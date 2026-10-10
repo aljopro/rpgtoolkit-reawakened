@@ -191,7 +191,7 @@ Scores 1–5 (5 = best). "Seam" means how swappable the core↔runner boundary s
 | **Browser runner quality** (×2) | 5 | 5 | 4 | 3 | 2 |
 | **Weighted total** (max 85) | **79** | **79** | 67 | 60 | 49 |
 
-A and B **tie on points**. The choice between them comes down to the team's appetite for Rust (B scores higher on friction) versus fitness and an enforced seam (A scores higher on both). The default below picks A because R1, R2 and the seam are the most expensive things to retrofit later.
+A and B **tie on points**. The choice between them comes down to the team's appetite for Rust (B scores higher on friction) versus fitness and an enforced seam (A scores higher on both). The tie was broken in favour of B in [ADR 0001](adr/0001-typescript-core.md): B scores higher on tooling friction, ecosystem and code sharing with the editor, language server and VS Code extension, and the guard-rails in [guardrails.md](guardrails.md) offset its softer seam.
 
 ---
 
@@ -222,7 +222,7 @@ How each hard capability lands in an Option A build, with notes on alternatives.
 ## 7. Licence implications (summary)
 
 1. **Clean-room boundary.** The legacy engine and editor are GPL-2. Only the documentation in `docs/` crosses into the new repo. No source, no translated code, no copied tables beyond what is needed to describe file layouts. Keep a short *provenance note* in the repo stating this process. The VGA palette (format-spec §3.1) and similar tables should come from public specifications.
-2. **Dependencies:** allow MIT, Apache-2.0, BSD, zlib, ISC, MPL-2.0 (file-level, acceptable for unmodified dependencies). **Block GPL/LGPL/AGPL and source-available licences** (Defold) in anything shipped. Run a licence check in CI (`cargo-deny` for Rust, `license-checker`-style auditing for npm).
+2. **Dependencies:** allow MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib and 0BSD (CC0-1.0 for data and assets), as [guardrails.md](guardrails.md) G6 states. MPL-2.0 needs an ADR exception. **Block GPL/LGPL/AGPL and source-available licences** (Defold) in anything shipped. Run a licence check in CI (`cargo-deny` for Rust, `license-checker`-style auditing for npm).
 3. **MIDI SoundFont.** Ship **FluidR3_GM** (generally described as MIT; large, ~140 MB, so ship a compressed or trimmed build and lazy-load it on the web). Treat **GeneralUser GS** as optional: it has a custom permissive licence but its author disclaims sample provenance. Avoid GPL SoundFonts. Let users point the runner at their own `.sf2`.
 4. **External GPL tools are fine as tools.** For example, letting users import maps from Tiled (GPL editor) is fine, because we only read its file format. LDtk is MIT.
 5. **Legacy game content** (users' boards, the bundled MIDI music pack under its own EULA) is the users' business. The runner should not redistribute legacy sample assets unless their licences allow it.
