@@ -1,0 +1,6 @@
+{
+  "url": "https://github.com/chrisbmatthews/rpgtoolkit",
+  "rev": "9191b9191c9bda0998c6faae16929b3331ed2ead",
+  "gamesPath": "build/game",
+  "games": ["demo", "Basic"]
+}

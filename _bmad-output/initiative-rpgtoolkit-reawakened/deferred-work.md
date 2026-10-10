@@ -4,3 +4,6 @@
 - source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-provenance-scan-plan.md`
   summary: Entry 1.7 (sample-game fixture fetch) must add the ignored root `fixtures/` folder to scope.skipRootPaths in tools/provenance/markers.json, or a local `pnpm provenance` after the fetch will scan the legacy sample files.
   evidence: scan.mjs walks the working tree, not git-tracked files, and `/fixtures/` is gitignored but not in skipRootPaths. CI is unaffected because the provenance job does not fetch fixtures.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-sample-game-fixture-fetch-plan.md`
+  summary: Entry 1.9's golden job must also run `pnpm fixtures:check` (after `pnpm fixtures:fetch`), so the "nothing under fixtures/ is tracked" check is part of a required job.
+  evidence: Human decision at the entry 1.7 plan checkpoint (Open Question 2, option a). Entry 1.10's required list has no `fixtures` job, so without this the check in `fixtures.yml` could be skipped at merge. Entry 1.7 does not edit the ticket text of entry 1.9.

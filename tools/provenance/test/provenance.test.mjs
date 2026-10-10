@@ -477,6 +477,21 @@ test("matrix: a legacy identifier exits 1 with legacyIdentifiers at line:col", (
   );
 });
 
+test("matrix: a fixture tree under the root is skipped, a nested fixtures folder is scanned", () => {
+  const sample = entriesOf("legacyIdentifiers")[0].examples[0];
+  const result = run(
+    makeRoot("fixtures-skip", {
+      ...CLEAN,
+      "fixtures/legacy/demo/x.ts": `${sample}\n`,
+      "packages/a/test/fixtures/x.ts": `${sample}\n`,
+    }),
+  );
+  equal(result.status, 1, result.output);
+  ok(result.stderr.includes(diagnostic("packages/a/test/fixtures/x.ts", 1, 1, "legacyIdentifiers")), result.stderr);
+  ok(!result.stderr.includes("fixtures/legacy/demo/x.ts"), result.stderr);
+  equal(result.stderr.split("\n").filter((line) => line.includes("[G7 ")).length, 1);
+});
+
 test("matrix: identifier boundary non-matches pass with exit 0", () => {
   const nonExamples = entriesOf("legacyIdentifiers").flatMap((entry) => entry.nonExamples);
   ok(nonExamples.length > 0);

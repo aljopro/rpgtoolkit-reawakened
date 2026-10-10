@@ -29,7 +29,8 @@
       "docs",
       "_bmad",
       "_bmad-output",
-      "tools/provenance/markers.json"
+      "tools/provenance/markers.json",
+      "fixtures"
     ],
     "skipDirectoryNames": [
       "node_modules",

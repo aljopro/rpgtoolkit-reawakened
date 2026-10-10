@@ -17,7 +17,10 @@
     "license": "pnpm run licence",
     "license:test": "pnpm run licence:test",
     "provenance": "node tools/provenance/scan.mjs",
-    "provenance:test": "node --test tools/provenance/test/provenance.test.mjs"
+    "provenance:test": "node --test tools/provenance/test/provenance.test.mjs",
+    "fixtures:fetch": "node tools/fixtures/fetch.mjs",
+    "fixtures:check": "node tools/fixtures/check.mjs",
+    "fixtures:test": "node --test tools/fixtures/test/fixtures.test.mjs"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@7.0.2",

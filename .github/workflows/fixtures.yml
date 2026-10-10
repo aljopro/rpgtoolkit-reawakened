@@ -1,0 +1,25 @@
+name: Fixtures
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm fixtures:test
+      - uses: actions/cache@v4
+        with:
+          path: fixtures/legacy
+          key: legacy-games-${{ hashFiles('tools/fixtures/sources.json') }}
+      - run: pnpm fixtures:fetch
+      - run: pnpm fixtures:check
