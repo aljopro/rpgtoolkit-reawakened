@@ -105,14 +105,14 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 ## G6 — Licence gate
 
 **Rule.**
-1. Every shipped artefact (npm packages, the VS Code extension, web bundles, desktop and mobile builds) **MUST** contain only dependencies under: **MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, 0BSD**, and for data/assets **CC0-1.0**.
-2. GPL, LGPL, AGPL, SSPL, EUPL, MS-PL, source-available licences (e.g. the Defold Licence) and "unknown/unlicensed" are **blocked**. MPL-2.0 or any other licence needs an ADR exception.
+1. Every shipped artefact (npm packages, the VS Code extension, web bundles, desktop and mobile builds) **MUST** contain only dependencies under licences rated **Bronze or better** on the [Blue Oak Council licence list](https://blueoakcouncil.org/list) (Model, Gold, Silver or Bronze; version pinned in the repo), except those on the repo's exception list (today only MS-PL, which has per-file copyleft terms). See [ADR 0003](adr/0003-permissive-licences-acceptable.md). Examples: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, 0BSD, BlueOak-1.0.0. For data and assets: CC0-1.0 (Bronze), or any other licence that passes the same test.
+2. Copyleft of any strength (GPL, LGPL, AGPL, MPL-2.0, EPL, EUPL, MS-PL, SSPL), source-available or restricted licences (for example the Defold Licence) and "unknown/unlicensed" are **blocked**. A licence rated Lead on the Blue Oak list, or not on it, needs an ADR exception.
 3. Bundled assets (SoundFonts, fonts, sample art) **MUST** be listed in `THIRD_PARTY_NOTICES` with their licence text. The default SoundFont is FluidR3_GM (MIT notice shipped with it).
 4. Our own code is released under MIT and/or Apache-2.0.
 
 **Rationale.** Brief (MIT/Apache) and architecture-options §7.
 
-**Enforcement.** A required CI job that lists the licences of the full production dependency tree (all workspaces, including the extension bundle) and fails on anything outside the allowlist. A dependency vulnerability audit runs in the same job. Lockfiles are committed and pinned. Dev-only tools that are never shipped, bundled or linked sit outside this production-tree scan, because they never reach users; each one is named, with its licence, in [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md) or a later ADR (currently only `ovsx`, EPL-2.0, used to publish to Open VSX). The scan still fails if such a tool appears in a production tree, and the same job also lists the licences of dev-only dependencies and fails on any outside the allowlist that is not named in an ADR.
+**Enforcement.** A required CI job that lists the licences of the full production dependency tree (all workspaces, including the extension bundle) and fails on any licence that is not rated Bronze or better on the pinned Blue Oak list or that is on the exception list. A dependency vulnerability audit runs in the same job. Lockfiles are committed and pinned. Dev-only tools that are never shipped, bundled or linked sit outside this production-tree scan, because they never reach users; each one is named, with its licence, in [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md) or a later ADR (currently only `ovsx`, EPL-2.0, used to publish to Open VSX). The scan still fails if such a tool appears in a production tree, and the same job also lists the licences of dev-only dependencies and fails on any that does not pass the same test and is not named in an ADR.
 
 ---
 

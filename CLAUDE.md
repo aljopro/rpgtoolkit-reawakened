@@ -11,7 +11,7 @@ Read and follow **[docs/guardrails.md](docs/guardrails.md)** (G1–G7) for every
 - **G3** No `Math.random`, `Date`, `performance.now` or `Intl` in `core`. Use the injected clock and seeded RNG, with a fixed time step. Only the exact `Math` functions are allowed (`abs`, `ceil`, `floor`, `round`, `trunc`, `sign`, `min`, `max`, `fround`, `imul`, `clz32`, `sqrt`), and `**` is banned, because other maths can give different answers on different JavaScript engines; use `core/fmath` instead ([ADR 0002](docs/adr/0002-core-pixels-and-deterministic-maths.md)).
 - **G4** Renderers only replay draw lists. Phaser and Pixi are never the loop and never hold state.
 - **G5** The headless golden tests must pass. Change goldens only deliberately, and explain why.
-- **G6** Dependencies only under MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD (CC0 for assets). Never add GPL, LGPL or AGPL.
+- **G6** Dependencies only under licences rated Bronze or better on the Blue Oak Council list (MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD and the like; CC0 for assets). Never add copyleft (GPL, LGPL, AGPL, MPL) or restricted licences.
 - **G7** Clean-room: implement only from `docs/`. Never open, copy or translate the legacy GPL source (`../rpgtoolkit`) while writing code. If the docs are wrong or missing something, fix the doc first in its own commit, then the code.
 
 If a task seems to need breaking a rule, stop and ask. Exceptions require an ADR.
