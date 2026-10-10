@@ -1,0 +1,277 @@
+# Architecture Options — RPG Toolkit Reawakened
+
+> **Question.** What is a realistic technology stack for a from-scratch, **MIT/Apache-licensed** 2D tile RPG engine plus authoring toolset that must **read legacy RPG Toolkit 3 worlds** (`.brd` boards, `.prg` RPGCode, and the rest; see [format-spec.md](format-spec.md))?
+>
+> **Approach.** Split the product into a **game core** and swappable **runners** (browser and native), plus an **editor** that reuses the core. Each option is judged on fitness, ecosystem maturity, licence, tooling friction, and how well the core-to-runner seam survives. Each option is tied back to the capability IDs in [engine-features.md](engine-features.md) (E-xx) and [editor-features.md](editor-features.md) (T-xx).
+>
+> Research current as of **October 2026**. Versions and statuses are cited at the end. Re-verify before committing.
+
+---
+
+## 1. What the requirements actually force
+
+Most stack debates about 2D engines are settled by a few hard requirements. For this project they are:
+
+| # | Hard requirement | Comes from | Consequence for the stack |
+|---|---|---|---|
+| R1 | **Resumable script interpreter.** Blocking programs (`wait()`, blocking movement, modal menus) and cooperative threads must run on a runtime with **no OS threads**, i.e. the browser. | E-33, E-90…E-96, §1.2 of engine doc | The RPGCode VM must be an **explicit step machine** (instruction pointer + frame stack you can pause after N steps). Do not rely on host threads, blocking I/O, or language-level async that cannot be serialised. This is the single most important design constraint. |
+| R2 | **Serialisable live state**, including running threads. | E-120/E-121 | VM state is plain data (frames, locals, IP), not closures or host coroutines. That rules out "just use JS generators / Rust async" as the thread model. |
+| R3 | **Deterministic simulation** independent of frame rate. | E-04, E-22…E-34 | Fixed-step core with an injected clock and RNG. The legacy fps-coupled speed maths is replaced by real-time equivalents. |
+| R4 | **Layered 2D compositing** with colour-key transparency, per-pixel **additive RGB tint** (−255…+255), translucency, masked iso diamonds, off-screen canvases, read-back (`getPixel`, `canvasGetScreen`). | E-52…E-59, E-17 | Needs render-to-texture and a simple tint shader, *or* a CPU compositor. Any WebGL2-class renderer is enough. 3D engines are overkill. Read-back rules out "fire-and-forget" GPU-only APIs unless the runner supports copies back to the CPU. |
+| R5 | **General MIDI playback everywhere.** | E-100, E-103 | Browsers and mobile have no OS MIDI synth, so a **SoundFont synthesiser must ship with the runner**, together with a permissively licensed SoundFont. This is a licensing trap (FluidSynth is LGPL; some popular SoundFonts are GPL or have unclear provenance). |
+| R6 | **Binary legacy formats + ZIP + appended-ZIP EXE import.** | format-spec §1–13, E-01, E-131 | Byte-level readers in the core, kept I/O-free. The runner provides bytes. Needs a permissive ZIP reader. |
+| R7 | **Editor with heavy forms, trees, a code editor with syntax colouring and call tips, a pixel editor, and a zoomable vector/tile canvas.** | T-01…T-64 | Favours a mature UI toolkit with a strong text-editor component. The web platform is the strongest here (CodeMirror/Monaco). Immediate-mode GUIs are weak at rich text. |
+| R8 | **Editor live preview and test-run** using the *same* core. | T-07, T-41, E-01 test mode | The core must embed in the editor (in-process, or as wasm in the editor's web view). |
+| R9 | **Licence: MIT/Apache for everything we ship;** clean-room relative to the GPL-2 legacy code. | brief | No GPL/LGPL in shipped binaries (including the wasm bundle). Non-OSI "source-available" engines are excluded. GPL tools may be used *externally* only (e.g. as importers run by the user). |
+
+R1, R2 and R5 do more than anything else to separate the options. Rendering (R4) is easy for every candidate.
+
+---
+
+## 2. The seam: core ↔ runner contract
+
+Whatever language you pick, keep this interface **data-only and narrow**. That is what keeps runners swappable.
+
+```
+          ┌──────────────────────── Game Core (pure library) ─────────────────────────┐
+ inputs → │ formats · world · movement/collision/pathfinding · triggers · RPGCode VM │ → outputs
+          │ battle/menu rules · save model · render-list builder · audio-cue builder │
+          └───────────────────────────────────────────────────────────────────────────┘
+inputs:  tick(dt) · input events (key name / scan code / pointer / gamepad)
+         asset bytes (answer to the core's "need asset X" requests) · persisted blobs
+outputs: frame = ordered draw list   [surface ops: blit(tex, src, dst, key, tint, alpha, blend),
+                                      fill/line/rect/ellipse/text, push/pop target (canvas),
+                                      read-back requests]
+         audio cues [music play/stop/loop/volume, sfx play, midi-file play]
+         requests   [load asset, save blob, quit, open URL, play video]
+```
+
+Rules that keep the seam honest:
+* **No I/O in the core.** It *asks* for assets by logical path. Case-folding and package lookup (format-spec §1.5) live in a shared "asset resolver" module that runners call with their own byte source (file system, fetch, OPFS, embedded archive).
+* **No pixels in the core.** It emits a **draw list** against abstract textures and surfaces. A runner can satisfy it with WebGL2, WebGPU, Canvas2D, SDL3's renderer, or a CPU rasteriser (useful for headless golden-image tests).
+* **Text layout** is a runner capability (the core requests "measure/draw text with font X"), because font rasterisation is platform-specific (E-132). Keep a deterministic fallback bitmap font for tests.
+* **Audio is cues, not samples.** A runner may synthesise MIDI natively or in an AudioWorklet. Offer a shared synth module so behaviour matches across runners.
+* **Blocking script calls never block the host.** A `wait()` makes the VM yield with a "waiting for key" status. The runner keeps calling `tick` until the core resumes it.
+
+**Swappability test:** a headless runner (CPU rasteriser, null audio, scripted input) should be able to play `build/game/demo` from the legacy repo in CI. If that is hard, the seam has leaked.
+
+---
+
+## 3. Candidate stacks
+
+Five realistic families. "Core" is the pure library. "Runners" are the platform hosts. "Editor" is the authoring app.
+
+### Option A — Rust core → native + WebAssembly runners
+
+* **Core:** Rust library with no platform dependencies. Readers, VM and simulation are plain Rust. Compiles to native and to `wasm32-unknown-unknown`.
+* **Runners:**
+  * *Web:* a thin TypeScript host. The wasm core produces the draw list, which TS replays with WebGL2 (or PixiJS v8, MIT, which can use WebGPU and falls back to WebGL). Audio uses Web Audio plus an AudioWorklet running the synth.
+  * *Desktop:* `winit` + `wgpu` (MIT/Apache; Vulkan, Metal, D3D12, GL), **or** SDL3 (zlib) through bindings, or `macroquad`/`miniquad` (MIT/Apache) for a minimal 2D host.
+  * *Mobile:* the web runner wrapped in Capacitor or Tauri mobile, or SDL3 native.
+* **MIDI:** `rustysynth` (MIT, pure Rust, std-only, SoundFont 2 with reverb and chorus) runs inside the core-adjacent audio module on **every** runner, wasm included, so playback is identical everywhere.
+* **Editor:** web UI, sharing the core through wasm for preview and test-run (R8). Desktop shell is chosen in §4.
+* **Fitness:** Excellent for R1–R3 (explicit VM, serialisable structs, deterministic), R6 (byte parsing), R5 (an MIT synth in-language). R4 is handled by any runner.
+* **Ecosystem:** Mature for this scope. Bevy (0.20, Oct 2026) shows Rust game tooling is healthy, but Bevy itself is *not* needed. A full ECS engine would fight the "core emits draw lists" seam.
+* **Licence:** Rust std, wgpu, winit, kira, rustysynth, image and zip are MIT/Apache. SDL3 is zlib. All clean.
+* **Friction:** The Rust learning curve. Wasm-bindgen glue. Two languages (Rust core + TS editor and web host). Compile times.
+* **Seam:** **Best.** The compiler enforces the boundary (the core crate simply has no platform deps), and the same binary logic runs in every runner.
+
+### Option B — TypeScript everywhere
+
+* **Core:** TypeScript package (pure, no DOM), runs in browser, Node/Bun, and any WebView.
+* **Runners:** *Web:* Canvas2D or WebGL2 directly, or PixiJS v8 (MIT), Phaser 4 (MIT; shipped April 2026, new WebGL renderer, tilemaps) or Excalibur (BSD-2). *Desktop:* the same web runner inside Tauri, Electron or Electrobun. *Mobile:* Capacitor 8 (adds a few MB around a full-screen WebView).
+* **MIDI:** SpessaSynth (Apache-2.0; SoundFont 2 / DLS, Web Audio wrapper available).
+* **Editor:** web UI in the same language. Simplest code sharing of all the options.
+* **Fitness:** Good. R1/R2 are satisfied *if* you still write an explicit step VM; generators are tempting but not serialisable. R3 is fine. Performance is adequate for 2D tile RPGs (this is 2000s-era content). Native-feel and offline packaging depend on a WebView shell.
+* **Ecosystem:** The largest of all options for UI and 2D web rendering.
+* **Licence:** Clean if you avoid GPL npm packages. Audit transitive dependencies.
+* **Friction:** Lowest. One language and one toolchain, with fast iteration.
+* **Seam:** **Good but soft.** Nothing *stops* the core from touching the DOM or `fetch`. Enforce it with lint rules and a separate package with no DOM types. "Native" runners are really the same web runner in a different shell, so there is less true runner diversity.
+* **Caveat:** Phaser and Excalibur want to own the game loop and scene graph. Use them only as *renderers* behind the draw-list seam, or skip them for a ~1–2 kLOC WebGL2 replayer.
+
+### Option C — C++ (or C) core with SDL3 runners
+
+* **Core:** portable C++ library. **Runners:** SDL3 (zlib; stable 3.x, 3.4.16 Sept 2026) for desktop and mobile, with Emscripten for web. Alternatively raylib 6.0 (zlib; April 2026; experimental Emscripten backend plus a new software renderer that is handy for headless tests).
+* **MIDI:** TinySoundFont / TinyMidiLoader (MIT, single-header). Avoid FluidSynth (LGPL).
+* **Editor:** Dear ImGui (MIT) native, or a web UI with the core compiled to wasm.
+* **Fitness:** Good runtime performance and portability. R1/R2 need the same explicit VM.
+* **Ecosystem:** Very mature (SDL is the industry baseline).
+* **Licence:** Clean (zlib/MIT).
+* **Friction:** Highest. Memory safety, build systems (CMake + Emscripten + mobile toolchains), and weaker editor UI if you go ImGui (R7: no rich code editor, forms are laborious).
+* **Seam:** Good if disciplined. Nothing enforces it.
+
+### Option D — Godot 4 (MIT) as the runner (and optionally editor host)
+
+* **Core:** GDScript, or Rust/C++ via GDExtension (`godot-rust`), inside a Godot project. **Runner:** Godot export targets (desktop, mobile, web). **Editor:** extend the Godot editor with plugins, or build a standalone Godot "tool" app.
+* **Fitness:** Rendering, input, audio mixing and exports are all solved. But:
+  * R1/R2 still need a custom VM.
+  * R5: no built-in MIDI synth, so you need an extension.
+  * Godot wants to own the loop, scene tree, and resource system, which works against the draw-list seam.
+  * **C# cannot export to web in Godot 4.6** (as of 2026), so a web-capable core must be GDScript or GDExtension.
+  * Web exports are large, and threaded web builds need cross-origin-isolation headers.
+* **Ecosystem:** Very mature and active (4.6 in 2026).
+* **Licence:** MIT. Clean.
+* **Friction:** Medium. Fast to get pixels, slower to get *legacy-exact* behaviour, because you end up working around engine conventions (layer ordering, colour-key transparency, additive tinting all need custom shaders/materials).
+* **Seam:** **Weakest of the clean options.** The "core" tends to dissolve into nodes and signals unless you keep it a GDExtension library that Godot merely hosts. If you do keep it separate, Godot becomes just one runner among several, which is a reasonable *alternative runner* role.
+
+### Option E — C# / .NET (MonoGame, FNA, or raylib-cs)
+
+* **Core:** .NET library. **Runners:** MonoGame (MS-PL) or FNA (MS-PL) for desktop and consoles. Web via Blazor/WASM is possible but immature for games. Mobile via MonoGame.
+* **Licence:** MS-PL is OSI-approved but **not** MIT/Apache, and it has copyleft-ish source-distribution terms for the runtime pieces. That is acceptable for a runner but complicates "MIT everything". raylib-cs is zlib.
+* **Fitness/Seam:** Fine on desktop. The **browser story is the weak point**, which fails the "browser or native runners" goal.
+* **Verdict:** Not recommended as the primary stack. Viable only if the team is C#-first and the web is secondary.
+
+### Excluded or demoted
+
+| Candidate | Why |
+|---|---|
+| **Defold** | Source-available Defold License (Apache-2.0 plus a non-commercialisation clause). **Not OSI open source**, so it fails R9. |
+| **LÖVE (zlib)** | Pleasant, but 12.0 is still unreleased (Oct 2026) and web builds (love.js) target 11.5, are unofficial, and run slower without LuaJIT. Lua makes a serialisable VM-in-VM awkward. |
+| **Bevy as the engine** | MIT/Apache and healthy (0.20), but ECS-first and frequent breaking releases. Use its building blocks (wgpu, winit), not the engine, behind the seam. |
+| **Qt / Slint for the editor** | Qt is LGPL/GPL/commercial and Slint is GPL/royalty-free/commercial. Workable but adds licence friction against "MIT everything". |
+| **FluidSynth (incl. wasm builds)** | LGPL-2.1. Linking into a wasm bundle makes LGPL compliance awkward. Use rustysynth, SpessaSynth or TinySoundFont instead. |
+
+---
+
+## 4. The editor shell (don't default to Tauri — compare)
+
+The editor's **UI** should be web technology in every recommended path: R7 needs CodeMirror 6 or Monaco (both MIT) for the RPGCode editor with call tips (T-40), plus trees, tabbed documents, inspectors and a canvas board editor (T-20…T-35). The real question is the **shell** that provides file-system access, menus, spawning a native runner, and packaging (T-70).
+
+| Shell | How it hosts the UI | Size / RAM | Fit for this editor | Licence | Risks |
+|---|---|---|---|---|---|
+| **Plain browser / PWA** | Any modern browser. Files through the File System Access API (Chromium) or OPFS plus ZIP import/export elsewhere. | none | Good for *trying* and *teaching* (zero install). Weak for big projects on Firefox/Safari (no direct folder access). | n/a | Folder workflows differ per browser. No spawning of native runners. |
+| **Tauri 2** (2.12, Sept 2026) | OS WebView (WebView2 / WKWebView / WebKitGTK) + Rust backend | Smallest (a few MB) | **Strong with Option A**: the Rust backend can link the *native* core for packaging, asset conversion and native test-runs. Capability-gated IPC. Mobile targets exist but are still catching up to desktop. | MIT/Apache | Rendering differs per OS WebView. **WebKitGTK on Linux** is the usual weak spot for canvas/WebGL performance, so test the board editor there early. |
+| **Electron** (v42/43) | Bundled Chromium + Node | Largest (~100 MB+, 100–300 MB RAM) | Most consistent rendering and the best devtools. Strong fallback if WebView variance bites. | MIT | Size. Security hardening is on you. |
+| **Wails** (v2 stable, v3 alpha) | OS WebView + Go backend | Small | Only if the team wants Go. Adds a third language to Option A. | MIT | Smaller community. Same WebView variance as Tauri. |
+| **Electrobun** | OS WebView + Bun | Medium (~70 MB) | TS-only teams (Option B). | MIT | Young. Linux and navigation defects reported in 2026. |
+| **egui / eframe** (0.36) | Immediate-mode, native + wasm | Small | Good for inspectors and canvases. **Poor for the code editor and rich text** (R7). | MIT/Apache | Re-implementing a decent text editor is a project in itself. |
+| **Godot editor plugin** | Godot editor | Large | Only with Option D. | MIT | Couples the editor to Godot's resource model. |
+
+**Design rule:** put the editor's host access behind a small **platform-services interface** (open/save/list folder, watch files, run game, export package). Implement it three times: browser (FSA/OPFS + ZIP), Tauri, Electron. Then the shell decision is reversible, the same way the runner decision is.
+
+---
+
+## 5. Scoring matrix
+
+Scores 1–5 (5 = best). "Seam" means how swappable the core↔runner boundary stays over years of maintenance.
+
+| Criterion (weight) | A: Rust core + web/native runners | B: TypeScript everywhere | C: C++/SDL3 | D: Godot runner | E: .NET |
+|---|---|---|---|---|---|
+| **Fitness** to R1–R6 (×3) | 5 | 4 | 4 | 3 | 3 |
+| **Ecosystem maturity** (×2) | 4 | 5 | 5 | 5 | 4 |
+| **Licence cleanliness** for MIT/Apache (×3) | 5 | 5 | 5 | 5 | 3 |
+| **Tooling friction** (low = 5) (×2) | 3 | 5 | 2 | 4 | 3 |
+| **Seam swappability** (×3) | 5 | 4 | 4 | 2 | 3 |
+| **Editor reuse** of core, R8 (×2) | 5 (wasm in editor + native in shell) | 5 | 3 | 3 | 2 |
+| **Browser runner quality** (×2) | 5 | 5 | 4 | 3 | 2 |
+| **Weighted total** (max 85) | **79** | **79** | 67 | 60 | 49 |
+
+A and B **tie on points**. The choice between them comes down to the team's appetite for Rust (B scores higher on friction) versus fitness and an enforced seam (A scores higher on both). The default below picks A because R1, R2 and the seam are the most expensive things to retrofit later.
+
+---
+
+## 6. Capability traceability
+
+How each hard capability lands in the recommended default (Option A), with notes on alternatives:
+
+| Capability | Where it lives | Notes / alternative impact |
+|---|---|---|
+| Format readers (format-spec §2–9), legacy upgrades (E-10, T-31) | core `formats` module | Same code serves runners, editor and a CLI converter. In B, TS DataView readers work equally well. |
+| Coordinates & iso (E-11, E-53) | core | Pure maths. |
+| Collision, sliding, stairs, edges, z-order, pathfinding (E-26…E-34) | core | Fixed-step, deterministic. Golden tests from the legacy demo games. |
+| Trigger rules (E-40…E-49) | core | Data-driven. Unit-testable without a renderer. |
+| RPGCode VM, threads, blocking, error handlers, ~280 built-ins (E-90…E-96) | core `script` module | Explicit step VM (R1/R2). Built-ins call core services. Drawing built-ins emit draw-list ops. |
+| Rendering: layers, colour-key, tint, translucency, canvases, transitions (E-52…E-63) | runner replays the draw list; the core builds it | WebGL2 replayer (web), wgpu or SDL3 renderer (native), CPU rasteriser (tests). |
+| Message window, menus, battle UI (E-55, E-70…E-80) | core rules + **core-built UI draw lists** | No plugins, so the default menu and battle become native core features. RPGCode replacements still work (E-79). |
+| Music and MIDI (E-100…E-103) | shared synth module (rustysynth) + runner output | Same MIDI sound on web and native. B uses SpessaSynth. C uses TinySoundFont. |
+| Video (E-104) | runner | Transcode AVI on import (editor-side tool) to a web-playable format. |
+| Save/load incl. threads (E-120…E-122) | core serialises plain state | Optional legacy `.sav` reader. |
+| Packaging/import (E-131, T-70…T-72) | editor backend (native core in Tauri) or browser ZIP | Import legacy `.tpk`/appended-ZIP EXE (format-spec §13). Export a web bundle and desktop runner bundle. |
+| Board editor canvas (T-20…T-35) | editor UI (web canvas/WebGL) using core types for vectors, tiles and coordinates | Reuses the same renderer code as the web runner for WYSIWYG. |
+| Program editor, call tips, test-run (T-40…T-41) | CodeMirror 6 + core parser (wasm) as a language service | Diagnostics match the engine exactly because it is the same parser. |
+| Pixel/tile tools, grabber, tilesets (T-36…T-39) | editor UI | Pure web canvas work. Tileset writer in core `formats`. |
+| Auto-tiler (T-25) | core (rule) + editor (UI) | Variant ordering reconstructed from sample sets. |
+
+---
+
+## 7. Licence implications (summary)
+
+1. **Clean-room boundary.** The legacy engine and editor are GPL-2. Only the documentation in `docs/` crosses into the new repo. No source, no translated code, no copied tables beyond what is needed to describe file layouts. Keep a short *provenance note* in the repo stating this process. The VGA palette (format-spec §3.1) and similar tables should come from public specifications.
+2. **Dependencies:** allow MIT, Apache-2.0, BSD, zlib, ISC, MPL-2.0 (file-level, acceptable for unmodified dependencies). **Block GPL/LGPL/AGPL and source-available licences** (Defold) in anything shipped. Run a licence check in CI (`cargo-deny` for Rust, `license-checker`-style auditing for npm).
+3. **MIDI SoundFont.** Ship **FluidR3_GM** (generally described as MIT; large, ~140 MB, so ship a compressed or trimmed build and lazy-load it on the web). Treat **GeneralUser GS** as optional: it has a custom permissive licence but its author disclaims sample provenance. Avoid GPL SoundFonts. Let users point the runner at their own `.sf2`.
+4. **External GPL tools are fine as tools.** For example, letting users import maps from Tiled (GPL editor) is fine, because we only read its file format. LDtk is MIT.
+5. **Legacy game content** (users' boards, the bundled MIDI music pack under its own EULA) is the users' business. The runner should not redistribute legacy sample assets unless their licences allow it.
+
+---
+
+## 8. Recommendation
+
+### Default: **Option A, Rust core with swappable runners; web-UI editor behind a platform-services interface, shipped in the browser and in Tauri.**
+
+* `core/` (Rust, no platform deps): formats, asset resolver, world, movement, triggers, RPGCode step VM, battle and menu rules, draw-list and audio-cue builders, save model. Compiles to native and wasm.
+* `synth/` (Rust): MIDI via rustysynth, shared by all runners.
+* `runner-web/` (TypeScript + wasm): WebGL2 draw-list replayer, Web Audio/AudioWorklet output, fetch/OPFS asset source.
+* `runner-native/` (Rust): winit + wgpu (or SDL3 if broader console/mobile reach is wanted), cpal or SDL audio, file-system and embedded-archive asset source.
+* `runner-headless/` (Rust): CPU rasteriser + null audio for CI golden tests against the legacy demo games.
+* `editor/` (TypeScript web UI; CodeMirror 6; canvas/WebGL board editor reusing runner-web's replayer; core via wasm for preview, diagnostics and test-run) behind `platform-services` with **three backends: browser (PWA), Tauri (default desktop), Electron (fallback)**.
+
+**Why this wins:**
+* It meets R1–R3 and R5 most naturally.
+* The compiler enforces the seam.
+* The same core runs in the browser, on desktop, inside the editor, and in CI.
+* Tauri's Rust backend can run the *native* core for packaging and conversion.
+* Everything is MIT/Apache/zlib.
+
+Tauri was chosen *after* comparison (§4) because it pairs with a Rust core and is the smallest option, **not** as a foregone conclusion. The platform-services interface keeps Electron one adapter away if WebView variance (notably Linux WebKitGTK) hurts the board editor.
+
+### Alternative 1: **Option B, TypeScript everywhere** (choose if the team is web-first or wants the fastest MVP)
+
+The same architecture with a TS core package and a hard "no DOM" lint boundary. SpessaSynth for MIDI. Editor and runner share one language. Desktop via Tauri or Electron, mobile via Capacitor 8. The trade-off: a softer seam and slower worst-case performance, though both are adequate for this content. You can migrate the core to Rust/wasm later behind the same seam if needed.
+
+### Alternative 2: **Option A core + Godot as an extra runner** (choose for the broadest export reach with minimal runner code)
+
+Keep the Rust core and wrap it as a GDExtension. Godot then becomes one *runner* that replays the draw list and plays audio cues, and its exporters (desktop, mobile, consoles via partners) do the rest. Do **not** move game logic into GDScript, or the seam collapses.
+
+### Alternative 3: **Option C, C++/SDL3** (choose only for a C++ team targeting consoles or very low-end hardware)
+
+Use SDL3 + TinySoundFont, Emscripten for web, and a web-UI editor with the core compiled to wasm (not ImGui, because of R7).
+
+### Not recommended
+
+.NET as the primary stack (weak browser path, MS-PL), Defold (not OSI), LÖVE (unreleased 12.0, unofficial web), and Bevy-as-engine (fights the seam).
+
+---
+
+## 9. First milestones (stack-independent)
+
+1. **Format readers + headless dump tool** for every format in format-spec. Round-trip tests on `build/game/demo` and `build/game/Basic` from the legacy repo.
+2. **RPGCode parser + step VM** with blocking and threads. Run `system.prg`/`start.prg` headlessly with scripted input.
+3. **Board render** (draw list → headless PNG) matching legacy screenshots for 2D and both iso modes.
+4. **Movement/collision/triggers.** Play the demo's NPC intercept and battle trigger end-to-end headlessly.
+5. **Web runner + native runner** sharing the core. MIDI via the shared synth.
+6. **Editor P0 tools** (editor-features §11) on the browser shell, then add the desktop shell.
+
+---
+
+## Sources
+
+* Tauri releases and changelog — [tauri.app/release](https://v2.tauri.app/release/), [Tauri 2.0 stable](https://v2.tauri.app/blog/tauri-20/), [Tauri 2.0 RC (mobile caveats)](https://v2.tauri.app/fr/blog/tauri-2-0-0-release-candidate/)
+* Desktop shell comparisons — [Tauri/Wails/Electron/Electrobun implementation comparison](https://github.com/pierophp/ai-mission-manager/issues/135), [Desktop frameworks 2026 overview](https://www.youngju.dev/blog/culture/2026-05-14-desktop-app-frameworks-2026-tauri-electron-wails-compose-multiplatform-maui-flutter-comparison-deep-dive-2026.en), [Electron alternatives 2026](https://teamdev.com/mobrowser/blog/top-5-electron-alternatives-in-2026/)
+* Bevy — [bevy.org news (0.20)](https://bevy.org/news/), [Bevy 0.20](https://bevy.org/news/bevy-0-20/)
+* Godot — [Godot 4.6 release](https://godotengine.org/releases/4.6/), [Exporting for the Web (4.6, C# limitation)](https://docs.godotengine.org/en/4.6/tutorials/export/exporting_for_web.html), [web .NET prototype](https://godotengine.org/article/live-from-godotcon-boston-web-dotnet-prototype/)
+* SDL3 — [SDL wiki](https://wiki.libsdl.org/SDL3), [SDL licensing FAQ](https://wiki.libsdl.org/SDL3/FAQLicensing/raw), [Wikipedia (3.4.16)](https://en.wikipedia.org/wiki/Simple_DirectMedia_Layer)
+* raylib — [raylib 6.0 release](https://raysan5.itch.io/raylib/devlog/1497342/raylib-60-released), [raylib license](https://raylib.com/license.html)
+* PixiJS — [PixiJS v8 launch](https://pixijs.com/blog/pixi-v8-launches), [v8.20 release](https://gamedev.net/news/5221-pixijs-v8200-released/)
+* Phaser / Excalibur — [Phaser v4 download](https://phaser.io/download/phaser4), [Phaser 3 vs 4](https://phaser.io/news/2026/05/phaser-3-vs-phaser-4), [Excalibur](https://excaliburjs.com/)
+* macroquad — [docs.rs/macroquad](https://docs.rs/macroquad)
+* egui/eframe — [eframe on docs.rs](https://docs.rs/crate/eframe/latest), [egui project listing](https://awesome.ecosyste.ms/projects/github.com%2Femilk%2Fegui)
+* LÖVE — [LÖVE 12.0 wiki (unreleased)](https://www.love2d.org/wiki/12.0), [2dengine love.js](https://github.com/2dengine/love.js)
+* Defold licence — [The Defold License](https://www.defold.com/license), [Defold (Wikipedia)](https://en.wikipedia.org/wiki/Defold)
+* Capacitor — [Capacitor for games](https://www.abratabia.com/native-wrappers/capacitor-games.php), [Capacitor releases](https://releasealert.dev/github/ionic-team/capacitor)
+* MIDI synths — [rustysynth](https://github.com/sinshu/rustysynth), [spessasynth_core](https://github.com/spessasus/spessasynth_core), [spessasynth_lib](https://github.com/spessasus/spessasynth_lib), [xsynth (LGPL, avoided)](https://github.com/arduano/xsynth)
+* SoundFonts — [GeneralUser GS 2.0 licence](https://scancode-licensedb.aboutcode.org/generaluser-gs-2.0.LICENSE), [FluidR3 MIT note (fluid-dev)](https://lists.nongnu.org/archive/html/fluid-dev/2009-03/msg00062.html)
+* Audio — [kira (MIT/Apache; wasm limits)](https://docs.rs/crate/kira/latest)
+* WebGPU status — [Khronos WebGL & WebGPU (SIGGRAPH 2026)](https://www.khronos.org/developers/linkto/webgl-and-webgpu-sigg26), [WebGPU vs WebGL for games (2026)](https://app.cinevva.com/guides/webgpu-vs-webgl-games)
+* Map editors — [Tiled news (1.12.1)](https://www.mapeditor.org/news), [Tiled (Arch, GPL-2.0)](https://archlinux.org/packages/extra/x86_64/tiled), [LDtk (MIT)](https://community.chocolatey.org/packages/ldtk/1.3.1)
+
+*Unverified in this pass (verify before adoption): TinySoundFont's current maintenance status and licence file; Capacitor core licence file; whether 2026 FluidR3_GM distributions keep the MIT notice; Linux WebKitGTK canvas performance on current distributions (flagged as a risk from general experience, not from a 2026 benchmark).*
