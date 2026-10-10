@@ -1,0 +1,5 @@
+[workflow]
+persistent_facts = [
+  "Human-facing docs (docs/, ADRs, guardrails.md, architecture-options.md, CLAUDE.md) are written in plain language: open with a short plain summary of what changes and why; give each rule or decision a one-sentence reason; define jargon on first use; put AD ids, E-xx/T-xx ids and spec section numbers in a References list at the end, not inline.",
+  "The spine stays terse, but each AD's Rule should be readable on its own, and summaries presented to the user are in plain language: say what was decided and why before citing ids.",
+]
