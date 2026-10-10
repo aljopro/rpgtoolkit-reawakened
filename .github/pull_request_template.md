@@ -11,6 +11,7 @@
 - [ ] **G5** Headless golden suite passes; any golden change is explained below.
 - [ ] **G6** Every new dependency's licence is rated Bronze or better on the Blue Oak Council list and not on the exception list (see G6 and ADR 0003); notices updated for bundled assets.
 - [ ] **G7** Implemented from `docs/` only; no legacy source consulted or copied; doc fixes landed first if needed.
+- [ ] I cited the `docs/` sections this change implements (E-xx / T-xx IDs or format-spec sections), or this change implements no behaviour.
 - [ ] No guard-rail exception, **or** exception marked inline with its ADR (`guardrail-exception: Gx ADR-NNNN`).
 
 ## Golden changes (if any)

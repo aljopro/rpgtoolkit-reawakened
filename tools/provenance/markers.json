@@ -1,0 +1,357 @@
+{
+  "scope": {
+    "sources": "docs/guardrails.md section G7 (\"A CI provenance scan over source files\")",
+    "extensions": [
+      ".ts",
+      ".tsx",
+      ".mts",
+      ".cts",
+      ".js",
+      ".jsx",
+      ".mjs",
+      ".cjs",
+      ".json",
+      ".yml",
+      ".yaml",
+      ".toml",
+      ".html",
+      ".css",
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cxx",
+      ".h",
+      ".hh",
+      ".hpp",
+      ".hxx"
+    ],
+    "skipRootPaths": [
+      "docs",
+      "_bmad",
+      "_bmad-output",
+      "tools/provenance/markers.json"
+    ],
+    "skipDirectoryNames": [
+      "node_modules",
+      "dist",
+      "build",
+      "coverage"
+    ],
+    "skipFileNames": [
+      "LICENSE",
+      "THIRD_PARTY_NOTICES",
+      "pnpm-lock.yaml"
+    ],
+    "keepDotDirectories": [
+      ".github"
+    ]
+  },
+  "categories": {
+    "gplLicenseHeaders": {
+      "caseSensitive": false,
+      "sources": "docs/guardrails.md section G7 (\"the GPL licence header text\"); the wording is the public FSF notice in \"How to Apply These Terms to Your New Programs\", https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+      "markers": [
+        {
+          "marker": "you can redistribute it and/or modify it under the terms of the GNU General Public License",
+          "examples": [
+            "This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation",
+            "YOU CAN REDISTRIBUTE IT AND/OR MODIFY IT UNDER THE TERMS OF THE GNU GENERAL PUBLIC LICENSE"
+          ],
+          "nonExamples": [
+            "Licensed under the MIT licence; see the LICENSE file.",
+            "// Never add GPL, LGPL or AGPL dependencies (G6).",
+            "you can redistribute it and/or modify it under the terms of the MIT License"
+          ]
+        },
+        {
+          "marker": "distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY",
+          "examples": [
+            "This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY",
+            "distributed in the hope that it will be useful, but without any warranty"
+          ],
+          "nonExamples": [
+            "Distributed under the MIT licence, without warranty of any kind."
+          ]
+        },
+        {
+          "marker": "You should have received a copy of the GNU General Public License along with this program",
+          "examples": [
+            "You should have received a copy of the GNU General Public License along with this program; if not, see",
+            "you should have received a copy of the gnu general public license along with this program"
+          ],
+          "nonExamples": [
+            "You should have received a copy of the MIT licence along with this program"
+          ]
+        }
+      ]
+    },
+    "legacyCopyrightHolders": {
+      "caseSensitive": false,
+      "sources": "_bmad-output/initiative-rpgtoolkit-reawakened/research-what-survived-of-rpg-toolkit/people.md; docs/guardrails.md section G7 (\"legacy copyright holder names\")",
+      "markers": [
+        {
+          "marker": "Christopher B. Matthews",
+          "examples": [
+            "Christopher B. Matthews",
+            "Copyright (C) 2004 Christopher B. Matthews",
+            "CHRISTOPHER B. MATTHEWS"
+          ],
+          "nonExamples": [
+            "Jane B. Matthews"
+          ]
+        },
+        {
+          "marker": "Colin James Fitzpatrick",
+          "examples": [
+            "Colin James Fitzpatrick",
+            "// (c) Colin James Fitzpatrick"
+          ],
+          "nonExamples": [
+            "Colin James Smith"
+          ]
+        },
+        {
+          "marker": "Jonathan D. Hughes",
+          "examples": [
+            "Jonathan D. Hughes",
+            "\"contributors\": [\"Jonathan D. Hughes\"]"
+          ],
+          "nonExamples": [
+            "Jonathan Q. Hughes"
+          ]
+        }
+      ]
+    },
+    "legacyIdentifiers": {
+      "caseSensitive": false,
+      "sources": "docs/guardrails.md section G7 (\"legacy module and class identifiers\")",
+      "markers": [
+        {
+          "marker": "trans3",
+          "examples": [
+            "trans3",
+            "trans3.exe",
+            "TRANS3"
+          ],
+          "nonExamples": [
+            "trans30",
+            "xtrans3"
+          ]
+        },
+        {
+          "marker": "tkCommon",
+          "examples": [
+            "tkCommon",
+            "tkcommon.dll",
+            "// see tkCommon"
+          ],
+          "nonExamples": [
+            "tkCommons",
+            "mytkCommon"
+          ]
+        },
+        {
+          "marker": "CBoardEditor",
+          "examples": [
+            "CBoardEditor",
+            "class CBoardEditor {}"
+          ],
+          "nonExamples": [
+            "CBoardEditors",
+            "XCBoardEditor"
+          ]
+        },
+        {
+          "marker": "CProgram",
+          "examples": [
+            "CProgram",
+            "new CProgram()"
+          ],
+          "nonExamples": [
+            "CProgramming",
+            "MyCProgram"
+          ]
+        },
+        {
+          "marker": "actkrt3",
+          "examples": [
+            "actkrt3",
+            "actkrt3.dll"
+          ],
+          "nonExamples": [
+            "actkrt30",
+            "xactkrt3"
+          ]
+        }
+      ]
+    },
+    "vb6SyntaxMarkers": {
+      "caseSensitive": true,
+      "sources": "docs/guardrails.md section G7 (\"VB6 syntax markers\"); the patterns are public Visual Basic 6 language syntax and project-file layout",
+      "markers": [
+        {
+          "marker": "^\\s*Attribute\\s+VB_Name\\b",
+          "examples": [
+            "Attribute VB_Name = \"Module1\"",
+            "  Attribute  VB_Name=\"Class1\""
+          ],
+          "nonExamples": [
+            "// Attribute VB_Name",
+            "const attribute = 1;"
+          ]
+        },
+        {
+          "marker": "^\\s*Begin\\s+VB\\.",
+          "examples": [
+            "Begin VB.Form Form1",
+            "   Begin VB.CommandButton Command1"
+          ],
+          "nonExamples": [
+            "Begin VBox",
+            "// Begin VB.Form"
+          ]
+        },
+        {
+          "marker": "^\\s*End\\s+(Sub|Function|Property)\\s*$",
+          "examples": [
+            "End Sub",
+            "    End Function",
+            "End Property"
+          ],
+          "nonExamples": [
+            "// end of sub-list",
+            "End of sub-list",
+            "end sub"
+          ]
+        },
+        {
+          "marker": "^\\s*(Private|Public|Friend)\\s+(Static\\s+)?(Sub|Function|Property\\s+(Get|Let|Set))\\s+\\w+",
+          "examples": [
+            "Private Sub Form_Load()",
+            "Public Function Total(x As Long) As Long",
+            "Friend Property Get Name() As String",
+            "Public Static Sub Tick()",
+            "Private Property Let Value(v)"
+          ],
+          "nonExamples": [
+            "Public Subscription = 1;",
+            "function fail(message) {",
+            "private function note() {}"
+          ]
+        },
+        {
+          "marker": "^VERSION\\s+5\\.00",
+          "examples": [
+            "VERSION 5.00"
+          ],
+          "nonExamples": [
+            "VERSION 6.00",
+            "const VERSION = 5.00;",
+            "version 5.00"
+          ]
+        },
+        {
+          "marker": "^\\s*Option\\s+Explicit\\s*$",
+          "examples": [
+            "Option Explicit",
+            "  Option Explicit  "
+          ],
+          "nonExamples": [
+            "// Option Explicit",
+            "Option Explicitly"
+          ]
+        },
+        {
+          "marker": "^\\s*Dim\\s+\\w+\\s+As\\s+\\w+",
+          "examples": [
+            "Dim x As Long",
+            "    Dim name As String"
+          ],
+          "nonExamples": [
+            "const label = \"'Dim x As'\";",
+            "// Dim x As Long"
+          ]
+        }
+      ]
+    },
+    "bannedExtensions": {
+      "caseSensitive": false,
+      "sources": "docs/guardrails.md section G7 (\"No legacy source files, headers or assets are committed\"); the extensions are the public Visual Basic 6 project and source file types",
+      "markers": [
+        {
+          "marker": ".vbp",
+          "examples": [
+            "project.vbp",
+            "PROJECT.VBP"
+          ],
+          "nonExamples": [
+            "vbp.ts",
+            "project.vbpx"
+          ]
+        },
+        {
+          "marker": ".vbg",
+          "examples": [
+            "group.vbg"
+          ],
+          "nonExamples": [
+            "vbg.ts",
+            "group.vbgx"
+          ]
+        },
+        {
+          "marker": ".frm",
+          "examples": [
+            "Form1.frm",
+            "FORM1.FRM"
+          ],
+          "nonExamples": [
+            "frm.ts",
+            "Form1.frmx"
+          ]
+        },
+        {
+          "marker": ".bas",
+          "examples": [
+            "module.bas",
+            "MODULE.BAS"
+          ],
+          "nonExamples": [
+            "bas.ts",
+            "module.basx"
+          ]
+        },
+        {
+          "marker": ".cls",
+          "examples": [
+            "Class1.cls"
+          ],
+          "nonExamples": [
+            "cls.ts",
+            "Class1.clsx"
+          ]
+        },
+        {
+          "marker": ".ctl",
+          "examples": [
+            "Control1.ctl"
+          ],
+          "nonExamples": [
+            "ctl.ts",
+            "Control1.ctlx"
+          ]
+        },
+        {
+          "marker": ".dsr",
+          "examples": [
+            "Designer1.dsr"
+          ],
+          "nonExamples": [
+            "dsr.ts",
+            "Designer1.dsrx"
+          ]
+        }
+      ]
+    }
+  }
+}
