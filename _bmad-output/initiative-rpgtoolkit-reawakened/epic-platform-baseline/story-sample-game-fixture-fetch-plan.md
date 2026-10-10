@@ -3,7 +3,7 @@ title: 'Sample-game fixture fetch'
 type: 'chore'
 ticket: '7'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '6bb4068bed7518c4eda5be20690fd67974e9fb3f'
 route: 'full'
 route_source: 'auto'
