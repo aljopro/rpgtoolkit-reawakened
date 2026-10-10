@@ -3,7 +3,7 @@ title: 'Dependency edge list and graph check'
 type: 'chore'
 ticket: '4'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '2562286dc40af6d71241741e556f4af8a27c4550'
 route: 'full'
 route_source: 'auto'
