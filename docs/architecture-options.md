@@ -5,6 +5,8 @@
 > **Approach.** Split the product into a **game core** and swappable **runners** (browser and native), plus an **editor** that reuses the core. Each option is judged on fitness, ecosystem maturity, licence, tooling friction, and how well the core-to-runner seam survives. Each option is tied back to the capability IDs in [engine-features.md](engine-features.md) (E-xx) and [editor-features.md](editor-features.md) (T-xx).
 >
 > Research current as of **October 2026**. Versions and statuses are cited at the end. Re-verify before committing.
+>
+> **Decision (October 2026): Option B, TypeScript everywhere**, with the VS Code extension as a first-class editor host alongside a standalone editor. See [ADR 0001](adr/0001-typescript-core.md). The comparison below is kept as the record of why. §8 states the chosen default.
 
 ---
 
@@ -195,7 +197,7 @@ A and B **tie on points**. The choice between them comes down to the team's appe
 
 ## 6. Capability traceability
 
-How each hard capability lands in the recommended default (Option A), with notes on alternatives:
+How each hard capability lands in an Option A build, with notes on alternatives. (This table predates the decision. The chosen Option B mapping is in §8 and [ADR 0001](adr/0001-typescript-core.md). The module boundaries are identical; only the language and the MIDI synth change.)
 
 | Capability | Where it lives | Notes / alternative impact |
 |---|---|---|
@@ -227,43 +229,53 @@ How each hard capability lands in the recommended default (Option A), with notes
 
 ---
 
-## 8. Recommendation
+## 8. Recommendation (decided: Option B)
 
-### Default: **Option A, Rust core with swappable runners; web-UI editor behind a platform-services interface, shipped in the browser and in Tauri.**
+### Chosen default: **Option B, TypeScript everywhere.** Pure TS core, swappable runners, and two first-class editor hosts: a standalone editor and a VS Code extension.
 
-* `core/` (Rust, no platform deps): formats, asset resolver, world, movement, triggers, RPGCode step VM, battle and menu rules, draw-list and audio-cue builders, save model. Compiles to native and wasm.
-* `synth/` (Rust): MIDI via rustysynth, shared by all runners.
-* `runner-web/` (TypeScript + wasm): WebGL2 draw-list replayer, Web Audio/AudioWorklet output, fetch/OPFS asset source.
-* `runner-native/` (Rust): winit + wgpu (or SDL3 if broader console/mobile reach is wanted), cpal or SDL audio, file-system and embedded-archive asset source.
-* `runner-headless/` (Rust): CPU rasteriser + null audio for CI golden tests against the legacy demo games.
-* `editor/` (TypeScript web UI; CodeMirror 6; canvas/WebGL board editor reusing runner-web's replayer; core via wasm for preview, diagnostics and test-run) behind `platform-services` with backends for **browser (PWA), Tauri (default desktop), Electron (fallback)**.
-* `lsp/` + `dap/`: an RPGCode language server and debug adapter built on the core's parser and VM. They are used by the standalone editor's CodeMirror *and* by any LSP/DAP-capable editor.
-* `vscode-extension/` (§4.1): a fourth `platform-services` backend that hosts the same editor components as webview custom editors and bundles the LSP and DAP. Published to the VS Code Marketplace and Open VSX, including a web-extension build for `vscode.dev`. It complements the standalone editor (power users, scripters, modders) rather than replacing it (beginners).
+**Packages (one monorepo, one language):**
 
-**Why this wins:**
-* It meets R1–R3 and R5 most naturally.
-* The compiler enforces the seam.
-* The same core runs in the browser, on desktop, inside the editor, and in CI.
-* Tauri's Rust backend can run the *native* core for packaging and conversion.
-* Everything is MIT/Apache/zlib.
+* `core/` (TypeScript, **no DOM, no Node APIs**): formats, asset resolver, world, movement, triggers, RPGCode **step VM**, battle and menu rules, draw-list and audio-cue builders, save model. Runs unchanged in browsers, Web Workers, Node/Bun, WebViews and the VS Code extension host.
+* `synth/`: MIDI via SpessaSynth (Apache-2.0) behind a small interface, so a runner can swap in another synth.
+* `runner-web/`: WebGL2 draw-list replayer (a Canvas2D fallback is optional), Web Audio/AudioWorklet output, fetch/OPFS asset source. This is also the renderer used inside every editor host for WYSIWYG.
+* `runner-desktop/`: `runner-web` in a desktop shell with a file-system asset source and an embedded-archive loader for single-file game builds.
+* `runner-mobile/`: `runner-web` in Capacitor.
+* `runner-headless/` (Node/Bun): CPU rasteriser + null audio + scripted input for CI golden tests against `build/game/demo` and `build/game/Basic`.
+* `lsp/` + `dap/`: the RPGCode language server and debug adapter, built directly on `core`'s parser and VM.
+* `editor-ui/`: host-agnostic editor components (board, sprite, animation, tile/tileset, tile bitmap, data editors; CodeMirror 6 for scripts) that talk only to the **platform-services** interface.
+* **Editor hosts, all implementing platform-services:**
+  * `host-vscode/`: **VS Code extension** (§4.1). Webview custom editors for every legacy format, bundled LSP and DAP, tasks for test-run and packaging, a web-extension build for `vscode.dev`. Published to the VS Code Marketplace **and** Open VSX.
+  * `host-web/`: standalone editor as a PWA (File System Access API / OPFS + ZIP import/export). The zero-install path for beginners.
+  * `host-desktop/`: the same standalone editor in a desktop shell.
 
-Tauri was chosen *after* comparison (§4) because it pairs with a Rust core and is the smallest option, **not** as a foregone conclusion. The platform-services interface keeps Electron one adapter away if WebView variance (notably Linux WebKitGTK) hurts the board editor.
+**Editor strategy: VS Code is a primary path, not the only path.** Both the VS Code extension and the standalone editor are first-class and ship from the same `editor-ui` components. Neither is a reduced version of the other:
+* VS Code serves scripters, experienced authors, contributors and modders of legacy games. It gets git, search, terminal and multi-root workspaces for free.
+* The standalone editor serves first-time creators (much of the legacy audience) with the familiar all-in-one layout (tool palette, tileset browser, inspector) and no prerequisite install.
+* The LSP and DAP also make the scripting experience available in any other LSP/DAP-capable editor (Neovim, Zed, JetBrains, Helix).
+* Feature parity rule: any editor capability (T-xx) lands in `editor-ui` first. Host-specific code is limited to platform services and chrome.
 
-### Alternative 1: **Option B, TypeScript everywhere** (choose if the team is web-first or wants the fastest MVP)
+**Desktop shell: still open; decide with a spike.** With a TypeScript core, Tauri's main advantage (running a Rust core natively in its backend) no longer applies.
+* **Tauri:** smallest bundle; the core runs in the WebView or a worker.
+* **Electron:** consistent Chromium; the core can also run in the Node backend for packaging tasks.
+* **Electrobun:** TS/Bun-native, but young.
 
-The same architecture with a TS core package and a hard "no DOM" lint boundary. SpessaSynth for MIDI. Editor and runner share one language. Desktop via Tauri or Electron, mobile via Capacitor 8. The trade-off: a softer seam and slower worst-case performance, though both are adequate for this content. You can migrate the core to Rust/wasm later behind the same seam if needed.
+Spike the board editor and the game runner on all three desktop OSes (Linux WebKitGTK especially) before choosing. The platform-services interface keeps the choice reversible.
 
-### Alternative 2: **Option A core + Godot as an extra runner** (choose for the broadest export reach with minimal runner code)
+**Day-one guard-rails** (these make up for Option B's softer seam):
+1. **Explicit step-machine VM.** Instruction pointer + frame stack, run N steps per call. No generators or async/await for script threads, because thread state must be saveable (R1, R2, E-120).
+2. **Hard core boundary.** `core` has no DOM or Node types in its TS config, and lint rules ban `window`, `document`, `fetch`, timers and `Math.random`. Assets arrive as bytes; time and RNG are injected (R3).
+3. **Renderers stay behind the draw list.** Phaser or Pixi, if used at all, only replay draw lists. They must never own the loop or hold game state.
+4. **Headless CI from milestone 1.** The headless runner plays the legacy demo games with scripted input and compares against golden images.
+5. **Licence gate in CI.** Allow MIT, Apache-2.0, BSD, ISC and zlib; block GPL, LGPL, AGPL and source-available dependencies (§7).
 
-Keep the Rust core and wrap it as a GDExtension. Godot then becomes one *runner* that replays the draw list and plays audio cues, and its exporters (desktop, mobile, consoles via partners) do the rest. Do **not** move game logic into GDScript, or the seam collapses.
+**Escape hatch.** If profiling ever shows a hot path (pathfinding, CPU rasterising, synth), move just that module to Rust/wasm behind the same TypeScript interface. That is Option A applied selectively, with no architectural change.
 
-### Alternative 3: **Option C, C++/SDL3** (choose only for a C++ team targeting consoles or very low-end hardware)
+### Alternatives considered (not chosen)
 
-Use SDL3 + TinySoundFont, Emscripten for web, and a web-UI editor with the core compiled to wasm (not ImGui, because of R7).
-
-### Not recommended
-
-.NET as the primary stack (weak browser path, MS-PL), Defold (not OSI), LÖVE (unreleased 12.0, unofficial web), and Bevy-as-engine (fights the seam).
+* **Option A, Rust core:** tied on points. It has a stronger enforced seam and native speed, but adds a second language and more friction. It remains the escape hatch above.
+* **Godot as an extra runner:** possible later as one more runner that replays the draw list. Never move logic into GDScript.
+* **Option C, C++/SDL3:** only for console or very low-end targets.
+* **Not recommended:** .NET as the primary stack (weak browser path, MS-PL), Defold (not OSI), LÖVE (12.0 unreleased, unofficial web builds), Bevy as the engine (fights the seam).
 
 ---
 
@@ -273,9 +285,9 @@ Use SDL3 + TinySoundFont, Emscripten for web, and a web-UI editor with the core 
 2. **RPGCode parser + step VM** with blocking and threads. Run `system.prg`/`start.prg` headlessly with scripted input.
 3. **Board render** (draw list → headless PNG) matching legacy screenshots for 2D and both iso modes.
 4. **Movement/collision/triggers.** Play the demo's NPC intercept and battle trigger end-to-end headlessly.
-5. **Web runner + native runner** sharing the core. MIDI via the shared synth.
+5. **Web runner + desktop runner** sharing the core. MIDI via the shared synth.
 6. **RPGCode LSP** (diagnostics, hover, outline) on top of milestone 2. It can be released early as a VS Code / Open VSX extension, which delivers value to legacy-game modders before the full editor exists.
-7. **Editor P0 tools** (editor-features §11) on the browser shell, then the desktop shell and the VS Code custom-editor host. Add the debug adapter once the VM is stable.
+7. **Editor P0 tools** (editor-features §11) in `editor-ui`, shipped through the VS Code custom-editor host and the standalone PWA in parallel, then the desktop shell. Add the debug adapter once the VM is stable.
 
 ---
 

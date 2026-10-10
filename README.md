@@ -8,5 +8,6 @@ This repository currently holds product documentation only:
 - [docs/engine-features.md](docs/engine-features.md) — runtime engine capability inventory and architecture
 - [docs/editor-features.md](docs/editor-features.md) — authoring toolset capability inventory
 - [docs/architecture-options.md](docs/architecture-options.md) — candidate stacks, core/runner seam, recommendation
+- [docs/adr/0001-typescript-core.md](docs/adr/0001-typescript-core.md) — decision: TypeScript everywhere; VS Code extension + standalone editor
 
 **Provenance:** The documents describe behaviour and file layouts observed in the GPL-2 legacy project. No legacy source code has been copied or ported. Implementation work must be done from these documents, not from the legacy source.
