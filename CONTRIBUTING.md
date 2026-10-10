@@ -9,3 +9,16 @@ Thanks for helping reawaken RPG Toolkit.
 5. **Architecture changes** go through an ADR in `docs/adr/`.
 
 Code is licensed under MIT and/or Apache-2.0.
+
+## Commands
+
+Node 24.21.0 (see `.node-version`) and pnpm 12.10.1 (`corepack enable` picks it up from `packageManager`).
+
+```sh
+pnpm install --frozen-lockfile   # install from the committed lockfile
+pnpm build                       # tsc -b
+pnpm typecheck                   # tsc -b, then each package's tsconfig.test.json (src and test)
+pnpm test                        # tsc -b, then node --test
+```
+
+These are the same commands CI runs, one workflow per check under `.github/workflows/`.

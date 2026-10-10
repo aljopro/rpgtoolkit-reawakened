@@ -40,7 +40,7 @@ The repo scaffold, CI, and the `runner-harness` skeleton (null audio, scripted-i
 
 ## Notes
 
-- Decision: tools are those of the architecture spine Stack: pnpm, Vitest, ESLint with typescript-eslint, dependency-cruiser, GitHub Actions (2026-10-10).
+- Decision: tools are those of the architecture spine Stack: pnpm, `node:test`, ESLint with typescript-eslint, dependency-cruiser, GitHub Actions. The user replaced Vitest with `node:test` on 2026-10-10 because Vitest brings `lightningcss` (MPL-2.0) into the dev tree.
 - Open question: where the sample games are fetched from, and a pinned revision for them.
 - Decision: epic set approved by the user, 2026-10-10.
 - Assumption: an agent drafts ADR 0002 and the doc amendments from the spine's Deferred list and a person accepts them (entry 1). Confirm.

@@ -356,9 +356,9 @@ graph TD
 | `@typescript/native` (alias `npm:typescript`, `tsc -b` typecheck and build) | 7.0.2 |
 | Node.js (LTS; CI and `runner-headless`) | 24.21.0 |
 | pnpm | 12.10.1 |
-| Vite | 8.3.4 |
+| Vite (not yet installed; needs its dev-only `lightningcss` dependency, MPL-2.0, named in an ADR first) | 8.3.4 |
 | esbuild | 0.28.2 |
-| Vitest | 5.0.3 |
+| Test runner: `node:test` with `node:assert` (built into Node, no dependency) | Node 24.21.0 |
 | Playwright (headless-browser tests) | 1.64.0 |
 | ESLint | 10.12.0 |
 | typescript-eslint | 8.71.1 |
@@ -404,7 +404,7 @@ Deployment and environments (no backend):
 
 ```mermaid
 graph LR
-  dev[Local dev: pnpm, Vite, Vitest] --> ci[CI: typecheck, lint, unit, golden, licence, provenance]
+  dev[Local dev: pnpm, node:test] --> ci[CI: typecheck, lint, unit, golden, licence, provenance]
   fixtures[Legacy sample games: fetched at CI time, pinned] --> ci
   ci --> npm[npm packages: core, synth, runner-web]
   ci --> pwa[PWA on static hosting]
@@ -463,4 +463,5 @@ Primary governing ADs per capability. Each AD's `Binds` line lists every capabil
 - Desktop shell and mobile packaging: spikes in epics desktop-shell and web-runner-packaging; both sit behind platform-services and `runner-web`.
 - Physical save location per host, behind `GameId` and blob keys (AD-17).
 - Accessibility and localisation: no cross-epic divergence point at this altitude.
+- Vite 8 depends on `lightningcss` (MPL-2.0). Before the first Vite install (epics web-runner-packaging and editor-foundation), an ADR names it as a dev-only tool, or the web builds use esbuild instead.
 - Internal structure of each domain module and each editor tool: per-epic spines at inception.
