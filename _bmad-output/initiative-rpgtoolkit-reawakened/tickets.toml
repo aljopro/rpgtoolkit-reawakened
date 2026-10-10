@@ -1,0 +1,105 @@
+# tickets.toml — the epics of this initiative, in build order. tickets.py reads it.
+
+[[epic]]
+id = 1
+slug = "epic-platform-baseline"
+title = "Platform baseline: monorepo, guard-rails and headless CI"
+covers = ["CAP-12", "CAP-13"]
+
+[[epic]]
+id = 2
+slug = "epic-legacy-formats"
+title = "Legacy projects load: formats, packages and asset resolver"
+covers = ["CAP-1"]
+after = [{ epic = 1, needs = "the monorepo, CI and fixture fetch" }]
+
+[[epic]]
+id = 3
+slug = "epic-rpgcode-vm"
+title = "RPGCode runs on a saveable step-machine VM"
+covers = ["CAP-5"]
+after = [{ epic = 1, needs = "G1 lint and type rules" }]
+
+[[epic]]
+id = 4
+slug = "epic-board-rendering"
+title = "Boards render through draw lists in 2D and both iso modes"
+covers = ["CAP-2", "CAP-6"]
+after = [{ epic = 1, needs = "the headless runner skeleton" }, { epic = 2, needs = "loaded boards, tiles and sprites" }, { epic = 3, needs = "the VM registration API and program execution for rendering built-ins" }]
+
+[[epic]]
+id = 5
+slug = "epic-movement-triggers"
+title = "Sprites move, collide and fire triggers as legacy did"
+covers = ["CAP-3", "CAP-4", "CAP-8"]
+after = [{ epic = 2, needs = "character, item and board data" }, { epic = 3, needs = "program execution for triggers" }, { epic = 4, needs = "world model and loop" }]
+
+[[epic]]
+id = 6
+slug = "epic-audio-synth"
+title = "Music, effects and MIDI play through a shared synth"
+covers = ["CAP-7"]
+after = [{ epic = 1, needs = "the synth package scaffold and licence gate" }, { epic = 3, needs = "audio built-in registration" }]
+
+[[epic]]
+id = 7
+slug = "epic-battle"
+title = "Battles run on core rules with a default UI"
+covers = ["CAP-9"]
+after = [{ epic = 2, needs = "enemy, special-move, status-effect and background data" }, { epic = 3, needs = "battle built-ins and custom programs" }, { epic = 5, needs = "random battle start and fighter state" }]
+
+[[epic]]
+id = 8
+slug = "epic-menu-party-save"
+title = "Menu, party, inventory and saves work, including running threads"
+covers = ["CAP-10", "CAP-11"]
+after = [{ epic = 3, needs = "thread snapshot support" }, { epic = 5, needs = "party and board state" }, { epic = 7, needs = "battle state to save" }]
+
+[[epic]]
+id = 9
+slug = "epic-web-runner-packaging"
+title = "Games play in the browser; desktop, mobile and packaging wrap the same core"
+covers = ["CAP-12"]
+after = [{ epic = 4, needs = "draw lists to replay" }, { epic = 6, needs = "audio cues and synth" }, { epic = 7, needs = "battle" }, { epic = 8, needs = "menu and save" }]
+
+[[epic]]
+id = 10
+slug = "epic-rpgcode-tooling"
+title = "RPGCode language server and debug adapter"
+covers = ["CAP-14"]
+after = [{ epic = 3, needs = "the parser and the VM" }]
+
+[[epic]]
+id = 11
+slug = "epic-editor-foundation"
+title = "Editor foundation: editor-ui, platform-services and two hosts"
+covers = ["CAP-15", "CAP-18"]
+after = [{ epic = 2, needs = "format readers" }, { epic = 9, needs = "runner-web for preview and test-run" }, { epic = 10, needs = "the program editor's language tooling" }]
+
+[[epic]]
+id = 12
+slug = "epic-editor-assets-p0"
+title = "P0 asset editors: board, character, item, animation, tile bitmap, packaging"
+covers = ["CAP-15"]
+after = [{ epic = 11, needs = "editor-ui and both hosts" }]
+
+[[epic]]
+id = 13
+slug = "epic-editor-p1"
+title = "P1 editor tools"
+covers = ["CAP-16"]
+after = [{ epic = 12, needs = "the board editor and shared tileset browser" }]
+
+[[epic]]
+id = 14
+slug = "epic-editor-p2"
+title = "P2 editor tools for beginners"
+covers = ["CAP-17"]
+after = [{ epic = 12, needs = "the program editor and board editor" }]
+
+[[epic]]
+id = 15
+slug = "epic-desktop-shell"
+title = "Standalone editor in a desktop shell"
+covers = ["CAP-18"]
+after = [{ epic = 12, needs = "a board editor to spike against" }]

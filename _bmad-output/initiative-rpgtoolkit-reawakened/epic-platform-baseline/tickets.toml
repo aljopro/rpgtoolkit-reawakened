@@ -1,0 +1,123 @@
+# tickets.toml — the planned entries of this epic, in build order. tickets.py reads it.
+
+[[entry]]
+id = 1
+type = "story"
+title = "ADR 0002 and the doc amendments"
+description = "Writes ADR 0002 (core rasteriser and glyph rasterisation, the `Math` allowlist and `**` ban, the `ovsx` exemption) and amends architecture-options section 2, the spec companion packages.md seam section, guardrails G3 enforcement and G4 rule 1 wording in one doc-only commit, so the scaffold in later entries implements accepted rules."
+verify = "A person reads and accepts ADR 0002; the commit touches only `docs/` and the spec companion packages.md, and each amended passage matches AD-4, AD-13 and AD-15."
+covers = ["CAP-13"]
+after = []
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Monorepo tracer: core, harness and shell through a green CI run"
+description = "Creates the pnpm workspace with the TypeScript 6 alias pair, the workspace Vitest and tsconfig bases, one tested `core` function called by an empty `runner-harness` that `runner-headless` runs, and a minimal GitHub Actions setup with one workflow file per check and one root script per check, so later entries add files and do not edit shared ones. A person creates the GitHub repository, adds the remote and enables Actions."
+verify = "A fresh clone runs one install, then one build, typecheck and test command per package, `runner-headless` prints the core function's result, and a pull request shows a green CI run."
+covers = ["CAP-13"]
+after = [1]
+hitl = true
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Guard-rail lint and type rules for core"
+description = "Adds the workspace ESLint base and its CI workflow, and for `core` the ESLint and tsconfig rules of G1 to G3, AD-13 and AD-24 (no DOM or Node types, generator/async/Promise ban in the VM scope, `Date`/`Intl`/`Math` allowlist, `**`, `console`, the bare `fflate` specifier), the `PlainData` JSON-value type in `core/ports` with its type-level constraint, the check that `core`'s runtime dependencies equal its allowlist, and a lint rule rejecting guard-rail suppressions without a `guardrail-exception: Gx ADR-NNNN` marker."
+verify = "A fixture file with one violation per rule fails lint or typecheck, a function type in a `PlainData` position fails, an unlisted core dependency fails, an unmarked suppression fails, and clean code passes."
+covers = ["CAP-13"]
+after = [2]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Dependency edge list and graph check"
+description = "Adds `tools/deps/edges.json` with every planned package edge, a generator that writes the dependency-cruiser rules and the spine's mermaid diagram, a check that the committed diagram matches, and the G4 rule that third-party engine imports (Phaser, PixiJS, Excalibur) are allowed only under `runner-*/src/render/**`. It adds its own workflow file."
+verify = "An import that is not an edge fails the graph check, a deep import of a package internal fails it, an edited edge list without a regenerated diagram fails it, and a Phaser import outside `runner-*/src/render/**` fails it."
+covers = ["CAP-13"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Licence gate and THIRD_PARTY_NOTICES"
+description = "Adds the G6 job (its own workflow file) that lists every production dependency licence across workspaces, fails outside the allowlist, runs the audit, pins the lockfile, records the `ovsx` dev-only exemption, and adds `THIRD_PARTY_NOTICES` (G6 rule 3)."
+verify = "Adding a GPL-licensed production dependency fails the job, a clean tree passes, and `THIRD_PARTY_NOTICES` is present at the repo root."
+covers = ["CAP-13"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Provenance scan"
+description = "Adds the G7 scan (its own workflow file) with the legacy-marker list kept in the repo, and a cite-the-docs checkbox in the existing PR template."
+verify = "A source file containing a legacy marker fails the scan; the PR template has a checkbox requiring the cited `docs/` sections."
+covers = ["CAP-13"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Sample-game fixture fetch"
+description = "Adds the script and CI step that fetch the legacy `demo` and `Basic` games at a pinned revision into an ignored folder that the golden job of entry 9 reads, and verify nothing from them is tracked."
+verify = "CI fetches both games, a local run reuses a cache, and a check fails if any fixture file is tracked by git."
+covers = ["CAP-13"]
+after = [2]
+hitl = true
+risk = "low"
+unknown = "The source location and pinned revision of the demo and Basic sample games."
+
+[[entry]]
+id = 8
+type = "story"
+title = "Contract types, canonical form and hashes"
+description = "Adds the runner-facing Engine contract types every CAP-12 runner drives (Engine, StepReport, InputRecord, requests; AD-1, AD-14), built on entry 3's `PlainData`, in `core/ports`, and `core/canon`: RFC 8785 canonical JSON and FNV-1a 64-bit hashes."
+verify = "RFC 8785 vectors and fixed FNV-1a vectors pass, `canon(JSON.parse(canon(x))) === canon(x)` holds for generated PlainData, and `canon(-0) === '0'`."
+covers = ["CAP-12", "CAP-13"]
+after = [3]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 9
+type = "story"
+title = "runner-harness driver, synth scaffold and the golden job"
+description = "Adds to `runner-harness` the input-log driver, the null audio port and golden compare (the CAP-12 headless runner skeleton; web, desktop, mobile and packaging are epic web-runner-packaging), an empty `synth` package (public `src/index.ts` only, typechecked, linted and on the edge list), and the golden CI job, which runs entry 7's fetch, asserts the hash vectors and replays an input log against a test-double engine. Each new package has build, typecheck, lint and test commands."
+verify = "The golden job passes on a pull request and its log shows both games fetched; changing a golden value or the replayed log fails it with the differing step."
+covers = ["CAP-12", "CAP-13"]
+after = [4, 7, 8]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 10
+type = "story"
+title = "Required CI checks, branch protection and contributor docs"
+description = "Makes typecheck, lint, unit, golden, licence, provenance and graph required checks with no `if:` conditions or path filters on required jobs and a final gate job (`if: always()`) that fails unless every `needs.*.result` is `success`, so a skipped job cannot merge, and documents the commands in CONTRIBUTING. A person sets branch protection."
+verify = "A pull request with any failing or skipped required job cannot merge."
+covers = ["CAP-13"]
+after = [3, 4, 5, 6, 9]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 11
+type = "story"
+title = "Refactor sweep"
+description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
+verify = "All required checks stay green and each cleanup traces to a deferred review finding."
+covers = ["CAP-13"]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+hitl = false
+risk = "low"

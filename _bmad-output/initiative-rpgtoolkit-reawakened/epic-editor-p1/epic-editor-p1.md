@@ -1,0 +1,41 @@
+---
+type: epic
+title: "P1 editor tools"
+parent: initiative-rpgtoolkit-reawakened
+covers: ["CAP-16"]
+assignee: ""
+risk: low
+---
+
+# P1 editor tools
+
+## Description
+
+Tile editor, tile grabber, tileset editor, enemy, special move, status effect and battle background editors, lighting and shading, the auto-tiler, undo and clipboard, export image and legacy upgrade wizards.
+
+## Outcome
+
+Authors get the full legacy toolset beyond P0; the CAP-16 success check is the signal.
+
+## Done when
+
+1. Each P1 tool opens, edits and saves its legacy format and the result loads in the runner and re-opens unchanged.
+2. The auto-tiler picks tiles from the 8-neighbour rules and matches the variant order of community sample sets.
+3. Export image writes the current view or the whole board without editor overlays.
+4. The coordinate and legacy-board upgrades of T-30 and T-31 run in the editor with correct object movement.
+
+## Boundaries
+
+P1 tools of editor-features section 11. Not P0 or P2.
+
+## References
+
+- spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
+- reference - docs/editor-features.md, sections 4, 6, 7, 11
+
+## Notes
+
+- Open question: the auto-tiler variant ordering must be rebuilt from sample sets under G7; which sample sets? Entries wait on that answer.
+- Decision: epic set approved by the user, 2026-10-10.
+- Waits on editor-assets-p0 because: the board editor and shared tileset browser.
+- Decision: envelope re-sliced against the architecture spine, 2026-10-10.
