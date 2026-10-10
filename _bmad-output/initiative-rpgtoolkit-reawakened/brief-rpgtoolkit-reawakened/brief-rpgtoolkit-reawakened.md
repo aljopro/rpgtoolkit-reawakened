@@ -13,6 +13,8 @@ In the early 2000s, Christopher B. Matthews' RPG Toolkit opened a door. It was f
 
 RPG Toolkit Reawakened brings it back, twenty years later, in a web browser. Classic community games play again from a link. New games are made and shared the same way. The project is free and open, and what you make with it is yours, including games you sell. **Your game, completely and freely.**
 
+The community saw this coming. In 2005 it was already asking for an organized team, because "it is near impossible for one person to do it on their own", and asking whether the Toolkit would ever go cross-platform (Allan@Aljo, June 2005). Reawakened answers both.
+
 It's a tribute first. But a tribute only lasts if new people walk through the door, so it's built for the next person ready to make their first game, with a welcome back for everyone who was there the first time.
 
 ## The Problem
@@ -73,7 +75,8 @@ A modern rebuild of RPG Toolkit 3, the last major version, that runs in the brow
 ## Open Questions
 
 - **Credit:** how to credit Phil "Xavier" and other key community members, and what they'd want to be called.
-- **The original creators:** whether to reach out to Chris (and Phil) for their blessing. It isn't needed, but it would mean a lot.
+- **The name (most important):** ask Christopher B. Matthews for his blessing to use the "RPG Toolkit" name. In 2005 the core team was clear that a true successor could only be started by Chris, and that anything else was a spin-off (toolkitzone.com, "Team Reorganisation", June 2005). Reawakened is written from scratch and deliberately isn't called "Toolkit 4". Even so, the name was seen as his to give, so ask before launch, not after.
+- **The original team:** reach out to Phil "Xavier" Carty, Colin (KSNiloc), Euix and the other contributors too. Their support would mean a lot.
 - **Custom plugins:** can we detect which plugins a game needs, and rebuild the most common community plugins on the new system so more games just work? This is a question for the team.
 - **Toolkit 2 games:** *Final Destiny* is a Toolkit 2 game. We need to confirm the new engine opens Toolkit 2 files as well as Toolkit 3.
 - **People to reach:** euix (the Discord, and remembered from the old days), arsekil (already rebuilding the old community website), and the original team listed on SourceForge.
