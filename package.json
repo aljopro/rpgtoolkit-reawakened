@@ -11,7 +11,11 @@
     "lint": "node tools/check-core-deps.mjs && eslint .",
     "graph": "node tools/deps/graph.mjs",
     "graph:write": "node tools/deps/graph.mjs --write",
-    "graph:test": "node --test tools/deps/test/graph.test.mjs"
+    "graph:test": "node --test tools/deps/test/graph.test.mjs",
+    "licence": "node tools/licences/check.mjs",
+    "licence:test": "node --test tools/licences/test/licences.test.mjs",
+    "license": "pnpm run licence",
+    "license:test": "pnpm run licence:test"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@7.0.2",

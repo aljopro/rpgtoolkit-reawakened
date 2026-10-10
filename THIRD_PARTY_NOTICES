@@ -1,0 +1,19 @@
+# Third-Party Software and Asset Notices
+
+This repository and the packages built from it may include third-party software and assets subject to the licences and notices below.
+
+This file satisfies the requirements of Guard-rail G6 (Rule 3) and ADR 0003 for third-party notices and attribution.
+
+---
+
+## Production Dependencies
+
+Production runtime dependencies bundled into or shipped with `@rpgtoolkit/*` packages will have their copyright notices and license texts recorded below.
+
+Currently, `@rpgtoolkit/core`, `@rpgtoolkit/runner-headless`, and `@rpgtoolkit/runner-harness` have zero production runtime npm dependencies.
+
+---
+
+## Bundled Assets
+
+Assets (SoundFonts, fonts, sample art) distributed with the engine or editor will be recorded here with their licence and copyright notice as they are added to the repository.

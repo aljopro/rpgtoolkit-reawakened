@@ -1,0 +1,13 @@
+{
+  "minimumRating": "Bronze",
+  "blocked": [
+    "MS-PL"
+  ],
+  "devExemptions": {
+    "ovsx": {
+      "license": "EPL-2.0",
+      "adr": "ADR-0002",
+      "reason": "Publishing CLI for Open VSX; dev-only tool that is never shipped, bundled, or linked."
+    }
+  }
+}
