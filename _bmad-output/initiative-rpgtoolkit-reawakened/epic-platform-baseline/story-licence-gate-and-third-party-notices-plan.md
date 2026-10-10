@@ -3,7 +3,7 @@ title: 'Licence gate and THIRD_PARTY_NOTICES'
 type: 'chore'
 ticket: '5'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '409500f2d845ac456216e2b63ab1107af8ae1c0a'
 route: 'full'
 route_source: 'auto'
