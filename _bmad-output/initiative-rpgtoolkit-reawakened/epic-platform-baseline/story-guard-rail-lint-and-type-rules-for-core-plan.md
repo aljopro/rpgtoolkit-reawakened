@@ -3,15 +3,15 @@ title: 'Guard-rail lint and type rules for core'
 type: 'feature'
 ticket: '3'
 created: '2026-10-10'
-status: 'draft'
-baseline_revision: 'de4cc2b7a401bf18d74547adc8761e4e8e547ba0'
+status: 'built'
+baseline_revision: 'b4f420df66a2e25ab2c7e032a4b5323a20ac81bd'
 route: 'full'
 route_source: 'auto'
 risk: 'high'
-review: ''
-review_source: ''
-lenses_ran: []
-review_loop_iteration: 0
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
+review_loop_iteration: 2
 context:
   - '{project-root}/docs/guardrails.md'
   - '{project-root}/docs/adr/0002-core-pixels-and-deterministic-maths.md'
@@ -41,8 +41,8 @@ context:
 | Allowed Math | `Math.sqrt`, `Math.floor` and the rest of the allowlist | Passes | none |
 | Non-plain data | A function type, `undefined`, `Map` or class instance in a `PlainData` position | Typecheck fails | none |
 | Unlisted dependency | A runtime dependency in `core`'s package.json not in the allowlist | The allowlist check fails and names it | Exit non-zero |
-| Unmarked suppression | `eslint-disable` of a guard-rail rule with no `guardrail-exception: Gx ADR-NNNN` | Lint fails | none |
-| Marked suppression | The same with a valid marker | Passes | none |
+| Suppression attempt | Any `eslint-disable` of a guard-rail rule, marked or not | Lint fails: inline config is off, so no suppression takes effect; the marker convention exists so a real exception is written as a config-level change with an ADR | none |
+| Marked suppression | A fixture with a clean line and a marked `eslint-disable` | The unused-directive problem is reported, because inline config is off by design | none |
 
 </frozen-after-approval>
 
@@ -70,7 +70,7 @@ context:
 
 **Acceptance Criteria:**
 - Given the repository, when `pnpm lint`, `pnpm typecheck` and `pnpm test` run, then all pass on clean code.
-- Given a fixture per rule listed in the matrix, when the test runs, then each fixture fails with its own rule and the allowed-`Math` and marked-suppression fixtures pass.
+- Given a fixture per rule listed in the matrix, when the test runs, then each fixture fails with exactly the guard-rail rule it declares and the clean and allowed-`Math` fixtures pass.
 - Given a function type in a `PlainData` position, when typechecked, then it fails.
 - Given a runtime dependency added to `core` that is not in the allowlist, when `pnpm lint` runs, then it fails and names the dependency.
 - Given the installed dev dependency tree, when every package's licence is read, then each is rated Bronze or better on the Blue Oak Council list (BlueOak-1.0.0, MIT, Apache-2.0, ISC, BSD-2-Clause, BSD-3-Clause and the like) and none is MS-PL, or is named in an accepted ADR.
@@ -80,7 +80,25 @@ context:
 
 ## Plan Change Log
 
+- **Iteration 1.** Trigger: review findings 1 to 9. Amended: the Code Map and Tasks now require (a) ESLint inline config turned off at the config level with the marker rule kept only for the `guardrail-exception:` comment convention, (b) the global-object check on for the banned globals, (c) Node built-ins matched by anchored regex against Node's own `builtinModules` list plus a rule for dynamic `import()`, (d) anchored patterns so relative imports and package subpaths are not caught, (e) the `fflate/browser` `Async*` exports banned, (f) `*.ts`, `*.mts`, `*.cts`, `*.tsx` all linted, (g) `for await` caught, (h) the dependency check covering `dependencies`, `optionalDependencies` and `peerDependencies`, (i) one fixture per rule and a fixture per banned case that only that rule can catch, plus fixtures for the dependency check. Known-bad state avoided: rules that fail open on an obvious evasion, and a fixture suite that proves nothing. KEEP: the rule scopes, the `PlainData` type and its constraint, the empty allowlist file, the custom plugin's marker format, the lint workflow, the `lint` script, and the fixture folder excluded from `pnpm lint` and `typecheck`.
+
+
 ## Review Triage Log
+| 1 | The suppression rule can be silenced by a bare `/* eslint-disable */`, `eslint-disable-line`, or a list naming the rule itself | medium | bad_plan | Config-level, not a typos: the rule polices directives from inside ESLint, so it cannot see its own report. Design fix: turn off inline config outright (linterOptions) and keep the marker rule for the cases that remain; the plan never decided this. |
+| 2 | `globalThis.Date`, `globalThis.setTimeout`, `globalThis.Promise` pass | medium | patch | Verified by inspection of the config: `no-restricted-globals` is given a plain list, so the option that also checks the global object is off. |
+| 3 | Hand-written Node built-in list misses `domain`, `constants`, `sys`; `import("fs")` unchecked | medium | patch |  |
+| 4 | Bare-name patterns reject `./stream/index.ts`, `./vm/state.ts` and `some-lib/util` as Node built-ins | medium | patch | A false positive that would stop the script VM living in a `vm/` folder. |
+| 5 | `fflate/browser` `Async*` classes not banned (AD-6) | medium | patch |  |
+| 6 | `.mts`, `.cts`, `.tsx` in core are never linted while `tsc` still compiles them | medium | patch |  |
+| 7 | Top-level `for await` evades the G1 await ban | medium | patch |  |
+| 8 | `check-core-deps.mjs` compares only `dependencies`, not `optionalDependencies` or `peerDependencies` (G2.3 is exact) | medium | patch |  |
+| 9 | Fixture test proves only that a rule id appears: the `await` fixture is masked by its enclosing `async`, and there are no fixtures for `**=`, workspace imports, `Intl`, `performance`, or the dependency check | medium | patch | The plan's matrix requires a fixture per rule, so this is a direct deviation. |
+| 10 | README and .gitignore changes in the diff | false | reject | Not this change: `git status` shows both modified in the working tree by a concurrent session, uncommitted. They are excluded from this entry's commit. |
+| 11 | `noInlineConfig` makes every suppression inert, so the matrix row "marked suppression passes" can never hold, and `suppress/marked.ts` hid that by containing no violation | medium | patch | By design (Design Notes) that no inline suppression works; the matrix row and the fixture were wrong, not the code. Row rewritten; the fixture must prove the unused-directive report instead. |
+| 12 | `fflate/node` and other subpaths pass (AD-6) | medium | patch |  |
+| 13 | The fflate async-class list may miss a name (`AsyncZipInflate`, `AsyncCompress`) | low | patch | Checked against `fflate` 0.8.3's own `esm/browser.d.ts`; the reviewer's claim that `AsyncZip`/`AsyncUnzip` exist is wrong, but `AsyncZipInflate` and `AsyncCompress` are worth adding if the restriction does not cover them. |
+| 14 | A relative import reaching into another workspace package passes the G2.3 ban | medium | patch | Ban relative imports that escape the importing package, using the rule context's file path. |
+| 15 | `Math` and `toLocale*` bypassed by string-literal indexing and destructuring; dynamic `import()` via a template literal | low | defer | Carried from pass 1 (finding 5); the robust fix needs a type-aware pass or a resolver and will be revisited if either pattern ever appears in `core`. |
 
 ## Verification
 
