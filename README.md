@@ -1,8 +1,10 @@
 # RPG Toolkit Reawakened
 
-**Make your own role-playing game in a web browser, and play the classic ones again.**
+**Your game, completely and freely.**
 
-In the early 2000s, Christopher B. Matthews' RPG Toolkit let a whole generation make their first maps, write their first scripts and share their first games. The community around it has been quiet for years, and the tool only runs on Windows machines of twenty years ago. RPG Toolkit Reawakened brings it back, rebuilt from scratch for the web.
+A classic RPG development ecosystem you can use right in your browser. Make your own role-playing game, and play the classic ones again.
+
+In the early 2000s, Christopher B. Matthews' RPG Toolkit opened a door for a whole generation. It was free, it was made for role-playing games, and a community grew up around it where young people made their first maps, wrote their first scripts and shared their first games. Many of them went on to become engineers and artists. That community has been quiet for years, and the tool only runs on Windows machines of twenty years ago. RPG Toolkit Reawakened brings it back, rebuilt from scratch for the web.
 
 ## What you'll be able to do
 
@@ -19,9 +21,9 @@ The code is open source under the [MIT license](LICENSE). You can share your gam
 
 ## Where it stands
 
-Early days. Nothing is playable yet. The full written specification and architecture are done, and the project's workspace and checks are being set up. The first goal is the player: a classic game with no plugins playing start to finish in a browser. The editor comes right after.
+It's early days, and nothing is playable yet. The full written specification and architecture are done, and we're setting up the project's workspace and checks. The first goal is the player: a classic community game playing start to finish in a browser. Our first candidate is *Final Destiny*, by Christopher B. Matthews himself. The editor comes right after.
 
-One known limit: the old Toolkit allowed Windows-only plugins, and those can't run in a browser. Games without plugins play as they are. Games that used plugins will need those parts rebuilt with the new extension system.
+One known limit: the old Toolkit allowed Windows-only add-ons called plugins, and those can't run in a browser. Toolkit 3's standard battle and menu systems were plugins too, but we're rebuilding those as part of the engine, so games that used only the standard ones should play. Games with custom-built plugins will need those parts rebuilt with the new extension system.
 
 ## Who it's for
 
@@ -33,11 +35,15 @@ One known limit: the old Toolkit allowed Windows-only plugins, and those can't r
 
 - [Format specification](docs/format-spec.md): the legacy file formats the player has to read
 - [Engine features](docs/engine-features.md) and [editor features](docs/editor-features.md): what the engine and the editor do
-- [Architecture options](docs/architecture-options.md) and [decision records](docs/adr/0001-typescript-core.md): how it is built, and why
+- [Architecture options](docs/architecture-options.md) and [decision records](docs/adr/0001-typescript-core.md): how it's built, and why
 - [Engineering rules](docs/guardrails.md): the rules every change follows
 
 ## Helping out
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md). It has the commands to build and test the project and the few rules that keep the project's license clean.
+We'd love the help. The earlier revivals stalled when too few people were left carrying them, so this one is meant to be built together. Start with [CONTRIBUTING.md](CONTRIBUTING.md). It has the commands to build and test the project, and the few rules that keep the project's license clean.
 
 *Contributors: this is a clean-room project, so implement from `docs/` only. The rules are in [CONTRIBUTING.md](CONTRIBUTING.md).*
+
+---
+
+*Reawakened by Jensen Chappell, in tribute to Christopher B. Matthews, Phil "Xavier" Carty, and the RPG Toolkit community.*
