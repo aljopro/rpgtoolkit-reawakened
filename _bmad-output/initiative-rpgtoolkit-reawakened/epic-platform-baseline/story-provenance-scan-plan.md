@@ -3,7 +3,7 @@ title: 'Provenance scan'
 type: 'chore'
 ticket: '6'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '6e827f564ea3a211514b1453224ad294cf9373f8'
 route: 'full'
 route_source: 'auto'
