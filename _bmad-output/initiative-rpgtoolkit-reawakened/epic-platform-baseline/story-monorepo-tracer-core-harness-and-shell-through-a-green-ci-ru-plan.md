@@ -3,7 +3,7 @@ title: 'Monorepo tracer: core, harness and shell through a green CI run'
 type: 'chore'
 ticket: '2'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '449ad49c6a38722314844094cac50c7ac0fe951d'
 route: 'full'
 route_source: 'auto'

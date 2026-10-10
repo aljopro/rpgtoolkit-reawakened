@@ -3,7 +3,7 @@ title: 'Guard-rail lint and type rules for core'
 type: 'feature'
 ticket: '3'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: 'b4f420df66a2e25ab2c7e032a4b5323a20ac81bd'
 route: 'full'
 route_source: 'auto'
