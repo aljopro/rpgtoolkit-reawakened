@@ -9,7 +9,7 @@ updated: 2026-10-10
 
 ## Executive Summary
 
-In the early 2000s, Christopher B. Matthews' RPG Toolkit opened a door. It was free, it was made for role-playing games, and a community grew up around it, led by Chris and Phil "Xavier". Young people made their first maps, wrote their first scripts and shared their first games there. Many of them went on to become engineers and artists. That community has been quiet since about 2006. The tool still exists, but it was built for Windows computers of twenty years ago, and the last attempts to modernize it stalled.
+In the early 2000s, Christopher B. Matthews' RPG Toolkit opened a door. It was free, it was made for role-playing games, and a community grew up around it, led by Chris and Phil "Xavier" Carty. Young people made their first maps, wrote their first scripts and shared their first games there. Many of them went on to become engineers and artists. That community has been quiet since about 2006. The tool still exists, but it was built for Windows computers of twenty years ago, and the last attempts to modernize it stalled.
 
 RPG Toolkit Reawakened brings it back, twenty years later, in a web browser. Classic community games play again from a link. New games are made and shared the same way. The project is free and open, and what you make with it is yours, including games you sell. **Your game, completely and freely.**
 
@@ -36,8 +36,8 @@ A modern rebuild of RPG Toolkit 3, the last major version, that runs in the brow
 - **A classic RPG development ecosystem you can use right in your browser.** Nothing to install, nothing to buy, and nothing tied to one company's servers.
 - **It comes with a library.** Beginners start with real community games they can play, open up and learn from. No other new tool has twenty years of games behind it.
 - **What you make is yours.** It's free and open source under a permissive license, so you can share your games, change them, or sell them. Nobody is forced to open up their own work. All we ask is that the license notice and credit travel with the engine.
-- **The community is looked after on purpose.** We bring real experience in building culture, including a book on empathy. A healthy, welcoming community is part of the product, not an afterthought. `[ASSUMPTION: earlier revival attempts may have stalled partly over community conflict. To be checked in research.]`
-- **It's carefully planned.** A full written plan and technical design already exist. The first goal is the thing every successful revival did first: make the old games playable again.
+- **The community is looked after on purpose.** We bring real experience in building culture, including a book on empathy. A healthy, welcoming community is part of the product, not an afterthought, and so is sharing the work. Earlier revivals didn't fail over arguments. They ran out of people, until one person was carrying everything.
+- **It keeps the old games.** Every earlier attempt to modernize the Toolkit (2015–2021) dropped support for existing games and lost its users along the way. Reawakened does the opposite. Making the old games playable is the first goal, which is what every successful revival of an old tool did first. A full written plan and technical design already exist.
 
 ## Who This Serves
 
@@ -56,13 +56,13 @@ A modern rebuild of RPG Toolkit 3, the last major version, that runs in the brow
 
 ## Scope
 
-**First milestone:** the player. Classic games load and play in a browser from a link.
+**First milestone:** the player. Classic games load and play in a browser from a link. The proof candidate is *Final Destiny* (Christopher B. Matthews, 2002), which is still downloadable and uses no plugins.
 
 **First release:** the player plus the browser editor. You can make, play and share a new game from start to finish. The player comes first, and the editor follows right after.
 
 **From day one:** a lightweight community foundation. That means a welcome, a code of conduct, a clear way to settle disagreements, and visible, regular releases. Culture gets set before the project takes off, not after.
 
-**Known limit:** the old Toolkit let creators add Windows-only add-ons, called plugins, and those can't run in a browser. Games without plugins play as they are. Games that relied on plugins will need those parts rebuilt using the new, safer way to add features. We don't yet know how many well-loved games used plugins.
+**Known limit:** the old Toolkit let creators add Windows-only add-ons, called plugins, and those can't run in a browser. Toolkit 3's standard battle and menu systems were themselves plugins, but Reawakened rebuilds those as part of the engine, so games that used only the standard ones should play. The real limit is games with *custom-built* plugins. Those parts will need rebuilding using the new, safer way to add features.
 
 **Not in the first release:**
 - a full website
@@ -74,11 +74,12 @@ A modern rebuild of RPG Toolkit 3, the last major version, that runs in the brow
 
 - **Credit:** how to credit Phil "Xavier" and other key community members, and what they'd want to be called.
 - **The original creators:** whether to reach out to Chris (and Phil) for their blessing. It isn't needed, but it would mean a lot.
-- **Why earlier attempts stalled:** what stopped the 2015–17 HTML5 rebuild and RPGWizard, which has been quiet since 2020?
-- **What survived:** which classic games still exist, and how many used plugins?
+- **Custom plugins:** can we detect which plugins a game needs, and rebuild the most common community plugins on the new system so more games just work? This is a question for the team.
+- **Toolkit 2 games:** *Final Destiny* is a Toolkit 2 game. We need to confirm the new engine opens Toolkit 2 files as well as Toolkit 3.
+- **People to reach:** euix (the Discord, and remembered from the old days), arsekil (already rebuilding the old community website), and the original team listed on SourceForge.
 - **Joining the Discord:** when to join, and listening before announcing anything.
 
-The research that follows this brief covers why earlier attempts stalled, what survived, and the Discord.
+The details are in the research report "What survived of RPG Toolkit".
 
 ## Vision
 
