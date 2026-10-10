@@ -146,8 +146,31 @@ The editor's **UI** should be web technology in every recommended path: R7 needs
 | **Electrobun** | OS WebView + Bun | Medium (~70 MB) | TS-only teams (Option B). | MIT | Young. Linux and navigation defects reported in 2026. |
 | **egui / eframe** (0.36) | Immediate-mode, native + wasm | Small | Good for inspectors and canvases. **Poor for the code editor and rich text** (R7). | MIT/Apache | Re-implementing a decent text editor is a project in itself. |
 | **Godot editor plugin** | Godot editor | Large | Only with Option D. | MIT | Couples the editor to Godot's resource model. |
+| **VS Code extension** (§4.1) | VS Code / VSCodium / other Code-OSS editors. Webview **custom editors** for binary files, plus native text editing | none extra (runs in the user's editor) | **Excellent for scripts** (T-40…T-46), the file tree (T-03) and test-run (T-07/T-41). **Good for asset editors** hosted as webviews (board, sprite, animation). Weak as the *only* tool for beginners. | Code-OSS is MIT; extension can be MIT | The Microsoft marketplace build of VS Code is proprietary (Open VSX covers the open forks). Webview UX is constrained (no free docking, message-passing only). Marketplace supply-chain risk. |
 
-**Design rule:** put the editor's host access behind a small **platform-services interface** (open/save/list folder, watch files, run game, export package). Implement it three times: browser (FSA/OPFS + ZIP), Tauri, Electron. Then the shell decision is reversible, the same way the runner decision is.
+**Design rule:** put the editor's host access behind a small **platform-services interface** (open/save/list folder, watch files, run game, export package). Implement it for each host: browser (FSA/OPFS + ZIP), Tauri, Electron, **and VS Code** (workspace FS + tasks/debug APIs). Then the shell decision is reversible, the same way the runner decision is.
+
+### 4.1 VS Code extension: a host, not a rewrite
+
+This is not just "another shell". Because the editor UI in the recommended path is web technology, the same components can be hosted inside VS Code. The extension then splits into three independent, reusable pieces:
+
+| Piece | What it delivers | Capabilities | Reuse outside VS Code |
+|---|---|---|---|
+| **RPGCode language server (LSP)** | Syntax colouring (TextMate grammar), diagnostics from the *core's own parser*, call tips and hover from the built-in catalogue (format-spec §9.11), go-to-definition across `#include` and implicit includes, outline of functions/classes/labels (replaces the legacy bookmark bar), formatting (replaces the indent wizard), quick fixes for legacy syntax (replaces the update and cleanup wizards). | T-40, T-42, T-43, T-44, T-46 | Any LSP client: Neovim, Zed, Helix, JetBrains, and the standalone editor's CodeMirror. |
+| **RPGCode debug adapter (DAP)** | Launch the game or a single program against a test fixture. Breakpoints, step, watch variables, thread list, call stack. The step VM (R1) makes this cheap to build. | T-07, T-41, E-98 (exceeds legacy, which only had an error window) | Any DAP client. |
+| **Custom editors (webviews)** | `.brd`, `.tem`, `.itm`, `.ene`, `.anm`, `.tbm`, `.tst`, `.gam` and the rest open in the same web components the standalone editor uses, with the core (wasm) for parsing, preview and saving. The Custom Editor API supports binary documents with undo/redo and dirty tracking. | T-10…T-64 | The components are shared with the browser, Tauri and Electron editors. |
+
+**Fitness.** VS Code already provides the workspace, the file tree, tabs, search, git, a terminal, tasks and settings sync (much of T-01…T-09) for free. Text editing is far beyond anything the legacy program editor offered. Board and sprite editing work as webviews: the SheetJS viewer is a shipping example of a binary-format custom editor. Running wasm in a worker keeps heavy parsing off the extension host.
+
+**Ecosystem.** Very mature APIs (custom editors, LSP, DAP, web extensions). Distribution through the Microsoft Marketplace **and Open VSX**, which by 2026 serves the open forks (VSCodium, Eclipse Theia, Gitpod, Cursor-style editors) and has AWS-backed hosting. A **web extension** build can even run in `vscode.dev`, giving a zero-install path similar to the PWA.
+
+**Licence.** Code-OSS and the extension APIs are MIT. Our extension, LSP and DAP can be MIT. The proprietary bit is only Microsoft's branded VS Code build and its marketplace terms, which users choose themselves. Publish to Open VSX as well so nobody depends on it.
+
+**Tooling friction.** Low to medium. TypeScript extension host, webview message passing, a TextMate grammar, and the LSP/DAP protocols. Constraints to plan for: webviews can't share a canvas with VS Code's own UI; the left/right docked layout of the legacy editor (tool palette, tileset browser, inspector) has to live *inside* each webview or in contributed side views; strict webview CSP; and supply-chain hygiene for marketplace publishing.
+
+**Who it serves.** Experienced authors and scripters, contributors, and the community modding legacy games. It does **not** replace a friendly standalone editor for beginners: the legacy audience included many first-time creators who won't install VS Code.
+
+**Seam impact.** It strengthens the architecture. It forces the editor UI to stay host-agnostic (platform-services interface), and it pushes language tooling into an LSP and DAP that every host reuses.
 
 ---
 
@@ -213,7 +236,9 @@ How each hard capability lands in the recommended default (Option A), with notes
 * `runner-web/` (TypeScript + wasm): WebGL2 draw-list replayer, Web Audio/AudioWorklet output, fetch/OPFS asset source.
 * `runner-native/` (Rust): winit + wgpu (or SDL3 if broader console/mobile reach is wanted), cpal or SDL audio, file-system and embedded-archive asset source.
 * `runner-headless/` (Rust): CPU rasteriser + null audio for CI golden tests against the legacy demo games.
-* `editor/` (TypeScript web UI; CodeMirror 6; canvas/WebGL board editor reusing runner-web's replayer; core via wasm for preview, diagnostics and test-run) behind `platform-services` with **three backends: browser (PWA), Tauri (default desktop), Electron (fallback)**.
+* `editor/` (TypeScript web UI; CodeMirror 6; canvas/WebGL board editor reusing runner-web's replayer; core via wasm for preview, diagnostics and test-run) behind `platform-services` with backends for **browser (PWA), Tauri (default desktop), Electron (fallback)**.
+* `lsp/` + `dap/`: an RPGCode language server and debug adapter built on the core's parser and VM. They are used by the standalone editor's CodeMirror *and* by any LSP/DAP-capable editor.
+* `vscode-extension/` (§4.1): a fourth `platform-services` backend that hosts the same editor components as webview custom editors and bundles the LSP and DAP. Published to the VS Code Marketplace and Open VSX, including a web-extension build for `vscode.dev`. It complements the standalone editor (power users, scripters, modders) rather than replacing it (beginners).
 
 **Why this wins:**
 * It meets R1–R3 and R5 most naturally.
@@ -249,7 +274,8 @@ Use SDL3 + TinySoundFont, Emscripten for web, and a web-UI editor with the core 
 3. **Board render** (draw list → headless PNG) matching legacy screenshots for 2D and both iso modes.
 4. **Movement/collision/triggers.** Play the demo's NPC intercept and battle trigger end-to-end headlessly.
 5. **Web runner + native runner** sharing the core. MIDI via the shared synth.
-6. **Editor P0 tools** (editor-features §11) on the browser shell, then add the desktop shell.
+6. **RPGCode LSP** (diagnostics, hover, outline) on top of milestone 2. It can be released early as a VS Code / Open VSX extension, which delivers value to legacy-game modders before the full editor exists.
+7. **Editor P0 tools** (editor-features §11) on the browser shell, then the desktop shell and the VS Code custom-editor host. Add the debug adapter once the VM is stable.
 
 ---
 
@@ -272,6 +298,7 @@ Use SDL3 + TinySoundFont, Emscripten for web, and a web-UI editor with the core 
 * SoundFonts — [GeneralUser GS 2.0 licence](https://scancode-licensedb.aboutcode.org/generaluser-gs-2.0.LICENSE), [FluidR3 MIT note (fluid-dev)](https://lists.nongnu.org/archive/html/fluid-dev/2009-03/msg00062.html)
 * Audio — [kira (MIT/Apache; wasm limits)](https://docs.rs/crate/kira/latest)
 * WebGPU status — [Khronos WebGL & WebGPU (SIGGRAPH 2026)](https://www.khronos.org/developers/linkto/webgl-and-webgpu-sigg26), [WebGPU vs WebGL for games (2026)](https://app.cinevva.com/guides/webgpu-vs-webgl-games)
+* VS Code extensions — [Custom Editor API](https://code.visualstudio.com/api/extension-guides/custom-editors), [Using WebAssembly for extension development](https://code.visualstudio.com/blogs/2024/05/08/wasm), [WebAssembly part 2 (workers)](https://code.visualstudio.com/blogs/2024/06/07/wasm-part2), [SheetJS VS Code custom editor demo](https://docs.sheetjs.com/docs/demos/extensions/vscode), [Open VSX (Wikipedia)](https://en.wikipedia.org/wiki/Open_VSX), [AWS backs Open VSX (The Register, 2026)](https://www.theregister.com/2026/03/03/open_vsx_aws/), [CVE-2026-13323 Open VSX advisory](https://bugzilla.redhat.com/show_bug.cgi?id=2495898)
 * Map editors — [Tiled news (1.12.1)](https://www.mapeditor.org/news), [Tiled (Arch, GPL-2.0)](https://archlinux.org/packages/extra/x86_64/tiled), [LDtk (MIT)](https://community.chocolatey.org/packages/ldtk/1.3.1)
 
 *Unverified in this pass (verify before adoption): TinySoundFont's current maintenance status and licence file; Capacitor core licence file; whether 2026 FluidR3_GM distributions keep the MIT notice; Linux WebKitGTK canvas performance on current distributions (flagged as a risk from general experience, not from a 2026 benchmark).*
