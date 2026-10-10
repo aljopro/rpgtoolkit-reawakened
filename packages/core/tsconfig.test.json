@@ -10,5 +10,6 @@
     "types": []
   },
   "include": ["src", "test"],
+  "exclude": ["test/fixtures"],
   "references": []
 }

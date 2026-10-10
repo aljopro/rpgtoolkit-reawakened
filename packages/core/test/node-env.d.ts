@@ -1,0 +1,38 @@
+// Minimal, module-only declarations for the Node environment the core tests
+// run in. core's own tsconfig keeps `types: []` and no host globals (G2); this
+// file is only seen by tsconfig.test.json and declares no ambient value globals
+// beyond `process`.
+declare module "node:fs" {
+  export function readdirSync(path: string): string[];
+  export function readFileSync(path: string, encoding: "utf8"): string;
+}
+
+declare module "node:path" {
+  export function join(...parts: string[]): string;
+  export function dirname(path: string): string;
+  export function extname(path: string): string;
+}
+
+declare module "node:url" {
+  export function fileURLToPath(url: string): string;
+}
+
+declare module "node:module" {
+  export function createRequire(url: string): { resolve(id: string): string };
+}
+
+declare module "node:child_process" {
+  export function spawnSync(
+    file: string,
+    args: readonly string[],
+    options: { encoding: "utf8"; cwd?: string },
+  ): { status: number | null; stdout: string; stderr: string };
+}
+
+declare const process: { execPath: string };
+
+// `lib: ["ES2022"]` has no `ImportMeta.url` (that lives in the DOM lib), so
+// the tests' `import.meta.url` needs it declared here.
+interface ImportMeta {
+  readonly url: string;
+}

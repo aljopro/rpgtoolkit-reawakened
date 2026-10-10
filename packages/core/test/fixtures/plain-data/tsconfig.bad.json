@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "erasableSyntaxOnly": true,
+    "noEmit": true,
+    "lib": ["ES2022"],
+    "types": [],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["bad.ts", "../../../src/**/*.ts"]
+}
