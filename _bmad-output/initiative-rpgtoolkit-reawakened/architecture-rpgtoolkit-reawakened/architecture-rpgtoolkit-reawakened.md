@@ -75,7 +75,7 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 | G3 determinism: injected clock and RNG, fixed step | guardrails | AD-2, AD-5, AD-11 to AD-14, AD-25, AD-26 |
 | G4 renderers only replay draw lists | guardrails | AD-3, AD-4, AD-27 |
 | G5 headless goldens required | guardrails | AD-11, AD-14 make hashes and logs the test substrate |
-| G6 licence allowlist | guardrails | Stack; Deferred names the `ovsx` exemption |
+| G6 licence test (Blue Oak Bronze or better, minus MS-PL; ADR 0003) | guardrails | Stack; Deferred names the `ovsx` exemption |
 | G7 clean-room | guardrails | every AD cites doc sections, never legacy source |
 | TypeScript everywhere; VS Code and standalone hosts first-class | ADR 0001 | Stack, AD-19, AD-20 |
 
