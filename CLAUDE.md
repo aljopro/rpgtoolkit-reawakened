@@ -8,7 +8,7 @@ Read and follow **[docs/guardrails.md](docs/guardrails.md)** (G1–G7) for every
 
 - **G1** The RPGCode VM is an explicit step machine. State is plain JSON data. No generators, async/await or Promises for script threads.
 - **G2** `core` touches no DOM, Node, I/O or timers. `editor-ui` reaches the host only through platform-services. Dependencies flow `core ← synth ← runners/lsp/dap/editor-ui ← host-*`.
-- **G3** No `Math.random`, `Date`, `performance.now` or `Intl` in `core`. Use the injected clock and seeded RNG, with a fixed time step.
+- **G3** No `Math.random`, `Date`, `performance.now` or `Intl` in `core`. Use the injected clock and seeded RNG, with a fixed time step. Only the exact `Math` functions are allowed (`abs`, `ceil`, `floor`, `round`, `trunc`, `sign`, `min`, `max`, `fround`, `imul`, `clz32`, `sqrt`), and `**` is banned, because other maths can give different answers on different JavaScript engines; use `core/fmath` instead ([ADR 0002](docs/adr/0002-core-pixels-and-deterministic-maths.md)).
 - **G4** Renderers only replay draw lists. Phaser and Pixi are never the loop and never hold state.
 - **G5** The headless golden tests must pass. Change goldens only deliberately, and explain why.
 - **G6** Dependencies only under MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD (CC0 for assets). Never add GPL, LGPL or AGPL.

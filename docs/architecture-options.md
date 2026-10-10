@@ -19,7 +19,7 @@ Most stack debates about 2D engines are settled by a few hard requirements. For 
 | R1 | **Resumable script interpreter.** Blocking programs (`wait()`, blocking movement, modal menus) and cooperative threads must run on a runtime with **no OS threads**, i.e. the browser. | E-33, E-90…E-96, §1.2 of engine doc | The RPGCode VM must be an **explicit step machine** (instruction pointer + frame stack you can pause after N steps). Do not rely on host threads, blocking I/O, or language-level async that cannot be serialised. This is the single most important design constraint. |
 | R2 | **Serialisable live state**, including running threads. | E-120/E-121 | VM state is plain data (frames, locals, IP), not closures or host coroutines. That rules out "just use JS generators / Rust async" as the thread model. |
 | R3 | **Deterministic simulation** independent of frame rate. | E-04, E-22…E-34 | Fixed-step core with an injected clock and RNG. The legacy fps-coupled speed maths is replaced by real-time equivalents. |
-| R4 | **Layered 2D compositing** with colour-key transparency, per-pixel **additive RGB tint** (−255…+255), translucency, masked iso diamonds, off-screen canvases, read-back (`getPixel`, `canvasGetScreen`). | E-52…E-59, E-17 | Needs render-to-texture and a simple tint shader, *or* a CPU compositor. Any WebGL2-class renderer is enough. 3D engines are overkill. Read-back rules out "fire-and-forget" GPU-only APIs unless the runner supports copies back to the CPU. |
+| R4 | **Layered 2D compositing** with colour-key transparency, per-pixel **additive RGB tint** (−255…+255), translucency, masked iso diamonds, off-screen canvases, read-back (`getPixel`, `canvasGetScreen`). | E-52…E-59, E-17 | Needs render-to-texture and a simple tint shader, *or* a CPU compositor. Any WebGL2-class renderer is enough. 3D engines are overkill. Read-back rules out "fire-and-forget" GPU-only APIs unless the runner supports copies back to the CPU (under [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md), read-back is served by `core/raster`, so runners need no CPU copy). |
 | R5 | **General MIDI playback everywhere.** | E-100, E-103 | Browsers and mobile have no OS MIDI synth, so a **SoundFont synthesiser must ship with the runner**, together with a permissively licensed SoundFont. This is a licensing trap (FluidSynth is LGPL; some popular SoundFonts are GPL or have unclear provenance). |
 | R6 | **Binary legacy formats + ZIP + appended-ZIP EXE import.** | format-spec §1–13, E-01, E-131 | Byte-level readers in the core, kept I/O-free. The runner provides bytes. Needs a permissive ZIP reader. |
 | R7 | **Editor with heavy forms, trees, a code editor with syntax colouring and call tips, a pixel editor, and a zoomable vector/tile canvas.** | T-01…T-64 | Favours a mature UI toolkit with a strong text-editor component. The web platform is the strongest here (CodeMirror/Monaco). Immediate-mode GUIs are weak at rich text. |
@@ -39,21 +39,23 @@ Whatever language you pick, keep this interface **data-only and narrow**. That i
  inputs → │ formats · world · movement/collision/pathfinding · triggers · RPGCode VM │ → outputs
           │ battle/menu rules · save model · render-list builder · audio-cue builder │
           └───────────────────────────────────────────────────────────────────────────┘
-inputs:  tick(dt) · input events (key name / scan code / pointer / gamepad)
-         asset bytes (answer to the core's "need asset X" requests) · persisted blobs
-outputs: frame = ordered draw list   [surface ops: blit(tex, src, dst, key, tint, alpha, blend),
-                                      fill/line/rect/ellipse/text, push/pop target (canvas),
-                                      read-back requests]
+inputs:  advance(steps, inputs), where inputs are key (name / scan code), pointer and gamepad events
+         and the replies to requests (asset bytes for "need asset X", persisted blobs)
+outputs: frame = ordered draw list   [blit(tex | surface, src, dst, key, tint, alpha, blend),
+                                      fill/line/rect/ellipse/text,
+                                      push/pop target (frame-scoped scratch targets only)]
+         persistent surfaces: core-owned bitmaps; blits read them, runners pull their pixels
+                              by id, outside the draw list
          audio cues [music play/stop/loop/volume, sfx play, midi-file play]
          requests   [load asset, save blob, quit, open URL, play video]
 ```
 
 Rules that keep the seam honest:
 * **No I/O in the core.** It *asks* for assets by logical path. Case-folding and package lookup (format-spec §1.5) live in a shared "asset resolver" module that runners call with their own byte source (file system, fetch, OPFS, embedded archive).
-* **No pixels in the core.** It emits a **draw list** against abstract textures and surfaces. A runner can satisfy it with WebGL2, WebGPU, Canvas2D, SDL3's renderer, or a CPU rasteriser (useful for headless golden-image tests).
-* **Text layout** is a runner capability (the core requests "measure/draw text with font X"), because font rasterisation is platform-specific (E-132). Keep a deterministic fallback bitmap font for tests.
+* **Draw lists out, one reference rasteriser inside** (amended by [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md)). The core emits a **draw list** against abstract textures and surfaces. A runner replays it with WebGL2, WebGPU, Canvas2D or SDL3's renderer. The core also holds the single reference rasteriser (`core/raster`) and owns persistent surfaces, because scripts read pixels back (`getPixel`, `canvasGetScreen`, screen save and restore) and must get the same pixels on every runner. The headless harness uses that rasteriser for golden images.
+* **Text layout, glyphs and image decoding are core-owned** (amended by [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md)). Line breaks, glyph advances and glyph rasterisation come from the core, and game images are decoded once in the core, so word wrap and script-read pixels do not depend on the platform. Game fonts arrive as assets (E-132); a bundled bitmap font is the fallback and the test font. Platform fonts are an opt-in runner mode, off in golden and conformance runs.
 * **Audio is cues, not samples.** A runner may synthesise MIDI natively or in an AudioWorklet. Offer a shared synth module so behaviour matches across runners.
-* **Blocking script calls never block the host.** A `wait()` makes the VM yield with a "waiting for key" status. The runner keeps calling `tick` until the core resumes it.
+* **Blocking script calls never block the host.** A `wait()` makes the VM yield with a "waiting for key" status. The runner keeps calling `advance` until the core resumes it.
 
 **Swappability test:** a headless runner (CPU rasteriser, null audio, scripted input) should be able to play `build/game/demo` from the legacy repo in CI. If that is hard, the seam has leaked.
 

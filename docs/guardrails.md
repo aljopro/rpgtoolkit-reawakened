@@ -66,6 +66,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 
 **Enforcement.**
 * Lint (`core`): ban `Math.random`, `Date`, `Date.now`, `performance.now`, `Intl` and `toLocale*`.
+* Lint (`core`), added by [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md): `Math` is an allowlist (`abs`, `ceil`, `floor`, `round`, `trunc`, `sign`, `min`, `max`, `fround`, `imul`, `clz32`, `sqrt`); every other `Math` member and the `**` and `**=` operators are banned, because their results may differ between JavaScript engines. Other maths comes from `core/fmath`.
 * Test (required): replay recorded input logs twice, and once under Node and once in a headless browser, asserting identical per-step state hashes and draw-list hashes.
 
 ---
@@ -73,7 +74,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 ## G4 — Renderers only replay draw lists
 
 **Rule.**
-1. Every renderer (WebGL2, Canvas2D, CPU rasteriser, and any Phaser/Pixi-based one) **MUST** implement the draw-list replay interface and nothing more: it receives a draw list and produces pixels.
+1. Every renderer (WebGL2, Canvas2D, and any Phaser/Pixi-based one) **MUST** implement the draw-list replay interface and nothing more: it receives a draw list and produces pixels. The single reference rasteriser lives in `core/raster`, is pure, and is not a renderer in this sense: it is part of `core`, so scripts read the same pixels on every runner ([ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md)).
 2. Renderers **MUST NOT** own the game loop, hold game state, run game logic, or call back into `core` except through the public runner API.
 3. Renderers **MAY** keep caches (textures, glyph atlases), as long as discarding them changes no observable behaviour.
 4. Third-party engines (Phaser, PixiJS, Excalibur, and so on), if used, **MUST** be confined to a renderer implementation. Their scene graphs, physics, tilemaps, input and loop are not used for game behaviour.
@@ -82,7 +83,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 
 **Enforcement.**
 * Dependency-graph check: `runner-*` may import only `core`'s public entry point (not internals). Third-party engine imports are allowed only under `runner-*/src/render/**`.
-* Test: the same draw list replayed through the CPU rasteriser and the WebGL2 renderer produces images within the golden tolerance (part of G5).
+* Test: the same draw list rendered by the reference rasteriser in `core/raster` and replayed by the WebGL2 renderer gives exactly the same result for colour keys and tint, and images otherwise within the golden tolerance (part of G5).
 * Code review checklist item.
 
 ---
@@ -111,7 +112,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 
 **Rationale.** Brief (MIT/Apache) and architecture-options §7.
 
-**Enforcement.** A required CI job that lists the licences of the full production dependency tree (all workspaces, including the extension bundle) and fails on anything outside the allowlist. A dependency vulnerability audit runs in the same job. Lockfiles are committed and pinned.
+**Enforcement.** A required CI job that lists the licences of the full production dependency tree (all workspaces, including the extension bundle) and fails on anything outside the allowlist. A dependency vulnerability audit runs in the same job. Lockfiles are committed and pinned. Dev-only tools that are never shipped, bundled or linked sit outside this production-tree scan, because they never reach users; each one is named, with its licence, in [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md) or a later ADR (currently only `ovsx`, EPL-2.0, used to publish to Open VSX). The scan still fails if such a tool appears in a production tree, and the same job also lists the licences of dev-only dependencies and fails on any outside the allowlist that is not named in an ADR.
 
 ---
 
