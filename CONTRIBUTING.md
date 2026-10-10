@@ -8,7 +8,17 @@ Thanks for helping reawaken RPG Toolkit.
 4. **Dependencies (G6).** New runtime dependencies must use an allowlisted licence. Say in the PR why the dependency is needed.
 5. **Architecture changes** go through an ADR in `docs/adr/`.
 
-Code is licensed under MIT and/or Apache-2.0.
+Code is licensed under the [MIT license](LICENSE).
+
+## Clean-room provenance
+
+RPG Toolkit Reawakened is a clean-room rebuild. The legacy RPG Toolkit engine and editor are GPL-2, so none of that source may enter this repository.
+
+- The documents in `docs/` describe legacy behaviour and file layouts in our own words. They are the only source for implementation work.
+- Do not open, copy, paraphrase or translate the legacy source while writing code. Contributors and AI agents follow the same rule (see [CLAUDE.md](CLAUDE.md)).
+- If `docs/` is wrong or missing something, fix the doc first in its own commit, then the code.
+- Legacy sample games are test fixtures fetched at CI time. Never commit them.
+- The full rule and its checks are G7 in [docs/guardrails.md](docs/guardrails.md).
 
 ## Commands
 
