@@ -3,6 +3,10 @@ dist
 *.tsbuildinfo
 /fixtures/
 
+# Generated dependency-graph inputs (tools/deps/graph.mjs)
+/.dependency-cruiser.mjs
+/tsconfig.depcruise.json
+
 # Build output and caches
 build/
 coverage/
