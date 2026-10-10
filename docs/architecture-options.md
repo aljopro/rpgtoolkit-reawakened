@@ -261,12 +261,7 @@ How each hard capability lands in an Option A build, with notes on alternatives.
 
 Spike the board editor and the game runner on all three desktop OSes (Linux WebKitGTK especially) before choosing. The platform-services interface keeps the choice reversible.
 
-**Day-one guard-rails** (these make up for Option B's softer seam):
-1. **Explicit step-machine VM.** Instruction pointer + frame stack, run N steps per call. No generators or async/await for script threads, because thread state must be saveable (R1, R2, E-120).
-2. **Hard core boundary.** `core` has no DOM or Node types in its TS config, and lint rules ban `window`, `document`, `fetch`, timers and `Math.random`. Assets arrive as bytes; time and RNG are injected (R3).
-3. **Renderers stay behind the draw list.** Phaser or Pixi, if used at all, only replay draw lists. They must never own the loop or hold game state.
-4. **Headless CI from milestone 1.** The headless runner plays the legacy demo games with scripted input and compares against golden images.
-5. **Licence gate in CI.** Allow MIT, Apache-2.0, BSD, ISC and zlib; block GPL, LGPL, AGPL and source-available dependencies (§7).
+**Day-one guard-rails.** Option B's softer seam is offset by the binding rules **G1–G7** in [guardrails.md](guardrails.md): step-machine VM, hard package boundaries, determinism, draw-list-only renderers, headless golden CI, licence gate, and clean-room provenance. Each rule has an automated check, and changing one requires an ADR.
 
 **Escape hatch.** If profiling ever shows a hot path (pathfinding, CPU rasterising, synth), move just that module to Rust/wasm behind the same TypeScript interface. That is Option A applied selectively, with no architectural change.
 

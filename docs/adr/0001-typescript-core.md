@@ -42,12 +42,17 @@ The hardest requirements are language-neutral:
 
 ## Guard-rails (enforced from milestone 1)
 
-1. Explicit step VM; no generator- or async-based script threads.
-2. No DOM, Node, timer or global RNG use in `core`.
-3. Renderers (Phaser, Pixi, raw WebGL2) only replay draw lists; they never own the loop or hold game state.
-4. A headless runner plays `build/game/demo` and `build/game/Basic` against golden images in CI.
-5. Licence gate: allow MIT, Apache-2.0, BSD, ISC and zlib; block GPL, LGPL, AGPL and source-available dependencies.
-6. Clean-room: implementation is derived from `docs/` only, never from the GPL-2 legacy source.
+The binding rules that offset this decision's risks are defined in **[docs/guardrails.md](../guardrails.md)**, which is the single source of truth:
+
+* **G1** step-machine VM with saveable state
+* **G2** hard package boundaries (pure core; host-agnostic editor UI)
+* **G3** determinism
+* **G4** renderers only replay draw lists
+* **G5** headless golden tests on every change
+* **G6** licence gate
+* **G7** clean-room provenance
+
+Changes to those rules require a new ADR.
 
 ## Alternatives considered
 
