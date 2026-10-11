@@ -3,7 +3,7 @@ title: 'Required CI checks, branch protection and contributor docs'
 type: 'story'
 ticket: '10'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '7118dddfbddbc52ebd585522b4fc14bf462db8e8'
 route: 'full'
 route_source: 'auto'
@@ -64,7 +64,7 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/_bmad-output/init
 - [x] `CONTRIBUTING.md` -- document exactly the CI command chain given in Verification, in the order listed in Verification; note the `*:test` scripts are CI's tool self-tests, `graph:write` is a dev aid CI never runs, and `license`/`license:test` are aliases; add the required-check list and rename rule -- contributor path
 - [x] `docs/guardrails.md` -- Rollout §4 list becomes `typecheck, lint, unit, graph, golden, licence, provenance` plus the gate -- the norm then matches the enforced set
 - [x] `.github/pull_request_template.md` -- pointer to the CONTRIBUTING commands -- the last gap
-- [ ] verify locally, then hand the human the copy-pasteable protection block in Verification -- hitl
+- [x] verify locally, then hand the human the copy-pasteable protection block in Verification -- hitl
 
 **Acceptance Criteria:**
 - Given a PR with a required job failing or skipped, then `gate` fails and the PR cannot merge (ticket verify).
@@ -78,6 +78,8 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/_bmad-output/init
 - **Supersedes** entry 1.2's "one workflow file per check / later entries add files only" and the epic's 2026-10-10 sequencing note, confirmed by the human at the 1.10 checkpoint: a `needs` gate cannot span workflow files.
 - **The one open item (hitl).** Branch protection is unset (live: 404 on the classic endpoint, no rulesets). The human applies it after the first green run of `ci.yml`; this plan is `built`, not `done`, until that is verified with the read-backs in Verification.
 - **Corrected at build time.** The actionlint download needs `gh release download --repo rhysd/actionlint` (the bare form reads the repo as a tag); the classic protection read-back errors 404 "Branch not protected" when unset rather than printing an empty list.
+- **Hand-off closed (2026-10-11).** The human saved a ruleset instead of the classic rule (Decision 5 allowed either): "Gate Guards", id 24867688, enforcement `active`, target `~DEFAULT_BRANCH`. It holds `required_status_checks` with exactly `typecheck lint unit golden licence provenance graph gate` (all from the GitHub Actions app, integration id 15368) and `strict_required_status_checks_policy: true`, plus `deletion` and `non_fast_forward`. There is no `pull_request` rule, so pull requests are not required. The bypass list is empty (`current_user_can_bypass: never`). Read back with a set comparison of the live rule against the eight names and the up-to-date flag: `VERDICT: PASS`. The classic endpoint still answers 404, which is expected when a ruleset is used.
+- **Later change (entry 1.11).** `fixtures.yml` no longer exists: its `pnpm fixtures:test` run moved into the required `unit` job, which supersedes Decision 3 below. The required set did not change.
 
 ## Plan Change Log
 
