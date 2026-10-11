@@ -3,13 +3,13 @@
 // magic/major/minor header, each field's documented width and signedness, the
 // signed per-round amounts of a status effect, empty versus non-empty strings,
 // the text-form detection byte, located errors and byte-identical round-trips,
-// plus the sample battle background when the fixtures have been fetched.
+// plus the sample battle files when the fixtures have been fetched.
 //
 // The readers never throw, so the tests assert on values and on the error's
 // offset and section rather than on exceptions.
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -253,17 +253,21 @@ test("a short special move reports the field offset", () => {
   if (result.ok) {
     return;
   }
+  // magic (17) + major (2) + minor (2) + name (9): the damage `i32` starts here.
   equal(result.error.offset, 30);
-  equal(typeof result.error.section, "string");
+  equal(result.error.section, "format-spec §1.1");
 });
 
 test("a special move too short to probe reports a located error", () => {
+  // The probe at offset 16 is past the end of these three bytes; that is not
+  // fatal, so the unterminated magic's own §1.1 error is what the caller sees.
   const result = readSpecialMove(new BinaryReader(new Uint8Array([82, 80, 71])));
   equal(result.ok, false);
   if (result.ok) {
     return;
   }
-  equal(result.error.offset, 16);
+  equal(result.error.offset, 0);
+  equal(result.error.section, "format-spec §1.1");
 });
 
 test("a parsed special move writes back byte-for-byte", () => {
@@ -317,21 +321,25 @@ test("an unencodable special-move string fails the writer", () => {
 // --- Status effects (§8.2) --------------------------------------------------
 
 test("reads a status effect's header and every field", () => {
-  const reader = new BinaryReader(buildSte());
+  // Distinct non-zero values for the five `i16`s that used to be 0 pin the
+  // field order: a reader that swapped two of them would fail here.
+  const reader = new BinaryReader(
+    buildSte({ speedUp: 4, disable: 7, smpEnabled: 2, smpPerRound: -6, runProgram: 9 }),
+  );
   const effect = unwrap(readStatusEffect(reader));
   equal(effect.magic, STATUS_EFFECT_MAGIC);
   equal(effect.major, 2);
   equal(effect.minor, 0);
   equal(effect.name, "Poison");
   equal(effect.rounds, 3);
-  equal(effect.speedUp, 0);
+  equal(effect.speedUp, 4);
   equal(effect.slowDown, -2);
-  equal(effect.disable, 0);
+  equal(effect.disable, 7);
   equal(effect.hpEnabled, 1);
   equal(effect.hpPerRound, -5);
-  equal(effect.smpEnabled, 0);
-  equal(effect.smpPerRound, 0);
-  equal(effect.runProgram, 0);
+  equal(effect.smpEnabled, 2);
+  equal(effect.smpPerRound, -6);
+  equal(effect.runProgram, 9);
   equal(effect.program, "");
   equal(reader.remaining, 0);
 });
@@ -378,7 +386,17 @@ test("a text-form status effect is refused at the detection byte", () => {
 });
 
 test("a parsed status effect writes back byte-for-byte", () => {
-  const bytes = buildSte({ name: "", rounds: 1, hpPerRound: -1, program: "poison.prg" });
+  const bytes = buildSte({
+    name: "",
+    rounds: 1,
+    speedUp: 4,
+    disable: 7,
+    smpEnabled: 2,
+    smpPerRound: -6,
+    runProgram: 9,
+    hpPerRound: -1,
+    program: "poison.prg",
+  });
   const effect = unwrap(readStatusEffect(new BinaryReader(bytes)));
   deepEqual(unwrap(writeStatusEffect(effect)), bytes);
 });
@@ -516,29 +534,75 @@ test("an unencodable battle-background string fails the writer", () => {
 
 // --- Sample fixtures (guard-rail G5 rule 4: fetched, never committed) --------
 
-const sampleBkg = join(repoRoot, "fixtures", "legacy", "demo", "Bkrounds", "bkg.bkg");
+/** Every path under `root` whose lower-cased name ends with one of `suffixes`. */
+function collect(root: string, suffixes: readonly string[]): string[] {
+  if (!existsSync(root)) {
+    return [];
+  }
+  return readdirSync(root, { recursive: true })
+    .filter((name) => suffixes.some((suffix) => name.toLowerCase().endsWith(suffix)))
+    .map((name) => join(root, name));
+}
+
+const sampleBattle = [
+  ...collect(join(repoRoot, "fixtures", "legacy", "demo"), [".bkg", ".spc", ".ste"]),
+  ...collect(join(repoRoot, "fixtures", "legacy", "Basic"), [".bkg", ".spc", ".ste"]),
+];
+
+/** Check one parsed sample: no trailing bytes, no residue, exact round-trip. */
+function checkBattle<T extends { readonly residue: Uint8Array }>(
+  path: string,
+  bytes: Uint8Array,
+  reader: BinaryReader,
+  result: Result<T>,
+  write: (model: T) => Result<Uint8Array>,
+): void {
+  if (!result.ok) {
+    throw new Error(`${path}: ${result.error.message} (offset ${result.error.offset})`);
+  }
+  // The readers absorb trailing bytes into `residue`, so `remaining === 0`
+  // alone would hold even if the layout stopped matching the bytes. Asserting
+  // an empty residue makes a field read at the wrong width fail here instead.
+  equal(reader.remaining, 0, `${path}: trailing bytes`);
+  equal(result.value.residue.length, 0, `${path}: ${result.value.residue.length} byte(s) of residue`);
+  equal(
+    result.warnings.filter((warning) => warning.includes("residue")).length,
+    0,
+    `${path}: residue warning`,
+  );
+  deepEqual(unwrap(write(result.value)), bytes, `${path}: byte-identical round-trip`);
+}
 
 test(
-  "the sample battle background parses with zero trailing bytes and round-trips",
-  { skip: existsSync(sampleBkg) ? false : "legacy fixtures are not fetched" },
+  "every sample battle file parses with zero trailing bytes and round-trips exactly",
+  { skip: sampleBattle.length === 0 ? "legacy fixtures are not fetched" : false },
   () => {
-    const bytes = new Uint8Array(readFileSync(sampleBkg));
-    const reader = new BinaryReader(bytes, sampleBkg);
-    const result = readBattleBackground(reader);
-    const background = unwrap(result);
-    equal(reader.remaining, 0, `${sampleBkg} has ${reader.remaining} trailing byte(s)`);
-    equal(
-      background.residue.length,
-      0,
-      `${sampleBkg}: ${background.residue.length} byte(s) fell through to residue`,
-    );
-    if (result.ok) {
-      equal(
-        result.warnings.filter((warning) => warning.includes("residue")).length,
-        0,
-        `${sampleBkg}: residue warning`,
-      );
+    for (const path of sampleBattle) {
+      const bytes = new Uint8Array(readFileSync(path));
+      const reader = new BinaryReader(bytes, path);
+      const lower = path.toLowerCase();
+      if (lower.endsWith(".bkg")) {
+        checkBattle(path, bytes, reader, readBattleBackground(reader), writeBattleBackground);
+      } else if (lower.endsWith(".spc")) {
+        checkBattle(path, bytes, reader, readSpecialMove(reader), writeSpecialMove);
+      } else {
+        checkBattle(path, bytes, reader, readStatusEffect(reader), writeStatusEffect);
+      }
     }
-    deepEqual(unwrap(writeBattleBackground(background)), bytes, `${sampleBkg} did not round-trip`);
+  },
+);
+
+test(
+  "the shipped demo battle samples pin their documented layouts",
+  { skip: sampleBattle.length === 0 ? "legacy fixtures are not fetched" : false },
+  () => {
+    const bkg = sampleBattle.find((path) => path.endsWith(join("demo", "Bkrounds", "bkg.bkg")));
+    if (bkg !== undefined) {
+      const bytes = new Uint8Array(readFileSync(bkg));
+      const background = unwrap(readBattleBackground(new BinaryReader(bytes, bkg)));
+      equal(background.minor, 3);
+      equal(background.image, "bkg.jpg");
+      equal(background.music, "VIP - Boss1.mid");
+    }
   },
 );

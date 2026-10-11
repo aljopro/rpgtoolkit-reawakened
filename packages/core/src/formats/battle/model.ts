@@ -70,9 +70,9 @@ export interface SpecialMove {
   readonly program: string;
   /** The SMP drained from the target (an `i32`, §8.1). */
   readonly targetSmpDrain: number;
-  /** Whether the move may be used in battle (an `i8`, §8.1). */
+  /** Whether the move may be used in battle: the raw `i8` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.1). */
   readonly usableInBattle: number;
-  /** Whether the move may be used from the menu (an `i8`, §8.1). */
+  /** Whether the move may be used from the menu: the raw `i8` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.1). */
   readonly usableFromMenu: number;
   /** The status effect the move applies, by handle (§8.1). */
   readonly statusEffect: string;
@@ -104,17 +104,17 @@ export interface StatusEffect {
   readonly speedUp: number;
   /** The speed penalty (an `i16`, §8.2). */
   readonly slowDown: number;
-  /** The disable flag / amount (an `i16`, §8.2). */
+  /** The raw `disable` value (an `i16`, §8.2), kept verbatim: the spec does not make it a flag, so any signed value, `-1` included, is stored as-is (§1.1). */
   readonly disable: number;
-  /** Whether HP is affected (an `i16`, §8.2). */
+  /** Whether HP is affected: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
   readonly hpEnabled: number;
   /** HP changed per round; negative heals (an `i16`, §8.2). */
   readonly hpPerRound: number;
-  /** Whether SMP is affected (an `i16`, §8.2). */
+  /** Whether SMP is affected: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
   readonly smpEnabled: number;
   /** SMP changed per round; negative heals (an `i16`, §8.2). */
   readonly smpPerRound: number;
-  /** Whether the program runs (an `i16`, §8.2). */
+  /** Whether the program runs: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
   readonly runProgram: number;
   /** The RPGCode program the effect runs (§8.2). */
   readonly program: string;

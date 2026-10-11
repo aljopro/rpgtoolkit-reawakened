@@ -24,24 +24,25 @@ import {
 /**
  * Read a special move from `reader` (format-spec §8.1).
  *
- * The detection byte at offset 16 (§1.3, §8.1) is checked first: a non-NUL
- * byte means the 2.x text form, which is refused with a located `FormatError`
- * rather than parsed as binary. Otherwise the magic, major/minor header and
- * the §8.1 field list are read in order; bytes after the description are kept
- * as `residue` (§1.7).
+ * The header is read first and the detection byte at offset 16 (§1.3, §8.1)
+ * probed without moving the cursor: a non-NUL byte means the 2.x text form,
+ * which is refused with a located `FormatError` rather than parsed as binary.
+ * A file too short to carry the detection byte is not an error here — the
+ * header's own error is reported instead. Otherwise the §8.1 field list is
+ * read in order; bytes after the description are kept as `residue` (§1.7).
  */
 export function readSpecialMove(reader: BinaryReader): Result<SpecialMove> {
-  const detectAt = reader.offset + SPECIAL_MOVE_DETECT_OFFSET;
-  const probe = reader.isBinaryAt(detectAt);
-  if (!probe.ok) {
-    return probe;
-  }
-  if (!probe.value) {
+  const start = reader.offset;
+  // §8.1 lists the detection byte first and the header second; the probe does
+  // not move the cursor, so the header is read first and the detection checked
+  // before any header error — a text file has no NUL-terminated magic to read.
+  const header = reader.header();
+  const detectAt = start + SPECIAL_MOVE_DETECT_OFFSET;
+  const detection = reader.isBinaryAt(detectAt);
+
+  if (detection.ok && !detection.value) {
     return err(unsupportedTextForm(reader, detectAt, SPECIAL_MOVE_SECTION, SPECIAL_MOVE_MAGIC));
   }
-
-  const start = reader.offset;
-  const header = reader.header();
   if (!header.ok) {
     return header;
   }
