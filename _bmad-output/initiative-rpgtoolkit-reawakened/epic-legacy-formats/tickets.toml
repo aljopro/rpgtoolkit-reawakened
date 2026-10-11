@@ -1,0 +1,122 @@
+# tickets.toml — the planned entries of this epic, in build order. tickets.py reads it.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Binary read and write primitives"
+description = "Adds pure, deterministic little-endian binary reader and writer utilities in `core/format/binary` for i8, u8, i16, u16, i32, u32, f64, NUL-terminated Windows-1252 strings, COLORREF, and upper-bound array loops per format-spec section 1. Built with zero Node or DOM dependencies (G2), deterministic maths (G3)."
+verify = "Unit tests with synthetic byte buffers prove exact round-trip serialization and error handling for EOF/bounds."
+covers = ["CAP-1"]
+after = []
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Tileset (.tst) reader and writer"
+description = "Adds reader and writer for Toolkit tileset files (.tst) supporting version 20 (24-bit column-major RGB pixels) and version 30, with upper-bound count handling per format-spec section 3.1. Adds transparent key detection (0,1,2)."
+verify = "Both sample tilesets in demo and Basic (char.tst, default.tst) parse without trailing bytes; writer produces identical bytes on round-trip."
+covers = ["CAP-1"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Texture decoders: PNG and JPEG"
+description = "Adds `core/format/image` with `decodeTexture` (AD-28), returning pure RGBA Uint8Array. Decodes 8-bit palette Adam7 PNG (using fflate/browser unzlibSync for deflate decompression, manual filter and palette expansion) and baseline 4:2:0 JPEG (evaluating jpeg-js with useTArray: true vs integer baseline decoder per G2/G3)."
+verify = "Both fixture JPEGs (bkg.jpg, mwin.jpg) and layout.png decode to exact expected dimensions and RGBA buffers; deterministic across runners."
+covers = ["CAP-1"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Animation (.anm) reader and writer"
+description = "Adds reader and writer for animation files (.anm), parsing major 2 / minor 3 binary format per format-spec section 7.1: 51 frame slots, tile references (set.tstN), frame transparent color, audio cues, and frame delay seconds."
+verify = "All 26 sample .anm files in demo and Basic parse with 0 trailing bytes; round-trip serialization matches."
+covers = ["CAP-1"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Board (.brd) minor 4 reader and writer"
+description = "Adds reader and writer for modern vector boards (minor 4) per format-spec section 4.2: coordinate types, tile matrix RLE decompression (wrapping rows/layers), tile shading layers with run-length encoding, vectors (solid, passage, under, stairs), board programs, sprites, and background settings."
+verify = "All 3 sample boards (out.brd, start.brd in demo, start.brd in Basic) parse with 0 trailing bytes; round-trip serialization matches."
+covers = ["CAP-1"]
+after = [1, 2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Actor definitions: Character, Item, Enemy (.tem, .itm, .ene)"
+description = "Adds readers and writers for player characters (.tem, minor 8, section 6.1), items and board NPCs (.itm, minor 7, section 6.2), and enemies (.ene, minor 1, section 6.3), including their 2 vector bases (collision and activation polygons), 7 body slots, stats, and stance lists."
+verify = "All sample actor files (start.tem, man.itm, oldman.itm, pirate.ene) parse with 0 trailing bytes; round-trip serialization matches."
+covers = ["CAP-1"]
+after = [1, 4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Battle definitions (.bkg, .spc, .ste)"
+description = "Adds binary readers and writers for battle backgrounds (.bkg, section 8.3), special moves (.spc, section 8.1), and status effects (.ste, section 8.2), with RPGTLKIT magic and major/minor headers."
+verify = "demo/Bkrounds/bkg.bkg parses cleanly with 0 trailing bytes and round-trips; synthetic test fixtures verify .spc and .ste."
+covers = ["CAP-1"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 8
+type = "story"
+title = "Pre-vector board converter"
+description = "Adds converter from pre-vector binary boards (minors 2–3) to vector boards (minor 4) per format-spec section 4.8: tile type vectorization (solid, under, passages, stairs 1..8), program trigger 32x32 bounding boxes, shading flattening, and tile-to-pixel coordinate conversion."
+verify = "Synthetic pre-vector board fixtures convert deterministically to valid vector board data structures with matching geometry."
+covers = ["CAP-1"]
+after = [5]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Main game file (.gam) reader and project layout"
+description = "Adds parser for <root>/Main/<game>.gam across minor versions 0–9 (section 2), reading the 43-row table with version-dependent fields. Implements project layout resolution (section 1.5) pairing the main file with <root>/Game/<project>/ assets."
+verify = "Synthetic .gam fixtures across minor versions parse all fields correctly; missing .gam reports clean error."
+covers = ["CAP-1"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 10
+type = "story"
+title = "Asset resolver and package loader (.tpk, appended-ZIP EXE)"
+description = "Adds case-insensitive asset resolver (section 1.5) and package loader for loose folders, .tpk ZIP archives, and standalone EXEs with CMP1 trailers (section 13). Enforces untrusted package limits (max entries, max sizes, zip-slip protection, CRC-32 validation)."
+verify = "A synthetic .tpk and an appended-ZIP EXE load to the identical asset tree as the extracted folder; case-insensitive lookups resolve correctly; malformed packages trigger named limits."
+covers = ["CAP-1"]
+after = [1, 9]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 11
+type = "story"
+title = "Headless project dump tool (runner-headless dump)"
+description = "Adds a CLI command to `packages/runner-headless` that opens a legacy project (extracted directory or .tpk), parses every data file using the readers, and prints human-readable verification data (Done-when #1)."
+verify = "Running `dump` on demo and Basic parses every asset file without error and exits 0."
+covers = ["CAP-1"]
+after = [2, 3, 4, 5, 6, 7, 10]
+hitl = false
+risk = "low"
