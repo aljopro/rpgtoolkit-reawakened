@@ -82,3 +82,41 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - `pnpm graph` — exit 0; `no dependency violations found (64 modules, 158 dependencies cruised)`.
 - `pnpm provenance` — exit 0; `scanned 152 files`, `0 violations`.
 - `uv run _bmad/method/scripts/tickets.py --project-root . status` — exit 0, entry 2.2 shown as `done`.
+
+## Code Review
+
+### 2026-10-11
+
+**Code review complete.** 0 `decision-needed`, 6 `patch`, 1 `defer`, 20 rejected. The two decisions were resolved on 2026-10-11 and became patches; checked items are applied.
+
+Scope: f6cc637; diff excludes the ticket's own plan file. Lenses run: blind-hunter, edge-case-hunter, verification-gap, intent-alignment (thorough). Decision, patch and defer counts are entries after grouping; the rejected count is findings.
+
+- [x] [Review][Patch] Sample-corpus tests are skipped in CI (fixtures are only fetched in the golden job) — decided 2026-10-11 (user: harden the test ecosystem); applied as the recommended option: the `golden` job now runs `pnpm test` right after `pnpm fixtures:fetch` and `pnpm fixtures:check` (`.github/workflows/ci.yml`, described in `CONTRIBUTING.md`), so this ticket's sample-tileset round trip (the `verify` line) executes in CI instead of being skipped in `unit`.
+- [x] [Review][Patch] 16×16 tiles are never upscaled to 32×32; the accessor returns stored geometry [packages/core/src/formats/tileset/tileset.ts:91-102] — decided 2026-10-11 (user): the conversion belongs in the renderer, which can tell the two apart (details 2, 4 and 6 are 16×16) and should double them once per tileset and cache the result, as a graphics engine would; applied: the format layer keeps the stored size, `tileDimensions` and `expandTileToRgba` now say so, format-spec §3.1 states it, and `epic-board-rendering.md` records the renderer decision.
+- [ ] [Review][Patch] Unused `ISO_SECTION` constant [packages/core/src/formats/tileset/tileset.ts:25] — delete it; nothing references it and every `fail(...)` uses `HEADER_SECTION`.
+- [ ] [Review][Patch] `vgaPaletteEntry` allocates an object per palette pixel [packages/core/src/formats/tileset/tileset.ts:245] — read the three bytes from `VGA_DEFAULT_PALETTE` at `index*3` in `writePalette` (up to 1024 allocations per palette tile today).
+- [ ] [Review][Patch] The palette provenance comment names a widening rule the table does not follow [packages/core/src/formats/tileset/vga-palette.ts:12-16] — indices 19/20/29 (0x2c/0x38/0xcb) match bit replication, not `round(v*255/63)`; name the actual rule.
+- [ ] [Review][Patch] `expandTileToRgba`'s out-of-range message renders "(0…-1)" on an empty tileset [packages/core/src/formats/tileset/tileset.ts:199] — word the no-tiles case explicitly.
+- [x] [Review][Defer] The sample corpus holds only version 20 / detail 1 tilesets [packages/core/test/format-tileset.test.ts:282-288] — deferred: pre-existing corpus limitation (all four samples are 20/detail 1 and `fixtures/legacy` has no `.iso`), not caused by this change and not fixable without acquiring or synthesising an `.iso`/palette/16×16 sample.
+
+**Rejected**
+- blind-hunter: `TestOptions` declared but unused, inline type kept — low: already removed at HEAD by `cca70e3`; nothing left to fix.
+- blind-hunter: Reader never validates `version` against `detail` — low: 20+150 and 30+1 do parse, but no real file carries them, §3.4 permits non-isometric tiles in an isometric set, and the fix adds a branch.
+- blind-hunter: `writeTileset` has no runtime validation of the header fields — low: only a hand-built plain-JSON model reaches `version 25`/`detail 7`, and the fix adds guards.
+- blind-hunter: `?? 0` masking hides short tiles; `expandIsometric` never checks the 1024 count — low: only a hand-built model holds a short tile (the reader always supplies `perTile` bytes; the writer refuses the same model), and the fix is a length guard.
+- blind-hunter: Sample-fixture test skips all-or-nothing on hardcoded paths — low: only bites on a partial fetch, the "weak assertions" part is refuted by the byte-identical round-trip, and the fix rewrites the gating logic.
+- blind-hunter: `isInsideIsoDiamond` silently accepts out-of-range coordinates — low: the range is a documented precondition and no caller passes an out-of-range value.
+- blind-hunter: `readTileset` breaks the `formats/` reader convention — low: true, but no caller is broken and unifying the shapes is an API reshape.
+- edge-case-hunter: `writeTileset` never checks `model.version` is 20/30 — low: same as the writer-validation finding above.
+- edge-case-hunter: `writeTileset` never checks `model.detail.code` is listed — low: same as the writer-validation finding above.
+- edge-case-hunter: Short `tile.pixels` padded with `?? 0` — low: same as the short-tile finding above.
+- edge-case-hunter: Version/detail cross-product unvalidated (reader) — low: same as the version/detail finding above.
+- edge-case-hunter: Partial fixture fetch skips all four samples — low: same as the fixture-gating finding above.
+- edge-case-hunter: Deletion check: orphaned `TestOptions` declaration — low: same as the `TestOptions` finding above (removed by `cca70e3`).
+- intent-alignment: The synthetic oracle is the implementation's own reading (no external pixel oracle) — low: real epistemic limit but no observable failure and no fix inside the clean-room rules.
+- intent-alignment: The corpus digest is recorded from this reader, so it cannot see pixel interpretation — low: same as above; the digest still pins everything the reader derives from the bytes.
+- intent-alignment: Accessor emits column-major RGBA; the repo's renderer convention is row-major — low: documented and test-asserted, no consumer yet, and changing it is an API decision.
+- intent-alignment: 0-based accessor vs §1.6's 1-based references; no test drives a reference in — low: the base is documented, an unshifted index mostly fails loudly, and bridging §1.6 is the reference layer's job.
+- intent-alignment: The writer's edit path is exercised only by refusals — low: no failure mode identified in the length check plus verbatim re-emit.
+- intent-alignment: The plan doc is not in the diff; the intent's verdict surface is split — low: bookkeeping; the only fix would be to edit the plan under review.
+- intent-alignment: Reader is version-driven with no extension input; the `.tst`/`.iso` cross-product is untested — low: the version field is the only `.tst`/`.iso` signal by design and the extension dispatch is outside this diff.

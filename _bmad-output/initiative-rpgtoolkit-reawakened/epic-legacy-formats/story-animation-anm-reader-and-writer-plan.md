@@ -76,3 +76,36 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - `pnpm lint` — exit 0; `check-core-deps: 0 core runtime dependencies matches the allowlist`, eslint clean.
 - `pnpm graph` — exit 0; `no dependency violations found (65 modules, 161 dependencies cruised)`.
 - `pnpm provenance` — exit 0; `scanned 153 files`, `0 violations`.
+
+## Code Review
+
+### 2026-10-11
+
+**Code review complete.** 0 `decision-needed`, 2 `patch`, 2 `defer`, 18 rejected. The two decisions were resolved on 2026-10-11 and became patches; checked items are applied.
+
+Scope: 9eaf6bc, cca70e3; diff excludes the ticket's own plan file. Lenses run: blind-hunter, edge-case-hunter, verification-gap, intent-alignment (thorough). Decision, patch and defer counts are entries after grouping; the rejected count is findings.
+
+- [x] [Review][Patch] Sample-corpus tests are skipped in CI (fixtures are only fetched in the golden job) — decided 2026-10-11 (user: harden the test ecosystem); applied as the recommended option: the `golden` job now runs `pnpm test` right after `pnpm fixtures:fetch` and `pnpm fixtures:check` (`.github/workflows/ci.yml`, described in `CONTRIBUTING.md`), so the parse and byte-identical round trip of the 26 sample `.anm` files execute in CI instead of being skipped in `unit`.
+- [x] [Review][Patch] Trailing bytes are silently dropped instead of being kept as residue — decided 2026-10-11 (user: warn, and keep the residue where dropping it would make the saved file differ from the one read, which it does); applied: `Animation` gains `residue`, `readAnimation` keeps the bytes and warns once, `writeAnimation` re-emits them (format-spec §1.7), tests cover both, and `golden/legacy-corpus.json` was re-recorded because the 26 `.anm` digests now include the empty residue.
+- [x] [Review][Defer] Negative upper bounds below -1 are accepted as zero slots [packages/core/src/formats/animation/reader.ts:58] — deferred: root cause in ticket 2.1's binary primitive (readUpperBound); fixing it there fixes this reader
+- [x] [Review][Defer] A negative `major` is accepted by `readAnimation` [packages/core/src/formats/animation/reader.ts:42] — deferred: root cause in ticket 2.1's binary primitive (`header()` accepts a negative version, which §1.4 calls invalid; see its patch); fixing it there fixes this reader (a negative `minor` is already refused by the `minor !== 3` check).
+
+**Rejected**
+- blind-hunter: reader.ts:58 trusts the stored frames bound and never compares it with reader.remaining — low: inner reads are bounds-checked and fail safely with located FormatError; only error offset/section on corrupt input differs; fixing it adds branches
+- blind-hunter: The text form is neither handled nor diagnosed — low: 2.x text animations are rejected with located FormatError at offset 0; no text animation exists in the corpus; §1.3 only mandates supporting binary forms; fixing it adds an isBinaryAt probe and error branch
+- blind-hunter: image-reference.ts covers only two of §1.6's four tile-reference extensions — low: format-spec §7.1 and plan define tile references for animation frames as set.tstN / set.isoN; neither rock.gph nor water.tan appears in any animation file in the corpus; fixing it adds variants to ImageReference and branches
+- blind-hunter: The classifier's kind names do not line up with AssetKind — false: ImageReference is a semantic decomposition of animation frame contents (including index numbers for tilesets) rather than an asset directory kind, and stripTypeFolder in resolveAsset already handles type folder prefixes
+- blind-hunter: `index` is unvalidated and lossy — low: AnimationFrame.image preserves raw string verbatim for round-trip; everyday tile references are small positive integers; invalid indices like 0 or 1e+30 fail safely during asset lookup; fixing it adds bounds-checking branches
+- blind-hunter: The case-insensitivity claim is only half true — false: preserving the source string's case in the tileset field while case-insensitively recognizing extensions is intentional and correct; case-folding lookup is handled by the asset resolver via foldPath per §1.5
+- blind-hunter: Writer/reader invariant asymmetry — false: writers across all formats in the repo re-emit model header fields verbatim to ensure byte-exact round-tripping per AD-18; writers are encoders, not model validators
+- blind-hunter: reader.ts:44 locates the minor error as reader.offset - 2 — false: reader.offset - 2 correctly identifies the start of the 2-byte minor field consumed by header(), matching format-spec §1.3/§1.4 and sibling readers; verified by test at format-animation.test.ts:102
+- blind-hunter: Test gaps for documented or helper-dependent behaviour — low: synthetic test suite has 13 tests covering all acceptance criteria; all sample files round-trip byte-identically; adding tests for minor edge cases is not worth fixing
+- blind-hunter: The fixture test asserts nothing about the corpus it claims to cover — low: format-animation.test.ts:271-283 asserts remaining === 0 and byte-identical round-trip for every sample animation, satisfying the plan's acceptance criteria; lack of an explicit count assertion or pinned facts table is cosmetic
+- edge-case-hunter: Tile references rock.gph, water.tan and bare set.tst fall through to picture — low: same substance as #5; bare set.tst has no tile index and is not a valid tile reference under §1.6; fixing it adds branches
+- edge-case-hunter: Unbounded digit run yields a tile index beyond Number.MAX_SAFE_INTEGER — low: same substance as #7; raw string is preserved verbatim and everyday tile references never exceed safe integer limits; fixing it adds branches
+- edge-case-hunter: Image beginning with a dot yields a tile with empty tileset name — low: .tst12 is corrupt input that fails asset resolution regardless of classification; everyday files never begin with a dot; fixing it adds a branch
+- intent-alignment: D1 — Intent claim "51 slots, many empty" vs diff tests — false: the 51-slot mention in the plan is background motivation for why the upper-bound rule must be preserved, not a test acceptance requirement; all named acceptance criteria are fully met
+- intent-alignment: D2 — Intent claim "images may be pictures / tile references / .tbm" vs diff coverage — false: the 2004 sample corpus only contains tile references; testing picture and .tbm branches using synthetic unit tests is the only possible way to test them and is properly implemented
+- intent-alignment: D3 — Intent §1.6 citation vs classifier scope — low: same substance as #5; .gph and .tan are not used in animations, and the plan explicitly specified set.tstN; fixing it adds branches and modifies public types
+- intent-alignment: D4 — Writer version enforcement vs "rejects any minor other than 3" — false: same substance as #9; the plan specifies reader rejection of minor !== 3 and writer verbatim re-emission; writer emission of model.minor verbatim matches all writers in the repo
+- intent-alignment: D5 — "Verbatim" scope: transparent stored as struct (Colorref) — false: COLORREF high byte is ignored on read and 0 on write per §1.1; unpacked Colorref struct is uniform across core; all sample files round-trip byte-identically

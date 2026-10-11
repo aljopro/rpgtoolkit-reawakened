@@ -83,3 +83,37 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - `pnpm graph` — exit 0; `no dependency violations found (59 modules, 142 dependencies cruised)`.
 - `pnpm provenance` — exit 0; `scanned 147 files`, `0 violations`.
 - `uv run _bmad/method/scripts/tickets.py --project-root . status` — exit 0, entry 1 shown.
+
+## Code Review
+
+### 2026-10-11
+
+**Code review complete.** 0 `decision-needed`, 4 `patch`, 0 `defer`, 19 rejected.
+
+Scope: e8f2d43, 68d7839; diff excludes the ticket's own plan file. Lenses run: blind-hunter, edge-case-hunter, verification-gap, intent-alignment (thorough). Decision, patch and defer counts are entries after grouping; the rejected count is findings.
+
+- [ ] [Review][Patch] A stored upper bound below -1 is silently read as "none" instead of being reported [packages/core/src/formats/binary/reader.ts:40-42,207-210] — smallest fix: `readUpperBound` returns a `FormatError` citing `COUNT_SECTION` (§1.2) when the stored bound is `< -1`, plus a test through a written `i16(-2)`, so the clamp can no longer be deleted unnoticed.
+- [ ] [Review][Patch] `header()` returns a negative `major`/`minor` as a valid header [packages/core/src/formats/binary/reader.ts:185-199] — format-spec §1.4 (pinned in 68d7839) calls a negative version field invalid, and at HEAD the three battle readers (2.7) and the animation reader's `major` (2.4) rely on `header()` alone and accept such files; smallest fix: `header()` returns a located `FormatError` citing `format-spec §1.4` when `major < 0 || minor < 0`, plus a test over a written negative version. Revised in the cross-ticket audit: the first triage pass rejected this as false ("every consumer checks"), which does not hold for the battle and animation readers.
+- [ ] [Review][Patch] `readUpperBound`'s JSDoc wrongly lists vector bases as an `i32` bound [packages/core/src/formats/binary/reader.ts:204-206] — smallest fix: drop "and vector bases"; the §6.1/§6.2 vector-base bounds are `i16` and §6.3 has none.
+- [ ] [Review][Patch] `header()`/`FormatHeader` JSDoc claims every binary Toolkit file starts with magic+major+minor [packages/core/src/formats/binary/reader.ts:22,183] — smallest fix: scope both comments to magic-carrying files, since §1.4 exempts `.tst`/`.iso` (and `.prg`).
+
+**Rejected**
+- blind-hunter: §1.2's "check n against the bytes that remain" has no home in the primitives — false: `take()` errors at the first element read past EOF and no consumer allocates from a bound (board/reader.ts:44-64, 100-110).
+- blind-hunter: `trueCount`/`readTrueCount` return a negative count unvalidated — false: the only caller (tileset.ts:119-123) reports `tileCount < 0`, so no caller-side throw occurs.
+- blind-hunter: `BinaryWriter.str` writes an embedded NUL straight through — low: no read path can produce a NUL-bearing string, and the fix adds a guard to the codec.
+- blind-hunter: §1.2's `i32` parenthetical omits §7.1 frames and §4.8 threads — false: the rule defers to "unless the section says otherwise", both sections state `i32`, and both readers pass `"i32"`.
+- blind-hunter: `take()` accepts a non-integer or NaN `size` — low: every in-repo caller passes an integer length, and the fix adds a guard.
+- blind-hunter: `isBinaryAt` classifies any non-zero byte as text — false: §1.3 prescribes exactly that ("otherwise it is text").
+- blind-hunter: `decodeCp1252` substitutes 0 outside the span — low: only a caller-side bad span reaches it, and the fix adds range guards.
+- blind-hunter: no `writeUpperBound`/`writeTrueCount` — false: the frozen Execution list defines the writer's surface without one, and the intent's drift clause is about readers.
+- blind-hunter: §1.4's "3.1.0 sample files all carry `major` 2" vs §11/§3.6 — false: verified the corpus itself carries `major` 2 in every magic-bearing file; §11/§3.6 are about `.sav`/`.tbm`.
+- blind-hunter: test-coverage holes — false: no bad outcome is claimed, and I exercised the reserve-doubling path, a `subarray` reader and the `toBytes()` copy — all correct.
+- blind-hunter: §14's detection-offset checklist omits the new offsets — false: that bullet is scoped to battle formats and stays accurate; §1.3 is the normative list.
+- edge-case-hunter: a stored bound larger than the remaining bytes is accepted unchecked — false: `take()` stops every read past EOF and nothing preallocates from a bound.
+- edge-case-hunter: a negative stored true count is returned unvalidated — false: tileset.ts:119-123 validates it.
+- edge-case-hunter: a non-integer/NaN length slips past the `take()` guard — low: same as above; the trigger is a caller-side non-integer.
+- edge-case-hunter: `decodeCp1252` decodes an out-of-range span as U+0000 — low: same as above; the trigger is a caller-side bad span.
+- intent-alignment: §1.2's remaining-bytes check has no home in the diff — false: same as the first rejection.
+- intent-alignment: only an `i16` `bool` helper exists — false: `bool()` documents `i16`, the `i8` form is `u8()/i8() !== 0`, and no caller is misled.
+- intent-alignment: the count rules are single-sourced forward only — false: same as the write-side rejection.
+- intent-alignment: the writer silently wraps out-of-range values — low: documented, permitted by AD-18 and the frozen criteria, and in-repo writers pass in-range values.

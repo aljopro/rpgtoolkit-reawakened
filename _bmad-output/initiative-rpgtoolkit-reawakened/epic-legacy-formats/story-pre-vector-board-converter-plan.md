@@ -59,3 +59,32 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - **Constants and titles.** §4.8's eleven constants are numeric and become their decimal strings in the §4.2 `constants` list; the nine fixed layer titles fill `sizeL + 1` entries, padded with empty strings when `sizeL + 1 > 9`.
 - **Unused fields dropped on conversion:** the foreground and border images, the border colour, the day/night fields and the reserved trailing string have no §4.2 field; the background image becomes a parallax background (`backgroundDrawType = 1`), and the ambient preset maps to its §4.8 offsets (unknown presets become none, with a warning).
 
+## Code Review
+
+### 2026-10-11
+
+**Code review complete.** 0 `decision-needed`, 3 `patch`, 6 `defer`, 10 rejected.
+
+Scope: 06b250e; diff excludes the ticket's own plan file. Lenses run: blind-hunter, edge-case-hunter, verification-gap, intent-alignment (thorough). Decision, patch and defer counts are entries after grouping; the rejected count is findings.
+
+- [ ] [Review][Patch] `coordType` validation rejects §5's combinable `PX_ABSOLUTE` flag [packages/core/src/formats/board/pre-vector-convert.ts:342-345] — a board stored as `PX_ABSOLUTE` (coordType 4 or 5, "combinable with 0, 1, or 2" in §5) converts to no `Board` at all; mask bit 4 before the 0/1/2 check and pass the value through, leaving the iso-rotated refusal in place.
+- [ ] [Review][Patch] Over-long run-length counts break the write-back of large boards [packages/core/src/formats/board/pre-vector-convert.ts:236-246,293-302] — a uniform matrix over 32768 cells converts to a board `writeBoard` rejects, and a shade run of 32768 cells wraps `i16` on write so the file no longer re-reads; chunk tile runs at 32768 and shade records at 32767 cells.
+- [ ] [Review][Patch] The converter branches and converted properties are unpinned by tests [packages/core/test/format-board-pre-vector.test.ts] — the `tileType` 0 skip (`:201`), the ambient presets, the constants mapping, the trailing properties (`links`, `lut`, `layerTitles`, `enterPrg`, battle fields, music) and any `writeBoard` round-trip have no assertion; add cases to the existing synthetic tests.
+- [x] [Review][Defer] The board load path still refuses minors 2–3 [packages/core/src/formats/board/reader.ts:195-203] — deferred: pre-existing refusal, not caused by this change; the first caller lands outside the diff in `2aa135e` (epic 2.11, `runner-headless/src/dump/parse.ts`).
+- [x] [Review][Defer] §4.8's "standard default vector bases" rule is implemented nowhere [packages/core/src/formats/board/pre-vector-convert.ts:340-346] — deferred: §4.2's `BoardSprite` has no base field and the actor readers synthesise no defaults for minor < 7/8, so the rule needs a spec/design decision (already recorded for §4.8).
+- [x] [Review][Defer] Iso-rotated pre-vector boards yield no board at all [packages/core/src/formats/board/pre-vector-convert.ts:346-352] — deferred: the refusal is deliberate and recorded (`deferred-work.md`), §4.8 gives no `(sizeX+sizeY)²` mapping, so closing it needs a doc decision (and leaves `tilePixel`'s rotated branch dead in the meantime).
+- [x] [Review][Defer] Empty program/sprite slots get invented off-board geometry [packages/core/src/formats/board/pre-vector-convert.ts:383,390] — deferred: §4.8 pins a fallback only for the start point, so the rect/diamond at tile (0,0) and sprite x=-16,y=-1 are unrecorded inventions needing a §4.8 decision.
+- [x] [Review][Defer] A legacy repeat bit converts to `repeatDistance: 0` [packages/core/src/formats/board/pre-vector-convert.ts:380-381] — deferred: §4.8 does not say the pre-vector `activationType` carries §4.4's bit 2 and the record has no distance field, so masking the bit versus defaulting a distance is a spec decision.
+- [x] [Review][Defer] The remaining §4.8 readings are recorded only in the deferred-work log, not the spec [packages/core/src/formats/board/pre-vector-convert.ts:340-346] — deferred: G7 doc-first was not followed for the empty-slot, activation-type, shade-range, dropped-field and constants/titles decisions; a spec amendment is a human decision on §4.8.
+
+**Rejected**
+- blind-hunter: Shade sums are unbounded and unvalidated against the documented ±255 — low: real (510 written and re-read) but the clamp is a guard the spec never asks for, the value renders clamped, and no consumer trusts the range.
+- blind-hunter: Shade flattening cannot represent per-layer differences — low: inherent to §4.8's mandated flattening into one shade layer and already recorded; no §4.2 shape can express per-layer shades.
+- blind-hunter: Every conversion error reports `offset: 0` and no path; four `fail` helpers — low: a pure function of the model has no byte positions or path to report, and each message names the offending value.
+- blind-hunter: Error attribution differs from the sibling vector reader — false: both readers report the same condition, offset and message for the same bytes; only the `section` label differs and each names the section that function implements.
+- blind-hunter: Silent data loss where the warning channel already exists — low: §4.8 marks those fields "unused", the unknown tile types have no conversion rule, and the layer-title truncation matches the model invariant `writer.ts` enforces; warnings would add branches and name no harm.
+- blind-hunter: Tile and diamond metrics are hard-coded although core already owns them — low: the `.iso` tileset constants are a different concern and `boardGrid` is moot because iso-rotated is refused; dormant duplication.
+- blind-hunter: The synthetic-fixture method cannot catch a misreading of §4.8 — low: inherent (the corpus has no minor 2–3 board) and already stated in the test file's header; the remaining ask edits the plan's verification record.
+- blind-hunter: The corpus test asserts almost nothing and re-derives the header by hand — low: true, but the corpus holds no pre-vector board and the ticket's fixtures are synthetic; the hand-rolled header parse is a hygiene nit.
+- edge-case-hunter: A matrix LUT index at or beyond `lut.length` is accepted — false: the sibling reader applies no such check, neither §4.2 nor §4.8 requires it, and no code resolves LUT indices, so the claimed harm has no consumer.
+- intent-alignment: Tests are self-referential and cannot be an oracle — low: unavoidable with no pre-vector sample; the ticket's verify line claims only synthetic fixtures, which the unconditional unit tests run.

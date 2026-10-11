@@ -91,3 +91,48 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - `demo/Enemy/pirate.ene` (minor 1) — "Pirate Bob", six stance slots (slot 5 empty), `i32` custom-stance bound.
 
 The fixture test guards on presence (`skip` when `fixtures/legacy/` is absent), and the `Basic` copies of the item and enemy samples do not exist in the corpus, which the extension-based collection handles.
+
+## Code Review
+
+### 2026-10-11
+
+**Code review complete.** 0 `decision-needed`, 10 `patch`, 2 `defer`, 22 rejected. The decision was resolved on 2026-10-11 and became a patch; checked items are applied.
+
+Scope: 8bc1111; diff excludes the ticket's own plan file. Lenses run: blind-hunter, edge-case-hunter, verification-gap, intent-alignment (thorough). Decision, patch and defer counts are entries after grouping; the rejected count is findings.
+
+- [x] [Review][Patch] Sample-corpus tests are skipped in CI (fixtures are only fetched in the golden job) — decided 2026-10-11 (user: harden the test ecosystem); applied as the recommended option: the `golden` job now runs `pnpm test` right after `pnpm fixtures:fetch` and `pnpm fixtures:check` (`.github/workflows/ci.yml`, described in `CONTRIBUTING.md`), so the real `.tem`/`.itm`/`.ene` samples' parse and byte-identical round trip execute in CI instead of being skipped in `unit`.
+- [ ] [Review][Patch] writeCharacter serialises the 201 special-move slots in the wrong order [packages/core/src/formats/actor/character.ts:376-391] — emit each slot as `str file, i32 minExp, i32 minLevel, str condVar, str condValue` like the reader, dropping the two-block split
+- [ ] [Review][Patch] Ignored writer.str results silently truncate unencodable output [packages/core/src/formats/actor/character.ts:350-448, packages/core/src/formats/actor/item.ts:359-477, packages/core/src/formats/actor/enemy.ts:206-238] — assign each `writer.str(...)` result and return a `writerError` on failure
+- [ ] [Review][Patch] Character version-conditional rows (minor < 8) have no test anywhere [packages/core/test/format-actor.test.ts:441] — add `buildCharacter({ minor: 3 })` and `buildCharacter({ minor: 4 })` round-trips
+- [ ] [Review][Patch] Item version-conditional rows (minor < 4) have no test anywhere [packages/core/test/format-actor.test.ts:441] — add `buildItem({ minor: 2 })` (and a `minor: 6` item) round-trips
+- [ ] [Review][Patch] Non-empty residue is never round-tripped [packages/core/test/format-actor.test.ts:569] — add one trailing-bytes case per actor format
+- [ ] [Review][Patch] Writer-failure paths are untested [packages/core/test/format-actor.test.ts] — cover the fixed-block length mismatch and the unencodable-string error
+- [ ] [Review][Patch] Synthetic tests never populate a special-move slot or pin field order with distinguishable values [packages/core/test/format-actor.test.ts:120-126] — populate one slot with distinguishable values and round-trip it
+- [ ] [Review][Patch] The raw stored flags kept verbatim are untested [packages/core/test/format-actor.test.ts] — read/write non-canonical flag bytes and assert the byte-identical re-emit
+- [ ] [Review][Patch] The sample-layout test silently no-ops when a named sample is absent [packages/core/test/format-actor.test.ts:601-624] — assert each expected sample path was found
+- [x] [Review][Defer] A stored upper bound below -1 is accepted as "none" [packages/core/src/formats/binary/reader.ts:40] — deferred: root cause in ticket 2.1's binary primitive (readUpperBound); fixing it there fixes this reader
+- [x] [Review][Defer] The accepted minor values for .tem and .itm are not stated in the spec [docs/format-spec.md §6.1, §6.2] — deferred: pre-existing spec gap (§1.4 requires each format to state its minors); the fix edits the spec under G7's doc-first rule, not this ticket's code
+
+**Rejected**
+- blind-hunter: The legacy-text diagnosis is made before the magic is checked, so non-actor files are reported as 2.x text actors — low: only a non-actor file misrouted here (byte 13 non-NUL) hits it, and the fix adds a magic-prefix branch
+- blind-hunter: A negative `major` is reported at the `minor` offset — low: a 2-byte offset error in a message for an already-invalid file
+- blind-hunter: `ENEMY_MAJOR` is declared and never used, and the major invariant is unenforced — low: §1.4 makes `major` informational, so not enforcing it is correct, and the plan deliberately exports the constants
+- blind-hunter: The writers accept a `minor` they cannot serialise — low: only reachable by hand-building a model the reader can never emit; the fix adds range validation
+- blind-hunter: `?? []` on a fixed-count block is dead and yields a misleading message — low: the result is still a loud `FormatError`; only the wording differs
+- blind-hunter: `readBases` never checks the bases bound against the bytes remaining — low: every inner read is bounds-checked, so it fails safely
+- blind-hunter: `writeStrings` discards the inner failure's location when it wraps it — low: error-location cosmetics on the same path as the writer.str fix
+- blind-hunter: `readStats` is built by parallel array plus a double cast — low: no current caller diverges; harm needs a future edit to the `order` array
+- blind-hunter: The header preamble and the `minor >= N` ladder are triplicated — low: refactor with no named defect
+- blind-hunter: `BATTLE_STANCE_COUNT = 5` is exported and referenced nowhere — low: dead spec constant; deleting it contradicts the plan's explicit constants task
+- blind-hunter: The enemy's six-slot stance invariant is neither enforced nor surfaced — low: §6.3 stores the bound as 5, so a conforming file is unaffected
+- blind-hunter: The bound rule exists in two shapes in the same file — low: a duplicated one-liner with no behavioural divergence
+- blind-hunter: Thirteen generic helper names became package-level public API — low: tsc/graph are green and no actual collision exists
+- blind-hunter: The barrel's summary comment was not updated — low: comment-only, and the list was already incomplete
+- blind-hunter: Avoidable allocations on hot-pure paths — low: micro-optimisation; the special-moves `.map()` goes with the E1 fix
+- blind-hunter: `readBoundedStrings`' guard error points at the first entry, not the bound — low: the offset is defensible (points at the payload after the bound)
+- intent-alignment: D1 — the four trap tests live at the spec surface, while the intent anchors the traps at the sample bytes — low: the traps are asserted on both surfaces and the sample side's CI exposure is covered by the decision item
+- intent-alignment: D2 — the implied acceptance signal (`remaining === 0`) is not discriminating; the check moved to residue — false: `checkActor` asserts `residue.length === 0` and the absence of a residue warning, which is strictly stronger
+- intent-alignment: D3 — R1 vs R2 (scope): the diff stops at the format layer, the intent's motivation names the runner — false: the plan's tasks bound the deliverable to the format layer; the runner consumer landed later (2.11, 2aa135e)
+- intent-alignment: D4 — R3 vs R4 (text forms): the diff refuses the text forms rather than converting them — false: the plan's frozen "Never" clause mandates refusing the 2.x text forms and §6.3's minor 0
+- intent-alignment: D5 — R5 vs R6 (normalisation): the diff stores raw values rather than applying §6 consumer rules — false: the byte-exact-write requirement and the plan's "Never: drop empty slots" require verbatim storage
+- intent-alignment: D6 — R7 vs R8 (six enemy stances): the reader is bound-driven, not structurally six — low: §6.3 documents the bound as "stored as 5"

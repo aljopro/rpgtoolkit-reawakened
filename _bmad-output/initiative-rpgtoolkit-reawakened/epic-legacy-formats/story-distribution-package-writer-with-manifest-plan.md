@@ -96,3 +96,31 @@ Entries are ordered by path with an explicit code-unit comparator (never `locale
 - `pnpm provenance` — exit 0; `scanned 212 files`, `0 violations`.
 - `pnpm licence` — exit 0; `Licence check PASSED`, 0 violations.
 - `uv run _bmad/method/scripts/tickets.py --project-root . status` — entry `2.12` reported `done` with no orphan row.
+
+## Code Review
+
+### 2026-10-11
+
+**Code review complete.** 0 `decision-needed`, 9 `patch`, 1 `defer`, 7 rejected. The decision was resolved on 2026-10-11 and became a patch; checked items are applied.
+
+Scope: ddf854d; diff excludes the ticket's own plan file. Lenses run: blind-hunter, edge-case-hunter, verification-gap, intent-alignment (thorough). Decision, patch and defer counts are entries after grouping; the rejected count is findings.
+
+- [x] [Review][Patch] Nothing in the product read `manifest.json`, so the descriptor's contract (and the index's meaning) was unverified — decided 2026-10-11 (user: we need to do that): `readDistributionManifest(pkg)` now exists in `formats/package/manifest.ts` and shares the writer's validation; format-spec §13 documents the manifest (exactly `schema`, `main` and `index`; `index` lists every game file but `manifest.json`); tests round-trip write → load → read and refuse the malformed cases (bad JSON, wrong shape, missing or extra keys, bad schema, `main` or index entries not in the archive, unlisted files, duplicates). `loadPackage` is unchanged: a legacy package has no manifest and still loads.
+- [ ] [Review][Patch] Writer throws instead of returning a `Result` on malformed `input`, file paths or `bytes` [packages/core/src/formats/package/write.ts:351,385-386,409] — require a non-null object `input`, and each element a non-null object with a string `path` and a `Uint8Array` `bytes`, returning a located failure before use.
+- [ ] [Review][Patch] Writer validates normalised/folded paths but emits the caller's raw strings [packages/core/src/formats/package/write.ts:259,418,443-447,470] — write `toSlashes(file.path)` as the entry name and the tree's own spelling for `main` and each `index` entry.
+- [ ] [Review][Patch] The L1 budget is checked only after the whole container is allocated and written [packages/core/src/formats/package/write.ts:276,326] — compare the computed `localBytes + centralBytes + EOCD_BYTES` before `new Uint8Array`.
+- [ ] [Review][Patch] L3/L4 budget accounting excludes the manifest's own bytes [packages/core/src/formats/package/write.ts:409-420] — serialise `manifestBytes` before the budget loop and add its length to the running total.
+- [ ] [Review][Patch] The self-check passes a file name where `readZip` expects the package name [packages/core/src/formats/package/write.ts:461] — pass a descriptive placeholder instead of `MANIFEST_FILE_NAME`.
+- [ ] [Review][Patch] The new path-shape rule cites L9, which is the zip-slip rule [packages/core/src/formats/package/write.ts:115] — drop the wrong row number from the message.
+- [ ] [Review][Patch] Writer validation branches are unpinned by the test suite [packages/core/test/format-package-writer.test.ts:105-270] — add a path-shape case and a non-ASCII fixture path (the malformed-input cases belong with the entry above).
+- [ ] [Review][Patch] Unused `paths` in the test helper [packages/core/test/format-package-writer.test.ts:80,85] — delete the field from the return type and the object.
+- [x] [Review][Defer] The feature catalogue and the commit's IDs do not mention the distribution manifest (G7 doc-first) [docs/editor-features.md T-70…T-74, docs/engine-features.md E-131] — deferred: format-spec §13 now documents the manifest (2026-10-11); what remains is a catalogue edit, which edits specs.
+
+**Rejected**
+- blind-hunter: lone-surrogate path rewritten as U+FFFD — low: ill-formed UTF-16 cannot come from a file system, so it is not met in everyday use and the fix is added surrogate validation, not a direct correction.
+- blind-hunter: reader/writer phrase the same condition differently — false: all three `checkEntryPath` call sites append "." (zip.ts:203, package.ts:105, write.ts:387).
+- blind-hunter: L2 ignores the directories the folder form holds — low: reachable only at ~9,995 files and the fix adds implied-directory accounting.
+- intent-alignment: the guarantee lives at the container surface — false: `loadPackage`'s tpk path is `readZip` + a total `createAssetIndex`, so no package can pass the self-check and fail `loadPackage`; the block itself calls the gap latent.
+- intent-alignment: "the same limits" partly by-construction — false: every reader limit is explicitly checked or guaranteed by construction, with the readZip self-check as the backstop.
+- intent-alignment: determinism asserted one level wide — low: the "same input twice" AC holds; bytes depend on the pinned fflate build and fixing that would mean dropping compression.
+- intent-alignment: the seam of the container-surface and manifest-index divergences — false: it names no bad outcome, restating those two findings and concluding both are deliberate interpretation decisions.
