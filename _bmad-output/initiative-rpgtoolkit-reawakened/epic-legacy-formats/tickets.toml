@@ -120,3 +120,14 @@ covers = ["CAP-1"]
 after = [2, 3, 4, 5, 6, 7, 10]
 hitl = false
 risk = "low"
+
+[[entry]]
+id = 12
+type = "story"
+title = "Distribution package writer with manifest"
+description = "Adds the writer for the project's own distribution package (AD-6): a .tpk-compatible ZIP containing manifest.json { schema, main, index } plus the game files, so a built game round-trips through the package reader. Completes the epic's Done-when 5, 'the distribution package round-trips with its manifest'."
+verify = "Writing a distribution package from an asset tree and reading it back yields the identical asset tree and manifest; the written package loads through the same resolver as the source folder."
+covers = ["CAP-1"]
+after = [10]
+hitl = false
+risk = "medium"
