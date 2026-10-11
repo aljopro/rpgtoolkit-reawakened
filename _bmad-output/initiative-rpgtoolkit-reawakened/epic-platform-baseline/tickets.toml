@@ -121,6 +121,7 @@ covers = ["CAP-12", "CAP-13"]
 after = [9]
 hitl = false
 risk = "medium"
+refine = true
 references = [
   "plan - _bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-contract-types-canonical-form-and-hashes-plan.md, findings F1 and R2-1",
   "plan - _bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md, parseRun",
