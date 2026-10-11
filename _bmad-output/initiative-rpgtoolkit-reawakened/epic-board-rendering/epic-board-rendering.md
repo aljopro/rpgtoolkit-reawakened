@@ -50,3 +50,5 @@ Core world model, the step pipeline's main loop, draw-list builder, `composeBoar
 - Waits on rpgcode-vm because: the VM registration API and program execution for rendering built-ins.
 - Open question: the TrueType rasteriser (library or hand-written) and the glyph-metric source for game fonts are chosen in this epic.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Decision: 16×16 tiles (tileset details 2, 4 and 6) are stored at 16×16 and doubled to 32×32 by pixel doubling in the renderer, once per tileset, with the result cached (format-spec §3.1); the format reader keeps the stored size. Decided by the user at the epic legacy-formats code review, 2026-10-11.
+- Carry-forward: colour keys are tested by `core/raster` on decoded pixels (the `key` of a `blit`, AD-3); `decodeTexture` applies none (AD-28, clarified 2026-10-11). If scripts need a key applied outside a blit, add one shared helper to `core/raster`.

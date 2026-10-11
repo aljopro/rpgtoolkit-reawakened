@@ -322,8 +322,8 @@ graph TD
 
 - **Binds:** CAP-1, CAP-6, CAP-16
 - **Prevents:** runner decoders giving different pixels from the ones scripts read; colour-key mismatches.
-- **Rule:** `core/formats/image` decodes game images (format-spec §10) to RGBA and applies colour keys. `core` exports `decodeTexture(bytes, ref) -> { w, h, rgba }`; `core/raster`, every runner and the editor use it. Runners never decode game images. PNG inflate uses `fflate`; the JPEG decoder is chosen in epic legacy-formats under the allowlist or written by hand.
-- **Check:** dependency-cruiser rule that `runner-*` and `editor-ui` import no `formats/*` decoder except `decodeTexture`.
+- **Rule:** `core/formats/image` decodes game images (format-spec §10) to straight RGBA: the file's own colours and its own alpha (`tRNS`, alpha channels), nothing added. A colour key is not part of the file (format-spec §10 keeps it per image or per frame, outside the image), so the decoder never applies one: the key is the `key` of a `blit` (AD-3), and `core/raster` tests it on these decoded pixels, so one decoder and one key test serve every consumer. `core` exports `decodeTexture(bytes, ref?) -> Result<{ w, h, rgba }, FormatError>` (AD-18; `ref` is the asset path used in error messages; `{ w, h, rgba }` is the shape of `SurfacePixels`); `core/raster`, every runner and the editor use it. Runners never decode game images. PNG inflate uses `fflate`; the JPEG decoder is hand-written, because `jpeg-js` ships types that name Node's `Buffer`, which `core` cannot compile under G2. *[Clarified 2026-10-11: the first wording said the decoder "applies colour keys", which contradicted AD-3's pixel pipeline.]*
+- **Check:** the `formats/image` entry exports `decodeTexture` and its result type only, so no other package can reach a PNG or JPEG decoder (AD-22: one public entry per package); the golden job's `dump:check` pins the decoded RGBA digest of every sample-game image.
 
 ### AD-29 — One board compositor
 
