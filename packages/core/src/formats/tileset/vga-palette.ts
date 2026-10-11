@@ -9,8 +9,12 @@
  * Provenance (G7): this is the public IBM VGA "mode 13h" default palette as
  * loaded by the VGA BIOS at mode set — 16 EGA colours, 16 grey shades, 216
  * hue-ramp colours and then 8 black entries. The 6-bit DAC values the BIOS
- * stores were widened to 8 bits with the usual `round(v * 255 / 63)` rule and
- * cross-checked against the BSD-3-Clause table at
+ * stores are widened to 8 bits by bit replication, `(v << 2) | (v >> 4)`, so
+ * the top two bits repeat the bottom two; it is not `round(v * 255 / 63)`,
+ * which would give a different byte for 81 of the 256 entries (111 of the 768
+ * bytes), the grey shades 0x2c, 0x38 and 0xcb at indices 19, 20 and 29 among
+ * them. Every byte of the table was checked to be exactly that replication of
+ * one 6-bit value, cross-checked against the BSD-3-Clause table at
  * https://github.com/fzipp/vga (which reproduces the same mode-13h palette).
  * It is rebuilt from that public data, never from the legacy GPL source.
  *

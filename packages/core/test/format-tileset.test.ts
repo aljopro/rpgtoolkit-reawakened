@@ -235,6 +235,16 @@ test("expandTileToRgba reports an out-of-range tile", () => {
   }
 });
 
+test("expandTileToRgba reports a tileset that has no tiles", () => {
+  const model = unwrap(readTileset(tilesetBytes(20, 0, 1, new Uint8Array(0))));
+  equal(model.tiles.length, 0);
+  const out = expandTileToRgba(model, 0);
+  equal(out.ok, false);
+  if (!out.ok) {
+    equal(out.error.section, "format-spec §3.1");
+  }
+});
+
 test("trailing bytes are kept as residue and round-trip", () => {
   const base = tilesetBytes(20, 1, 1, indexedPixels(32, 3));
   const bytes = new Uint8Array([...base, 9, 9, 9]);

@@ -19,10 +19,9 @@ import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import { ISO_IMAGE_HEIGHT, ISO_IMAGE_WIDTH, isInsideIsoDiamond } from "./iso-diamond.ts";
-import { vgaPaletteEntry } from "./vga-palette.ts";
+import { VGA_DEFAULT_PALETTE } from "./vga-palette.ts";
 
 const HEADER_SECTION = "format-spec §3.1";
-const ISO_SECTION = "format-spec §3.3";
 
 /** The stored `version` field: 20 is `.tst`, 30 is `.iso` (format-spec §3.1). */
 export type TilesetVersion = 20 | 30;
@@ -204,7 +203,13 @@ export function writeTileset(model: Tileset): Result<Uint8Array> {
 export function expandTileToRgba(model: Tileset, tileIndex: number): Result<Uint8Array> {
   const tile = model.tiles[tileIndex];
   if (tile === undefined) {
-    return fail(6, HEADER_SECTION, `tile index ${tileIndex} is out of range (0…${model.tiles.length - 1})`);
+    return fail(
+      6,
+      HEADER_SECTION,
+      model.tiles.length === 0
+        ? `tileset has no tiles, so tile index ${tileIndex} is out of range`
+        : `tile index ${tileIndex} is out of range (0…${model.tiles.length - 1})`,
+    );
   }
   const { detail } = model;
   const { width, height } = tileDimensions(detail);
@@ -250,10 +255,10 @@ function writePalette(out: Uint8Array, at: number, index: number): void {
     out[at + 3] = 0;
     return;
   }
-  const { r, g, b } = vgaPaletteEntry(index);
-  out[at] = r;
-  out[at + 1] = g;
-  out[at + 2] = b;
+  const from = index * 3;
+  out[at] = VGA_DEFAULT_PALETTE[from] ?? 0;
+  out[at + 1] = VGA_DEFAULT_PALETTE[from + 1] ?? 0;
+  out[at + 2] = VGA_DEFAULT_PALETTE[from + 2] ?? 0;
   out[at + 3] = 255;
 }
 
