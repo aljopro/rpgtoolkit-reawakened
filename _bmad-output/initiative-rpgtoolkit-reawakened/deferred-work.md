@@ -31,3 +31,16 @@
 - source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-required-ci-checks-branch-protection-and-contributor-docs-plan.md`
   summary: If a merge queue is ever enabled for `main`, `merge_group:` must be added to `ci.yml`'s `on:`.
   evidence: GitHub reports required checks for a queue entry only from workflows triggered by `merge_group`; without it every required check stops reporting and the merge fails. No merge queue exists today (entry 1.10).
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-refactor-sweep-plan.md`
+  summary: `uv run _bmad/method/scripts/tickets.py find <id>` aborts with ``frontmatter lists must be inline: `key: [a, b]` `` because ten of the epic's plan files use a block-style `context:` list, so the ticket CLI cannot be used to read tickets for this epic.
+  evidence: Reproduced by the entry 1.11 planner and reviewer at `eddc75c`: the strict re-parse inside `tickets.py`'s `load_folder` (the raise is around line 167, called around line 360) rejects a block list, so `find`, `status`, `next` and `pull` all abort identically — `cmd_find` never parses frontmatter itself, and ten plans use a block list. Fixing it either way — the strict re-parse in `load_folder`, or inline lists across ten historical plans — edits method-owned tooling or plan history, so entry 1.11 logged it instead of changing it.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-refactor-sweep-plan.md`
+  summary: `tools/deps/graph.mjs` and `tools/check-core-deps.mjs` have no entry guard at all, so importing either would execute the check as a side effect; and `packages/runner-headless/src/cli.ts` resolves only `argv[1]` with `realpathSync`, not `import.meta.url`.
+  evidence: Entry 1.11 review finding F10. Neither tool exports anything and every call site spawns a child process (`tools/deps/test/graph.test.mjs`, `packages/core/test/lint-rules.test.ts`, the root `package.json` scripts), so there is no live defect; `cli.ts` still detects its entry because Node realpaths the main module by default (no `--preserve-symlinks` anywhere in the repo). A guard is needed only if a caller ever imports them.
+
+## Resolved
+
+- `deferred-work` §2 (the ignored `fixtures/` folder missing from the provenance scan's `scope.skipRootPaths`) — resolved by entry 1.7; `tools/provenance/markers.json` lists `"fixtures"`.
+- `deferred-work` §3 (entry 1.9's golden job must also run `pnpm fixtures:check`) — resolved; the required `golden` job in `.github/workflows/ci.yml` runs `fixtures:fetch` then `fixtures:check`.
+- `deferred-work` §1 (the licence tool's entry guard silently did nothing through a symlinked path, so the G6 gate exited 0 having checked nothing) — resolved by entry 1.11: `tools/licences/check.mjs` resolves both sides with `realpathSync` (the pattern `tools/provenance/scan.mjs` and `tools/fixtures/fetch.mjs` already use), and `tools/licences/test/licences.test.mjs` gained a regression row that fails against the old file and passes against the new one.
+- `CLAUDE.md`'s stale G3 summary (recorded in the entry 1.1 plan, line 50) — resolved by entry 1 in commit `bb6c540`; the guard-rail text and the pull-request template row carry the `Math` allowlist and the `**` ban.

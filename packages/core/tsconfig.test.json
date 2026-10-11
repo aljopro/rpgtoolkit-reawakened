@@ -9,7 +9,7 @@
     "lib": ["ES2022"],
     "types": []
   },
-  "include": ["src", "test"],
+  "include": ["src", "test", "../../types/node-test.d.ts"],
   "exclude": ["test/fixtures"],
   "references": []
 }

@@ -24,7 +24,7 @@ RPG Toolkit Reawakened is a clean-room rebuild. The legacy RPG Toolkit engine an
 
 Node 24.21.0 (see `.node-version`) and pnpm 12.10.1 (`corepack enable` picks it up from `packageManager`).
 
-CI runs these commands. The seven required jobs are in `.github/workflows/ci.yml`; `pnpm fixtures:test` runs in the non-required `.github/workflows/fixtures.yml`, and `pnpm build` is the same `tsc -b` that `typecheck` and `test` already run, kept here for a first local build. Run them locally in this order before you open a pull request.
+CI runs these commands. The seven required jobs are in `.github/workflows/ci.yml` — the fixture tool's own tests (`pnpm fixtures:test`) run in its `unit` job, and `pnpm build` is the same `tsc -b` that `typecheck` and `test` already run, kept here for a first local build. Run them locally in this order before you open a pull request.
 
 ```sh
 pnpm install --frozen-lockfile   # install from the committed lockfile
@@ -51,4 +51,4 @@ The `*:test` scripts are the tool self-tests that CI also runs, so run them when
 
 Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `core`, `runner-harness` and `runner-headless` expose `typecheck:tests` only, and their tests run through the root `pnpm test`.
 
-**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. `fixtures` is not required, because `pnpm fixtures:check` already runs inside the required `golden` job. Renaming a job id means updating branch protection in the same pull request, or every merge blocks.
+**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's own tests run in `unit`; there is no separate `fixtures` check. Renaming a job id means updating branch protection in the same pull request, or every merge blocks.

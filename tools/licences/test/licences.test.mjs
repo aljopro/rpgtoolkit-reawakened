@@ -1,10 +1,10 @@
 // Tests covering all matrix rows of story-licence-gate-and-third-party-notices-plan.md
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   evaluateLicense,
   loadBlueOakList,
@@ -395,4 +395,38 @@ test("CLI e2e: fails on fixture root with missing THIRD_PARTY_NOTICES", () => {
     assert.match(result.stderr, /Licence check FAILED with 1 violation/);
     assert.match(result.stderr, /missing-notices-file/);
   });
+});
+
+test("CLI e2e: runs through a symlinked file and a symlinked directory", (t) => {
+  const tool = join(import.meta.dirname, "..", "check.mjs");
+  const repo = join(import.meta.dirname, "..", "..", "..");
+
+  const dir = mkdtempSync(join(tmpdir(), "licence-symlink-"));
+  try {
+    const fileLink = join(dir, "check-link.mjs");
+    const dirLink = join(dir, "licences-link");
+    try {
+      symlinkSync(tool, fileLink, "file");
+      symlinkSync(dirname(tool), dirLink, "dir");
+    } catch (error) {
+      t.skip(`cannot create symlinks here: ${error.message}`);
+      return;
+    }
+
+    const viaFile = spawnSync(process.execPath, [fileLink, repo], {
+      encoding: "utf8",
+    });
+    assert.equal(viaFile.status, 0, `${viaFile.stdout}${viaFile.stderr}`);
+    assert.match(viaFile.stdout, /Licence check PASSED\./);
+    assert.match(viaFile.stdout, /Total \(prod \+ dev\) packages checked: \d+/);
+
+    const viaDir = spawnSync(process.execPath, [join(dirLink, "check.mjs"), repo], {
+      encoding: "utf8",
+    });
+    assert.equal(viaDir.status, 0, `${viaDir.stdout}${viaDir.stderr}`);
+    assert.match(viaDir.stdout, /Licence check PASSED\./);
+    assert.match(viaDir.stdout, /Total \(prod \+ dev\) packages checked: \d+/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

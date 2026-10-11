@@ -1,7 +1,3 @@
-export function add(a: number, b: number): number {
-  return a + b;
-}
-
 // The published core surface: the runner/editor port contracts (AD-1…AD-17)
 // and the canonical form and hashes (AD-11).
 export * from "./canon/index.ts";
