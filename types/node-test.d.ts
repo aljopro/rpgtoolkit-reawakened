@@ -3,6 +3,11 @@
 // (G2), so @types/node is absent; these declarations add no globals.
 declare module "node:test" {
   export function test(name: string, fn: () => void | Promise<void>): void;
+  export function test(
+    name: string,
+    options: { skip?: string | boolean },
+    fn: () => void | Promise<void>,
+  ): void;
   export default test;
 }
 declare module "node:assert/strict" {

@@ -2,3 +2,4 @@
 // contract (AD-18) and the binary primitives built on it.
 export * from "./result.ts";
 export * from "./binary/index.ts";
+export * from "./animation/index.ts";

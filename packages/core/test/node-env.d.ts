@@ -4,7 +4,10 @@
 // beyond `process`.
 declare module "node:fs" {
   export function readdirSync(path: string): string[];
+  export function readdirSync(path: string, options: { recursive: true }): string[];
   export function readFileSync(path: string, encoding: "utf8"): string;
+  export function readFileSync(path: string): Uint8Array;
+  export function existsSync(path: string): boolean;
 }
 
 declare module "node:path" {
@@ -36,6 +39,7 @@ declare module "node:util" {
 }
 
 declare const process: { execPath: string };
+declare const console: { log(...args: unknown[]): void };
 
 // `lib: ["ES2022"]` has no `ImportMeta.url` (that lives in the DOM lib), so
 // the tests' `import.meta.url` needs it declared here.
