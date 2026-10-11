@@ -279,6 +279,5 @@ test(
       const out = unwrap(writeAnimation(animation));
       deepEqual(out, bytes, `${file} did not round-trip`);
     }
-    console.log(`round-tripped ${sampleAnm.length} sample .anm file(s)`);
   },
 );

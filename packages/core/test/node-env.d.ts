@@ -39,7 +39,6 @@ declare module "node:util" {
 }
 
 declare const process: { execPath: string };
-declare const console: { log(...args: unknown[]): void };
 
 // `lib: ["ES2022"]` has no `ImportMeta.url` (that lives in the DOM lib), so
 // the tests' `import.meta.url` needs it declared here.
