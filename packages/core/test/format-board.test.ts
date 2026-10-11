@@ -707,8 +707,21 @@ test(
     for (const path of sampleBoards) {
       const bytes = new Uint8Array(readFileSync(path));
       const reader = new BinaryReader(bytes, path);
-      const model = unwrap(readBoard(reader));
+      const result = readBoard(reader);
+      const model = unwrap(result);
+      // The reader absorbs trailing bytes into `residue` with this warning, so
+      // `remaining === 0` alone would hold even if the §4.2 layout stopped
+      // matching the bytes. Asserting empty residue makes a layout drift — a
+      // field read at the wrong width, a missing section — fail here instead.
       equal(reader.remaining, 0, `${path}: trailing bytes`);
+      equal(model.residue.length, 0, `${path}: ${model.residue.length} byte(s) fell through to residue`);
+      if (result.ok) {
+        equal(
+          result.warnings.filter((warning) => warning.includes("residue")).length,
+          0,
+          `${path}: residue warning`,
+        );
+      }
       deepEqual(unwrap(writeBoard(model)), bytes, `${path}: byte-identical round-trip`);
       t?.diagnostic?.(
         `${path}: size ${model.sizeX}×${model.sizeY}×${model.sizeL}, coordType ${model.coordType}, ` +
