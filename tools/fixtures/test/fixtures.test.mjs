@@ -121,12 +121,21 @@ function makeSource(label, files = GAMES) {
 }
 
 // What `fixtures/legacy` must hold for `files`: `<game>/<path>` -> base64 bytes.
-function expectedTree(files, games = GAME_NAMES) {
+// `main`, when given, is `{ mainPath, mainFiles }`: each main file is copied
+// into its game's folder, so `<game>/<name>` -> the bytes at `<mainPath>/<name>`.
+function expectedTree(files, games = GAME_NAMES, main = null) {
   const prefix = "build/game/";
   const tree = {};
   for (const [path, content] of Object.entries(files)) {
     if (!path.startsWith(prefix) || !games.includes(path.slice(prefix.length).split("/")[0])) continue;
     tree[path.slice(prefix.length)] = Buffer.from(content).toString("base64");
+  }
+  if (main !== null) {
+    for (const file of main.mainFiles) {
+      const stem = file.slice(0, -".gam".length).toLowerCase();
+      const game = games.find((name) => name.toLowerCase() === stem);
+      tree[`${game}/${file}`] = Buffer.from(files[`${main.mainPath}/${file}`]).toString("base64");
+    }
   }
   return tree;
 }
@@ -503,6 +512,108 @@ test("matrix: a game that is missing leaves an earlier good folder untouched", (
   deepEqual(stagingLeft(root), []);
 });
 
+// ============================================================== matrix: main file
+
+// A main file with CR, LF, NUL and a high byte: copied byte for byte, never
+// converted by the checkout or the copy.
+const MAIN_BYTES = Buffer.from([0x47, 0x41, 0x4d, 0x0d, 0x0a, 0x00, 0x7f]);
+
+const MAIN = { mainPath: "build/main", mainFiles: ["demo.gam"] };
+
+test("matrix: a pin with a main file copies it into the game folder, counts it and stamps it", () => {
+  const files = { ...GAMES, "build/main/demo.gam": MAIN_BYTES };
+  const source = makeSource("main", files);
+  const root = makeRoot("main");
+  const result = runFetch(root, pinFor(source, MAIN));
+  equal(result.status, 0, result.output);
+  equal(result.stdout, "demo: 4 files\nBasic: 2 files\nfetched\n");
+  equal(result.stderr, "");
+  deepEqual(legacyTree(root), expectedTree(files, GAME_NAMES, MAIN));
+  ok(readFileSync(join(legacyOf(root), "demo", "demo.gam")).equals(MAIN_BYTES));
+  deepEqual(JSON.parse(readFileSync(stampOf(root), "utf8")), {
+    url: source.dir,
+    rev: source.rev,
+    gamesPath: "build/game",
+    games: { demo: { files: 4 }, Basic: { files: 2 } },
+    mainPath: "build/main",
+    mainFiles: ["demo.gam"],
+  });
+  deepEqual(stagingLeft(root), []);
+});
+
+test("matrix: a rerun with a main file is cached and runs no git command", posixOnly, () => {
+  const files = { ...GAMES, "build/main/demo.gam": MAIN_BYTES };
+  const source = makeSource("main-cache", files);
+  const root = makeRoot("main-cache");
+  const pin = pinFor(source, MAIN);
+  const first = runFetch(root, pin);
+  equal(first.status, 0, first.output);
+  rmSync(source.dir, { recursive: true, force: true });
+
+  const before = { tree: legacyTree(root), stamp: readFileSync(stampOf(root), "utf8") };
+  const stub = makeStub("main-cache");
+  const second = runFetch(root, pin, { env: stub.env });
+  equal(second.status, 0, second.output);
+  equal(second.stdout, "demo: 4 files\nBasic: 2 files\ncached\n");
+  equal(second.stderr, "");
+  deepEqual(stub.calls(), []);
+  deepEqual(legacyTree(root), before.tree);
+  equal(readFileSync(stampOf(root), "utf8"), before.stamp);
+});
+
+test("matrix: a changed or dropped main file list is a cache miss and the old file is gone", () => {
+  const files = { ...GAMES, "build/main/demo.gam": "demo main\n", "build/main/Basic.gam": "basic main\n" };
+  const source = makeSource("main-list", files);
+  const root = makeRoot("main-list");
+  const first = runFetch(root, pinFor(source, { mainPath: "build/main", mainFiles: ["demo.gam"] }));
+  equal(first.status, 0, first.output);
+  ok(existsSync(join(legacyOf(root), "demo", "demo.gam")));
+
+  const changed = runFetch(root, pinFor(source, { mainPath: "build/main", mainFiles: ["Basic.gam"] }));
+  equal(changed.status, 0, changed.output);
+  match(changed.stdout, /^fetched$/m);
+  ok(!existsSync(join(legacyOf(root), "demo", "demo.gam")), "the old main file is gone");
+  ok(existsSync(join(legacyOf(root), "Basic", "Basic.gam")));
+
+  const dropped = runFetch(root, pinFor(source));
+  equal(dropped.status, 0, dropped.output);
+  equal(dropped.stdout, "demo: 3 files\nBasic: 2 files\nfetched\n");
+  ok(!existsSync(join(legacyOf(root), "Basic", "Basic.gam")), "the copied main file is gone");
+});
+
+test("matrix: a main file absent at the pinned revision exits 1 naming it and leaves an earlier good folder untouched", () => {
+  const good = makeSource("main-good-then-missing", { ...GAMES, "build/main/demo.gam": MAIN_BYTES });
+  const root = makeRoot("main-good-then-missing");
+  const first = runFetch(root, pinFor(good, MAIN));
+  equal(first.status, 0, first.output);
+  const before = { tree: legacyTree(root), stamp: readFileSync(stampOf(root), "utf8") };
+
+  const bad = makeSource("main-missing", GAMES);
+  const result = runFetch(root, pinFor(bad, MAIN));
+  equal(result.status, 1, result.output);
+  equal(result.stdout, "");
+  match(result.stderr, /main file missing at [0-9a-f]{40}/);
+  ok(result.stderr.includes('"demo.gam"'), result.stderr);
+  ok(result.stderr.includes("build/main/demo.gam"), result.stderr);
+  deepEqual(legacyTree(root), before.tree);
+  equal(readFileSync(stampOf(root), "utf8"), before.stamp);
+  deepEqual(stagingLeft(root), []);
+});
+
+test("matrix: a game folder that already holds a file with the main file's name exits 1 naming it", () => {
+  const files = { ...GAMES, "build/main/demo.gam": MAIN_BYTES, "build/game/demo/demo.gam": "the corpus file\n" };
+  const source = makeSource("main-collision", files);
+  const root = makeRoot("main-collision");
+  const result = runFetch(root, pinFor(source, MAIN));
+  equal(result.status, 1, result.output);
+  equal(result.stdout, "");
+  match(result.stderr, /main file collides with the game corpus/);
+  ok(result.stderr.includes('"demo.gam"'), result.stderr);
+  ok(result.stderr.includes("build/game/demo/demo.gam"), result.stderr);
+  ok(!existsSync(legacyOf(root)));
+  deepEqual(stagingLeft(root), []);
+});
+
 // ============================================================= matrix: fetch fails
 
 test("matrix: a rev absent from the source exits 1 naming git fetch; an earlier good folder is untouched", () => {
@@ -705,6 +816,17 @@ const badPins = [
   ["a game is listed twice in another case", { games: ["demo", "DEMO"] }, "duplicate game"],
   ["games is empty", { games: [] }, "games: "],
   ["games is a string", { games: "demo" }, "games: "],
+  ["mainFiles without mainPath", { mainFiles: ["demo.gam"] }, "mainPath: "],
+  ["mainPath without mainFiles", { mainPath: "build/main" }, "mainFiles: "],
+  ["mainFiles is empty", { mainPath: "build/main", mainFiles: [] }, "mainFiles: "],
+  ["mainPath is absolute", { mainPath: "/build/main", mainFiles: ["demo.gam"] }, "mainPath: "],
+  ["mainPath holds ..", { mainPath: "build/../main", mainFiles: ["demo.gam"] }, "mainPath: "],
+  ["a main file is a path", { mainPath: "build/main", mainFiles: ["sub/demo.gam"] }, "mainFiles[0]: "],
+  ["a main file has the wrong extension", { mainPath: "build/main", mainFiles: ["demo.txt"] }, "mainFiles[0]: "],
+  ["a main file names no game", { mainPath: "build/main", mainFiles: ["other.gam"] }, "mainFiles[0]: "],
+  ["a main file is listed twice", { mainPath: "build/main", mainFiles: ["demo.gam", "demo.gam"] }, "duplicate main file"],
+  ["a main file starts with .", { mainPath: "build/main", mainFiles: [".demo.gam"] }, "mainFiles[0]: "],
+  ["a main file is not a string", { mainPath: "build/main", mainFiles: [7] }, "mainFiles[0]: "],
   ["an unknown key", { extra: true }, 'unknown key "extra"'],
 ];
 
@@ -777,7 +899,12 @@ test("the committed pin is valid and names demo and Basic", () => {
   match(pin.rev, /^[0-9a-f]{40}$/);
   match(pin.url, /^https:\/\//);
   ok(!pin.gamesPath.startsWith("/") && !pin.gamesPath.split("/").includes(".."));
-  equal(JSON.stringify(Object.keys(JSON.parse(readFileSync(committedPin, "utf8")))), '["url","rev","gamesPath","games"]');
+  equal(pin.mainPath, "build/main");
+  deepEqual(pin.mainFiles, ["demo.gam"]);
+  equal(
+    JSON.stringify(Object.keys(JSON.parse(readFileSync(committedPin, "utf8")))),
+    '["url","rev","gamesPath","games","mainPath","mainFiles"]',
+  );
 });
 
 // ================================================================ matrix: bad CLI use

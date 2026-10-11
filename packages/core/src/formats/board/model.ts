@@ -32,6 +32,15 @@ export const BOARD_LAYOUT_SECTION = "format-spec §4.2";
  */
 export const COORD_ISO_ROTATED = 2;
 
+/**
+ * The most cells a board's tile matrix may declare (format-spec §4.2, "Size
+ * limits"): the effective grid times `sizeL`. A reader refuses a board above
+ * this, so that a run-length marker — four bytes for up to 32,768 cells —
+ * cannot make it reserve gigabytes, and a writer refuses a board the reader
+ * would refuse.
+ */
+export const BOARD_MAX_CELLS = 4_194_304;
+
 /** The stored grid dimensions of a board's tile matrix (format-spec §4.2, §5). */
 export interface BoardGrid {
   /** Cells across, per layer. */
@@ -136,7 +145,12 @@ export interface BoardLight {
 export interface BoardVector {
   /** The polygon/polyline points, in pixels. */
   readonly points: readonly BoardPoint[];
-  /** Bit flags, meaning by `type` (format-spec §4.4). */
+  /**
+   * Meaning by `type` (format-spec §4.4): an *under* vector uses bit flags
+   * (1 = include the board background image, 2 = apply to all layers below,
+   * 4 = trigger on sprite frame intersection); a *stairs* vector stores the
+   * destination layer number.
+   */
   readonly attributes: number;
   /** The stored closed flag: non-zero (legacy `-1`) = closed, 0 = open polyline. */
   readonly closed: number;
@@ -202,9 +216,12 @@ export interface BoardSprite {
   readonly activate: number;
   /** 0 = step-on, 1 = key-press (format-spec §4.2, §4.4). */
   readonly activationType: number;
-  /** X in pixels; the anchor is the frame's bottom-centre (format-spec §4.2). */
+  /** X in pixels; the anchor is the frame's bottom-centre (format-spec §4.3). */
   readonly x: number;
-  /** Y in pixels. */
+  /**
+   * Y in pixels; the editor display adds a historical +8 px vertical offset on
+   * isometric boards (format-spec §4.3).
+   */
   readonly y: number;
   /** The tile layer the sprite draws on. */
   readonly layer: number;
@@ -247,11 +264,11 @@ export interface BoardLinks {
 
 /** The board's start position, in pixels (format-spec §4.2). */
 export interface BoardStart {
-  /** Start X in pixels; the engine falls back to 64 when ≤ 0. */
+  /** Start X in pixels; defaults to 64 when ≤ 0 (format-spec §4.2). */
   readonly x: number;
-  /** Start Y in pixels. */
+  /** Start Y in pixels; defaults to 64 when ≤ 0 (format-spec §4.2). */
   readonly y: number;
-  /** The start layer (1-based). */
+  /** The start layer (1-based); defaults to 1 when ≤ 0 (format-spec §4.2). */
   readonly layer: number;
 }
 
@@ -277,7 +294,7 @@ export interface BoardProperties {
   readonly battleSkill: number;
   /** Whether random battles happen. */
   readonly allowBattles: number;
-  /** Whether the player may save here. */
+  /** Non-zero disables the main menu's Save option on this board (engine-features E-18). */
   readonly disableSaving: number;
   /** Additive board ambience, −255…+255 (format-spec §4.5). */
   readonly ambient: BoardRgb;

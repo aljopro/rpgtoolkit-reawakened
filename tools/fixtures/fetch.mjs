@@ -5,16 +5,25 @@
 // Fills `<root>/fixtures/legacy/<game>/…` with the legacy sample games named in
 // the pin file (`tools/fixtures/sources.json`, or `--sources <file>`: the tests
 // point it at a local git repository) and writes `fixtures/legacy/.fetched.json`
-// (url, rev, gamesPath and a file count per game). `root` defaults to this
-// repository. The games are test fixtures for the golden job: `fixtures/` is
-// ignored by git and `tools/fixtures/check.mjs` fails if any of it is tracked.
+// (url, rev, gamesPath, a file count per game and, when the pin names them,
+// mainPath and mainFiles). `root` defaults to this repository. The games are
+// test fixtures for the golden job: `fixtures/` is ignored by git and
+// `tools/fixtures/check.mjs` fails if any of it is tracked.
+//
+// A pin may also name `mainPath` and `mainFiles` (both or neither): the shipped
+// demo's main file(s) under `build/main/*.gam`, one per game (the name without
+// `.gam` names the game, ignoring case). Each is copied byte for byte into its
+// game's folder (`build/main/demo.gam` -> `fixtures/legacy/demo/demo.gam`)
+// after checkout and before the counts are taken, so the corpus holds one
+// folder per game and that game's count includes it. A game folder that already
+// holds a file of that name at `rev` is a named error, never overwritten.
 //
 // The pin is validated before any git command runs. A change of pin is a pull
 // request that edits only the pin file.
 //
-// Cache: when `.fetched.json` matches the pin (url, rev, gamesPath, games) and
-// every game folder holds the file count recorded in it, the tool prints
-// `cached` and runs no git command.
+// Cache: when `.fetched.json` matches the pin (url, rev, gamesPath, games and
+// the main keys, present in both or neither) and every game folder holds the
+// file count recorded in it, the tool prints `cached` and runs no git command.
 //
 // Otherwise it fetches exactly `rev`, shallow, blobless and sparse, into
 // `fixtures/.staging-<pid>/` and renames the finished folder over
@@ -34,6 +43,7 @@
 // set exit code 1.
 import { spawnSync } from "node:child_process";
 import {
+  copyFileSync,
   lstatSync,
   mkdirSync,
   readdirSync,
@@ -102,7 +112,7 @@ export class SourcesError extends Error {
 
 // ------------------------------------------------------------------- the pin
 
-const PIN_KEYS = ["url", "rev", "gamesPath", "games"];
+const PIN_KEYS = ["url", "rev", "gamesPath", "games", "mainPath", "mainFiles"];
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 const GLOB_CHARACTERS = /[*?[\]\\]/;
 
@@ -130,7 +140,7 @@ function validatePin(value, problems) {
     if (!PIN_KEYS.includes(key)) problems.push(`unknown key "${key}" (allowed: ${PIN_KEYS.join(", ")})`);
   }
 
-  const { url, rev, gamesPath, games } = value;
+  const { url, rev, gamesPath, games, mainPath, mainFiles } = value;
 
   if (typeof url !== "string" || url === "") {
     problems.push("url: must be a non-empty string");
@@ -160,6 +170,22 @@ function validatePin(value, problems) {
     }
   }
 
+  if (mainPath !== undefined) {
+    if (typeof mainPath !== "string" || mainPath === "") {
+      problems.push("mainPath: must be a non-empty string");
+    } else if (mainPath.startsWith("/")) {
+      problems.push(`mainPath: must be relative, with no leading "/", got ${JSON.stringify(mainPath)}`);
+    } else {
+      for (const segment of mainPath.split("/")) {
+        const problem = segment === "." ? 'must not contain a "." segment' : segmentProblem(segment);
+        if (problem !== null) {
+          problems.push(`mainPath: every "/"-separated segment ${problem}, got ${JSON.stringify(mainPath)}`);
+          break;
+        }
+      }
+    }
+  }
+
   if (!Array.isArray(games) || games.length === 0) {
     problems.push("games: must be a non-empty array of folder names");
   } else {
@@ -183,12 +209,51 @@ function validatePin(value, problems) {
       seen.add(game.toLowerCase());
     });
   }
-  return problems.length === 0 ? { url, rev, gamesPath, games: [...games] } : null;
+
+  if (mainFiles !== undefined) {
+    if (!Array.isArray(mainFiles) || mainFiles.length === 0) {
+      problems.push("mainFiles: must be a non-empty array of file names");
+    } else {
+      const seen = new Set();
+      mainFiles.forEach((file, index) => {
+        const field = `mainFiles[${index}]`;
+        if (typeof file !== "string") {
+          problems.push(`${field}: must be a string, got ${JSON.stringify(file)}`);
+          return;
+        }
+        const problem = segmentProblem(file);
+        const stem = file.slice(0, -4).toLowerCase();
+        if (problem !== null) {
+          problems.push(`${field}: ${problem}, got ${JSON.stringify(file)}`);
+        } else if (file.includes("/")) {
+          problems.push(`${field}: must be one file name, not a path, got ${JSON.stringify(file)}`);
+        } else if (file.startsWith(".")) {
+          problems.push(`${field}: must not start with ".", got ${JSON.stringify(file)}`);
+        } else if (!file.toLowerCase().endsWith(".gam")) {
+          problems.push(`${field}: must end in ".gam", got ${JSON.stringify(file)}`);
+        } else if (!Array.isArray(games) || !games.some((game) => typeof game === "string" && game.toLowerCase() === stem)) {
+          problems.push(`${field}: the name must name a game, got ${JSON.stringify(file)}`);
+        } else if (seen.has(file.toLowerCase())) {
+          problems.push(`${field}: duplicate main file ${JSON.stringify(file)}`);
+        }
+        seen.add(file.toLowerCase());
+      });
+    }
+  }
+
+  // mainPath and mainFiles go together: one without the other is a defect.
+  if (mainPath !== undefined && mainFiles === undefined) problems.push("mainFiles: required when mainPath is set");
+  if (mainFiles !== undefined && mainPath === undefined) problems.push("mainPath: required when mainFiles is set");
+
+  if (problems.length !== 0) return null;
+  const main = mainPath === undefined ? {} : { mainPath, mainFiles: [...mainFiles] };
+  return { url, rev, gamesPath, games: [...games], ...main };
 }
 
 /**
- * Checks a parsed pin (`url`, `rev`, `gamesPath`, `games`) and returns a clean
- * copy. Throws a SourcesError naming every defect found.
+ * Checks a parsed pin (`url`, `rev`, `gamesPath`, `games` and, when present,
+ * `mainPath` and `mainFiles`) and returns a clean copy. Throws a SourcesError
+ * naming every defect found.
  */
 function validateSources(value, path = "(pin)") {
   const problems = [];
@@ -344,6 +409,20 @@ function cachedCounts(legacy, pin) {
   if (!isObject(stamp) || stamp.url !== pin.url || stamp.rev !== pin.rev || stamp.gamesPath !== pin.gamesPath) {
     return null;
   }
+  // The main keys must match too, present in both or neither, so a pin that
+  // gained or lost them (or changed them) refetches.
+  if (pin.mainPath !== undefined) {
+    if (stamp.mainPath !== pin.mainPath) return null;
+    if (
+      !Array.isArray(stamp.mainFiles) ||
+      stamp.mainFiles.length !== pin.mainFiles.length ||
+      !stamp.mainFiles.every((file, index) => file === pin.mainFiles[index])
+    ) {
+      return null;
+    }
+  } else if (stamp.mainPath !== undefined || stamp.mainFiles !== undefined) {
+    return null;
+  }
   if (!isObject(stamp.games)) return null;
   const names = Object.keys(stamp.games);
   if (names.length !== pin.games.length || !pin.games.every((game) => names.includes(game))) return null;
@@ -377,6 +456,7 @@ function stageGames(staging, pin, env) {
   const tree = join(staging, "tree");
   const out = join(staging, "out");
   mkdirSync(tree);
+  const mainFiles = pin.mainFiles ?? [];
 
   const git = (step, ...args) =>
     gitStep(
@@ -411,6 +491,7 @@ function stageGames(staging, pin, env) {
     "set",
     "--",
     ...pin.games.map((game) => `/${pin.gamesPath}/${game}/`),
+    ...mainFiles.map((file) => `/${pin.mainPath}/${file}`),
   );
   git(
     "git fetch",
@@ -432,16 +513,26 @@ function stageGames(staging, pin, env) {
   }
 
   // The trees are all here (only blobs were left out), so a game that is absent
-  // or is a file is named before anything is checked out.
-  const absent = pin.games.filter(
-    (game) =>
-      git("git ls-tree", "ls-tree", "-r", "--name-only", "-z", "FETCH_HEAD", "--", `${pin.gamesPath}/${game}/`) === "",
-  );
+  // or is a file, a missing main file, and a main file that collides with a
+  // file already in its game folder are named before anything is checked out.
+  const listed = (path) => git("git ls-tree", "ls-tree", "-r", "--name-only", "-z", "FETCH_HEAD", "--", path);
+  const absent = pin.games.filter((game) => listed(`${pin.gamesPath}/${game}/`) === "");
   if (absent.length > 0) throw absentGames(absent, pin);
+
+  const missingMain = mainFiles.filter(
+    (file) => !listed(`${pin.mainPath}/${file}`).split("\0").includes(`${pin.mainPath}/${file}`),
+  );
+  if (missingMain.length > 0) throw absentMainFiles(missingMain, pin);
+
+  const collidingMain = mainFiles.filter((file) => listed(`${pin.gamesPath}/${mainGame(pin, file)}/${file}`) !== "");
+  if (collidingMain.length > 0) throw collidingMainFiles(collidingMain, pin);
 
   git("git checkout", "checkout", "--quiet", "--detach", "FETCH_HEAD");
 
   const base = join(tree, ...pin.gamesPath.split("/"));
+  for (const file of mainFiles) {
+    copyFileSync(join(tree, ...pin.mainPath.split("/"), file), join(base, mainGame(pin, file), file));
+  }
   const counts = {};
   for (const game of pin.games) counts[game] = gameFileCount(base, game);
   const empty = pin.games.filter((game) => counts[game] === 0);
@@ -455,6 +546,10 @@ function stageGames(staging, pin, env) {
     gamesPath: pin.gamesPath,
     games: Object.fromEntries(pin.games.map((game) => [game, { files: counts[game] }])),
   };
+  if (pin.mainPath !== undefined) {
+    stamp.mainPath = pin.mainPath;
+    stamp.mainFiles = [...pin.mainFiles];
+  }
   writeFileSync(join(out, STAMP_NAME), `${JSON.stringify(stamp, null, 2)}\n`);
   return counts;
 }
@@ -463,6 +558,27 @@ const absentGames = (games, pin) =>
   new FixturesError(
     `game folder missing at ${pin.rev}: ${games
       .map((game) => `${JSON.stringify(game)} (${pin.gamesPath}/${game} must be a folder holding at least one file)`)
+      .join(", ")}`,
+  );
+
+// The game folder a main file belongs to: its name without `.gam` names a game
+// (the pin is validated, so one always matches).
+const mainGame = (pin, file) => pin.games.find((game) => game.toLowerCase() === file.slice(0, -4).toLowerCase());
+
+const absentMainFiles = (files, pin) =>
+  new FixturesError(
+    `main file missing at ${pin.rev}: ${files
+      .map((file) => `${JSON.stringify(file)} (${pin.mainPath}/${file} must be a main file)`)
+      .join(", ")}`,
+  );
+
+const collidingMainFiles = (files, pin) =>
+  new FixturesError(
+    `main file collides with the game corpus at ${pin.rev}: ${files
+      .map(
+        (file) =>
+          `${JSON.stringify(file)} (${pin.gamesPath}/${mainGame(pin, file)}/${file} already holds a file of that name, refusing to overwrite it)`,
+      )
       .join(", ")}`,
   );
 

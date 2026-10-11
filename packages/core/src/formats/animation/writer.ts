@@ -42,5 +42,6 @@ export function writeAnimation(model: Animation): Result<Uint8Array> {
   }
 
   writer.f64(model.delay);
+  writer.writeBytes(model.residue);
   return ok(writer.toBytes());
 }

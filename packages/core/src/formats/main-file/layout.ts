@@ -98,21 +98,32 @@ export function stripTypeFolder(kind: AssetKind, reference: string): string {
 
 /**
  * The project folder `<root>/Game/<projectPath>/` (format-spec §1.5). The root
- * has any trailing separator removed and the project path any leading or
- * trailing one, so the result is well-formed whatever the caller passes.
+ * has any trailing separator removed and backslashes normalised. The stored
+ * project path is normalised the same way, with its leading and trailing
+ * separators stripped: if its first segment is `Game` (any case) and more
+ * segments follow, the path already starts at `<root>` and its remaining
+ * segments are placed under `Game/`; otherwise it is a bare folder name placed
+ * under `Game/`. A bare `Game` (one segment) therefore gives `<root>/Game/Game/`.
  */
 export function projectFolder(root: string, project: MainFileProject): string {
   const base = toSlashes(root).replace(/\/+$/, "");
-  const projectPath = toSlashes(project.projectPath).replace(/^\/+|\/+$/g, "");
   const prefix = base === "" ? "" : `${base}/`;
-  return projectPath === "" ? `${prefix}Game/` : `${prefix}Game/${projectPath}/`;
+  const projectPath = toSlashes(project.projectPath).replace(/^\/+|\/+$/g, "");
+  if (projectPath === "") {
+    return `${prefix}Game/`;
+  }
+  const segments = projectPath.split("/");
+  if (segments.length > 1 && segments[0]!.toLowerCase() === "game") {
+    return `${prefix}Game/${segments.slice(1).join("/")}/`;
+  }
+  return `${prefix}Game/${projectPath}/`;
 }
 
 /**
- * Resolve a stored reference of `kind` to its full path under the project
- * folder: `<root>/Game/<projectPath>/<TypeFolder>/<reference>`, with the
- * separators normalised and any leading type-folder prefix stripped (§1.5).
- * `lookup` the result with `foldPath` for the case-insensitive match.
+ * Resolve a stored reference of `kind` under the project folder:
+ * `<projectFolder>/<TypeFolder>/<reference>`, with the separators normalised and
+ * any leading type-folder prefix stripped (§1.5). `lookup` the result with
+ * `foldPath` for the case-insensitive match.
  */
 export function resolveReference(
   root: string,

@@ -4,6 +4,7 @@
 // of untrusted-input limits (AD-17); and the writer for the project's own
 // distribution package, a `.tpk`-compatible ZIP carrying `manifest.json`.
 export * from "./limits.ts";
+export * from "./manifest.ts";
 export * from "./model.ts";
 export * from "./package.ts";
 export * from "./write.ts";

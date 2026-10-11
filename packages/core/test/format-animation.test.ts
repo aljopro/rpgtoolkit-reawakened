@@ -51,6 +51,8 @@ interface BuildOptions {
   readonly bound?: number;
   readonly frames?: readonly AnimationFrame[];
   readonly delay?: number;
+  /** Extra bytes after the last field, to prove they survive as residue. */
+  readonly tail?: readonly number[];
 }
 
 /** Serialise a synthetic animation with the raw stored bound. */
@@ -68,6 +70,9 @@ function buildBytes(options: BuildOptions = {}): Uint8Array {
     writer.str(f.sound);
   }
   writer.f64(options.delay ?? 0.15);
+  if (options.tail !== undefined) {
+    writer.writeBytes(new Uint8Array(options.tail));
+  }
   return writer.toBytes();
 }
 
@@ -194,6 +199,29 @@ test("a parsed animation writes back byte-for-byte", () => {
   deepEqual(out, bytes);
 });
 
+test("keeps trailing bytes as residue with one warning and round-trips", () => {
+  const bytes = buildBytes({ bound: 0, frames: [frame("a.tst1", BLACK)], tail: [0xde, 0xad] });
+  const reader = new BinaryReader(bytes);
+  const result = readAnimation(reader);
+  equal(result.ok, true);
+  const animation = unwrap(result);
+  deepEqual(animation.residue, new Uint8Array([0xde, 0xad]));
+  equal(result.ok && result.warnings.length, 1);
+  equal(reader.remaining, 0);
+  deepEqual(unwrap(writeAnimation(animation)), bytes);
+});
+
+test("a clean synthetic animation has no residue and no warnings", () => {
+  const bytes = buildBytes({ bound: 0, frames: [frame("a.tst1", BLACK)], delay: 0.5 });
+  const result = readAnimation(new BinaryReader(bytes));
+  equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  equal(result.value.residue.length, 0);
+  equal(result.warnings.length, 0);
+});
+
 test("EOF before the delay reports the field offset and a section", () => {
   const writer = new BinaryWriter();
   writer.str(ANIMATION_MAGIC);
@@ -245,6 +273,7 @@ test("an unencodable frame string fails the writer", () => {
     height: 32,
     frames: [frame("bad\u0100.png", BLACK)],
     delay: 0.15,
+    residue: new Uint8Array(0),
   };
   const result = writeAnimation(model);
   equal(result.ok, false);
@@ -274,8 +303,17 @@ test(
     for (const file of sampleAnm) {
       const bytes = new Uint8Array(readFileSync(file));
       const reader = new BinaryReader(bytes, file);
-      const animation = unwrap(readAnimation(reader));
+      const result = readAnimation(reader);
+      const animation = unwrap(result);
       equal(reader.remaining, 0, `${file} has ${reader.remaining} trailing byte(s)`);
+      equal(animation.residue.length, 0, `${file}: ${animation.residue.length} byte(s) fell through to residue`);
+      if (result.ok) {
+        equal(
+          result.warnings.filter((warning) => warning.includes("residue")).length,
+          0,
+          `${file}: residue warning`,
+        );
+      }
       const out = unwrap(writeAnimation(animation));
       deepEqual(out, bytes, `${file} did not round-trip`);
     }

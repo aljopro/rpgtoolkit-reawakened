@@ -5,8 +5,9 @@
  * Pure (G2): the reader consumes a `BinaryReader` the caller positioned and
  * the writer fills a `BinaryWriter`; neither touches a host. A wrong magic, a
  * text-form file or a short read is a `Result` carrying a located `FormatError`
- * and is never thrown (AD-18). The reader consumes exactly the fields §8.1
- * lists, so a caller checks any trailing bytes with `reader.remaining`.
+ * and is never thrown (AD-18). The reader consumes the whole file, keeping any
+ * bytes after the last field as `residue` (§1.7), so a caller sees
+ * `remaining === 0`.
  */
 
 import { err, ok, type Result } from "../result.ts";
@@ -23,23 +24,25 @@ import {
 /**
  * Read a special move from `reader` (format-spec §8.1).
  *
- * The detection byte at offset 16 (§1.3, §8.1) is checked first: a non-NUL
- * byte means the 2.x text form, which is refused with a located `FormatError`
- * rather than parsed as binary. Otherwise the magic, major/minor header and
- * the §8.1 field list are read in order; reading stops after the description.
+ * The header is read first and the detection byte at offset 16 (§1.3, §8.1)
+ * probed without moving the cursor: a non-NUL byte means the 2.x text form,
+ * which is refused with a located `FormatError` rather than parsed as binary.
+ * A file too short to carry the detection byte is not an error here — the
+ * header's own error is reported instead. Otherwise the §8.1 field list is
+ * read in order; bytes after the description are kept as `residue` (§1.7).
  */
 export function readSpecialMove(reader: BinaryReader): Result<SpecialMove> {
-  const detectAt = reader.offset + SPECIAL_MOVE_DETECT_OFFSET;
-  const probe = reader.isBinaryAt(detectAt);
-  if (!probe.ok) {
-    return probe;
-  }
-  if (!probe.value) {
+  const start = reader.offset;
+  // §8.1 lists the detection byte first and the header second; the probe does
+  // not move the cursor, so the header is read first and the detection checked
+  // before any header error — a text file has no NUL-terminated magic to read.
+  const header = reader.header();
+  const detectAt = start + SPECIAL_MOVE_DETECT_OFFSET;
+  const detection = reader.isBinaryAt(detectAt);
+
+  if (detection.ok && !detection.value) {
     return err(unsupportedTextForm(reader, detectAt, SPECIAL_MOVE_SECTION, SPECIAL_MOVE_MAGIC));
   }
-
-  const start = reader.offset;
-  const header = reader.header();
   if (!header.ok) {
     return header;
   }
@@ -93,21 +96,36 @@ export function readSpecialMove(reader: BinaryReader): Result<SpecialMove> {
     return description;
   }
 
-  return ok({
-    magic: header.value.magic,
-    major: header.value.major,
-    minor: header.value.minor,
-    name: name.value,
-    damage: damage.value,
-    smpCost: smpCost.value,
-    program: program.value,
-    targetSmpDrain: targetSmpDrain.value,
-    usableInBattle: usableInBattle.value,
-    usableFromMenu: usableFromMenu.value,
-    statusEffect: statusEffect.value,
-    animation: animation.value,
-    description: description.value,
-  });
+  const residue = reader.readBytes(reader.remaining);
+  if (!residue.ok) {
+    return residue;
+  }
+  const warnings: string[] = [];
+  if (residue.value.length > 0) {
+    warnings.push(
+      `${residue.value.length} trailing byte(s) after the special move were kept as residue (format-spec §8.1, §1.7)`,
+    );
+  }
+
+  return ok(
+    {
+      magic: header.value.magic,
+      major: header.value.major,
+      minor: header.value.minor,
+      name: name.value,
+      damage: damage.value,
+      smpCost: smpCost.value,
+      program: program.value,
+      targetSmpDrain: targetSmpDrain.value,
+      usableInBattle: usableInBattle.value,
+      usableFromMenu: usableFromMenu.value,
+      statusEffect: statusEffect.value,
+      animation: animation.value,
+      description: description.value,
+      residue: residue.value,
+    },
+    warnings,
+  );
 }
 
 /**
@@ -144,5 +162,6 @@ export function writeSpecialMove(model: SpecialMove): Result<Uint8Array> {
     }
   }
 
+  writer.writeBytes(model.residue);
   return ok(writer.toBytes());
 }

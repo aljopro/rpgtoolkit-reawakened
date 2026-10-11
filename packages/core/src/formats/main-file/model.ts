@@ -8,9 +8,10 @@
  * runs, so an unchanged file writes back byte-for-byte (AD-18).
  *
  * The reserved runs are kept as raw bytes rather than as parsed numbers: they
- * are unmodelled for the minor that wrote them (the "unknown minor" residue),
- * so re-emitting the exact bytes is the only way to guarantee a byte-identical
- * round-trip (AD-18).
+ * are unmodelled for the minor that wrote them, so re-emitting the exact bytes
+ * is the only way to guarantee a byte-identical round-trip (AD-18). Bytes after
+ * the last documented row are the file's `residue`, kept and re-emitted too
+ * (§1.7).
  */
 
 import type { Colorref } from "../binary/color.ts";
@@ -89,7 +90,7 @@ export interface MainFilePlugin {
  * The reserved runs the spec says to ignore, kept verbatim so the writer can
  * reproduce them (AD-18). Each is empty when the minor does not carry it.
  */
-export interface MainFileResidue {
+export interface MainFileReservedRuns {
   /** Row 10, minor < 3: an `i32` between `resolution` and `disableProtectReg`. */
   readonly parallax: Uint8Array;
   /** Row 21, minor < 3: the `i32` in place of `menuPlugin`/`fightPlugin`. */
@@ -117,7 +118,12 @@ export interface MainFile {
   readonly registrationFlag: number;
   /** Row 4: the old registration code, default `"NOCODE"`. */
   readonly registrationCode: string;
-  /** Row 5: the project folder under `Game/` (§1.5). */
+  /**
+   * Row 5: the stored project path, relative to `<root>` (§1.5). Either a bare
+   * folder name placed under `Game/` (`demo`) or a path that already begins with
+   * `Game/` (`Game\demo\`); `projectFolder` tells the two apart by the first
+   * segment.
+   */
   readonly projectPath: string;
   /** Row 6: the window title. */
   readonly gameTitle: string;
@@ -224,5 +230,11 @@ export interface MainFile {
   /** Row 43, minor ≥ 9: eight scan codes, ordered E, SE, S, SW, W, NW, N, NE. */
   readonly movementScanCodes: readonly number[];
   /** The reserved runs, kept verbatim (AD-18). */
-  readonly residue: MainFileResidue;
+  readonly reservedRuns: MainFileReservedRuns;
+  /**
+   * The bytes after the last documented row, kept verbatim so the writer puts
+   * them back and the file round-trips byte for byte (§1.7). Empty when the
+   * file has no trailing bytes.
+   */
+  readonly residue: Uint8Array;
 }

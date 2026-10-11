@@ -4,7 +4,8 @@
  *
  * Each of the three is a magic-and-version header (`str magic`, `i16 major`,
  * `i16 minor`, §1.3/§1.4) followed by a fixed field list. The models keep every
- * field verbatim, so a parsed file writes back byte-for-byte (AD-18).
+ * field verbatim plus any bytes after the last documented one as `residue`, so
+ * a parsed file writes back byte-for-byte (AD-18, §1.7).
  *
  * Each format also has a 2.x-era line-oriented text form. Its presence is
  * detected by the byte at a documented offset — `0x00` means binary, a CR/LF
@@ -69,9 +70,9 @@ export interface SpecialMove {
   readonly program: string;
   /** The SMP drained from the target (an `i32`, §8.1). */
   readonly targetSmpDrain: number;
-  /** Whether the move may be used in battle (an `i8`, §8.1). */
+  /** Whether the move may be used in battle: the raw `i8` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.1). */
   readonly usableInBattle: number;
-  /** Whether the move may be used from the menu (an `i8`, §8.1). */
+  /** Whether the move may be used from the menu: the raw `i8` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.1). */
   readonly usableFromMenu: number;
   /** The status effect the move applies, by handle (§8.1). */
   readonly statusEffect: string;
@@ -79,6 +80,12 @@ export interface SpecialMove {
   readonly animation: string;
   /** The move's one-line description (§8.1). */
   readonly description: string;
+  /**
+   * Bytes after the last documented field, kept so a write is byte-identical
+   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * reported as a warning rather than dropped.
+   */
+  readonly residue: Uint8Array;
 }
 
 /** A parsed status effect (format-spec §8.2). */
@@ -97,20 +104,26 @@ export interface StatusEffect {
   readonly speedUp: number;
   /** The speed penalty (an `i16`, §8.2). */
   readonly slowDown: number;
-  /** The disable flag / amount (an `i16`, §8.2). */
+  /** The raw `disable` value (an `i16`, §8.2), kept verbatim: the spec does not make it a flag, so any signed value, `-1` included, is stored as-is (§1.1). */
   readonly disable: number;
-  /** Whether HP is affected (an `i16`, §8.2). */
+  /** Whether HP is affected: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
   readonly hpEnabled: number;
   /** HP changed per round; negative heals (an `i16`, §8.2). */
   readonly hpPerRound: number;
-  /** Whether SMP is affected (an `i16`, §8.2). */
+  /** Whether SMP is affected: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
   readonly smpEnabled: number;
   /** SMP changed per round; negative heals (an `i16`, §8.2). */
   readonly smpPerRound: number;
-  /** Whether the program runs (an `i16`, §8.2). */
+  /** Whether the program runs: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
   readonly runProgram: number;
   /** The RPGCode program the effect runs (§8.2). */
   readonly program: string;
+  /**
+   * Bytes after the last documented field, kept so a write is byte-identical
+   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * reported as a warning rather than dropped.
+   */
+  readonly residue: Uint8Array;
 }
 
 /** A parsed battle background (format-spec §8.3). */
@@ -133,6 +146,12 @@ export interface BattleBackground {
   readonly readySound: string;
   /** The "can't do that" sound cue (§8.3). */
   readonly cantDoSound: string;
+  /**
+   * Bytes after the last documented field, kept so a write is byte-identical
+   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * reported as a warning rather than dropped.
+   */
+  readonly residue: Uint8Array;
 }
 
 /**

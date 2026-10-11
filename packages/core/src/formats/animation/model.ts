@@ -2,9 +2,9 @@
  * The animation model and its constants (format-spec §7.1).
  *
  * A `.anm` is a fixed run of frame slots followed by one delay. The model keeps
- * every slot, including the empty ones, and each frame's image reference
- * verbatim, so an unmodified animation writes back byte-for-byte (AD-18,
- * §7.1).
+ * every slot, including the empty ones, each frame's image reference verbatim
+ * and any bytes after the delay as `residue`, so an unmodified animation writes
+ * back byte-for-byte (AD-18, §1.7, §7.1).
  */
 
 import type { Colorref } from "../binary/color.ts";
@@ -53,4 +53,10 @@ export interface Animation {
   readonly frames: readonly AnimationFrame[];
   /** Seconds per frame (§7.1). */
   readonly delay: number;
+  /**
+   * Bytes after the last documented field, kept so a write is byte-identical
+   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * reported as a warning rather than dropped.
+   */
+  readonly residue: Uint8Array;
 }

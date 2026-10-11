@@ -169,3 +169,19 @@ test("two paths that fold to the same key share one lookup", () => {
   equal(index.byKey.size, 1);
   equal(unwrap(resolveAsset(index, PACKAGE_ROOT, "boards", "Inn.Brd")), "boards/inn.brd");
 });
+
+test("a game folder accepts both stored forms of the project path", () => {
+  const index = createAssetIndex(["Game/demo/Boards/start.brd"]);
+  for (const projectPath of ["Game\\demo\\", "demo", "game/demo"]) {
+    const root: AssetRoot = { kind: "game", projectPath };
+    equal(
+      unwrap(resolveAsset(index, root, "boards", "start.brd")),
+      "game/demo/boards/start.brd",
+      projectPath,
+    );
+  }
+  // A package root ignores the project path and looks the reference up at the
+  // package root (§13).
+  const asPackage = createAssetIndex(["Boards/start.brd"]);
+  equal(unwrap(resolveAsset(asPackage, PACKAGE_ROOT, "boards", "start.brd")), "boards/start.brd");
+});

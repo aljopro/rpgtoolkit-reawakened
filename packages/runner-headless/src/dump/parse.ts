@@ -2,9 +2,10 @@
  * One file → one outcome: parse it, skip it with a reason, or report a located
  * failure (epic 2 Done-when 1).
  *
- * Every reader call is `core`'s and never throws (AD-18), so this module has no
- * error handling of its own: an `ok: false` from a reader *is* the failure
- * outcome. The dispatch is `classify` (formats.ts); the digest is `digestModel`
+ * Every reader call is `core`'s and never throws (AD-18): an `ok: false` from a
+ * reader *is* the failure outcome, and the one throw this module guards is the
+ * digest's — `canon` rejects a value a reader accepted, which fails that file
+ * alone. The dispatch is `classify` (formats.ts); the digest is `digestModel`
  * / `digestRgba` (digest.ts).
  *
  * `runner-headless` is the Node host shell, so nothing here is subject to G2 —
@@ -226,9 +227,9 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
       // §10: `decodeTexture` matches the PNG/JPEG signature and returns straight RGBA.
       const read = decodeTexture(bytes, path);
       if (!read.ok) return read;
-      const { width, height, rgba } = read.value;
+      const { w, h, rgba } = read.value;
       return imageOutcome(
-        `image ${extensionOf(path)} ${width}×${height} (${rgba.length} RGBA bytes)`,
+        `image ${extensionOf(path)} ${w}×${h} (${rgba.length} RGBA bytes)`,
         rgba,
         read.warnings,
       );
@@ -240,6 +241,10 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
  * Decide one file's outcome: parse it (a data format), skip it with a reason
  * (text, media, a plugin, or a format with no reader yet), or fail with the
  * reader's located `FormatError` (a data format that would not parse).
+ *
+ * A reader never throws (AD-18), so the only throw here is the digest: `canon`
+ * rejects a value a reader accepted — a NaN delay in a `.anm`, say. That is
+ * this one file's failure, never the whole dump's.
  */
 export function parseFile(file: PackageFile): FileOutcome {
   const cls = classify(file.path);
@@ -247,9 +252,23 @@ export function parseFile(file: PackageFile): FileOutcome {
     const detail = cls.describe?.(file.bytes);
     return { status: "skipped", reason: detail === undefined ? cls.reason : `${cls.reason} — ${detail}` };
   }
-  const parsed = parseData(cls, file);
-  if (!parsed.ok) {
-    return { status: "failed", format: cls.format, section: cls.section, error: parsed.error };
+  try {
+    const parsed = parseData(cls, file);
+    if (!parsed.ok) {
+      return { status: "failed", format: cls.format, section: cls.section, error: parsed.error };
+    }
+    return { status: "parsed", format: cls.format, section: cls.section, ...parsed.value };
+  } catch (cause) {
+    return {
+      status: "failed",
+      format: cls.format,
+      section: cls.section,
+      error: {
+        path: file.path,
+        offset: 0,
+        section: cls.section,
+        message: `the parsed model could not be digested: ${cause instanceof Error ? cause.message : String(cause)}`,
+      },
+    };
   }
-  return { status: "parsed", format: cls.format, section: cls.section, ...parsed.value };
 }

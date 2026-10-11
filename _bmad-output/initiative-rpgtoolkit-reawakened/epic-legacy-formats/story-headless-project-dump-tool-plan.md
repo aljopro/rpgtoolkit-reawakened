@@ -98,3 +98,41 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - `node packages/runner-headless/dist/cli.js dump --check golden/legacy-corpus.json fixtures/legacy` — exit 0; both games report their digest counts matching.
 - A deliberately corrupted copy of the corpus (`demo/Boards/start.brd` truncated to 40 bytes) — exit 1 with `Boards/start.brd  FAILED  board  format-spec §1.1 at offset 30: …` and `28 parsed, 46 skipped, 1 failed`.
 - A deliberately drifted digest in a copy of the expectation — exit 1 with `dump: check failed: demo: Boards/start.brd digest 65da9ee0349bf83c differs from the expected 0000000000000000`.
+
+## Code Review
+
+### 2026-10-11
+
+**Code review complete.** 0 `decision-needed`, 10 `patch`, 0 `defer`, 17 rejected. Every patch is applied (2026-10-11).
+
+Scope: 2aa135e; diff excludes the ticket's own plan file. Lenses run: blind-hunter, edge-case-hunter, verification-gap, intent-alignment (thorough). Decision, patch and defer counts are entries after grouping; the rejected count is findings.
+
+- [x] [Review][Patch] A canon-rejected model value aborts the whole dump (a `.anm` NaN delay loses every other file's result) [packages/runner-headless/src/dump/parse.ts:63] — wrap the digest call and return a located `failed` outcome for that file. — applied 2026-10-11: `parseFile` wraps the reader and the digest in a try/catch, so a value `canon` rejects (a NaN `.anm` delay) fails that one file with a located error and the rest of the dump goes on. A unit test and a CLI test cover it.
+- [x] [Review][Patch] `.bmp`/`.gif` are hard failures although §10 lists them and core has no decoder [packages/runner-headless/src/dump/formats.ts:102] — make the two rows skips like `.gph`/`.tan`/`.tbm`, per the acceptance criterion. — applied 2026-10-11: `.bmp` and `.gif` are skipped with a reason, like `.gph`, `.tan` and `.tbm`; a test covers both.
+- [x] [Review][Patch] `dump --check` ignores a game folder the expectation does not name [packages/runner-headless/src/dump/cli.ts:70] — compare the corpus directory's names with `expectation.games` and fail naming an unlisted one. — applied 2026-10-11: `dump --check` fails, naming the folder, when the games directory holds one the expectation does not name; a test covers it.
+- [x] [Review][Patch] The `.tpk` and standalone-EXE forms are run by no test [packages/runner-headless/src/dump/fs.ts:94] — add a `.tpk` (and appended-ZIP `.exe`) CLI case asserting exit 0 and a known digest. — applied 2026-10-11: CLI cases run a `.tpk` and an appended-ZIP `.exe` (a stub, the ZIP and the 12-byte format-spec §13 trailer) and assert exit 0 and the digest.
+- [x] [Review][Patch] `.gam`/`.spc`/`.ste` rows are classified but parsed by nothing [packages/runner-headless/test/dump.test.ts:180] — add in-memory fixtures via `writeMainFile`/`writeSpecialMove`/`writeStatusEffect`. — applied 2026-10-11: In-memory `.gam`, `.spc` and `.ste` files, written with the core writers, are parsed by a test that checks format, summary and digest.
+- [x] [Review][Patch] The §4.8 pre-vector board branch is executed by nothing [packages/runner-headless/src/dump/parse.ts:88] — add one pre-vector `.brd` case driving `readPreVectorBoard` + `convertPreVectorBoard`. — applied 2026-10-11: A minor-3 board in the §4.8 layout, built byte by byte, runs `readPreVectorBoard` and `convertPreVectorBoard` through the dump and is reported parsed. The `parse.ts` module comment, which said the module had no error handling, is corrected.
+- [x] [Review][Patch] The host reads every file into memory before core's AD-17 limits apply [packages/runner-headless/src/dump/fs.ts:60] — check `stat.size` against `PACKAGE_LIMITS` before `readFileSync`. — applied 2026-10-11: The host compares `stat.size` with `PACKAGE_LIMITS` before reading: a loose file above the per-entry limit and a `.tpk` or `.exe` above the compressed-input limit are refused unread. A test uses sparse files.
+- [x] [Review][Patch] Drift wording says "missing" for a file that is present but no longer parses [packages/runner-headless/src/dump/expectation.ts:170] — print the new report's `failed` entry or reword the line. — applied 2026-10-11: The drift report says a file that is present but no longer parses 'failed to parse' and shows the new failure, instead of 'missing'; a test covers it.
+- [x] [Review][Patch] `boardLayout` duplicates core's §4.1 thresholds and its "obsolete" branch is unreachable [packages/runner-headless/src/dump/formats.ts:186] — build it from `BOARD_VECTOR_MINOR`/`PRE_VECTOR_MINOR_MIN`/`PRE_VECTOR_MINOR_MAX` and fix the doc comment. — applied 2026-10-11: `boardLayout` takes its thresholds from core's `BOARD_VECTOR_MINOR`, `PRE_VECTOR_MINOR_MIN` and `PRE_VECTOR_MINOR_MAX`, and its comment is corrected. The 'obsolete' outcome is reachable (minor 0 and 1, which an existing test asserts), so the branch stays.
+- [x] [Review][Patch] The CI comment describes `--json` while the step runs `dump:check` [.github/workflows/ci.yml:60] — reword it to name `pnpm dump:check`. — applied 2026-10-11: The comment now names `pnpm dump:check` and says what it compares: the dump's JSON report against the committed `golden/legacy-corpus.json`.
+
+**Rejected**
+- blind-hunter: The expectation records no skipped files, skip reasons or warnings — low: the gate is deliberately a counts-and-digest model-drift reference over a SHA-pinned corpus, so gating warnings/reasons would widen the committed schema for no reachable drift.
+- blind-hunter: `FormatError.path` is thrown away — low: the entry's own `path` is printed in the human line and present in JSON, so nothing is lost to the user.
+- blind-hunter: The digest ignores Map/Set/Date/ArrayBuffer/DataView and symbol keys — low: no reader can return those (G1/G2); only the `digest.ts` docstring's TypeError claim is wrong, and a guard would be dead code.
+- blind-hunter: A `Uint8Array` and its hex string digest identically — low: separating them needs a type tag in every digest field, for a hypothetical type change.
+- blind-hunter: Image digests cover pixels but not dimensions — low: width/height are derived from the same bytes, so a same-length mislabel is contrived.
+- blind-hunter: A FIFO/socket/device node is reported as a symbolic link — low: such a node cannot occur in a fetched fixture, and the mislabel is cosmetic.
+- blind-hunter: `countLines` miscounts CR-only files and says "1 bytes, 1 lines" — low: CR-only is not a real legacy encoding and the grammar is a skipped file's detail.
+- blind-hunter: `parseExpectation` does not check internal consistency — low: it only bites a hand-edited expectation, which `--record` documents against.
+- blind-hunter: `USAGE` is unreachable and the `golden` messages lost their prefix — low: no `--help` was specified, the messages must be subcommand-neutral now, and the only fix would be to the plan's own wording.
+- blind-hunter: The determinism criterion is tested vacuously and flags swallow the next argument — low: the criterion holds by construction and `dump --check --json` fails loudly.
+- edge-case-hunter: A symlinked game folder is omitted by `--record` but refused by `--check` — low: contrived, the refusal is loud, and agreeing the two paths is a policy choice.
+- edge-case-hunter: A control character splits a report line — low: it degrades only the human rendering of a legacy string; the JSON report and gate are unaffected.
+- edge-case-hunter: `compareGame`/`driftLines` compare only digests and counts — low: same root cause as the warning/reason item; the counts check is included and there is one caller.
+- intent-alignment: The "no-reader-yet" skip rows are unexercised — low: an unknown extension is also a skip, so these rows only change the reason's wording.
+- intent-alignment: The gate omits the readable surface — low: the plan makes the rendering a debugging aid, not the gate's subject.
+- intent-alignment: The expectation is a snapshot, not an independent oracle — false: the plan's Design Notes define it as a drift reference, so the described property is the intended design.
+- intent-alignment: The digest is over a normalised model — false: the hex fold and `undefined` drop are documented in `digest.ts`, the plan and the digest tests.

@@ -10,9 +10,10 @@
  * `require('./lib/…')`) with a `window` fallback branch. The evidence is in the
  * story plan. This decoder touches no host global at all (G2).
  *
- * It handles the Baseline sequential DCT process (SOF0), 8-bit precision, one
- * or three components with any sampling factor from 1×1 to 4×4 (the fixtures
- * are 4:2:0), Huffman-coded entropy data (DHT) with optional restart intervals,
+ * It handles the Baseline sequential DCT process (SOF0) and the 8-bit extended
+ * sequential process (SOF1) — the two share one decoding path — one or three
+ * components with any sampling factor from 1×1 to 4×4 (the fixtures are
+ * 4:2:0), Huffman-coded entropy data (DHT) with optional restart intervals,
  * dequantisation, a separable floating-point IDCT over `+ - * /` with a fixed
  * evaluation order, nearest-neighbour chroma upsampling and YCbCr→RGB (or
  * component-copy for an Adobe RGB transform). Anything else — progressive
@@ -200,15 +201,24 @@ class BitReader {
   /** Consume the `FF D0 … FF D7` restart marker at the current position. */
   readRestart(): Result<void> {
     this.align();
-    const at = this.at;
-    if (at + 2 > this.data.length) {
-      return fail(at, "truncated restart marker", this.path);
+    const started = this.at;
+    let at = this.at;
+    // T.81 §B.1.1.2: any number of `FF` fill bytes may precede a marker, the
+    // same repetition `nextByte` already skips inside the entropy data.
+    while (at < this.data.length && this.data[at] === 0xff) {
+      at += 1;
     }
-    const marker = this.data[at + 1]!;
-    if (this.data[at] !== 0xff || marker < 0xd0 || marker > 0xd7) {
-      return fail(at, `expected a restart marker (FF D0–FF D7)`, this.path);
+    if (at === started) {
+      return fail(started, `expected a restart marker (FF D0–FF D7)`, this.path);
     }
-    this.at += 2;
+    if (at >= this.data.length) {
+      return fail(started, "truncated restart marker", this.path);
+    }
+    const marker = this.data[at]!;
+    if (marker < 0xd0 || marker > 0xd7) {
+      return fail(started, `expected a restart marker (FF D0–FF D7)`, this.path);
+    }
+    this.at = at + 1;
     return ok(undefined);
   }
 
@@ -346,6 +356,13 @@ function decodeBlock(
   if (category < 0) {
     return fail(reader.position, "invalid DC Huffman code", reader.path);
   }
+  if (category > 11) {
+    return fail(
+      reader.position,
+      `DC difference category ${category} is outside 0–11 for 8-bit samples`,
+      reader.path,
+    );
+  }
   const difference = category === 0 ? 0 : extend(reader.receive(category), category);
   const dc = predictors[scan.predictor]! + difference;
   predictors[scan.predictor] = dc;
@@ -462,7 +479,7 @@ function compose(frame: Frame, adobeTransform: number | undefined): DecodedTextu
         rgba[out + 3] = 255;
       }
     }
-    return { width, height, rgba };
+    return { w: width, h: height, rgba };
   }
 
   const first = components[0]!;
@@ -490,10 +507,10 @@ function compose(frame: Frame, adobeTransform: number | undefined): DecodedTextu
       rgba[out + 3] = 255;
     }
   }
-  return { width, height, rgba };
+  return { w: width, h: height, rgba };
 }
 
-/** Parse a SOF0 segment into a `Frame` (format-spec §10, T.81 §B.2.2). */
+/** Parse a SOF0/SOF1 frame segment into a `Frame` (format-spec §10, T.81 §B.2.2). */
 function readFrame(bytes: Uint8Array, segmentAt: number, segmentEnd: number, path?: string): Result<Frame> {
   const count = bytes[segmentAt + 5]!;
   if (segmentEnd - segmentAt !== 6 + count * 3) {
@@ -521,6 +538,9 @@ function readFrame(bytes: Uint8Array, segmentAt: number, segmentEnd: number, pat
   for (let i = 0; i < count; i += 1) {
     const at = segmentAt + 6 + i * 3;
     const id = bytes[at]!;
+    if (descriptions.some((earlier) => earlier.id === id)) {
+      return fail(at, `component ${id} appears twice in the frame`, path);
+    }
     const sampling = bytes[at + 1]!;
     const h = sampling >> 4;
     const v = sampling & 15;
@@ -631,18 +651,29 @@ function readHuffman(
 }
 
 /**
- * Decode a baseline JPEG file to straight RGBA (AD-28, format-spec §10). Never
- * throws: nothing here is a `FormatError` escape hatch.
+ * Decode a baseline JPEG file to the file's own straight RGBA (AD-28,
+ * format-spec §10): the component channels and alpha 255 (JPEG carries no
+ * alpha), nothing added. No colour key is applied — the key is not part of the
+ * file; it is the `key` of a `blit` (AD-3) and `core/raster` tests it on these
+ * pixels. Never throws: nothing here is a `FormatError` escape hatch. `path`,
+ * the asset path, is carried on every error.
  */
 export function decodeJpeg(bytes: Uint8Array, path?: string): Result<DecodedTexture> {
-  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
+  if (bytes.length < 3 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
     return fail(0, "not a JPEG: the file does not start with FF D8 FF", path);
+  }
+  if (bytes.length < 4) {
+    return fail(bytes.length, "JPEG is too short: the file ends after its FF D8 FF signature", path);
   }
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const quant: (QuantTable | undefined)[] = [undefined, undefined, undefined, undefined];
   const huffman: (HuffmanTable | undefined)[][] = [[], [], [], []];
   let frame: Frame | undefined;
+  /** Offset of the frame's first field, for errors about the frame as a whole. */
+  let frameAt = 0;
+  /** Frame component indices a scan has actually decoded. */
+  const decodedComponents = new Set<number>();
   let restartInterval = 0;
   let adobeTransform: number | undefined;
   let scanned = false;
@@ -676,12 +707,13 @@ export function decodeJpeg(bytes: Uint8Array, path?: string): Result<DecodedText
       return fail(at, `FF ${marker.toString(16)} segment length ${length} runs past the end of the file`, path);
     }
 
-    if (marker === 0xc0) {
+    if (marker === 0xc0 || marker === 0xc1) {
       const read = readFrame(bytes, segmentAt, segmentEnd, path);
       if (!read.ok) {
         return read;
       }
       frame = read.value;
+      frameAt = segmentAt;
     } else if (marker === 0xc2) {
       return fail(at, "progressive JPEG (SOF2) is not supported", path);
     } else if (marker >= 0xc1 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
@@ -722,6 +754,9 @@ export function decodeJpeg(bytes: Uint8Array, path?: string): Result<DecodedText
         if (component === undefined) {
           return fail(entry, `the scan names component ${id}, which SOF0 does not define`, path);
         }
+        if (scan.some((named) => named.component === component)) {
+          return fail(entry, `the scan names component ${id} twice`, path);
+        }
         const tables = bytes[entry + 1]!;
         const dc = huffman[0]![tables >> 4];
         const ac = huffman[1]![tables & 15];
@@ -753,6 +788,9 @@ export function decodeJpeg(bytes: Uint8Array, path?: string): Result<DecodedText
       if (!decoded.ok) {
         return decoded;
       }
+      for (const part of scan) {
+        decodedComponents.add(part.predictor);
+      }
       scanned = true;
       at = reader.position;
       continue;
@@ -766,6 +804,11 @@ export function decodeJpeg(bytes: Uint8Array, path?: string): Result<DecodedText
   }
   if (!scanned) {
     return fail(at, "no scan (SOS) was found", path);
+  }
+  for (let i = 0; i < frame.components.length; i += 1) {
+    if (!decodedComponents.has(i)) {
+      return fail(frameAt, `component ${frame.components[i]!.id} was never decoded by any scan`, path);
+    }
   }
   return ok(compose(frame, adobeTransform));
 }

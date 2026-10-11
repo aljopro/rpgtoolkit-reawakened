@@ -12,9 +12,12 @@
  * Everything the spec pairs is decoded: colour types 0 (grey), 2 (truecolour),
  * 3 (palette), 4 (grey+alpha) and 6 (truecolour+alpha) at their permitted bit
  * depths 1/2/4/8/16, filter method 0 and both interlace modes. A file that is
- * truncated, has a bad chunk CRC, or names a colour type/bit-depth/interlace
- * combination the spec does not define comes back as `ok: false` with the
- * offending field's byte offset (AD-18) — never a silently wrong image.
+ * truncated, has a bad chunk CRC, a malformed chunk list (a missing `IEND`, a
+ * second `IHDR`, an unknown critical chunk, `PLTE`/`tRNS` after the first
+ * `IDAT`, or a palette longer than the depth selects), the wrong number of
+ * inflated bytes, or a colour type/bit-depth/interlace combination the spec does
+ * not define comes back as `ok: false` with the offending field's byte offset
+ * (AD-18) — never a silently wrong image.
  */
 
 import { unzlibSync } from "fflate/browser";
@@ -34,6 +37,16 @@ const SIGNATURE_LENGTH = 8;
  * decoder's resolution limit and is far above any game asset.
  */
 const MAX_PIXELS = 100_000_000;
+
+/**
+ * The most a deflate stream can expand (RFC 1951: a 258-byte match costs two
+ * bits, so 1032 to 1), plus slack for the stream's own framing. A header that
+ * declares more inflated bytes than the IDAT could ever produce is refused
+ * before an output buffer of that size is reserved for a file that may be a
+ * few bytes long.
+ */
+const MAX_DEFLATE_RATIO = 1032;
+const DEFLATE_SLACK_BYTES = 1024;
 
 /** The bit depths each colour type permits (PNG spec, `IHDR`). */
 const PERMITTED_DEPTHS: Record<number, readonly number[]> = {
@@ -125,8 +138,10 @@ function readChunkAt(bytes: Uint8Array, view: DataView, at: number, path?: strin
 }
 
 /**
- * Read and CRC-check every chunk from the end of the signature. Stops after
- * `IEND`; a trailing chunk after it is not part of the image and is ignored.
+ * Read and CRC-check every chunk from the end of the signature up to and
+ * including the `IEND` the spec requires last; a chunk after `IEND` is not part
+ * of the image and is ignored. A chunk stream that runs out before `IEND` is a
+ * located error rather than a short image.
  */
 function readChunks(bytes: Uint8Array, view: DataView, path?: string): Result<Chunk[]> {
   const chunks: Chunk[] = [];
@@ -139,10 +154,64 @@ function readChunks(bytes: Uint8Array, view: DataView, path?: string): Result<Ch
     chunks.push(chunk.value);
     at = chunk.value.at + 12 + chunk.value.data.length;
     if (chunk.value.type === "IEND") {
-      break;
+      return ok(chunks);
     }
   }
-  return ok(chunks);
+  return fail(at, "no IEND chunk: the chunk stream ends without one", path);
+}
+
+/**
+ * Check the chunk list's structure: `IHDR` appears exactly once, every critical
+ * chunk is one the spec defines, `PLTE` and `tRNS` precede the first `IDAT`, and
+ * `PLTE` holds no more entries than the bit depth can select (format-spec §10).
+ * Each defect is a located error at the offending chunk, never a throw.
+ */
+function checkStructure(chunks: readonly Chunk[], header: Header, path?: string): Result<void> {
+  const maxEntries = 1 << header.depth;
+  let ihdrCount = 0;
+  let sawIdat = false;
+  for (const chunk of chunks) {
+    if (chunk.type === "IDAT") {
+      sawIdat = true;
+      continue;
+    }
+    if (chunk.type === "IHDR") {
+      ihdrCount += 1;
+      if (ihdrCount > 1) {
+        return fail(chunk.at, "a second IHDR chunk; IHDR appears once and first", path);
+      }
+      continue;
+    }
+    if (chunk.type === "PLTE") {
+      if (sawIdat) {
+        return fail(chunk.at, "PLTE after the first IDAT; the palette precedes the image data", path);
+      }
+      if (chunk.data.length > maxEntries * 3) {
+        return fail(
+          chunk.at,
+          `PLTE holds more than ${maxEntries} entries; bit depth ${header.depth} selects at most that many`,
+          path,
+        );
+      }
+      continue;
+    }
+    if (chunk.type === "tRNS") {
+      if (sawIdat) {
+        return fail(chunk.at, "tRNS after the first IDAT; the colour key precedes the image data", path);
+      }
+      continue;
+    }
+    if (chunk.type === "IEND") {
+      continue;
+    }
+    // A chunk type's first letter decides criticality: uppercase (bit 5 clear)
+    // is critical, and only the four above are critical chunks this decoder
+    // knows, so anything else there is a file it cannot honour (PNG spec §5.4).
+    if ((chunk.type.charCodeAt(0) & 0x20) === 0) {
+      return fail(chunk.at, `unknown critical chunk ${chunk.type}`, path);
+    }
+  }
+  return ok(undefined);
 }
 
 /** Validate the leading `IHDR` chunk's geometry (format-spec §10). */
@@ -431,9 +500,13 @@ function emitPixel(
 }
 
 /**
- * Decode a PNG file to straight RGBA (AD-28, format-spec §10). Never throws: the
- * caller has already matched the signature, and every later defect is a located
- * `FormatError`.
+ * Decode a PNG file to the file's own straight RGBA (AD-28, format-spec §10):
+ * the palette/truecolour channels and the file's own alpha (`tRNS`, alpha
+ * channels), nothing added. No colour key is applied — the key is not part of
+ * the file; it is the `key` of a `blit` (AD-3) and `core/raster` tests it on
+ * these pixels. Never throws: the caller has already matched the signature, and
+ * every later defect is a located `FormatError`. `path`, the asset path, is
+ * carried on every error.
  */
 export function decodePng(bytes: Uint8Array, path?: string): Result<DecodedTexture> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -454,6 +527,10 @@ export function decodePng(bytes: Uint8Array, path?: string): Result<DecodedTextu
   if (!chunks.ok) {
     return chunks;
   }
+  const structure = checkStructure(chunks.value, header.value, path);
+  if (!structure.ok) {
+    return structure;
+  }
   const palette = readPalette(chunks.value, path);
   if (!palette.ok) {
     return palette;
@@ -473,26 +550,39 @@ export function decodePng(bytes: Uint8Array, path?: string): Result<DecodedTextu
   // IDAT payload is where those bytes come from.
   const idatAt = chunks.value.find((chunk) => chunk.type === "IDAT")!.at + 8;
 
-  let inflated: Uint8Array;
-  try {
-    inflated = unzlibSync(idat.value);
-  } catch (cause) {
-    return fail(idatAt, `IDAT is not a valid zlib stream: ${String(cause)}`, path);
-  }
-
   const { width, height, depth, colourType, channels } = header.value;
   const bpp = Math.max(1, Math.ceil((channels * depth) / 8));
   const bitsPerPixel = channels * depth;
   const passes = passesOf(header.value);
 
+  // The header fixes the exact inflated size, so it is computed before
+  // inflating: the decompressor writes into a buffer of that size and cannot
+  // allocate past the declared layout, however much a crafted stream expands
+  // to. One byte of slack makes an over-long stream come back one byte too long
+  // rather than truncated to the declared size and accepted.
   let expected = 0;
   for (const pass of passes) {
     expected += pass.height * (1 + Math.ceil((pass.width * bitsPerPixel) / 8));
   }
-  if (inflated.length !== expected) {
+  if (expected > idat.value.length * MAX_DEFLATE_RATIO + DEFLATE_SLACK_BYTES) {
     return fail(
       idatAt,
-      `IDAT inflates to ${inflated.length} bytes; ${width}×${height} at ${depth}-bit needs ${expected}`,
+      `IDAT of ${idat.value.length} bytes cannot inflate to the ${expected} bytes that ${width}×${height} at ${depth}-bit needs`,
+      path,
+    );
+  }
+
+  let inflated: Uint8Array;
+  try {
+    inflated = unzlibSync(idat.value, { out: new Uint8Array(expected + 1) });
+  } catch (cause) {
+    return fail(idatAt, `IDAT is not a valid zlib stream: ${String(cause)}`, path);
+  }
+  if (inflated.length !== expected) {
+    const actual = inflated.length > expected ? `more than ${expected}` : `${inflated.length}`;
+    return fail(
+      idatAt,
+      `IDAT inflates to ${actual} bytes; ${width}×${height} at ${depth}-bit needs ${expected}`,
       path,
     );
   }
@@ -529,5 +619,5 @@ export function decodePng(bytes: Uint8Array, path?: string): Result<DecodedTextu
     }
   }
 
-  return ok({ width, height, rgba });
+  return ok({ w: width, h: height, rgba });
 }

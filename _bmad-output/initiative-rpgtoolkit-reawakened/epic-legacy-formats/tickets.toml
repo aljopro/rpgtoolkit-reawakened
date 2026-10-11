@@ -131,3 +131,25 @@ covers = ["CAP-1"]
 after = [10]
 hitl = false
 risk = "medium"
+
+[[entry]]
+id = 13
+type = "story"
+title = "AssetDecoder interface and core format registry (AD-31)"
+description = "Adds the `AssetDecoder` interface of AD-31 and a core format registry that dispatches bytes to a decoder by file extension and magic header, wraps every landed reader as a decoder, and moves the dump command's data-format rows onto the registry so the project has one dispatch. Registration through ADR 0004's `PluginDefinition` is not part of this epic."
+verify = "A test registers a custom decoder over synthetic bytes and the registry dispatches to it by extension and by magic header; every sample-game file with a registered extension decodes through the registry to the model its reader returns, and `pnpm dump:check` still matches the committed expectation."
+covers = ["CAP-1"]
+after = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 14
+type = "story"
+title = "Refactor sweep"
+description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts, from their plans and the deferred review findings. It takes cleanup only."
+verify = "All required checks stay green and each cleanup traces to a deferred review finding."
+covers = ["CAP-1"]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+hitl = false
+risk = "low"

@@ -17,10 +17,12 @@ import {
   BinaryReader,
   BinaryWriter,
   convertPreVectorBoard,
+  readBoard,
   readPreVectorBoard,
   TT_SOLID,
   TT_STAIRS,
   TT_UNDER,
+  writeBoard,
 } from "../src/index.ts";
 import type { Board, Colorref, PreVectorBoard, Result } from "../src/index.ts";
 
@@ -310,9 +312,10 @@ test("a run marker wraps a row end and one wraps a layer boundary", () => {
 });
 
 test("each legacy tile type vectorizes to the §4.8 shape", () => {
-  // One 4 × 1 layer: two solid tiles, one under tile, one stair to layer 3.
+  // One 5 × 1 layer: two solid tiles, one under tile, one stair to layer 3 and
+  // one normal tile, which emits no vector at all.
   const bytes = buildPreVectorBoard({
-    sizeX: 4,
+    sizeX: 5,
     sizeY: 1,
     sizeL: 1,
     cells: [
@@ -320,9 +323,11 @@ test("each legacy tile type vectorizes to the §4.8 shape", () => {
       { count: 1, index: 1, r: 0, g: 0, b: 0, tileType: 1 },
       { count: 1, index: 2, r: 0, g: 0, b: 0, tileType: 2 },
       { count: 1, index: 3, r: 0, g: 0, b: 0, tileType: 13 },
+      { count: 1, index: 0, r: 0, g: 0, b: 0, tileType: 0 },
     ],
   });
   const { converted } = readAndConvert(bytes);
+  equal(converted.vectors.length, 3, "the normal tile (type 0) emits no vector");
   deepEqual(converted.vectors, [
     {
       points: [
@@ -368,6 +373,7 @@ test("each legacy tile type vectorizes to the §4.8 shape", () => {
     { lutIndex: 1, count: 2, marker: true },
     { lutIndex: 2, count: 1, marker: false },
     { lutIndex: 3, count: 1, marker: false },
+    { lutIndex: 0, count: 1, marker: false },
   ]);
 });
 
@@ -616,6 +622,177 @@ test("converting the same bytes twice gives deep-equal boards", () => {
   const second = readAndConvert(bytes).converted;
   equal(first.minor, 4);
   deepEqual(first, second);
+});
+
+test("accepts §5's combinable PX_ABSOLUTE flag and passes the value through", () => {
+  for (const coordType of [4, 5]) {
+    const { board, converted } = readAndConvert(buildPreVectorBoard({ minor: 3, coordType }));
+    equal(board.coordType, coordType);
+    equal(converted.coordType, coordType, "the stored coordType is passed through unchanged");
+    equal(converted.minor, 4);
+  }
+  // 6 = iso rotated (2) + pixel absolute (4): the iso-rotated refusal still applies.
+  const rotated = unwrap(
+    readPreVectorBoard(new BinaryReader(buildPreVectorBoard({ minor: 3, coordType: 6 }))),
+  );
+  const result = convertPreVectorBoard(rotated);
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.section, "format-spec §4.8");
+    equal(result.error.message.includes("iso-rotated"), true);
+  }
+});
+
+test("a uniform board over 32768 cells chunks its runs so writeBoard accepts it", () => {
+  // 192 × 192 = 36864 cells in one layer, all index 1 with shade 5: one maximal
+  // tile run and one maximal shade run both exceed the i16 limits.
+  const bytes = buildPreVectorBoard({
+    sizeX: 192,
+    sizeY: 192,
+    sizeL: 1,
+    cells: [
+      { count: 32768, index: 1, r: 5, g: 0, b: 0, tileType: 0 },
+      { count: 4096, index: 1, r: 5, g: 0, b: 0, tileType: 0 },
+    ],
+  });
+  const { converted } = readAndConvert(bytes);
+  equal(converted.tileMatrix.length, 36864);
+  deepEqual(
+    converted.tileRuns.map((run) => [run.count, run.lutIndex, run.marker]),
+    [
+      [32768, 1, true],
+      [4096, 1, true],
+    ],
+    "the tile run is split at 32768 cells",
+  );
+  deepEqual(converted.shadeLayers, [
+    {
+      castLayer: 1,
+      records: [
+        { runCount: 32767, r: 5, g: 0, b: 0 },
+        { runCount: 4097, r: 5, g: 0, b: 0 },
+      ],
+    },
+  ], "the shade run is split at 32767 cells");
+  const written = unwrap(writeBoard(converted));
+  const reread = unwrap(readBoard(new BinaryReader(written)));
+  deepEqual(reread.tileRuns, converted.tileRuns, "the chunked tile runs re-read");
+  deepEqual(reread.shadeLayers, converted.shadeLayers, "the chunked shade records re-read");
+  deepEqual(reread.tileMatrix, converted.tileMatrix);
+});
+
+test("the ambient preset maps to its additive ambience and warns on an unknown one", () => {
+  const presets: readonly (readonly [number, number, number, number])[] = [
+    [0, 0, 0, 0],
+    [1, 75, 75, 75],
+    [2, -75, -75, -75],
+    [3, 0, 0, 75],
+  ];
+  for (const [preset, r, g, b] of presets) {
+    const { converted } = readAndConvert(buildPreVectorBoard({ ambientPreset: preset }));
+    deepEqual(converted.properties.ambient, { r, g, b }, `ambient preset ${preset}`);
+  }
+  const unknown = convertPreVectorBoard(
+    unwrap(readPreVectorBoard(new BinaryReader(buildPreVectorBoard({ ambientPreset: 7 })))),
+  );
+  equal(unknown.ok, true);
+  if (unknown.ok) {
+    deepEqual(unknown.value.properties.ambient, { r: 0, g: 0, b: 0 });
+    equal(
+      unknown.warnings.some((warning) => warning.includes("ambient preset 7")),
+      true,
+    );
+  }
+});
+
+test("the converted board carries the LUT, constants, links and trailing properties", () => {
+  const bytes = buildPreVectorBoard({
+    lut: ["", "a.tst1", "b.tst2"],
+    constants: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    layerTitles: ["sky", "ground"],
+    links: ["n.brd", "s.brd", "e.prg", "w.brd"],
+    backgroundImage: "bg.img",
+    backgroundMusic: "song.mid",
+    enterPrg: "enter.prg",
+    battleSkill: 7,
+    battleBackground: "fight.bkg",
+    allowBattles: 1,
+    disableSaving: 1,
+  });
+  const { converted } = readAndConvert(bytes);
+  deepEqual(converted.lut, ["", "a.tst1", "b.tst2"]);
+  deepEqual(converted.constants, ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]);
+  deepEqual(converted.links, { north: "n.brd", south: "s.brd", east: "e.prg", west: "w.brd" });
+  equal(converted.layerTitles.length, converted.sizeL + 1);
+  deepEqual(converted.layerTitles, ["sky", "ground"]);
+  equal(converted.properties.backgroundImage, "bg.img");
+  equal(converted.properties.backgroundDrawType, 1, "§4.8 draws the background as parallax");
+  equal(converted.properties.backgroundMusic, "song.mid");
+  equal(converted.properties.enterPrg, "enter.prg");
+  equal(converted.properties.battleSkill, 7);
+  equal(converted.properties.battleBackground, "fight.bkg");
+  equal(converted.properties.allowBattles, 1);
+  equal(converted.properties.disableSaving, 1);
+});
+
+test("a converted board writes back with writeBoard and re-reads unchanged", () => {
+  const bytes = buildPreVectorBoard({
+    sizeX: 4,
+    sizeY: 3,
+    sizeL: 1,
+    cells: [
+      { count: 1, index: 1, r: 4, g: 0, b: 0, tileType: 1 },
+      { count: 5, index: 1, r: 0, g: 0, b: 0, tileType: 0 },
+      { count: 3, index: 2, r: -2, g: 3, b: 0, tileType: 2 },
+      { count: 3, index: 3, r: 0, g: 0, b: 0, tileType: 3 },
+    ],
+    links: ["n.brd", "s.brd", "e.prg", "w.brd"],
+    constants: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    layerTitles: ["sky", "ground"],
+    ambientPreset: 3,
+    backgroundImage: "bg.img",
+    backgroundMusic: "song.mid",
+    enterPrg: "enter.prg",
+    battleSkill: 7,
+    battleBackground: "fight.bkg",
+    allowBattles: 1,
+    disableSaving: 1,
+    programs: [
+      {
+        file: "p.prg",
+        x: 2,
+        y: 2,
+        layer: 1,
+        graphic: "",
+        activate: 1,
+        initialVar: "met$",
+        finalVar: "done!",
+        initialValue: "",
+        finalValue: "yes",
+        activationType: 1,
+      },
+    ],
+    sprites: [
+      {
+        file: "npc.itm",
+        x: 3,
+        y: 1,
+        layer: 1,
+        activate: 1,
+        initialVar: "met$",
+        finalVar: "met$",
+        initialValue: "",
+        finalValue: "yes",
+        activationType: 1,
+        activationPrg: "",
+        multitaskPrg: "",
+      },
+    ],
+  });
+  const { converted } = readAndConvert(bytes);
+  const written = unwrap(writeBoard(converted));
+  const reread = unwrap(readBoard(new BinaryReader(written)));
+  deepEqual(reread, converted);
 });
 
 test("a residue after the last field is kept and warned about", () => {

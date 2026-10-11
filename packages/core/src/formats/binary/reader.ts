@@ -15,11 +15,16 @@ import { type Colorref, unpackColorref } from "./color.ts";
 const SECTION = "format-spec §1.1";
 const COUNT_SECTION = "format-spec §1.2";
 const DETECT_SECTION = "format-spec §1.3";
+const VERSION_SECTION = "format-spec §1.4";
 
 /** The width a count or upper bound is stored in (format-spec §1.2). */
 export type CountWidth = "i16" | "i32";
 
-/** The magic-and-version triple every binary Toolkit file starts with. */
+/**
+ * The magic-and-version triple a binary Toolkit file that carries a magic
+ * starts with (format-spec §1.3, §1.4). `.tst`, `.iso` and a pre-compiled
+ * `.prg` have no magic and do not use it.
+ */
 export interface FormatHeader {
   /** The ASCII magic string, e.g. `"RPGTLKIT BOARD"` (format-spec §1.3). */
   readonly magic: string;
@@ -180,20 +185,39 @@ export class BinaryReader {
 
   /**
    * Read `str magic`, `i16 major`, `i16 minor` (format-spec §1.3, §1.4), the
-   * header every binary Toolkit file starts with.
+   * header every magic-carrying binary Toolkit file starts with. A negative
+   * version field is invalid (§1.4) and is reported at its own offset.
    */
   header(): Result<FormatHeader> {
     const magic = this.str();
     if (!magic.ok) {
       return magic;
     }
+    const majorAt = this.pos;
     const major = this.i16();
     if (!major.ok) {
       return major;
     }
+    const minorAt = this.pos;
     const minor = this.i16();
     if (!minor.ok) {
       return minor;
+    }
+    if (major.value < 0) {
+      return err({
+        ...(this.path === undefined ? {} : { path: this.path }),
+        offset: majorAt,
+        section: VERSION_SECTION,
+        message: `negative major version ${major.value} (format-spec §1.4)`,
+      });
+    }
+    if (minor.value < 0) {
+      return err({
+        ...(this.path === undefined ? {} : { path: this.path }),
+        offset: minorAt,
+        section: VERSION_SECTION,
+        message: `negative minor version ${minor.value} (format-spec §1.4)`,
+      });
     }
     return ok({ magic: magic.value, major: major.value, minor: minor.value });
   }
@@ -201,12 +225,25 @@ export class BinaryReader {
   /**
    * Read a stored upper bound of the given width and return the entry count it
    * means (format-spec §1.2). The bound is `i16` unless a format says
-   * otherwise; `.tem`/`.itm`/`.ene` custom stances and vector bases use `i32`
-   * (§6.1–§6.3), so readers pass `"i32"` there.
+   * otherwise; the `.tem`/`.itm`/`.ene` custom stances use `i32`
+   * (§6.1–§6.3), so readers pass `"i32"` there. A stored value below `-1` is
+   * invalid (§1.2) and is reported at the bound's first byte.
    */
   readUpperBound(width: CountWidth = "i16"): Result<number> {
+    const at = this.pos;
     const stored = width === "i32" ? this.i32() : this.i16();
-    return stored.ok ? ok(upperBoundCount(stored.value)) : stored;
+    if (!stored.ok) {
+      return stored;
+    }
+    if (stored.value < -1) {
+      return err({
+        ...(this.path === undefined ? {} : { path: this.path }),
+        offset: at,
+        section: COUNT_SECTION,
+        message: `invalid upper bound: ${stored.value} is below -1 (only -1 means none)`,
+      });
+    }
+    return ok(upperBoundCount(stored.value));
   }
 
   /**

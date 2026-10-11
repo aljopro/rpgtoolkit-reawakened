@@ -25,8 +25,8 @@ import {
  * The detection byte at offset 12 (§1.3, §8.3) is checked first: a non-NUL
  * byte means the 2.x text form, which is refused with a located `FormatError`
  * rather than parsed as binary. Otherwise the magic, major/minor header and
- * the six `str` fields of §8.3 are read in order; reading stops after the last
- * sound.
+ * the six `str` fields of §8.3 are read in order; bytes after the last sound
+ * are kept as `residue` (§1.7).
  */
 export function readBattleBackground(reader: BinaryReader): Result<BattleBackground> {
   const detectAt = reader.offset + BATTLE_BACKGROUND_DETECT_OFFSET;
@@ -79,17 +79,32 @@ export function readBattleBackground(reader: BinaryReader): Result<BattleBackgro
     return cantDoSound;
   }
 
-  return ok({
-    magic: header.value.magic,
-    major: header.value.major,
-    minor: header.value.minor,
-    image: image.value,
-    music: music.value,
-    menuMoveSound: menuMoveSound.value,
-    menuChooseSound: menuChooseSound.value,
-    readySound: readySound.value,
-    cantDoSound: cantDoSound.value,
-  });
+  const residue = reader.readBytes(reader.remaining);
+  if (!residue.ok) {
+    return residue;
+  }
+  const warnings: string[] = [];
+  if (residue.value.length > 0) {
+    warnings.push(
+      `${residue.value.length} trailing byte(s) after the battle background were kept as residue (format-spec §8.3, §1.7)`,
+    );
+  }
+
+  return ok(
+    {
+      magic: header.value.magic,
+      major: header.value.major,
+      minor: header.value.minor,
+      image: image.value,
+      music: music.value,
+      menuMoveSound: menuMoveSound.value,
+      menuChooseSound: menuChooseSound.value,
+      readySound: readySound.value,
+      cantDoSound: cantDoSound.value,
+      residue: residue.value,
+    },
+    warnings,
+  );
 }
 
 /**
@@ -120,5 +135,6 @@ export function writeBattleBackground(model: BattleBackground): Result<Uint8Arra
     }
   }
 
+  writer.writeBytes(model.residue);
   return ok(writer.toBytes());
 }

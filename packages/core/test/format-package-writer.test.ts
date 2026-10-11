@@ -77,12 +77,11 @@ function unwrap<T>(result: Result<T>): T {
 function writeAndRead(
   files: readonly PackageFile[] = FILES,
   manifest: DistributionManifest = MANIFEST,
-): { bytes: Uint8Array; paths: readonly string[]; files: readonly PackageFile[] } {
+): { bytes: Uint8Array; files: readonly PackageFile[] } {
   const bytes = unwrap(writeDistributionPackage(input(files, manifest)));
   const loaded = unwrap(loadPackage({ kind: "tpk", name: "game.tpk", bytes }));
   return {
     bytes,
-    paths: loaded.files.map((file) => file.path),
     files: loaded.files,
   };
 }
@@ -267,4 +266,91 @@ test("a path over the length limit is refused, naming L6", () => {
   const long = `${"a".repeat(300)}.brd`;
   const files: readonly PackageFile[] = [{ path: long, bytes: bytesOf("x") }];
   writeFailure(files, { schema: 1, main: long, index: [long] }, "max path length, L6");
+});
+
+test("a path with an empty segment is refused, naming the path-shape rule", () => {
+  const files: readonly PackageFile[] = [{ path: "Boards//inn.brd", bytes: bytesOf("x") }];
+  const failure = writeFailure(
+    files,
+    { schema: 1, main: "Boards/inn.brd", index: ["Boards//inn.brd"] },
+    "path shape",
+  );
+  // The path-shape rule is not the zip-slip rule, so the message must not cite L9.
+  equal(failure.message.includes("L9"), false, failure.message);
+});
+
+test("a backslash-separated path is written with forward slashes", () => {
+  const files: readonly PackageFile[] = [
+    { path: "Main\\demo.gam", bytes: bytesOf("RPGTLKIT MAIN demo") },
+    { path: "Boards\\Village\\inn.brd", bytes: bytesOf("the inn") },
+  ];
+  const manifest: DistributionManifest = {
+    schema: 1,
+    main: "Main\\demo.gam",
+    index: ["Main\\demo.gam", "Boards\\Village\\inn.brd"],
+  };
+  const { files: readBack } = writeAndRead(files, manifest);
+  deepEqual(
+    readBack.map((file) => file.path).sort(),
+    [MANIFEST_FILE_NAME, "Boards/Village/inn.brd", "Main/demo.gam"].sort(),
+  );
+  // The manifest names the archive's own spelling, not the caller's backslashes.
+  const manifestFile = readBack.find((file) => file.path === MANIFEST_FILE_NAME);
+  equal(manifestFile !== undefined, true);
+  deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, {
+    schema: 1,
+    main: "Main/demo.gam",
+    index: ["Main/demo.gam", "Boards/Village/inn.brd"],
+  });
+});
+
+test("a non-ASCII file name round-trips through the package", () => {
+  const files: readonly PackageFile[] = [
+    { path: "Main/demo.gam", bytes: bytesOf("RPGTLKIT MAIN demo") },
+    { path: "Média/café.dat", bytes: bytesOf("café") },
+  ];
+  const manifest: DistributionManifest = { schema: 1, main: "Main/demo.gam", index: files.map((file) => file.path) };
+  const { files: readBack } = writeAndRead(files, manifest);
+  const found = readBack.find((file) => file.path === "Média/café.dat");
+  equal(found !== undefined, true);
+  deepEqual(Array.from(found?.bytes ?? []), Array.from(bytesOf("café")));
+});
+
+test("a non-object input is refused, naming the distribution input", () => {
+  for (const bad of [null, undefined, 42, "input"] as readonly unknown[]) {
+    const result = writeDistributionPackage(bad as DistributionInput);
+    if (result.ok) throw new Error("expected a failure");
+    equal(result.error.section, "format-spec §13");
+    equal(result.error.message.includes("distribution input"), true, result.error.message);
+  }
+});
+
+test("a files list that is not an array is refused, naming the asset tree", () => {
+  const result = writeDistributionPackage({ files: null, manifest: MANIFEST } as unknown as DistributionInput);
+  if (result.ok) throw new Error("expected a failure");
+  equal(result.error.message.includes("asset tree"), true, result.error.message);
+});
+
+test("an asset-tree entry that is not an object is refused, naming the asset tree", () => {
+  const result = writeDistributionPackage({ files: [null], manifest: MANIFEST } as unknown as DistributionInput);
+  if (result.ok) throw new Error("expected a failure");
+  equal(result.error.message.includes("asset tree"), true, result.error.message);
+});
+
+test("an asset-tree entry whose path is not a string is refused, naming the asset tree", () => {
+  const result = writeDistributionPackage({
+    files: [{ path: 7, bytes: bytesOf("x") }],
+    manifest: MANIFEST,
+  } as unknown as DistributionInput);
+  if (result.ok) throw new Error("expected a failure");
+  equal(result.error.message.includes("asset tree"), true, result.error.message);
+});
+
+test("an asset-tree entry whose bytes are not a Uint8Array is refused, naming the asset tree", () => {
+  const result = writeDistributionPackage({
+    files: [{ path: "Main/demo.gam", bytes: "not bytes" }],
+    manifest: MANIFEST,
+  } as unknown as DistributionInput);
+  if (result.ok) throw new Error("expected a failure");
+  equal(result.error.message.includes("asset tree"), true, result.error.message);
 });

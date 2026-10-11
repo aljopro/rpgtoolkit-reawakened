@@ -26,7 +26,8 @@ import {
  * The detection byte at offset 16 (§1.3, §8.2) is checked first: a non-NUL
  * byte means the 2.x text form, which is refused with a located `FormatError`
  * rather than parsed as binary. Otherwise the magic, major/minor header and
- * the §8.2 field list are read in order; reading stops after the program.
+ * the §8.2 field list are read in order; bytes after the program are kept as
+ * `residue` (§1.7).
  */
 export function readStatusEffect(reader: BinaryReader): Result<StatusEffect> {
   const detectAt = reader.offset + STATUS_EFFECT_DETECT_OFFSET;
@@ -97,22 +98,37 @@ export function readStatusEffect(reader: BinaryReader): Result<StatusEffect> {
     return program;
   }
 
-  return ok({
-    magic: header.value.magic,
-    major: header.value.major,
-    minor: header.value.minor,
-    name: name.value,
-    rounds: rounds.value,
-    speedUp: speedUp.value,
-    slowDown: slowDown.value,
-    disable: disable.value,
-    hpEnabled: hpEnabled.value,
-    hpPerRound: hpPerRound.value,
-    smpEnabled: smpEnabled.value,
-    smpPerRound: smpPerRound.value,
-    runProgram: runProgram.value,
-    program: program.value,
-  });
+  const residue = reader.readBytes(reader.remaining);
+  if (!residue.ok) {
+    return residue;
+  }
+  const warnings: string[] = [];
+  if (residue.value.length > 0) {
+    warnings.push(
+      `${residue.value.length} trailing byte(s) after the status effect were kept as residue (format-spec §8.2, §1.7)`,
+    );
+  }
+
+  return ok(
+    {
+      magic: header.value.magic,
+      major: header.value.major,
+      minor: header.value.minor,
+      name: name.value,
+      rounds: rounds.value,
+      speedUp: speedUp.value,
+      slowDown: slowDown.value,
+      disable: disable.value,
+      hpEnabled: hpEnabled.value,
+      hpPerRound: hpPerRound.value,
+      smpEnabled: smpEnabled.value,
+      smpPerRound: smpPerRound.value,
+      runProgram: runProgram.value,
+      program: program.value,
+      residue: residue.value,
+    },
+    warnings,
+  );
 }
 
 /**
@@ -147,5 +163,6 @@ export function writeStatusEffect(model: StatusEffect): Result<Uint8Array> {
     return program;
   }
 
+  writer.writeBytes(model.residue);
   return ok(writer.toBytes());
 }

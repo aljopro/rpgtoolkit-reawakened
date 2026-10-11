@@ -81,6 +81,7 @@ A game is a **main file** plus a **project folder**:
 
 * A reference stored in one file to another is a **path relative to the folder for that file type**. For example, a board's link `village\inn.brd` resolves to `Game/<project>/Boards/village/inn.brd`. Subfolders have been allowed since 3.1.0.
 * **Location of `.gam` vs project folders:** `<root>/Main/<game>.gam` is a sibling of the `<root>/Game/` directory, never inside the project folder. For example, the shipped demo game pairs `<root>/Main/demo.gam` with project assets at `<root>/Game/demo/`. Starter templates like `Basic` (`<root>/Game/Basic/`) contain assets only; a `.gam` file is only created under `Main/` once a project is saved from the editor.
+* **The root and the stored project path:** `<root>` is the folder that holds `Main/` and `Game/`, so for a main file at `<root>/Main/<game>.gam` it is the folder above the main file's own folder. The project path stored in the main file is relative to `<root>`, never to `Main/`: the shipped demo's main file stores `Game\demo\`, which names `<root>/Game/demo/`. A bare folder name such as `demo` is accepted too and means `<root>/Game/demo/`. A reader tells the two apart by the first segment: if it is `Game` (any case) and more segments follow, the path already starts at `<root>`; otherwise it is placed under `Game/`. Finding `<root>` is the host's job (from where the main file sits, or from the folder the game was opened in); the core never touches the file system.
 * **Engine startup requirement:** Games **cannot run without a `.gam` file**. At boot, the engine resolves the main file from the command line (`Main/<arg>`), from an embedded `main.gam` inside a standalone package or pakfile (§13), or prompts the user with an open-file dialog targeting `Main/*.gam`. If no valid `.gam` is loaded, the engine cannot boot: it relies on `.gam` to discover `projectPath`, `startupPrg`, `initBoard`, `initChar`, resolution, window mode, and active plugins.
 * The legacy separator is **backslash**. Treat `\` and `/` as equivalent.
 * Matching is **case-insensitive**, because the legacy platform's file system was. A modern reader on a case-sensitive file system needs a case-folding lookup.
@@ -98,6 +99,10 @@ water.tan          → animated tile
 
 To parse, split at the last `.`. The first three characters after it are the extension and the remaining digits are the index. **Re-ordering a tileset changes what every board shows**, because references are positional.
 
+### 1.7 Bytes after the last documented field
+
+Bytes after the last documented field of a binary file are not an error. A reader keeps them as they are (the file's *residue*) and reports a warning, and a writer puts them back, so a file that is read and saved without changes is written back byte for byte. *Reason: dropping bytes the reader does not understand would silently change a file its author never edited.* Rows the format marks reserved are different: they are part of the layout and stay in their place.
+
 ---
 
 ## 2. Main file — `.gam` (`RPGTLKIT MAIN`)
@@ -111,7 +116,7 @@ The table below details all **43 logical rows** across the file's lifetime, incl
 | 2 | i16, i16 | major, minor | layouts below key on minor (0–9 observed; 9 = 3.1.0) |
 | 3 | i32 / i16 | reserved | ignore (old registration flag). *Quirk:* On disk, the editor writes an `i16` value (1). The legacy C++ reader reads a 4-byte `int`, consuming 2 bytes of the flag and 2 bytes of the subsequent `"NOCODE\0"` string, while the subsequent string read consumes the remainder (`"CODE\0"`), perfectly keeping byte alignment at offset 0x1B (`projectPath`). |
 | 4 | str | reserved | ignore (old registration code, default `"NOCODE"`). |
-| 5 | str | **projectPath** | folder under `Game/`. Ignore it when the game is loaded from a package (§13). |
+| 5 | str | **projectPath** | the project folder; §1.5 says how it resolves (the shipped demo stores `Game\demo\`, relative to `<root>`; a bare `demo` means the same folder). Ignore it when the game is loaded from a package (§13). |
 | 6 | str | **gameTitle** | window title |
 | 7 | i16 | screenType | 0/1 = full-screen accelerated, 2 = windowed |
 | 8 | i16 | extendToFullScreen | 0/1 |
@@ -205,7 +210,7 @@ Tile *n* (1-based) starts at byte offset `6 + (n−1) × size × size × bytesPe
 
 **Palette (8-bit detail).** Indices refer to the standard **VGA/DOS 256-colour default palette** (16 EGA colours, 16 greys, then hue ramps). A reimplementation must ship this table. Build it from the public VGA default palette, not from the legacy source.
 
-**16×16 tiles** are upscaled to 32×32 by pixel doubling before use.
+**16×16 tiles** are upscaled to 32×32 by pixel doubling before use. A reader keeps the stored 16×16 pixels; the renderer does the doubling once per tileset and caches the result.
 
 ### 3.2 Single tile — `.gph` (legacy, text)
 
@@ -287,6 +292,8 @@ All coordinates in this layout are **pixels**, except tile grid indices.
 | i16 | coordType (bit flags; §5) |
 
 *Effective grid*: for **isometric-rotated** boards the stored tile matrix is `(sizeX + sizeY) × (sizeX + sizeY)` per layer. Otherwise it is `sizeX × sizeY`.
+
+*Size limits*: a negative `sizeX`, `sizeY` or `sizeL` is invalid, and a reader reports it. A reader also refuses a board whose tile matrix would hold more than 4,194,304 cells (the effective grid times `sizeL`). That second rule is an implementation limit, not part of the format: a run marker fills up to 32,768 cells with four bytes, so without it a file of a few kilobytes could make a reader reserve gigabytes. Real boards are about a hundred times smaller. A writer refuses a board the reader would refuse.
 
 **Tile lookup table (LUT)**
 
@@ -863,6 +870,11 @@ Legacy plugins are native Windows libraries (`Plugin/*.dll`) of three kinds: **R
   * `[end - 4 .. end - 1]`: `i32 zipLength` (4 bytes, **little-endian**). This is the exact byte length of the appended ZIP archive.
   Extracting `[offsetOfZip, offsetOfZip + zipLength)` yields the clean game ZIP. A rebuild can import legacy standalone games this way.
 * **Setup ZIP:** a plain ZIP of the `Main/` and `Game/` folders.
+* **Distribution package (this project's own):** a `.tpk`-compatible ZIP that also holds a `manifest.json` at the archive root, next to the game files. The manifest is UTF-8 JSON with exactly three fields:
+  * `schema`: a non-negative integer, the project schema version.
+  * `main`: the in-package path of the main file, for example `Main/demo.gam`. It must name a game file in the archive and must not be `manifest.json` itself.
+  * `index`: the in-package path of every game file except `manifest.json`, each listed once.
+  Paths use `/` and follow §1.5 (matching ignores case and treats `\` as `/`). A reader checks that `main` and every `index` entry name a file in the archive and that no game file is missing from `index`, and it refuses a manifest with any other field. A legacy package has no manifest and loads without one; only packages this project writes are required to carry it.
 
 ---
 

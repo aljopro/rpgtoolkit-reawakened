@@ -8,18 +8,27 @@
 // image path is exercised end to end.
 import { equal, notEqual, deepEqual, ok } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 import {
+  BinaryWriter,
+  PACKAGE_LIMITS,
   writeAnimation,
+  writeDistributionPackage,
+  writeMainFile,
+  writeSpecialMove,
+  writeStatusEffect,
   writeTileset,
   type Animation,
+  type MainFile,
   type PackageFile,
   type Result,
+  type SpecialMove,
+  type StatusEffect,
   type Tileset,
 } from "@rpgtoolkit/core";
 import { main } from "../src/index.ts";
@@ -65,6 +74,7 @@ const ANIMATION: Animation = {
     { image: "", transparent: { r: 0, g: 0, b: 0 }, sound: "die.wav" },
   ],
   delay: 0.15,
+  residue: new Uint8Array(0),
 };
 
 const ANIMATION_BYTES = unwrap(writeAnimation(ANIMATION));
@@ -77,6 +87,133 @@ const TILESET: Tileset = {
 };
 
 const TILESET_BYTES = unwrap(writeTileset(TILESET));
+
+/** A minimal §2 main file at minor 0, the layout §2 documents for the earliest games. */
+const MAIN_FILE: MainFile = {
+  magic: "RPGTLKIT MAIN",
+  major: 2,
+  minor: 0,
+  registrationFlag: 1,
+  registrationCode: "NOCODE",
+  projectPath: "demo",
+  gameTitle: "Demo Game",
+  screenType: 2,
+  extendToFullScreen: 1,
+  resolution: 1,
+  disableProtectReg: 7,
+  languageFile: "lang.txt",
+  startupPrg: "start.prg",
+  initBoard: "start.brd",
+  initChar: "hero.tem",
+  runTimePrg: "rt.prg",
+  runTimeKey: 82,
+  menuKey: 77,
+  activationKey: 32,
+  extKeys: [],
+  menuPlugin: "",
+  fightPlugin: "",
+  fightingDisabled: 0,
+  enemies: [],
+  fightType: 0,
+  chances: 0,
+  useCustomFightPrg: 0,
+  customFightPrg: "",
+  gameOverPrg: "",
+  skinButton: "",
+  skinWindow: "",
+  plugins: [],
+  useDayNight: 0,
+  dayNightType: 0,
+  dayLengthMinutes: 0,
+  cursorMoveSound: "",
+  cursorSelectSound: "",
+  cursorCancelSound: "",
+  useJoystick: 0,
+  colorDepth: 0,
+  gameSpeed: 0,
+  pixelMovement: 0,
+  cursorEnabled: 0,
+  mouseCursor: "",
+  hotSpotX: 0,
+  hotSpotY: 0,
+  transparent: { r: 0, g: 0, b: 0 },
+  resX: 0,
+  resY: 0,
+  showFpsInTitle: 0,
+  pathfindHeuristic: 0,
+  drawVectorsFlags: 0,
+  pathColor: { r: 0, g: 0, b: 0 },
+  movementControls: 0,
+  movementScanCodes: [],
+  // Minor 0 carries the four pre-3 reserved runs at the widths §2 gives them.
+  reservedRuns: {
+    parallax: new Uint8Array(4),
+    menuPluginFallback: new Uint8Array(4),
+    multitask: new Uint8Array(6),
+    fightStyle: new Uint8Array(2),
+  },
+  residue: new Uint8Array(0),
+};
+
+const MAIN_FILE_BYTES = unwrap(writeMainFile(MAIN_FILE));
+
+const SPECIAL_MOVE: SpecialMove = {
+  magic: "RPGTLKIT SPLMOVE",
+  major: 2,
+  minor: 0,
+  name: "Fireball",
+  damage: 40,
+  smpCost: 5,
+  program: "fire.prg",
+  targetSmpDrain: 0,
+  usableInBattle: 1,
+  usableFromMenu: 0,
+  statusEffect: "burn.ste",
+  animation: "fire.anm",
+  description: "A ball of fire",
+  residue: new Uint8Array(0),
+};
+
+const SPECIAL_MOVE_BYTES = unwrap(writeSpecialMove(SPECIAL_MOVE));
+
+const STATUS_EFFECT: StatusEffect = {
+  magic: "RPGTLKIT STATUSE",
+  major: 2,
+  minor: 0,
+  name: "Poison",
+  rounds: 3,
+  speedUp: 0,
+  slowDown: -2,
+  disable: 0,
+  hpEnabled: 1,
+  hpPerRound: -5,
+  smpEnabled: 0,
+  smpPerRound: 0,
+  runProgram: 0,
+  program: "",
+  residue: new Uint8Array(0),
+};
+
+const STATUS_EFFECT_BYTES = unwrap(writeStatusEffect(STATUS_EFFECT));
+
+/**
+ * A `.anm` whose delay is NaN (format-spec §7.1): the reader accepts the `f64`
+ * — it does not check finiteness — and only `canon` rejects the value, so this
+ * is the one file whose model cannot be digested.
+ */
+function nanDelayAnimation(): Uint8Array {
+  const writer = new BinaryWriter();
+  writer.str("RPGTLKIT ANIM");
+  writer.i16(2);
+  writer.i16(3);
+  writer.i32(32);
+  writer.i32(32);
+  writer.i32(-1); // frame upper bound: no slots
+  writer.f64(Number.NaN);
+  return writer.toBytes();
+}
+
+const NAN_DELAY_ANM = nanDelayAnimation();
 
 /** The ASCII bytes of a literal, for a text `.prg` and a truncated board header. */
 function asciiBytes(text: string): Uint8Array {
@@ -144,6 +281,72 @@ const PIXEL_RGBA = new Uint8Array([200, 100, 50, 255]);
 /** A board file truncated just after its magic, so `readBoard` reports a located EOF. */
 const TRUNCATED_BOARD = asciiBytes("RPGTLKIT BOARD\0");
 
+/** An animation truncated just after its magic, so `readAnimation` fails at its header. */
+const TRUNCATED_ANIMATION = asciiBytes("RPGTLKIT ANIM\0");
+
+/** The stored upper bound for `count` entries (format-spec §1.2). */
+function bound(count: number): number {
+  return count === 0 ? -1 : count - 1;
+}
+
+/**
+ * A minimal minor-3 pre-vector board (format-spec §4.8), serialised in the
+ * §4.8 field order; the same shape the core pre-vector test builds, trimmed to
+ * the one board this case needs. Minor 4 and above take the §4.2 vector path
+ * instead, so this is the only form that reaches `readPreVectorBoard`.
+ */
+function buildPreVectorBoard(): Uint8Array {
+  const writer = new BinaryWriter();
+  writer.str("RPGTLKIT BOARD");
+  writer.i16(2); // major
+  writer.i16(3); // minor
+  writer.i16(0); // registration flag
+  writer.str(""); // registration key
+  writer.i16(2); // sizeX
+  writer.i16(2); // sizeY
+  writer.i16(1); // sizeL
+  writer.i16(1); // startX
+  writer.i16(1); // startY
+  writer.i16(1); // startLayer
+  writer.i16(0); // disableSaving
+  writer.i16(bound(2)); // LUT upper bound: two slots
+  writer.str("");
+  writer.str("default.tst1");
+  // One run marker covering all four cells (a count above 1 is stored negated).
+  writer.i16(-4);
+  writer.i16(1); // LUT index
+  writer.i16(0);
+  writer.i16(0);
+  writer.i16(0);
+  writer.i8(0); // tile type: normal
+  writer.str(""); // background image
+  writer.str(""); // foreground image (unused)
+  writer.str(""); // border image (unused)
+  writer.color({ r: 0, g: 0, b: 0 }); // background colour
+  writer.color({ r: 0, g: 0, b: 0 }); // border colour (unused)
+  writer.i16(0); // ambient preset
+  for (let index = 0; index < 4; index += 1) writer.str(""); // links
+  writer.i16(0); // battle skill
+  writer.str(""); // battle background
+  writer.i16(0); // allow battles
+  writer.i16(0);
+  writer.i16(0);
+  writer.i16(0);
+  writer.str(""); // day/night text (unused)
+  for (let index = 0; index < 11; index += 1) writer.i16(0); // constants
+  writer.str(""); // background music
+  for (let index = 0; index < 9; index += 1) writer.str(""); // layer titles
+  writer.i16(bound(0)); // programs
+  writer.str(""); // enter program
+  writer.str(""); // reserved
+  writer.i16(bound(0)); // sprites
+  writer.i32(bound(0)); // threads (minor >= 3)
+  writer.i8(0); // coordType (minor >= 3)
+  return writer.toBytes();
+}
+
+const PRE_VECTOR_BOARD = buildPreVectorBoard();
+
 const FILES: readonly PackageFile[] = [
   { path: "Prg/main.prg", bytes: PRG_TEXT },
   { path: "walk.anm", bytes: ANIMATION_BYTES },
@@ -193,8 +396,6 @@ const DISPATCH: ReadonlyArray<readonly [string, DataFormatId, string]> = [
   ["Bitmap/layout.png", "image", "format-spec §10"],
   ["Bitmap/bkg.jpg", "image", "format-spec §10"],
   ["Bitmap/bkg.jpeg", "image", "format-spec §10"],
-  ["Bitmap/old.bmp", "image", "format-spec §10"],
-  ["Bitmap/anim.gif", "image", "format-spec §10"],
 ];
 
 test("classify sends every data extension to the reader its section names", () => {
@@ -215,11 +416,26 @@ test("classify is case-insensitive, so the legacy uppercase names land on the sa
   if (upper.kind === "skip" && lower.kind === "skip") {
     equal(upper.reason, lower.reason);
   }
-  const bmp = classify("Bitmap/OLD.BMP");
-  equal(bmp.kind, "data");
-  if (bmp.kind === "data") {
-    equal(bmp.format, "image");
+  const upperBmp = classify("Bitmap/OLD.BMP");
+  const lowerBmp = classify("Bitmap/old.bmp");
+  equal(upperBmp.kind, "skip");
+  equal(lowerBmp.kind, "skip");
+  if (upperBmp.kind === "skip" && lowerBmp.kind === "skip") {
+    equal(upperBmp.reason, lowerBmp.reason);
   }
+});
+
+test("classify skips .bmp and .gif, which §10 lists but core cannot decode", () => {
+  for (const path of ["Bitmap/old.bmp", "Bitmap/anim.gif", "Bitmap/ANIM.GIF"]) {
+    const cls = classify(path);
+    equal(cls.kind, "skip", path);
+    if (cls.kind === "skip") {
+      ok(cls.reason.includes("format-spec §10"), cls.reason);
+    }
+  }
+  // A bitmap in a project is reported as skipped, so it never fails a dump.
+  const report = buildReport([{ path: "Bitmap/old.bmp", bytes: new Uint8Array([0x42, 0x4d]) }]);
+  deepEqual(report.counts, { parsed: 0, skipped: 1, failed: 0 });
 });
 
 test("classify skips the non-format, media and plugin files with a reason", () => {
@@ -252,6 +468,73 @@ test("boardLayout picks the §4.1 branch a stored minor takes", () => {
   equal(boardLayout(3), "pre-vector");
   equal(boardLayout(4), "vector");
   equal(boardLayout(9), "vector");
+});
+
+test("the .gam, .spc and .ste rows parse the models their writers produced", () => {
+  const report = buildReport([
+    { path: "Main/demo.gam", bytes: MAIN_FILE_BYTES },
+    { path: "SpcMove/fire.spc", bytes: SPECIAL_MOVE_BYTES },
+    { path: "StatusE/poison.ste", bytes: STATUS_EFFECT_BYTES },
+  ]);
+  deepEqual(report.counts, { parsed: 3, skipped: 0, failed: 0 });
+  const byPath: { [path: string]: DumpEntry } = Object.fromEntries(
+    report.files.map((entry) => [entry.path, entry] as const),
+  );
+
+  const gam = byPath["Main/demo.gam"];
+  ok(gam !== undefined && gam.status === "parsed");
+  if (gam?.status === "parsed") {
+    equal(gam.format, "gam");
+    equal(gam.digest, digestModel(MAIN_FILE));
+    ok(gam.summary.includes('project "demo"'), gam.summary);
+  }
+
+  const spc = byPath["SpcMove/fire.spc"];
+  ok(spc !== undefined && spc.status === "parsed");
+  if (spc?.status === "parsed") {
+    equal(spc.format, "special-move");
+    equal(spc.digest, digestModel(SPECIAL_MOVE));
+  }
+
+  const ste = byPath["StatusE/poison.ste"];
+  ok(ste !== undefined && ste.status === "parsed");
+  if (ste?.status === "parsed") {
+    equal(ste.format, "status-effect");
+    equal(ste.digest, digestModel(STATUS_EFFECT));
+  }
+});
+
+test("a §4.8 pre-vector board is read, converted and parsed", () => {
+  const report = buildReport([{ path: "Boards/old.brd", bytes: PRE_VECTOR_BOARD }]);
+  deepEqual(report.counts, { parsed: 1, skipped: 0, failed: 0 });
+  const entry = report.files[0];
+  ok(entry !== undefined && entry.status === "parsed");
+  if (entry?.status === "parsed") {
+    equal(entry.format, "board");
+    // The summary names the conversion: the §4.8 minor-3 board became a §4.2 minor-4 model.
+    ok(entry.summary.includes("2.4 (pre-vector, converted to vectors)"), entry.summary);
+  }
+});
+
+test("a model the digest cannot canonicalise fails only its own file", () => {
+  const report = buildReport([
+    { path: "walk.anm", bytes: ANIMATION_BYTES },
+    { path: "bad.anm", bytes: NAN_DELAY_ANM },
+    { path: "pic.png", bytes: PIXEL_PNG },
+  ]);
+  deepEqual(report.counts, { parsed: 2, skipped: 0, failed: 1 });
+  const byPath: { [path: string]: DumpEntry } = Object.fromEntries(
+    report.files.map((entry) => [entry.path, entry] as const),
+  );
+  equal(byPath["walk.anm"]?.status, "parsed");
+  equal(byPath["pic.png"]?.status, "parsed");
+  const bad = byPath["bad.anm"];
+  ok(bad !== undefined && bad.status === "failed");
+  if (bad?.status === "failed") {
+    equal(bad.format, "animation");
+    equal(bad.section, "format-spec §7.1");
+    ok(bad.error.message.includes("digest"), bad.error.message);
+  }
 });
 
 // -------------------------------------------------------------- digest values
@@ -425,6 +708,94 @@ test("a data file that fails to parse exits non-zero and names the file and the 
   }
 });
 
+test("a model the digest cannot canonicalise fails that file and still reports the rest", () => {
+  const project = createProject({ extra: [["bad.anm", NAN_DELAY_ANM]] });
+  try {
+    const result = runCli(["dump", project.root]);
+    equal(result.status, 1);
+    ok(result.stdout.includes("bad.anm  FAILED"), result.stdout);
+    ok(result.stdout.includes("walk.anm  animation"), result.stdout);
+    ok(result.stdout.includes("3 parsed, 4 skipped, 1 failed"), result.stdout);
+  } finally {
+    project.cleanup();
+  }
+});
+
+test("a file above core's size limit is refused while walking, before it is read", () => {
+  const root = mkdtempSync(join(tmpdir(), "rpg-dump-limit-"));
+  try {
+    // A sparse file costs no disk: only its size exists.
+    const huge = join(root, "bbb/huge.tst");
+    mkdirSync(dirname(huge), { recursive: true });
+    writeFileSync(huge, new Uint8Array(0));
+    truncateSync(huge, PACKAGE_LIMITS.maxEntryUncompressedBytes + 1);
+    // The loader refuses a link too, and this one sorts before the oversize
+    // file, so the size refusal is the one reported only if the walk makes it
+    // first — i.e. only if the file was never read.
+    symlinkSync(join(root, "gone.anm"), join(root, "aaa.anm"));
+
+    const folder = runCli(["dump", root]);
+    equal(folder.status, 1);
+    ok(folder.stderr.includes("bbb/huge.tst"), folder.stderr);
+    ok(folder.stderr.includes(String(PACKAGE_LIMITS.maxEntryUncompressedBytes)), folder.stderr);
+    ok(!folder.stderr.includes("symbolic link"), folder.stderr);
+
+    const tpk = join(root, "game.tpk");
+    writeFileSync(tpk, new Uint8Array(0));
+    truncateSync(tpk, PACKAGE_LIMITS.maxCompressedInputBytes + 1);
+    const packed = runCli(["dump", tpk]);
+    equal(packed.status, 1);
+    ok(packed.stderr.includes(String(PACKAGE_LIMITS.maxCompressedInputBytes)), packed.stderr);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("dump reads a .tpk and an appended-ZIP .exe, both with a known digest", () => {
+  const zip = unwrap(
+    writeDistributionPackage({
+      files: [{ path: "walk.anm", bytes: ANIMATION_BYTES }],
+      manifest: { schema: 1, main: "walk.anm", index: ["walk.anm"] },
+    }),
+  );
+  const root = mkdtempSync(join(tmpdir(), "rpg-dump-package-"));
+  try {
+    const tpk = join(root, "game.tpk");
+    writeFileSync(tpk, zip);
+    const tpkResult = runCli(["dump", "--json", tpk]);
+    equal(tpkResult.status, 0, tpkResult.stderr);
+    const tpkReport = JSON.parse(tpkResult.stdout) as {
+      counts: { parsed: number; failed: number };
+      files: ReadonlyArray<{ path: string; digest?: string }>;
+    };
+    equal(tpkReport.counts.parsed, 1);
+    equal(tpkReport.counts.failed, 0);
+    equal(tpkReport.files.find((file) => file.path === "walk.anm")?.digest, digestModel(ANIMATION));
+
+    // §13's standalone EXE: any stub, then the ZIP, then the 12-byte CMP1 trailer.
+    const stub = asciiBytes("MZ this is a stub executable");
+    const trailer = new Uint8Array(12);
+    trailer.set(asciiBytes("CMP1"), 0);
+    const view = new DataView(trailer.buffer);
+    view.setInt32(4, stub.length, true);
+    view.setInt32(8, zip.length, true);
+    const exe = join(root, "game.exe");
+    writeFileSync(exe, concat([stub, zip, trailer]));
+
+    const exeResult = runCli(["dump", "--json", exe]);
+    equal(exeResult.status, 0, exeResult.stderr);
+    const exeReport = JSON.parse(exeResult.stdout) as {
+      counts: { parsed: number; failed: number };
+      files: ReadonlyArray<{ path: string; digest?: string }>;
+    };
+    equal(exeReport.counts.parsed, 1);
+    equal(exeReport.counts.failed, 0);
+    equal(exeReport.files.find((file) => file.path === "walk.anm")?.digest, digestModel(ANIMATION));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("dump --json is byte-identical across runs and carries the counts", () => {
   const clean = createProject();
   const broken = createProject({ brokenBoard: true });
@@ -483,6 +854,52 @@ test("dump --record then --check round-trips, and a drifted digest fails naming 
     equal(drifted.status, 1);
     ok(drifted.stderr.includes("alpha: walk.anm"), drifted.stderr);
     ok(drifted.stderr.includes("differs"), drifted.stderr);
+  } finally {
+    rmSync(games, { recursive: true, force: true });
+  }
+});
+
+test("dump --check fails naming a game folder the expectation does not name", () => {
+  const games = mkdtempSync(join(tmpdir(), "rpg-dump-games-"));
+  const alpha = join(games, "alpha");
+  try {
+    mkdirSync(alpha, { recursive: true });
+    writeFileSync(join(alpha, "walk.anm"), ANIMATION_BYTES);
+    const expectationPath = join(games, "expectation.json");
+    const recorded = runCli(["dump", "--record", expectationPath, games]);
+    equal(recorded.status, 0, recorded.stderr);
+
+    // A folder the expectation does not name is a gate failure, not silence.
+    const beta = join(games, "beta");
+    mkdirSync(beta, { recursive: true });
+    writeFileSync(join(beta, "start.prg"), PRG_TEXT);
+
+    const checked = runCli(["dump", "--check", expectationPath, games]);
+    equal(checked.status, 1);
+    ok(checked.stderr.includes("beta"), checked.stderr);
+    ok(checked.stderr.includes("does not name"), checked.stderr);
+  } finally {
+    rmSync(games, { recursive: true, force: true });
+  }
+});
+
+test("check reports a file that is present but no longer parses, not one that is missing", () => {
+  const games = mkdtempSync(join(tmpdir(), "rpg-dump-games-"));
+  const game = join(games, "alpha");
+  try {
+    mkdirSync(game, { recursive: true });
+    writeFileSync(join(game, "walk.anm"), ANIMATION_BYTES);
+    const expectationPath = join(games, "expectation.json");
+    const recorded = runCli(["dump", "--record", expectationPath, games]);
+    equal(recorded.status, 0, recorded.stderr);
+
+    // Present, but no longer an animation: it failed, it did not vanish.
+    writeFileSync(join(game, "walk.anm"), TRUNCATED_ANIMATION);
+    const checked = runCli(["dump", "--check", expectationPath, games]);
+    equal(checked.status, 1);
+    ok(checked.stderr.includes("alpha: walk.anm"), checked.stderr);
+    ok(checked.stderr.includes("failed to parse"), checked.stderr);
+    ok(!checked.stderr.includes("is missing"), checked.stderr);
   } finally {
     rmSync(games, { recursive: true, force: true });
   }

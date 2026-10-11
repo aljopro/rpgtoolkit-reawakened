@@ -12,7 +12,9 @@
  * `runner-headless` is the Node host shell, so `node:fs`/`node:path` are allowed
  * here; G2 restricts `core` only. `node:fs` throws, so this is the one module
  * that catches: a missing path or an unreadable file becomes a located
- * `FormatError` like any reader's.
+ * `FormatError` like any reader's. Every file's `stat` size is checked against
+ * `PACKAGE_LIMITS` *before* it is read whole, so a file `core` would refuse is
+ * refused without ever being loaded (AD-17).
  */
 
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
@@ -20,6 +22,8 @@ import { basename, extname, join, resolve } from "node:path";
 import {
   err,
   loadPackage,
+  ok,
+  PACKAGE_LIMITS,
   type FolderEntry,
   type FormatError,
   type LoadedPackage,
@@ -45,12 +49,15 @@ function messageOf(cause: unknown): string {
  * Paths are POSIX and relative to `root`; names are sorted so the listing is
  * deterministic. A symbolic link is reported as a `link` entry, which the loader
  * rejects — links could point outside the game folder (L23) — so this tool never
- * follows one.
+ * follows one. A file above the per-entry limit (L25) is refused by its `stat`
+ * size before it is read, so an oversized file is never loaded into memory.
  */
-function walkEntries(root: string): FolderEntry[] {
+function walkEntries(root: string): Result<FolderEntry[]> {
   const entries: FolderEntry[] = [];
+  const oversize: { error?: FormatError } = {};
   const visit = (directory: string, prefix: string): void => {
     for (const name of readdirSync(directory).sort()) {
+      if (oversize.error !== undefined) return;
       const child = join(directory, name);
       const path = prefix === "" ? name : `${prefix}/${name}`;
       const stat = lstatSync(child);
@@ -60,6 +67,14 @@ function walkEntries(root: string): FolderEntry[] {
         entries.push({ kind: "directory", path });
         visit(child, path);
       } else if (stat.isFile()) {
+        if (stat.size > PACKAGE_LIMITS.maxEntryUncompressedBytes) {
+          oversize.error = failure(
+            path,
+            0,
+            `File "${path}" is ${stat.size} bytes; the limit is ${PACKAGE_LIMITS.maxEntryUncompressedBytes} (max entry size, L25)`,
+          );
+          return;
+        }
         entries.push({ kind: "file", path, bytes: new Uint8Array(readFileSync(child)) });
       } else {
         // A socket, FIFO or device node has no bytes to read; treat it like a link.
@@ -68,7 +83,27 @@ function walkEntries(root: string): FolderEntry[] {
     }
   };
   visit(root, "");
-  return entries;
+  if (oversize.error !== undefined) {
+    return err(oversize.error);
+  }
+  return ok(entries);
+}
+
+/**
+ * The bytes of a `.tpk` or standalone EXE, refused by its `stat` size before the
+ * read when it is above the compressed-input limit (L1, AD-17).
+ */
+function readPackageBytes(absolute: string, path: string, size: number): Result<Uint8Array> {
+  if (size > PACKAGE_LIMITS.maxCompressedInputBytes) {
+    return err(
+      failure(
+        path,
+        0,
+        `"${path}" is ${size} bytes; the limit is ${PACKAGE_LIMITS.maxCompressedInputBytes} bytes (max compressed input, L1)`,
+      ),
+    );
+  }
+  return ok(new Uint8Array(readFileSync(absolute)));
 }
 
 /**
@@ -87,17 +122,21 @@ export function loadRoot(path: string): Result<LoadedPackage> {
       return err(failure(path, 0, `"${path}" is a symbolic link; dump wants the folder or package itself (symbolic links, L23)`));
     }
     if (stat.isDirectory()) {
-      return loadPackage({ kind: "folder", name: basename(absolute), entries: walkEntries(absolute) });
+      const entries = walkEntries(absolute);
+      if (!entries.ok) return entries;
+      return loadPackage({ kind: "folder", name: basename(absolute), entries: entries.value });
     }
     if (stat.isFile()) {
       const extension = extname(absolute).toLowerCase();
       if (extension === ".tpk") {
-        const bytes = new Uint8Array(readFileSync(absolute));
-        return loadPackage({ kind: "tpk", name: basename(absolute), bytes });
+        const bytes = readPackageBytes(absolute, path, stat.size);
+        if (!bytes.ok) return bytes;
+        return loadPackage({ kind: "tpk", name: basename(absolute), bytes: bytes.value });
       }
       if (extension === ".exe") {
-        const bytes = new Uint8Array(readFileSync(absolute));
-        return loadPackage({ kind: "exe", name: basename(absolute), bytes });
+        const bytes = readPackageBytes(absolute, path, stat.size);
+        if (!bytes.ok) return bytes;
+        return loadPackage({ kind: "exe", name: basename(absolute), bytes: bytes.value });
       }
       return err(
         failure(

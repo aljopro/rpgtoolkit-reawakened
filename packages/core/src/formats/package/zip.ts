@@ -29,10 +29,10 @@
 import { inflateSync, strFromU8, unzipSync } from "fflate/browser";
 import type { Unzipped, UnzipFileInfo } from "fflate/browser";
 import { crc32 } from "../image/crc32.ts";
-import { foldPath, toSlashes } from "../main-file/layout.ts";
+import { foldPath } from "../main-file/layout.ts";
 import { err, ok, type FormatError, type Result } from "../result.ts";
 import { PACKAGE_LIMITS } from "./limits.ts";
-import { checkEntryPath } from "./path-rules.ts";
+import { canonicalEntryPath, checkEntryPath } from "./path-rules.ts";
 import type { PackageFile } from "./model.ts";
 
 /** The format-spec section every failure here cites. */
@@ -139,13 +139,25 @@ function readCentralDirectory(bytes: Uint8Array, view: DataView, name: string): 
 
   const entries: CentralEntry[] = [];
   const foldedPaths = new Map<string, string>();
+  const cdEnd = cdOffset + cdSize;
   let cursor = cdOffset;
-  for (let index = 0; index < totalEntries; index += 1) {
+  while (cursor < cdEnd) {
+    // The EOCD's count (already held to L2) bounds the work: a directory that
+    // keeps going past it is refused here instead of being walked to the end of
+    // a crafted `cdSize`.
+    if (entries.length === totalEntries) {
+      return err(
+        failure(
+          eocdOffset,
+          `Package "${name}" end-of-central-directory record declares ${totalEntries} entries but the central directory holds more; the package is corrupt (central directory, L19).`,
+        ),
+      );
+    }
     if (cursor + CENTRAL_HEADER_BYTES > length || view.getUint32(cursor, true) !== CENTRAL_SIGNATURE) {
       return err(
         failure(
           cursor,
-          `Package "${name}" entry ${index + 1} of ${totalEntries} has no central-directory header (central directory, L19).`,
+          `Package "${name}" central directory entry ${entries.length + 1} has no central-directory header (central directory, L19).`,
         ),
       );
     }
@@ -173,7 +185,7 @@ function readCentralDirectory(bytes: Uint8Array, view: DataView, name: string): 
       return err(
         failure(
           cursor,
-          `Package "${name}" entry ${index + 1} has a name that runs past the archive (central directory, L19).`,
+          `Package "${name}" entry ${entries.length + 1} has a name that runs past the archive (central directory, L19).`,
         ),
       );
     }
@@ -181,7 +193,7 @@ function readCentralDirectory(bytes: Uint8Array, view: DataView, name: string): 
       bytes.subarray(cursor + CENTRAL_HEADER_BYTES, nameEnd),
       (flags & FLAG_UTF8_NAME) === 0,
     );
-    const path = toSlashes(storedName);
+    const path = canonicalEntryPath(storedName);
     if ((flags & FLAG_ENCRYPTED) !== 0) {
       return err(
         failure(
@@ -198,12 +210,12 @@ function readCentralDirectory(bytes: Uint8Array, view: DataView, name: string): 
         ),
       );
     }
-    const pathProblem = checkEntryPath(path);
+    const pathProblem = checkEntryPath(storedName);
     if (pathProblem !== null) {
       return err(failure(localOffset, `${pathProblem}.`));
     }
     const directory = path.endsWith("/") || (externalAttributes & DOS_DIRECTORY) !== 0;
-    if (!directory && uncompressedSize > PACKAGE_LIMITS.maxEntryUncompressedBytes) {
+    if (uncompressedSize > PACKAGE_LIMITS.maxEntryUncompressedBytes) {
       return err(
         failure(
           localOffset,
@@ -234,6 +246,14 @@ function readCentralDirectory(bytes: Uint8Array, view: DataView, name: string): 
       localOffset,
     });
     cursor = nameEnd + extraLength + commentLength;
+  }
+  if (entries.length !== totalEntries) {
+    return err(
+      failure(
+        eocdOffset,
+        `Package "${name}" end-of-central-directory record declares ${totalEntries} entries but the central directory holds ${entries.length}; the package is corrupt (central directory, L19).`,
+      ),
+    );
   }
 
   let total = 0;
@@ -370,9 +390,10 @@ export function readZip(bytes: Uint8Array, name: string): Result<readonly Packag
   // The entry's own stream must hold exactly what its header declares (L17).
   // fflate trusts the declared size, so this is proved here, before anything is
   // decoded: a lying header is a located failure, never a silently truncated
-  // buffer. `out` bounds the decompression to the declared size, so a stream
-  // that is longer than it claims cannot make this allocate more than the
-  // header promised.
+  // buffer. `out` is one byte larger than the declared size, so a huffman
+  // stream that decodes to more than it claims cannot return the declared
+  // length and pass the check below; the produced length is required to be
+  // exactly the declared size.
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index] as CentralEntry;
     if (entry.directory) continue;
@@ -391,7 +412,7 @@ export function readZip(bytes: Uint8Array, name: string): Result<readonly Packag
     const span = bytes.subarray(dataOffset, dataOffset + entry.compressedSize);
     let inflated: Uint8Array;
     try {
-      inflated = inflateSync(span, { out: new Uint8Array(entry.uncompressedSize) });
+      inflated = inflateSync(span, { out: new Uint8Array(entry.uncompressedSize + 1) });
     } catch {
       return err(
         failure(

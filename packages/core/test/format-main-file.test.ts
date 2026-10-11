@@ -265,10 +265,10 @@ test("the upper-bound lists keep empty entries and round-trip", () => {
 test("minor 2 reads every reserved run of the pre-3 layout", () => {
   const built = buildGam(2);
   const model = readBuilt(built);
-  deepEqual(model.residue.parallax, PARALLAX);
-  deepEqual(model.residue.menuPluginFallback, MENU_FALLBACK);
-  deepEqual(model.residue.multitask, MULTITASK);
-  deepEqual(model.residue.fightStyle, FIGHT_STYLE);
+  deepEqual(model.reservedRuns.parallax, PARALLAX);
+  deepEqual(model.reservedRuns.menuPluginFallback, MENU_FALLBACK);
+  deepEqual(model.reservedRuns.multitask, MULTITASK);
+  deepEqual(model.reservedRuns.fightStyle, FIGHT_STYLE);
   // The minor ≥ 3 rows are absent: their models hold the defaults.
   equal(model.menuPlugin, "");
   equal(model.fightPlugin, "");
@@ -291,9 +291,9 @@ test("minor 2 reads every reserved run of the pre-3 layout", () => {
 test("minors 0 and 1 read the same pre-3 rows as minor 2", () => {
   for (const minor of [0, 1, 2]) {
     const model = readBuilt(buildGam(minor));
-    deepEqual(model.residue.parallax, PARALLAX);
-    deepEqual(model.residue.multitask, MULTITASK);
-    deepEqual(model.residue.fightStyle, FIGHT_STYLE);
+    deepEqual(model.reservedRuns.parallax, PARALLAX);
+    deepEqual(model.reservedRuns.multitask, MULTITASK);
+    deepEqual(model.reservedRuns.fightStyle, FIGHT_STYLE);
     equal(model.minor, minor);
   }
 });
@@ -303,10 +303,10 @@ test("minor 3 switches on the plugin names and the cursor block", () => {
   const model = readBuilt(built);
   equal(model.menuPlugin, "menu.plg");
   equal(model.fightPlugin, "fight.plg");
-  deepEqual(model.residue.parallax, new Uint8Array(0));
-  deepEqual(model.residue.menuPluginFallback, new Uint8Array(0));
-  deepEqual(model.residue.multitask, new Uint8Array(0));
-  deepEqual(model.residue.fightStyle, new Uint8Array(0));
+  deepEqual(model.reservedRuns.parallax, new Uint8Array(0));
+  deepEqual(model.reservedRuns.menuPluginFallback, new Uint8Array(0));
+  deepEqual(model.reservedRuns.multitask, new Uint8Array(0));
+  deepEqual(model.reservedRuns.fightStyle, new Uint8Array(0));
   equal(model.cursorMoveSound, "cm.wav");
   equal(model.cursorSelectSound, "cs.wav");
   equal(model.cursorCancelSound, "cc.wav");
@@ -481,6 +481,155 @@ test("every minor 0–9 reads with zero trailing bytes and writes back byte-for-
   }
 });
 
+// --- The writer refuses a model it cannot represent (AD-18) ------------------
+//
+// `BinaryWriter` truncates an out-of-range integer and the serialiser derives
+// the list bounds, so without a check a model the reader could never produce
+// would be written as a different, valid file. Each of these mutates one field
+// of a model that came from `readMainFile` and asserts the write is refused at
+// §2.
+
+test("the writer refuses a model whose magic is not the main-file magic", () => {
+  const model = readBuilt(buildGam(9));
+  const result = writeMainFile({ ...model, magic: "RPGTLKIT BOARD" });
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.section, MAIN_SECTION);
+  }
+});
+
+test("the writer refuses a minor outside 0–9", () => {
+  const model = readBuilt(buildGam(9));
+  for (const minor of [-1, 10]) {
+    const result = writeMainFile({ ...model, minor });
+    equal(result.ok, false, `minor ${minor} must be refused`);
+    if (!result.ok) {
+      equal(result.error.section, MAIN_SECTION);
+    }
+  }
+});
+
+test("the writer refuses an i16 field the BinaryWriter would truncate", () => {
+  const model = readBuilt(buildGam(9));
+  const scalar = writeMainFile({ ...model, screenType: 40_000 });
+  equal(scalar.ok, false);
+  if (!scalar.ok) {
+    equal(scalar.error.section, MAIN_SECTION);
+  }
+  // The per-entry i16 fields are checked too.
+  const entry = writeMainFile({
+    ...model,
+    enemies: [{ enemyFile: "slime.ene", skillLevel: 40_000 }],
+  });
+  equal(entry.ok, false);
+  if (!entry.ok) {
+    equal(entry.error.section, MAIN_SECTION);
+  }
+});
+
+test("the writer refuses an i32 field the BinaryWriter would truncate", () => {
+  const model = readBuilt(buildGam(9));
+  const result = writeMainFile({ ...model, chances: 2_147_483_648 });
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.section, MAIN_SECTION);
+  }
+});
+
+test("the writer refuses a u8 field the BinaryWriter would truncate", () => {
+  const model = readBuilt(buildGam(9));
+  const colour = writeMainFile({ ...model, colorDepth: 256 });
+  equal(colour.ok, false);
+  if (!colour.ok) {
+    equal(colour.error.section, MAIN_SECTION);
+  }
+  // The biased gameSpeed byte wraps to a negative speed at minor ≥ 8.
+  const speed = writeMainFile({ ...model, gameSpeed: 200 });
+  equal(speed.ok, false);
+  if (!speed.ok) {
+    equal(speed.error.section, MAIN_SECTION);
+  }
+  // Below minor 8 the byte is the raw speed, so 200 is representable.
+  const raw = readBuilt(buildGam(6, { gameSpeedStored: 200 }));
+  deepEqual(unwrap(writeMainFile(raw)), buildGam(6, { gameSpeedStored: 200 }).bytes);
+});
+
+test("the writer refuses a list longer than its i16 upper bound", () => {
+  const model = readBuilt(buildGam(9));
+  const extKeys = Array.from({ length: 32_769 }, () => ({ asciiKey: 65, program: "" }));
+  const result = writeMainFile({ ...model, extKeys });
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.section, MAIN_SECTION);
+  }
+  // 32 768 entries is the last count the derived bound can carry.
+  const most = writeMainFile({ ...model, extKeys: extKeys.slice(0, 32_768) });
+  equal(most.ok, true);
+});
+
+test("the writer refuses a scan-code row that is not eight codes", () => {
+  const model = readBuilt(buildGam(9));
+  for (const movementScanCodes of [[30, 31, 32], [...SCAN_CODES, 38]]) {
+    const result = writeMainFile({ ...model, movementScanCodes });
+    equal(result.ok, false, `${movementScanCodes.length} scan codes must be refused`);
+    if (!result.ok) {
+      equal(result.error.section, MAIN_SECTION);
+    }
+  }
+});
+
+test("the writer refuses a reserved run of the wrong width for the minor", () => {
+  // A pre-3 minor carries a 4-byte parallax row.
+  const pre3 = readBuilt(buildGam(2));
+  const short = writeMainFile({
+    ...pre3,
+    reservedRuns: { ...pre3.reservedRuns, parallax: new Uint8Array(3) },
+  });
+  equal(short.ok, false);
+  if (!short.ok) {
+    equal(short.error.section, MAIN_SECTION);
+  }
+  // A minor that does not carry it must leave it empty, not silently drop it.
+  const post3 = readBuilt(buildGam(9));
+  const stale = writeMainFile({
+    ...post3,
+    reservedRuns: { ...post3.reservedRuns, parallax: PARALLAX },
+  });
+  equal(stale.ok, false);
+  if (!stale.ok) {
+    equal(stale.error.section, MAIN_SECTION);
+  }
+});
+
+test("a clean buffer leaves an empty residue and warns about nothing", () => {
+  const result = readMainFile(new BinaryReader(buildGam(9).bytes));
+  equal(result.ok, true);
+  if (result.ok) {
+    deepEqual(result.value.residue, new Uint8Array(0));
+    deepEqual(result.warnings, []);
+  }
+});
+
+test("trailing bytes become the residue, warn once and round-trip", () => {
+  const trailing = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+  const clean = buildGam(9).bytes;
+  const bytes = new Uint8Array(clean.length + trailing.length);
+  bytes.set(clean);
+  bytes.set(trailing, clean.length);
+
+  const reader = new BinaryReader(bytes);
+  const result = readMainFile(reader);
+  equal(result.ok, true);
+  if (result.ok) {
+    deepEqual(result.value.residue, trailing);
+    equal(reader.remaining, 0);
+    deepEqual(result.warnings, [
+      "4 trailing byte(s) after the main file were kept as residue (format-spec §2, §1.7)",
+    ]);
+    deepEqual(unwrap(writeMainFile(result.value)), bytes);
+  }
+});
+
 test("a wrong magic is rejected at offset 0", () => {
   const writer = new BinaryWriter();
   putStr(writer, "RPGTLKIT BOARD");
@@ -576,6 +725,31 @@ test("the project folder is <root>/Game/<projectPath>/", () => {
   equal(projectFolder("/games/root", { projectPath: "a\\b" }), "/games/root/Game/a/b/");
 });
 
+test("a stored project path that already starts with Game is not double-prefixed", () => {
+  // The shipped demo stores the full `Game\demo\` form; every spelling maps to
+  // the same folder (format-spec §1.5). Only the leading `Game` segment is
+  // canonicalised; the remaining segments keep their stored casing.
+  for (const stored of ["Game\\demo\\", "game/demo", "/Game/demo/", "\\Game\\demo"]) {
+    equal(projectFolder("/games/root", { projectPath: stored }), "/games/root/Game/demo/", stored);
+  }
+  equal(projectFolder("/games/root", { projectPath: "GAME\\Demo" }), "/games/root/Game/Demo/");
+  // A bare folder name still lands under `Game/`; a bare `Game` is a single
+  // segment and so becomes `Game/Game/`.
+  equal(projectFolder("/games/root", { projectPath: "demo" }), "/games/root/Game/demo/");
+  equal(projectFolder("/games/root", { projectPath: "Game" }), "/games/root/Game/Game/");
+  equal(projectFolder("/games/root", { projectPath: "Game\\Game\\" }), "/games/root/Game/Game/");
+  // Leading and trailing separators on a bare name change nothing.
+  equal(projectFolder("/games/root", { projectPath: "\\demo\\" }), "/games/root/Game/demo/");
+  // An empty project path is `<root>/Game/`.
+  equal(projectFolder("/games/root", { projectPath: "" }), "/games/root/Game/");
+});
+
+test("an empty root gives no prefix and the stored project path is still applied", () => {
+  equal(projectFolder("", { projectPath: "demo" }), "Game/demo/");
+  equal(projectFolder("", { projectPath: "Game\\demo\\" }), "Game/demo/");
+  equal(projectFolder("", { projectPath: "" }), "Game/");
+});
+
 test("a reference resolves under the project folder and its type folder", () => {
   equal(
     resolveReference("/games/root", { projectPath: "demo" }, "boards", "village\\inn.brd"),
@@ -584,6 +758,11 @@ test("a reference resolves under the project folder and its type folder", () => 
   equal(
     resolveReference("/games/root", { projectPath: "demo" }, "programs", "start.prg"),
     "/games/root/Game/demo/Prg/start.prg",
+  );
+  // The stored `Game\demo\` form names the same folder as the bare `demo`.
+  equal(
+    resolveReference("/games/root", { projectPath: "Game\\demo\\" }, "boards", "village\\inn.brd"),
+    "/games/root/Game/demo/Boards/village/inn.brd",
   );
 });
 
@@ -640,7 +819,7 @@ test(
     for (const file of sampleGam) {
       const reader = new BinaryReader(readFileSync(file), file);
       const model = unwrap(readMainFile(reader));
-      equal(reader.remaining, 0, `${file} should have no trailing bytes`);
+      equal(model.residue.length, 0, `${file} should have an empty residue`);
       deepEqual(unwrap(writeMainFile(model)), new Uint8Array(readFileSync(file)), file);
     }
   },

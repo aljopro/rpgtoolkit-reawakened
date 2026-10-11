@@ -21,8 +21,8 @@ import {
  * Read an animation from `reader` (format-spec §7.1). The header's minor must
  * be 3; the frame count comes from the `i32` upper bound (`n` means `n + 1`
  * slots, `-1` means none, §1.2), and every slot — empty ones included — is
- * returned. Reading stops right after the trailing `f64` delay; any remaining
- * bytes are the caller's to check.
+ * returned. The reader consumes the whole file: bytes after the trailing `f64`
+ * delay are kept as `residue` (§1.7), so a caller sees `remaining === 0`.
  */
 export function readAnimation(reader: BinaryReader): Result<Animation> {
   const start = reader.offset;
@@ -82,13 +82,28 @@ export function readAnimation(reader: BinaryReader): Result<Animation> {
     return delay;
   }
 
-  return ok({
-    magic: header.value.magic,
-    major: header.value.major,
-    minor: header.value.minor,
-    width: width.value,
-    height: height.value,
-    frames,
-    delay: delay.value,
-  });
+  const residue = reader.readBytes(reader.remaining);
+  if (!residue.ok) {
+    return residue;
+  }
+  const warnings: string[] = [];
+  if (residue.value.length > 0) {
+    warnings.push(
+      `${residue.value.length} trailing byte(s) after the animation were kept as residue (format-spec §7.1, §1.7)`,
+    );
+  }
+
+  return ok(
+    {
+      magic: header.value.magic,
+      major: header.value.major,
+      minor: header.value.minor,
+      width: width.value,
+      height: height.value,
+      frames,
+      delay: delay.value,
+      residue: residue.value,
+    },
+    warnings,
+  );
 }

@@ -2,9 +2,14 @@
  * Image decoding for game assets (format-spec §10, AD-28).
  *
  * `decodeTexture` is the one place a game image becomes pixels: it reads the
- * signature, dispatches to the PNG or the JPEG decoder, and returns straight
- * RGBA. Scripts, `core/raster`, every runner and the editor use this and only
- * this, so they cannot disagree about what an image contains.
+ * signature, dispatches to the PNG or the JPEG decoder, and returns the file's
+ * own straight RGBA and its own alpha, nothing added. A colour key is not part
+ * of the file (format-spec §10), so no key is applied here: the key is the `key`
+ * of a `blit` (AD-3) and `core/raster` tests it on these pixels. Scripts,
+ * `core/raster`, every runner and the editor use this and only this, so they
+ * cannot disagree about what an image contains. This entry exports
+ * `decodeTexture` and `DecodedTexture` only (AD-22, AD-28), so no other package
+ * can reach the PNG or JPEG decoder.
  */
 
 import { err, type Result } from "../result.ts";
@@ -12,9 +17,7 @@ import type { DecodedTexture } from "./model.ts";
 import { decodePng } from "./png.ts";
 import { decodeJpeg } from "./jpeg.ts";
 
-export * from "./model.ts";
-export * from "./png.ts";
-export * from "./jpeg.ts";
+export type { DecodedTexture } from "./model.ts";
 
 const SECTION = "format-spec §10";
 
