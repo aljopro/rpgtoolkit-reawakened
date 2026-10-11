@@ -21,6 +21,7 @@ import {
   readStances,
   writeBoundedStrings,
   writeStances,
+  writerError,
   type Enemy,
 } from "./model.ts";
 
@@ -50,14 +51,6 @@ export function readEnemy(reader: BinaryReader): Result<Enemy> {
       start,
       ENEMY_SECTION,
       `not an enemy: magic is "${header.value.magic}", expected "${ENEMY_MAGIC}"`,
-    );
-  }
-  if (header.value.major < 0 || header.value.minor < 0) {
-    return actorError(
-      reader,
-      reader.offset - 2,
-      "format-spec §1.4",
-      `invalid negative version ${header.value.major}.${header.value.minor}`,
     );
   }
   if (header.value.minor !== ENEMY_BINARY_MINOR) {
@@ -203,11 +196,17 @@ export function readEnemy(reader: BinaryReader): Result<Enemy> {
 /** Serialise `model` to the enemy layout (format-spec §6.3). */
 export function writeEnemy(model: Enemy): Result<Uint8Array> {
   const writer = new BinaryWriter();
-  writer.str(model.magic);
+  const magic = writer.str(model.magic);
+  if (!magic.ok) {
+    return writerError(writer, ENEMY_SECTION, `magic: ${magic.error.message}`);
+  }
   writer.i16(model.major);
   writer.i16(model.minor);
 
-  writer.str(model.name);
+  const name = writer.str(model.name);
+  if (!name.ok) {
+    return writerError(writer, ENEMY_SECTION, `name: ${name.error.message}`);
+  }
   writer.i32(model.hp);
   writer.i32(model.smp);
   writer.i32(model.fp);
@@ -231,11 +230,20 @@ export function writeEnemy(model: Enemy): Result<Uint8Array> {
 
   writer.i8(model.aiLevel);
   writer.i8(model.customAi);
-  writer.str(model.aiProgram);
+  const aiProgram = writer.str(model.aiProgram);
+  if (!aiProgram.ok) {
+    return writerError(writer, ENEMY_SECTION, `AI program: ${aiProgram.error.message}`);
+  }
   writer.i32(model.experienceReward);
   writer.i32(model.goldReward);
-  writer.str(model.defeatProgram);
-  writer.str(model.runAwayProgram);
+  const defeatProgram = writer.str(model.defeatProgram);
+  if (!defeatProgram.ok) {
+    return writerError(writer, ENEMY_SECTION, `defeat program: ${defeatProgram.error.message}`);
+  }
+  const runAwayProgram = writer.str(model.runAwayProgram);
+  if (!runAwayProgram.ok) {
+    return writerError(writer, ENEMY_SECTION, `run-away program: ${runAwayProgram.error.message}`);
+  }
 
   const stances = writeBoundedStrings(writer, model.stances, ENEMY_SECTION, "stance animations");
   if (!stances.ok) {

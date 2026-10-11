@@ -91,6 +91,15 @@ function putBases(writer: BinaryWriter, bases: readonly ActorBase[]): void {
   }
 }
 
+/** One special-move slot as §6.1 stores it (file, minExp, minLevel, conds). */
+interface SpecialMoveSpec {
+  readonly file: string;
+  readonly minExp: number;
+  readonly minLevel: number;
+  readonly condVar: string;
+  readonly condValue: string;
+}
+
 interface CharacterSpec {
   readonly minor?: number;
   readonly magic?: string;
@@ -102,6 +111,10 @@ interface CharacterSpec {
   readonly battleStances?: readonly string[];
   readonly idle?: readonly string[];
   readonly customStances?: readonly ActorStance[];
+  readonly specialMoves?: readonly SpecialMoveSpec[];
+  readonly hasSpecialMoves?: number;
+  readonly levelUpType?: number;
+  readonly sizeType?: number;
 }
 
 /** Build a character buffer in the exact §6.1 field order. */
@@ -118,14 +131,15 @@ function buildCharacter(spec: CharacterSpec = {}): Uint8Array {
   }
   w.str(""); // profile picture
   for (let i = 0; i < 201; i += 1) {
-    w.str("");
-    w.i32(0);
-    w.i32(0);
-    w.str("");
-    w.str("");
+    const move = spec.specialMoves?.[i];
+    w.str(move?.file ?? "");
+    w.i32(move?.minExp ?? 0);
+    w.i32(move?.minLevel ?? 0);
+    w.str(move?.condVar ?? "");
+    w.str(move?.condValue ?? "");
   }
   w.str(""); // special-move category
-  w.i8(0); // hasSpecialMoves == 0 (yes)
+  w.i8(spec.hasSpecialMoves ?? 0); // 0 = has special moves (yes)
   putStrings(w, ["", "", "", "", "", "", "", "", "", "", ""]); // 11 accessory slots
   for (const slot of spec.bodySlots ?? [0, 1, 1, 1, 1, 1, 1]) {
     w.i8(slot);
@@ -144,8 +158,8 @@ function buildCharacter(spec: CharacterSpec = {}): Uint8Array {
     putStrings(w, ["", "", "", ""]); // obsolete battle sounds
   }
   w.str(""); // level-up program
-  w.i8(0); // level-up type
-  w.i8(1); // size type
+  w.i8(spec.levelUpType ?? 0); // level-up type
+  w.i8(spec.sizeType ?? 1); // size type
   if (minor >= 5) {
     putStrings(w, spec.movement ?? BLANK8);
     putStrings(w, spec.battleStances ?? ["", "", "", "", "", ""]);
@@ -175,6 +189,7 @@ interface ItemSpec {
   readonly movement?: readonly string[];
   readonly idle?: readonly string[];
   readonly customStances?: readonly ActorStance[];
+  readonly flags?: readonly number[];
 }
 
 /** Build an item buffer in the exact §6.2 field order. */
@@ -188,7 +203,7 @@ function buildItem(spec: ItemSpec = {}): Uint8Array {
   w.str("man");
   w.str(""); // description
   for (let i = 0; i < 5; i += 1) {
-    w.i8(0); // use flags
+    w.i8(spec.flags?.[i] ?? 0); // use flags
   }
   putStrings(w, new Array<string>(51).fill(""));
   if (wide) {
@@ -265,6 +280,8 @@ interface EnemySpec {
   readonly magic?: string;
   readonly stances?: readonly string[];
   readonly customStances?: readonly ActorStance[];
+  readonly canRun?: number;
+  readonly customAi?: number;
 }
 
 /** Build an enemy buffer in the exact §6.3 field order. */
@@ -277,14 +294,14 @@ function buildEnemy(spec: EnemySpec = {}): Uint8Array {
   for (const value of [34, 12, 4, 2]) {
     w.i32(value);
   }
-  w.i8(1); // player can run
+  w.i8(spec.canRun ?? 1); // player can run
   w.i16(4); // critical on this enemy
   w.i16(10); // critical by this enemy
   putBoundedStrings(w, []);
   putBoundedStrings(w, []);
   putBoundedStrings(w, []);
   w.i8(0); // AI level
-  w.i8(0); // use custom AI
+  w.i8(spec.customAi ?? 0); // use custom AI
   w.str(""); // AI program
   w.i32(23); // experience reward
   w.i32(4); // gold reward
@@ -315,6 +332,35 @@ function readError<T>(bytes: Uint8Array, read: (reader: BinaryReader) => Result<
     throw new Error("unreachable");
   }
   return result.error;
+}
+
+/** The warnings of a result the test expects to succeed. */
+function warningsOf<T>(result: Result<T>): readonly string[] {
+  if (!result.ok) {
+    throw new Error(`expected ok, got: ${result.error.message}`);
+  }
+  return result.warnings;
+}
+
+/** Write `model` with `write` and require it to fail, returning the error. */
+function writeError<T>(model: T, write: (model: T) => Result<Uint8Array>): {
+  readonly offset: number;
+  readonly section: string;
+} {
+  const result = write(model);
+  equal(result.ok, false, "the writer was expected to fail");
+  if (result.ok) {
+    throw new Error("unreachable");
+  }
+  return result.error;
+}
+
+/** Append `extra` bytes after `bytes` (a file with trailing residue). */
+function withTrailing(bytes: Uint8Array, extra: readonly number[]): Uint8Array {
+  const out = new Uint8Array(bytes.length + extra.length);
+  out.set(bytes, 0);
+  out.set(extra, bytes.length);
+  return out;
 }
 
 // --- §6.1 character, the vector-bases upper bound ---------------------------
@@ -478,6 +524,137 @@ test("every synthetic actor buffer round-trips byte for byte", () => {
   }
 });
 
+// --- §6.1 the 201 special-move slots ----------------------------------------
+
+test("character: the 201 special-move slots keep their five-field order", () => {
+  // A slot is one record — `str file, i32 minExp, i32 minLevel, str condVar,
+  // str condValue` — not a files-only block followed by a conditions-only
+  // block. An all-empty slot has the same byte length either way, so the value
+  // below is what distinguishes the orders: a writer that split the two blocks
+  // re-emits a different byte sequence (§6.1, readSpecialMove).
+  const slot = { file: "sm/fire.spc", minExp: 120, minLevel: 7, condVar: "hasFire$", condValue: "yes" };
+  const bytes = buildCharacter({ specialMoves: [slot] });
+  const reader = new BinaryReader(bytes);
+  const character = unwrap(readCharacter(reader));
+  equal(reader.remaining, 0, "no trailing bytes");
+  equal(character.residue.length, 0, "no residue");
+  equal(character.specialMoves.length, 201, "the fixed slot count is kept");
+  deepEqual(character.specialMoves[0], slot);
+  equal(character.specialMoves[1]?.file, "", "slot 1 is empty");
+  deepEqual(unwrap(writeCharacter(character)), bytes, "byte-identical round-trip");
+});
+
+// --- Version-conditional rows -----------------------------------------------
+
+test("character: the version-conditional rows at minor 3 and minor 4 round-trip", () => {
+  for (const minor of [3, 4]) {
+    const bytes = buildCharacter({ minor });
+    const reader = new BinaryReader(bytes);
+    const character = unwrap(readCharacter(reader));
+    equal(character.minor, minor);
+    equal(reader.remaining, 0, `minor ${minor}: trailing bytes`);
+    equal(character.residue.length, 0, `minor ${minor}: residue`);
+    // Both minors still carry the obsolete battle sounds (minor < 5); the
+    // first-level-exp row is an i8 only at minor 3, an i32 at minor 4.
+    equal(character.battleSounds?.length, 4, `minor ${minor}: battle sounds`);
+    equal(character.firstLevelExp, 90, `minor ${minor}: first-level exp`);
+    equal(character.movementAnimations, undefined, `minor ${minor}: no movement animations`);
+    deepEqual(unwrap(writeCharacter(character)), bytes, `minor ${minor}: byte-identical round-trip`);
+  }
+});
+
+test("item: the version-conditional rows at minor 2 and minor 6 round-trip", () => {
+  for (const minor of [2, 6]) {
+    const bytes = buildItem({ minor });
+    const reader = new BinaryReader(bytes);
+    const item = unwrap(readItem(reader));
+    equal(item.minor, minor);
+    equal(reader.remaining, 0, `minor ${minor}: trailing bytes`);
+    equal(item.residue.length, 0, `minor ${minor}: residue`);
+    deepEqual(unwrap(writeItem(item)), bytes, `minor ${minor}: byte-identical round-trip`);
+  }
+
+  // minor 2 keeps the i16 price rows and the legacy walk frames; minor 6 uses
+  // the i32 rows plus movement and idle animations, but no vector bases.
+  const item2 = unwrap(readItem(new BinaryReader(buildItem({ minor: 2 }))));
+  equal(item2.legacyWalk?.frames.length, 16, "minor 2 walk frames");
+  equal(item2.movementAnimations, undefined, "minor 2 has no movement animations");
+  const item6 = unwrap(readItem(new BinaryReader(buildItem({ minor: 6 }))));
+  equal(item6.legacyWalk, undefined, "minor 6 has no legacy walk");
+  equal(item6.movementAnimations?.length, 8, "minor 6 movement animations");
+  equal(item6.idleAnimations?.length, 8, "minor 6 idle animations");
+  equal(item6.vectorBases, undefined, "minor 6 has no vector bases");
+});
+
+// --- Residue ----------------------------------------------------------------
+
+test("trailing bytes after each actor are kept as residue and re-emitted verbatim", () => {
+  const trailing = [0xde, 0xad, 0xbe, 0xef];
+
+  const characterBytes = withTrailing(buildCharacter(), trailing);
+  const characterResult = readCharacter(new BinaryReader(characterBytes));
+  const character = unwrap(characterResult);
+  equal(character.residue.length, trailing.length, "character residue");
+  equal(
+    warningsOf(characterResult).some((warning) => warning.includes("residue")),
+    true,
+    "character warning",
+  );
+  deepEqual(unwrap(writeCharacter(character)), characterBytes, "character re-emit");
+
+  const itemBytes = withTrailing(buildItem(), trailing);
+  const itemResult = readItem(new BinaryReader(itemBytes));
+  const item = unwrap(itemResult);
+  equal(item.residue.length, trailing.length, "item residue");
+  equal(
+    warningsOf(itemResult).some((warning) => warning.includes("residue")),
+    true,
+    "item warning",
+  );
+  deepEqual(unwrap(writeItem(item)), itemBytes, "item re-emit");
+
+  const enemyBytes = withTrailing(buildEnemy(), trailing);
+  const enemyResult = readEnemy(new BinaryReader(enemyBytes));
+  const enemy = unwrap(enemyResult);
+  equal(enemy.residue.length, trailing.length, "enemy residue");
+  equal(
+    warningsOf(enemyResult).some((warning) => warning.includes("residue")),
+    true,
+    "enemy warning",
+  );
+  deepEqual(unwrap(writeEnemy(enemy)), enemyBytes, "enemy re-emit");
+});
+
+// --- Raw stored flags -------------------------------------------------------
+
+test("non-canonical flag bytes are kept verbatim, not normalised", () => {
+  const bodySlots = [1, 2, 3, 4, 5, 6, 7];
+  const characterBytes = buildCharacter({
+    hasSpecialMoves: 2,
+    levelUpType: 3,
+    sizeType: 127,
+    bodySlots,
+  });
+  const character = unwrap(readCharacter(new BinaryReader(characterBytes)));
+  equal(character.hasSpecialMoves, 2, "hasSpecialMoves kept raw");
+  equal(character.levelUpType, 3, "levelUpType kept raw");
+  equal(character.sizeType, 127, "sizeType kept raw");
+  deepEqual(character.bodySlots, bodySlots, "body slots kept raw");
+  deepEqual(unwrap(writeCharacter(character)), characterBytes, "character re-emit");
+
+  const flags = [2, -1, 127, -128, 3];
+  const itemBytes = buildItem({ flags });
+  const item = unwrap(readItem(new BinaryReader(itemBytes)));
+  deepEqual([item.equipable, item.menuUsable, item.boardUsable, item.battleUsable, item.usedBy], flags);
+  deepEqual(unwrap(writeItem(item)), itemBytes, "item flag re-emit");
+
+  const enemyBytes = buildEnemy({ canRun: 2, customAi: 5 });
+  const enemy = unwrap(readEnemy(new BinaryReader(enemyBytes)));
+  equal(enemy.canRun, 2, "canRun kept raw");
+  equal(enemy.customAi, 5, "customAi kept raw");
+  deepEqual(unwrap(writeEnemy(enemy)), enemyBytes, "enemy flag re-emit");
+});
+
 // --- Located errors ---------------------------------------------------------
 
 test("a wrong magic is a located error at offset 0 in each section", () => {
@@ -534,6 +711,32 @@ test("a truncated file is a located error, never a throw", () => {
   equal(short.section, "format-spec §1.1");
 });
 
+test("the writers report an unencodable string and a wrong fixed-block length", () => {
+  // A character with a Windows-1252-unencodable name, a per-level block with
+  // three entries instead of four, and a special-move list that is one slot
+  // short: each is a located writer error, never a silently truncated file.
+  const character = unwrap(readCharacter(new BinaryReader(buildCharacter())));
+  const badName = writeError({ ...character, name: "hero\u0100" }, writeCharacter);
+  equal(badName.section, CHARACTER_SECTION, "unencodable character name");
+  const shortIncreases = writeError({ ...character, levelIncreases: [1, 2, 3] }, writeCharacter);
+  equal(shortIncreases.section, CHARACTER_SECTION, "wrong per-level increase count");
+  const shortMoves = writeError(
+    { ...character, specialMoves: character.specialMoves.slice(0, 200) },
+    writeCharacter,
+  );
+  equal(shortMoves.section, CHARACTER_SECTION, "wrong special-move count");
+
+  const item = unwrap(readItem(new BinaryReader(buildItem())));
+  const badItemName = writeError({ ...item, name: "man\u0100" }, writeItem);
+  equal(badItemName.section, ITEM_SECTION, "unencodable item name");
+  const shortBonuses = writeError({ ...item, equipBonus: [1, 2, 3] }, writeItem);
+  equal(shortBonuses.section, ITEM_SECTION, "wrong equip-bonus count");
+
+  const enemy = unwrap(readEnemy(new BinaryReader(buildEnemy())));
+  const badEnemyName = writeError({ ...enemy, name: "pirate\u0100" }, writeEnemy);
+  equal(badEnemyName.section, ENEMY_SECTION, "unencodable enemy name");
+});
+
 // --- Sample fixtures (guard-rail G5 rule 4: fetched, never committed) -------
 
 /** Every path under `root` whose lower-cased name ends with one of `suffixes`. */
@@ -550,6 +753,19 @@ const sampleActors = [
   ...collect(join(repoRoot, "fixtures", "legacy", "demo"), [".tem", ".itm", ".ene"]),
   ...collect(join(repoRoot, "fixtures", "legacy", "Basic"), [".tem", ".itm", ".ene"]),
 ];
+
+/**
+ * Find the fetched sample whose path ends with `suffix`, failing when it was
+ * not fetched: a layout test that silently skips a missing fixture would pass
+ * without checking anything.
+ */
+function sample(suffix: string): string {
+  const path = sampleActors.find((candidate) => candidate.endsWith(suffix));
+  if (path === undefined) {
+    throw new Error(`expected sample fixture ${suffix} was not found under fixtures/legacy`);
+  }
+  return path;
+}
 
 /** Check one parsed sample: no trailing bytes, no residue, exact round-trip. */
 function checkActor<T extends { readonly residue: Uint8Array }>(
@@ -598,36 +814,30 @@ test(
   "the shipped demo actor samples pin their documented layouts",
   { skip: sampleActors.length === 0 ? "legacy fixtures are not fetched" : false },
   () => {
-    const startTem = sampleActors.find((path) => path.endsWith(join("demo", "Chrs", "start.tem")));
-    if (startTem !== undefined) {
-      const bytes = new Uint8Array(readFileSync(startTem));
-      const character = unwrap(readCharacter(new BinaryReader(bytes, startTem)));
-      equal(character.minor, 8);
-      equal(character.bodySlots.length, 7);
-      equal(character.bodySlots[0], 0, "byte 0 is padding");
-      equal(character.idleTime, 3, "characters store idleTime first");
-      equal(character.speed, 0.05);
-      equal(character.vectorBases?.length, 2, "stored bound 1 means two bases");
-      equal(character.maxLevel, 0, "0 disables level progression");
-    }
+    const startTem = sample(join("demo", "Chrs", "start.tem"));
+    const startBytes = new Uint8Array(readFileSync(startTem));
+    const character = unwrap(readCharacter(new BinaryReader(startBytes, startTem)));
+    equal(character.minor, 8);
+    equal(character.bodySlots.length, 7);
+    equal(character.bodySlots[0], 0, "byte 0 is padding");
+    equal(character.idleTime, 3, "characters store idleTime first");
+    equal(character.speed, 0.05);
+    equal(character.vectorBases?.length, 2, "stored bound 1 means two bases");
+    equal(character.maxLevel, 0, "0 disables level progression");
 
-    const manItm = sampleActors.find((path) => path.endsWith(join("demo", "Item", "man.itm")));
-    if (manItm !== undefined) {
-      const bytes = new Uint8Array(readFileSync(manItm));
-      const item = unwrap(readItem(new BinaryReader(bytes, manItm)));
-      equal(item.minor, 7);
-      equal(item.speed, 0.1, "items store speed first");
-      equal(item.idleTime, 3);
-      equal(item.vectorBases?.length, 2);
-    }
+    const manItm = sample(join("demo", "Item", "man.itm"));
+    const manBytes = new Uint8Array(readFileSync(manItm));
+    const item = unwrap(readItem(new BinaryReader(manBytes, manItm)));
+    equal(item.minor, 7);
+    equal(item.speed, 0.1, "items store speed first");
+    equal(item.idleTime, 3);
+    equal(item.vectorBases?.length, 2);
 
-    const pirateEne = sampleActors.find((path) => path.endsWith(join("demo", "Enemy", "pirate.ene")));
-    if (pirateEne !== undefined) {
-      const bytes = new Uint8Array(readFileSync(pirateEne));
-      const enemy = unwrap(readEnemy(new BinaryReader(bytes, pirateEne)));
-      equal(enemy.minor, 1);
-      equal(enemy.stances.length, 6, "stored bound 5 yields six slots");
-      equal(enemy.stances[5], "", "slot 5 is unused");
-    }
+    const pirateEne = sample(join("demo", "Enemy", "pirate.ene"));
+    const pirateBytes = new Uint8Array(readFileSync(pirateEne));
+    const enemy = unwrap(readEnemy(new BinaryReader(pirateBytes, pirateEne)));
+    equal(enemy.minor, 1);
+    equal(enemy.stances.length, 6, "stored bound 5 yields six slots");
+    equal(enemy.stances[5], "", "slot 5 is unused");
   },
 );

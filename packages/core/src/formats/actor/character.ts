@@ -129,14 +129,6 @@ export function readCharacter(reader: BinaryReader): Result<Character> {
       `not a character: magic is "${header.value.magic}", expected "${CHARACTER_MAGIC}"`,
     );
   }
-  if (header.value.major < 0 || header.value.minor < 0) {
-    return actorError(
-      reader,
-      reader.offset - 2,
-      "format-spec §1.4",
-      `invalid negative version ${header.value.major}.${header.value.minor}`,
-    );
-  }
   if (header.value.minor < CHARACTER_MIN_MINOR || header.value.minor > CHARACTER_MAX_MINOR) {
     return actorError(
       reader,
@@ -347,11 +339,17 @@ export function readCharacter(reader: BinaryReader): Result<Character> {
 /** Serialise `model` to the character layout (format-spec §6.1). */
 export function writeCharacter(model: Character): Result<Uint8Array> {
   const writer = new BinaryWriter();
-  writer.str(model.magic);
+  const magic = writer.str(model.magic);
+  if (!magic.ok) {
+    return writerError(writer, CHARACTER_SECTION, `magic: ${magic.error.message}`);
+  }
   writer.i16(model.major);
   writer.i16(model.minor);
 
-  writer.str(model.name);
+  const name = writer.str(model.name);
+  if (!name.ok) {
+    return writerError(writer, CHARACTER_SECTION, `name: ${name.error.message}`);
+  }
   const names = writeFixedStrings(
     writer,
     model.variableNames,
@@ -372,25 +370,53 @@ export function writeCharacter(model: Character): Result<Uint8Array> {
   writer.i32(model.stats.maxSmp);
   writer.i32(model.stats.level);
 
-  writer.str(model.profilePicture);
-  const moves = writeFixedStrings(
-    writer,
-    model.specialMoves.map((move) => move.file),
-    SPECIAL_MOVE_SLOTS,
-    CHARACTER_SECTION,
-    "special-move files",
-  );
-  if (!moves.ok) {
-    return moves;
+  const profilePicture = writer.str(model.profilePicture);
+  if (!profilePicture.ok) {
+    return writerError(writer, CHARACTER_SECTION, `profile picture: ${profilePicture.error.message}`);
+  }
+  // §6.1 stores each special-move slot as one record, not two blocks: emit the
+  // file, minExp, minLevel, condVar and condValue of a slot together, in the
+  // order `readSpecialMove` reads them.
+  if (model.specialMoves.length !== SPECIAL_MOVE_SLOTS) {
+    return writerError(
+      writer,
+      CHARACTER_SECTION,
+      `special moves need exactly ${SPECIAL_MOVE_SLOTS} entries but the model has ${model.specialMoves.length}`,
+    );
   }
   for (const move of model.specialMoves) {
+    const file = writer.str(move.file);
+    if (!file.ok) {
+      return writerError(writer, CHARACTER_SECTION, `special-move file: ${file.error.message}`);
+    }
     writer.i32(move.minExp);
     writer.i32(move.minLevel);
-    writer.str(move.condVar);
-    writer.str(move.condValue);
+    const condVar = writer.str(move.condVar);
+    if (!condVar.ok) {
+      return writerError(
+        writer,
+        CHARACTER_SECTION,
+        `special-move condition variable: ${condVar.error.message}`,
+      );
+    }
+    const condValue = writer.str(move.condValue);
+    if (!condValue.ok) {
+      return writerError(
+        writer,
+        CHARACTER_SECTION,
+        `special-move condition value: ${condValue.error.message}`,
+      );
+    }
   }
 
-  writer.str(model.specialMoveCategory);
+  const specialMoveCategory = writer.str(model.specialMoveCategory);
+  if (!specialMoveCategory.ok) {
+    return writerError(
+      writer,
+      CHARACTER_SECTION,
+      `special-move category: ${specialMoveCategory.error.message}`,
+    );
+  }
   writer.i8(model.hasSpecialMoves);
   const accessories = writeFixedStrings(
     writer,
@@ -445,7 +471,10 @@ export function writeCharacter(model: Character): Result<Uint8Array> {
     }
   }
 
-  writer.str(model.levelUpProgram);
+  const levelUpProgram = writer.str(model.levelUpProgram);
+  if (!levelUpProgram.ok) {
+    return writerError(writer, CHARACTER_SECTION, `level-up program: ${levelUpProgram.error.message}`);
+  }
   writer.i8(model.levelUpType);
   writer.i8(model.sizeType);
 

@@ -96,14 +96,6 @@ export function readItem(reader: BinaryReader): Result<Item> {
       `not an item: magic is "${header.value.magic}", expected "${ITEM_MAGIC}"`,
     );
   }
-  if (header.value.major < 0 || header.value.minor < 0) {
-    return actorError(
-      reader,
-      reader.offset - 2,
-      "format-spec §1.4",
-      `invalid negative version ${header.value.major}.${header.value.minor}`,
-    );
-  }
   if (header.value.minor < ITEM_MIN_MINOR || header.value.minor > ITEM_MAX_MINOR) {
     return actorError(
       reader,
@@ -356,13 +348,22 @@ function writeWide(writer: BinaryWriter, value: number, wide: boolean): void {
 /** Serialise `model` to the item layout (format-spec §6.2). */
 export function writeItem(model: Item): Result<Uint8Array> {
   const writer = new BinaryWriter();
-  writer.str(model.magic);
+  const magic = writer.str(model.magic);
+  if (!magic.ok) {
+    return writerError(writer, ITEM_SECTION, `magic: ${magic.error.message}`);
+  }
   writer.i16(model.major);
   writer.i16(model.minor);
   const wide = model.minor >= ITEM_I32_MINOR;
 
-  writer.str(model.name);
-  writer.str(model.description);
+  const name = writer.str(model.name);
+  if (!name.ok) {
+    return writerError(writer, ITEM_SECTION, `name: ${name.error.message}`);
+  }
+  const description = writer.str(model.description);
+  if (!description.ok) {
+    return writerError(writer, ITEM_SECTION, `description: ${description.error.message}`);
+  }
   const flags = writeFixedBytes(
     writer,
     [model.equipable, model.menuUsable, model.boardUsable, model.battleUsable, model.usedBy],
@@ -397,7 +398,10 @@ export function writeItem(model: Item): Result<Uint8Array> {
   if (!slots.ok) {
     return slots;
   }
-  writer.str(model.accessoryName);
+  const accessoryName = writer.str(model.accessoryName);
+  if (!accessoryName.ok) {
+    return writerError(writer, ITEM_SECTION, `accessory name: ${accessoryName.error.message}`);
+  }
   if (model.equipBonus.length !== EQUIP_BONUS_COUNT) {
     return writerError(
       writer,
@@ -409,18 +413,39 @@ export function writeItem(model: Item): Result<Uint8Array> {
     writeWide(writer, value, wide);
   }
 
-  writer.str(model.onEquipProgram);
-  writer.str(model.onRemoveProgram);
+  const onEquipProgram = writer.str(model.onEquipProgram);
+  if (!onEquipProgram.ok) {
+    return writerError(writer, ITEM_SECTION, `on-equip program: ${onEquipProgram.error.message}`);
+  }
+  const onRemoveProgram = writer.str(model.onRemoveProgram);
+  if (!onRemoveProgram.ok) {
+    return writerError(writer, ITEM_SECTION, `on-remove program: ${onRemoveProgram.error.message}`);
+  }
   writeWide(writer, model.menuUseHp, wide);
   writeWide(writer, model.menuUseSmp, wide);
-  writer.str(model.menuUseProgram);
+  const menuUseProgram = writer.str(model.menuUseProgram);
+  if (!menuUseProgram.ok) {
+    return writerError(writer, ITEM_SECTION, `menu-use program: ${menuUseProgram.error.message}`);
+  }
   writeWide(writer, model.battleUseHp, wide);
   writeWide(writer, model.battleUseSmp, wide);
-  writer.str(model.battleUseProgram);
+  const battleUseProgram = writer.str(model.battleUseProgram);
+  if (!battleUseProgram.ok) {
+    return writerError(writer, ITEM_SECTION, `battle-use program: ${battleUseProgram.error.message}`);
+  }
 
-  writer.str(model.battleAnimation);
-  writer.str(model.multitaskProgram);
-  writer.str(model.activationProgram);
+  const battleAnimation = writer.str(model.battleAnimation);
+  if (!battleAnimation.ok) {
+    return writerError(writer, ITEM_SECTION, `battle animation: ${battleAnimation.error.message}`);
+  }
+  const multitaskProgram = writer.str(model.multitaskProgram);
+  if (!multitaskProgram.ok) {
+    return writerError(writer, ITEM_SECTION, `multitask program: ${multitaskProgram.error.message}`);
+  }
+  const activationProgram = writer.str(model.activationProgram);
+  if (!activationProgram.ok) {
+    return writerError(writer, ITEM_SECTION, `activation program: ${activationProgram.error.message}`);
+  }
   writer.i8(model.sizeType);
 
   if (model.minor >= ITEM_MOVEMENT_MINOR) {
@@ -434,8 +459,18 @@ export function writeItem(model: Item): Result<Uint8Array> {
     if (!movements.ok) {
       return movements;
     }
-    writer.str(model.restAnimation ?? "");
-    writer.str(model.reservedAnimation ?? "");
+    const restAnimation = writer.str(model.restAnimation ?? "");
+    if (!restAnimation.ok) {
+      return writerError(writer, ITEM_SECTION, `rest animation: ${restAnimation.error.message}`);
+    }
+    const reservedAnimation = writer.str(model.reservedAnimation ?? "");
+    if (!reservedAnimation.ok) {
+      return writerError(
+        writer,
+        ITEM_SECTION,
+        `reserved animation: ${reservedAnimation.error.message}`,
+      );
+    }
   }
   if (model.minor >= ITEM_IDLE_MINOR) {
     const idle = writeFixedStrings(
@@ -473,8 +508,14 @@ export function writeItem(model: Item): Result<Uint8Array> {
       );
     }
     for (const frame of walk.frames) {
-      writer.str(frame.top);
-      writer.str(frame.bottom);
+      const top = writer.str(frame.top);
+      if (!top.ok) {
+        return writerError(writer, ITEM_SECTION, `legacy walk frame top: ${top.error.message}`);
+      }
+      const bottom = writer.str(frame.bottom);
+      if (!bottom.ok) {
+        return writerError(writer, ITEM_SECTION, `legacy walk frame bottom: ${bottom.error.message}`);
+      }
     }
     const rest = writeFixedStrings(
       writer,
