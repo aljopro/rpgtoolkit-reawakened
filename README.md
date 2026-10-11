@@ -15,6 +15,8 @@ In the early 2000s, Christopher B. Matthews' RPG Toolkit opened a door for a who
 
 Nothing to install, nothing to buy. Desktop, mobile and VS Code versions are planned from the same core.
 
+Reawakened is its own project, not a new version of the old Toolkit. Its first release will be v1.0. It opens and plays classic RPG Toolkit games, and is free to define its own native format if the old ones ever hold it back.
+
 ## Free, and what you make is yours
 
 The code is open source under the [MIT license](LICENSE). You can share your games, change them, or sell them. Nobody has to open up their own work. All we ask is that the license notice and credit travel with the engine.

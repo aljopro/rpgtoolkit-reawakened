@@ -2,6 +2,8 @@
 
 Clean-room, MIT/Apache rebuild of the RPG Toolkit 3 engine and editor in **TypeScript** ([ADR 0001](docs/adr/0001-typescript-core.md)).
 
+**This is its own product, not RPG Toolkit v3.x or v4.** Its first release is v1.0. It plays and imports TK3 worlds, and is free to get its own native format (working name "TKR") if legacy limits a feature. See [ADR 0005](docs/adr/0005-independent-product-v1-and-native-format.md). Never describe it as a TK version.
+
 ## Non-negotiable: the guard-rails
 
 Read and follow **[docs/guardrails.md](docs/guardrails.md)** (G1–G7) for every change. In short:
