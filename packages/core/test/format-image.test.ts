@@ -248,9 +248,9 @@ test("an Adam7 stream de-interlaces to the exact image (known-answer stream)", (
   // pass 7 → (0,1),(1,1),(2,1). Passes 2 and 3 are empty for a 3×3 image.
   const raw = new Uint8Array([0, 1, 0, 3, 0, 7, 9, 0, 2, 0, 8, 0, 4, 5, 6]);
   const png = buildPng({ width: 3, height: 3, depth: 8, colourType: 0, interlace: 1, raw });
-  const { width, height, rgba } = unwrap(decodeTexture(png));
-  equal(width, 3);
-  equal(height, 3);
+  const { w, h, rgba } = unwrap(decodeTexture(png));
+  equal(w, 3);
+  equal(h, 3);
   equal(rgba.length, 3 * 3 * 4);
   for (let index = 0; index < 9; index += 1) {
     const value = index + 1;
@@ -498,8 +498,8 @@ test(
     for (const image of SAMPLE_IMAGES) {
       const bytes = new Uint8Array(readFileSync(image.file));
       const first = unwrap(decodeTexture(bytes, image.file));
-      equal(first.width, image.width, `${image.file} width`);
-      equal(first.height, image.height, `${image.file} height`);
+      equal(first.w, image.width, `${image.file} width`);
+      equal(first.h, image.height, `${image.file} height`);
       equal(first.rgba.length, image.width * image.height * 4, `${image.file} buffer length`);
 
       // Determinism (G3): the same bytes decode to the same pixels.

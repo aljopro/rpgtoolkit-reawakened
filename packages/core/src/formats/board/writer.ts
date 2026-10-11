@@ -13,6 +13,7 @@ import { err, ok, type Result } from "../result.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import {
   BOARD_LAYOUT_SECTION,
+  boardGrid,
   type Board,
   type BoardPoint,
 } from "./model.ts";
@@ -20,6 +21,62 @@ import {
 /** A located error for a value the writer cannot encode (AD-18). */
 function fail(writer: BinaryWriter, message: string): Result<never> {
   return err({ offset: writer.toBytes().length, section: BOARD_LAYOUT_SECTION, message });
+}
+
+/**
+ * Check the stored tile runs against the grid and the decompressed matrix
+ * (format-spec §4.2). The writer serialises the stored runs, so they must be
+ * the runs `readBoard` would read back — its `readTileMatrix` stops at the run
+ * that completes the grid, so the runs must cover at least `sizeL × width ×
+ * height` cells with no run after the completing one (only a final run may
+ * overshoot), and must expand to `tileMatrix` cell for cell. A malformed run
+ * (a non-integer or short count) is left to the run loop, which reports it
+ * with its own message.
+ */
+function checkTileMatrix(writer: BinaryWriter, model: Board): Result<never> | undefined {
+  const grid = boardGrid(model.sizeX, model.sizeY, model.coordType);
+  const totalCells = grid.width * grid.height * model.sizeL;
+
+  let covered = 0;
+  for (const run of model.tileRuns) {
+    if (!Number.isInteger(run.count) || run.count < 1) {
+      return undefined;
+    }
+    covered += run.count;
+  }
+  if (covered < totalCells) {
+    return fail(
+      writer,
+      `the tile runs cover ${covered} cells but the grid needs ${totalCells}`,
+    );
+  }
+  const last = model.tileRuns[model.tileRuns.length - 1];
+  if (last !== undefined && covered - last.count >= totalCells) {
+    return fail(
+      writer,
+      `the grid is already complete before the final run; the reader stops at the run that completes the grid, so no run may follow it`,
+    );
+  }
+
+  let cell = 0;
+  for (const run of model.tileRuns) {
+    for (let i = 0; i < run.count; i += 1) {
+      if (model.tileMatrix[cell] !== run.lutIndex) {
+        return fail(
+          writer,
+          `tile cell ${cell} of the tile matrix is ${model.tileMatrix[cell]} but the stored runs give ${run.lutIndex}; the writer serialises the stored runs, so the runs must be rebuilt from the matrix before writing`,
+        );
+      }
+      cell += 1;
+    }
+  }
+  if (model.tileMatrix.length !== covered) {
+    return fail(
+      writer,
+      `tile cell ${covered} of the tile matrix is ${model.tileMatrix[covered]} beyond the ${covered} cells the stored runs cover; the writer serialises the stored runs, so the runs must be rebuilt from the matrix before writing`,
+    );
+  }
+  return undefined;
 }
 
 /** The stored `i16` upper bound for `count` entries: `-1` for none, else `count - 1`. */
@@ -83,6 +140,11 @@ export function writeBoard(model: Board): Result<Uint8Array> {
     if (!written.ok) {
       return written;
     }
+  }
+
+  const tileMatrix = checkTileMatrix(writer, model);
+  if (tileMatrix !== undefined) {
+    return tileMatrix;
   }
 
   for (const run of model.tileRuns) {

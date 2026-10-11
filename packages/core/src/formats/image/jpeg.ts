@@ -462,7 +462,7 @@ function compose(frame: Frame, adobeTransform: number | undefined): DecodedTextu
         rgba[out + 3] = 255;
       }
     }
-    return { width, height, rgba };
+    return { w: width, h: height, rgba };
   }
 
   const first = components[0]!;
@@ -490,7 +490,7 @@ function compose(frame: Frame, adobeTransform: number | undefined): DecodedTextu
       rgba[out + 3] = 255;
     }
   }
-  return { width, height, rgba };
+  return { w: width, h: height, rgba };
 }
 
 /** Parse a SOF0 segment into a `Frame` (format-spec §10, T.81 §B.2.2). */
@@ -631,8 +631,12 @@ function readHuffman(
 }
 
 /**
- * Decode a baseline JPEG file to straight RGBA (AD-28, format-spec §10). Never
- * throws: nothing here is a `FormatError` escape hatch.
+ * Decode a baseline JPEG file to the file's own straight RGBA (AD-28,
+ * format-spec §10): the component channels and alpha 255 (JPEG carries no
+ * alpha), nothing added. No colour key is applied — the key is not part of the
+ * file; it is the `key` of a `blit` (AD-3) and `core/raster` tests it on these
+ * pixels. Never throws: nothing here is a `FormatError` escape hatch. `path`,
+ * the asset path, is carried on every error.
  */
 export function decodeJpeg(bytes: Uint8Array, path?: string): Result<DecodedTexture> {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {

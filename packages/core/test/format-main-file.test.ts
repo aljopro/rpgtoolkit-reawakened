@@ -265,10 +265,10 @@ test("the upper-bound lists keep empty entries and round-trip", () => {
 test("minor 2 reads every reserved run of the pre-3 layout", () => {
   const built = buildGam(2);
   const model = readBuilt(built);
-  deepEqual(model.residue.parallax, PARALLAX);
-  deepEqual(model.residue.menuPluginFallback, MENU_FALLBACK);
-  deepEqual(model.residue.multitask, MULTITASK);
-  deepEqual(model.residue.fightStyle, FIGHT_STYLE);
+  deepEqual(model.reservedRuns.parallax, PARALLAX);
+  deepEqual(model.reservedRuns.menuPluginFallback, MENU_FALLBACK);
+  deepEqual(model.reservedRuns.multitask, MULTITASK);
+  deepEqual(model.reservedRuns.fightStyle, FIGHT_STYLE);
   // The minor ≥ 3 rows are absent: their models hold the defaults.
   equal(model.menuPlugin, "");
   equal(model.fightPlugin, "");
@@ -291,9 +291,9 @@ test("minor 2 reads every reserved run of the pre-3 layout", () => {
 test("minors 0 and 1 read the same pre-3 rows as minor 2", () => {
   for (const minor of [0, 1, 2]) {
     const model = readBuilt(buildGam(minor));
-    deepEqual(model.residue.parallax, PARALLAX);
-    deepEqual(model.residue.multitask, MULTITASK);
-    deepEqual(model.residue.fightStyle, FIGHT_STYLE);
+    deepEqual(model.reservedRuns.parallax, PARALLAX);
+    deepEqual(model.reservedRuns.multitask, MULTITASK);
+    deepEqual(model.reservedRuns.fightStyle, FIGHT_STYLE);
     equal(model.minor, minor);
   }
 });
@@ -303,10 +303,10 @@ test("minor 3 switches on the plugin names and the cursor block", () => {
   const model = readBuilt(built);
   equal(model.menuPlugin, "menu.plg");
   equal(model.fightPlugin, "fight.plg");
-  deepEqual(model.residue.parallax, new Uint8Array(0));
-  deepEqual(model.residue.menuPluginFallback, new Uint8Array(0));
-  deepEqual(model.residue.multitask, new Uint8Array(0));
-  deepEqual(model.residue.fightStyle, new Uint8Array(0));
+  deepEqual(model.reservedRuns.parallax, new Uint8Array(0));
+  deepEqual(model.reservedRuns.menuPluginFallback, new Uint8Array(0));
+  deepEqual(model.reservedRuns.multitask, new Uint8Array(0));
+  deepEqual(model.reservedRuns.fightStyle, new Uint8Array(0));
   equal(model.cursorMoveSound, "cm.wav");
   equal(model.cursorSelectSound, "cs.wav");
   equal(model.cursorCancelSound, "cc.wav");
@@ -481,6 +481,35 @@ test("every minor 0–9 reads with zero trailing bytes and writes back byte-for-
   }
 });
 
+test("a clean buffer leaves an empty residue and warns about nothing", () => {
+  const result = readMainFile(new BinaryReader(buildGam(9).bytes));
+  equal(result.ok, true);
+  if (result.ok) {
+    deepEqual(result.value.residue, new Uint8Array(0));
+    deepEqual(result.warnings, []);
+  }
+});
+
+test("trailing bytes become the residue, warn once and round-trip", () => {
+  const trailing = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+  const clean = buildGam(9).bytes;
+  const bytes = new Uint8Array(clean.length + trailing.length);
+  bytes.set(clean);
+  bytes.set(trailing, clean.length);
+
+  const reader = new BinaryReader(bytes);
+  const result = readMainFile(reader);
+  equal(result.ok, true);
+  if (result.ok) {
+    deepEqual(result.value.residue, trailing);
+    equal(reader.remaining, 0);
+    deepEqual(result.warnings, [
+      "4 trailing byte(s) after the main file were kept as residue (format-spec §2, §1.7)",
+    ]);
+    deepEqual(unwrap(writeMainFile(result.value)), bytes);
+  }
+});
+
 test("a wrong magic is rejected at offset 0", () => {
   const writer = new BinaryWriter();
   putStr(writer, "RPGTLKIT BOARD");
@@ -576,6 +605,31 @@ test("the project folder is <root>/Game/<projectPath>/", () => {
   equal(projectFolder("/games/root", { projectPath: "a\\b" }), "/games/root/Game/a/b/");
 });
 
+test("a stored project path that already starts with Game is not double-prefixed", () => {
+  // The shipped demo stores the full `Game\demo\` form; every spelling maps to
+  // the same folder (format-spec §1.5). Only the leading `Game` segment is
+  // canonicalised; the remaining segments keep their stored casing.
+  for (const stored of ["Game\\demo\\", "game/demo", "/Game/demo/", "\\Game\\demo"]) {
+    equal(projectFolder("/games/root", { projectPath: stored }), "/games/root/Game/demo/", stored);
+  }
+  equal(projectFolder("/games/root", { projectPath: "GAME\\Demo" }), "/games/root/Game/Demo/");
+  // A bare folder name still lands under `Game/`; a bare `Game` is a single
+  // segment and so becomes `Game/Game/`.
+  equal(projectFolder("/games/root", { projectPath: "demo" }), "/games/root/Game/demo/");
+  equal(projectFolder("/games/root", { projectPath: "Game" }), "/games/root/Game/Game/");
+  equal(projectFolder("/games/root", { projectPath: "Game\\Game\\" }), "/games/root/Game/Game/");
+  // Leading and trailing separators on a bare name change nothing.
+  equal(projectFolder("/games/root", { projectPath: "\\demo\\" }), "/games/root/Game/demo/");
+  // An empty project path is `<root>/Game/`.
+  equal(projectFolder("/games/root", { projectPath: "" }), "/games/root/Game/");
+});
+
+test("an empty root gives no prefix and the stored project path is still applied", () => {
+  equal(projectFolder("", { projectPath: "demo" }), "Game/demo/");
+  equal(projectFolder("", { projectPath: "Game\\demo\\" }), "Game/demo/");
+  equal(projectFolder("", { projectPath: "" }), "Game/");
+});
+
 test("a reference resolves under the project folder and its type folder", () => {
   equal(
     resolveReference("/games/root", { projectPath: "demo" }, "boards", "village\\inn.brd"),
@@ -584,6 +638,11 @@ test("a reference resolves under the project folder and its type folder", () => 
   equal(
     resolveReference("/games/root", { projectPath: "demo" }, "programs", "start.prg"),
     "/games/root/Game/demo/Prg/start.prg",
+  );
+  // The stored `Game\demo\` form names the same folder as the bare `demo`.
+  equal(
+    resolveReference("/games/root", { projectPath: "Game\\demo\\" }, "boards", "village\\inn.brd"),
+    "/games/root/Game/demo/Boards/village/inn.brd",
   );
 });
 
@@ -640,7 +699,7 @@ test(
     for (const file of sampleGam) {
       const reader = new BinaryReader(readFileSync(file), file);
       const model = unwrap(readMainFile(reader));
-      equal(reader.remaining, 0, `${file} should have no trailing bytes`);
+      equal(model.residue.length, 0, `${file} should have an empty residue`);
       deepEqual(unwrap(writeMainFile(model)), new Uint8Array(readFileSync(file)), file);
     }
   },

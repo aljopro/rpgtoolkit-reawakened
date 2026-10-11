@@ -6,13 +6,14 @@
  * touches a host. A wrong magic, a version outside 0–9, a truncated file or a
  * short read is a `Result` carrying a located `FormatError`, never a throw
  * (AD-18). The reader consumes exactly the rows §2 lists for the file's minor,
- * so a caller checks any trailing bytes with `reader.remaining`.
+ * then keeps any bytes after them as the file's `residue` and warns once
+ * (§1.7).
  *
  * The twelve version-dependent rows are read here in the order §2 lists them;
  * each is guarded by the condition the spec gives it (`minor < 3`, `minor ≤ 2`,
  * `minor ≥ 3`, `minor ≥ 4`, `minor = 5`, `minor ≥ 6`, `minor ≥ 7`, `minor ≥ 8`,
- * `minor ≥ 9`). Reserved runs are read as raw bytes and kept as residue so the
- * writer reproduces them (AD-18).
+ * `minor ≥ 9`). Reserved runs are read as raw bytes and kept so the writer
+ * reproduces them (AD-18).
  */
 
 import { err, ok, type Result } from "../result.ts";
@@ -28,7 +29,7 @@ import {
   type MainFileEnemy,
   type MainFileExtKey,
   type MainFilePlugin,
-  type MainFileResidue,
+  type MainFileReservedRuns,
 } from "./model.ts";
 
 const NO_BYTES: Uint8Array = new Uint8Array(0);
@@ -46,8 +47,8 @@ function fail(reader: BinaryReader, offset: number, message: string): Result<nev
 
 /**
  * Read a main game file from `reader` (format-spec §2). The header's minor must
- * be 0–9; every field §2 lists for that minor is read in order, and reading
- * stops right after the last one, so trailing bytes are the caller's to check.
+ * be 0–9; every field §2 lists for that minor is read in order. Any bytes after
+ * the last row are kept as `residue` and reported as one warning (§1.7).
  */
 export function readMainFile(reader: BinaryReader): Result<MainFile> {
   const start = reader.offset;
@@ -459,7 +460,18 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     }
   }
 
-  const residue: MainFileResidue = { parallax, menuPluginFallback, multitask, fightStyle };
+  const reservedRuns: MainFileReservedRuns = { parallax, menuPluginFallback, multitask, fightStyle };
+
+  const trailing = reader.readBytes(reader.remaining);
+  if (!trailing.ok) {
+    return trailing;
+  }
+  const warnings: string[] = [];
+  if (trailing.value.length > 0) {
+    warnings.push(
+      `${trailing.value.length} trailing byte(s) after the main file were kept as residue (format-spec §2, §1.7)`,
+    );
+  }
 
   return ok({
     magic,
@@ -517,6 +529,7 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     pathColor,
     movementControls,
     movementScanCodes,
-    residue,
-  });
+    reservedRuns,
+    residue: trailing.value,
+  }, warnings);
 }

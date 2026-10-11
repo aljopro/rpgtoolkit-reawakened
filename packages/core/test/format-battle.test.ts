@@ -65,6 +65,8 @@ interface SpcOptions {
   readonly statusEffect?: string;
   readonly animation?: string;
   readonly description?: string;
+  /** Extra bytes after the last field, to prove they survive as residue. */
+  readonly tail?: readonly number[];
 }
 
 /** Serialise a synthetic special move. */
@@ -83,6 +85,9 @@ function buildSpc(options: SpcOptions = {}): Uint8Array {
   writer.str(options.statusEffect ?? "");
   writer.str(options.animation ?? "fire.anm");
   writer.str(options.description ?? "A ball of fire");
+  if (options.tail !== undefined) {
+    writer.writeBytes(new Uint8Array(options.tail));
+  }
   return writer.toBytes();
 }
 
@@ -102,6 +107,8 @@ interface SteOptions {
   readonly smpPerRound?: number;
   readonly runProgram?: number;
   readonly program?: string;
+  /** Extra bytes after the last field, to prove they survive as residue. */
+  readonly tail?: readonly number[];
 }
 
 /** Serialise a synthetic status effect. */
@@ -121,6 +128,9 @@ function buildSte(options: SteOptions = {}): Uint8Array {
   writer.i16(options.smpPerRound ?? 0);
   writer.i16(options.runProgram ?? 0);
   writer.str(options.program ?? "");
+  if (options.tail !== undefined) {
+    writer.writeBytes(new Uint8Array(options.tail));
+  }
   return writer.toBytes();
 }
 
@@ -135,6 +145,8 @@ interface BkgOptions {
   readonly menuChooseSound?: string;
   readonly readySound?: string;
   readonly cantDoSound?: string;
+  /** Extra bytes after the last field, to prove they survive as residue. */
+  readonly tail?: readonly number[];
 }
 
 /** Serialise a synthetic battle background. */
@@ -149,6 +161,9 @@ function buildBkg(options: BkgOptions = {}): Uint8Array {
   writer.str(options.menuChooseSound ?? "");
   writer.str(options.readySound ?? "ready.wav");
   writer.str(options.cantDoSound ?? "cant.wav");
+  if (options.tail !== undefined) {
+    writer.writeBytes(new Uint8Array(options.tail));
+  }
   return writer.toBytes();
 }
 
@@ -257,6 +272,28 @@ test("a parsed special move writes back byte-for-byte", () => {
   deepEqual(unwrap(writeSpecialMove(move)), bytes);
 });
 
+test("a special move keeps trailing bytes as residue with one warning", () => {
+  const bytes = buildSpc({ tail: [0xde, 0xad, 0xbe, 0xef] });
+  const reader = new BinaryReader(bytes);
+  const result = readSpecialMove(reader);
+  equal(result.ok, true);
+  const move = unwrap(result);
+  deepEqual(move.residue, new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
+  equal(result.ok && result.warnings.length, 1);
+  equal(reader.remaining, 0);
+  deepEqual(unwrap(writeSpecialMove(move)), bytes);
+});
+
+test("a clean synthetic special move has no residue and no warnings", () => {
+  const result = readSpecialMove(new BinaryReader(buildSpc()));
+  equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  equal(result.value.residue.length, 0);
+  equal(result.warnings.length, 0);
+});
+
 test("an unencodable special-move string fails the writer", () => {
   const model: SpecialMove = {
     magic: SPECIAL_MOVE_MAGIC,
@@ -272,6 +309,7 @@ test("an unencodable special-move string fails the writer", () => {
     statusEffect: "",
     animation: "",
     description: "",
+    residue: new Uint8Array(0),
   };
   equal(writeSpecialMove(model).ok, false);
 });
@@ -345,6 +383,28 @@ test("a parsed status effect writes back byte-for-byte", () => {
   deepEqual(unwrap(writeStatusEffect(effect)), bytes);
 });
 
+test("a status effect keeps trailing bytes as residue with one warning", () => {
+  const bytes = buildSte({ tail: [1, 2, 3] });
+  const reader = new BinaryReader(bytes);
+  const result = readStatusEffect(reader);
+  equal(result.ok, true);
+  const effect = unwrap(result);
+  deepEqual(effect.residue, new Uint8Array([1, 2, 3]));
+  equal(result.ok && result.warnings.length, 1);
+  equal(reader.remaining, 0);
+  deepEqual(unwrap(writeStatusEffect(effect)), bytes);
+});
+
+test("a clean synthetic status effect has no residue and no warnings", () => {
+  const result = readStatusEffect(new BinaryReader(buildSte()));
+  equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  equal(result.value.residue.length, 0);
+  equal(result.warnings.length, 0);
+});
+
 // --- Battle backgrounds (§8.3) ---------------------------------------------
 
 test("reads a battle background's header and six string fields", () => {
@@ -416,6 +476,28 @@ test("a parsed battle background writes back byte-for-byte", () => {
   deepEqual(unwrap(writeBattleBackground(background)), bytes);
 });
 
+test("a battle background keeps trailing bytes as residue with one warning", () => {
+  const bytes = buildBkg({ tail: [0x00, 0xff] });
+  const reader = new BinaryReader(bytes);
+  const result = readBattleBackground(reader);
+  equal(result.ok, true);
+  const background = unwrap(result);
+  deepEqual(background.residue, new Uint8Array([0x00, 0xff]));
+  equal(result.ok && result.warnings.length, 1);
+  equal(reader.remaining, 0);
+  deepEqual(unwrap(writeBattleBackground(background)), bytes);
+});
+
+test("a clean synthetic battle background has no residue and no warnings", () => {
+  const result = readBattleBackground(new BinaryReader(buildBkg()));
+  equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  equal(result.value.residue.length, 0);
+  equal(result.warnings.length, 0);
+});
+
 test("an unencodable battle-background string fails the writer", () => {
   const model: BattleBackground = {
     magic: BATTLE_BACKGROUND_MAGIC,
@@ -427,6 +509,7 @@ test("an unencodable battle-background string fails the writer", () => {
     menuChooseSound: "",
     readySound: "",
     cantDoSound: "",
+    residue: new Uint8Array(0),
   };
   equal(writeBattleBackground(model).ok, false);
 });
@@ -441,8 +524,21 @@ test(
   () => {
     const bytes = new Uint8Array(readFileSync(sampleBkg));
     const reader = new BinaryReader(bytes, sampleBkg);
-    const background = unwrap(readBattleBackground(reader));
+    const result = readBattleBackground(reader);
+    const background = unwrap(result);
     equal(reader.remaining, 0, `${sampleBkg} has ${reader.remaining} trailing byte(s)`);
+    equal(
+      background.residue.length,
+      0,
+      `${sampleBkg}: ${background.residue.length} byte(s) fell through to residue`,
+    );
+    if (result.ok) {
+      equal(
+        result.warnings.filter((warning) => warning.includes("residue")).length,
+        0,
+        `${sampleBkg}: residue warning`,
+      );
+    }
     deepEqual(unwrap(writeBattleBackground(background)), bytes, `${sampleBkg} did not round-trip`);
   },
 );

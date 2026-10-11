@@ -4,7 +4,8 @@
  *
  * Each of the three is a magic-and-version header (`str magic`, `i16 major`,
  * `i16 minor`, §1.3/§1.4) followed by a fixed field list. The models keep every
- * field verbatim, so a parsed file writes back byte-for-byte (AD-18).
+ * field verbatim plus any bytes after the last documented one as `residue`, so
+ * a parsed file writes back byte-for-byte (AD-18, §1.7).
  *
  * Each format also has a 2.x-era line-oriented text form. Its presence is
  * detected by the byte at a documented offset — `0x00` means binary, a CR/LF
@@ -79,6 +80,12 @@ export interface SpecialMove {
   readonly animation: string;
   /** The move's one-line description (§8.1). */
   readonly description: string;
+  /**
+   * Bytes after the last documented field, kept so a write is byte-identical
+   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * reported as a warning rather than dropped.
+   */
+  readonly residue: Uint8Array;
 }
 
 /** A parsed status effect (format-spec §8.2). */
@@ -111,6 +118,12 @@ export interface StatusEffect {
   readonly runProgram: number;
   /** The RPGCode program the effect runs (§8.2). */
   readonly program: string;
+  /**
+   * Bytes after the last documented field, kept so a write is byte-identical
+   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * reported as a warning rather than dropped.
+   */
+  readonly residue: Uint8Array;
 }
 
 /** A parsed battle background (format-spec §8.3). */
@@ -133,6 +146,12 @@ export interface BattleBackground {
   readonly readySound: string;
   /** The "can't do that" sound cue (§8.3). */
   readonly cantDoSound: string;
+  /**
+   * Bytes after the last documented field, kept so a write is byte-identical
+   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * reported as a warning rather than dropped.
+   */
+  readonly residue: Uint8Array;
 }
 
 /**

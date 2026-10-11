@@ -431,9 +431,13 @@ function emitPixel(
 }
 
 /**
- * Decode a PNG file to straight RGBA (AD-28, format-spec §10). Never throws: the
- * caller has already matched the signature, and every later defect is a located
- * `FormatError`.
+ * Decode a PNG file to the file's own straight RGBA (AD-28, format-spec §10):
+ * the palette/truecolour channels and the file's own alpha (`tRNS`, alpha
+ * channels), nothing added. No colour key is applied — the key is not part of
+ * the file; it is the `key` of a `blit` (AD-3) and `core/raster` tests it on
+ * these pixels. Never throws: the caller has already matched the signature, and
+ * every later defect is a located `FormatError`. `path`, the asset path, is
+ * carried on every error.
  */
 export function decodePng(bytes: Uint8Array, path?: string): Result<DecodedTexture> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -529,5 +533,5 @@ export function decodePng(bytes: Uint8Array, path?: string): Result<DecodedTextu
     }
   }
 
-  return ok({ width, height, rgba });
+  return ok({ w: width, h: height, rgba });
 }

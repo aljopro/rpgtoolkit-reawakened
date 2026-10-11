@@ -65,6 +65,7 @@ const ANIMATION: Animation = {
     { image: "", transparent: { r: 0, g: 0, b: 0 }, sound: "die.wav" },
   ],
   delay: 0.15,
+  residue: new Uint8Array(0),
 };
 
 const ANIMATION_BYTES = unwrap(writeAnimation(ANIMATION));

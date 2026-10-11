@@ -670,6 +670,69 @@ test("round-trips a board with every section populated", () => {
   deepEqual(unwrap(writeBoard(model)), bytes);
 });
 
+test("a valid model's runs and matrix round-trip unchanged", () => {
+  const bytes = buildBoard({ sizeX: 3, sizeY: 2, sizeL: 2, tokens: [1, -4, 3, -3, 6, -4, 2] });
+  const model = unwrap(readBoard(new BinaryReader(bytes)));
+  deepEqual(unwrap(writeBoard(model)), bytes);
+});
+
+test("refuses a tile matrix that disagrees with the stored runs", () => {
+  const model = unwrap(readBoard(new BinaryReader(buildBoard({}))));
+  const edited = { ...model, tileMatrix: [1, 1, 7, 1] };
+  const result = writeBoard(edited);
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §4.2");
+  equal(result.error.message.includes("tile cell 2"), true, result.error.message);
+});
+
+test("refuses tile runs that cover fewer cells than the grid", () => {
+  const model = unwrap(readBoard(new BinaryReader(buildBoard({}))));
+  const partial = {
+    ...model,
+    tileRuns: [{ lutIndex: 1, count: 3, marker: true }],
+    tileMatrix: [1, 1, 1],
+  };
+  const result = writeBoard(partial);
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §4.2");
+});
+
+test("refuses a run that follows the run completing the grid", () => {
+  const model = unwrap(readBoard(new BinaryReader(buildBoard({}))));
+  const over = {
+    ...model,
+    tileRuns: [
+      { lutIndex: 1, count: 4, marker: true },
+      { lutIndex: 1, count: 1, marker: false },
+    ],
+    tileMatrix: [1, 1, 1, 1, 1],
+  };
+  const result = writeBoard(over);
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §4.2");
+});
+
+test("keeps a final run that overshoots the grid and writes it back", () => {
+  const bytes = buildBoard({ tokens: [1, -5, 2] });
+  const result = readBoard(new BinaryReader(bytes));
+  equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  equal(result.warnings.length > 0, true, "the reader warns about the overshoot");
+  deepEqual(result.value.tileMatrix, [1, 2, 2, 2, 2, 2]);
+  deepEqual(unwrap(writeBoard(result.value)), bytes);
+});
+
 // --- Sample fixtures (guard-rail G5 rule 4: fetched, never committed) --------
 
 /** Every `.brd` under `root`, recursively; empty when the folder is absent. */

@@ -226,9 +226,9 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
       // §10: `decodeTexture` matches the PNG/JPEG signature and returns straight RGBA.
       const read = decodeTexture(bytes, path);
       if (!read.ok) return read;
-      const { width, height, rgba } = read.value;
+      const { w, h, rgba } = read.value;
       return imageOutcome(
-        `image ${extensionOf(path)} ${width}×${height} (${rgba.length} RGBA bytes)`,
+        `image ${extensionOf(path)} ${w}×${h} (${rgba.length} RGBA bytes)`,
         rgba,
         read.warnings,
       );

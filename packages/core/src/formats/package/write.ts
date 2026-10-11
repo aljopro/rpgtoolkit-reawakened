@@ -35,18 +35,22 @@
 
 import { deflateSync, strToU8 } from "fflate/browser";
 import { crc32 } from "../image/crc32.ts";
-import { foldPath, toSlashes } from "../main-file/layout.ts";
+import { foldPath } from "../main-file/layout.ts";
 import { err, ok, type FormatError, type Result } from "../result.ts";
 import { PACKAGE_LIMITS } from "./limits.ts";
+import {
+  checkFilePath,
+  checkIndex,
+  checkManifest,
+  MANIFEST_FILE_NAME,
+  type DistributionManifest,
+} from "./manifest.ts";
 import { checkEntryPath } from "./path-rules.ts";
 import { readZip } from "./zip.ts";
 import type { PackageFile } from "./model.ts";
 
 /** The format-spec section every failure here cites. */
 const SECTION = "format-spec §13";
-
-/** The manifest's name at the archive root (AD-6). */
-export const MANIFEST_FILE_NAME = "manifest.json";
 
 // The ZIP container's structure (PKZIP APPNOTE 4.3, §13): the signatures the
 // reader looks for, the two header sizes and the UTF-8 name flag. The writer
@@ -72,22 +76,6 @@ const DOS_TIME = 0x0000;
 /** The deflate level used when an entry is compressed. */
 const DEFLATE_LEVEL = 6;
 
-/**
- * The manifest of the project's distribution package (AD-6, AD-23, AD-5).
- *
- * `schema` is the project-level integer version; `main` is the in-package path
- * of the main file; `index` lists the relative paths of the game files the
- * resolver keys on.
- */
-export interface DistributionManifest {
-  /** The project-level integer schema version (AD-23). */
-  readonly schema: number;
-  /** The in-package path of the main file, e.g. `Main/demo.gam` (§1.5, §13). */
-  readonly main: string;
-  /** The game files' relative paths, each once; the resolver's index (AD-5). */
-  readonly index: readonly string[];
-}
-
 /** The asset tree and manifest a distribution package is written from (AD-6). */
 export interface DistributionInput {
   /** Every game file: its in-package relative path and its bytes (AD-6). */
@@ -99,81 +87,6 @@ export interface DistributionInput {
 /** A located failure citing §13 (AD-18). */
 function failure(offset: number, message: string): FormatError {
   return { offset, section: SECTION, message };
-}
-
-/**
- * Check a path that names a *file*: it must be a plain relative path, not empty,
- * not ending with a separator, and holding no empty or `.` segment. The shared
- * `checkEntryPath` then applies the §1.5 escape, length, depth and basename
- * rules; this refuses the shapes that would make the reader treat the entry as a
- * directory or an odd path.
- */
-function checkFilePath(path: string): string | null {
-  const normalised = toSlashes(path);
-  const segments = normalised.split("/");
-  if (normalised.length === 0 || segments.some((segment) => segment === "" || segment === ".")) {
-    return `Path "${path}" is not a plain relative file path; a file path must not be empty, end with a separator, or hold an empty or "." segment (path shape, L9)`;
-  }
-  return null;
-}
-
-/**
- * Check the manifest's shape and its own path rules, returning the failure
- * message naming the rule or `null`. A missing or malformed manifest is refused
- * rather than written (AD-18).
- */
-function checkManifest(manifest: DistributionManifest): string | null {
-  const schema = manifest.schema;
-  if (typeof schema !== "number" || !Number.isInteger(schema) || schema < 0) {
-    return `The manifest's schema is ${String(schema)}; it must be a non-negative integer project schema version (project schema, AD-23)`;
-  }
-  const main = manifest.main;
-  if (typeof main !== "string" || main.length === 0) {
-    return `The manifest's main is ${String(main)}; it must name the main file inside the package (manifest main, AD-6)`;
-  }
-  const pathProblem = checkEntryPath(main);
-  if (pathProblem !== null) return `${pathProblem} (manifest main)`;
-  const shapeProblem = checkFilePath(main);
-  if (shapeProblem !== null) return `${shapeProblem} (manifest main)`;
-  if (foldPath(main) === foldPath(MANIFEST_FILE_NAME)) {
-    return `The manifest's main must not be "${MANIFEST_FILE_NAME}"; it names the main game file (manifest main, AD-6)`;
-  }
-  if (!Array.isArray(manifest.index)) {
-    return `The manifest's index is missing; it must list the game files' relative paths (asset index, AD-5)`;
-  }
-  return null;
-}
-
-/**
- * Check the manifest's `index`: an array of plain relative file paths, each once,
- * whose folded set equals the asset tree's. Every file must be indexed and no
- * index entry may name a file the tree does not hold, so `index` is the
- * resolver's lookup over the package (AD-5).
- */
-function checkIndex(index: readonly string[], tree: ReadonlyMap<string, string>): string | null {
-  const listed = new Map<string, string>();
-  for (const value of index) {
-    if (typeof value !== "string" || value.length === 0) {
-      return `The manifest's index holds ${String(value)}; every entry must be a relative file path (asset index, AD-5)`;
-    }
-    const pathProblem = checkEntryPath(value);
-    if (pathProblem !== null) return `${pathProblem} (asset index)`;
-    const shapeProblem = checkFilePath(value);
-    if (shapeProblem !== null) return `${shapeProblem} (asset index)`;
-    const folded = foldPath(value);
-    const first = listed.get(folded);
-    if (first !== undefined) {
-      return `The manifest's index lists "${first}" and "${value}"; the same path after case and separator folding (asset index, L10)`;
-    }
-    listed.set(folded, value);
-    if (!tree.has(folded)) {
-      return `The manifest's index lists "${value}", which is not in the asset tree (asset index, AD-5)`;
-    }
-  }
-  if (listed.size !== tree.size) {
-    return `The manifest's index lists ${listed.size} files but the asset tree holds ${tree.size}; every file must be indexed (asset index, AD-5)`;
-  }
-  return null;
 }
 
 /**

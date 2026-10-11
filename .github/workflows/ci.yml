@@ -56,6 +56,10 @@ jobs:
           key: legacy-games-${{ hashFiles('tools/fixtures/sources.json') }}
       - run: pnpm fixtures:fetch
       - run: pnpm fixtures:check
+      # The format tests skip their sample-game cases when `fixtures/` is absent,
+      # which is the case in the `unit` job. Run the whole suite again here, after
+      # the fetch, so those cases (real files, writer round trips) execute in CI.
+      - run: pnpm test
       - run: pnpm golden
       # The corpus gate (epic 2 Done-when 1): `dump --json` over both sample
       # games, compared against the committed `golden/legacy-corpus.json`. A

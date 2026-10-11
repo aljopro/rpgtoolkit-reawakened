@@ -88,7 +88,13 @@ function storedTileSize(detail: TilesetDetail): number {
   return detail.size * detail.size * detail.bytesPerPixel;
 }
 
-/** The drawn width/height of one tile once expanded (format-spec §3.3). */
+/**
+ * The width/height of one tile as stored, once expanded to RGBA (format-spec
+ * §3.1, §3.3): 32×32 for a 2D tileset, 64×32 for an isometric one, and 16×16
+ * for the 16×16 details (2, 4 and 6). Those 16×16 tiles are not doubled here:
+ * §3.1 puts the pixel doubling in the renderer, which does it once per tileset
+ * and caches the result, so this layer reports what the file stores.
+ */
 export function tileDimensions(detail: TilesetDetail): { width: number; height: number } {
   return detail.isometric
     ? { width: ISO_IMAGE_WIDTH, height: ISO_IMAGE_HEIGHT }
@@ -190,8 +196,10 @@ export function writeTileset(model: Tileset): Result<Uint8Array> {
  * Expand one tile to RGBA (format-spec §3.1, §3.3): the stored colour with the
  * transparent key turned into alpha 0, and the VGA palette applied for the
  * 8-bit details. The result is column-major, `width × height × 4` bytes, with
- * `tileDimensions` giving the width and height. The stored encoding is left
- * untouched, so the writer still re-emits the original bytes (AD-18).
+ * `tileDimensions` giving the width and height at the stored size (a 16×16
+ * detail gives 16×16 pixels; doubling them to 32×32 is the renderer's job, §3.1).
+ * The stored encoding is left untouched, so the writer still re-emits the
+ * original bytes (AD-18).
  */
 export function expandTileToRgba(model: Tileset, tileIndex: number): Result<Uint8Array> {
   const tile = model.tiles[tileIndex];

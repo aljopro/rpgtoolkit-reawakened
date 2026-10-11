@@ -4,9 +4,10 @@
  *
  * It emits the minor it was given and reproduces the bytes of a model that came
  * from `readMainFile` exactly (AD-18): the version-dependent rows are written
- * under the same conditions the reader read them, and the reserved runs are
- * re-emitted verbatim. Pure (G2): it writes into a `BinaryWriter` and never
- * touches a host. Only an unencodable string fails.
+ * under the same conditions the reader read them, the reserved runs are
+ * re-emitted verbatim, and the file's `residue` follows the last row (§1.7).
+ * Pure (G2): it writes into a `BinaryWriter` and never touches a host. Only an
+ * unencodable string fails.
  */
 
 import { ok, type Result } from "../result.ts";
@@ -16,7 +17,8 @@ import { encodeGameSpeed, type MainFile } from "./model.ts";
 /**
  * Serialise `model` to the main-file layout (format-spec §2). Which rows are
  * written is decided by `model.minor`, exactly as the reader decided which to
- * read, so a file the reader accepted writes back byte-for-byte.
+ * read, and `model.residue` is appended after the last row, so a file the
+ * reader accepted writes back byte for byte (§1.7).
  */
 export function writeMainFile(model: MainFile): Result<Uint8Array> {
   const writer = new BinaryWriter();
@@ -49,7 +51,7 @@ export function writeMainFile(model: MainFile): Result<Uint8Array> {
   writer.i16(model.extendToFullScreen);
   writer.i16(model.resolution);
   if (minor < 3) {
-    writer.writeBytes(model.residue.parallax);
+    writer.writeBytes(model.reservedRuns.parallax);
   }
   writer.i16(model.disableProtectReg);
   const languageFile = writer.str(model.languageFile);
@@ -98,12 +100,12 @@ export function writeMainFile(model: MainFile): Result<Uint8Array> {
       return fightPlugin;
     }
   } else {
-    writer.writeBytes(model.residue.menuPluginFallback);
+    writer.writeBytes(model.reservedRuns.menuPluginFallback);
   }
 
   // Row 22 (conditional, minor ≤ 2).
   if (minor <= 2) {
-    writer.writeBytes(model.residue.multitask);
+    writer.writeBytes(model.reservedRuns.multitask);
   }
 
   // Row 20: the inverted fighting flag.
@@ -129,7 +131,7 @@ export function writeMainFile(model: MainFile): Result<Uint8Array> {
 
   // Row 29 (conditional, minor < 3).
   if (minor < 3) {
-    writer.writeBytes(model.residue.fightStyle);
+    writer.writeBytes(model.reservedRuns.fightStyle);
   }
 
   const gameOverPrg = writer.str(model.gameOverPrg);
@@ -225,5 +227,6 @@ export function writeMainFile(model: MainFile): Result<Uint8Array> {
     }
   }
 
+  writer.writeBytes(model.residue);
   return ok(writer.toBytes());
 }
