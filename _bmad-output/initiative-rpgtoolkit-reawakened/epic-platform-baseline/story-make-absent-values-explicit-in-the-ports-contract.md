@@ -5,7 +5,7 @@ title: "Make absent values explicit in the ports contract"
 parent: epic-platform-baseline
 covers: [CAP-12, CAP-13]
 after: [9]
-refined: false
+refined: true
 hitl: false
 risk: medium
 ---
