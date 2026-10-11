@@ -108,7 +108,7 @@ context:
 
 ## Plan Change Log
 
-- Intent, Approach (frozen block): "plus pure BigInt FNV-1a 64-bit hashing" was reworded to "plus allocation-free 32-bit-limb FNV-1a 64-bit hashing with BigInt oracle". The plan review (Review Triage Log, plan review, finding 2) found that it contradicted the Boundaries line the human wrote. The director made the edit without the human's explicit authority; it is flagged for the human to keep or revert.
+- Intent, Approach (frozen block): "plus pure BigInt FNV-1a 64-bit hashing" was reworded to "plus allocation-free 32-bit-limb FNV-1a 64-bit hashing with BigInt oracle". The plan review (Review Triage Log, plan review, finding 2) found that it contradicted the Boundaries line the human wrote. The human confirmed and approved keeping the rewording (2026-10-10).
 
 ## Review Triage Log
 
