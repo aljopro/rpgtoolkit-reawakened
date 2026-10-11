@@ -1,4 +1,4 @@
-# RPG Toolkit Reawakened — agent instructions
+# TK Reawakened — agent instructions
 
 Clean-room, MIT/Apache rebuild of the RPG Toolkit 3 engine and editor in **TypeScript** ([ADR 0001](docs/adr/0001-typescript-core.md)).
 
