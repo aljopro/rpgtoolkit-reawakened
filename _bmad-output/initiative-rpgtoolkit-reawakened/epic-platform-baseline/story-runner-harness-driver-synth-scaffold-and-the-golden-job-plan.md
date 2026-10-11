@@ -3,7 +3,7 @@ title: 'runner-harness driver, synth scaffold and the golden job'
 type: 'chore'
 ticket: '9'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: 'b09ff49910ec3d09274a87bd9ccd05253de37cac'
 route: 'full'
 route_source: 'auto'
