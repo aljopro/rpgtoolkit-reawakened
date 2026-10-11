@@ -144,5 +144,5 @@ The checks are created **with the first code commit** (repository scaffolding), 
 1. Workspace layout and `tsconfig` per package (G2).
 2. Lint configuration with the restricted globals, imports and syntax above (G1–G3).
 3. Dependency-graph rules (G2, G4).
-4. CI workflow with required jobs: typecheck, lint, unit, **headless golden** (G5), **licence** (G6), **provenance** (G7).
+4. CI workflow with required jobs: `typecheck`, `lint`, `unit`, `graph`, **headless golden** (G5), **licence** (G6) and **provenance** (G7), plus a gate job that fails unless every required job succeeded, so a skipped job cannot merge.
 5. A pull-request template with the guard-rail checklist (already in `.github/`).

@@ -28,3 +28,6 @@
 - source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md`
   summary: The harness driver (entry 1.9) throws if a step report contains non-empty requests or diagnostics.
   evidence: Review finding F10 / Design Notes. Revisit when a real engine emits diagnostics or blocking requests.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-required-ci-checks-branch-protection-and-contributor-docs-plan.md`
+  summary: If a merge queue is ever enabled for `main`, `merge_group:` must be added to `ci.yml`'s `on:`.
+  evidence: GitHub reports required checks for a queue entry only from workflows triggered by `merge_group`; without it every required check stops reporting and the merge fails. No merge queue exists today (entry 1.10).
