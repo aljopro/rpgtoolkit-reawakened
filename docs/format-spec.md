@@ -28,27 +28,32 @@ All multi-byte values are **little-endian**.
 | Name used here | Size | Meaning |
 |---|---|---|
 | `i8` / `u8` | 1 byte | signed / unsigned byte (flags, booleans, small enums) |
-| `i16` | 2 bytes | signed integer (the legacy "Integer"/"short") |
-| `i32` | 4 bytes | signed integer (the legacy "Long"/"int") |
+| `i16` / `u16` | 2 bytes | signed / unsigned integer (the legacy "Integer"/"short") |
+| `i32` / `u32` | 4 bytes | signed / unsigned integer (the legacy "Long"/"int") |
 | `f64` | 8 bytes | IEEE‑754 double |
-| `str` | variable | **NUL-terminated** single-byte string in the Windows ANSI code page (assume Windows‑1252). No length prefix. An empty string is a single `0x00`. |
-| `color` | 4 bytes (`i32`) | Windows COLORREF: `0x00BBGGRR` (red in the low byte) |
+| `str` | variable | **NUL-terminated** single-byte string in the Windows ANSI code page (assume Windows‑1252). No length prefix. An empty string is a single `0x00`. A `str` must be followed by its `0x00` before the end of the file; a string that runs to the end of the data with no terminator is invalid and is reported as a read error at the offset where the string began. |
+| `color` | 4 bytes (`i32`) | Windows COLORREF: `0x00BBGGRR` (red in the low byte). The high byte is zero in every legacy value; a reader ignores it and a writer emits `0x00`. |
+| `bytes` | variable | an uninterpreted run of raw bytes whose length is given by the surrounding field; no terminator, no encoding |
 
-Booleans are stored as `i16` or `i8`: zero = false, any non-zero = true. Some VB-era writers stored true as `-1`.
+The five byte values Windows‑1252 leaves undefined (`0x81`, `0x8D`, `0x8F`, `0x90`, `0x9D`) carry no character in that code page. Decode each to the character with the same numeric value (U+0081 and so on) and write it back as the same byte, so that reading and re-writing a string never changes it.
+
+Booleans are stored as `i16` or `i8`: zero = false, and any non-zero value is true, including `-1` (some VB-era writers stored true as `-1`). When writing, store `1` for true unless the field's own section says otherwise.
 
 ### 1.2 The "upper bound" count convention
 
-Most repeated sections start with an **upper bound**, not a count. A value `n` means the entries are indexed `0..n`, so there are **`n + 1` entries**. A value of **`-1` means none**. Where a format uses a true count, this spec says so.
+Most repeated sections start with an **upper bound**, not a count. The bound is an `i16` unless the section says otherwise (the custom-stance lists in §6.1, §6.2 and §6.3 use an `i32`). A value `n` means the entries are indexed `0..n`, so there are **`n + 1` entries**. A value of **`-1` means none**; no other negative value is valid, and a reader reports one as an error. A reader must also check `n` against the bytes that remain rather than trusting it, so that a damaged or untrusted file cannot make it read past the end or reserve a huge block up front. Where a format uses a true count, this spec says so. "None" is not the same as an empty entry: a board's tile lookup table, for example, reserves its index 0 for the empty "no tile" reference (§4.2), which is a real entry that keeps later indices stable.
 
 ### 1.3 Header strings and binary vs. text detection
 
-Every Toolkit data file starts with an ASCII magic string such as `RPGTLKIT BOARD`. In the binary (3.x) layouts the magic is written as a `str`, so it is followed by a `0x00`. Older (2.x-era) versions of several formats were **line-oriented text** with the same magic as their first line.
+Every Toolkit data file that carries a magic starts with an ASCII magic string such as `RPGTLKIT BOARD`; the tileset formats have no magic and state their own first field (§3.1). In the binary (3.x) layouts the magic is written as a `str`, so it is followed by a `0x00`. Older (2.x-era) versions of several formats were **line-oriented text** with the same magic as their first line.
 
-**Detection rule:** look at the byte at offset `len(magic)`. If it is `0x00` the file is binary; otherwise it is text (the byte is a CR/LF). Readers must support the binary forms. Text forms are needed only for very old projects, and the 3.x engine refused some of them anyway (see each format).
+**Detection rule:** for a format that begins with a magic string, look at the byte at offset `len(magic)`. If it is `0x00` the file is binary; otherwise it is text (the byte is a CR/LF). Some formats instead place a zero-versus-non-zero marker at a fixed offset, or detect the form another way: `.brd` at byte 14 (§4.1), `.tem` at byte 13 (§6.1), `.itm` at byte 13 (§6.2), `.ene` at byte 14 (§6.3), `.bkg` at byte 12 (§8.3), `.spc` and `.ste` at byte 16 (§8.1, §8.2), and a pre-compiled `.prg` by the byte `0x00` at the very start (§9.1). Where a format names its own rule, that rule takes precedence over this one. Readers must support the binary forms. Text forms are needed only for very old projects, and the 3.x engine refused some of them anyway (see each format).
 
 ### 1.4 Version fields
 
-Binary files store `i16 major`, `i16 minor` right after the magic. For 3.x files `major` is `3` (sometimes `2` on files carried over from 2.x). **`minor` selects the layout.** All conditional fields below are keyed on `minor`.
+Binary files store `i16 major`, `i16 minor` right after the magic. `major` is informational only and selects no layout: the 3.1.0 sample files all carry `major` 2, and older files may differ. **`minor` selects the layout**, and all conditional fields below are keyed on `minor`. Each format states which `minor` values it accepts; an unlisted value is invalid and a reader reports it rather than guessing a neighbouring layout. A negative version field is invalid.
+
+Two formats do not use this scheme. `.tst` and `.iso` begin with a single `i16 version` (`20` or `30`) and no magic at all (§3.1). A pre-compiled `.prg` is recognised by the byte `0x00` at the start, not by a version (§9.1). `.tbm` stores `major` 3 with `minor` 0 (§3.6).
 
 ### 1.5 Project layout and path resolution
 
@@ -177,7 +182,7 @@ No magic string. The file is a fixed header followed by tightly packed tiles.
 | Type | Field | Values |
 |---|---|---|
 | i16 | version | `20` = `.tst`, `30` = `.iso` |
-| i16 | tileCount | number of tiles |
+| i16 | tileCount | number of tiles (a true count, not an upper bound) |
 | i16 | detail | pixel format; uniform for the whole set |
 
 **Detail levels:**
@@ -242,6 +247,8 @@ Animated tiles can be placed on boards like ordinary tiles (§4.3) and play cont
 
 A small grid of tiles used as one picture, e.g. a 32×64 character frame.
 
+`width` and `height` are inclusive bounds, like every other upper bound (§1.2): the loops run over `0..width` and `0..height`, so a `width` of 0 still has one column.
+
 | Type | Field |
 |---|---|
 | str | magic `TK3 TILEBITMAP` |
@@ -286,7 +293,7 @@ All coordinates in this layout are **pixels**, except tile grid indices.
 | Type | Field |
 |---|---|
 | i16 | lutUpperBound |
-| str × (lutUpperBound + 1) | tile references. **Index 0 is always the "no tile" entry (empty string).** Unused slots may be empty. |
+| str × (lutUpperBound + 1) | tile references. **Index 0 is always the "no tile" entry (empty string).** Unused slots may be empty. An empty slot is not the same as the table being absent: the table always has `lutUpperBound + 1` entries, and `-1` is the only value that means "none" (§1.2). |
 
 **Tile matrix:** for each layer z = 1…sizeL, then each row y = 1…H, then each column x = 1…W (row-major within a layer), read an `i16`:
 * **≥ 0:** LUT index for this one cell.
