@@ -1,15 +1,20 @@
 // The image decoders of format-spec §10 (AD-28): synthetic PNGs built byte by
 // byte pin each scanline filter, sub-byte samples, the palette and tRNS path,
-// Adam7 de-interlacing and the known-answer Adam7 stream; located errors cover
-// a bad signature, truncation, a broken zlib stream, an unlisted colour type or
-// depth and an out-of-range palette index. When the legacy sample games are
-// fetched, the two JPEGs and the palette PNG decode to their exact dimensions,
-// twice to byte-identical RGBA, and a declared tRNS yields transparent pixels.
+// the alpha channels of colour types 4 and 6, grey and truecolour colour keys,
+// Adam7 de-interlacing and the known-answer Adam7 stream. Located errors cover
+// a bad signature, truncation, a broken zlib stream, an IDAT that does not
+// inflate to the declared layout, a stale chunk CRC, a malformed chunk list, an
+// unlisted colour type or depth and an out-of-range palette index, and every
+// truncation or one-byte corruption of a valid file comes back as a Result
+// rather than a throw. When the legacy sample games are fetched, the two JPEGs
+// and the palette PNG decode to their exact dimensions, twice to byte-identical
+// RGBA, and a declared tRNS yields transparent pixels.
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { zlibSync } from "fflate/browser";
 import { decodeTexture } from "../src/index.ts";
 import type { Result } from "../src/index.ts";
 
@@ -158,6 +163,37 @@ function idatDataOffset(png: Uint8Array): number {
   throw new Error("no IDAT chunk in the built PNG");
 }
 
+/** An IHDR chunk with the geometry the decoder reads, for hand-assembled files. */
+function ihdrChunk(width: number, height: number, depth: number, colourType: number): Uint8Array {
+  const ihdr = new Uint8Array(13);
+  writeU32(ihdr, 0, width);
+  writeU32(ihdr, 4, height);
+  ihdr[8] = depth;
+  ihdr[9] = colourType;
+  return chunk("IHDR", ihdr);
+}
+
+/** The file offset of the length field of the first `type` chunk in `png`. */
+function chunkOffset(png: Uint8Array, type: string): number {
+  let at = SIGNATURE.length;
+  while (at < png.length) {
+    const length = (png[at]! << 24) | (png[at + 1]! << 16) | (png[at + 2]! << 8) | png[at + 3]!;
+    const found = String.fromCharCode(png[at + 4]!, png[at + 5]!, png[at + 6]!, png[at + 7]!);
+    if (found === type) {
+      return at;
+    }
+    at += 12 + length;
+  }
+  throw new Error(`no ${type} chunk in the built PNG`);
+}
+
+/** The file offset of a chunk's stored CRC, from the same walk. */
+function chunkCrcOffset(png: Uint8Array, type: string): number {
+  const at = chunkOffset(png, type);
+  const length = (png[at]! << 24) | (png[at + 1]! << 16) | (png[at + 2]! << 8) | png[at + 3]!;
+  return at + 8 + length;
+}
+
 /** The RGBA of one pixel, as a plain array, for readable assertions. */
 function pixel(rgba: Uint8Array, width: number, x: number, y: number): number[] {
   const at = (y * width + x) * 4;
@@ -290,6 +326,66 @@ test("an interlaced palette PNG combines Adam7 with a tRNS alpha", () => {
   });
 });
 
+test("colour type 6 and 4 carry their own non-opaque alpha", () => {
+  const truecolour = buildPng({
+    width: 2,
+    height: 1,
+    depth: 8,
+    colourType: 6,
+    interlace: 0,
+    // filter 0, then RGBA / RGBA.
+    raw: new Uint8Array([0, 10, 20, 30, 0, 200, 100, 50, 128]),
+  });
+  const rgba6 = unwrap(decodeTexture(truecolour));
+  deepEqual(pixel(rgba6.rgba, 2, 0, 0), [10, 20, 30, 0]);
+  deepEqual(pixel(rgba6.rgba, 2, 1, 0), [200, 100, 50, 128]);
+
+  const greyAlpha = buildPng({
+    width: 2,
+    height: 1,
+    depth: 8,
+    colourType: 4,
+    interlace: 0,
+    // filter 0, then grey/alpha / grey/alpha.
+    raw: new Uint8Array([0, 77, 0, 200, 64]),
+  });
+  const rgba4 = unwrap(decodeTexture(greyAlpha));
+  deepEqual(pixel(rgba4.rgba, 2, 0, 0), [77, 77, 77, 0]);
+  deepEqual(pixel(rgba4.rgba, 2, 1, 0), [200, 200, 200, 64]);
+});
+
+test("a type 0 and a type 2 tRNS colour key give transparent pixels", () => {
+  // Colour type 0: the key is one 16-bit grey. Only samples equal to it are
+  // transparent; every other pixel stays opaque.
+  const grey = buildPng({
+    width: 3,
+    height: 1,
+    depth: 8,
+    colourType: 0,
+    interlace: 0,
+    raw: new Uint8Array([0, 5, 6, 5]),
+    trns: new Uint8Array([0, 5]),
+  });
+  const greyRgba = unwrap(decodeTexture(grey)).rgba;
+  deepEqual(pixel(greyRgba, 3, 0, 0), [5, 5, 5, 0]);
+  deepEqual(pixel(greyRgba, 3, 1, 0), [6, 6, 6, 255]);
+  deepEqual(pixel(greyRgba, 3, 2, 0), [5, 5, 5, 0]);
+
+  // Colour type 2: three 16-bit channels must all match the key.
+  const truecolour = buildPng({
+    width: 2,
+    height: 1,
+    depth: 8,
+    colourType: 2,
+    interlace: 0,
+    raw: new Uint8Array([0, 10, 20, 30, 10, 20, 31]),
+    trns: new Uint8Array([0, 10, 0, 20, 0, 30]),
+  });
+  const rgbRgba = unwrap(decodeTexture(truecolour)).rgba;
+  deepEqual(pixel(rgbRgba, 2, 0, 0), [10, 20, 30, 0]);
+  deepEqual(pixel(rgbRgba, 2, 1, 0), [10, 20, 31, 255]);
+});
+
 test("the RGBA buffer is fresh and non-aliasing", () => {
   const png = greyU8(2, [1, 2]);
   const first = unwrap(decodeTexture(png));
@@ -371,6 +467,109 @@ test("an IDAT that is not a zlib stream is a located error", () => {
     equal(truncated.error.offset, idatDataOffset(short));
     equal(truncated.error.message.includes("inflates to"), true);
     equal(truncated.error.section, "format-spec §10");
+  }
+});
+
+test("a stale chunk CRC is a located error at the CRC field", () => {
+  // Every chunk's stored CRC is checked over its type and data, so a chunk whose
+  // CRC no longer matches its bytes is refused rather than decoded from bytes
+  // the file cannot vouch for. Only the CRC byte changes here, so the chunk data
+  // itself is untouched and the mismatch is exactly the stale CRC.
+  const png = greyU8(2, [1, 2]);
+  const crcAt = chunkCrcOffset(png, "IDAT");
+  const stale = png.slice();
+  stale[crcAt] = stale[crcAt]! ^ 0xff;
+  const result = decodeTexture(stale);
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.offset, crcAt);
+    equal(result.error.section, "format-spec §10");
+    equal(result.error.message.includes("CRC"), true);
+  }
+});
+
+test("an IDAT that inflates past the declared layout is refused", () => {
+  // A 1×1 grey image declares two bytes of inflated scanlines. This IDAT is a
+  // one-kilobyte zlib stream that expands to a megabyte of zeros, so a decoder
+  // that inflated without a bound would allocate a hundredfold more than the
+  // header allows; the declared layout bounds the output buffer and the
+  // over-long stream is refused.
+  const png = buildPng({
+    width: 1,
+    height: 1,
+    depth: 8,
+    colourType: 0,
+    interlace: 0,
+    raw: new Uint8Array([0, 7]),
+    idat: zlibSync(new Uint8Array(1_000_000)),
+  });
+  const result = decodeTexture(png);
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.offset, idatDataOffset(png));
+    equal(result.error.message.includes("inflates to"), true);
+    equal(result.error.section, "format-spec §10");
+  }
+});
+
+test("a header that declares more than any deflate stream of that length can fill is refused", () => {
+  // 5000×5000 grey needs about 25 MB of inflated scanlines; a 100-byte stream
+  // cannot expand past a thousandfold, so the header is refused before an
+  // output buffer that size is reserved for it.
+  const png = buildPng({
+    width: 5000,
+    height: 5000,
+    depth: 8,
+    colourType: 0,
+    interlace: 0,
+    raw: new Uint8Array(0),
+    idat: zlibSync(new Uint8Array(100)),
+  });
+  const result = decodeTexture(png);
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.offset, idatDataOffset(png));
+    equal(result.error.message.includes("cannot inflate"), true);
+    equal(result.error.section, "format-spec §10");
+  }
+});
+
+test("a highly compressible image is not mistaken for a bomb", () => {
+  // 2000×2000 grey of one colour inflates to four million bytes from a few
+  // kilobytes, a ratio near the deflate maximum; it must still decode.
+  const raw = new Uint8Array(2000 * (1 + 2000));
+  const png = buildPng({
+    width: 2000,
+    height: 2000,
+    depth: 8,
+    colourType: 0,
+    interlace: 0,
+    raw,
+    idat: zlibSync(raw, { level: 9 }),
+  });
+  const decoded = unwrap(decodeTexture(png));
+  equal(decoded.w, 2000);
+  equal(decoded.h, 2000);
+  deepEqual(pixel(decoded.rgba, 2000, 1999, 1999), [0, 0, 0, 255]);
+});
+
+test("an IDAT that inflates to fewer bytes than the declared layout is refused", () => {
+  const png = buildPng({
+    width: 2,
+    height: 1,
+    depth: 8,
+    colourType: 0,
+    interlace: 0,
+    raw: new Uint8Array([0, 1, 2]),
+    // A well-formed zlib stream of two bytes, where the layout needs three.
+    idat: zlibStore(new Uint8Array([0, 1])),
+  });
+  const result = decodeTexture(png);
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.offset, idatDataOffset(png));
+    equal(result.error.message.includes("inflates to"), true);
+    equal(result.error.section, "format-spec §10");
   }
 });
 
@@ -457,6 +656,107 @@ test("a truncated IHDR payload reports a short IHDR", () => {
   if (!result.ok) {
     equal(result.error.offset, 8);
     equal(result.error.message.includes("IHDR is 5 bytes"), true);
+  }
+});
+
+test("a malformed chunk list is a located error, not a decoded image", () => {
+  // Every file below is otherwise a valid 2×1 grey or 1×1 palette PNG, so the
+  // only defect is the one under test and only the structure check can catch it.
+  const ihdr = ihdrChunk(2, 1, 8, 0);
+  const greyIdat = chunk("IDAT", zlibStore(new Uint8Array([0, 1, 2])));
+  const paletteIhdr = ihdrChunk(1, 1, 8, 3);
+  const paletteIdat = chunk("IDAT", zlibStore(new Uint8Array([0, 0])));
+  const iend = chunk("IEND", new Uint8Array(0));
+
+  // No IEND: the chunk stream ends after the image data.
+  const noEnd = concat([SIGNATURE, ihdr, greyIdat]);
+  const missing = decodeTexture(noEnd);
+  equal(missing.ok, false);
+  if (!missing.ok) {
+    equal(missing.error.offset, noEnd.length);
+    equal(missing.error.message.includes("IEND"), true);
+    equal(missing.error.section, "format-spec §10");
+  }
+
+  // A second IHDR: the header appears once and first.
+  const twoHeaders = concat([SIGNATURE, ihdr, ihdr, greyIdat, iend]);
+  const duplicate = decodeTexture(twoHeaders);
+  equal(duplicate.ok, false);
+  if (!duplicate.ok) {
+    equal(duplicate.error.offset, 8 + ihdr.length);
+    equal(duplicate.error.message.includes("IHDR"), true);
+  }
+
+  // An unknown critical chunk: `CgBI`'s first letter is uppercase, so a decoder
+  // that cannot honour it must refuse the file rather than guess at the pixels.
+  const unknown = concat([SIGNATURE, ihdr, chunk("CgBI", new Uint8Array(0)), greyIdat, iend]);
+  const critical = decodeTexture(unknown);
+  equal(critical.ok, false);
+  if (!critical.ok) {
+    equal(critical.error.offset, chunkOffset(unknown, "CgBI"));
+    equal(critical.error.message.includes("CgBI"), true);
+  }
+
+  // PLTE and tRNS belong before the first IDAT.
+  const latePlte = concat([
+    SIGNATURE,
+    paletteIhdr,
+    paletteIdat,
+    chunk("PLTE", new Uint8Array([1, 2, 3])),
+    iend,
+  ]);
+  const misplacedPalette = decodeTexture(latePlte);
+  equal(misplacedPalette.ok, false);
+  if (!misplacedPalette.ok) {
+    equal(misplacedPalette.error.offset, chunkOffset(latePlte, "PLTE"));
+    equal(misplacedPalette.error.message.includes("PLTE"), true);
+  }
+
+  const lateTrns = concat([SIGNATURE, ihdr, greyIdat, chunk("tRNS", new Uint8Array([0, 1])), iend]);
+  const misplacedKey = decodeTexture(lateTrns);
+  equal(misplacedKey.ok, false);
+  if (!misplacedKey.ok) {
+    equal(misplacedKey.error.offset, chunkOffset(lateTrns, "tRNS"));
+    equal(misplacedKey.error.message.includes("tRNS"), true);
+  }
+
+  // A palette longer than the bit depth can address: depth 1 selects two.
+  const longPalette = concat([
+    SIGNATURE,
+    ihdrChunk(1, 1, 1, 3),
+    chunk("PLTE", new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9])),
+    paletteIdat,
+    iend,
+  ]);
+  const oversized = decodeTexture(longPalette);
+  equal(oversized.ok, false);
+  if (!oversized.ok) {
+    equal(oversized.error.offset, chunkOffset(longPalette, "PLTE"));
+    equal(oversized.error.message.includes("PLTE"), true);
+  }
+});
+
+test("every truncation and one-byte change of a PNG returns a Result, never a throw", () => {
+  // An asset is untrusted input: a decoder that throws takes the whole game down
+  // on one corrupt file. A cut at any length and a flipped byte at any offset
+  // must come back as a `Result`, and a refusal must be a located failure.
+  const png = greyU8(2, [1, 2]);
+  for (let cut = 0; cut <= png.length; cut += 1) {
+    const result = decodeTexture(png.subarray(0, cut));
+    equal(result.ok, cut === png.length, `truncated to ${cut} bytes`);
+    if (!result.ok) {
+      equal(result.error.section, "format-spec §10", `truncated to ${cut} bytes`);
+      equal(result.error.offset >= 0, true, `truncated to ${cut} bytes`);
+    }
+  }
+  for (let at = 0; at < png.length; at += 1) {
+    const mutated = png.slice();
+    mutated[at] = mutated[at]! ^ 0xff;
+    const result = decodeTexture(mutated);
+    if (!result.ok) {
+      equal(result.error.section, "format-spec §10", `byte ${at} changed`);
+      equal(result.error.offset >= 0, true, `byte ${at} changed`);
+    }
   }
 });
 
