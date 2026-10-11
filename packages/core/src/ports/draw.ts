@@ -48,10 +48,13 @@ export type Rect = {
 /** A `blit` blend mode (AD-3). */
 export type Blend = "normal" | "additive" | "translucent";
 
-/** A texture: a canonical asset key plus an optional 1-based tile index (AD-3). */
+/**
+ * A texture: a canonical asset key plus a 1-based tile index, or `null` when
+ * there is no tile (AD-3).
+ */
 export type TexRef = {
   readonly asset: AssetKey;
-  readonly tile?: number;
+  readonly tile: number | null;
 };
 
 /**

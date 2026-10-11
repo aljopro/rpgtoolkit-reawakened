@@ -1,5 +1,10 @@
 // Port-contract fixtures that must FAIL to typecheck: functions, `undefined`
-// and `Map` are outside `PlainData`/`PortData` (AD-1, AD-7).
+// and `Map` are outside `PlainData`/`PortData`, and every port-contract field
+// is required and never `undefined` (AD-1, AD-7, AD-5, AD-14).
+//
+// Each `export ` line below carries exactly one defect (`contracts.test.ts`
+// compiles this file and requires one error per exported line), so each object
+// literal stays on a single line.
 import type {
   AssertPlainData,
   AssertPortData,
@@ -16,8 +21,11 @@ export type UndefinedFieldIsNotPortData = AssertPortData<{ readonly value: strin
 export type MapIsNotPortData = AssertPortData<Map<string, number>>;
 export type FunctionIsNotPlainData = AssertPlainData<() => number>;
 export type UndefinedIsNotPlainData = AssertPlainData<undefined>;
-export const badKeyInput: KeyInput = { kind: "key", name: "A", code: "KeyA", char: undefined, down: true };
-export const badAudioCue: AudioCue = { cueId: 1, kind: "music.play", asset: undefined };
-export const badTexRef: TexRef = { asset: "hero.png" as AssetKey, tile: undefined };
+export const badKeyInputMissingChar: KeyInput = { kind: "key", name: "A", code: "KeyA", down: true };
+export const badKeyInputUndefinedChar: KeyInput = { kind: "key", name: "A", code: "KeyA", char: undefined, down: true };
+export const badAudioCueUndefinedAsset: AudioCue = { cueId: 1, kind: "music.play", asset: undefined, loop: null, volume: null };
+export const badAudioCueMissingVolume: AudioCue = { cueId: 1, kind: "music.play", asset: "a.ogg" as AssetKey, loop: null };
+export const badTexRefUndefinedTile: TexRef = { asset: "hero.png" as AssetKey, tile: undefined };
+export const badTexRefMissingTile: TexRef = { asset: "hero.png" as AssetKey };
 export const badAssetReply: AssetReply = { kind: "asset", reqId: 1, bytes: new Uint8Array(), missing: true };
 export const badBlobLoaded: BlobLoaded = { kind: "blob.loaded", reqId: 1, bytes: new Uint8Array(), missing: true };

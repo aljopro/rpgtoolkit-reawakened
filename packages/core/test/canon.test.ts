@@ -428,14 +428,60 @@ test("encodeLog refuses non-plain records instead of emptying them", () => {
 
 test("a log round-trips through encodeLog, canon and decodeLog", () => {
   const log: PortData = [
-    { step: 0, event: { kind: "key", name: "ENTER", code: "Enter", down: true } },
+    { step: 0, event: { kind: "key", name: "ENTER", code: "Enter", char: null, down: true } },
     { step: 4, event: { kind: "asset", reqId: 1, bytes: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) } },
-    { step: 9, event: { kind: "blob.loaded", reqId: 2, missing: true } },
+    { step: 9, event: { kind: "blob.loaded", reqId: 2, bytes: null } },
     { step: 9, event: { kind: "blob.listed", reqId: 3, names: ["a", "b"] } },
     { step: 12, event: { kind: "audio.ended", cueId: 7 } },
   ];
   const text = canon(encodeLog(log));
   deepEqual(decodeLog(JSON.parse(text) as PlainData), log);
+});
+
+test("an explicit null survives the log and differs from an absent key", () => {
+  // An absent value is written `null`; an omitted key is not the same record.
+  equal(canon({ char: null }) !== canon({}), true);
+
+  const withNull: PortData = [
+    { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
+  ];
+  const absent: PortData = [
+    { step: 0, event: { kind: "key", name: "A", code: "KeyA", down: true } },
+  ];
+  equal(canon(encodeLog(withNull)) !== canon(encodeLog(absent)), true);
+
+  const roundTripped = decodeLog(JSON.parse(canon(encodeLog(withNull)))) as {
+    event: { char: unknown };
+  }[];
+  equal(roundTripped[0]!.event.char, null);
+  deepEqual(roundTripped, withNull);
+});
+
+test("decodeLog names the dotted path of a malformed payload", () => {
+  function messageOf(value: PlainData): string {
+    try {
+      decodeLog(value);
+    } catch (error) {
+      return (error as Error).message;
+    }
+    return "";
+  }
+
+  equal(
+    messageOf({ event: { bytes: { t: "bytes", hex: "zz" } } }),
+    "decodeLog: at event.bytes: invalid hex digit",
+  );
+  equal(
+    messageOf({ event: { bytes: { t: "bytes", hex: "abc" } } }),
+    "decodeLog: at event.bytes: odd-length hex string",
+  );
+  equal(
+    messageOf([{ event: { bytes: { t: "bytes", hex: "zz" } } }]),
+    "decodeLog: at [0].event.bytes: invalid hex digit",
+  );
+  // A failure at the value's own root keeps the plain message.
+  equal(messageOf({ t: "bytes", hex: "zz" }), "decodeLog: invalid hex digit");
+  equal(messageOf({ t: "bytes", hex: "abc" }), "decodeLog: odd-length hex string");
 });
 
 test("encodeLog and decodeLog round-trip own __proto__ keys without prototype pollution", () => {
@@ -492,4 +538,18 @@ test("log codec handles all byte values, subarray views and decode errors", () =
   throws(() => decodeLog({ t: "bytes", hex: "zz" }), TypeError, "invalid digit");
   throws(() => decodeLog({ t: "bytes", hex: "DEAD" }), TypeError, "uppercase hex");
   deepEqual(decodeLog({ t: "bytes", hex: 5 } as PlainData), { t: "bytes", hex: 5 });
+});
+
+test("decodeLog preserves sparse-array length and holes", () => {
+  const sparse: PlainData[] = [1];
+  sparse[3] = 2;
+
+  const decoded = decodeLog(sparse) as PlainData[];
+  equal(decoded.length, 4);
+  equal(0 in decoded, true, "index 0 present");
+  equal(1 in decoded, false, "index 1 is a hole");
+  equal(2 in decoded, false, "index 2 is a hole");
+  equal(3 in decoded, true, "index 3 present");
+  equal(decoded[0], 1);
+  equal(decoded[3], 2);
 });

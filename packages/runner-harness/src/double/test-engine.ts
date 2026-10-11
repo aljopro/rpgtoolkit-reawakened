@@ -88,6 +88,8 @@ export function createTestEngine(): Engine {
               audioCues.push({
                 cueId: state.cueId,
                 kind: "volume.set",
+                asset: null,
+                loop: null,
                 volume: 100,
               });
             } else {

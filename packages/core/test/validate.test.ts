@@ -1,0 +1,180 @@
+// The runtime input-event validator (AD-14, AD-5, CAP-12/CAP-13).
+//
+// One valid event of each of the 11 kinds (including the `null` forms of
+// `char` and `bytes`) is accepted and returned unchanged; every malformed
+// shape is rejected with the path of the offending field; and no input,
+// however hostile, makes the validator throw.
+import { test } from "node:test";
+import { deepEqual, equal } from "node:assert/strict";
+import { validateInputEvent } from "../src/index.ts";
+
+test("validateInputEvent accepts one valid event of each kind", () => {
+  const valid: readonly (readonly [string, unknown])[] = [
+    ["key with char", { kind: "key", name: "A", code: "KeyA", char: "a", down: true }],
+    ["key with null char", { kind: "key", name: "ENTER", code: "Enter", char: null, down: false }],
+    ["pointer", { kind: "pointer", x: 10, y: -20, buttons: 0 }],
+    ["gamepad", { kind: "gamepad" }],
+    ["focus", { kind: "focus", state: "gained" }],
+    ["asset with bytes", { kind: "asset", reqId: 1, bytes: new Uint8Array([1, 2]) }],
+    ["asset with null bytes", { kind: "asset", reqId: 1, bytes: null }],
+    ["blob.loaded with null bytes", { kind: "blob.loaded", reqId: 2, bytes: null }],
+    ["blob.loaded with bytes", { kind: "blob.loaded", reqId: 2, bytes: new Uint8Array([]) }],
+    ["blob.saved", { kind: "blob.saved", reqId: 3, ok: false }],
+    ["blob.listed", { kind: "blob.listed", reqId: 4, names: ["a", "b"] }],
+    ["extension.result object", { kind: "extension.result", reqId: 5, result: { x: 1 } }],
+    ["extension.result null", { kind: "extension.result", reqId: 5, result: null }],
+    [
+      "extension.result bytes",
+      { kind: "extension.result", reqId: 5, result: new Uint8Array([1]) },
+    ],
+    ["audio.ended", { kind: "audio.ended", cueId: 7 }],
+    ["video.ended", { kind: "video.ended" }],
+  ];
+
+  for (const [label, event] of valid) {
+    const result = validateInputEvent(event);
+    equal(result.ok, true, label);
+    if (result.ok) deepEqual(result.value, event, label);
+  }
+});
+
+test("validateInputEvent names the path of the first failure", () => {
+  const rejected: readonly (readonly [string, unknown, string])[] = [
+    ["absent char", { kind: "key", name: "A", code: "KeyA", down: true }, "char"],
+    [
+      "undefined char",
+      { kind: "key", name: "A", code: "KeyA", char: undefined, down: true },
+      "char",
+    ],
+    ["undefined bytes", { kind: "asset", reqId: 1, bytes: undefined }, "bytes"],
+    ["undefined reqId", { kind: "asset", reqId: undefined, bytes: null }, "reqId"],
+    [
+      "undefined name",
+      { kind: "key", name: undefined, code: "KeyA", char: null, down: true },
+      "name",
+    ],
+    ["string x", { kind: "pointer", x: "10", y: 0, buttons: 0 }, "x"],
+    ["fractional x", { kind: "pointer", x: 1.5, y: 0, buttons: 0 }, "x"],
+    ["negative buttons", { kind: "pointer", x: 0, y: 0, buttons: -1 }, "buttons"],
+    ["non-number bytes", { kind: "asset", reqId: 2, bytes: 5 }, "bytes"],
+    [
+      "object bytes",
+      { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "00" } },
+      "bytes",
+    ],
+    ["unknown kind", { kind: "nope" }, "kind"],
+    ["absent kind", {}, "kind"],
+    ["extra key", { kind: "gamepad", extra: 1 }, "extra"],
+    [
+      "missing on an asset reply",
+      { kind: "asset", reqId: 1, bytes: null, missing: true },
+      "missing",
+    ],
+    [
+      "missing on a blob reply",
+      { kind: "blob.loaded", reqId: 1, bytes: new Uint8Array(), missing: true },
+      "missing",
+    ],
+    ["empty name", { kind: "key", name: "", code: "KeyA", char: null, down: true }, "name"],
+    ["empty code", { kind: "key", name: "A", code: "", char: null, down: true }, "code"],
+    ["two code points", { kind: "key", name: "A", code: "KeyA", char: "AB", down: true }, "char"],
+    [
+      "lone surrogate char",
+      { kind: "key", name: "A", code: "KeyA", char: "\ud800", down: true },
+      "char",
+    ],
+    ["non-string name in list", { kind: "blob.listed", reqId: 1, names: ["a", 2] }, "names"],
+    ["non-boolean ok", { kind: "blob.saved", reqId: 1, ok: "yes" }, "ok"],
+    ["bad focus state", { kind: "focus", state: "maybe" }, "state"],
+    ["negative cueId", { kind: "audio.ended", cueId: -1 }, "cueId"],
+    ["absent result", { kind: "extension.result", reqId: 1 }, "result"],
+    [
+      "undefined result",
+      { kind: "extension.result", reqId: 1, result: undefined },
+      "result",
+    ],
+    [
+      "function result",
+      { kind: "extension.result", reqId: 1, result: () => 1 },
+      "result",
+    ],
+    ["Map result", { kind: "extension.result", reqId: 1, result: new Map() }, "result"],
+    ["NaN result", { kind: "extension.result", reqId: 1, result: NaN }, "result"],
+    [
+      "nested undefined result",
+      { kind: "extension.result", reqId: 1, result: { a: undefined } },
+      "result",
+    ],
+    [
+      "extra key on a key event",
+      { kind: "key", name: "A", code: "KeyA", char: null, down: true, extra: 1 },
+      "extra",
+    ],
+  ];
+
+  for (const [label, event, path] of rejected) {
+    const result = validateInputEvent(event);
+    equal(result.ok, false, label);
+    if (!result.ok) equal(result.path, path, label);
+  }
+
+  const cyclicResult: { self?: unknown } = {};
+  cyclicResult.self = cyclicResult;
+  const cyclicOutcome = validateInputEvent({
+    kind: "extension.result",
+    reqId: 1,
+    result: cyclicResult,
+  });
+  equal(cyclicOutcome.ok, false, "cyclic result");
+  if (!cyclicOutcome.ok) equal(cyclicOutcome.path, "result", "cyclic result");
+});
+
+test("validateInputEvent never throws on hostile input", () => {
+  const notObjects: readonly (readonly [string, unknown])[] = [
+    ["null", null],
+    ["undefined", undefined],
+    ["number", 42],
+    ["string", "key"],
+    ["boolean", true],
+    ["symbol", Symbol("s")],
+    ["function", () => 1],
+  ];
+  for (const [label, value] of notObjects) {
+    const result = validateInputEvent(value);
+    equal(result.ok, false, label);
+    if (!result.ok) equal(result.path, "", label);
+  }
+
+  for (const [label, value] of [
+    ["empty array", []],
+    ["array of events", [{ kind: "gamepad" }]],
+  ] as readonly (readonly [string, unknown])[]) {
+    const result = validateInputEvent(value);
+    equal(result.ok, false, label);
+    if (!result.ok) equal(result.path, "", label);
+  }
+
+  const cyclic: { self?: unknown } = {};
+  cyclic.self = cyclic;
+  equal(validateInputEvent(cyclic).ok, false, "cyclic object");
+
+  const throwingGetter: Record<string, unknown> = {};
+  Object.defineProperty(throwingGetter, "kind", {
+    get() {
+      throw new Error("boom");
+    },
+  });
+  const throwingOutcome = validateInputEvent(throwingGetter);
+  equal(throwingOutcome.ok, false, "throwing getter");
+  if (!throwingOutcome.ok) equal(throwingOutcome.path, "", "throwing getter");
+});
+
+test("validateInputEvent returns a fresh value, not the input reference", () => {
+  const input = { kind: "gamepad" };
+  const result = validateInputEvent(input);
+  equal(result.ok, true);
+  if (!result.ok) return;
+
+  input.kind = "nope";
+  equal(result.value.kind, "gamepad");
+});

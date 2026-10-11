@@ -5,9 +5,10 @@
  * holds bytes. AD-1 and AD-5 put bytes on the runner seam — asset replies,
  * blob payloads and `surfacePixels` — so port positions use `PortData`:
  * `PlainData` plus `Uint8Array` leaves, structured-cloneable, so every engine
- * argument and result survives a Worker boundary (AD-1). The contract types
- * in core/ports are only assignable to PortData in a project that enables
- * exactOptionalPropertyTypes (tsconfig.base.json does).
+ * argument and result survives a Worker boundary (AD-1). Every port-contract
+ * field is required and an absent value is `null` (never an omitted key, never
+ * `undefined`); `exactOptionalPropertyTypes` is a backstop for that rule, not
+ * the rule itself.
  */
 
 import type { PlainData } from "./plain-data.ts";

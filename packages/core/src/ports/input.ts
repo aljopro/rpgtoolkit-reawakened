@@ -12,13 +12,13 @@ import type { Bytes, PortData } from "./bytes.ts";
 /**
  * A key press or release. `name` is the legacy logical name (`"ENTER"`,
  * `"LEFT"`, `"A"`); `code` is the physical scan code; `char` is the typed
- * character when there is one (AD-14).
+ * character, or `null` when there is none (AD-14).
  */
 export type KeyInput = {
   readonly kind: "key";
   readonly name: string;
   readonly code: string;
-  readonly char?: string;
+  readonly char: string | null;
   readonly down: boolean;
 };
 
@@ -47,35 +47,19 @@ export type FocusInput = {
   readonly state: "lost" | "gained";
 };
 
-/** The reply to an `asset` request: the bytes, or that the key is missing (AD-5). */
-export type AssetReply =
-  | {
-      readonly kind: "asset";
-      readonly reqId: number;
-      readonly bytes: Bytes;
-      readonly missing?: never;
-    }
-  | {
-      readonly kind: "asset";
-      readonly reqId: number;
-      readonly missing: true;
-      readonly bytes?: never;
-    };
+/** The reply to an `asset` request: the bytes, or `null` when the key is missing (AD-5). */
+export type AssetReply = {
+  readonly kind: "asset";
+  readonly reqId: number;
+  readonly bytes: Bytes | null;
+};
 
-/** The reply to a `loadBlob` request: the bytes, or that the blob is missing (AD-5). */
-export type BlobLoaded =
-  | {
-      readonly kind: "blob.loaded";
-      readonly reqId: number;
-      readonly bytes: Bytes;
-      readonly missing?: never;
-    }
-  | {
-      readonly kind: "blob.loaded";
-      readonly reqId: number;
-      readonly missing: true;
-      readonly bytes?: never;
-    };
+/** The reply to a `loadBlob` request: the bytes, or `null` when the blob is missing (AD-5). */
+export type BlobLoaded = {
+  readonly kind: "blob.loaded";
+  readonly reqId: number;
+  readonly bytes: Bytes | null;
+};
 
 /** The reply to a `saveBlob` request (AD-5). */
 export type BlobSaved = {

@@ -19,11 +19,14 @@ export type AudioCueKind =
   | "sfx.stop"
   | "volume.set";
 
-/** One audio cue (AD-16). `volume` is an integer percent. */
+/**
+ * One audio cue (AD-16). `volume` is an integer percent. `asset`, `loop` and
+ * `volume` are required; each is `null` when the cue does not use it.
+ */
 export type AudioCue = {
   readonly cueId: number;
   readonly kind: AudioCueKind;
-  readonly asset?: AssetKey;
-  readonly loop?: boolean;
-  readonly volume?: number;
+  readonly asset: AssetKey | null;
+  readonly loop: boolean | null;
+  readonly volume: number | null;
 };

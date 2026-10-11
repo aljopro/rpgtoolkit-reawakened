@@ -35,7 +35,7 @@ test("parseRun parses valid run with all 11 event kinds including non-BMP char a
       },
       {
         step: 5,
-        event: { kind: "asset", reqId: 2, missing: true },
+        event: { kind: "asset", reqId: 2, bytes: null },
       },
       {
         step: 6,
@@ -136,24 +136,49 @@ test("parseRun rejects bad records naming record index and field", () => {
       fieldSnippet: "step 5 must be < steps 5",
     },
     {
+      name: "record without an event",
+      record: [{ step: 0 }],
+      fieldSnippet: "record 0: event",
+    },
+    {
+      name: "record with a non-object event",
+      record: [{ step: 0, event: 5 }],
+      fieldSnippet: "record 0: event",
+    },
+    {
+      name: "second record is bad",
+      record: [
+        { step: 0, event: { kind: "gamepad" } },
+        { step: 1, event: { kind: "unknown_kind" } },
+      ],
+      fieldSnippet: "record 1: kind",
+    },
+    {
       name: "unknown kind",
       record: [{ step: 0, event: { kind: "unknown_kind" } }],
-      fieldSnippet: "event kind",
+      fieldSnippet: "kind: unknown input event kind",
     },
     {
       name: "missing field in key",
       record: [{ step: 0, event: { kind: "key", name: "A", down: true } }],
-      fieldSnippet: "code",
+      fieldSnippet: "code: missing required key",
     },
     {
       name: "wrong type for down",
-      record: [{ step: 0, event: { kind: "key", name: "A", code: "KeyA", down: "yes" } }],
-      fieldSnippet: "down must be a boolean",
+      record: [
+        { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: "yes" } },
+      ],
+      fieldSnippet: "down: expected a boolean",
     },
     {
-      name: "bytes with missing",
-      record: [{ step: 0, event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "00" }, missing: true } }],
-      fieldSnippet: "mutually exclusive",
+      name: "extra key missing on a reply",
+      record: [
+        {
+          step: 0,
+          event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "00" }, missing: true },
+        },
+      ],
+      fieldSnippet: "missing: unexpected key",
     },
     {
       name: "extra key in record",
@@ -163,37 +188,46 @@ test("parseRun rejects bad records naming record index and field", () => {
     {
       name: "extra key in event",
       record: [{ step: 0, event: { kind: "gamepad", extra: 1 } }],
-      fieldSnippet: "unexpected extra field 'extra'",
+      fieldSnippet: "extra: unexpected key",
     },
     {
       name: "invalid hex digits zz",
       record: [{ step: 0, event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "zz" } } }],
-      fieldSnippet: "invalid hex character",
+      fieldSnippet: "decodeLog: at event.bytes: invalid hex digit",
     },
     {
       name: "odd-length hex",
       record: [{ step: 0, event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "abc" } } }],
-      fieldSnippet: "odd-length hex string",
+      fieldSnippet: "decodeLog: at event.bytes: odd-length hex string",
     },
     {
       name: "empty name in key",
-      record: [{ step: 0, event: { kind: "key", name: "", code: "KeyA", down: true } }],
-      fieldSnippet: "name must be a non-empty string",
+      record: [
+        { step: 0, event: { kind: "key", name: "", code: "KeyA", char: null, down: true } },
+      ],
+      fieldSnippet: "name: expected a non-empty string",
     },
     {
       name: "multi-code-point char in key",
-      record: [{ step: 0, event: { kind: "key", name: "A", code: "KeyA", char: "AB", down: true } }],
-      fieldSnippet: "char must be a single code point",
+      record: [
+        { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: "AB", down: true } },
+      ],
+      fieldSnippet: "char: expected null or a single code point",
     },
     {
       name: "extension.result missing result",
       record: [{ step: 0, event: { kind: "extension.result", reqId: 1 } }],
-      fieldSnippet: "result is required",
+      fieldSnippet: "result: missing required key",
     },
     {
       name: "extension.result malformed hex payload",
-      record: [{ step: 0, event: { kind: "extension.result", reqId: 1, result: { t: "bytes", hex: "zz" } } }],
-      fieldSnippet: "result: decodeLog: invalid hex digit",
+      record: [
+        {
+          step: 0,
+          event: { kind: "extension.result", reqId: 1, result: { t: "bytes", hex: "zz" } },
+        },
+      ],
+      fieldSnippet: "decodeLog: at event.result: invalid hex digit",
     },
   ];
 

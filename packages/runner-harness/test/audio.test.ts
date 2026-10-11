@@ -7,13 +7,13 @@ test("createNullAudio records all valid audio cue kinds in order", () => {
   const audio = createNullAudio();
 
   const sampleCues: Record<AudioCueKind, AudioCue> = {
-    "music.play": { cueId: 1, kind: "music.play", asset: "bgm/intro" as never, loop: true },
-    "music.stop": { cueId: 2, kind: "music.stop" },
-    "music.pause": { cueId: 3, kind: "music.pause" },
-    "music.resume": { cueId: 4, kind: "music.resume" },
-    "sfx.play": { cueId: 5, kind: "sfx.play", asset: "sfx/click" as never },
-    "sfx.stop": { cueId: 6, kind: "sfx.stop" },
-    "volume.set": { cueId: 7, kind: "volume.set", volume: 80 },
+    "music.play": { cueId: 1, kind: "music.play", asset: "bgm/intro" as never, loop: true, volume: null },
+    "music.stop": { cueId: 2, kind: "music.stop", asset: null, loop: null, volume: null },
+    "music.pause": { cueId: 3, kind: "music.pause", asset: null, loop: null, volume: null },
+    "music.resume": { cueId: 4, kind: "music.resume", asset: null, loop: null, volume: null },
+    "sfx.play": { cueId: 5, kind: "sfx.play", asset: "sfx/click" as never, loop: null, volume: null },
+    "sfx.stop": { cueId: 6, kind: "sfx.stop", asset: null, loop: null, volume: null },
+    "volume.set": { cueId: 7, kind: "volume.set", asset: null, loop: null, volume: 80 },
   };
 
   const cueList = Object.values(sampleCues);

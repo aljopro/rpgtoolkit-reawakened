@@ -215,13 +215,25 @@ test("runLog forwards report.audioCues to audio.handle", () => {
     schema: 1,
     steps: 2,
     log: [
-      { step: 0, event: { kind: "key", name: "A", code: "KeyA", down: true } },
-      { step: 1, event: { kind: "key", name: "B", code: "KeyB", down: true } },
+      { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
+      { step: 1, event: { kind: "key", name: "B", code: "KeyB", char: null, down: true } },
     ],
   };
   const audio = createNullAudio();
   runLog(engine, run, 2, audio);
   equal(audio.cues.length, 2);
-  deepEqual(audio.cues[0], { cueId: 1, kind: "volume.set", volume: 100 });
-  deepEqual(audio.cues[1], { cueId: 2, kind: "volume.set", volume: 100 });
+  deepEqual(audio.cues[0], {
+    cueId: 1,
+    kind: "volume.set",
+    asset: null,
+    loop: null,
+    volume: 100,
+  });
+  deepEqual(audio.cues[1], {
+    cueId: 2,
+    kind: "volume.set",
+    asset: null,
+    loop: null,
+    volume: 100,
+  });
 });

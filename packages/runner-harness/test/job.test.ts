@@ -32,9 +32,9 @@ const VALID_RUN = JSON.stringify({
   schema: 1,
   steps: 3,
   log: [
-    { step: 0, event: { kind: "key", name: "A", code: "KeyA", down: true } },
+    { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
     { step: 1, event: { kind: "pointer", x: 10, y: 20, buttons: 1 } },
-    { step: 2, event: { kind: "key", name: "A", code: "KeyA", down: false } },
+    { step: 2, event: { kind: "key", name: "A", code: "KeyA", char: null, down: false } },
   ],
 });
 

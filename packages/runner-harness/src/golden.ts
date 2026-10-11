@@ -1,4 +1,11 @@
-import { decodeLog, type InputEvent, type InputRecord, type PortData } from "@rpgtoolkit/core";
+import {
+  decodeLog,
+  validateInputEvent,
+  type InputEvent,
+  type InputRecord,
+  type PlainData,
+  type PortData,
+} from "@rpgtoolkit/core";
 
 export type StepRecord = {
   readonly step: number;
@@ -29,388 +36,67 @@ function checkNoExtraKeys(
   }
 }
 
-function parseBytesField(
-  recordIndex: number,
-  fieldName: string,
-  value: unknown,
-): Uint8Array {
-  if (value instanceof Uint8Array) {
-    return value;
+/**
+ * Decode one run record once and check its event against the port contract.
+ *
+ * The record must carry an own `event` that is a non-null, non-array object;
+ * otherwise the failure names `event`. `decodeLog` then restores each
+ * `{t:"bytes",hex}` leaf to `Uint8Array` and names the dotted path of a codec
+ * failure; `validateInputEvent` names the field of a contract failure. Both
+ * messages carry the record index. This is the only place that knows about
+ * event shapes; `parseRun` keeps run-file structure.
+ */
+export function parseEvent(raw: unknown, recordIndex: number): InputEvent {
+  const missingEvent = `run.json: record ${recordIndex}: event: missing or not an object`;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error(missingEvent);
   }
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!("event" in raw)) {
+    throw new Error(missingEvent);
+  }
+  const rawEvent = raw.event;
+  if (
+    typeof rawEvent !== "object" ||
+    rawEvent === null ||
+    Array.isArray(rawEvent)
+  ) {
+    throw new Error(missingEvent);
+  }
+
+  let decoded: PortData;
+  try {
+    decoded = decodeLog(raw as PlainData);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`run.json: record ${recordIndex}: ${message}`);
+  }
+
+  const result = validateInputEvent(readEventField(decoded));
+  if (!result.ok) {
+    const prefix = `run.json: record ${recordIndex}: `;
     throw new Error(
-      `run.json: record ${recordIndex}: ${fieldName} must be an object with {t: "bytes", hex}`,
+      result.path === ""
+        ? prefix + result.message
+        : `${prefix}${result.path}: ${result.message}`,
     );
   }
-  const rec = value as Record<string, unknown>;
-  const keys = Object.keys(rec);
-  if (keys.length !== 2 || !keys.includes("t") || !keys.includes("hex")) {
-    throw new Error(
-      `run.json: record ${recordIndex}: ${fieldName} must have exactly keys 't' and 'hex'`,
-    );
-  }
-  if (rec.t !== "bytes") {
-    throw new Error(
-      `run.json: record ${recordIndex}: ${fieldName}: tag 't' must be 'bytes'`,
-    );
-  }
-  if (typeof rec.hex !== "string") {
-    throw new Error(
-      `run.json: record ${recordIndex}: ${fieldName}: 'hex' must be a string`,
-    );
-  }
-  if (rec.hex.length % 2 !== 0) {
-    throw new Error(
-      `run.json: record ${recordIndex}: ${fieldName}: odd-length hex string`,
-    );
-  }
-  for (let j = 0; j < rec.hex.length; j++) {
-    const code = rec.hex.charCodeAt(j);
-    const isDigit = code >= 0x30 && code <= 0x39;
-    const isLower = code >= 0x61 && code <= 0x66;
-    const isUpper = code >= 0x41 && code <= 0x46;
-    if (!isDigit && !isLower && !isUpper) {
-      throw new Error(
-        `run.json: record ${recordIndex}: ${fieldName}: invalid hex character '${rec.hex[j]}'`,
-      );
-    }
-  }
-  const bytes = new Uint8Array(rec.hex.length / 2);
-  for (let j = 0; j < bytes.length; j++) {
-    bytes[j] = Number.parseInt(rec.hex.slice(j * 2, j * 2 + 2), 16);
-  }
-  return bytes;
+  return result.value;
 }
 
-export function parseEvent(raw: unknown, recordIndex: number): InputEvent {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    throw new Error(`run.json: record ${recordIndex}: event must be an object`);
+/** The `event` member of a decoded record, or `undefined` when it is not one. */
+function readEventField(decoded: PortData): unknown {
+  if (
+    typeof decoded !== "object" ||
+    decoded === null ||
+    Array.isArray(decoded) ||
+    decoded instanceof Uint8Array
+  ) {
+    return undefined;
   }
-  const rawEvent = raw as Record<string, unknown>;
-  const kind = rawEvent.kind;
-  if (typeof kind !== "string") {
-    throw new Error(
-      `run.json: record ${recordIndex}: event: missing or invalid kind`,
-    );
+  if ("event" in decoded) {
+    return decoded.event;
   }
-
-  switch (kind) {
-    case "key": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind", "name", "code", "char", "down"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      if (typeof rawEvent.name !== "string" || rawEvent.name.length === 0) {
-        throw new Error(
-          `run.json: record ${recordIndex}: name must be a non-empty string`,
-        );
-      }
-      if (typeof rawEvent.code !== "string" || rawEvent.code.length === 0) {
-        throw new Error(
-          `run.json: record ${recordIndex}: code must be a non-empty string`,
-        );
-      }
-      if (typeof rawEvent.down !== "boolean") {
-        throw new Error(
-          `run.json: record ${recordIndex}: down must be a boolean`,
-        );
-      }
-      if ("char" in rawEvent) {
-        if (
-          typeof rawEvent.char !== "string" ||
-          [...rawEvent.char].length !== 1
-        ) {
-          throw new Error(
-            `run.json: record ${recordIndex}: char must be a single code point`,
-          );
-        }
-      }
-      return {
-        kind: "key",
-        name: rawEvent.name,
-        code: rawEvent.code,
-        ...("char" in rawEvent ? { char: rawEvent.char as string } : {}),
-        down: rawEvent.down,
-      };
-    }
-    case "pointer": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind", "x", "y", "buttons"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      if (typeof rawEvent.x !== "number" || !Number.isInteger(rawEvent.x)) {
-        throw new Error(
-          `run.json: record ${recordIndex}: x must be a finite integer`,
-        );
-      }
-      if (typeof rawEvent.y !== "number" || !Number.isInteger(rawEvent.y)) {
-        throw new Error(
-          `run.json: record ${recordIndex}: y must be a finite integer`,
-        );
-      }
-      if (
-        typeof rawEvent.buttons !== "number" ||
-        !Number.isInteger(rawEvent.buttons) ||
-        rawEvent.buttons < 0
-      ) {
-        throw new Error(
-          `run.json: record ${recordIndex}: buttons must be a finite integer >= 0`,
-        );
-      }
-      return {
-        kind: "pointer",
-        x: rawEvent.x,
-        y: rawEvent.y,
-        buttons: rawEvent.buttons,
-      };
-    }
-    case "gamepad": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      return { kind: "gamepad" };
-    }
-    case "focus": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind", "state"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      if (rawEvent.state !== "lost" && rawEvent.state !== "gained") {
-        throw new Error(
-          `run.json: record ${recordIndex}: state must be 'lost' or 'gained'`,
-        );
-      }
-      return {
-        kind: "focus",
-        state: rawEvent.state,
-      };
-    }
-    case "asset": {
-      if (
-        typeof rawEvent.reqId !== "number" ||
-        !Number.isInteger(rawEvent.reqId) ||
-        rawEvent.reqId < 0
-      ) {
-        throw new Error(
-          `run.json: record ${recordIndex}: reqId must be a finite integer >= 0`,
-        );
-      }
-      const hasMissing = "missing" in rawEvent;
-      const hasBytes = "bytes" in rawEvent;
-      if (hasMissing && hasBytes) {
-        throw new Error(
-          `run.json: record ${recordIndex}: bytes and missing are mutually exclusive`,
-        );
-      }
-      if (hasMissing) {
-        checkNoExtraKeys(
-          rawEvent,
-          ["kind", "reqId", "missing"],
-          `run.json: record ${recordIndex}: event`,
-        );
-        if (rawEvent.missing !== true) {
-          throw new Error(
-            `run.json: record ${recordIndex}: missing must be true`,
-          );
-        }
-        return {
-          kind: "asset",
-          reqId: rawEvent.reqId,
-          missing: true,
-        };
-      }
-      if (hasBytes) {
-        checkNoExtraKeys(
-          rawEvent,
-          ["kind", "reqId", "bytes"],
-          `run.json: record ${recordIndex}: event`,
-        );
-        const bytes = parseBytesField(recordIndex, "bytes", rawEvent.bytes);
-        return {
-          kind: "asset",
-          reqId: rawEvent.reqId,
-          bytes,
-        };
-      }
-      throw new Error(
-        `run.json: record ${recordIndex}: asset event requires bytes or missing: true`,
-      );
-    }
-    case "blob.loaded": {
-      if (
-        typeof rawEvent.reqId !== "number" ||
-        !Number.isInteger(rawEvent.reqId) ||
-        rawEvent.reqId < 0
-      ) {
-        throw new Error(
-          `run.json: record ${recordIndex}: reqId must be a finite integer >= 0`,
-        );
-      }
-      const hasMissing = "missing" in rawEvent;
-      const hasBytes = "bytes" in rawEvent;
-      if (hasMissing && hasBytes) {
-        throw new Error(
-          `run.json: record ${recordIndex}: bytes and missing are mutually exclusive`,
-        );
-      }
-      if (hasMissing) {
-        checkNoExtraKeys(
-          rawEvent,
-          ["kind", "reqId", "missing"],
-          `run.json: record ${recordIndex}: event`,
-        );
-        if (rawEvent.missing !== true) {
-          throw new Error(
-            `run.json: record ${recordIndex}: missing must be true`,
-          );
-        }
-        return {
-          kind: "blob.loaded",
-          reqId: rawEvent.reqId,
-          missing: true,
-        };
-      }
-      if (hasBytes) {
-        checkNoExtraKeys(
-          rawEvent,
-          ["kind", "reqId", "bytes"],
-          `run.json: record ${recordIndex}: event`,
-        );
-        const bytes = parseBytesField(recordIndex, "bytes", rawEvent.bytes);
-        return {
-          kind: "blob.loaded",
-          reqId: rawEvent.reqId,
-          bytes,
-        };
-      }
-      throw new Error(
-        `run.json: record ${recordIndex}: blob.loaded event requires bytes or missing: true`,
-      );
-    }
-    case "blob.saved": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind", "reqId", "ok"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      if (
-        typeof rawEvent.reqId !== "number" ||
-        !Number.isInteger(rawEvent.reqId) ||
-        rawEvent.reqId < 0
-      ) {
-        throw new Error(
-          `run.json: record ${recordIndex}: reqId must be a finite integer >= 0`,
-        );
-      }
-      if (typeof rawEvent.ok !== "boolean") {
-        throw new Error(`run.json: record ${recordIndex}: ok must be a boolean`);
-      }
-      return {
-        kind: "blob.saved",
-        reqId: rawEvent.reqId,
-        ok: rawEvent.ok,
-      };
-    }
-    case "blob.listed": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind", "reqId", "names"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      if (
-        typeof rawEvent.reqId !== "number" ||
-        !Number.isInteger(rawEvent.reqId) ||
-        rawEvent.reqId < 0
-      ) {
-        throw new Error(
-          `run.json: record ${recordIndex}: reqId must be a finite integer >= 0`,
-        );
-      }
-      if (
-        !Array.isArray(rawEvent.names) ||
-        rawEvent.names.some((name) => typeof name !== "string")
-      ) {
-        throw new Error(
-          `run.json: record ${recordIndex}: names must be an array of strings`,
-        );
-      }
-      return {
-        kind: "blob.listed",
-        reqId: rawEvent.reqId,
-        names: rawEvent.names,
-      };
-    }
-    case "extension.result": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind", "reqId", "result"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      if (
-        typeof rawEvent.reqId !== "number" ||
-        !Number.isInteger(rawEvent.reqId) ||
-        rawEvent.reqId < 0
-      ) {
-        throw new Error(
-          `run.json: record ${recordIndex}: reqId must be a finite integer >= 0`,
-        );
-      }
-      if (!("result" in rawEvent)) {
-        throw new Error(`run.json: record ${recordIndex}: result is required`);
-      }
-      let result: PortData;
-      try {
-        result = decodeLog(rawEvent.result as Parameters<typeof decodeLog>[0]);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(`run.json: record ${recordIndex}: result: ${msg}`);
-      }
-      return {
-        kind: "extension.result",
-        reqId: rawEvent.reqId,
-        result,
-      };
-    }
-    case "audio.ended": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind", "cueId"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      if (
-        typeof rawEvent.cueId !== "number" ||
-        !Number.isInteger(rawEvent.cueId) ||
-        rawEvent.cueId < 0
-      ) {
-        throw new Error(
-          `run.json: record ${recordIndex}: cueId must be a finite integer >= 0`,
-        );
-      }
-      return {
-        kind: "audio.ended",
-        cueId: rawEvent.cueId,
-      };
-    }
-    case "video.ended": {
-      checkNoExtraKeys(
-        rawEvent,
-        ["kind"],
-        `run.json: record ${recordIndex}: event`,
-      );
-      return { kind: "video.ended" };
-    }
-    default: {
-      const _never: never = kind as never;
-      throw new Error(
-        `run.json: record ${recordIndex}: unexpected event kind '${_never}'`,
-      );
-    }
-  }
+  return undefined;
 }
 
 export function parseRun(text: string): Run {
@@ -476,7 +162,7 @@ export function parseRun(text: string): Run {
       );
     }
 
-    const event = parseEvent(rec.event, i);
+    const event = parseEvent(rec, i);
 
     log.push({
       step: rec.step,

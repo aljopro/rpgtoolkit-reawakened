@@ -214,6 +214,7 @@ export const pinStepReport: StepReport = {
         kind: "key",
         name: "A",
         code: "KeyA",
+        char: null,
         down: true,
       },
     },
@@ -222,6 +223,9 @@ export const pinStepReport: StepReport = {
     {
       cueId: 1,
       kind: "music.play",
+      asset: null,
+      loop: null,
+      volume: null,
     },
   ],
   requests: [
@@ -276,6 +280,9 @@ export const pinAudioCueWithOptionals: AudioCue = {
 export const pinAudioCueWithoutOptionals: AudioCue = {
   cueId: 2,
   kind: "music.stop",
+  asset: null,
+  loop: null,
+  volume: null,
 };
 
 export const pinAssetRequest: AssetRequest = {
@@ -339,6 +346,7 @@ export const pinKeyInputWithoutChar: KeyInput = {
   kind: "key",
   name: "B",
   code: "KeyB",
+  char: null,
   down: true,
 };
 
@@ -364,10 +372,10 @@ export const pinAssetReplyBytes: AssetReply = {
   bytes: new Uint8Array([1, 2]),
 };
 
-export const pinAssetReplyMissing: AssetReply = {
+export const pinAssetReplyNull: AssetReply = {
   kind: "asset",
   reqId: 1,
-  missing: true,
+  bytes: null,
 };
 
 export const pinBlobLoadedBytes: BlobLoaded = {
@@ -376,10 +384,10 @@ export const pinBlobLoadedBytes: BlobLoaded = {
   bytes: new Uint8Array([3, 4]),
 };
 
-export const pinBlobLoadedMissing: BlobLoaded = {
+export const pinBlobLoadedNull: BlobLoaded = {
   kind: "blob.loaded",
   reqId: 2,
-  missing: true,
+  bytes: null,
 };
 
 export const pinBlobSaved: BlobSaved = {
@@ -416,6 +424,7 @@ export const pinTexRefWithTile: TexRef = {
 
 export const pinTexRefWithoutTile: TexRef = {
   asset: "bg.png" as AssetKey,
+  tile: null,
 };
 
 export const pinBreakpoint: Breakpoint = {

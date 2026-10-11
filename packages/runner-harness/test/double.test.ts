@@ -9,7 +9,7 @@ test("test double executes key down, pointer, key up and matches literals", () =
   const inputs: InputRecord[] = [
     {
       step: 0,
-      event: { kind: "key", name: "A", code: "KeyA", down: true },
+      event: { kind: "key", name: "A", code: "KeyA", char: null, down: true },
     },
     {
       step: 1,
@@ -17,7 +17,7 @@ test("test double executes key down, pointer, key up and matches literals", () =
     },
     {
       step: 2,
-      event: { kind: "key", name: "A", code: "KeyA", down: false },
+      event: { kind: "key", name: "A", code: "KeyA", char: null, down: false },
     },
   ];
 
@@ -30,7 +30,13 @@ test("test double executes key down, pointer, key up and matches literals", () =
   deepEqual(report.requests, []);
   deepEqual(report.diagnostics, []);
   equal(report.audioCues.length, 1);
-  deepEqual(report.audioCues[0], { cueId: 1, kind: "volume.set", volume: 100 });
+  deepEqual(report.audioCues[0], {
+    cueId: 1,
+    kind: "volume.set",
+    asset: null,
+    loop: null,
+    volume: 100,
+  });
 
   const dl = engine.drawList(0);
   equal(dl.step, 3);
@@ -53,7 +59,7 @@ test("test double key-up for an unheld key removes nothing and does not throw", 
   const report = engine.advance(1, [
     {
       step: 0,
-      event: { kind: "key", name: "UNHELD", code: "KeyU", down: false },
+      event: { kind: "key", name: "UNHELD", code: "KeyU", char: null, down: false },
     },
   ]);
 
@@ -124,7 +130,7 @@ test("test double increments other counter for remaining events and returns null
   const inputs: InputRecord[] = [
     { step: 0, event: { kind: "gamepad" } },
     { step: 1, event: { kind: "asset", reqId: 1, bytes } },
-    { step: 2, event: { kind: "blob.loaded", reqId: 2, missing: true } },
+    { step: 2, event: { kind: "blob.loaded", reqId: 2, bytes: null } },
     { step: 3, event: { kind: "blob.saved", reqId: 3, ok: true } },
     { step: 4, event: { kind: "blob.listed", reqId: 4, names: ["save1"] } },
     { step: 5, event: { kind: "extension.result", reqId: 5, result: 42 } },
@@ -153,8 +159,8 @@ test("test double increments other counter for remaining events and returns null
 test("test double key-down deduplicates held keys", () => {
   const engine = createTestEngine();
   engine.advance(2, [
-    { step: 0, event: { kind: "key", name: "A", code: "KeyA", down: true } },
-    { step: 1, event: { kind: "key", name: "A", code: "KeyA", down: true } },
+    { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
+    { step: 1, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
   ]);
 
   const dl = engine.drawList(0);
