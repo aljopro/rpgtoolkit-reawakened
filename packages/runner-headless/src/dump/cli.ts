@@ -13,7 +13,8 @@
  *
  * `--check` is the epic's Done-when 1 as a CI gate: it re-runs the `--json`
  * report for every game named in the expectation and fails, naming the file,
- * when a digest differs. `--record` rewrites the expectation and is a deliberate
+ * when a digest differs — or naming the folder when the corpus holds one the
+ * expectation does not. `--record` rewrites the expectation and is a deliberate
  * act, like `golden:record` (G5) — never a CI step.
  */
 
@@ -70,6 +71,16 @@ function checkCorpus(expectationPath: string, gamesDir: string): number {
   const names = Object.keys(expectation.games).sort();
   if (names.length === 0) {
     console.error(`dump: ${expectationPath} names no games to check`);
+    return 1;
+  }
+  const unlisted = readdirSync(gamesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !names.includes(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  if (unlisted.length > 0) {
+    console.error(
+      `dump: check failed: ${gamesDir} holds game folder(s) the expectation does not name: ${unlisted.join(", ")}`,
+    );
     return 1;
   }
   let failed = false;

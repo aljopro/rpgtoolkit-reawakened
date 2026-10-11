@@ -9,6 +9,8 @@
  * formats no reader has been written for yet). A skip is never a failure.
  */
 
+import { BOARD_VECTOR_MINOR, PRE_VECTOR_MINOR_MAX, PRE_VECTOR_MINOR_MIN } from "@rpgtoolkit/core";
+
 /** The data formats `dump` parses, one id per reader family. */
 export type DataFormatId =
   | "gam"
@@ -71,9 +73,10 @@ const UNRECOGNISED = skip(
  * Extension (lowercase, no dot) → what to do with it.
  *
  * A file with no extension, or one not listed, is skipped as unrecognised. The
- * `.prg`, `.gph`, `.tan`, `.tbm` and `.sav` rows are skipped *by design*: §9
- * programs are text for a later epic, and §3.2/§3.5/§3.6/§11 have no reader in
- * `core` yet, so reporting them as failures would fail every game that ships one.
+ * `.prg`, `.gph`, `.tan`, `.tbm`, `.sav`, `.bmp` and `.gif` rows are skipped
+ * *by design*: §9 programs are text for a later epic, and §3.2/§3.5/§3.6/§11
+ * plus §10's BMP and GIF have no reader in `core` yet, so reporting them as
+ * failures would fail every game that ships one.
  */
 const TABLE: Readonly<Record<string, FileClass>> = {
   // §2 — the main game file.
@@ -93,14 +96,14 @@ const TABLE: Readonly<Record<string, FileClass>> = {
   spc: { kind: "data", format: "special-move", section: "format-spec §8.1" },
   ste: { kind: "data", format: "status-effect", section: "format-spec §8.2" },
   bkg: { kind: "data", format: "battle-background", section: "format-spec §8.3" },
-  // §10 — images, matched by signature inside `decodeTexture` (§10 lists BMP, PNG,
-  // JPEG and GIF as the formats seen; only PNG and JPEG decode, so a `.bmp`/`.gif`
-  // with no PNG/JPEG signature is a failure, not a skip).
+  // §10 — the images `decodeTexture` matches by signature: PNG and JPEG.
   png: { kind: "data", format: "image", section: "format-spec §10" },
   jpg: { kind: "data", format: "image", section: "format-spec §10" },
   jpeg: { kind: "data", format: "image", section: "format-spec §10" },
-  bmp: { kind: "data", format: "image", section: "format-spec §10" },
-  gif: { kind: "data", format: "image", section: "format-spec §10" },
+  // §10 also lists BMP and GIF, but `core` has no decoder for either, so they
+  // are skipped like the other formats with no reader — never a failure.
+  bmp: skip("BMP image (format-spec §10): no decoder in core yet"),
+  gif: skip("GIF image (format-spec §10): no decoder in core yet"),
 
   // §9 — RPGCode programs are text; a later epic parses them. Size and line count
   // are reported so a dump still shows what is there.
@@ -148,14 +151,16 @@ export function classify(path: string): FileClass {
 export type BoardLayout = "vector" | "pre-vector" | "obsolete";
 
 /**
- * Which §4.1 branch a board minor takes: the §4.2 vector layout (minor ≥ 4), the
- * §4.8 pre-vector layout (minor 2–3), or one this tool refuses (minor 0–1).
+ * Which §4.1 branch a board minor takes, from `core`'s own thresholds: the §4.2
+ * vector layout (`BOARD_VECTOR_MINOR` and above), the §4.8 pre-vector layout
+ * (`PRE_VECTOR_MINOR_MIN`…`PRE_VECTOR_MINOR_MAX`), or one below those, which no
+ * reader here accepts and `readBoard` refuses as obsolete.
  */
 export function boardLayout(minor: number): BoardLayout {
-  if (minor >= 4) {
+  if (minor >= BOARD_VECTOR_MINOR) {
     return "vector";
   }
-  if (minor >= 2) {
+  if (minor >= PRE_VECTOR_MINOR_MIN && minor <= PRE_VECTOR_MINOR_MAX) {
     return "pre-vector";
   }
   return "obsolete";

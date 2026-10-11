@@ -137,16 +137,41 @@ export interface DigestDrift {
 export interface GameDrift {
   readonly game: string;
   readonly missing: readonly string[];
+  /**
+   * Files the expectation names that are still in the corpus but no longer
+   * parse, with the new report's located failure for each — a present file that
+   * broke is not "missing".
+   */
+  readonly failed: readonly FailedFile[];
   readonly extra: readonly string[];
   readonly drifted: readonly DigestDrift[];
   readonly expectedCounts: DumpCounts;
   readonly actualCounts: DumpCounts;
 }
 
+/** A file the expectation names that is present but no longer parses. */
+export interface FailedFile {
+  readonly path: string;
+  /** The new report's failure: its section, offset and message, in one line. */
+  readonly detail: string;
+}
+
 /** Compare a fresh report with one game's expectation. */
 export function compareGame(game: string, expected: ExpectationGame, actual: DumpReport): GameDrift {
   const digests = digestsOf(actual);
-  const missing = Object.keys(expected.digests).filter((path) => !(path in digests)).sort();
+  const failedNow = new Map<string, string>();
+  for (const entry of actual.files) {
+    if (entry.status === "failed") {
+      failedNow.set(entry.path, `${entry.error.section} at offset ${entry.error.offset}: ${entry.error.message}`);
+    }
+  }
+  const missing = Object.keys(expected.digests)
+    .filter((path) => !(path in digests) && !failedNow.has(path))
+    .sort();
+  const failed: FailedFile[] = Object.keys(expected.digests)
+    .filter((path) => failedNow.has(path))
+    .sort()
+    .map((path) => ({ path, detail: failedNow.get(path) as string }));
   const extra = Object.keys(digests).filter((path) => !(path in expected.digests)).sort();
   const drifted: DigestDrift[] = [];
   for (const path of Object.keys(expected.digests).sort()) {
@@ -155,7 +180,7 @@ export function compareGame(game: string, expected: ExpectationGame, actual: Dum
       drifted.push({ path, expected: expected.digests[path] as string, actual: actualDigest });
     }
   }
-  return { game, missing, extra, drifted, expectedCounts: expected.counts, actualCounts: actual.counts };
+  return { game, missing, failed, extra, drifted, expectedCounts: expected.counts, actualCounts: actual.counts };
 }
 
 /**
@@ -167,6 +192,9 @@ export function driftLines(drift: GameDrift): string[] {
   const lines = drift.drifted.map(
     (item) => `${prefix}${drift.game}: ${item.path} digest ${item.actual} differs from the expected ${item.expected}`,
   );
+  for (const item of drift.failed) {
+    lines.push(`${prefix}${drift.game}: ${item.path} failed to parse: ${item.detail}`);
+  }
   for (const path of drift.missing) {
     lines.push(`${prefix}${drift.game}: ${path} is missing (the expectation has it, the corpus does not)`);
   }
