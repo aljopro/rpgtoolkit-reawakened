@@ -481,6 +481,126 @@ test("every minor 0–9 reads with zero trailing bytes and writes back byte-for-
   }
 });
 
+// --- The writer refuses a model it cannot represent (AD-18) ------------------
+//
+// `BinaryWriter` truncates an out-of-range integer and the serialiser derives
+// the list bounds, so without a check a model the reader could never produce
+// would be written as a different, valid file. Each of these mutates one field
+// of a model that came from `readMainFile` and asserts the write is refused at
+// §2.
+
+test("the writer refuses a model whose magic is not the main-file magic", () => {
+  const model = readBuilt(buildGam(9));
+  const result = writeMainFile({ ...model, magic: "RPGTLKIT BOARD" });
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.section, MAIN_SECTION);
+  }
+});
+
+test("the writer refuses a minor outside 0–9", () => {
+  const model = readBuilt(buildGam(9));
+  for (const minor of [-1, 10]) {
+    const result = writeMainFile({ ...model, minor });
+    equal(result.ok, false, `minor ${minor} must be refused`);
+    if (!result.ok) {
+      equal(result.error.section, MAIN_SECTION);
+    }
+  }
+});
+
+test("the writer refuses an i16 field the BinaryWriter would truncate", () => {
+  const model = readBuilt(buildGam(9));
+  const scalar = writeMainFile({ ...model, screenType: 40_000 });
+  equal(scalar.ok, false);
+  if (!scalar.ok) {
+    equal(scalar.error.section, MAIN_SECTION);
+  }
+  // The per-entry i16 fields are checked too.
+  const entry = writeMainFile({
+    ...model,
+    enemies: [{ enemyFile: "slime.ene", skillLevel: 40_000 }],
+  });
+  equal(entry.ok, false);
+  if (!entry.ok) {
+    equal(entry.error.section, MAIN_SECTION);
+  }
+});
+
+test("the writer refuses an i32 field the BinaryWriter would truncate", () => {
+  const model = readBuilt(buildGam(9));
+  const result = writeMainFile({ ...model, chances: 2_147_483_648 });
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.section, MAIN_SECTION);
+  }
+});
+
+test("the writer refuses a u8 field the BinaryWriter would truncate", () => {
+  const model = readBuilt(buildGam(9));
+  const colour = writeMainFile({ ...model, colorDepth: 256 });
+  equal(colour.ok, false);
+  if (!colour.ok) {
+    equal(colour.error.section, MAIN_SECTION);
+  }
+  // The biased gameSpeed byte wraps to a negative speed at minor ≥ 8.
+  const speed = writeMainFile({ ...model, gameSpeed: 200 });
+  equal(speed.ok, false);
+  if (!speed.ok) {
+    equal(speed.error.section, MAIN_SECTION);
+  }
+  // Below minor 8 the byte is the raw speed, so 200 is representable.
+  const raw = readBuilt(buildGam(6, { gameSpeedStored: 200 }));
+  deepEqual(unwrap(writeMainFile(raw)), buildGam(6, { gameSpeedStored: 200 }).bytes);
+});
+
+test("the writer refuses a list longer than its i16 upper bound", () => {
+  const model = readBuilt(buildGam(9));
+  const extKeys = Array.from({ length: 32_769 }, () => ({ asciiKey: 65, program: "" }));
+  const result = writeMainFile({ ...model, extKeys });
+  equal(result.ok, false);
+  if (!result.ok) {
+    equal(result.error.section, MAIN_SECTION);
+  }
+  // 32 768 entries is the last count the derived bound can carry.
+  const most = writeMainFile({ ...model, extKeys: extKeys.slice(0, 32_768) });
+  equal(most.ok, true);
+});
+
+test("the writer refuses a scan-code row that is not eight codes", () => {
+  const model = readBuilt(buildGam(9));
+  for (const movementScanCodes of [[30, 31, 32], [...SCAN_CODES, 38]]) {
+    const result = writeMainFile({ ...model, movementScanCodes });
+    equal(result.ok, false, `${movementScanCodes.length} scan codes must be refused`);
+    if (!result.ok) {
+      equal(result.error.section, MAIN_SECTION);
+    }
+  }
+});
+
+test("the writer refuses a reserved run of the wrong width for the minor", () => {
+  // A pre-3 minor carries a 4-byte parallax row.
+  const pre3 = readBuilt(buildGam(2));
+  const short = writeMainFile({
+    ...pre3,
+    reservedRuns: { ...pre3.reservedRuns, parallax: new Uint8Array(3) },
+  });
+  equal(short.ok, false);
+  if (!short.ok) {
+    equal(short.error.section, MAIN_SECTION);
+  }
+  // A minor that does not carry it must leave it empty, not silently drop it.
+  const post3 = readBuilt(buildGam(9));
+  const stale = writeMainFile({
+    ...post3,
+    reservedRuns: { ...post3.reservedRuns, parallax: PARALLAX },
+  });
+  equal(stale.ok, false);
+  if (!stale.ok) {
+    equal(stale.error.section, MAIN_SECTION);
+  }
+});
+
 test("a clean buffer leaves an empty residue and warns about nothing", () => {
   const result = readMainFile(new BinaryReader(buildGam(9).bytes));
   equal(result.ok, true);

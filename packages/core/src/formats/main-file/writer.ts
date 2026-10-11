@@ -7,22 +7,308 @@
  * under the same conditions the reader read them, the reserved runs are
  * re-emitted verbatim, and the file's `residue` follows the last row (§1.7).
  * Pure (G2): it writes into a `BinaryWriter` and never touches a host. Only an
- * unencodable string fails.
+ * unencodable string or a model the writer cannot represent — a magic that is
+ * not the main-file magic, a minor outside 0–9, an integer too wide for the
+ * field it is stored in, a list longer than its `i16` upper bound, a scan-code
+ * row that is not eight codes, or a reserved run of the wrong width — fails;
+ * those come back as a located `FormatError` (AD-18).
  */
 
-import { ok, type Result } from "../result.ts";
+import { err, ok, type Result } from "../result.ts";
 import { BinaryWriter } from "../binary/writer.ts";
-import { encodeGameSpeed, type MainFile } from "./model.ts";
+import {
+  encodeGameSpeed,
+  MAIN_MAGIC,
+  MAIN_MAX_MINOR,
+  MAIN_MIN_MINOR,
+  MAIN_SECTION,
+  type MainFile,
+} from "./model.ts";
+
+/** The signed 16-bit range every `i16` field must fit (format-spec §1.1). */
+const I16_MIN = -32_768;
+const I16_MAX = 32_767;
+
+/** The signed 32-bit range every `i32` field must fit (format-spec §1.1). */
+const I32_MIN = -2_147_483_648;
+const I32_MAX = 2_147_483_647;
+
+/** The unsigned 8-bit range every `u8` field must fit (format-spec §1.1). */
+const U8_MAX = 255;
+
+/** The most entries an `i16` upper bound can index (format-spec §1.2). */
+const MAX_LIST_ENTRIES = 32_768;
+
+/** A located error for a value the writer cannot encode (AD-18). */
+function fail(writer: BinaryWriter, message: string): Result<never> {
+  return err({ offset: writer.toBytes().length, section: MAIN_SECTION, message });
+}
+
+/** `undefined` when `value` fits an `i16`; otherwise a located error (§1.1). */
+function checkI16(writer: BinaryWriter, field: string, value: number): Result<never> | undefined {
+  if (Number.isInteger(value) && value >= I16_MIN && value <= I16_MAX) {
+    return undefined;
+  }
+  return fail(writer, `${field} is ${value}; an i16 field holds ${I16_MIN}–${I16_MAX} (format-spec §1.1)`);
+}
+
+/** `undefined` when `value` fits an `i32`; otherwise a located error (§1.1). */
+function checkI32(writer: BinaryWriter, field: string, value: number): Result<never> | undefined {
+  if (Number.isInteger(value) && value >= I32_MIN && value <= I32_MAX) {
+    return undefined;
+  }
+  return fail(writer, `${field} is ${value}; an i32 field holds ${I32_MIN}–${I32_MAX} (format-spec §1.1)`);
+}
+
+/** `undefined` when `value` fits a `u8`; otherwise a located error (§1.1). */
+function checkU8(writer: BinaryWriter, field: string, value: number): Result<never> | undefined {
+  if (Number.isInteger(value) && value >= 0 && value <= U8_MAX) {
+    return undefined;
+  }
+  return fail(writer, `${field} is ${value}; a u8 field holds 0–${U8_MAX} (format-spec §1.1)`);
+}
+
+/** `undefined` when `count` fits the derived `i16` upper bound; otherwise a located error (§1.2). */
+function checkCount(writer: BinaryWriter, field: string, count: number): Result<never> | undefined {
+  if (count <= MAX_LIST_ENTRIES) {
+    return undefined;
+  }
+  return fail(
+    writer,
+    `the ${field} has ${count} entries; an i16 upper bound holds at most ${MAX_LIST_ENTRIES} (format-spec §1.2)`,
+  );
+}
+
+/** `undefined` when `run` has the width the minor stores; otherwise a located error (§2). */
+function checkRun(
+  writer: BinaryWriter,
+  field: string,
+  run: Uint8Array,
+  width: number,
+  row: string,
+): Result<never> | undefined {
+  if (run.length === width) {
+    return undefined;
+  }
+  return fail(
+    writer,
+    `the ${field} reserved run is ${run.length} byte(s); the ${row} row stores ${width} (format-spec §2)`,
+  );
+}
+
+/**
+ * Check that `model` is a main file this writer can represent (format-spec §2)
+ * before it writes a byte of it. `BinaryWriter` truncates an out-of-range
+ * integer, and the serialiser derives the list bounds, pads the scan-code row
+ * and drops the reserved runs a minor does not carry, so without this check a
+ * model no reader could produce would quietly be written as a different, valid
+ * file (AD-18). Runs before serialising, so a failing `fail` locates its field
+ * by name and cites §2; the offset is the start of the output.
+ */
+function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | undefined {
+  if (model.magic !== MAIN_MAGIC) {
+    return fail(
+      writer,
+      `the magic is "${model.magic}" but a main file starts with "${MAIN_MAGIC}" (format-spec §2 row 1)`,
+    );
+  }
+  if (!Number.isInteger(model.minor) || model.minor < MAIN_MIN_MINOR || model.minor > MAIN_MAX_MINOR) {
+    return fail(
+      writer,
+      `minor ${model.minor} is outside ${MAIN_MIN_MINOR}–${MAIN_MAX_MINOR}, the layouts §2 documents (format-spec §2)`,
+    );
+  }
+  const minor = model.minor;
+
+  // Rows 2, 3, 7–10: the header scalars.
+  const header =
+    checkI16(writer, "major", model.major) ??
+    checkI16(writer, "registrationFlag", model.registrationFlag) ??
+    checkI16(writer, "screenType", model.screenType) ??
+    checkI16(writer, "extendToFullScreen", model.extendToFullScreen) ??
+    checkI16(writer, "resolution", model.resolution) ??
+    checkI16(writer, "disableProtectReg", model.disableProtectReg);
+  if (header !== undefined) {
+    return header;
+  }
+
+  // Rows 16–18: the key codes.
+  const keys =
+    checkI16(writer, "runTimeKey", model.runTimeKey) ??
+    checkI16(writer, "menuKey", model.menuKey) ??
+    checkI16(writer, "activationKey", model.activationKey);
+  if (keys !== undefined) {
+    return keys;
+  }
+
+  // Row 19: the extra run-time keys.
+  const extKeys = checkCount(writer, "extra run-time key list", model.extKeys.length);
+  if (extKeys !== undefined) {
+    return extKeys;
+  }
+  for (const key of model.extKeys) {
+    const asciiKey = checkI16(writer, "an extra run-time key's asciiKey", key.asciiKey);
+    if (asciiKey !== undefined) {
+      return asciiKey;
+    }
+  }
+
+  // Rows 20–24: the fight settings, then row 21's encounter pool.
+  const fight =
+    checkI16(writer, "fightingDisabled", model.fightingDisabled) ??
+    checkI16(writer, "fightType", model.fightType) ??
+    checkI32(writer, "chances", model.chances) ??
+    checkI16(writer, "useCustomFightPrg", model.useCustomFightPrg);
+  if (fight !== undefined) {
+    return fight;
+  }
+  const enemies = checkCount(writer, "enemy list", model.enemies.length);
+  if (enemies !== undefined) {
+    return enemies;
+  }
+  for (const enemy of model.enemies) {
+    const skillLevel = checkI16(writer, "an enemy's skillLevel", enemy.skillLevel);
+    if (skillLevel !== undefined) {
+      return skillLevel;
+    }
+  }
+
+  // Row 29: the plugin list; only the field the minor stores is written.
+  const plugins = checkCount(writer, "plugin list", model.plugins.length);
+  if (plugins !== undefined) {
+    return plugins;
+  }
+  if (minor <= 2) {
+    for (const plugin of model.plugins) {
+      const enabled = checkI16(writer, "a plugin's enabled flag", plugin.enabled);
+      if (enabled !== undefined) {
+        return enabled;
+      }
+    }
+  }
+
+  // Rows 30–32: the day/night settings.
+  const dayNight =
+    checkI16(writer, "useDayNight", model.useDayNight) ??
+    checkI16(writer, "dayNightType", model.dayNightType) ??
+    checkI32(writer, "dayLengthMinutes", model.dayLengthMinutes);
+  if (dayNight !== undefined) {
+    return dayNight;
+  }
+
+  // Row 37 (minor ≥ 3): the joystick and colour depth.
+  if (minor >= 3) {
+    const cursor =
+      checkU8(writer, "useJoystick", model.useJoystick) ?? checkU8(writer, "colorDepth", model.colorDepth);
+    if (cursor !== undefined) {
+      return cursor;
+    }
+  }
+
+  // Row 38 (minor ≥ 4): the *stored* gameSpeed byte, which is biased at minor
+  // ≥ 8, so it is the byte that must fit a `u8`, not the decoded speed.
+  if (minor >= 4) {
+    const speed =
+      checkU8(writer, "the stored gameSpeed byte", encodeGameSpeed(minor, model.gameSpeed)) ??
+      checkU8(writer, "pixelMovement", model.pixelMovement);
+    if (speed !== undefined) {
+      return speed;
+    }
+  }
+
+  // Row 39 (minor = 5).
+  if (minor === 5) {
+    const cursorEnabled = checkU8(writer, "cursorEnabled", model.cursorEnabled);
+    if (cursorEnabled !== undefined) {
+      return cursorEnabled;
+    }
+  }
+
+  // Row 40 (minor ≥ 6): the mouse cursor's hot spot and transparent colour.
+  if (minor >= 6) {
+    const mouseCursor =
+      checkU8(writer, "hotSpotX", model.hotSpotX) ??
+      checkU8(writer, "hotSpotY", model.hotSpotY) ??
+      checkU8(writer, "the transparent colour's red", model.transparent.r) ??
+      checkU8(writer, "the transparent colour's green", model.transparent.g) ??
+      checkU8(writer, "the transparent colour's blue", model.transparent.b);
+    if (mouseCursor !== undefined) {
+      return mouseCursor;
+    }
+  }
+
+  // Row 41 (minor ≥ 7): the custom resolution.
+  if (minor >= 7) {
+    const resolution = checkI32(writer, "resX", model.resX) ?? checkI32(writer, "resY", model.resY);
+    if (resolution !== undefined) {
+      return resolution;
+    }
+  }
+
+  // Row 42 (minor ≥ 8).
+  if (minor >= 8) {
+    const fps = checkU8(writer, "showFpsInTitle", model.showFpsInTitle);
+    if (fps !== undefined) {
+      return fps;
+    }
+  }
+
+  // Row 43 (minor ≥ 9): the pathfinding block and its eight scan codes.
+  if (minor >= 9) {
+    const path =
+      checkI16(writer, "pathfindHeuristic", model.pathfindHeuristic) ??
+      checkI32(writer, "drawVectorsFlags", model.drawVectorsFlags) ??
+      checkU8(writer, "the path colour's red", model.pathColor.r) ??
+      checkU8(writer, "the path colour's green", model.pathColor.g) ??
+      checkU8(writer, "the path colour's blue", model.pathColor.b) ??
+      checkI32(writer, "movementControls", model.movementControls);
+    if (path !== undefined) {
+      return path;
+    }
+    if (model.movementScanCodes.length !== 8) {
+      return fail(
+        writer,
+        `minor 9 stores exactly eight movement scan codes but the model has ${model.movementScanCodes.length} (format-spec §2 row 43)`,
+      );
+    }
+    for (const scan of model.movementScanCodes) {
+      const code = checkI16(writer, "a movement scan code", scan);
+      if (code !== undefined) {
+        return code;
+      }
+    }
+  }
+
+  // The reserved runs are re-emitted under the conditions the reader read them,
+  // so a run the minor carries must be exactly the row's width and one the
+  // minor does not carry must be empty (format-spec §2, §1.7).
+  const runs =
+    checkRun(writer, "parallax", model.reservedRuns.parallax, minor < 3 ? 4 : 0, "row 10") ??
+    checkRun(writer, "menuPluginFallback", model.reservedRuns.menuPluginFallback, minor < 3 ? 4 : 0, "row 21") ??
+    checkRun(writer, "multitask", model.reservedRuns.multitask, minor <= 2 ? 6 : 0, "row 22") ??
+    checkRun(writer, "fightStyle", model.reservedRuns.fightStyle, minor < 3 ? 2 : 0, "row 29");
+  if (runs !== undefined) {
+    return runs;
+  }
+
+  return undefined;
+}
 
 /**
  * Serialise `model` to the main-file layout (format-spec §2). Which rows are
  * written is decided by `model.minor`, exactly as the reader decided which to
  * read, and `model.residue` is appended after the last row, so a file the
- * reader accepted writes back byte for byte (§1.7).
+ * reader accepted writes back byte for byte (§1.7). A model the writer cannot
+ * represent is refused by `checkModel` before a byte is written (AD-18).
  */
 export function writeMainFile(model: MainFile): Result<Uint8Array> {
   const writer = new BinaryWriter();
   const minor = model.minor;
+
+  const checked = checkModel(writer, model);
+  if (checked !== undefined) {
+    return checked;
+  }
 
   const magic = writer.str(model.magic);
   if (!magic.ok) {
@@ -222,8 +508,8 @@ export function writeMainFile(model: MainFile): Result<Uint8Array> {
     writer.i32(model.drawVectorsFlags);
     writer.color(model.pathColor);
     writer.i32(model.movementControls);
-    for (let i = 0; i < 8; i += 1) {
-      writer.i16(model.movementScanCodes[i] ?? 0);
+    for (const scan of model.movementScanCodes) {
+      writer.i16(scan);
     }
   }
 
