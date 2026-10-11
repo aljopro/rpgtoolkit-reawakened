@@ -1,0 +1,633 @@
+// The actor formats of format-spec §6: player characters (`.tem`, §6.1), items
+// and board NPCs (`.itm`, §6.2) and enemies (`.ene`, §6.3), plus the sample
+// fixtures when they have been fetched (G5 rule 4: fetched, never committed).
+//
+// The readers never throw, so the tests assert on values and on the error's
+// offset and section rather than on exceptions. The synthetic buffers are built
+// field by field with `BinaryWriter` in the exact spec order, so a reader that
+// reads a field at the wrong width or in the wrong order fails here.
+import { test } from "node:test";
+import { deepEqual, equal } from "node:assert/strict";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  BODY_SLOT_NAMES,
+  CHARACTER_SECTION,
+  ENEMY_SECTION,
+  ITEM_SECTION,
+  BinaryReader,
+  BinaryWriter,
+  readCharacter,
+  readEnemy,
+  readItem,
+  writeCharacter,
+  writeEnemy,
+  writeItem,
+} from "../src/index.ts";
+import type { ActorBase, ActorStance, Result } from "../src/index.ts";
+
+const testDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(testDir, "..", "..", "..");
+
+/** Unwrap a result the test expects to succeed. */
+function unwrap<T>(result: Result<T>): T {
+  if (!result.ok) {
+    throw new Error(`expected ok, got: ${result.error.message} (offset ${result.error.offset}, ${result.error.section})`);
+  }
+  return result.value;
+}
+
+/** The stored upper bound for `count` entries (format-spec §1.2). */
+function bound(count: number): number {
+  return count === 0 ? -1 : count - 1;
+}
+
+/** A rectangular base with the four corners given as `[x, y]` pairs. */
+function rect(x0: number, y0: number, x1: number, y1: number): ActorBase {
+  return {
+    points: [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x1, y: y1 },
+      { x: x0, y: y1 },
+    ],
+  };
+}
+
+const BLANK8: readonly string[] = ["", "", "", "", "", "", "", ""];
+
+/** Write a list of strings verbatim (the builder always knows its own counts). */
+function putStrings(writer: BinaryWriter, values: readonly string[]): void {
+  for (const value of values) {
+    writer.str(value);
+  }
+}
+
+/** Write a bounded string list as the formats store it (an upper bound, §1.2). */
+function putBoundedStrings(writer: BinaryWriter, values: readonly string[]): void {
+  writer.i16(bound(values.length));
+  putStrings(writer, values);
+}
+
+/** Write a custom-stance block: an `i32` bound, then the pairs (§6.1–§6.3). */
+function putStances(writer: BinaryWriter, stances: readonly ActorStance[]): void {
+  writer.i32(bound(stances.length));
+  for (const stance of stances) {
+    writer.str(stance.animation);
+    writer.str(stance.handle);
+  }
+}
+
+/** Write the two vector bases (§6.1, §6.2): an `i16` bound, then the polygons. */
+function putBases(writer: BinaryWriter, bases: readonly ActorBase[]): void {
+  writer.i16(bound(bases.length));
+  for (const base of bases) {
+    writer.i16(bound(base.points.length));
+    for (const point of base.points) {
+      writer.i32(point.x);
+      writer.i32(point.y);
+    }
+  }
+}
+
+interface CharacterSpec {
+  readonly minor?: number;
+  readonly magic?: string;
+  readonly bodySlots?: readonly number[];
+  readonly idleTime?: number;
+  readonly speed?: number;
+  readonly bases?: readonly ActorBase[];
+  readonly movement?: readonly string[];
+  readonly battleStances?: readonly string[];
+  readonly idle?: readonly string[];
+  readonly customStances?: readonly ActorStance[];
+}
+
+/** Build a character buffer in the exact §6.1 field order. */
+function buildCharacter(spec: CharacterSpec = {}): Uint8Array {
+  const minor = spec.minor ?? 8;
+  const w = new BinaryWriter();
+  w.str(spec.magic ?? "RPGTLKIT CHAR");
+  w.i16(2);
+  w.i16(minor);
+  w.str("Hero");
+  putStrings(w, ["exp!", "dp!", "fp!", "hp!", "maxhp!", "name$", "smp!", "maxsm!", "level!"]);
+  for (const value of [10, 100, 100, 10, 40, 40, 40, 1]) {
+    w.i32(value);
+  }
+  w.str(""); // profile picture
+  for (let i = 0; i < 201; i += 1) {
+    w.str("");
+    w.i32(0);
+    w.i32(0);
+    w.str("");
+    w.str("");
+  }
+  w.str(""); // special-move category
+  w.i8(0); // hasSpecialMoves == 0 (yes)
+  putStrings(w, ["", "", "", "", "", "", "", "", "", "", ""]); // 11 accessory slots
+  for (const slot of spec.bodySlots ?? [0, 1, 1, 1, 1, 1, 1]) {
+    w.i8(slot);
+  }
+  if (minor === 3) {
+    w.i8(90);
+  } else {
+    w.i32(90);
+  }
+  w.i16(5); // experience increase
+  w.i32(0); // max level (0 disables progression)
+  for (const value of [5, 5, 5, 5]) {
+    w.i16(value);
+  }
+  if (minor < 5) {
+    putStrings(w, ["", "", "", ""]); // obsolete battle sounds
+  }
+  w.str(""); // level-up program
+  w.i8(0); // level-up type
+  w.i8(1); // size type
+  if (minor >= 5) {
+    putStrings(w, spec.movement ?? BLANK8);
+    putStrings(w, spec.battleStances ?? ["", "", "", "", "", ""]);
+  }
+  if (minor >= 6) {
+    putStrings(w, spec.idle ?? BLANK8);
+  }
+  if (minor >= 7) {
+    w.f64(spec.idleTime ?? 3);
+    w.f64(spec.speed ?? 0.05);
+  }
+  if (minor >= 5) {
+    putStances(w, spec.customStances ?? []);
+  }
+  if (minor >= 8) {
+    putBases(w, spec.bases ?? []);
+  }
+  return w.toBytes();
+}
+
+interface ItemSpec {
+  readonly minor?: number;
+  readonly magic?: string;
+  readonly speed?: number;
+  readonly idleTime?: number;
+  readonly bases?: readonly ActorBase[];
+  readonly movement?: readonly string[];
+  readonly idle?: readonly string[];
+  readonly customStances?: readonly ActorStance[];
+}
+
+/** Build an item buffer in the exact §6.2 field order. */
+function buildItem(spec: ItemSpec = {}): Uint8Array {
+  const minor = spec.minor ?? 7;
+  const wide = minor >= 3;
+  const w = new BinaryWriter();
+  w.str(spec.magic ?? "RPGTLKIT ITEM");
+  w.i16(2);
+  w.i16(minor);
+  w.str("man");
+  w.str(""); // description
+  for (let i = 0; i < 5; i += 1) {
+    w.i8(0); // use flags
+  }
+  putStrings(w, new Array<string>(51).fill(""));
+  if (wide) {
+    w.i32(0);
+    w.i32(0);
+  } else {
+    w.i16(0);
+    w.i16(0);
+  }
+  w.i8(0); // key item
+  for (let i = 0; i < 8; i += 1) {
+    w.i8(0); // equip slots
+  }
+  w.str(""); // accessory name
+  for (let i = 0; i < 4; i += 1) {
+    if (wide) {
+      w.i32(0);
+    } else {
+      w.i16(0);
+    }
+  }
+  w.str(""); // on-equip
+  w.str(""); // on-remove
+  for (let i = 0; i < 2; i += 1) {
+    if (wide) {
+      w.i32(0);
+    } else {
+      w.i16(0);
+    }
+  }
+  w.str(""); // menu use program
+  for (let i = 0; i < 2; i += 1) {
+    if (wide) {
+      w.i32(0);
+    } else {
+      w.i16(0);
+    }
+  }
+  w.str(""); // battle use program
+  w.str(""); // battle animation
+  w.str(""); // multitask program
+  w.str(""); // activation program
+  w.i8(1); // size type
+  if (minor >= 4) {
+    putStrings(w, spec.movement ?? BLANK8);
+    w.str(""); // legacy rest animation
+    w.str(""); // reserved
+  }
+  if (minor >= 5) {
+    putStrings(w, spec.idle ?? BLANK8);
+    // Items store speed before idleTime — the opposite of characters (§6.2).
+    w.f64(spec.speed ?? 0.1);
+    w.f64(spec.idleTime ?? 3);
+  }
+  if (minor >= 4) {
+    putStances(w, spec.customStances ?? []);
+  }
+  if (minor >= 7) {
+    putBases(w, spec.bases ?? []);
+  }
+  if (minor < 4) {
+    for (let i = 0; i < 16; i += 1) {
+      w.str("");
+      w.str("");
+    }
+    w.str("");
+    w.str("");
+  }
+  return w.toBytes();
+}
+
+interface EnemySpec {
+  readonly minor?: number;
+  readonly magic?: string;
+  readonly stances?: readonly string[];
+  readonly customStances?: readonly ActorStance[];
+}
+
+/** Build an enemy buffer in the exact §6.3 field order. */
+function buildEnemy(spec: EnemySpec = {}): Uint8Array {
+  const w = new BinaryWriter();
+  w.str(spec.magic ?? "RPGTLKIT ENEMY");
+  w.i16(2);
+  w.i16(spec.minor ?? 1);
+  w.str("Pirate");
+  for (const value of [34, 12, 4, 2]) {
+    w.i32(value);
+  }
+  w.i8(1); // player can run
+  w.i16(4); // critical on this enemy
+  w.i16(10); // critical by this enemy
+  putBoundedStrings(w, []);
+  putBoundedStrings(w, []);
+  putBoundedStrings(w, []);
+  w.i8(0); // AI level
+  w.i8(0); // use custom AI
+  w.str(""); // AI program
+  w.i32(23); // experience reward
+  w.i32(4); // gold reward
+  w.str(""); // defeat program
+  w.str(""); // run-away program
+  putBoundedStrings(w, spec.stances ?? ["", "", "", "", "", ""]);
+  putStances(w, spec.customStances ?? []);
+  return w.toBytes();
+}
+
+/** A Windows-1252/ASCII buffer that pretends to be a 2.x text file. */
+function ascii(text: string): Uint8Array {
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i += 1) {
+    bytes[i] = text.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/** Read `bytes` with `read` and require it to fail, returning the error. */
+function readError<T>(bytes: Uint8Array, read: (reader: BinaryReader) => Result<T>): {
+  readonly offset: number;
+  readonly section: string;
+} {
+  const result = read(new BinaryReader(bytes, "synthetic"));
+  equal(result.ok, false, "the reader was expected to fail");
+  if (result.ok) {
+    throw new Error("unreachable");
+  }
+  return result.error;
+}
+
+// --- §6.1 character, the vector-bases upper bound ---------------------------
+
+test("character: the vector-bases field is an upper bound (stored 1 means 2 bases)", () => {
+  const collision = rect(-15, -15, 15, 0);
+  const activation = rect(-24, -24, 24, 8);
+  const bytes = buildCharacter({ bases: [collision, activation] });
+
+  // A literal `i16 count` reading would read one base and stop, leaving the
+  // 34 bytes of the second base (2 + 4 × 8) trailing — the discovery report's
+  // exact symptom. Pin the stored value first, then the two bases.
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  equal(view.getInt16(bytes.length - 70, true), 1, "the stored bound is 1");
+
+  const reader = new BinaryReader(bytes);
+  const character = unwrap(readCharacter(reader));
+  equal(reader.remaining, 0, "no trailing bytes");
+  equal(character.residue.length, 0, "no residue");
+  deepEqual(character.vectorBases, [collision, activation]);
+  deepEqual(unwrap(writeCharacter(character)), bytes, "byte-identical round-trip");
+
+  const none = unwrap(readCharacter(new BinaryReader(buildCharacter({ bases: [] }))));
+  equal(none.vectorBases?.length, 0, "a stored -1 means no bases");
+});
+
+// --- §6.1 character, the seven body slots -----------------------------------
+
+test("character: seven body slots, byte 0 is padding", () => {
+  const bytes = buildCharacter({ bodySlots: [0, 1, 1, 0, 1, 0, 1] });
+  const character = unwrap(readCharacter(new BinaryReader(bytes)));
+  equal(character.bodySlots.length, 7);
+  deepEqual(character.bodySlots, [0, 1, 1, 0, 1, 0, 1]);
+  deepEqual(
+    [...BODY_SLOT_NAMES],
+    ["padding", "head", "neck", "leftHand", "rightHand", "body", "legs"],
+  );
+  equal(BODY_SLOT_NAMES[0], "padding");
+});
+
+// --- §6.1 vs §6.2, the speed/idleTime order ---------------------------------
+
+test("character stores idleTime then speed; item stores speed then idleTime", () => {
+  // The two values are deliberately distinguishable, and the opposite order in
+  // items (§6.2) means a reader that used one order for both would swap them.
+  const character = unwrap(readCharacter(new BinaryReader(buildCharacter({ idleTime: 3, speed: 0.05 }))));
+  equal(character.idleTime, 3);
+  equal(character.speed, 0.05);
+
+  const item = unwrap(readItem(new BinaryReader(buildItem({ speed: 0.1, idleTime: 3 }))));
+  equal(item.speed, 0.1);
+  equal(item.idleTime, 3);
+});
+
+// --- §6.2 item, custom-stance placement -------------------------------------
+
+test("item: custom stances follow the movement strings at minor 4 and idle+speed at minor 5", () => {
+  const movement = ["m_s", "m_n", "m_e", "m_w", "", "", "", ""];
+  const stances4: readonly ActorStance[] = [{ animation: "a4", handle: "h4" }];
+  const bytes4 = buildItem({ minor: 4, movement, customStances: stances4 });
+  const reader4 = new BinaryReader(bytes4);
+  const item4 = unwrap(readItem(reader4));
+  equal(reader4.remaining, 0);
+  equal(item4.residue.length, 0);
+  deepEqual(item4.movementAnimations, movement);
+  deepEqual(item4.customStances, stances4);
+  equal(item4.idleAnimations, undefined, "minor 4 has no idle animations");
+  equal(item4.speed, undefined, "minor 4 has no speed");
+  deepEqual(unwrap(writeItem(item4)), bytes4, "byte-identical round-trip");
+
+  const idle = ["i_s", "", "", "", "", "", "", ""];
+  const stances5: readonly ActorStance[] = [{ animation: "a5", handle: "h5" }];
+  const bytes5 = buildItem({ minor: 5, idle, speed: 0.2, idleTime: 2, customStances: stances5 });
+  const reader5 = new BinaryReader(bytes5);
+  const item5 = unwrap(readItem(reader5));
+  equal(reader5.remaining, 0);
+  equal(item5.residue.length, 0);
+  deepEqual(item5.idleAnimations, idle);
+  equal(item5.speed, 0.2);
+  equal(item5.idleTime, 2);
+  deepEqual(item5.customStances, stances5);
+  deepEqual(unwrap(writeItem(item5)), bytes5, "byte-identical round-trip");
+});
+
+// --- §6.3 enemy, six stance slots and the i32 custom-stance bound -----------
+
+test("enemy: the stance bound 5 yields six slots and the custom-stance bound is i32", () => {
+  const stances = ["rest", "fight", "defend", "special", "die", ""];
+  const bytes = buildEnemy({ stances });
+  const reader = new BinaryReader(bytes);
+  const enemy = unwrap(readEnemy(reader));
+  equal(reader.remaining, 0);
+  equal(enemy.residue.length, 0);
+  equal(enemy.stances.length, 6, "six slots 0..5");
+  deepEqual(enemy.stances, stances);
+  equal(enemy.stances[5], "", "slot 5 is the unused boundary slot");
+  deepEqual(unwrap(writeEnemy(enemy)), bytes, "byte-identical round-trip");
+
+  // All-empty stances plus six empty custom-stance pairs: the tail is exactly
+  // stance bound + 6 NULs + i32 bound + 12 NULs, so the two bounds can be read
+  // back at known offsets. A four-byte 5 is what proves the custom bound is an
+  // i32 and not the i16 legacy readers used.
+  const custom: readonly ActorStance[] = [
+    { animation: "", handle: "" },
+    { animation: "", handle: "" },
+    { animation: "", handle: "" },
+    { animation: "", handle: "" },
+    { animation: "", handle: "" },
+    { animation: "", handle: "" },
+  ];
+  const tail = buildEnemy({ customStances: custom });
+  const view = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
+  equal(view.getInt16(tail.length - 24, true), 5, "stored stance bound is 5");
+  equal(view.getInt32(tail.length - 16, true), 5, "stored custom-stance bound is a 4-byte 5");
+  const tailReader = new BinaryReader(tail);
+  const tailEnemy = unwrap(readEnemy(tailReader));
+  equal(tailReader.remaining, 0);
+  equal(tailEnemy.residue.length, 0);
+  deepEqual(tailEnemy.customStances, custom);
+  equal(unwrap(readEnemy(new BinaryReader(buildEnemy({ customStances: [] })))).customStances.length, 0);
+});
+
+// --- Round-trips for all three formats -------------------------------------
+
+test("every synthetic actor buffer round-trips byte for byte", () => {
+  const cases: readonly { readonly name: string; readonly bytes: Uint8Array; readonly rewrite: (bytes: Uint8Array) => Uint8Array }[] = [
+    {
+      name: "character",
+      bytes: buildCharacter({
+        bases: [rect(-15, -15, 15, 0), rect(-24, -24, 24, 8)],
+        movement: ["s", "n", "e", "w", "", "", "", ""],
+        battleStances: ["fight", "defend", "item", "die", "rest", ""],
+        idle: ["is", "", "", "", "", "", "", ""],
+        customStances: [{ animation: "a", handle: "h" }],
+      }),
+      rewrite: (bytes) => unwrap(writeCharacter(unwrap(readCharacter(new BinaryReader(bytes))))),
+    },
+    {
+      name: "item",
+      bytes: buildItem({
+        bases: [rect(-15, -15, 15, 0), rect(-24, -24, 24, 8)],
+        movement: ["s", "n", "e", "w", "", "", "", ""],
+        idle: ["is", "", "", "", "", "", "", ""],
+        speed: 0.1,
+        idleTime: 3,
+        customStances: [{ animation: "a", handle: "h" }],
+      }),
+      rewrite: (bytes) => unwrap(writeItem(unwrap(readItem(new BinaryReader(bytes))))),
+    },
+    {
+      name: "enemy",
+      bytes: buildEnemy({
+        stances: ["rest", "fight", "defend", "special", "die", ""],
+        customStances: [{ animation: "a", handle: "h" }],
+      }),
+      rewrite: (bytes) => unwrap(writeEnemy(unwrap(readEnemy(new BinaryReader(bytes))))),
+    },
+  ];
+  for (const { name, bytes, rewrite } of cases) {
+    deepEqual(rewrite(bytes), bytes, `${name} did not round-trip`);
+  }
+});
+
+// --- Located errors ---------------------------------------------------------
+
+test("a wrong magic is a located error at offset 0 in each section", () => {
+  const cases: readonly { readonly bytes: Uint8Array; readonly read: (reader: BinaryReader) => Result<unknown>; readonly section: string }[] = [
+    { bytes: buildCharacter({ magic: "RPGTLKIT CHAP" }), read: readCharacter, section: CHARACTER_SECTION },
+    { bytes: buildItem({ magic: "RPGTLKIT ITEN" }), read: readItem, section: ITEM_SECTION },
+    { bytes: buildEnemy({ magic: "RPGTLKIT ENEMZ" }), read: readEnemy, section: ENEMY_SECTION },
+  ];
+  for (const { bytes, read, section } of cases) {
+    const error = readError(bytes, read);
+    equal(error.offset, 0, `${section}: offset`);
+    equal(error.section, section, "section");
+  }
+});
+
+test("an unsupported minor is a located error on the minor field", () => {
+  const tem = readError(buildCharacter({ minor: 99 }), readCharacter);
+  equal(tem.offset, 16, "character minor field");
+  equal(tem.section, CHARACTER_SECTION);
+
+  const itm = readError(buildItem({ minor: 99 }), readItem);
+  equal(itm.offset, 16, "item minor field");
+  equal(itm.section, ITEM_SECTION);
+
+  // Only minor 1 is binary; minor 0 is the 2.0 text form (§6.3).
+  const ene = readError(buildEnemy({ minor: 0 }), readEnemy);
+  equal(ene.offset, 17, "enemy minor field");
+  equal(ene.section, ENEMY_SECTION);
+});
+
+test("a 2.x text file is a located error at the detection byte", () => {
+  const tem = readError(ascii("RPGTLKIT CHAR\r\nname=Frap\r\n"), readCharacter);
+  equal(tem.offset, 13);
+  equal(tem.section, CHARACTER_SECTION);
+
+  const itm = readError(ascii("RPGTLKIT ITEM\r\nname=man\r\n"), readItem);
+  equal(itm.offset, 13);
+  equal(itm.section, ITEM_SECTION);
+
+  const ene = readError(ascii("RPGTLKIT ENEMY\r\nname=Pirate\r\n"), readEnemy);
+  equal(ene.offset, 14);
+  equal(ene.section, ENEMY_SECTION);
+});
+
+test("a truncated file is a located error, never a throw", () => {
+  const full = buildCharacter();
+  const stub = readError(full.slice(0, 6), readCharacter);
+  equal(stub.offset, 0, "the magic string is unterminated");
+  equal(stub.section, "format-spec §1.1");
+
+  // Truncated in the middle of the fixed 9-name block: the reader stops on the
+  // first missing NUL rather than running past the end.
+  const short = readError(full.slice(0, 20), readCharacter);
+  equal(short.section, "format-spec §1.1");
+});
+
+// --- Sample fixtures (guard-rail G5 rule 4: fetched, never committed) -------
+
+/** Every path under `root` whose lower-cased name ends with one of `suffixes`. */
+function collect(root: string, suffixes: readonly string[]): string[] {
+  if (!existsSync(root)) {
+    return [];
+  }
+  return readdirSync(root, { recursive: true })
+    .filter((name) => suffixes.some((suffix) => name.toLowerCase().endsWith(suffix)))
+    .map((name) => join(root, name));
+}
+
+const sampleActors = [
+  ...collect(join(repoRoot, "fixtures", "legacy", "demo"), [".tem", ".itm", ".ene"]),
+  ...collect(join(repoRoot, "fixtures", "legacy", "Basic"), [".tem", ".itm", ".ene"]),
+];
+
+/** Check one parsed sample: no trailing bytes, no residue, exact round-trip. */
+function checkActor<T extends { readonly residue: Uint8Array }>(
+  path: string,
+  bytes: Uint8Array,
+  reader: BinaryReader,
+  result: Result<T>,
+  write: (model: T) => Result<Uint8Array>,
+): void {
+  if (!result.ok) {
+    throw new Error(`${path}: ${result.error.message} (offset ${result.error.offset})`);
+  }
+  // The readers absorb trailing bytes into `residue`, so `remaining === 0`
+  // alone would hold even if the layout stopped matching the bytes. Asserting
+  // an empty residue makes a field read at the wrong width fail here instead.
+  equal(reader.remaining, 0, `${path}: trailing bytes`);
+  equal(result.value.residue.length, 0, `${path}: ${result.value.residue.length} byte(s) of residue`);
+  equal(
+    result.warnings.filter((warning) => warning.includes("residue")).length,
+    0,
+    `${path}: residue warning`,
+  );
+  deepEqual(unwrap(write(result.value)), bytes, `${path}: byte-identical round-trip`);
+}
+
+test(
+  "every sample actor parses with zero trailing bytes and round-trips exactly",
+  { skip: sampleActors.length === 0 ? "legacy fixtures are not fetched" : false },
+  () => {
+    for (const path of sampleActors) {
+      const bytes = new Uint8Array(readFileSync(path));
+      const reader = new BinaryReader(bytes, path);
+      const lower = path.toLowerCase();
+      if (lower.endsWith(".tem")) {
+        checkActor(path, bytes, reader, readCharacter(reader), writeCharacter);
+      } else if (lower.endsWith(".itm")) {
+        checkActor(path, bytes, reader, readItem(reader), writeItem);
+      } else {
+        checkActor(path, bytes, reader, readEnemy(reader), writeEnemy);
+      }
+    }
+  },
+);
+
+test(
+  "the shipped demo actor samples pin their documented layouts",
+  { skip: sampleActors.length === 0 ? "legacy fixtures are not fetched" : false },
+  () => {
+    const startTem = sampleActors.find((path) => path.endsWith(join("demo", "Chrs", "start.tem")));
+    if (startTem !== undefined) {
+      const bytes = new Uint8Array(readFileSync(startTem));
+      const character = unwrap(readCharacter(new BinaryReader(bytes, startTem)));
+      equal(character.minor, 8);
+      equal(character.bodySlots.length, 7);
+      equal(character.bodySlots[0], 0, "byte 0 is padding");
+      equal(character.idleTime, 3, "characters store idleTime first");
+      equal(character.speed, 0.05);
+      equal(character.vectorBases?.length, 2, "stored bound 1 means two bases");
+      equal(character.maxLevel, 0, "0 disables level progression");
+    }
+
+    const manItm = sampleActors.find((path) => path.endsWith(join("demo", "Item", "man.itm")));
+    if (manItm !== undefined) {
+      const bytes = new Uint8Array(readFileSync(manItm));
+      const item = unwrap(readItem(new BinaryReader(bytes, manItm)));
+      equal(item.minor, 7);
+      equal(item.speed, 0.1, "items store speed first");
+      equal(item.idleTime, 3);
+      equal(item.vectorBases?.length, 2);
+    }
+
+    const pirateEne = sampleActors.find((path) => path.endsWith(join("demo", "Enemy", "pirate.ene")));
+    if (pirateEne !== undefined) {
+      const bytes = new Uint8Array(readFileSync(pirateEne));
+      const enemy = unwrap(readEnemy(new BinaryReader(bytes, pirateEne)));
+      equal(enemy.minor, 1);
+      equal(enemy.stances.length, 6, "stored bound 5 yields six slots");
+      equal(enemy.stances[5], "", "slot 5 is unused");
+    }
+  },
+);
