@@ -4,7 +4,7 @@
 id = 1
 type = "story"
 title = "Binary read and write primitives"
-description = "Adds pure, deterministic little-endian binary reader and writer utilities in `core/format/binary` for i8, u8, i16, u16, i32, u32, f64, NUL-terminated Windows-1252 strings, COLORREF, and upper-bound array loops per format-spec section 1. Built with zero Node or DOM dependencies (G2), deterministic maths (G3)."
+description = "Adds pure, deterministic little-endian binary reader and writer utilities in `core/formats/binary` for i8, u8, i16, u16, i32, u32, f64, NUL-terminated Windows-1252 strings, COLORREF, and upper-bound array loops per format-spec section 1. Built with zero Node or DOM dependencies (G2), deterministic maths (G3)."
 verify = "Unit tests with synthetic byte buffers prove exact round-trip serialization and error handling for EOF/bounds."
 covers = ["CAP-1"]
 after = []
