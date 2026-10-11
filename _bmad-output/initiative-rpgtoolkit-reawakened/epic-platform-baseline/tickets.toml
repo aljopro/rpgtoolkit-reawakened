@@ -112,12 +112,34 @@ hitl = true
 risk = "medium"
 
 [[entry]]
+id = 12
+type = "story"
+title = "Make absent values explicit in the ports contract"
+description = "Replaces the optional fields and the two reply unions of the ports contract with required fields that hold `null` when empty, so every event and cue has one fixed set of keys. Adds one validator in core that checks an event against the contract and names the failing field, and makes entry 9's `parseRun` call it. The compiler flag `exactOptionalPropertyTypes` stays on as a backstop. Why: `undefined` and an absent key are different values across the Worker boundary and in a hash, and the difference first surfaced as a late `canon` throw (entry 8 review F1, R2-1)."
+verify = "A contract fixture that omits a required field or sets `undefined` fails to compile; the validator rejects each case with the field path; the golden job passes after the committed run and golden are re-recorded."
+covers = ["CAP-12", "CAP-13"]
+after = [9]
+hitl = false
+risk = "medium"
+references = [
+  "plan - _bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-contract-types-canonical-form-and-hashes-plan.md, findings F1 and R2-1",
+  "plan - _bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md, parseRun",
+]
+notes = [
+  "Open question: should `AudioCue` be nullable fields (`asset`, `loop`, `volume` always present, `null` when unused) or a discriminated union by `kind`? Default: nullable fields.",
+  "Check: the plain-data fixture tsconfigs do not extend tsconfig.base.json and do not set the flag. Confirm whether they should.",
+  "Fields in scope: KeyInput.char, TexRef.tile, AudioCue.asset/loop/volume, and the AssetReply and BlobLoaded unions (`bytes: Bytes | null` replaces `missing`).",
+  "The round-trip log in canon.test.ts is typed PortData, so it will not catch shape drift. Update its literals by hand.",
+  "Checked 2026-10-10: no golden or recorded log contained `missing`. Recheck after entry 9 adds its committed run.",
+]
+
+[[entry]]
 id = 11
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-13"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
 hitl = false
 risk = "low"
