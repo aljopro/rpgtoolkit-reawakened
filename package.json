@@ -22,7 +22,10 @@
     "fixtures:check": "node tools/fixtures/check.mjs",
     "fixtures:test": "node --test tools/fixtures/test/fixtures.test.mjs",
     "golden": "tsc -b && node packages/runner-headless/dist/cli.js golden",
-    "golden:record": "tsc -b && node packages/runner-headless/dist/cli.js golden --record"
+    "golden:record": "tsc -b && node packages/runner-headless/dist/cli.js golden --record",
+    "dump": "tsc -b && node packages/runner-headless/dist/cli.js dump",
+    "dump:check": "tsc -b && node packages/runner-headless/dist/cli.js dump --check golden/legacy-corpus.json fixtures/legacy",
+    "dump:record": "tsc -b && node packages/runner-headless/dist/cli.js dump --record golden/legacy-corpus.json fixtures/legacy"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@7.0.2",

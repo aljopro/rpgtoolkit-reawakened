@@ -20,6 +20,7 @@
     ["core", "synth"],
     ["core", "render-webgl2"],
     ["core", "runner-harness"],
+    ["core", "runner-headless"],
     ["core", "lsp"],
     ["core", "editor-model"],
     ["synth", "runner-harness"],

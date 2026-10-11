@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { goldenJob } from "@rpgtoolkit/runner-harness";
+import { runDump } from "./dump/cli.ts";
 
 function readFileOrUndefined(filePath: string): string | undefined {
   try {
@@ -18,7 +19,8 @@ function readFileOrUndefined(filePath: string): string | undefined {
   }
 }
 
-export function main(argv: string[]): number {
+/** `golden [<root>] [--record]`: replay (or record) the committed golden tree. */
+function runGolden(argv: string[]): number {
   try {
     let record = false;
     const positionals: string[] = [];
@@ -36,22 +38,12 @@ export function main(argv: string[]): number {
       }
     }
 
-    if (positionals.length === 0) {
-      console.error("golden: missing subcommand");
+    if (positionals.length > 1) {
+      console.error(`golden: unexpected argument '${positionals[1] as string}'`);
       return 1;
     }
 
-    if (positionals[0] !== "golden") {
-      console.error(`golden: unknown subcommand '${positionals[0]}'`);
-      return 1;
-    }
-
-    if (positionals.length > 2) {
-      console.error(`golden: unexpected argument '${positionals[2]}'`);
-      return 1;
-    }
-
-    const root = positionals[1] ?? process.cwd();
+    const root = positionals[0] ?? process.cwd();
 
     const vectors = readFileOrUndefined(join(root, "golden/hash-vectors.json"));
     const run = readFileOrUndefined(join(root, "golden/test-double/run.json"));
@@ -90,4 +82,31 @@ export function main(argv: string[]): number {
     console.error(`golden: error: ${message}`);
     return 1;
   }
+}
+
+/** The headless shell: `golden` replays the G5 suite, `dump` walks a legacy project. */
+export function main(argv: string[]): number {
+  const subcommand = argv[0];
+
+  if (subcommand === undefined) {
+    console.error("missing subcommand");
+    return 1;
+  }
+
+  if (subcommand === "golden") {
+    return runGolden(argv.slice(1));
+  }
+
+  if (subcommand === "dump") {
+    try {
+      return runDump(argv.slice(1));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`dump: error: ${message}`);
+      return 1;
+    }
+  }
+
+  console.error(`unknown subcommand '${subcommand}'`);
+  return 1;
 }

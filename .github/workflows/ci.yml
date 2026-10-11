@@ -57,6 +57,11 @@ jobs:
       - run: pnpm fixtures:fetch
       - run: pnpm fixtures:check
       - run: pnpm golden
+      # The corpus gate (epic 2 Done-when 1): `dump --json` over both sample
+      # games, compared against the committed `golden/legacy-corpus.json`. A
+      # parser or decoder that drifts fails here, naming the file. Regenerating
+      # the expectation is deliberate (`pnpm dump:record`), like a golden (G5).
+      - run: pnpm dump:check
   licence:
     runs-on: ubuntu-latest
     steps:

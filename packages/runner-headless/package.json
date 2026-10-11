@@ -14,6 +14,7 @@
     "typecheck:tests": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
+    "@rpgtoolkit/core": "workspace:*",
     "@rpgtoolkit/runner-harness": "workspace:*"
   },
   "devDependencies": {

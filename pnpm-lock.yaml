@@ -196,6 +196,9 @@ importers:
 
   packages/runner-headless:
     dependencies:
+      '@rpgtoolkit/core':
+        specifier: workspace:*
+        version: link:../core
       '@rpgtoolkit/runner-harness':
         specifier: workspace:*
         version: link:../runner-harness

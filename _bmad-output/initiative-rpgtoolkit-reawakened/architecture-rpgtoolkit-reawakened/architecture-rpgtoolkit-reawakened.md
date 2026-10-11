@@ -42,12 +42,13 @@ graph LR
   core --> synth
   core --> renderwebgl2[render-webgl2]
   core --> runnerharness[runner-harness]
+  core --> runnerheadless[runner-headless]
   core --> lsp
   core --> editormodel[editor-model]
   synth --> runnerharness
   synth --> runnerweb[runner-web]
   renderwebgl2 --> runnerweb
-  runnerharness --> runnerheadless[runner-headless]
+  runnerharness --> runnerheadless
   runnerharness --> dap
   runnerweb --> runnerdesktop[runner-desktop]
   runnerweb --> runnermobile[runner-mobile]

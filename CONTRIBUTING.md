@@ -65,6 +65,8 @@ pnpm fixtures:test               # the fixture tool's own tests
 pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
 pnpm fixtures:check              # fail if anything under fixtures/ is tracked
 pnpm golden                      # the headless golden suite (G5)
+pnpm dump fixtures/legacy/demo   # parse a legacy project and print it (needs fixtures:fetch)
+pnpm dump:check                  # the corpus digest gate (runs in the golden job, after fixtures:fetch)
 ```
 
 The `*:test` scripts are the tool self-tests that CI also runs, so run them when you touch `tools/`. `pnpm graph:write` is a dev aid that CI never runs. `pnpm license` and `pnpm license:test` are aliases of `licence` and `licence:test`.
@@ -74,3 +76,14 @@ The `*:test` scripts are the tool self-tests that CI also runs, so run them when
 Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `core`, `runner-harness` and `runner-headless` expose `typecheck:tests` only, and their tests run through the root `pnpm test`.
 
 **Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's own tests run in `unit`; there is no separate `fixtures` check. Renaming a job id means updating branch protection in the same pull request, or every merge blocks. `main` accepts only a commit whose eight checks have already passed, so every change lands through a pull request (see [Work in a worktree](#work-in-a-worktree)).
+
+## The dump tool and the corpus digest gate
+
+`pnpm dump <path>` walks a legacy project and prints one readable line per file. `<path>` is an extracted project folder, a game folder, or a `.tpk`/standalone EXE package (format-spec §13). Each file goes to the reader its extension names (`.gam` §2, `.brd` §4, `.tst`/`.iso` §3.1, `.anm` §7.1, `.tem`/`.itm`/`.ene` §6.1–§6.3, `.spc`/`.ste`/`.bkg` §8.1–§8.3, images, and `.prg` as text); text, media, plugin files and formats with no reader yet are reported as **skipped with a reason**, and never counted as failures; a file whose extension is a data format that will not parse prints its located `FormatError` (path, offset, section, message) and makes the command exit non-zero. It exits 0 if and only if every data-format file parsed.
+
+`pnpm dump --json <path>` prints the same report as JSON, with a per-file digest: `core`'s FNV-1a over the canonical JSON of the parsed model (AD-11), or over the decoded RGBA for an image. The report is deterministic — files sorted by path, fixed key order, nothing machine-specific — so a reader or decoder that drifts changes a digest.
+
+That is epic 2's Done-when 1 as a **CI gate**, not a local habit: the required `golden` job (which already runs `pnpm fixtures:fetch`) runs `pnpm dump:check`, which re-runs the JSON report over `fixtures/legacy/demo` and `fixtures/legacy/Basic` and compares it with the committed `golden/legacy-corpus.json`. A changed digest fails the job and names the file, so parser and decoder drift cannot pass silently.
+
+`pnpm dump:record` rewrites `golden/legacy-corpus.json` and is the only writer of it. Regenerating it is a **deliberate act**, exactly like `pnpm golden:record` (G5): never run it in CI, never let it run as a side effect, and explain in the pull request why the digests changed. If a digest moved because a reader was fixed, the fix belongs in the same pull request as the regenerated expectation.
+
