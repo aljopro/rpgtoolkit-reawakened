@@ -58,7 +58,7 @@ try {
 }
 
 // A package name is a label: lowercase, digits and dashes, and its npm name is
-// `@rpgtoolkit/<name>`. A diagram node id is the label with every non-alphanumeric
+// `@tk-reawakened/<name>`. A diagram node id is the label with every non-alphanumeric
 // character removed, so two labels that differ only by punctuation are a
 // collision.
 const NAME = /^[a-z][a-z0-9-]*$/;
@@ -148,9 +148,9 @@ for (const name of list.packages) {
   } catch (error) {
     fail(`cannot read ${manifestPath}: ${error.message}`);
   }
-  if (manifest.name !== `@rpgtoolkit/${name}`) {
+  if (manifest.name !== `@tk-reawakened/${name}`) {
     fail(
-      `${listPath}: packages/${name}/package.json names ${JSON.stringify(manifest.name)}, expected "@rpgtoolkit/${name}"`,
+      `${listPath}: packages/${name}/package.json names ${JSON.stringify(manifest.name)}, expected "@tk-reawakened/${name}"`,
     );
   }
 }
@@ -230,9 +230,9 @@ function buildRules() {
     name: "r2-no-deep-package-imports",
     severity: "error",
     comment:
-      "a package is reached only through its public entry point `@rpgtoolkit/<pkg>` (AD-22); a subpath is never exported.",
+      "a package is reached only through its public entry point `@tk-reawakened/<pkg>` (AD-22); a subpath is never exported.",
     from: {},
-    to: { path: "^@rpgtoolkit/[^/]+/." },
+    to: { path: "^@tk-reawakened/[^/]+/." },
   });
   rules.push({
     name: "r3-render-engines-only-in-render",
@@ -265,7 +265,7 @@ const config = {
 };
 
 // `paths` resolves a package's entry point to its source, so the graph is read
-// without a build; a `@rpgtoolkit/<pkg>/<subpath>` import misses every key,
+// without a build; a `@tk-reawakened/<pkg>/<subpath>` import misses every key,
 // resolution fails and r2 sees it.
 const tsconfig = {
   compilerOptions: {
@@ -275,7 +275,7 @@ const tsconfig = {
     baseUrl: ".",
     noEmit: true,
     paths: Object.fromEntries(
-      list.packages.map((name) => [`@rpgtoolkit/${name}`, [`packages/${name}/src/index.ts`]]),
+      list.packages.map((name) => [`@tk-reawakened/${name}`, [`packages/${name}/src/index.ts`]]),
     ),
   },
 };

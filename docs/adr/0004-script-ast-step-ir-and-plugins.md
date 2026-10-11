@@ -39,7 +39,7 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
    ```
    No command has private backdoors into the VM.
 
-3. **TK2 Compatibility Plugin (`@rpgtoolkit/plugin-tk2-compat`):**
+3. **TK2 Compatibility Plugin (`@tk-reawakened/plugin-tk2-compat`):**
    Legacy TK2-specific commands (`#Mwin`, `#Prompt`, `#Item`, legacy `#Fbranch` subroutine call stacks, and integer `WalkSpeed` frame rate adapters) are encapsulated within a dedicated compatibility plugin. When a TK2 project loads, the TK2 plugin activates automatically. The core VM remains clean of legacy heuristics.
 
 4. **Deterministic Event & Lifecycle Bus:**

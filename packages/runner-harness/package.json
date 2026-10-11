@@ -1,5 +1,5 @@
 {
-  "name": "@rpgtoolkit/runner-harness",
+  "name": "@tk-reawakened/runner-harness",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -14,6 +14,6 @@
     }
   },
   "dependencies": {
-    "@rpgtoolkit/core": "workspace:*"
+    "@tk-reawakened/core": "workspace:*"
   }
 }

@@ -5,7 +5,7 @@ import {
   type InputRecord,
   type PlainData,
   type PortData,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 
 export type StepRecord = {
   readonly step: number;

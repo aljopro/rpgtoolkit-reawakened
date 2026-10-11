@@ -1,5 +1,5 @@
 {
-  "name": "@rpgtoolkit/runner-headless",
+  "name": "@tk-reawakened/runner-headless",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -14,8 +14,8 @@
     "typecheck:tests": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@rpgtoolkit/core": "workspace:*",
-    "@rpgtoolkit/runner-harness": "workspace:*"
+    "@tk-reawakened/core": "workspace:*",
+    "@tk-reawakened/runner-harness": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.0.0"

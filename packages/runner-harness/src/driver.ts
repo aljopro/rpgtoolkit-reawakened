@@ -4,7 +4,7 @@ import {
   hashDrawList,
   type Engine,
   type InputRecord,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 import type { AudioSink } from "./audio.ts";
 import type { Run, StepRecord } from "./golden.ts";
 

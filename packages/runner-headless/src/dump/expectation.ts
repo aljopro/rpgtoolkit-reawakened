@@ -12,7 +12,7 @@
  * printed for a readable diff.
  */
 
-import { canon, type PlainData } from "@rpgtoolkit/core";
+import { canon, type PlainData } from "@tk-reawakened/core";
 import { digestsOf, type DumpCounts, type DumpReport } from "./report.ts";
 
 /** The one line every recorded expectation carries, explaining the file. */

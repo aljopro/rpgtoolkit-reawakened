@@ -28,7 +28,7 @@ import {
   type FormatError,
   type LoadedPackage,
   type Result,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 
 /** The format-spec section every failure here cites: the three package forms. */
 const SECTION = "format-spec §13";

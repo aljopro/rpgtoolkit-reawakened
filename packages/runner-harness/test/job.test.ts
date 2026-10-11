@@ -8,7 +8,7 @@ import type {
   StepReport,
   SurfaceId,
   SurfacePixels,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 import { goldenJob } from "../src/job.ts";
 
 const VALID_VECTORS = JSON.stringify({

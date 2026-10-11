@@ -1,4 +1,4 @@
-import type { Engine } from "@rpgtoolkit/core";
+import type { Engine } from "@tk-reawakened/core";
 import { createNullAudio } from "./audio.ts";
 import { createTestEngine } from "./double/test-engine.ts";
 import { runLog } from "./driver.ts";

@@ -20,7 +20,7 @@ function writeFile(path, content) {
 function manifest(name) {
   return `${JSON.stringify(
     {
-      name: `@rpgtoolkit/${name}`,
+      name: `@tk-reawakened/${name}`,
       version: "0.0.0",
       private: true,
       type: "module",
@@ -114,7 +114,7 @@ test("clean tree: listed imports only", () => {
     "clean",
     {
       packages: {
-        a: { "src/index.ts": 'import { b } from "@rpgtoolkit/b";\nexport const x = b;\n' },
+        a: { "src/index.ts": 'import { b } from "@tk-reawakened/b";\nexport const x = b;\n' },
         b: { "src/index.ts": "export const b = 1;\n" },
       },
       edges: [["b", "a"]],
@@ -133,7 +133,7 @@ test("import not an edge: r1-<a>-workspace-edges names file and target", () => {
     "not-an-edge",
     {
       packages: {
-        a: { "src/index.ts": 'import { b } from "@rpgtoolkit/b";\nexport const x = b;\n' },
+        a: { "src/index.ts": 'import { b } from "@tk-reawakened/b";\nexport const x = b;\n' },
         b: { "src/index.ts": "export const b = 1;\n" },
       },
       edges: [],
@@ -178,10 +178,10 @@ test("deep import: r2 catches src, dist and import type subpaths, entry is clean
       packages: {
         a: {
           "src/index.ts": [
-            'import { b } from "@rpgtoolkit/b";',
-            'import { x } from "@rpgtoolkit/b/src/x.ts";',
-            'import type { T } from "@rpgtoolkit/b/src/y.ts";',
-            'import { d } from "@rpgtoolkit/b/dist/index.js";',
+            'import { b } from "@tk-reawakened/b";',
+            'import { x } from "@tk-reawakened/b/src/x.ts";',
+            'import type { T } from "@tk-reawakened/b/src/y.ts";',
+            'import { d } from "@tk-reawakened/b/dist/index.js";',
             "export const y = [b, x, d] as T[];",
             "",
           ].join("\n"),
@@ -201,9 +201,9 @@ test("deep import: r2 catches src, dist and import type subpaths, entry is clean
       const deep = violations(result.output).filter((line) => line.includes("r2-no-deep-package-imports"));
       equal(deep.length, 3, result.output);
       for (const target of [
-        "@rpgtoolkit/b/src/x.ts",
-        "@rpgtoolkit/b/src/y.ts",
-        "@rpgtoolkit/b/dist/index.js",
+        "@tk-reawakened/b/src/x.ts",
+        "@tk-reawakened/b/src/y.ts",
+        "@tk-reawakened/b/dist/index.js",
       ]) {
         ok(
           deep.some((line) => line.includes(target)),
@@ -325,7 +325,7 @@ test("bad list: unknown name, duplicate, self edge, cycle, id collision and an o
         packages: { a: { "src/index.ts": "export const a = 1;\n" } },
         edges: [],
       },
-      expected: /names "@rpgtoolkit\/wrong", expected "@rpgtoolkit\/a"/,
+      expected: /names "@tk-reawakened\/wrong", expected "@tk-reawakened\/a"/,
       // rename the package's manifest so the name no longer matches
       prepare: (root) => writeFile(join(root, "packages", "a", "package.json"), manifest("wrong")),
     },

@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { goldenJob } from "@rpgtoolkit/runner-harness";
+import { goldenJob } from "@tk-reawakened/runner-harness";
 import { runDump } from "./dump/cli.ts";
 
 function readFileOrUndefined(filePath: string): string | undefined {

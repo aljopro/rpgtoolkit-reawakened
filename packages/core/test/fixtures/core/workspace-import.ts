@@ -1,4 +1,4 @@
 // expect-rule: no-restricted-imports
-import { add } from "@rpgtoolkit/runner-harness";
+import { add } from "@tk-reawakened/runner-harness";
 
 export const sum = add;

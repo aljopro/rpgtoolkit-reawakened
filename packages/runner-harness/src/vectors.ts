@@ -5,7 +5,7 @@ import {
   hashState,
   type DrawList,
   type PlainData,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 
 function doubleFromHex(hex: string): number {
   const buf = new ArrayBuffer(8);

@@ -30,7 +30,7 @@ import {
   type SpecialMove,
   type StatusEffect,
   type Tileset,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 import { main } from "../src/index.ts";
 import { digestModel, digestRgba } from "../src/dump/digest.ts";
 import { boardLayout, classify, type DataFormatId } from "../src/dump/formats.ts";
