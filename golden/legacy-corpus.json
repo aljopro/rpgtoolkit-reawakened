@@ -29,7 +29,7 @@
     "demo": {
       "counts": {
         "failed": 0,
-        "parsed": 29,
+        "parsed": 30,
         "skipped": 46
       },
       "digests": {
@@ -61,7 +61,8 @@
         "Misc/start/start_s.anm": "1a5f77efdfe18d1a",
         "Misc/start/start_w.anm": "4b21a38102db8252",
         "Tiles/char.tst": "ceb8114a907c3a88",
-        "Tiles/default.tst": "738b26d112a1e71c"
+        "Tiles/default.tst": "738b26d112a1e71c",
+        "demo.gam": "ddff567768e9326d"
       }
     }
   },

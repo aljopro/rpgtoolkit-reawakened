@@ -46,13 +46,14 @@ git branch -d <type>/<short-name>
 
 Node 24.21.0 (see `.node-version`) and pnpm 12.10.1 (`corepack enable` picks it up from `packageManager`).
 
-CI runs these commands. The seven required jobs are in `.github/workflows/ci.yml` — the fixture tool's own tests (`pnpm fixtures:test`) run in its `unit` job, and `pnpm build` is the same `tsc -b` that `typecheck` and `test` already run, kept here for a first local build. Run them locally in this order before you open a pull request.
+CI runs these commands. The seven required jobs are in `.github/workflows/ci.yml` — the fixture tool's and the no-skips guard's own tests (`pnpm fixtures:test`, `pnpm no-skips:test`) run in its `unit` job, and `pnpm build` is the same `tsc -b` that `typecheck` and `test` already run, kept here for a first local build. Run them locally in this order before you open a pull request.
 
 ```sh
 pnpm install --frozen-lockfile   # install from the committed lockfile
 pnpm build                       # tsc -b
 pnpm typecheck                   # tsc -b, then each package's tsconfig.test.json
 pnpm test                        # tsc -b, then node --test
+pnpm test:strict                 # tsc -b, then node --test, failing if any test was skipped (needs fixtures:fetch; runs in the golden job)
 pnpm lint                        # the core dependency check, then ESLint
 pnpm graph:test                  # the dependency-edge tool's own tests
 pnpm graph                       # the dependency-edge check
@@ -62,6 +63,7 @@ pnpm audit --prod                # dependency vulnerability audit (network)
 pnpm provenance:test             # the provenance scan's own tests
 pnpm provenance                  # the clean-room provenance scan (G7)
 pnpm fixtures:test               # the fixture tool's own tests
+pnpm no-skips:test               # the no-skips guard's own tests
 pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
 pnpm fixtures:check              # fail if anything under fixtures/ is tracked
 pnpm golden                      # the headless golden suite (G5)
@@ -75,7 +77,7 @@ The `*:test` scripts are the tool self-tests that CI also runs, so run them when
 
 Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `core`, `runner-harness` and `runner-headless` expose `typecheck:tests` only, and their tests run through the root `pnpm test`.
 
-**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's own tests run in `unit`; there is no separate `fixtures` check. `pnpm test` runs in both: in `unit` without the sample games, where the format tests skip their sample-game cases, and again in `golden` after the fetch, where those cases run against the real files. Renaming a job id means updating branch protection in the same pull request, or every merge blocks. `main` accepts only a commit whose eight checks have already passed, so every change lands through a pull request (see [Work in a worktree](#work-in-a-worktree)).
+**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's and the no-skips guard's own tests run in `unit`; there is no separate `fixtures` check. `pnpm test` runs in `unit` without the sample games, where the format tests skip their sample-game cases. The `golden` job runs the whole suite again after the fetch as `pnpm test:strict`: those cases run against the real files, and any skipped test fails the job, so a sample-game case cannot pass by skipping. Renaming a job id means updating branch protection in the same pull request, or every merge blocks. `main` accepts only a commit whose eight checks have already passed, so every change lands through a pull request (see [Work in a worktree](#work-in-a-worktree)).
 
 ## The dump tool and the corpus digest gate
 
@@ -84,6 +86,8 @@ Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `c
 `pnpm dump --json <path>` prints the same report as JSON, with a per-file digest: `core`'s FNV-1a over the canonical JSON of the parsed model (AD-11), or over the decoded RGBA for an image. The report is deterministic — files sorted by path, fixed key order, nothing machine-specific — so a reader or decoder that drifts changes a digest.
 
 That is epic 2's Done-when 1 as a **CI gate**, not a local habit: the required `golden` job (which already runs `pnpm fixtures:fetch`) runs `pnpm dump:check`, which re-runs the JSON report over `fixtures/legacy/demo` and `fixtures/legacy/Basic` and compares it with the committed `golden/legacy-corpus.json`. A changed digest fails the job and names the file, so parser and decoder drift cannot pass silently.
+
+The fetch also copies the shipped demo's main file (`build/main/demo.gam`) into `fixtures/legacy/demo/`, named by the pin's `mainPath` and `mainFiles`. The corpus then holds each game's main file with its folder, so this gate and the format tests cover the `.gam` reader against a real file.
 
 `pnpm dump:record` rewrites `golden/legacy-corpus.json` and is the only writer of it. Regenerating it is a **deliberate act**, exactly like `pnpm golden:record` (G5): never run it in CI, never let it run as a side effect, and explain in the pull request why the digests changed. If a digest moved because a reader was fixed, the fix belongs in the same pull request as the regenerated expectation.
 

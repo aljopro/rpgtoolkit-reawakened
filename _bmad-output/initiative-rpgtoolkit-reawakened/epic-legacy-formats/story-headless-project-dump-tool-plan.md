@@ -103,7 +103,7 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 
 ### 2026-10-11
 
-**Code review complete.** 0 `decision-needed`, 10 `patch`, 0 `defer`, 17 rejected.
+**Code review complete.** 0 `decision-needed`, 10 `patch`, 0 `defer`, 17 rejected. Every patch is applied (2026-10-11).
 
 Scope: 2aa135e; diff excludes the ticket's own plan file. Lenses run: blind-hunter, edge-case-hunter, verification-gap, intent-alignment (thorough). Decision, patch and defer counts are entries after grouping; the rejected count is findings.
 
@@ -116,7 +116,7 @@ Scope: 2aa135e; diff excludes the ticket's own plan file. Lenses run: blind-hunt
 - [x] [Review][Patch] The host reads every file into memory before core's AD-17 limits apply [packages/runner-headless/src/dump/fs.ts:60] — check `stat.size` against `PACKAGE_LIMITS` before `readFileSync`. — applied 2026-10-11: The host compares `stat.size` with `PACKAGE_LIMITS` before reading: a loose file above the per-entry limit and a `.tpk` or `.exe` above the compressed-input limit are refused unread. A test uses sparse files.
 - [x] [Review][Patch] Drift wording says "missing" for a file that is present but no longer parses [packages/runner-headless/src/dump/expectation.ts:170] — print the new report's `failed` entry or reword the line. — applied 2026-10-11: The drift report says a file that is present but no longer parses 'failed to parse' and shows the new failure, instead of 'missing'; a test covers it.
 - [x] [Review][Patch] `boardLayout` duplicates core's §4.1 thresholds and its "obsolete" branch is unreachable [packages/runner-headless/src/dump/formats.ts:186] — build it from `BOARD_VECTOR_MINOR`/`PRE_VECTOR_MINOR_MIN`/`PRE_VECTOR_MINOR_MAX` and fix the doc comment. — applied 2026-10-11: `boardLayout` takes its thresholds from core's `BOARD_VECTOR_MINOR`, `PRE_VECTOR_MINOR_MIN` and `PRE_VECTOR_MINOR_MAX`, and its comment is corrected. The 'obsolete' outcome is reachable (minor 0 and 1, which an existing test asserts), so the branch stays.
-- [ ] [Review][Patch] The CI comment describes `--json` while the step runs `dump:check` [.github/workflows/ci.yml:60] — reword it to name `pnpm dump:check`.
+- [x] [Review][Patch] The CI comment describes `--json` while the step runs `dump:check` [.github/workflows/ci.yml:60] — reword it to name `pnpm dump:check`. — applied 2026-10-11: The comment now names `pnpm dump:check` and says what it compares: the dump's JSON report against the committed `golden/legacy-corpus.json`.
 
 **Rejected**
 - blind-hunter: The expectation records no skipped files, skip reasons or warnings — low: the gate is deliberately a counts-and-digest model-drift reference over a SHA-pinned corpus, so gating warnings/reasons would widen the committed schema for no reachable drift.
