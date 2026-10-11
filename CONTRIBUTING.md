@@ -20,6 +20,28 @@ RPG Toolkit Reawakened is a clean-room rebuild. The legacy RPG Toolkit engine an
 - Legacy sample games are test fixtures fetched at CI time. Never commit them.
 - The full rule and its checks are G7 in [docs/guardrails.md](docs/guardrails.md).
 
+## Work in a worktree
+
+Do each piece of work in its own git worktree (a second folder checked out from the same repository), and leave the main checkout on `main`, unedited. Reason: several people or agents can then work at the same time without overwriting each other's files, and `main` only moves when a tested pull request lands.
+
+```sh
+git fetch origin
+git worktree add -b <type>/<short-name> ../rpgtoolkit-reawakened.worktrees/<short-name> origin/main
+cd ../rpgtoolkit-reawakened.worktrees/<short-name>
+pnpm install --frozen-lockfile   # about a second: dependencies link from the shared pnpm store
+pnpm fixtures:fetch              # about a second; only needed before `pnpm golden`
+```
+
+A new worktree starts without the files git ignores, which is why the last two commands are needed (`node_modules/` and the sample games under `fixtures/`). If you use the BMAD ticket tools, also copy `_bmad/custom/config.user.toml` from the main checkout into the same place in the worktree: it names the active initiative, and the tools read no tickets without it.
+
+When the work is done, push the branch and open a pull request. `main` accepts only a commit whose eight required checks have already passed, so a direct push of a new commit is refused. After it lands, bring the main checkout up to date and remove the worktree:
+
+```sh
+git switch main && git merge --ff-only origin/main   # run in the main checkout
+git worktree remove ../rpgtoolkit-reawakened.worktrees/<short-name>
+git branch -d <type>/<short-name>
+```
+
 ## Commands
 
 Node 24.21.0 (see `.node-version`) and pnpm 12.10.1 (`corepack enable` picks it up from `packageManager`).
@@ -51,4 +73,4 @@ The `*:test` scripts are the tool self-tests that CI also runs, so run them when
 
 Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `core`, `runner-harness` and `runner-headless` expose `typecheck:tests` only, and their tests run through the root `pnpm test`.
 
-**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's own tests run in `unit`; there is no separate `fixtures` check. Renaming a job id means updating branch protection in the same pull request, or every merge blocks.
+**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's own tests run in `unit`; there is no separate `fixtures` check. Renaming a job id means updating branch protection in the same pull request, or every merge blocks. `main` accepts only a commit whose eight checks have already passed, so every change lands through a pull request (see [Work in a worktree](#work-in-a-worktree)).
