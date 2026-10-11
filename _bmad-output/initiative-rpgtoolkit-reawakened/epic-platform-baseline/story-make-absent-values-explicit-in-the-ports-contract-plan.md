@@ -1,6 +1,6 @@
 ---
 title: 'Make absent values explicit in the ports contract'
-type: 'story'
+type: 'chore'
 ticket: '12'
 created: '2026-10-10'
 status: done
@@ -12,9 +12,7 @@ review: 'quick'
 review_source: 'pinned'
 lenses_ran: ['quick']
 review_loop_iteration: 1
-context:
-  - '{project-root}/docs/guardrails.md'
-  - '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md'
+context: ['{project-root}/docs/guardrails.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">

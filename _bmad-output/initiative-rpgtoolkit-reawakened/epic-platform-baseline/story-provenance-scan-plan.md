@@ -12,8 +12,7 @@ review: 'quick'
 review_source: 'pinned'
 lenses_ran: ['quick']
 review_loop_iteration: 1
-context:
-  - '{project-root}/docs/guardrails.md'
+context: ['{project-root}/docs/guardrails.md']
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">

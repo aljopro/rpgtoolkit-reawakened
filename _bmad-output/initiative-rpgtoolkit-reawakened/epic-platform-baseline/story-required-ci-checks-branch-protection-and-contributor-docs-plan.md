@@ -1,6 +1,6 @@
 ---
 title: 'Required CI checks, branch protection and contributor docs'
-type: 'story'
+type: 'chore'
 ticket: '10'
 created: '2026-10-10'
 status: done

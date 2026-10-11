@@ -12,10 +12,7 @@ review: 'quick'
 review_source: 'pinned'
 lenses_ran: ['quick']
 review_loop_iteration: 2
-context:
-  - '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md'
-  - '{project-root}/docs/guardrails.md'
-  - '{project-root}/CONTRIBUTING.md'
+context: ['{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md', '{project-root}/docs/guardrails.md', '{project-root}/CONTRIBUTING.md']
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">

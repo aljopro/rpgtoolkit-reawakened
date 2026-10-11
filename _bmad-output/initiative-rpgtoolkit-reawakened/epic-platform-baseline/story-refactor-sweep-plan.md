@@ -1,6 +1,6 @@
 ---
 title: 'Refactor sweep'
-type: 'story'
+type: 'chore'
 ticket: '11'
 created: '2026-10-10'
 status: done
