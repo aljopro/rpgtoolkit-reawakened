@@ -3,7 +3,7 @@ title: 'Make absent values explicit in the ports contract'
 type: 'story'
 ticket: '12'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: 'fa246780ff6ee193ddbab9d5ea0a9c22a9e15b79'
 route: 'full'
 route_source: 'auto'
