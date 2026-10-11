@@ -151,6 +151,20 @@ test("the upper-bound count rule is n + 1 entries and -1 is none", () => {
   equal(unwrap(r.readUpperBound("i32")), 4);
 });
 
+test("a stored upper bound below -1 is reported, not read as none", () => {
+  const w = new BinaryWriter();
+  w.i16(3); // 4 entries
+  w.i16(-2); // invalid: only -1 means "none" (format-spec §1.2)
+  const r = new BinaryReader(w.toBytes());
+  equal(unwrap(r.readUpperBound()), 4);
+  const bad = r.readUpperBound();
+  equal(bad.ok, false);
+  if (!bad.ok) {
+    equal(bad.error.section, "format-spec §1.2");
+    equal(bad.error.offset, 2); // the invalid bound's first byte
+  }
+});
+
 test("raw byte spans copy out instead of aliasing", () => {
   const r = new BinaryReader(new Uint8Array([1, 2, 3, 4]));
   const span = unwrap(r.readBytes(3));
@@ -311,6 +325,31 @@ test("the header helper reads magic, major and minor", () => {
   const r = new BinaryReader(w.toBytes());
   deepEqual(unwrap(r.header()), { magic: "RPGTLKIT BOARD", major: 3, minor: 9 });
   equal(r.eof, true);
+});
+
+test("a negative version field is an error at its own byte", () => {
+  // magic (14) + NUL = 15, so major sits at 15 and minor at 17.
+  const negativeMinor = new BinaryWriter();
+  equal(negativeMinor.str("RPGTLKIT BOARD").ok, true);
+  negativeMinor.i16(3);
+  negativeMinor.i16(-1);
+  const minorResult = new BinaryReader(negativeMinor.toBytes()).header();
+  equal(minorResult.ok, false);
+  if (!minorResult.ok) {
+    equal(minorResult.error.section, "format-spec §1.4");
+    equal(minorResult.error.offset, 17);
+  }
+
+  const negativeMajor = new BinaryWriter();
+  equal(negativeMajor.str("RPGTLKIT BOARD").ok, true);
+  negativeMajor.i16(-2);
+  negativeMajor.i16(9);
+  const majorResult = new BinaryReader(negativeMajor.toBytes()).header();
+  equal(majorResult.ok, false);
+  if (!majorResult.ok) {
+    equal(majorResult.error.section, "format-spec §1.4");
+    equal(majorResult.error.offset, 15);
+  }
 });
 
 test("the detection probe reports binary at a caller offset without moving", () => {

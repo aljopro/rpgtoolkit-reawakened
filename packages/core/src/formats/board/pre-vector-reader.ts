@@ -480,14 +480,6 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
       reader.path,
     );
   }
-  if (header.value.major < 0 || header.value.minor < 0) {
-    return fail(
-      reader.offset - 2,
-      "format-spec §1.4",
-      `invalid negative version ${header.value.major}.${header.value.minor}`,
-      reader.path,
-    );
-  }
   const versionAt = reader.offset - 2;
   if (header.value.minor < PRE_VECTOR_MINOR_MIN) {
     return fail(
