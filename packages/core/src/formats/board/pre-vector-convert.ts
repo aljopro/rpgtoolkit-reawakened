@@ -1,0 +1,461 @@
+/**
+ * Converting a pre-vector board to the vector board model (format-spec §4.8
+ * conversion rules, over the layout of §4.8 and the coordinates of §5).
+ *
+ * Pure and deterministic (G2, G3): it is a function of the `PreVectorBoard`
+ * the reader returned, with no clock, randomness or host access, so the same
+ * bytes always convert to the identical `Board`.
+ *
+ * §4.8 gives no geometry for a tile type beyond "trace contiguous tiles", so
+ * the shapes here are the ones §5 (tile → pixel) and §4.6 (tile size) pin
+ * down: an axis-aligned 32×32 cell in 2D, a 64×32 diamond for an iso-stacked
+ * board. Objects that §4.8 leaves without a mapping (the sprite/item collision
+ * base, the unused fields, an iso-rotated grid) are recorded rather than
+ * invented — see the story plan and `deferred-work.md`.
+ */
+
+import { err, ok, type Result } from "../result.ts";
+import {
+  BOARD_VECTOR_MINOR,
+  COORD_ISO_ROTATED,
+  type Board,
+  type BoardPoint,
+  type BoardProgram,
+  type BoardRgb,
+  type BoardShadeLayer,
+  type BoardShadeRecord,
+  type BoardSprite,
+  type BoardTileRun,
+  type BoardVector,
+} from "./model.ts";
+import { PRE_VECTOR_SECTION, type PreVectorBoard } from "./pre-vector-reader.ts";
+
+/** The vector type for a solid / passage blocking edge (format-spec §4.4). */
+export const TT_SOLID = 1;
+
+/** The vector type for an under tile (format-spec §4.4). */
+export const TT_UNDER = 2;
+
+/** The vector type for a stair (format-spec §4.4). */
+export const TT_STAIRS = 8;
+
+/** The under attribute that includes the board background image (format-spec §4.4). */
+export const TA_BRD_BACKGROUND = 1;
+
+/** The program activation flag that stops the player's movement (format-spec §4.4). */
+export const PRG_STOPS_MOVEMENT = 4;
+
+/** The legacy tile type for a solid tile (format-spec §4.7). */
+const TILE_SOLID = 1;
+
+/** The legacy tile type for an under tile (format-spec §4.7). */
+const TILE_UNDER = 2;
+
+/** The legacy tile type for a north–south passage (format-spec §4.7). */
+const TILE_PASSAGE_NS = 3;
+
+/** The legacy tile type for an east–west passage (format-spec §4.7). */
+const TILE_PASSAGE_EW = 4;
+
+/** The first legacy stair tile type; 11…18 mean layers 1…8 (format-spec §4.7). */
+const TILE_STAIRS_FIRST = 11;
+
+/** The last legacy stair tile type (format-spec §4.7). */
+const TILE_STAIRS_LAST = 18;
+
+/** A located error for a value the converter cannot map (AD-18). */
+function fail(message: string): Result<never> {
+  return err({ offset: 0, section: PRE_VECTOR_SECTION, message });
+}
+
+/**
+ * The tile-top-left → pixel mapping of §5, with the base point already added
+ * (2D +16,+31; the iso systems +0,+0, where the result is the tile centre).
+ * §4.8 sends positions through this and §4.2 stores the result in pixels.
+ */
+function tilePixel(x: number, y: number, sizeX: number, coordType: number): BoardPoint {
+  if ((coordType & COORD_ISO_ROTATED) !== 0) {
+    return { x: (x - y + sizeX) * 32, y: (x + y - sizeX) * 16 - 16 };
+  }
+  if ((coordType & 1) !== 0) {
+    return { x: 64 * x - (y % 2 !== 0 ? 32 : 64), y: 16 * y - 16 };
+  }
+  return { x: (x - 1) * 32 + 16, y: (y - 1) * 32 + 31 };
+}
+
+/**
+ * The closed pixel polygon of the horizontal run of tiles `x…xEnd` at row `y`
+ * on a 2D board, in the winding order (top-left, top-right, bottom-right,
+ * bottom-left). §4.8's program rectangle `((x−1)·32, (y−1)·32)`–`(x·32, y·32)`
+ * is the single-tile case (`xEnd === x`), and §5 fixes the 32×32 extent.
+ */
+function tileCellRect(x: number, y: number, xEnd: number): BoardPoint[] {
+  const left = (x - 1) * 32;
+  const top = (y - 1) * 32;
+  const right = xEnd * 32;
+  const bottom = y * 32;
+  return [
+    { x: left, y: top },
+    { x: right, y: top },
+    { x: right, y: bottom },
+    { x: left, y: bottom },
+  ];
+}
+
+/**
+ * The closed 64×32 diamond centred on a tile of an iso-stacked board, in the
+ * order (top, right, bottom, left). §4.8 asks for exactly this shape for a
+ * program region; §4.6 plus the §5 stacked mapping, whose base point is the
+ * tile centre, give the same cell for a tile vector.
+ */
+function tileDiamond(x: number, y: number, sizeX: number): BoardPoint[] {
+  const centre = tilePixel(x, y, sizeX, 1);
+  return [
+    { x: centre.x, y: centre.y - 16 },
+    { x: centre.x + 32, y: centre.y },
+    { x: centre.x, y: centre.y + 16 },
+    { x: centre.x - 32, y: centre.y },
+  ];
+}
+
+/**
+ * The two open blocking-edge polylines of a passage tile (§4.8): a north–south
+ * passage lets the player travel north–south, so its west and east edges block;
+ * an east–west passage blocks its north and south edges. §4.8 names the shape
+ * ("open polylines along the blocking edges") but not which edges block, so
+ * the reading — travel direction open, the two perpendicular sides blocked —
+ * is recorded as an ambiguity.
+ */
+function passageEdges(type: number, x: number, y: number, layer: number, board: PreVectorBoard): BoardVector[] {
+  const iso = (board.coordType & 1) !== 0;
+  let west: BoardPoint[];
+  let east: BoardPoint[];
+  if (iso) {
+    const [top, right, bottom, left] = tileDiamond(x, y, board.sizeX) as [
+      BoardPoint,
+      BoardPoint,
+      BoardPoint,
+      BoardPoint,
+    ];
+    if (type === TILE_PASSAGE_NS) {
+      west = [top, left, bottom];
+      east = [top, right, bottom];
+    } else {
+      west = [left, top, right];
+      east = [left, bottom, right];
+    }
+  } else if (type === TILE_PASSAGE_NS) {
+    west = [
+      { x: (x - 1) * 32, y: (y - 1) * 32 },
+      { x: (x - 1) * 32, y: y * 32 },
+    ];
+    east = [
+      { x: x * 32, y: (y - 1) * 32 },
+      { x: x * 32, y: y * 32 },
+    ];
+  } else {
+    west = [
+      { x: (x - 1) * 32, y: (y - 1) * 32 },
+      { x: x * 32, y: (y - 1) * 32 },
+    ];
+    east = [
+      { x: (x - 1) * 32, y: y * 32 },
+      { x: x * 32, y: y * 32 },
+    ];
+  }
+  return [
+    { points: west, attributes: 0, closed: 0, layer, type: TT_SOLID, handle: "" },
+    { points: east, attributes: 0, closed: 0, layer, type: TT_SOLID, handle: "" },
+  ];
+}
+
+/**
+ * Merge the per-tile types of §4.8 into vectors (§4.8 "tile type
+ * vectorization"): solid tiles become closed polygons, under tiles closed
+ * polygons with the background attribute, passages open polylines along their
+ * blocking edges, and stairs closed polygons carrying the target layer.
+ *
+ * On a 2D board each maximal horizontal run of one type becomes one rectangle
+ * ("merge contiguous non-zero tiles"); on an iso-stacked board each tile is its
+ * own diamond, because the merged-run rule has no diamond analogue. Tile types
+ * §4.7 does not list (5…10 and values above 18) emit nothing rather than an
+ * invented shape.
+ */
+function buildTileVectors(board: PreVectorBoard): BoardVector[] {
+  const vectors: BoardVector[] = [];
+  const cellsPerLayer = board.sizeX * board.sizeY;
+  const iso = (board.coordType & 1) !== 0;
+  for (let layer = 1; layer <= board.sizeL; layer += 1) {
+    const base = (layer - 1) * cellsPerLayer;
+    for (let y = 1; y <= board.sizeY; y += 1) {
+      let x = 1;
+      while (x <= board.sizeX) {
+        const type = board.tileMatrix[base + (y - 1) * board.sizeX + (x - 1)]?.tileType ?? 0;
+        if (type === TILE_PASSAGE_NS || type === TILE_PASSAGE_EW) {
+          for (const vector of passageEdges(type, x, y, layer, board)) {
+            vectors.push(vector);
+          }
+          x += 1;
+          continue;
+        }
+        if (type !== TILE_SOLID && type !== TILE_UNDER && (type < TILE_STAIRS_FIRST || type > TILE_STAIRS_LAST)) {
+          x += 1;
+          continue;
+        }
+        let xEnd = x;
+        if (!iso) {
+          while (
+            xEnd < board.sizeX &&
+            (board.tileMatrix[base + (y - 1) * board.sizeX + xEnd]?.tileType ?? 0) === type
+          ) {
+            xEnd += 1;
+          }
+        }
+        const isUnder = type === TILE_UNDER;
+        const isStairs = type >= TILE_STAIRS_FIRST;
+        vectors.push({
+          points: iso ? tileDiamond(x, y, board.sizeX) : tileCellRect(x, y, xEnd),
+          attributes: isUnder ? TA_BRD_BACKGROUND : isStairs ? type - 10 : 0,
+          closed: -1,
+          layer,
+          type: isUnder ? TT_UNDER : isStairs ? TT_STAIRS : TT_SOLID,
+          handle: "",
+        });
+        x = xEnd + 1;
+      }
+    }
+  }
+  return vectors;
+}
+
+/**
+ * The stored run-length encoding of an index matrix (§4.2), built from the
+ * expanded cells: maximal runs of one index, a bare index when a run is one
+ * cell. Kept so the converted board's writer is byte-stable (AD-18).
+ */
+function encodeTileRuns(indices: readonly number[]): BoardTileRun[] {
+  const runs: BoardTileRun[] = [];
+  let i = 0;
+  while (i < indices.length) {
+    const value = indices[i] ?? 0;
+    let end = i + 1;
+    while (end < indices.length && indices[end] === value) {
+      end += 1;
+    }
+    runs.push({ lutIndex: value, count: end - i, marker: end - i > 1 });
+    i = end;
+  }
+  return runs;
+}
+
+/**
+ * Flatten the per-tile shades of every layer into shade layer 0 (§4.8), with
+ * its cast layer set to the highest layer that carried non-zero shading. The
+ * planes are combined additively — §4.5 makes shades additive offsets — and a
+ * board with no shading at all gets no shade layer. §4.8 does not say how to
+ * combine differing per-layer shades, so the additive reading is recorded.
+ */
+function buildShadeLayers(board: PreVectorBoard): BoardShadeLayer[] {
+  const cellsPerLayer = board.sizeX * board.sizeY;
+  const sums: BoardRgb[] = [];
+  for (let cell = 0; cell < cellsPerLayer; cell += 1) {
+    sums.push({ r: 0, g: 0, b: 0 });
+  }
+  let castLayer = 0;
+  for (let layer = 1; layer <= board.sizeL; layer += 1) {
+    const base = (layer - 1) * cellsPerLayer;
+    let layerHasShade = false;
+    for (let cell = 0; cell < cellsPerLayer; cell += 1) {
+      const tile = board.tileMatrix[base + cell];
+      if (tile === undefined) {
+        continue;
+      }
+      if (tile.r !== 0 || tile.g !== 0 || tile.b !== 0) {
+        layerHasShade = true;
+      }
+      const sum = sums[cell];
+      if (sum !== undefined) {
+        sums[cell] = { r: sum.r + tile.r, g: sum.g + tile.g, b: sum.b + tile.b };
+      }
+    }
+    if (layerHasShade) {
+      castLayer = layer;
+    }
+  }
+  if (castLayer === 0) {
+    return [];
+  }
+  const records: BoardShadeRecord[] = [];
+  let cell = 0;
+  while (cell < cellsPerLayer) {
+    const current = sums[cell] ?? { r: 0, g: 0, b: 0 };
+    let end = cell + 1;
+    while (end < cellsPerLayer) {
+      const next = sums[end];
+      if (next === undefined || next.r !== current.r || next.g !== current.g || next.b !== current.b) {
+        break;
+      }
+      end += 1;
+    }
+    records.push({ runCount: end - cell, r: current.r, g: current.g, b: current.b });
+    cell = end;
+  }
+  return [{ castLayer, records }];
+}
+
+/** Strip a legacy VB type-declaration suffix (`!` or `$`) from a variable name (§4.8). */
+function stripLegacySuffix(name: string): string {
+  const last = name.slice(-1);
+  return last === "!" || last === "$" ? name.slice(0, -1) : name;
+}
+
+/** The additive ambience for an ambient preset of §4.8 (0 none, 1 mist, 2 dark, 3 water). */
+function ambientFromPreset(preset: number, warnings: string[]): BoardRgb {
+  if (preset === 1) {
+    return { r: 75, g: 75, b: 75 };
+  }
+  if (preset === 2) {
+    return { r: -75, g: -75, b: -75 };
+  }
+  if (preset === 3) {
+    return { r: 0, g: 0, b: 75 };
+  }
+  if (preset !== 0) {
+    warnings.push(`unknown ambient preset ${preset}; converted as none (format-spec §4.8)`);
+  }
+  return { r: 0, g: 0, b: 0 };
+}
+
+/**
+ * Convert a pre-vector board to the vector board model of §4.2, applying the
+ * §4.8 conversion rules: per-tile-type vectorization, program trigger regions,
+ * shading flattened into layer 0, and tile → pixel positions for the start
+ * point and the sprites. The result's minor is 4 and its `coordType` is the
+ * source's.
+ *
+ * The start falls back to `(64, 64)` on layer 1 when its tile coordinates are
+ * ≤ 0 (§4.8). §4.8 also says pre-vector items "receive standard default vector
+ * bases", but the vector sprite model carries no base — a sprite's collision
+ * comes from its own `.itm` — so no base is generated; the gap is recorded.
+ */
+export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
+  if (board.coordType !== 0 && board.coordType !== 1 && board.coordType !== COORD_ISO_ROTATED) {
+    return fail(
+      `coordType ${board.coordType} is not one of §4.8's 0 (2D), 1 (iso stacked) or 2 (iso rotated)`,
+    );
+  }
+  if ((board.coordType & COORD_ISO_ROTATED) !== 0) {
+    return fail(
+      "iso-rotated pre-vector boards cannot be converted: §4.8 records no mapping from the sizeX×sizeY pre-vector tile matrix onto §4.2's (sizeX+sizeY)² rotated grid and gives no rotated program region",
+    );
+  }
+  if (board.sizeX < 0 || board.sizeY < 0 || board.sizeL < 0) {
+    return fail(`negative board dimensions ${board.sizeX}×${board.sizeY}×${board.sizeL}`);
+  }
+  const cellsPerLayer = board.sizeX * board.sizeY;
+  const totalCells = cellsPerLayer * board.sizeL;
+  if (board.tileMatrix.length !== totalCells) {
+    return fail(
+      `tile matrix covers ${board.tileMatrix.length} cells but the ${board.sizeX}×${board.sizeY}×${board.sizeL} grid has ${totalCells}`,
+    );
+  }
+
+  const indices: number[] = [];
+  for (const tile of board.tileMatrix) {
+    if (!Number.isInteger(tile.lutIndex) || tile.lutIndex < 0 || tile.lutIndex > 32767) {
+      return fail(`tile matrix LUT index ${tile.lutIndex} does not fit a non-negative i16`);
+    }
+    indices.push(tile.lutIndex);
+  }
+
+  const iso = (board.coordType & 1) !== 0;
+  const programs: BoardProgram[] = board.programs.map((program) => ({
+    program: program.file,
+    graphic: program.graphic,
+    initialVar: stripLegacySuffix(program.initialVar),
+    initialValue: program.initialValue,
+    finalVar: stripLegacySuffix(program.finalVar),
+    finalValue: program.finalValue,
+    activate: program.activate,
+    activationType: program.activationType | PRG_STOPS_MOVEMENT,
+    repeatDistance: 0,
+    layer: program.layer,
+    points: iso ? tileDiamond(program.x, program.y, board.sizeX) : tileCellRect(program.x, program.y, program.x),
+    closed: -1,
+    handle: "",
+  }));
+
+  const sprites: BoardSprite[] = board.sprites.map((sprite) => {
+    const initialVar = stripLegacySuffix(sprite.initialVar);
+    const pixel = tilePixel(sprite.x, sprite.y, board.sizeX, board.coordType);
+    return {
+      itemFile: sprite.file,
+      activationPrg: sprite.activationPrg,
+      multitaskPrg: sprite.multitaskPrg,
+      initialVar,
+      initialValue: sprite.initialValue,
+      finalVar: stripLegacySuffix(sprite.finalVar),
+      finalValue: sprite.finalValue,
+      loadingVar: initialVar,
+      loadingValue: sprite.initialValue,
+      activate: sprite.activate,
+      activationType: sprite.activationType,
+      x: pixel.x,
+      y: pixel.y,
+      layer: sprite.layer,
+      reserved: -1,
+    };
+  });
+
+  const startPixel = tilePixel(board.startX, board.startY, board.sizeX, board.coordType);
+  const start =
+    board.startX <= 0 || board.startY <= 0
+      ? { x: 64, y: 64, layer: 1 }
+      : { x: startPixel.x, y: startPixel.y, layer: board.startLayer > 0 ? board.startLayer : 1 };
+
+  const warnings: string[] = [];
+  const layerTitles: string[] = [];
+  for (let index = 0; index <= board.sizeL; index += 1) {
+    layerTitles.push(board.layerTitles[index] ?? "");
+  }
+
+  return ok(
+    {
+      magic: board.magic,
+      major: board.major,
+      minor: BOARD_VECTOR_MINOR,
+      sizeX: board.sizeX,
+      sizeY: board.sizeY,
+      sizeL: board.sizeL,
+      coordType: board.coordType,
+      lut: [...board.lut],
+      tileMatrix: indices,
+      tileRuns: encodeTileRuns(indices),
+      shadeLayers: buildShadeLayers(board),
+      lights: [],
+      vectors: buildTileVectors(board),
+      programs,
+      sprites,
+      images: [],
+      threads: [...board.threads],
+      constants: board.constants.map((value) => String(value)),
+      layerTitles,
+      links: { ...board.links },
+      properties: {
+        backgroundImage: board.backgroundImage,
+        backgroundDrawType: 1,
+        backgroundColour: board.backgroundColour,
+        backgroundMusic: board.backgroundMusic,
+        enterPrg: board.enterPrg,
+        battleBackground: board.battleBackground,
+        battleSkill: board.battleSkill,
+        allowBattles: board.allowBattles,
+        disableSaving: board.disableSaving,
+        ambient: ambientFromPreset(board.ambientPreset, warnings),
+        start,
+      },
+      residue: board.residue.slice(),
+    },
+    warnings,
+  );
+}

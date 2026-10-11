@@ -38,6 +38,10 @@
   summary: `tools/deps/graph.mjs` and `tools/check-core-deps.mjs` have no entry guard at all, so importing either would execute the check as a side effect; and `packages/runner-headless/src/cli.ts` resolves only `argv[1]` with `realpathSync`, not `import.meta.url`.
   evidence: Entry 1.11 review finding F10. Neither tool exports anything and every call site spawns a child process (`tools/deps/test/graph.test.mjs`, `packages/core/test/lint-rules.test.ts`, the root `package.json` scripts), so there is no live defect; `cli.ts` still detects its entry because Node realpaths the main module by default (no `--preserve-symlinks` anywhere in the repo). A guard is needed only if a caller ever imports them.
 
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-pre-vector-board-converter-plan.md`
+  summary: format-spec §4.8 under-specifies three things the entry 2.8 pre-vector converter needs, so it records them rather than inventing geometry: (a) the "standard default vector bases" pre-vector items are said to receive — the vector sprite model has no base because a sprite's collision comes from its own `.itm`, so none is generated; (b) how the `sizeX × sizeY` pre-vector tile matrix maps onto §4.2's `(sizeX + sizeY)²` iso-rotated grid, and what a program region on a rotated board is — an iso-rotated board is refused by the converter with a located error; (c) how differing per-layer tile shades combine when flattened into layer 0 — they are summed additively per §4.5, with the cast layer at the highest shaded layer.
+  evidence: Verified against the spec text at `docs/format-spec.md` §4.8 and §5; the corpus ships no minor 2–3 board (all three fixture `.brd` files are minor 4), so nothing pins the reading. A doc amendment to §4.8 stating the bases, the rotated mapping and the flattening rule is a human decision on the format-spec, per G7's "fix the doc first".
+
 ## Resolved
 
 - `deferred-work` §2 (the ignored `fixtures/` folder missing from the provenance scan's `scope.skipRootPaths`) — resolved by entry 1.7; `tools/provenance/markers.json` lists `"fixtures"`.
