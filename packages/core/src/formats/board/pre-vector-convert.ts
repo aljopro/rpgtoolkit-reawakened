@@ -63,6 +63,26 @@ const TILE_STAIRS_FIRST = 11;
 /** The last legacy stair tile type (format-spec §4.7). */
 const TILE_STAIRS_LAST = 18;
 
+/**
+ * The `coordType` bit for pixel-absolute object coordinates (format-spec §5):
+ * a flag combinable with 0 (2D), 1 (iso stacked) or 2 (iso rotated), so it is
+ * masked off before the coordinate-style check and passed through unchanged.
+ */
+const COORD_PX_ABSOLUTE = 4;
+
+/**
+ * The most cells one stored tile run marker may cover (format-spec §4.2): a
+ * marker holds the negated count in an `i16`, so a longer uniform stretch is
+ * split into several markers that still re-read cell for cell.
+ */
+const MAX_TILE_RUN = 32768;
+
+/**
+ * The most cells one shade record may cover (format-spec §4.2): the writer
+ * stores `runCount` as an `i16`, so a longer uniform shade is split at 32767.
+ */
+const MAX_SHADE_RUN = 32767;
+
 /** A located error for a value the converter cannot map (AD-18). */
 function fail(message: string): Result<never> {
   return err({ offset: 0, section: PRE_VECTOR_SECTION, message });
@@ -242,7 +262,12 @@ function encodeTileRuns(indices: readonly number[]): BoardTileRun[] {
     while (end < indices.length && indices[end] === value) {
       end += 1;
     }
-    runs.push({ lutIndex: value, count: end - i, marker: end - i > 1 });
+    let remaining = end - i;
+    while (remaining > 0) {
+      const count = remaining > MAX_TILE_RUN ? MAX_TILE_RUN : remaining;
+      runs.push({ lutIndex: value, count, marker: count > 1 });
+      remaining -= count;
+    }
     i = end;
   }
   return runs;
@@ -297,7 +322,12 @@ function buildShadeLayers(board: PreVectorBoard): BoardShadeLayer[] {
       }
       end += 1;
     }
-    records.push({ runCount: end - cell, r: current.r, g: current.g, b: current.b });
+    let remaining = end - cell;
+    while (remaining > 0) {
+      const runCount = remaining > MAX_SHADE_RUN ? MAX_SHADE_RUN : remaining;
+      records.push({ runCount, r: current.r, g: current.g, b: current.b });
+      remaining -= runCount;
+    }
     cell = end;
   }
   return [{ castLayer, records }];
@@ -339,9 +369,10 @@ function ambientFromPreset(preset: number, warnings: string[]): BoardRgb {
  * comes from its own `.itm` — so no base is generated; the gap is recorded.
  */
 export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
-  if (board.coordType !== 0 && board.coordType !== 1 && board.coordType !== COORD_ISO_ROTATED) {
+  const coordStyle = board.coordType & ~COORD_PX_ABSOLUTE;
+  if (coordStyle !== 0 && coordStyle !== 1 && coordStyle !== COORD_ISO_ROTATED) {
     return fail(
-      `coordType ${board.coordType} is not one of §4.8's 0 (2D), 1 (iso stacked) or 2 (iso rotated)`,
+      `coordType ${board.coordType} is not one of §4.8's 0 (2D), 1 (iso stacked) or 2 (iso rotated), optionally combined with §5's 4 (pixel absolute)`,
     );
   }
   if ((board.coordType & COORD_ISO_ROTATED) !== 0) {
