@@ -13,11 +13,11 @@
  * (AD-18); nothing here throws.
  */
 
-import { foldPath, toSlashes } from "../main-file/layout.ts";
+import { foldPath } from "../main-file/layout.ts";
 import { createAssetIndex } from "../resolver/resolver.ts";
 import { err, ok, type FormatError, type Result } from "../result.ts";
 import { PACKAGE_LIMITS } from "./limits.ts";
-import { checkEntryPath } from "./path-rules.ts";
+import { canonicalEntryPath, checkEntryPath } from "./path-rules.ts";
 import { readZip } from "./zip.ts";
 import type { FolderEntry, LoadedPackage, PackageFile, PackageInput } from "./model.ts";
 
@@ -94,13 +94,13 @@ function loadFolder(
   const foldedPaths = new Map<string, string>();
   let total = 0;
   for (const entry of entries) {
-    const path = toSlashes(entry.path);
+    const path = canonicalEntryPath(entry.path);
     if (entry.kind === "link") {
       return err(
         failure(0, `"${path}" is a symbolic link; links are not allowed in game folders (symbolic links, L23).`),
       );
     }
-    const pathProblem = checkEntryPath(path);
+    const pathProblem = checkEntryPath(entry.path);
     if (pathProblem !== null) {
       return err(failure(0, `${pathProblem}.`));
     }

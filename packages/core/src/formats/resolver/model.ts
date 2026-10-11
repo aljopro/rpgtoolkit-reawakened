@@ -45,7 +45,7 @@ export const PACKAGE_ROOT: PackageAssetRoot = { kind: "package" };
  * `createAssetIndex`.
  */
 export interface AssetIndex {
-  /** The paths exactly as the host supplied them (order preserved). */
+  /** The package's paths, with `\` normalised to `/` (order preserved). */
   readonly paths: readonly string[];
   /** The canonical `AssetKey` of each path, parallel to `paths`. */
   readonly keys: readonly AssetKey[];

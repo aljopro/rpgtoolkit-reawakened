@@ -9,6 +9,7 @@
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
 import { TextEncoder } from "node:util";
+import { deflateSync } from "fflate/browser";
 import {
   loadPackage,
   PACKAGE_LIMITS,
@@ -227,24 +228,40 @@ function unwrap<T>(result: Result<T>): T {
   return result.value;
 }
 
-/** Assert a `.tpk` load failed, naming `rule`, and return the failure. */
-function tpkFailure(bytes: Uint8Array, rule: string): FormatError {
+/**
+ * Assert a `.tpk` load failed, naming `rule`, and return the failure. Its
+ * offset must be a real byte position inside the archive, and must equal
+ * `offset` when the caller knows it.
+ */
+function tpkFailure(bytes: Uint8Array, rule: string, offset?: number): FormatError {
   const result = loadPackage({ kind: "tpk", name: "bad.tpk", bytes });
   if (result.ok) {
     throw new Error(`expected a failure naming ${rule}`);
   }
   equal(result.error.section, "format-spec §13");
+  equal(
+    result.error.offset >= 0 && result.error.offset <= bytes.length,
+    true,
+    `offset ${result.error.offset} is outside the ${bytes.length}-byte archive`,
+  );
+  if (offset !== undefined) {
+    equal(result.error.offset, offset, `"${result.error.message}" offset`);
+  }
   equal(result.error.message.includes(rule), true, `"${result.error.message}" should name ${rule}`);
   return result.error;
 }
 
-/** Assert a loose-folder load failed, naming `rule`, and return the failure. */
+/**
+ * Assert a loose-folder load failed, naming `rule`, and return the failure. A
+ * folder has no byte offsets, so every failure is located at 0.
+ */
 function folderFailure(entries: readonly FolderEntry[], rule: string): FormatError {
   const result = loadPackage({ kind: "folder", name: "bad", entries });
   if (result.ok) {
     throw new Error(`expected a failure naming ${rule}`);
   }
   equal(result.error.section, "format-spec §13");
+  equal(result.error.offset, 0, `"${result.error.message}" offset`);
   equal(result.error.message.includes(rule), true, `"${result.error.message}" should name ${rule}`);
   return result.error;
 }
@@ -350,6 +367,41 @@ test("a stored entry whose compressed size differs from its declared size is rej
   equal(error.message.includes("stored"), true, error.message);
 });
 
+test("a huffman stream that decodes past its declared size is rejected (L17)", () => {
+  // A Huffman-coded raw deflate (fflate's own `deflateSync`, a real DEFLATE
+  // stream, not stored blocks) of a large payload under a header that declares
+  // 1,000 bytes. fflate's inflate fills the caller's buffer and hides the
+  // overflow, and the header's CRC-32 matches the first 1,000 decoded bytes, so
+  // without the bound the entry loads as a silent truncation. The reader
+  // inflates into declared + 1 bytes and requires the produced length to be
+  // exactly the declared size, so the failure names the 1,001st byte.
+  const payload = new Uint8Array(200_000);
+  for (let i = 0; i < payload.length; i += 1) payload[i] = (i * 31 + 7) & 0xff;
+  const body = deflateSync(payload, { level: 9 });
+  const bytes = buildZip([
+    {
+      name: "Boards/fat.brd",
+      content: payload,
+      method: 8,
+      body,
+      crc: crc32Of(payload.subarray(0, 1000)),
+      uncompressedSize: 1000,
+    },
+  ]);
+  const error = tpkFailure(bytes, "declared vs actual size", 0);
+  equal(error.message.includes("L17"), true, error.message);
+  equal(error.message.includes("1001"), true, error.message);
+});
+
+test("a deflate stream shorter than its declared size is rejected (L17)", () => {
+  const content = new Uint8Array(100).fill(7);
+  const bytes = buildZip([
+    { name: "Boards/thin.brd", content, method: 8, body: storedDeflate(content), uncompressedSize: 5000 },
+  ]);
+  const error = tpkFailure(bytes, "declared vs actual size", 0);
+  equal(error.message.includes("L17"), true, error.message);
+});
+
 test("CRC-32 corruption is caught (L18)", () => {
   const bytes = buildZip([
     { name: "bad.txt", content: bytesOf("hello"), method: 8, body: storedDeflate(bytesOf("hellp")) },
@@ -376,6 +428,17 @@ test("a local header that disagrees with the central directory is caught (L19)",
   );
 });
 
+test("an EOCD entry count below the central directory's is rejected (L19)", () => {
+  // The archive holds both records of GAME, but the record claims one entry.
+  // The reader walks the central directory to cdOffset + cdSize and requires
+  // the walked count to match, so no entry can be dropped silently. The record
+  // sits in the last 22 bytes, which is where the failure is located.
+  const bytes = tpkBytes(GAME, { totalEntries: 1 });
+  const error = tpkFailure(bytes, "central directory", bytes.length - 22);
+  equal(error.message.includes("L19"), true, error.message);
+  equal(error.message.includes("holds"), true, error.message);
+});
+
 test("too many entries is rejected (L2)", () => {
   const bytes = buildZip([{ name: "a.txt", content: bytesOf("a") }], {
     totalEntries: PACKAGE_LIMITS.maxEntries + 1,
@@ -394,6 +457,21 @@ test("an oversize entry is rejected before anything inflates (L3)", () => {
     },
   ]);
   const error = tpkFailure(bytes, "max entry size");
+  equal(error.message.includes("L3"), true, error.message);
+});
+
+test("a directory entry is held to the entry-size cap too (L3)", () => {
+  // Directories are exempt from nothing: a directory that declares an oversize
+  // uncompressed size is refused at L3, before the filter would skip it.
+  const bytes = buildZip([
+    {
+      name: "Big/",
+      content: new Uint8Array(0),
+      method: 0,
+      uncompressedSize: PACKAGE_LIMITS.maxEntryUncompressedBytes + 1,
+    },
+  ]);
+  const error = tpkFailure(bytes, "max entry size", 0);
   equal(error.message.includes("L3"), true, error.message);
 });
 
@@ -447,6 +525,52 @@ test("an entry duplicated by case is rejected (L10)", () => {
   equal(error.message.includes("L10"), true, error.message);
 });
 
+test("entry paths are canonicalised before folding (L10)", () => {
+  // `Bitmap//a.png` and `./Bitmap/a.png` name one entry, so each spelling loads
+  // under the canonical path and the index keys it the same way.
+  const doubled = unwrap(
+    loadPackage({
+      kind: "tpk",
+      name: "m.tpk",
+      bytes: tpkBytes([{ name: "Bitmap//a.png", content: bytesOf("x"), method: 0 }]),
+    }),
+  );
+  deepEqual(doubled.files.map((file) => file.path), ["Bitmap/a.png"]);
+  equal(doubled.index.byKey.has("bitmap/a.png"), true);
+
+  const dotted = unwrap(
+    loadPackage({
+      kind: "folder",
+      name: "m",
+      entries: [{ kind: "file", path: "./Bitmap/a.png", bytes: bytesOf("x") }],
+    }),
+  );
+  deepEqual(dotted.files.map((file) => file.path), ["Bitmap/a.png"]);
+  equal(dotted.index.byKey.has("bitmap/a.png"), true);
+
+  // Both spellings fold together, so one archive may not hold both.
+  const both = tpkFailure(
+    tpkBytes([
+      { name: "Bitmap//a.png", content: bytesOf("x"), method: 0 },
+      { name: "./Bitmap/a.png", content: bytesOf("x"), method: 0 },
+    ]),
+    "case-insensitive duplicates",
+  );
+  equal(both.message.includes("L10"), true, both.message);
+
+  // A path that names nothing is refused.
+  const nothing = tpkFailure(
+    tpkBytes([{ name: ".", content: bytesOf("x"), method: 0 }]),
+    "empty entry path",
+    0,
+  );
+  equal(nothing.message.includes("L9"), true, nothing.message);
+  equal(
+    folderFailure([{ kind: "file", path: "./", bytes: bytesOf("x") }], "empty entry path").message.includes("L9"),
+    true,
+  );
+});
+
 test("an encrypted entry is rejected (L11)", () => {
   const bytes = buildZip([{ name: "secret.brd", content: bytesOf("x"), flags: 1 }]);
   const error = tpkFailure(bytes, "encrypted entry");
@@ -465,6 +589,16 @@ test("ZIP64 is rejected (L13)", () => {
     "ZIP64",
   );
   equal(error.message.includes("L13"), true, error.message);
+});
+
+test("a UTF-8 entry name (general-purpose flag bit 11) decodes and keys correctly", () => {
+  const bytes = tpkBytes([
+    { name: "Tiles/héllo.tst", content: bytesOf("tiles"), method: 0, flags: 0x0800 },
+  ]);
+  const loaded = unwrap(loadPackage({ kind: "tpk", name: "utf8.tpk", bytes }));
+  deepEqual(loaded.files.map((file) => file.path), ["Tiles/héllo.tst"]);
+  deepEqual(loaded.index.keys, ["tiles/héllo.tst"]);
+  equal(loaded.index.byKey.has("tiles/héllo.tst"), true);
 });
 
 test("a package with no end-of-central-directory record in the window is rejected (L15)", () => {

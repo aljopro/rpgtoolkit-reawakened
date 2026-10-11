@@ -26,18 +26,43 @@ function utf8ByteLength(text: string): number {
 }
 
 /**
+ * Canonicalise one entry path: `\` becomes `/`, then empty and `.` segments are
+ * dropped, and a trailing `/` is put back when the original ended in one and a
+ * name remains.
+ *
+ * Two spellings of one path (`Bitmap//a.png`, `./Bitmap/a.png`) therefore come
+ * back the same, so the reader and the folder loader key and de-duplicate
+ * entries identically. A path that names nothing (``, `.`, `./`) comes back
+ * empty; `checkEntryPath` refuses it. `..` is kept, so an escape still reads as
+ * an escape after canonicalisation.
+ */
+export function canonicalEntryPath(path: string): string {
+  const slashed = toSlashes(path);
+  const trailing = slashed.endsWith("/");
+  const kept = slashed.split("/").filter((segment) => segment !== "" && segment !== ".");
+  const joined = kept.join("/");
+  return trailing && joined !== "" ? `${joined}/` : joined;
+}
+
+/**
  * Check one entry path against the §1.5 path rules and return the failure
  * message — naming the limit it hit — or `null` when the path is acceptable.
  *
- * The path is normalised first (`\` becomes `/`, §1.5), then rejected if it is
- * absolute, starts with a drive letter, carries a `..` segment or a NUL, or
- * breaches the length, depth or basename caps. A trailing `/` marks a directory
- * and is allowed.
+ * The path is normalised first (`\` becomes `/`, §1.5), then rejected if it
+ * names nothing, is absolute, starts with a drive letter, carries a `..`
+ * segment or a NUL, or breaches the length, depth or basename caps. The caps
+ * are measured on the canonical path, so empty and `.` segments do not count;
+ * the escape check reads the normalised path, so canonicalisation can never
+ * drop an absolute prefix. A trailing `/` marks a directory and is allowed.
  */
 export function checkEntryPath(path: string): string | null {
   const normalised = toSlashes(path);
   if (normalised.includes("\u0000")) {
     return `Entry "${path}" contains a NUL byte; packages may not contain NUL in a path (path escape, L9)`;
+  }
+  const canonical = canonicalEntryPath(path);
+  if (canonical === "") {
+    return `Entry "${path}" names nothing once empty and "." segments are removed; a package entry must name a file or folder (empty entry path, L9)`;
   }
   const segments = normalised.split("/");
   const escaped =
@@ -47,11 +72,11 @@ export function checkEntryPath(path: string): string | null {
   if (escaped) {
     return `Entry "${path}" escapes the package root; packages may not contain absolute paths, drive letters or ".." (path escape, L9)`;
   }
-  const bytes = utf8ByteLength(normalised);
+  const bytes = utf8ByteLength(canonical);
   if (bytes > PACKAGE_LIMITS.maxPathBytes) {
     return `Entry path "${path}" is ${bytes} bytes; the limit is ${PACKAGE_LIMITS.maxPathBytes} (max path length, L6)`;
   }
-  const named = segments.filter((segment) => segment !== "");
+  const named = canonical.split("/").filter((segment) => segment !== "");
   if (named.length > PACKAGE_LIMITS.maxPathDepth) {
     return `Entry "${path}" has ${named.length} segments; the limit is ${PACKAGE_LIMITS.maxPathDepth} (max depth, L7)`;
   }
