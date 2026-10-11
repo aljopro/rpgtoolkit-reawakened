@@ -1,0 +1,20 @@
+{
+  "name": "@rpgtoolkit/synth",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b && pnpm run typecheck:tests",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "tsc -b && node --test \"test/*.test.ts\""
+  }
+}

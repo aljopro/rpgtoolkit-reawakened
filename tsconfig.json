@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/core" },
+    { "path": "packages/synth" },
     { "path": "packages/runner-harness" },
     { "path": "packages/runner-headless" }
   ]

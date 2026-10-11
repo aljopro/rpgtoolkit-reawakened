@@ -16,3 +16,15 @@
 - source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-contract-types-canonical-form-and-hashes-plan.md`
   summary: `canon` (entry 1.8) costs about 13 times `JSON.stringify` (3.9 ms against 0.3 ms on a 264 KB state; `hashState` 6.4 ms), and `Object.keys(items)` on every array allocates about 107 MB for a 1M-element array.
   evidence: Review F11, not a correctness issue. Decide when the engine epic wires `hashState` into `advance` (the Design Notes say it runs on every `advance`): replace the density check with a loop over `i in items`, skip the per-property descriptor read on the common path, or hash while serialising.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md`
+  summary: The golden test double (entry 1.9) does not model the focus pause of AD-14/E-03 (it throws on focus, and the driver throws when advance reports 0 steps run). Pause replay lands with the engine epic.
+  evidence: Review finding F2. Revisit when the engine epic implements E-03 pause state.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md`
+  summary: `audio.ended` and `video.ended` emission by the headless runner is deferred because it requires parsed durations from audio readers that core currently lacks.
+  evidence: Review finding F2 / Design Notes. Revisit in the audio-synth epic.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md`
+  summary: An exported `./testing` entry point for runner-harness (AD-22) is deferred because dependency-cruiser rule r2 bans subpath imports.
+  evidence: Review finding F17 / probe b2. Revisit when DAP needs runner-harness testing helpers.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md`
+  summary: The harness driver (entry 1.9) throws if a step report contains non-empty requests or diagnostics.
+  evidence: Review finding F10 / Design Notes. Revisit when a real engine emits diagnostics or blocking requests.

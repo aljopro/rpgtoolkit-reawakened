@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "records": [
+    {"step": 1, "state": "197cb2e6196e4255", "draw": "65618c49e21b06f7"},
+    {"step": 2, "state": "1978b2e6196a597e", "draw": "55197df27ce776b0"},
+    {"step": 3, "state": "e828ceea3741e42d", "draw": "d9eb915d159b6186"},
+    {"step": 4, "state": "59c81dc7213c80f8", "draw": "f9e68569ceae5463"},
+    {"step": 5, "state": "59c521c7213a51ed", "draw": "db7b97c2c461f04e"},
+    {"step": 6, "state": "59c121c721366916", "draw": "76c4d222de1c1409"},
+    {"step": 7, "state": "59177984595ceb89", "draw": "8cebdaa9076491b2"},
+    {"step": 8, "state": "59067984594e7856", "draw": "06d4e426efa8b559"},
+    {"step": 9, "state": "59027584594a88b3", "draw": "724d4bb7fc0b8d2c"},
+    {"step": 10, "state": "d0dac1e3e277d3a3", "draw": "b79c3d8501e68344"},
+    {"step": 11, "state": "04b40ebc6bdf3980", "draw": "c36fcf9763039711"},
+    {"step": 12, "state": "04aa0ebc6bd6e4fb", "draw": "e0c0c5e2f9451c96"},
+    {"step": 13, "state": "04ae12bc6bdad49e", "draw": "94e11fd829ccd38b"},
+    {"step": 14, "state": "04a312bc6bd0cd19", "draw": "d1577c2ad8c985c0"},
+    {"step": 15, "state": "62b16d7e0ee1d035", "draw": "278837313f5ad1fd"},
+    {"step": 16, "state": "62ad6d7e0edde75e", "draw": "a76aa366fc0adb82"},
+    {"step": 17, "state": "62aa697e0edbaabb", "draw": "1201269832315907"},
+    {"step": 18, "state": "628b697e0ec0fa2c", "draw": "9278bcde9b1061fc"},
+    {"step": 19, "state": "62886d7e0ebecb21", "draw": "b001f3a317bbe8a9"},
+    {"step": 20, "state": "6bbc967e141c0de5", "draw": "aae5907aae4afaf9"},
+    {"step": 21, "state": "6bc0927e141feff0", "draw": "6f337ac7c6bf4bcc"},
+    {"step": 22, "state": "6bb6927e14179b6b", "draw": "3c2d036e76c51793"},
+    {"step": 23, "state": "6bb9967e1419d80e", "draw": "42c4330a483506be"},
+    {"step": 24, "state": "6baf967e14118389", "draw": "556f15eeb2c6e005"}
+  ]
+}

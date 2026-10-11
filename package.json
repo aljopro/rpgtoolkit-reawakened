@@ -20,7 +20,9 @@
     "provenance:test": "node --test tools/provenance/test/provenance.test.mjs",
     "fixtures:fetch": "node tools/fixtures/fetch.mjs",
     "fixtures:check": "node tools/fixtures/check.mjs",
-    "fixtures:test": "node --test tools/fixtures/test/fixtures.test.mjs"
+    "fixtures:test": "node --test tools/fixtures/test/fixtures.test.mjs",
+    "golden": "tsc -b && node packages/runner-headless/dist/cli.js golden",
+    "golden:record": "tsc -b && node packages/runner-headless/dist/cli.js golden --record"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@7.0.2",
