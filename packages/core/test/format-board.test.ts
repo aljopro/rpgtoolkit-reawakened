@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   BOARD_DETECT_OFFSET,
   BOARD_MAGIC,
+  BOARD_MAX_CELLS,
   BOARD_SECTION,
   BinaryReader,
   BinaryWriter,
@@ -93,6 +94,15 @@ interface ShadeSpec {
   readonly records: readonly (readonly [number, number, number, number])[];
 }
 
+/** One precomputed light as the builder writes it (format-spec §4.2). */
+interface LightSpec {
+  readonly layer: number;
+  /** 0 = elliptical spotlight, 1 = linear gradient, 2 = clipped gradient. */
+  readonly type: number;
+  readonly nodes: readonly (readonly [number, number])[];
+  readonly colours: readonly BoardRgb[];
+}
+
 /** One free image as the builder writes it (format-spec §4.2). */
 interface ImageSpec {
   readonly file: string;
@@ -117,6 +127,7 @@ interface BuildOptions {
   /** The raw `i16` tile-matrix tokens, markers included (negative = a run marker). */
   readonly tokens?: readonly number[];
   readonly shadeLayers?: readonly ShadeSpec[];
+  readonly lights?: readonly LightSpec[];
   readonly vectors?: readonly VectorSpec[];
   readonly programs?: readonly ProgramSpec[];
   readonly sprites?: readonly SpriteSpec[];
@@ -187,7 +198,23 @@ function buildBoard(options: BuildOptions = {}): Uint8Array {
     }
   }
 
-  writer.i16(-1); // no lights
+  const lights = options.lights ?? [];
+  writer.i16(bound(lights.length));
+  for (const light of lights) {
+    writer.i32(light.layer);
+    writer.i32(light.type);
+    writer.i16(bound(light.nodes.length));
+    for (const node of light.nodes) {
+      writer.i32(node[0]);
+      writer.i32(node[1]);
+    }
+    writer.i16(bound(light.colours.length));
+    for (const colour of light.colours) {
+      writer.i16(colour.r);
+      writer.i16(colour.g);
+      writer.i16(colour.b);
+    }
+  }
 
   const vectors = options.vectors ?? [];
   writer.i16(bound(vectors.length));
@@ -377,6 +404,36 @@ test("a shading layer stops after the grid is covered", () => {
   deepEqual(unwrap(writeBoard(model)), bytes);
 });
 
+test("round-trips the precomputed lights byte for byte", () => {
+  const bytes = buildBoard({
+    lights: [
+      {
+        layer: 1,
+        type: 0,
+        nodes: [[64, 96], [128, 96], [64, 32]],
+        colours: [{ r: 10, g: 20, b: 30 }, { r: 0, g: 0, b: 0 }],
+      },
+      {
+        layer: 2,
+        type: 1,
+        nodes: [[0, 0], [32, 32]],
+        colours: [{ r: -5, g: 5, b: 0 }, { r: 1, g: 1, b: 1 }],
+      },
+    ],
+  });
+  const model = unwrap(readBoard(new BinaryReader(bytes)));
+  equal(model.lights.length, 2);
+  deepEqual(model.lights[0], {
+    layer: 1,
+    type: 0,
+    nodes: [{ x: 64, y: 96 }, { x: 128, y: 96 }, { x: 64, y: 32 }],
+    colours: [{ r: 10, g: 20, b: 30 }, { r: 0, g: 0, b: 0 }],
+  });
+  equal(model.lights[1]?.type, 1, "a linear gradient has two nodes and two colours");
+  deepEqual(model.lights[1]?.nodes, [{ x: 0, y: 0 }, { x: 32, y: 32 }]);
+  deepEqual(unwrap(writeBoard(model)), bytes);
+});
+
 test("reads and writes a closed vector with the legacy -1", () => {
   const bytes = buildBoard({
     vectors: [
@@ -541,7 +598,7 @@ test("refuses minors 2 and 3 with a pointer to §4.8", () => {
     if (result.ok) {
       continue;
     }
-    // magic (14 bytes incl. NUL) + major (2) = the minor field starts at 17.
+    // magic (15 bytes) + major (2) = the minor field starts at 17.
     equal(result.error.offset, 17);
     equal(result.error.section, BOARD_SECTION);
     equal(result.error.message.includes("§4.8"), true, result.error.message);
@@ -570,6 +627,23 @@ test("refuses a negative minor version", () => {
   }
   equal(result.error.offset, 17);
   equal(result.error.section, "format-spec §1.4");
+});
+
+test("refuses a negative sizeX, sizeY or sizeL", () => {
+  const cases: readonly (readonly [number, number, number])[] = [
+    [-1, 2, 1],
+    [2, -1, 1],
+    [2, 2, -2],
+  ];
+  for (const [sizeX, sizeY, sizeL] of cases) {
+    const result = readBoard(new BinaryReader(buildBoard({ sizeX, sizeY, sizeL })));
+    equal(result.ok, false, `${sizeX}×${sizeY}×${sizeL} is invalid`);
+    if (result.ok) {
+      continue;
+    }
+    equal(result.error.section, "format-spec §4.2");
+    equal(result.error.offset, 19, "the sizeX field");
+  }
 });
 
 test("a truncated file reports the field's offset", () => {
@@ -731,6 +805,69 @@ test("keeps a final run that overshoots the grid and writes it back", () => {
   equal(result.warnings.length > 0, true, "the reader warns about the overshoot");
   deepEqual(result.value.tileMatrix, [1, 2, 2, 2, 2, 2]);
   deepEqual(unwrap(writeBoard(result.value)), bytes);
+});
+
+test("refuses a board whose tile matrix would exceed the cell limit", () => {
+  // 397 × 2113 × 5 = BOARD_MAX_CELLS + 1 cells — yet the crafted file is tiny,
+  // so the reader must refuse on the dimensions before it expands a single run.
+  equal(397 * 2113 * 5, BOARD_MAX_CELLS + 1, "the crafted grid is one cell over the limit");
+  const bytes = buildBoard({ sizeX: 397, sizeY: 2113, sizeL: 5 });
+  const result = readBoard(new BinaryReader(bytes));
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §4.2");
+  equal(result.error.offset, 19, "the sizeX field");
+});
+
+test("accepts a board of exactly BOARD_MAX_CELLS cells built from 128 maximum runs", () => {
+  equal(2048 * 2048, BOARD_MAX_CELLS, "2048 × 2048 × 1 is exactly the limit");
+  equal(128 * 32_768, BOARD_MAX_CELLS, "128 runs of 32768 cells fill it");
+  const tokens = Array.from({ length: 128 }, () => [-32_768, 1]).flat();
+  const bytes = buildBoard({ sizeX: 2048, sizeY: 2048, sizeL: 1, tokens, shadeLayers: [] });
+  const model = unwrap(readBoard(new BinaryReader(bytes)));
+  equal(model.tileMatrix.length, BOARD_MAX_CELLS);
+  equal(model.tileRuns.length, 128);
+  deepEqual(unwrap(writeBoard(model)), bytes);
+});
+
+test("refuses a model whose tile matrix would exceed the cell limit", () => {
+  const model = unwrap(readBoard(new BinaryReader(buildBoard({}))));
+  // 2048 × 2064 × 1 = 4227072 cells — 32768 over the limit — and 129 maximum
+  // runs (129 × 32768 = 4227072) cover it exactly, so only the §4.2 limit can
+  // refuse this model; every other guard would accept it.
+  equal(2048 * 2064, 129 * 32_768, "the runs cover the over-limit grid exactly");
+  const tileMatrix = new Array<number>(129 * 32_768).fill(1);
+  const tileRuns = Array.from({ length: 129 }, () => ({ lutIndex: 1, count: 32_768, marker: true }));
+  const result = writeBoard({ ...model, sizeX: 2048, sizeY: 2064, sizeL: 1, tileMatrix, tileRuns });
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §4.2");
+});
+
+test("refuses a model with a value the §4.2 layout cannot store", () => {
+  const model = unwrap(readBoard(new BinaryReader(buildBoard({}))));
+
+  const wideDimension = writeBoard({ ...model, sizeX: 40_000 });
+  equal(wideDimension.ok, false, "an i16-overflowing sizeX");
+  if (!wideDimension.ok) {
+    equal(wideDimension.error.section, "format-spec §4.2");
+  }
+
+  const tooManyLayers = writeBoard({
+    ...model,
+    shadeLayers: Array.from({ length: 40_000 }, () => ({ castLayer: 1, records: [] })),
+  });
+  equal(tooManyLayers.ok, false, "a shade-layer count above 32768");
+
+  const wrongMagic = writeBoard({ ...model, magic: "RPGTLKIT WRONG" });
+  equal(wrongMagic.ok, false, "a magic the reader refuses");
+
+  const oldMinor = writeBoard({ ...model, minor: 3 });
+  equal(oldMinor.ok, false, "a minor that dispatches to §4.8");
 });
 
 // --- Sample fixtures (guard-rail G5 rule 4: fetched, never committed) --------

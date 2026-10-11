@@ -5,14 +5,20 @@
  * version it was given and reproduces the bytes `readBoard` consumed exactly
  * (AD-18): the stored runs, the stored `closed` flags (including the legacy
  * `-1`), every empty slot and the residue are re-emitted verbatim, so an
- * unmodified board writes back byte for byte. Only an unencodable string or an
- * inconsistent model fails; those come back as a located `FormatError`.
+ * unmodified board writes back byte for byte. A value the reader would refuse
+ * is refused here — an unencodable string, an out-of-range `i16` scalar or
+ * count, a magic or version this layout cannot write, a negative dimension, a
+ * tile matrix past the §4.2 cell limit, or an inconsistent tile matrix — and
+ * comes back as a located `FormatError`.
  */
 
 import { err, ok, type Result } from "../result.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import {
   BOARD_LAYOUT_SECTION,
+  BOARD_MAGIC,
+  BOARD_MAX_CELLS,
+  BOARD_VECTOR_MINOR,
   boardGrid,
   type Board,
   type BoardPoint,
@@ -22,6 +28,10 @@ import {
 function fail(writer: BinaryWriter, message: string): Result<never> {
   return err({ offset: writer.toBytes().length, section: BOARD_LAYOUT_SECTION, message });
 }
+
+/** The stored `i16` range a §4.2 scalar must fit (format-spec §1.1). */
+const I16_MIN = -32_768;
+const I16_MAX = 32_767;
 
 /**
  * Check the stored tile runs against the grid and the decompressed matrix
@@ -84,12 +94,46 @@ function bound(count: number): number {
   return count === 0 ? -1 : count - 1;
 }
 
+/**
+ * Write a list's `i16` upper bound (format-spec §1.2) after checking it fits:
+ * a count above 32768 would wrap `count - 1` and re-read as "none", so it is
+ * refused (AD-18).
+ */
+function writeUpperBound(writer: BinaryWriter, count: number, what: string): Result<void> {
+  if (count > 32_768) {
+    return fail(writer, `${what} has ${count} entries but the i16 upper bound holds at most 32768`);
+  }
+  writer.i16(bound(count));
+  return ok(undefined);
+}
+
+/**
+ * Check a group of named scalars and, only when they all fit, write them as
+ * `i16`. `BinaryWriter.i16` silently wraps an out-of-range value, which would
+ * turn a dimension negative or a field into a different number; a model the
+ * reader would refuse must be refused here (AD-18).
+ */
+function writeI16s(
+  writer: BinaryWriter,
+  ...scalars: readonly (readonly [string, number])[]
+): Result<void> {
+  for (const [field, value] of scalars) {
+    if (!Number.isInteger(value) || value < I16_MIN || value > I16_MAX) {
+      return fail(writer, `${field} ${value} does not fit the stored i16 range ${I16_MIN}..${I16_MAX}`);
+    }
+  }
+  for (const [, value] of scalars) {
+    writer.i16(value);
+  }
+  return ok(undefined);
+}
+
 /** Write an upper-bounded list of strings (format-spec §1.2, §4.2). */
 function writeStrings(writer: BinaryWriter, values: readonly string[]): Result<void> {
-  if (values.length > 32_768) {
-    return fail(writer, `a string list has ${values.length} entries but the i16 upper bound holds at most 32768`);
+  const count = writeUpperBound(writer, values.length, "a string list");
+  if (!count.ok) {
+    return count;
   }
-  writer.i16(bound(values.length));
   for (const value of values) {
     const written = writer.str(value);
     if (!written.ok) {
@@ -101,10 +145,10 @@ function writeStrings(writer: BinaryWriter, values: readonly string[]): Result<v
 
 /** Write an upper-bounded list of `i32 x, i32 y` points (format-spec §4.2). */
 function writePoints(writer: BinaryWriter, points: readonly BoardPoint[]): Result<void> {
-  if (points.length > 32_768) {
-    return fail(writer, `a point list has ${points.length} entries but the i16 upper bound holds at most 32768`);
+  const count = writeUpperBound(writer, points.length, "a point list");
+  if (!count.ok) {
+    return count;
   }
-  writer.i16(bound(points.length));
   for (const point of points) {
     writer.i32(point.x);
     writer.i32(point.y);
@@ -120,21 +164,60 @@ function writePoints(writer: BinaryWriter, points: readonly BoardPoint[]): Resul
 export function writeBoard(model: Board): Result<Uint8Array> {
   const writer = new BinaryWriter();
 
+  // Everything the reader refuses is refused here first, so the writer never
+  // hands back a file its own reader would reject (AD-18): the magic is fixed,
+  // the version must select the §4.2 vector layout, the dimensions must be
+  // non-negative and the tile matrix must fit the §4.2 cell limit.
+  if (model.magic !== BOARD_MAGIC) {
+    return fail(
+      writer,
+      `the magic "${model.magic}" is not "${BOARD_MAGIC}"; the reader refuses any other value`,
+    );
+  }
+  if (model.major < 0 || model.minor < BOARD_VECTOR_MINOR) {
+    return fail(
+      writer,
+      `invalid board version ${model.major}.${model.minor}: the vector layout needs a non-negative major and minor >= ${BOARD_VECTOR_MINOR}`,
+    );
+  }
+  if (model.sizeX < 0 || model.sizeY < 0 || model.sizeL < 0) {
+    return fail(
+      writer,
+      `invalid negative board dimensions ${model.sizeX}×${model.sizeY}×${model.sizeL}`,
+    );
+  }
+  const grid = boardGrid(model.sizeX, model.sizeY, model.coordType);
+  const declaredCells = grid.width * grid.height * model.sizeL;
+  if (declaredCells > BOARD_MAX_CELLS) {
+    return fail(
+      writer,
+      `the tile matrix would hold ${declaredCells} cells (${grid.width}×${grid.height}×${model.sizeL}) but the limit is ${BOARD_MAX_CELLS}`,
+    );
+  }
+
   const magic = writer.str(model.magic);
   if (!magic.ok) {
     return magic;
   }
-  writer.i16(model.major);
-  writer.i16(model.minor);
-  writer.i16(model.sizeX);
-  writer.i16(model.sizeY);
-  writer.i16(model.sizeL);
-  writer.i16(model.coordType);
-
-  if (model.lut.length > 32_768) {
-    return fail(writer, `the tile LUT has ${model.lut.length} entries but the i16 upper bound holds at most 32768`);
+  const version = writeI16s(writer, ["major", model.major], ["minor", model.minor]);
+  if (!version.ok) {
+    return version;
   }
-  writer.i16(bound(model.lut.length));
+  const dimensions = writeI16s(
+    writer,
+    ["sizeX", model.sizeX],
+    ["sizeY", model.sizeY],
+    ["sizeL", model.sizeL],
+    ["coordType", model.coordType],
+  );
+  if (!dimensions.ok) {
+    return dimensions;
+  }
+
+  const lutCount = writeUpperBound(writer, model.lut.length, "the tile LUT");
+  if (!lutCount.ok) {
+    return lutCount;
+  }
   for (const reference of model.lut) {
     const written = writer.str(reference);
     if (!written.ok) {
@@ -162,18 +245,30 @@ export function writeBoard(model: Board): Result<Uint8Array> {
     writer.i16(run.lutIndex);
   }
 
-  writer.i16(bound(model.shadeLayers.length));
+  const shadeLayers = writeUpperBound(writer, model.shadeLayers.length, "the shade-layer list");
+  if (!shadeLayers.ok) {
+    return shadeLayers;
+  }
   for (const layer of model.shadeLayers) {
     writer.i32(layer.castLayer);
     for (const record of layer.records) {
-      writer.i16(record.runCount);
-      writer.i16(record.r);
-      writer.i16(record.g);
-      writer.i16(record.b);
+      const scalars = writeI16s(
+        writer,
+        ["shade runCount", record.runCount],
+        ["shade red", record.r],
+        ["shade green", record.g],
+        ["shade blue", record.b],
+      );
+      if (!scalars.ok) {
+        return scalars;
+      }
     }
   }
 
-  writer.i16(bound(model.lights.length));
+  const lights = writeUpperBound(writer, model.lights.length, "the light list");
+  if (!lights.ok) {
+    return lights;
+  }
   for (const light of model.lights) {
     writer.i32(light.layer);
     writer.i32(light.type);
@@ -181,31 +276,52 @@ export function writeBoard(model: Board): Result<Uint8Array> {
     if (!nodes.ok) {
       return nodes;
     }
-    writer.i16(bound(light.colours.length));
+    const colours = writeUpperBound(writer, light.colours.length, "the light colour list");
+    if (!colours.ok) {
+      return colours;
+    }
     for (const colour of light.colours) {
-      writer.i16(colour.r);
-      writer.i16(colour.g);
-      writer.i16(colour.b);
+      const scalars = writeI16s(
+        writer,
+        ["light red", colour.r],
+        ["light green", colour.g],
+        ["light blue", colour.b],
+      );
+      if (!scalars.ok) {
+        return scalars;
+      }
     }
   }
 
-  writer.i16(bound(model.vectors.length));
+  const vectors = writeUpperBound(writer, model.vectors.length, "the vector list");
+  if (!vectors.ok) {
+    return vectors;
+  }
   for (const vector of model.vectors) {
     const points = writePoints(writer, vector.points);
     if (!points.ok) {
       return points;
     }
-    writer.i16(vector.attributes);
-    writer.i16(vector.closed);
-    writer.i16(vector.layer);
-    writer.i16(vector.type);
+    const scalars = writeI16s(
+      writer,
+      ["vector attributes", vector.attributes],
+      ["vector closed", vector.closed],
+      ["vector layer", vector.layer],
+      ["vector type", vector.type],
+    );
+    if (!scalars.ok) {
+      return scalars;
+    }
     const handle = writer.str(vector.handle);
     if (!handle.ok) {
       return handle;
     }
   }
 
-  writer.i16(bound(model.programs.length));
+  const programs = writeUpperBound(writer, model.programs.length, "the program list");
+  if (!programs.ok) {
+    return programs;
+  }
   for (const program of model.programs) {
     for (const value of [
       program.program,
@@ -220,22 +336,34 @@ export function writeBoard(model: Board): Result<Uint8Array> {
         return written;
       }
     }
-    writer.i16(program.activate);
-    writer.i16(program.activationType);
-    writer.i16(program.repeatDistance);
-    writer.i16(program.layer);
+    const activation = writeI16s(
+      writer,
+      ["program activate", program.activate],
+      ["program activationType", program.activationType],
+      ["program repeatDistance", program.repeatDistance],
+      ["program layer", program.layer],
+    );
+    if (!activation.ok) {
+      return activation;
+    }
     const points = writePoints(writer, program.points);
     if (!points.ok) {
       return points;
     }
-    writer.i16(program.closed);
+    const closed = writeI16s(writer, ["program closed", program.closed]);
+    if (!closed.ok) {
+      return closed;
+    }
     const handle = writer.str(program.handle);
     if (!handle.ok) {
       return handle;
     }
   }
 
-  writer.i16(bound(model.sprites.length));
+  const sprites = writeUpperBound(writer, model.sprites.length, "the sprite list");
+  if (!sprites.ok) {
+    return sprites;
+  }
   for (const sprite of model.sprites) {
     for (const value of [
       sprite.itemFile,
@@ -253,15 +381,24 @@ export function writeBoard(model: Board): Result<Uint8Array> {
         return written;
       }
     }
-    writer.i16(sprite.activate);
-    writer.i16(sprite.activationType);
-    writer.i16(sprite.x);
-    writer.i16(sprite.y);
-    writer.i16(sprite.layer);
-    writer.i16(sprite.reserved);
+    const placement = writeI16s(
+      writer,
+      ["sprite activate", sprite.activate],
+      ["sprite activationType", sprite.activationType],
+      ["sprite x", sprite.x],
+      ["sprite y", sprite.y],
+      ["sprite layer", sprite.layer],
+      ["sprite reserved", sprite.reserved],
+    );
+    if (!placement.ok) {
+      return placement;
+    }
   }
 
-  writer.i16(bound(model.images.length));
+  const images = writeUpperBound(writer, model.images.length, "the image list");
+  if (!images.ok) {
+    return images;
+  }
   for (const image of model.images) {
     const file = writer.str(image.file);
     if (!file.ok) {
@@ -269,10 +406,15 @@ export function writeBoard(model: Board): Result<Uint8Array> {
     }
     writer.i32(image.left);
     writer.i32(image.top);
-    writer.i16(image.layer);
-    writer.i16(image.drawType);
+    const draw = writeI16s(writer, ["image layer", image.layer], ["image drawType", image.drawType]);
+    if (!draw.ok) {
+      return draw;
+    }
     writer.color(image.transparent);
-    writer.i16(image.reserved);
+    const reserved = writeI16s(writer, ["image reserved", image.reserved]);
+    if (!reserved.ok) {
+      return reserved;
+    }
   }
 
   const threads = writeStrings(writer, model.threads);
@@ -321,15 +463,21 @@ export function writeBoard(model: Board): Result<Uint8Array> {
       return written;
     }
   }
-  writer.i16(properties.battleSkill);
-  writer.i16(properties.allowBattles);
-  writer.i16(properties.disableSaving);
-  writer.i16(properties.ambient.r);
-  writer.i16(properties.ambient.g);
-  writer.i16(properties.ambient.b);
-  writer.i16(properties.start.x);
-  writer.i16(properties.start.y);
-  writer.i16(properties.start.layer);
+  const scalars = writeI16s(
+    writer,
+    ["battleSkill", properties.battleSkill],
+    ["allowBattles", properties.allowBattles],
+    ["disableSaving", properties.disableSaving],
+    ["ambient red", properties.ambient.r],
+    ["ambient green", properties.ambient.g],
+    ["ambient blue", properties.ambient.b],
+    ["start x", properties.start.x],
+    ["start y", properties.start.y],
+    ["start layer", properties.start.layer],
+  );
+  if (!scalars.ok) {
+    return scalars;
+  }
 
   writer.writeBytes(model.residue);
   return ok(writer.toBytes());

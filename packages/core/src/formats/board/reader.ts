@@ -19,6 +19,7 @@ import {
   BOARD_DETECT_OFFSET,
   BOARD_MAGIC,
   BOARD_LAYOUT_SECTION,
+  BOARD_MAX_CELLS,
   BOARD_SECTION,
   BOARD_VECTOR_MINOR,
   boardGrid,
@@ -184,14 +185,6 @@ export function readBoard(reader: BinaryReader): Result<Board> {
       reader.path,
     );
   }
-  if (header.value.major < 0 || header.value.minor < 0) {
-    return fail(
-      reader.offset - 2,
-      "format-spec §1.4",
-      `invalid negative version ${header.value.major}.${header.value.minor}`,
-      reader.path,
-    );
-  }
   if (header.value.minor < BOARD_VECTOR_MINOR) {
     const section = BOARD_SECTION;
     const at = reader.offset - 2;
@@ -228,6 +221,31 @@ export function readBoard(reader: BinaryReader): Result<Board> {
     return coordType;
   }
 
+  // §4.2 "Size limits": the dimensions bound the tile matrix, so a negative
+  // one is invalid and an over-large declared cell count is refused here —
+  // before a single run is read or expanded — so a crafted file cannot make
+  // the reader reserve gigabytes.
+  const dimensionsOffset = reader.offset - 8;
+  if (sizeX.value < 0 || sizeY.value < 0 || sizeL.value < 0) {
+    return fail(
+      dimensionsOffset,
+      BOARD_LAYOUT_SECTION,
+      `invalid negative board dimensions ${sizeX.value}×${sizeY.value}×${sizeL.value}`,
+      reader.path,
+    );
+  }
+  const grid = boardGrid(sizeX.value, sizeY.value, coordType.value);
+  const cellsPerLayer = grid.width * grid.height;
+  const totalCells = cellsPerLayer * sizeL.value;
+  if (totalCells > BOARD_MAX_CELLS) {
+    return fail(
+      dimensionsOffset,
+      BOARD_LAYOUT_SECTION,
+      `the tile matrix would hold ${totalCells} cells (${grid.width}×${grid.height}×${sizeL.value}) but the limit is ${BOARD_MAX_CELLS}`,
+      reader.path,
+    );
+  }
+
   const lutBound = reader.readUpperBound();
   if (!lutBound.ok) {
     return lutBound;
@@ -237,9 +255,6 @@ export function readBoard(reader: BinaryReader): Result<Board> {
     return lut;
   }
 
-  const grid = boardGrid(sizeX.value, sizeY.value, coordType.value);
-  const cellsPerLayer = grid.width * grid.height;
-  const totalCells = cellsPerLayer * sizeL.value;
   const tile = readTileMatrix(reader, totalCells);
   if (!tile.ok) {
     return tile;
