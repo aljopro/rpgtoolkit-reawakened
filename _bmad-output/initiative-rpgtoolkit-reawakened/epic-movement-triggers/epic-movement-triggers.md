@@ -11,7 +11,7 @@ risk: high
 
 ## Description
 
-Players and items walk, animate, collide, path-find and follow waypoints; programs fire from step-on, key-press, repeat, item, board-entry, edge and global-key triggers with the exact observable rules; keyboard, mouse and gamepad input drive it.
+Players and items walk, animate, collide, path-find and follow waypoints; programs fire from step-on, key-press, repeat, item, board-entry, edge and global-key triggers with the exact observable rules; keyboard, mouse and gamepad input drive it. Operates over the Unified Actor model (AD-32) and the synchronous, deterministic world event queue (ADR 0004, AD-32), dispatching triggers and movement through plain-data event hooks.
 
 ## Outcome
 
@@ -32,7 +32,7 @@ Core movement, collision, pathfinding, triggers and input mapping. Not battle ru
 ## References
 
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
-- spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-2, AD-13, AD-14, AD-25, AD-26
+- spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-2, AD-13, AD-14, AD-25, AD-26, AD-32
 - constraint - docs/guardrails.md, section G3
 - reference - docs/engine-features.md, E-20 to E-34, E-40 to E-49, E-110 to E-113
 

@@ -11,7 +11,7 @@ risk: high
 
 ## Description
 
-The RPGCode 3.1 language runs on an explicit step-machine VM whose entire state is plain JSON: parser, interpreter, functions, classes, includes, error handlers, cooperative threads, blocking by yielded status, source/target context and sandboxed file I/O. The VM exposes a built-in registration API that every domain epic uses.
+The RPGCode 3.1 language runs on an explicit step-machine VM whose entire state is plain JSON: parser, interpreter, functions, classes, includes, error handlers, cooperative threads, blocking by yielded status, source/target context and sandboxed file I/O. The VM executes a linear Step IR lowered from a Unified AST produced by distinct TK2 and TK3 dialect frontends (ADR 0004). Legacy TK2 commands and runtime shims are encapsulated in `@rpgtoolkit/plugin-tk2-compat`, keeping the core VM free of legacy heuristics. Core built-in commands register through the dogfooded `PluginDefinition` interface. The VM exposes a built-in registration API that every domain epic uses.
 
 ## Outcome
 
@@ -35,7 +35,7 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 ## References
 
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
-- spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7, AD-8, AD-9, AD-12, AD-13, AD-17, AD-24, AD-26
+- spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7, AD-8, AD-9, AD-12, AD-13, AD-17, AD-24, AD-26, ADR 0004, AD-32
 - constraint - docs/guardrails.md, section G1
 - reference - docs/format-spec.md, section 9
 - reference - docs/engine-features.md, E-33, E-90 to E-99

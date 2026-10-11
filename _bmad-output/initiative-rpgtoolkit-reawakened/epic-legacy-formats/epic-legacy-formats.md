@@ -11,7 +11,7 @@ risk: medium
 
 ## Description
 
-Every file format in the legacy sample games parses in pure TypeScript from bytes, from a folder, a `.tpk` or an appended-ZIP EXE, through a case-insensitive asset resolver, images decode once to RGBA (`decodeTexture`), the project's own distribution package (a `.tpk`-compatible ZIP with `manifest.json`) reads and writes, and pre-vector boards upgrade to the vector model. A headless dump tool prints each file.
+Every file format in the legacy sample games parses in pure TypeScript from bytes, from a folder, a `.tpk` or an appended-ZIP EXE, through a case-insensitive asset resolver, images decode once to RGBA (`decodeTexture`), the project's own distribution package (a `.tpk`-compatible ZIP with `manifest.json`) reads and writes, and pre-vector boards upgrade to the vector model. Every reader implements the pluggable `AssetDecoder` interface (AD-31) registered through the core format registry. A headless dump tool prints each file.
 
 ## Outcome
 
@@ -32,7 +32,7 @@ Byte readers and writers, the asset resolver, package import and pre-vector upgr
 ## References
 
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
-- spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-5, AD-6, AD-18, AD-28
+- spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-5, AD-6, AD-18, AD-28, AD-31
 - constraint - docs/format-spec.md, sections 1-13
 - reference - docs/engine-features.md, E-01, E-10, E-130, E-131
 

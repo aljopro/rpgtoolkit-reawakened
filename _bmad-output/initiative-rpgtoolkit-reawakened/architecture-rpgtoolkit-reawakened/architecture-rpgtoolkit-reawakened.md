@@ -78,6 +78,7 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 | G6 licence test (Blue Oak Bronze or better, minus MS-PL; ADR 0003) | guardrails | Stack; Deferred names the `ovsx` exemption |
 | G7 clean-room | guardrails | every AD cites doc sections, never legacy source |
 | TypeScript everywhere; VS Code and standalone hosts first-class | ADR 0001 | Stack, AD-19, AD-20 |
+| Script lowering, plugin command registry, deterministic event bus | ADR 0004 | AD-8, AD-31, AD-32, AD-33 |
 
 ## Invariants & Rules
 
@@ -336,6 +337,36 @@ graph TD
 - **Prevents:** a Rust/wasm escape hatch (ADR 0001) forcing a core API change.
 - **Rule:** pathfinding, rasterisation and synth hot paths sit behind ports. A runner may inject a wasm implementation; the pure-TypeScript one remains the reference for goldens.
 - **Check:** golden tests run the reference implementation.
+
+### AD-31 — Pluggable asset pipeline: AssetDecoder interface
+
+- **Binds:** CAP-1, CAP-12, CAP-15
+- **Prevents:** Format ingestion being hardcoded to legacy files; inability to support modern external scene formats (Tiled, LDtk, vector navmeshes) or community asset extensions.
+- **Rule:** Format ingestion implements `AssetDecoder<T> { id, extensions, detect(header: Uint8Array): boolean, decode(bytes: Uint8Array, context: AssetResolver): Result<T, FormatError> }`. Dispatched by file extension and magic header. Returns `Result<T, FormatError>` (AD-18). Decoders register through the `PluginDefinition.decoders` array (ADR 0004). Core formats implement this interface.
+- **Check:** Unit test verifying custom `AssetDecoder` registration and dispatch over synthetic bytes.
+
+### AD-32 — Consolidated game ecosystem: four abstract pillars
+
+- **Binds:** CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-9, CAP-10
+- **Prevents:** Fragmenting the core simulation into historical 1998 silos (Items as NPCs vs Items as potions, Enemies isolated to battle screens, rigid 8-layer boards, disparate trigger types).
+- **Rule:** The simulation core consolidates the world model into four abstract pillars:
+  1. *Spatial Scene:* Layered backgrounds (multi-parallax, stretch, tiled), spatial geometry hulls, optional tile grids (zero or more), Y-sorted entity layer, ambient/lighting masks, overlays.
+  2. *Unified Actor:* Entities composed of modular components: Transform (pos/layer/facing), Visual (animation, sprite, or static texture), Hulls (collision base and activation base polygon vectors), Controller (Player input, AI wanderer, script thread, or static), Stats Container (key-value attributes).
+  3. *Event Bus:* Synchronous, priority-ordered event queue stored in world state (`world.eventQueue`, ADR 0004).
+  4. *Presentation Compositor:* Viewport-culled `composeBoard` (AD-29) emitting `DrawList` (AD-3) and audio cues (AD-16).
+- **Check:** Conformance test asserting that legacy `.brd`, `.tem`, and `.itm` files hydrate into `Scene` and `Actor` structures with zero loss of observable behavior.
+
+### AD-33 — Dynamic camera, tracking, and responsive viewport model
+
+- **Binds:** CAP-2, CAP-6, CAP-12
+- **Prevents:** Fixed-resolution CRT lock-in (640×480), camera clamping glitches on scenes smaller than the screen, and lack of cinematic cutscene camera control.
+- **Rule:** The camera is deterministic state in `GameState.camera` (G1, G3).
+  * *Tracking modes:* Follow player (default), track arbitrary entity, focus on coordinate point, or follow waypoint path.
+  * *Viewport physics:* Step-based smoothing and deadzone bounding box (prevents subpixel jitter).
+  * *Bounds clamping:* `clamp-to-scene` or `center-if-small` (automatically centers scenes smaller than the viewport with clean borders instead of void bugs).
+  * *Scriptable cutscenes:* Cutscenes can detach the camera and pan to off-screen action leaving the player behind (`cameraPanTo(x, y, duration, easing)`, `cameraFollow(entityId)`, `cameraReset()`, `cameraShake()`). Interpolation curves are plain JSON state.
+  * *Responsive scaling:* Core emits `DrawList` for a logical viewport. Runners map the logical viewport to physical displays via runner-configurable modes (integer-scaled pixel-perfect letterbox vs responsive expand-viewport).
+- **Check:** Headless replay verifying identical camera coordinates, panning curves, and draw lists across fixed steps; small-scene centering test.
 
 ## Consistency Conventions
 

@@ -11,7 +11,7 @@ risk: high
 
 ## Description
 
-The core boots a game, runs the fixed-step main loop, models boards, layers, coordinate systems, tiles, lighting and transitions, and builds ordered draw lists through one `composeBoard` for layer compositing, iso drawing, occlusion, translucency, shading, animations and the message window. The reference rasteriser in `core/raster` (also used for script read-back) replays them to PNG, with core-owned text layout, glyphs and surfaces.
+The core boots a game, runs the fixed-step main loop, models boards, layers, coordinate systems, tiles, lighting and transitions, and builds ordered draw lists through one `composeBoard` for layer compositing, iso drawing, occlusion, translucency, shading, animations and the message window. Implements the Spatial Scene model (AD-32) and Dynamic Camera & Viewport model (AD-33), supporting camera tracking, scriptable cutscene panning, deadzones, small-scene centering, multi-layer parallax (§4.3, E-52), and decoupled responsive viewport scaling. The reference rasteriser in `core/raster` (also used for script read-back) replays them to PNG, with core-owned text layout, glyphs and surfaces.
 
 ## Outcome
 
@@ -19,7 +19,7 @@ A runner can show any legacy board as the legacy game did; the CAP-2 and CAP-6 s
 
 ## Done when
 
-1. Boards from the sample games render to golden PNGs through the CPU rasteriser in 2D, iso-stacked and iso-rotated modes.
+1. Boards from the sample games render to golden PNGs through the CPU rasteriser in 2D, iso-stacked and iso-rotated modes, with camera tracking, small-scene centering, and multi-layer parallax verified.
 2. Layer order, colour-key transparency, shading plus ambient arithmetic and animated tiles match format-spec sections 4.3 and 4.5.
 3. Startup runs, `send`, board edit built-ins and `reset()` leave the expected state on a scripted board.
 4. Message window, text, primitives and transitions are draw-list operations and replay identically in headless runs (G3 hash).
@@ -35,7 +35,7 @@ Core world model, the step pipeline's main loop, draw-list builder, `composeBoar
 ## References
 
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
-- spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-1, AD-2, AD-3, AD-4, AD-10, AD-15, AD-26, AD-27, AD-28, AD-29
+- spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-1, AD-2, AD-3, AD-4, AD-10, AD-15, AD-26, AD-27, AD-28, AD-29, AD-32, AD-33
 - constraint - docs/guardrails.md, sections G3 and G4
 - reference - docs/engine-features.md, E-01 to E-06, E-10 to E-19, E-50 to E-63
 - reference - docs/format-spec.md, sections 4 and 5
