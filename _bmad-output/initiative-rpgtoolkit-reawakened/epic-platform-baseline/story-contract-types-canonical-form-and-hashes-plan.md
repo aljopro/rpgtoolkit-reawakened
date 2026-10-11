@@ -3,7 +3,7 @@ title: 'Contract types, canonical form and hashes'
 type: 'chore'
 ticket: '8'
 created: '2026-10-10'
-status: 'built'
+status: done
 baseline_revision: '082b372076214532b694b2933924fca29676579d'
 route: 'full'
 route_source: 'auto'
