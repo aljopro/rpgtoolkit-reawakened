@@ -75,10 +75,11 @@ A game is a **main file** plus a **project folder**:
 ```
 
 * A reference stored in one file to another is a **path relative to the folder for that file type**. For example, a board's link `village\inn.brd` resolves to `Game/<project>/Boards/village/inn.brd`. Subfolders have been allowed since 3.1.0.
+* **Location of `.gam` vs project folders:** `<root>/Main/<game>.gam` is a sibling of the `<root>/Game/` directory, never inside the project folder. For example, the shipped demo game pairs `<root>/Main/demo.gam` with project assets at `<root>/Game/demo/`. Starter templates like `Basic` (`<root>/Game/Basic/`) contain assets only; a `.gam` file is only created under `Main/` once a project is saved from the editor.
+* **Engine startup requirement:** Games **cannot run without a `.gam` file**. At boot, the engine resolves the main file from the command line (`Main/<arg>`), from an embedded `main.gam` inside a standalone package or pakfile (§13), or prompts the user with an open-file dialog targeting `Main/*.gam`. If no valid `.gam` is loaded, the engine cannot boot: it relies on `.gam` to discover `projectPath`, `startupPrg`, `initBoard`, `initChar`, resolution, window mode, and active plugins.
 * The legacy separator is **backslash**. Treat `\` and `/` as equivalent.
 * Matching is **case-insensitive**, because the legacy platform's file system was. A modern reader on a case-sensitive file system needs a case-folding lookup.
 * Some saved paths include the type folder prefix (e.g. `Item\npc.itm`). Strip a leading type folder if it is present.
-
 ### 1.6 Tile references
 
 A tile is referenced by a string that names a tileset and a **1-based** index appended directly to the extension:
@@ -98,12 +99,13 @@ To parse, split at the last `.`. The first three characters after it are the ext
 
 One per game. It holds global settings and the startup sequence. Binary only.
 
+The table below details all **43 logical rows** across the file's lifetime, including the **12 version-dependent fields** controlled by `minor`:
 | # | Type | Field | Notes |
 |---|---|---|---|
 | 1 | str | magic `RPGTLKIT MAIN` | |
 | 2 | i16, i16 | major, minor | layouts below key on minor (0–9 observed; 9 = 3.1.0) |
-| 3 | i32 | reserved | ignore (old registration flag) |
-| 4 | str | reserved | ignore (old registration code) |
+| 3 | i32 / i16 | reserved | ignore (old registration flag). *Quirk:* On disk, the editor writes an `i16` value (1). The legacy C++ reader reads a 4-byte `int`, consuming 2 bytes of the flag and 2 bytes of the subsequent `"NOCODE\0"` string, while the subsequent string read consumes the remainder (`"CODE\0"`), perfectly keeping byte alignment at offset 0x1B (`projectPath`). |
+| 4 | str | reserved | ignore (old registration code, default `"NOCODE"`). |
 | 5 | str | **projectPath** | folder under `Game/`. Ignore it when the game is loaded from a package (§13). |
 | 6 | str | **gameTitle** | window title |
 | 7 | i16 | screenType | 0/1 = full-screen accelerated, 2 = windowed |
@@ -143,6 +145,20 @@ One per game. It holds global settings and the startup sequence. Binary only.
 | — | | *(minor ≥ 7)* `i32 resX`, `i32 resY` | custom resolution |
 | — | | *(minor ≥ 8)* `u8 showFpsInTitle` | |
 | — | | *(minor ≥ 9)* `i16 pathfindHeuristic`, `i32 drawVectorsFlags`, `color pathColor`, `i32 movementControls`, then 8 × `i16 movementScanCode` | heuristic: axial / diagonal / vector (default diagonal before minor 9). drawVectors: debug-overlay bit flags (board vectors, sprite vectors, player path, destination). movementControls bits: 1 = keyboard, 2 = mouse, 4 = allow diagonals (default 1 + 4). The scan codes are **hardware keyboard scan codes**, ordered E, SE, S, SW, W, NW, N, NE. 0 = unbound. Defaults: arrow keys for E/S/W/N, diagonals unbound. |
+
+**Version-dependent fields summary (12 conditional rows):**
+1. `minor < 3`: Row 10 (reserved `i32` old parallax value).
+2. `minor ≥ 3`: Row 21 (`str menuPlugin, str fightPlugin`) vs `minor < 3`: reserved `i32`.
+3. `minor ≤ 2`: Row 22 (reserved `i32, i16` multitask speed and memory protection).
+4. `minor < 3`: Row 29 (reserved `i16` old fight style).
+5. `minor ≤ 2`: Row 33 (plugin list entries stored as `i16 enabled` rather than `str pluginFile`).
+6. `minor ≥ 3`: Row 37 (`cursorMoveSound, cursorSelectSound, cursorCancelSound, useJoystick, colorDepth`).
+7. `minor ≥ 4`: Row 38 (`gameSpeed, pixelMovement`).
+8. `minor = 5`: Row 39 (`cursorEnabled`).
+9. `minor ≥ 6`: Row 40 (`mouseCursor, hotSpotX, hotSpotY, transparent`).
+10. `minor ≥ 7`: Row 41 (`resX, resY`).
+11. `minor ≥ 8`: Row 42 (`showFpsInTitle`).
+12. `minor ≥ 9`: Row 43 (`pathfindHeuristic, drawVectorsFlags, pathColor, movementControls, 8 × movementScanCode`).
 
 **Key encodings differ.** The menu, activation and run-time keys are character codes. The movement keys are physical scan codes. A rebuild should map both to its own input abstraction.
 
@@ -299,7 +315,7 @@ Spotlights have 3 nodes (centre, semi-major end, semi-minor end) and 2 colours (
 | Type | Field |
 |---|---|
 | i16 | vectors upper bound (−1 = none) |
-| per vector: | `i16 points upper bound`, points as `i32 x, i32 y`; `i16 attributes`; `i16 closed` (0/1); `i16 layer`; `i16 type`; `str handle` |
+| per vector: | `i16 points upper bound`, points as `i32 x, i32 y`; `i16 attributes`; `i16 closed` (non-zero = closed polygon, specifically `-1` / `0xFFFF` written by legacy VB `CInt(True)`; `0` = open polyline); `i16 layer`; `i16 type`; `str handle` |
 
 `type` and `attributes`: see §4.4.
 
@@ -308,7 +324,7 @@ Spotlights have 3 nodes (centre, semi-major end, semi-minor end) and 2 colours (
 | Type | Field |
 |---|---|
 | i16 | programs upper bound (−1 = none) |
-| per program: | `str program`, `str graphic` (unused), `str initialVar`, `str initialValue`, `str finalVar`, `str finalValue`, `i16 activate` (0 = always, 1 = conditional), `i16 activationType` (flags; §4.4), `i16 repeatDistance` (pixels), `i16 layer`, `i16 points upper bound` then points as `i32 x, i32 y`, `i16 closed`, `str handle` (reserved) |
+| per program: | `str program`, `str graphic` (unused), `str initialVar`, `str initialValue`, `str finalVar`, `str finalValue`, `i16 activate` (0 = always, 1 = conditional), `i16 activationType` (flags; §4.4), `i16 repeatDistance` (pixels), `i16 layer`, `i16 points upper bound` then points as `i32 x, i32 y`, `i16 closed` (non-zero = closed polygon, specifically `-1`; `0` = open), `str handle` (reserved) |
 
 `program` is a `.prg` file name. **If no such file exists, the string is run as a line of inline RPGCode.** An entry with an empty `program` is an empty slot. Keep the slot so indices stay stable.
 
@@ -400,18 +416,19 @@ In these boards **object positions are tile coordinates**, and collision is a **
 
 | Type | Field |
 |---|---|
+| str; i16, i16 | magic `RPGTLKIT BOARD`; major; minor (2 or 3; byte 14 must be 0) |
 | i16, str | reserved (registration) |
 | i16 × 3 | sizeX, sizeY, sizeL |
 | i16 × 3 | startX, startY, startLayer (**tiles**) |
-| i16 | disableSaving |
+| i16 | disableSaving (0/1) |
 | i16, str… | LUT as in §4.2 |
-| tile matrix | each cell is either `i16 index, i16 r, i16 g, i16 b, i8 tileType` or a run: `i16 −count, i16 index, i16 r, i16 g, i16 b, i8 tileType`. Order is z, y, x. |
+| tile matrix | each cell is either `i16 index, i16 r, i16 g, i16 b, i8 tileType` or a run: `i16 −count, i16 index, i16 r, i16 g, i16 b, i8 tileType`. Order is z, y, x. Runs may span rows and layers. |
 | str | background image (treat as parallax) |
 | str, str | foreground image, border image (unused) |
 | i32 | background colour |
 | i32 | border colour (unused) |
 | i16 | ambient preset: 0 none, 1 "mist" (+75,+75,+75), 2 "dark" (−75,−75,−75), 3 "water" (0,0,+75) |
-| str × 4 | links N, S, E, W |
+| str × 4 | directional links in exact order: **N, S, E, W** |
 | i16 | battleSkill |
 | str | battleBackground |
 | i16 | allowBattles |
@@ -419,23 +436,35 @@ In these boards **object positions are tile coordinates**, and collision is a **
 | i16 × 11 | constants 0…10 (numeric) |
 | str | background music |
 | str × 9 | layer titles 0…8 |
-| i16 | programs upper bound, then per program: `str file, i16 x, i16 y, i16 layer, str graphic, i16 activate, str initialVar, str finalVar, str initialValue, str finalValue, i16 activationType`. **Old programs always behave as "stops movement".** Strip legacy `!`/`$` suffixes from variable names. |
+| i16 | programs upper bound, then per program: `str file, i16 x, i16 y, i16 layer, str graphic, i16 activate, str initialVar, str finalVar, str initialValue, str finalValue, i16 activationType`. Program positions are in **tile coordinates**. Strip legacy `!`/`$` suffixes from variable names. **Old programs always receive the flag `activationType |= PRG_STOPS_MOVEMENT` (stops player movement).** |
 | str, str | enterPrg, reserved |
-| i16 | sprites upper bound, then per sprite: `str file, i16 x, i16 y, i16 layer, i16 activate, str initialVar, str finalVar, str initialValue, str finalValue, i16 activationType, str activationPrg, str multitaskPrg`. Loading condition = the activation condition. |
-| *(minor ≥ 3)* i32, str… | threads (upper bound, then names) |
-| *(minor ≥ 3)* i8 | coordType |
+| i16 | sprites upper bound, then per sprite: `str file, i16 x, i16 y, i16 layer, i16 activate, str initialVar, str finalVar, str initialValue, str finalValue, i16 activationType, str activationPrg, str multitaskPrg`. Positions are in **tile coordinates**. Loading condition equals the activation condition (`loadingVar = initialVar`, `loadingValue = initialValue`). |
+| *(minor ≥ 3)* i32, str… | threads (upper bound, then names). *Minor 2 has no threads field.* |
+| *(minor ≥ 3)* i8 | coordType (0 = 2D, 1 = iso stacked, 2 = iso rotated). *Minor 2 defaults to 0 (2D).* |
 
-**Conversion rules**
-* Per layer, merge adjacent tiles of the same tile type into polygons and emit vectors. Passages (types 3/4) become **open** solid polylines along the blocking edges. Stairs become stair vectors with the target layer. Under becomes an under vector with "include background".
-* Each program at a tile becomes a closed vector around that tile.
-* The per-tile RGB values become one shade layer. Its cast layer is the highest layer that had non-zero shading.
-* Convert the start point and sprite positions from tile to pixel coordinates (§5) with the base point added.
-
+**Conversion rules to vector board:**
+* **Tile type vectorization:** For each layer, merge contiguous non-zero tiles into vector geometry:
+  * `0` (Normal): no vector emitted.
+  * `1` (Solid): solid polygon vectors (closed) tracing contiguous solid tiles.
+  * `2` (Under): under vector (`TT_UNDER = 2`, closed), with attributes set to `TA_BRD_BACKGROUND` (include background).
+  * `3` (North–South) and `4` (East–West): passage vectors, converted to `TT_SOLID` open polylines along the blocking edges (`closed = 0`).
+  * `11…18` (Stairs 1…8): converted to `TT_STAIRS` (`8`), closed polygon, with `attributes = tileType − 10` (the target layer 1…8).
+* **Program trigger regions:** Each program at tile `(x, y)` becomes a closed vector around that tile:
+  * 2D: 32×32 bounding rectangle from `((x−1)·32, (y−1)·32)` to `(x·32, y·32)`.
+  * Isometric stacked: 64×32 diamond centered on the tile.
+* **Shading:** The per-tile RGB values across all layers are flattened into a single shade layer (`tileShading[0]`). Its cast layer is set to the highest layer that had non-zero shading.
+* **Positions:** Convert the player start point and sprite positions from tile coordinates to pixel coordinates (§5) with the base point added. (Fallback for start location if ≤ 0 is (64, 64) px on layer 1). Pre-vector items receive standard default vector bases.
 ---
 
 ## 5. Coordinate systems
 
-The `coordType` flags: **0** = 2D top-down; **1** = isometric "stacked" (staggered columns); **2** = isometric "rotated" (axes turned 45°); **4** = "pixel absolute" (object coordinates in scripts are pixels; may be combined with 0/1/2). Tile indices are always **1-based**.
+The `coordType` flags:
+* **0** = 2D top-down (`TILE_NORMAL`, 32×32 tiles).
+* **1** = isometric "stacked" (`ISO_STACKED`, staggered columns, 64×32 diamonds).
+* **2** = isometric "rotated" (`ISO_ROTATED`, axes turned 60°/30°).
+* **4** = "pixel absolute" (`PX_ABSOLUTE`, object coordinates in scripts are pixels; bit flag combinable with 0, 1, or 2).
+
+Isometric boards are detected whenever `(coordType & 1) || (coordType & 2)` is non-zero (`ISO_STACKED` and `ISO_ROTATED` are mutually exclusive coordinate styles). Tile indices are always **1-based**.
 
 **Tile → pixel (top-left of the tile's bounding cell), then add the base point:**
 
@@ -478,17 +507,17 @@ Detection: byte at offset 13. Only the binary form is supported (text versions m
 |---|---|
 | str; i16, i16 | magic; major; minor |
 | str | name |
-| str × 9 | **script variable names** bound to: experience, DP, FP, HP, max HP, name, SMP, max SMP, level. Strip trailing `!`/`$`. |
-| i32 × 8 | initial experience, HP, maxHP, DP, FP, SMP, maxSMP, level |
+| str × 9 | **script variable names** in exact order: experience, DP, FP, HP, max HP, name, SMP, max SMP, level. Strip trailing `!`/`$`. |
+| i32 × 8 | **initial stats** in exact order: initial experience, HP, max HP, DP, FP, SMP, max SMP, level. |
 | str | profile picture (portrait image or tile) |
 | 201 × { str moveFile, i32 minExp, i32 minLevel, str condVar, str condValue } | special-move list with learn conditions |
 | str | special-move category name (e.g. "Magic") |
 | i8 | hasSpecialMoves (**0 = yes**, 1 = no) |
 | str × 11 | accessory slot names |
-| i8 × 7 | body slots in use (0/1): head, neck, left hand, right hand, body, legs, … |
+| i8 × 7 | body slots in use (0/1). *Note:* Due to legacy 1-based indexing in VB6 (`armorType(6)`), byte 0 is an unused padding byte (always 0). Bytes 1 through 6 correspond to: **1 = head, 2 = neck, 3 = left hand, 4 = right hand, 5 = body, 6 = legs**. |
 | *(minor = 3)* i8 / *(else)* i32 | initial experience needed for the first level-up |
 | i16 | experience increase (% if exponential, points if linear) |
-| i32 | max level |
+| i32 | max level. Maximum level the character can reach. If `maxLevel == 0`, the level-up condition (`level ≥ maxLevel`) is immediately satisfied, disabling level progression entirely. |
 | i16 × 4 | per-level increase of HP, DP, FP, SMP (% or points) |
 | *(minor < 5)* str × 4 | obsolete battle sounds |
 | str | level-up program |
@@ -499,8 +528,8 @@ Detection: byte at offset 13. Only the binary form is supported (text versions m
 | *(minor ≥ 6)* str × 8 | idle animations (same order) |
 | *(minor ≥ 7)* f64, f64 | idleTime, speed (defaults 3.0 s, 0.05 s) |
 | *(minor ≥ 5)* i32 | custom stances upper bound, then pairs `str animation, str handle` (skip if either is empty) |
-| *(minor ≥ 8)* i16 | number of vector bases (2) |
-| *(minor ≥ 8)* | collision base: `i16 points upper bound`, points `i32 x, i32 y`; then the activation base in the same form (both closed) |
+| *(minor ≥ 8)* i16 | number of vector bases upper bound (stored as `1`, representing indices `0..1` for **2 bases**) |
+| *(minor ≥ 8)* | collision base: `i16 points upper bound`, points `i32 x, i32 y`; then the activation base in the same form (both closed polygons) |
 
 ### 6.2 Item — `.itm` (`RPGTLKIT ITEM`)
 
@@ -528,19 +557,21 @@ Items are inventory objects, equipment and **NPCs** (anything placed on a board)
 | str | **activation program** (runs when the player interacts) |
 | i8 | size type (legacy) |
 | *(minor ≥ 4)* str × 8, str, str | movement animations (S, N, E, W, NW, NE, SW, SE), legacy rest animation, reserved |
-| *(minor ≥ 5)* str × 8, f64, f64 | idle animations, then **speed, idleTime** (note: the opposite order from characters) |
+| *(minor ≥ 5)* str × 8, f64, f64 | idle animations, then **speed, idleTime** (note: the opposite order from characters, which store `idleTime`, then `speed`) |
 | *(minor < 6)* | the legacy rest animation becomes the idle-South animation |
-| *(minor ≥ 4)* i32 + pairs | custom stances as for characters |
-| *(minor ≥ 7)* | vector bases as for characters |
+| *(minor ≥ 4)* i32 + pairs | custom stances upper bound (`i32`), then pairs `str animation, str handle`. *Sequence note:* In `minor = 4`, custom stances appears immediately after the 10 movement strings. In `minor ≥ 5`, it appears after the idle animations and speed/idleTime. |
+| *(minor ≥ 7)* i16 + bases | vector bases upper bound (`1` = 2 bases: collision base, then activation base), with points as for characters |
 | *(minor < 4)* str × 16 × 2, str × 2 | legacy two-tile-tall walk frames (4 per direction S, E, N, W, each frame = top & bottom tile) and two rest tiles. A reader synthesises 1×2 tile bitmaps and 4-frame animations (frame delay 0.167 s) from these. |
 
 ### 6.3 Enemy — `.ene` (`RPGTLKIT ENEMY`)
 
-Detection: byte at offset 14.
+Detection: byte at offset 14 (`0x00` = binary 2.1; non-zero = legacy text 2.0).
+
+**Versions:** Major version is always 2. Only two versions exist: **minor 0** (2.0 text format) and **minor 1** (2.1 binary format, used by Toolkit 3.0 and 3.1). No other minor versions exist.
 
 | Type | Field |
 |---|---|
-| str; i16, i16 | magic; major; minor |
+| str; i16, i16 | magic `RPGTLKIT ENEMY`; major (2); minor (1) |
 | str | name |
 | i32 × 4 | HP (= max), SMP (= max), FP, DP |
 | i8 | player can run (0 = no) |
@@ -554,11 +585,10 @@ Detection: byte at offset 14.
 | str | AI program |
 | i32, i32 | experience reward, gold reward |
 | str, str | defeat program, run-away program |
-| i16 + str… | stance animations by index: 0 REST, 1 FIGHT, 2 DEFEND, 3 SPECIAL, 4 DIE |
-| i16 + pairs | custom stances: `str handle, str animation` (**handle first**, the opposite of players and items) |
+| i16 + str… | stance animations upper bound (stored as **5**, yielding 6 slots 0..5): **0 REST, 1 FIGHT / ATTACK, 2 DEFEND, 3 SPECIAL MOVE, 4 DIE, 5 unused / padding**. Slot 5 was an off-by-one threshold where editor UI checks `idx < UBound` routed indices ≥ 5 to custom stances. |
+| i32 + pairs | custom stances upper bound (**`i32`**, 4 bytes), then pairs `str animation, str handle` (same serialization order as players and items; legacy C++ had an inverted key/value map read). *Quirk:* Legacy VB and C++ readers read `i16` here, consuming the upper 2 bytes of the count as two empty strings when count is small. |
 
-The **text form** (older) lists name, HP, SMP, FP, DP, run, crits, then a W×H tile grid for the rest image, then 101 special/weakness pairs, AI, program, rewards, programs, 4 blank lines, and 4 stance animations. A reader synthesises a rest `.tbm` and `.anm` from the grid.
-
+The **text form** (minor 0) lists name, HP, SMP, FP, DP, run, crits, then a W×H tile grid for the rest image, then 101 special/weakness pairs, AI, program, rewards, programs, 4 blank lines, and 4 stance animations. A reader synthesises a rest `.tbm` and `.anm` from the grid.
 ---
 
 ## 7. Animation
@@ -589,16 +619,33 @@ Anywhere an `.anm` is accepted, an animated `.gif` in `Misc/` may be used instea
 
 ### 8.1 Special move — `.spc` (`RPGTLKIT SPLMOVE`)
 
-Detection: offset 16. Binary: `str name, i32 damage (FP), i32 smpCost (to user), str program, i32 targetSmpDrain, i8 usableInBattle, i8 usableFromMenu, str statusEffect, str animation, str description`. The text form has the same fields, one per line.
+Detection: byte at offset 16 (`0x00` = binary, non-zero = text).
+
+**Binary:**
+* Header: `str magic ("RPGTLKIT SPLMOVE")`, `i16 major`, `i16 minor`.
+* Fields: `str name`, `i32 damage (FP)`, `i32 smpCost (to user)`, `str program`, `i32 targetSmpDrain`, `i8 usableInBattle`, `i8 usableFromMenu`, `str statusEffect`, `str animation`, `str description`.
+
+The **text form** lists the header `RPGTLKIT SPLMOVE`, major, minor, then the same fields, one per line.
 
 ### 8.2 Status effect — `.ste` (`RPGTLKIT STATUSE`)
 
-Detection: offset 16. Binary: `str name, i16 rounds, i16 speedUp, i16 slowDown, i16 disable, i16 hpEnabled, i16 hpPerRound, i16 smpEnabled, i16 smpPerRound, i16 runProgram, str program`. Negative per-round amounts heal. The text form has the same fields, one per line.
+Detection: byte at offset 16 (`0x00` = binary, non-zero = text).
+
+**Binary:**
+* Header: `str magic ("RPGTLKIT STATUSE")`, `i16 major`, `i16 minor`.
+* Fields: `str name`, `i16 rounds`, `i16 speedUp`, `i16 slowDown`, `i16 disable`, `i16 hpEnabled`, `i16 hpPerRound`, `i16 smpEnabled`, `i16 smpPerRound`, `i16 runProgram`, `str program`. Negative per-round amounts heal.
+
+The **text form** lists the header `RPGTLKIT STATUSE`, major, minor, then the same fields, one per line.
 
 ### 8.3 Battle background — `.bkg` (`RPGTLKIT BKG`)
 
-Detection: offset 12. Binary: `str image, str music, str menuMoveSound, str menuChooseSound, str readySound, str cantDoSound`.
-The text form is a 19×19 tile grid, then the four sounds and the music, then the 19×19 shade grid. Convert the grid to a `.tbm`.
+Detection: byte at offset 12 (`0x00` = binary, non-zero = text).
+
+**Binary:**
+* Header: `str magic ("RPGTLKIT BKG")`, `i16 major`, `i16 minor`.
+* Fields: `str image`, `str music`, `str menuMoveSound`, `str menuChooseSound`, `str readySound`, `str cantDoSound`.
+
+The **text form** lists the header `RPGTLKIT BKG`, major, minor, then a 19×19 tile grid, then the four sounds and the music, then the 19×19 shade grid. Convert the grid to a `.tbm`.
 
 ---
 
@@ -803,7 +850,11 @@ Legacy plugins are native Windows libraries (`Plugin/*.dll`) of three kinds: **R
 ## 13. Packaging
 
 * **PakFile `.tpk`:** a standard ZIP archive with the project folder plus `main.gam`. When playing from a pak, ignore the main file's `projectPath`.
-* **Standalone EXE:** an engine executable with a ZIP appended. Its **last 12 bytes** are a trailer: ASCII `CMP1`, `i32 offsetOfZip` (the original executable length), `i32 zipLength`. Extracting `[offset, offset+length)` gives the game ZIP. A rebuild can import legacy standalone games this way.
+* **Standalone EXE:** an engine executable with a ZIP appended. Its **last 12 bytes** are a trailer:
+  * `[end - 12 .. end - 9]`: ASCII string `CMP1` (4 bytes: `0x43 0x4D 0x50 0x31`).
+  * `[end - 8 .. end - 5]`: `i32 offsetOfZip` (4 bytes, **little-endian**). This is the original executable length and marks the starting byte offset of the appended ZIP archive.
+  * `[end - 4 .. end - 1]`: `i32 zipLength` (4 bytes, **little-endian**). This is the exact byte length of the appended ZIP archive.
+  Extracting `[offsetOfZip, offsetOfZip + zipLength)` yields the clean game ZIP. A rebuild can import legacy standalone games this way.
 * **Setup ZIP:** a plain ZIP of the `Main/` and `Game/` folders.
 
 ---
@@ -811,10 +862,18 @@ Legacy plugins are native Windows libraries (`Plugin/*.dll`) of three kinds: **R
 ## 14. Known ambiguities / test checklist
 
 * The order of `speed`/`idleTime` differs between `.tem` (idle, then speed) and `.itm` (speed, then idle).
-* Enemy custom stances store the handle first. Player and item custom stances store the animation first.
+* Custom stances are serialized on disk as `str animation, str handle` across `.tem`, `.itm`, and `.ene`. (Legacy C++ inverted the key/value map read in `.ene` only).
+* In `.ene`, custom stances count is an `i32` on disk, while standard stances upper bound is `5` (yielding 6 slots 0..5, where slot 5 is an unused editor boundary slot).
+* In `.tem`, body slots are 7 bytes on disk: byte 0 is padding (0), followed by 6 body slots (1 head through 6 legs). Setting `maxLevel == 0` disables leveling entirely.
+* In `.tem` and `.itm`, the vector bases count field is an upper bound stored as `1` (indicating 2 bases: collision base, then activation base).
+* In `.brd`, the `closed` field is non-zero (specifically `-1` from legacy VB `CInt(True)`) for closed polygons and `0` for open polylines.
+* In `.brd`, coordinate types are bitmask flags: `0` = 2D, `1` = iso stacked, `2` = iso rotated, `4` = pixel absolute. Isometric detection is `(coordType & 1) || (coordType & 2)`.
+* Battle formats (`.bkg`, `.spc`, `.ste`) all share standard binary headers: `str magic, i16 major, i16 minor`, with binary detection at byte 12 (`.bkg`) or byte 16 (`.spc`, `.ste`).
+* Standalone EXE appended ZIP trailer (`CMP1`) stores `offsetOfZip` and `zipLength` as little-endian 32-bit integers (`i32`).
+* Main file layout (`.gam`): `<root>/Main/<game>.gam` is separate from project assets in `<root>/Game/<project>/`. The engine requires `.gam` to boot.
 * Tile bitmaps store an extra padding row and column.
 * The `fightingDisabled` flag in `.gam` is inverted.
 * Shade-layer run records always carry an explicit count. The tile matrix uses negative counts.
 * Tile LUT index 0 is reserved for "no tile".
 * Inline-RPGCode fallback for program/sprite program fields applies when the file is missing.
-* Validate against `build/game/demo` and `build/game/Basic` from the legacy repo: they contain one of each common format.
+* Validate against `build/main/demo.gam` and project assets in `build/game/demo` and `build/game/Basic` from the legacy repo.
