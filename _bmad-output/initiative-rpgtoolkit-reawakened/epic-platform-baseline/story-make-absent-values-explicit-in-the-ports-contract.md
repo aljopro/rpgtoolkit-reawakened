@@ -74,6 +74,7 @@ Why: `undefined` and an absent key are different values across a Worker boundary
 
 - Decision: the validator lives in core and entry 9's `parseRun` calls it; this story follows entry 9 (2026-10-10).
 - Decision: absent values are required `T | null`, not optional; `exactOptionalPropertyTypes` stays on as a backstop (2026-10-10).
+- Assumption: the rule is to be explicit: an absent value is written `null` and spelled out in the type. Where the type is lost (decoded log data, `PortData`, parsed JSON) the compiler cannot enforce it, so the validator enforces the same rule at runtime. Confirm this is the exception you meant.
 - Assumption: the validator returns a result that names the path and does not throw on malformed data; `parseRun` turns the result into its error. Confirm.
 - Assumption: the validator takes decoded data, after `decodeLog` has turned `{t:"bytes",hex}` back into bytes. Confirm.
 - Open question: should `AudioCue` be nullable fields (`asset`, `loop`, `volume` always present, `null` when unused) or a discriminated union by `kind`? Default: nullable fields.
