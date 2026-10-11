@@ -1,0 +1,476 @@
+/**
+ * Writing the project's own distribution package (format-spec §13, AD-6).
+ *
+ * A distribution package is a `.tpk`-compatible ZIP — the same container the
+ * reader in `zip.ts` accepts — holding the game files plus `manifest.json`
+ * `{ schema, main, index }` at the archive root (AD-6). The manifest is the
+ * package's descriptor, so a consumer can find the main file and know the asset
+ * index without listing the archive:
+ *
+ * * `schema` — the project-level integer schema version (AD-23).
+ * * `main` — the in-package path of the main file (the `.gam`, §1.5/§13). A
+ *   package ignores the main file's `projectPath` (AD-5), so this names the file
+ *   rather than a game-folder root.
+ * * `index` — the relative paths the resolver keys on (AD-5): every game file in
+ *   the tree, once each. `manifest.json` is the descriptor itself, so it is not
+ *   part of the index the writer takes; the reader's index does list it, being
+ *   built from every archive entry.
+ *
+ * The writer's contract is that a package it emits is always one the landed
+ * reader (`readZip`) accepts: every entry carries a CRC-32, entries are ordered
+ * deterministically so the same input is byte-identical (G3), a per-entry
+ * compression method is chosen so the §13 limits hold (a highly compressible
+ * entry is stored rather than emitting a ratio above L5), and the finished bytes
+ * are read back through `readZip` before they are returned. Anything that would
+ * breach a limit or the path rules is a located `FormatError` naming the rule
+ * (AD-17, AD-18); nothing here throws.
+ *
+ * `fflate/browser` is the only runtime dependency (AD-6): the synchronous
+ * `deflateSync` (compression) and `strToU8` (names and the manifest's UTF-8
+ * bytes). The ZIP container is laid out here rather than by `fflate`'s `zipSync`,
+ * because `zipSync` stamps a DOS timestamp from the local clock and time zone —
+ * `Date`'s local getters, which G3 bans in `core`. Every field the writer emits
+ * comes from the input alone, so two writes are byte-identical (G3).
+ */
+
+import { deflateSync, strToU8 } from "fflate/browser";
+import { crc32 } from "../image/crc32.ts";
+import { foldPath, toSlashes } from "../main-file/layout.ts";
+import { err, ok, type FormatError, type Result } from "../result.ts";
+import { PACKAGE_LIMITS } from "./limits.ts";
+import { checkEntryPath } from "./path-rules.ts";
+import { readZip } from "./zip.ts";
+import type { PackageFile } from "./model.ts";
+
+/** The format-spec section every failure here cites. */
+const SECTION = "format-spec §13";
+
+/** The manifest's name at the archive root (AD-6). */
+export const MANIFEST_FILE_NAME = "manifest.json";
+
+// The ZIP container's structure (PKZIP APPNOTE 4.3, §13): the signatures the
+// reader looks for, the two header sizes and the UTF-8 name flag. The writer
+// emits the container itself rather than calling `fflate`'s `zipSync`, because
+// `zipSync` stamps a DOS timestamp derived from the local clock and time zone
+// (`Date`'s local getters), which G3 bans in `core`; these fixed fields are the
+// ZIP epoch (1980-01-01 00:00:00), independent of any clock or zone.
+const LOCAL_SIGNATURE = 0x04034b50;
+const CENTRAL_SIGNATURE = 0x02014b50;
+const EOCD_SIGNATURE = 0x06054b50;
+const LOCAL_HEADER_BYTES = 30;
+const CENTRAL_HEADER_BYTES = 46;
+const EOCD_BYTES = 22;
+const VERSION_NEEDED = 20;
+const FLAG_UTF8_NAME = 0x0800;
+const METHOD_STORED = 0;
+const METHOD_DEFLATE = 8;
+/** 1980-01-01, in the DOS date packing the ZIP fields use. */
+const DOS_DATE = 0x0021;
+/** 00:00:00, in the DOS time packing the ZIP fields use. */
+const DOS_TIME = 0x0000;
+
+/** The deflate level used when an entry is compressed. */
+const DEFLATE_LEVEL = 6;
+
+/**
+ * The manifest of the project's distribution package (AD-6, AD-23, AD-5).
+ *
+ * `schema` is the project-level integer version; `main` is the in-package path
+ * of the main file; `index` lists the relative paths of the game files the
+ * resolver keys on.
+ */
+export interface DistributionManifest {
+  /** The project-level integer schema version (AD-23). */
+  readonly schema: number;
+  /** The in-package path of the main file, e.g. `Main/demo.gam` (§1.5, §13). */
+  readonly main: string;
+  /** The game files' relative paths, each once; the resolver's index (AD-5). */
+  readonly index: readonly string[];
+}
+
+/** The asset tree and manifest a distribution package is written from (AD-6). */
+export interface DistributionInput {
+  /** Every game file: its in-package relative path and its bytes (AD-6). */
+  readonly files: readonly PackageFile[];
+  /** The manifest written to `manifest.json` (AD-6). */
+  readonly manifest: DistributionManifest;
+}
+
+/** A located failure citing §13 (AD-18). */
+function failure(offset: number, message: string): FormatError {
+  return { offset, section: SECTION, message };
+}
+
+/**
+ * Check a path that names a *file*: it must be a plain relative path, not empty,
+ * not ending with a separator, and holding no empty or `.` segment. The shared
+ * `checkEntryPath` then applies the §1.5 escape, length, depth and basename
+ * rules; this refuses the shapes that would make the reader treat the entry as a
+ * directory or an odd path.
+ */
+function checkFilePath(path: string): string | null {
+  const normalised = toSlashes(path);
+  const segments = normalised.split("/");
+  if (normalised.length === 0 || segments.some((segment) => segment === "" || segment === ".")) {
+    return `Path "${path}" is not a plain relative file path; a file path must not be empty, end with a separator, or hold an empty or "." segment (path shape, L9)`;
+  }
+  return null;
+}
+
+/**
+ * Check the manifest's shape and its own path rules, returning the failure
+ * message naming the rule or `null`. A missing or malformed manifest is refused
+ * rather than written (AD-18).
+ */
+function checkManifest(manifest: DistributionManifest): string | null {
+  const schema = manifest.schema;
+  if (typeof schema !== "number" || !Number.isInteger(schema) || schema < 0) {
+    return `The manifest's schema is ${String(schema)}; it must be a non-negative integer project schema version (project schema, AD-23)`;
+  }
+  const main = manifest.main;
+  if (typeof main !== "string" || main.length === 0) {
+    return `The manifest's main is ${String(main)}; it must name the main file inside the package (manifest main, AD-6)`;
+  }
+  const pathProblem = checkEntryPath(main);
+  if (pathProblem !== null) return `${pathProblem} (manifest main)`;
+  const shapeProblem = checkFilePath(main);
+  if (shapeProblem !== null) return `${shapeProblem} (manifest main)`;
+  if (foldPath(main) === foldPath(MANIFEST_FILE_NAME)) {
+    return `The manifest's main must not be "${MANIFEST_FILE_NAME}"; it names the main game file (manifest main, AD-6)`;
+  }
+  if (!Array.isArray(manifest.index)) {
+    return `The manifest's index is missing; it must list the game files' relative paths (asset index, AD-5)`;
+  }
+  return null;
+}
+
+/**
+ * Check the manifest's `index`: an array of plain relative file paths, each once,
+ * whose folded set equals the asset tree's. Every file must be indexed and no
+ * index entry may name a file the tree does not hold, so `index` is the
+ * resolver's lookup over the package (AD-5).
+ */
+function checkIndex(index: readonly string[], tree: ReadonlyMap<string, string>): string | null {
+  const listed = new Map<string, string>();
+  for (const value of index) {
+    if (typeof value !== "string" || value.length === 0) {
+      return `The manifest's index holds ${String(value)}; every entry must be a relative file path (asset index, AD-5)`;
+    }
+    const pathProblem = checkEntryPath(value);
+    if (pathProblem !== null) return `${pathProblem} (asset index)`;
+    const shapeProblem = checkFilePath(value);
+    if (shapeProblem !== null) return `${shapeProblem} (asset index)`;
+    const folded = foldPath(value);
+    const first = listed.get(folded);
+    if (first !== undefined) {
+      return `The manifest's index lists "${first}" and "${value}"; the same path after case and separator folding (asset index, L10)`;
+    }
+    listed.set(folded, value);
+    if (!tree.has(folded)) {
+      return `The manifest's index lists "${value}", which is not in the asset tree (asset index, AD-5)`;
+    }
+  }
+  if (listed.size !== tree.size) {
+    return `The manifest's index lists ${listed.size} files but the asset tree holds ${tree.size}; every file must be indexed (asset index, AD-5)`;
+  }
+  return null;
+}
+
+/**
+ * Compress one entry, returning the method and the body to write: deflate only
+ * when it actually shrinks the entry *and* stays within the reader's
+ * compression-ratio limit (L5), otherwise store it. A highly compressible entry
+ * (say 200,000 zero bytes, which deflates far past 100:1) is therefore stored,
+ * so the writer cannot emit a package its own reader would reject as a zip bomb.
+ * One deflate per entry, reused as the body when it is chosen.
+ */
+function compress(bytes: Uint8Array): { method: number; body: Uint8Array } {
+  if (bytes.length === 0) return { method: METHOD_STORED, body: bytes };
+  const deflated = deflateSync(bytes, { level: DEFLATE_LEVEL });
+  const ratio = Math.round(bytes.length / Math.max(deflated.length, 1));
+  if (deflated.length < bytes.length && ratio <= PACKAGE_LIMITS.maxCompressionRatio) {
+    return { method: METHOD_DEFLATE, body: deflated };
+  }
+  return { method: METHOD_STORED, body: bytes };
+}
+
+/** Whether two byte arrays hold the same bytes. */
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+/** Whether a read-back set of files matches the writer's, path for path. */
+function sameTree(read: readonly PackageFile[], written: readonly PackageFile[]): boolean {
+  if (read.length !== written.length) return false;
+  for (let index = 0; index < written.length; index += 1) {
+    const left = read[index] as PackageFile;
+    const right = written[index] as PackageFile;
+    if (left.path !== right.path || !sameBytes(left.bytes, right.bytes)) return false;
+  }
+  return true;
+}
+
+/** Write a little-endian 16-bit field at `at`. */
+function putU16(target: Uint8Array, at: number, value: number): void {
+  target[at] = value & 0xff;
+  target[at + 1] = (value >>> 8) & 0xff;
+}
+
+/** Write a little-endian 32-bit field at `at`. */
+function putU32(target: Uint8Array, at: number, value: number): void {
+  target[at] = value & 0xff;
+  target[at + 1] = (value >>> 8) & 0xff;
+  target[at + 2] = (value >>> 16) & 0xff;
+  target[at + 3] = (value >>> 24) & 0xff;
+}
+
+/** One entry as it will be laid out in the archive. */
+interface PreparedEntry {
+  readonly name: Uint8Array;
+  readonly flags: number;
+  readonly method: number;
+  readonly crc: number;
+  readonly body: Uint8Array;
+  readonly size: number;
+  readonly offset: number;
+}
+
+/**
+ * Write already-ordered entries into a ZIP container (PKZIP APPNOTE 4.3, §13):
+ * a local header and body per entry, then the central directory, then the
+ * end-of-central-directory record.
+ *
+ * The container is built here rather than by `fflate`'s `zipSync`, whose DOS
+ * timestamp comes from the local clock and time zone and would make the bytes
+ * depend on when and where they were written (G3). Every field is derived from
+ * the input alone: the store/deflate choice keeps the reader's ratio limit (L5),
+ * the CRC-32 is `formats/image/crc32.ts`'s, and the entries appear in the order
+ * given (path order). The result is bounded by the reader's L1 limit.
+ */
+function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
+  const prepared: PreparedEntry[] = [];
+  let localBytes = 0;
+  let centralBytes = 0;
+  for (const entry of entries) {
+    const name = strToU8(entry.path);
+    const { method, body } = compress(entry.bytes);
+    prepared.push({
+      name,
+      // fflate's own rule: flag bit 11 says the name is UTF-8; ASCII names need
+      // no flag, and the reader decodes with the same rule, so names round-trip.
+      flags: name.length === entry.path.length ? 0 : FLAG_UTF8_NAME,
+      method,
+      crc: crc32(entry.bytes),
+      body,
+      size: entry.bytes.length,
+      offset: localBytes,
+    });
+    localBytes += LOCAL_HEADER_BYTES + name.length + body.length;
+    centralBytes += CENTRAL_HEADER_BYTES + name.length;
+  }
+
+  const out = new Uint8Array(localBytes + centralBytes + EOCD_BYTES);
+  for (const entry of prepared) {
+    const at = entry.offset;
+    putU32(out, at, LOCAL_SIGNATURE);
+    putU16(out, at + 4, VERSION_NEEDED);
+    putU16(out, at + 6, entry.flags);
+    putU16(out, at + 8, entry.method);
+    putU16(out, at + 10, DOS_TIME);
+    putU16(out, at + 12, DOS_DATE);
+    putU32(out, at + 14, entry.crc);
+    putU32(out, at + 18, entry.body.length);
+    putU32(out, at + 22, entry.size);
+    putU16(out, at + 26, entry.name.length);
+    putU16(out, at + 28, 0);
+    out.set(entry.name, at + LOCAL_HEADER_BYTES);
+    out.set(entry.body, at + LOCAL_HEADER_BYTES + entry.name.length);
+  }
+
+  let cursor = localBytes;
+  for (const entry of prepared) {
+    putU32(out, cursor, CENTRAL_SIGNATURE);
+    putU16(out, cursor + 4, VERSION_NEEDED);
+    putU16(out, cursor + 6, VERSION_NEEDED);
+    putU16(out, cursor + 8, entry.flags);
+    putU16(out, cursor + 10, entry.method);
+    putU16(out, cursor + 12, DOS_TIME);
+    putU16(out, cursor + 14, DOS_DATE);
+    putU32(out, cursor + 16, entry.crc);
+    putU32(out, cursor + 20, entry.body.length);
+    putU32(out, cursor + 24, entry.size);
+    putU16(out, cursor + 28, entry.name.length);
+    putU16(out, cursor + 30, 0);
+    putU16(out, cursor + 32, 0);
+    putU16(out, cursor + 34, 0);
+    putU16(out, cursor + 36, 0);
+    putU32(out, cursor + 38, 0);
+    putU32(out, cursor + 42, entry.offset);
+    out.set(entry.name, cursor + CENTRAL_HEADER_BYTES);
+    cursor += CENTRAL_HEADER_BYTES + entry.name.length;
+  }
+
+  putU32(out, cursor, EOCD_SIGNATURE);
+  putU16(out, cursor + 4, 0);
+  putU16(out, cursor + 6, 0);
+  putU16(out, cursor + 8, prepared.length);
+  putU16(out, cursor + 10, prepared.length);
+  putU32(out, cursor + 12, centralBytes);
+  putU32(out, cursor + 16, localBytes);
+  putU16(out, cursor + 20, 0);
+
+  if (out.length > PACKAGE_LIMITS.maxCompressedInputBytes) {
+    return err(
+      failure(
+        0,
+        `The written package is ${out.length} bytes; the limit is ${PACKAGE_LIMITS.maxCompressedInputBytes} bytes (max compressed input, L1).`,
+      ),
+    );
+  }
+  return ok(out);
+}
+
+/**
+ * Write the project's distribution package (format-spec §13, AD-6): a
+ * `.tpk`-compatible ZIP carrying `input.files` plus `manifest.json` at the
+ * archive root.
+ *
+ * The manifest's `schema`, `main` and `index` are validated (an integer project
+ * schema, a main file that is in the tree, an index that matches it) and every
+ * file is checked against the same `PACKAGE_LIMITS` and path rules the reader
+ * applies, so the writer cannot emit a package the reader would refuse. Entries
+ * are ordered by path and each is compressed or stored deterministically, so the
+ * same input always yields byte-identical output (G3). The finished bytes are
+ * read back through `readZip` before being returned. Never throws (AD-18).
+ */
+export function writeDistributionPackage(input: DistributionInput): Result<Uint8Array> {
+  const rawManifest: unknown = input.manifest;
+  if (typeof rawManifest !== "object" || rawManifest === null || Array.isArray(rawManifest)) {
+    return err(
+      failure(
+        0,
+        `The manifest is missing; a distribution package requires ${MANIFEST_FILE_NAME} { schema, main, index } (manifest, AD-6).`,
+      ),
+    );
+  }
+  const manifestProblem = checkManifest(rawManifest as DistributionManifest);
+  if (manifestProblem !== null) return err(failure(0, `${manifestProblem}.`));
+
+  if (!Array.isArray(input.files)) {
+    return err(
+      failure(0, "The asset tree is missing; files must be an array of { path, bytes } (asset tree, AD-6)."),
+    );
+  }
+  const files = input.files;
+  const manifest = rawManifest as DistributionManifest;
+
+  // The manifest is an entry too, so the tree's files plus it must fit L2 (and
+  // comfortably below the ZIP 16-bit count field, which maxEntries already is).
+  if (files.length + 1 > PACKAGE_LIMITS.maxEntries) {
+    return err(
+      failure(
+        0,
+        `The asset tree has ${files.length} files plus the manifest; the limit is ${PACKAGE_LIMITS.maxEntries} entries (max entry count, L2).`,
+      ),
+    );
+  }
+
+  const tree = new Map<string, string>();
+  const ordered: PackageFile[] = [];
+  let total = 0;
+  for (const file of files) {
+    const pathProblem = checkEntryPath(file.path);
+    if (pathProblem !== null) return err(failure(0, `${pathProblem}.`));
+    const shapeProblem = checkFilePath(file.path);
+    if (shapeProblem !== null) return err(failure(0, `${shapeProblem}.`));
+    const folded = foldPath(file.path);
+    if (folded === foldPath(MANIFEST_FILE_NAME)) {
+      return err(
+        failure(
+          0,
+          `The asset tree already contains "${file.path}"; the writer writes ${MANIFEST_FILE_NAME} itself (manifest, L10).`,
+        ),
+      );
+    }
+    const first = tree.get(folded);
+    if (first !== undefined) {
+      return err(
+        failure(
+          0,
+          `Files "${first}" and "${file.path}" are the same path after case and separator folding; the package would be ambiguous (case-insensitive duplicates, L10).`,
+        ),
+      );
+    }
+    tree.set(folded, file.path);
+    if (file.bytes.length > PACKAGE_LIMITS.maxEntryUncompressedBytes) {
+      return err(
+        failure(
+          0,
+          `File "${file.path}" is ${file.bytes.length} bytes; the limit is ${PACKAGE_LIMITS.maxEntryUncompressedBytes} (max entry size, L3).`,
+        ),
+      );
+    }
+    total += file.bytes.length;
+    ordered.push({ path: file.path, bytes: file.bytes });
+  }
+  if (total > PACKAGE_LIMITS.maxTotalUncompressedBytes) {
+    return err(
+      failure(
+        0,
+        `The asset tree totals ${total} bytes; the limit is ${PACKAGE_LIMITS.maxTotalUncompressedBytes} (max total size, L4).`,
+      ),
+    );
+  }
+
+  if (!tree.has(foldPath(manifest.main))) {
+    return err(
+      failure(
+        0,
+        `The manifest's main file "${manifest.main}" is not in the asset tree (manifest main, AD-6).`,
+      ),
+    );
+  }
+  const indexProblem = checkIndex(manifest.index, tree);
+  if (indexProblem !== null) return err(failure(0, `${indexProblem}.`));
+
+  // A fixed key order, so the manifest's bytes are deterministic whatever order
+  // the caller's object happens to hold (G3, AD-25). The schema version is the
+  // project-level integer of AD-23; `schema` is written first, `main`, `index`.
+  const manifestBytes = strToU8(
+    JSON.stringify({
+      schema: manifest.schema,
+      main: manifest.main,
+      index: [...manifest.index],
+    }),
+  );
+  ordered.push({ path: MANIFEST_FILE_NAME, bytes: manifestBytes });
+
+  // Deterministic entry order: code-unit order on the path (never locale
+  // sensitive, G3), so the same input produces byte-identical output (AD-25).
+  ordered.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+
+  const built = buildZip(ordered);
+  if (!built.ok) return built;
+
+  // The writer must not be able to emit a package its own reader would reject:
+  // read the bytes back and prove every file survives intact.
+  const reread = readZip(built.value, MANIFEST_FILE_NAME);
+  if (!reread.ok) {
+    return err(
+      failure(
+        0,
+        `The writer produced a package its own reader rejects: ${reread.error.message} (writer self-check, §13)`,
+      ),
+    );
+  }
+  if (!sameTree(reread.value, ordered)) {
+    return err(
+      failure(0, "The writer produced a package whose read-back tree differs from its input (writer self-check, §13)."),
+    );
+  }
+  return built;
+}
