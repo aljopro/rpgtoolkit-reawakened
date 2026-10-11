@@ -35,7 +35,7 @@
 
 import { deflateSync, strToU8 } from "fflate/browser";
 import { crc32 } from "../image/crc32.ts";
-import { foldPath } from "../main-file/layout.ts";
+import { foldPath, toSlashes } from "../main-file/layout.ts";
 import { err, ok, type FormatError, type Result } from "../result.ts";
 import { PACKAGE_LIMITS } from "./limits.ts";
 import {
@@ -186,7 +186,18 @@ function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
     centralBytes += CENTRAL_HEADER_BYTES + name.length;
   }
 
-  const out = new Uint8Array(localBytes + centralBytes + EOCD_BYTES);
+  // The container's own length is known from the headers alone, so the L1
+  // budget is proved before a single byte is allocated.
+  const totalBytes = localBytes + centralBytes + EOCD_BYTES;
+  if (totalBytes > PACKAGE_LIMITS.maxCompressedInputBytes) {
+    return err(
+      failure(
+        0,
+        `The written package is ${totalBytes} bytes; the limit is ${PACKAGE_LIMITS.maxCompressedInputBytes} bytes (max compressed input, L1).`,
+      ),
+    );
+  }
+  const out = new Uint8Array(totalBytes);
   for (const entry of prepared) {
     const at = entry.offset;
     putU32(out, at, LOCAL_SIGNATURE);
@@ -236,14 +247,6 @@ function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
   putU32(out, cursor + 16, localBytes);
   putU16(out, cursor + 20, 0);
 
-  if (out.length > PACKAGE_LIMITS.maxCompressedInputBytes) {
-    return err(
-      failure(
-        0,
-        `The written package is ${out.length} bytes; the limit is ${PACKAGE_LIMITS.maxCompressedInputBytes} bytes (max compressed input, L1).`,
-      ),
-    );
-  }
   return ok(out);
 }
 
@@ -261,6 +264,14 @@ function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
  * read back through `readZip` before being returned. Never throws (AD-18).
  */
 export function writeDistributionPackage(input: DistributionInput): Result<Uint8Array> {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return err(
+      failure(
+        0,
+        "The distribution input is missing; it must hold the asset tree and the manifest (distribution input, AD-6).",
+      ),
+    );
+  }
   const rawManifest: unknown = input.manifest;
   if (typeof rawManifest !== "object" || rawManifest === null || Array.isArray(rawManifest)) {
     return err(
@@ -278,7 +289,7 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
       failure(0, "The asset tree is missing; files must be an array of { path, bytes } (asset tree, AD-6)."),
     );
   }
-  const files = input.files;
+  const files: readonly unknown[] = input.files;
   const manifest = rawManifest as DistributionManifest;
 
   // The manifest is an entry too, so the tree's files plus it must fit L2 (and
@@ -294,12 +305,39 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
 
   const tree = new Map<string, string>();
   const ordered: PackageFile[] = [];
-  let total = 0;
-  for (const file of files) {
+  for (const raw of files) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      return err(
+        failure(
+          0,
+          "The asset tree holds a non-object entry; every entry must be { path, bytes } (asset tree, AD-6).",
+        ),
+      );
+    }
+    const file = raw as { readonly path?: unknown; readonly bytes?: unknown };
+    if (typeof file.path !== "string") {
+      return err(
+        failure(
+          0,
+          `The asset tree holds an entry whose path is a ${typeof file.path}; every entry's path must be a string (asset tree, AD-6).`,
+        ),
+      );
+    }
+    if (!(file.bytes instanceof Uint8Array)) {
+      return err(
+        failure(
+          0,
+          `The asset tree holds "${file.path}" whose bytes are not a Uint8Array; every entry's bytes must be a Uint8Array (asset tree, AD-6).`,
+        ),
+      );
+    }
     const pathProblem = checkEntryPath(file.path);
     if (pathProblem !== null) return err(failure(0, `${pathProblem}.`));
     const shapeProblem = checkFilePath(file.path);
     if (shapeProblem !== null) return err(failure(0, `${shapeProblem}.`));
+    // The package stores `/`-separated names (§1.5), so the entry name written
+    // and the tree's own spelling are the normalised path, not the raw string.
+    const normalised = toSlashes(file.path);
     const folded = foldPath(file.path);
     if (folded === foldPath(MANIFEST_FILE_NAME)) {
       return err(
@@ -318,25 +356,8 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
         ),
       );
     }
-    tree.set(folded, file.path);
-    if (file.bytes.length > PACKAGE_LIMITS.maxEntryUncompressedBytes) {
-      return err(
-        failure(
-          0,
-          `File "${file.path}" is ${file.bytes.length} bytes; the limit is ${PACKAGE_LIMITS.maxEntryUncompressedBytes} (max entry size, L3).`,
-        ),
-      );
-    }
-    total += file.bytes.length;
-    ordered.push({ path: file.path, bytes: file.bytes });
-  }
-  if (total > PACKAGE_LIMITS.maxTotalUncompressedBytes) {
-    return err(
-      failure(
-        0,
-        `The asset tree totals ${total} bytes; the limit is ${PACKAGE_LIMITS.maxTotalUncompressedBytes} (max total size, L4).`,
-      ),
-    );
+    tree.set(folded, normalised);
+    ordered.push({ path: normalised, bytes: file.bytes });
   }
 
   if (!tree.has(foldPath(manifest.main))) {
@@ -353,14 +374,40 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
   // A fixed key order, so the manifest's bytes are deterministic whatever order
   // the caller's object happens to hold (G3, AD-25). The schema version is the
   // project-level integer of AD-23; `schema` is written first, `main`, `index`.
+  // `main` and every index entry take the tree's own spelling, so the manifest
+  // names the archive's normalised paths (§1.5) rather than the caller's strings.
   const manifestBytes = strToU8(
     JSON.stringify({
       schema: manifest.schema,
-      main: manifest.main,
-      index: [...manifest.index],
+      main: tree.get(foldPath(manifest.main)) ?? manifest.main,
+      index: manifest.index.map((value) => tree.get(foldPath(value)) ?? value),
     }),
   );
   ordered.push({ path: MANIFEST_FILE_NAME, bytes: manifestBytes });
+
+  // The manifest is an entry too, so it counts against the per-entry (L3) and
+  // total (L4) uncompressed budgets exactly like a game file. Its bytes are
+  // serialised first, so the whole package is measured before anything is built.
+  let total = 0;
+  for (const entry of ordered) {
+    if (entry.bytes.length > PACKAGE_LIMITS.maxEntryUncompressedBytes) {
+      return err(
+        failure(
+          0,
+          `File "${entry.path}" is ${entry.bytes.length} bytes; the limit is ${PACKAGE_LIMITS.maxEntryUncompressedBytes} (max entry size, L3).`,
+        ),
+      );
+    }
+    total += entry.bytes.length;
+  }
+  if (total > PACKAGE_LIMITS.maxTotalUncompressedBytes) {
+    return err(
+      failure(
+        0,
+        `The asset tree totals ${total} bytes; the limit is ${PACKAGE_LIMITS.maxTotalUncompressedBytes} (max total size, L4).`,
+      ),
+    );
+  }
 
   // Deterministic entry order: code-unit order on the path (never locale
   // sensitive, G3), so the same input produces byte-identical output (AD-25).
@@ -370,8 +417,10 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
   if (!built.ok) return built;
 
   // The writer must not be able to emit a package its own reader would reject:
-  // read the bytes back and prove every file survives intact.
-  const reread = readZip(built.value, MANIFEST_FILE_NAME);
+  // read the bytes back and prove every file survives intact. `readZip`'s name
+  // is the package name used in its messages, so a descriptive placeholder is
+  // passed rather than the manifest's file name.
+  const reread = readZip(built.value, "the distribution package");
   if (!reread.ok) {
     return err(
       failure(

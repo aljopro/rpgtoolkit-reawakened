@@ -71,7 +71,7 @@ export function checkFilePath(path: string): string | null {
   const normalised = toSlashes(path);
   const segments = normalised.split("/");
   if (normalised.length === 0 || segments.some((segment) => segment === "" || segment === ".")) {
-    return `Path "${path}" is not a plain relative file path; a file path must not be empty, end with a separator, or hold an empty or "." segment (path shape, L9)`;
+    return `Path "${path}" is not a plain relative file path; a file path must not be empty, end with a separator, or hold an empty or "." segment (path shape)`;
   }
   return null;
 }
