@@ -2,4 +2,7 @@ export function add(a: number, b: number): number {
   return a + b;
 }
 
-export type { PlainData, AssertPlainData } from "./ports/plain-data.ts";
+// The published core surface: the runner/editor port contracts (AD-1…AD-17)
+// and the canonical form and hashes (AD-11).
+export * from "./canon/index.ts";
+export type * from "./ports/index.ts";

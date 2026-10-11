@@ -29,6 +29,12 @@ declare module "node:child_process" {
   ): { status: number | null; stdout: string; stderr: string };
 }
 
+declare module "node:util" {
+  export class TextEncoder {
+    encode(input?: string): Uint8Array;
+  }
+}
+
 declare const process: { execPath: string };
 
 // `lib: ["ES2022"]` has no `ImportMeta.url` (that lives in the DOM lib), so

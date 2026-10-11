@@ -1,0 +1,92 @@
+/**
+ * The engine runner boundary: one API every runner drives (AD-1, AD-24).
+ *
+ * `createEngine(init)` returns an `Engine` (deferred to the engine epic).
+ * `advance` runs whole fixed steps and reports what happened; `drawList` is a
+ * pure function of current state; `surfacePixels` is the pixel accessor
+ * (AD-27); `setBreakpoints` takes data and a hit stops mid-step.
+ */
+
+import type { AudioCue } from "./audio.ts";
+import type { Bytes } from "./bytes.ts";
+import type { DrawList } from "./draw.ts";
+import type { InputRecord } from "./input.ts";
+import type { SurfaceId } from "./keys.ts";
+import type { RunnerRequest } from "./requests.ts";
+
+/**
+ * A located runtime diagnostic (AD-24). A script error is visible to RPGCode
+ * handlers and also appears here.
+ */
+export type Diagnostic = {
+  readonly code: string;
+  readonly file: string;
+  readonly line: number;
+  readonly message: string;
+};
+
+/** Where a breakpoint stopped: thread, frame and source line (AD-1). */
+export type PausedState = {
+  readonly thread: number;
+  readonly frame: number;
+  readonly line: number;
+};
+
+/** A source breakpoint, set as data through `setBreakpoints` (AD-1). */
+export type Breakpoint = {
+  readonly file: string;
+  readonly line: number;
+};
+
+/**
+ * A persistent surface's pixels. Outputs never alias state: `rgba` owns its
+ * whole buffer (`byteOffset` 0) and is a copy (AD-1, AD-27, AD-28).
+ */
+export type SurfacePixels = {
+  readonly w: number;
+  readonly h: number;
+  readonly rgba: Bytes;
+};
+
+/**
+ * The result of one `advance` batch (AD-1, AD-14). `consumed` is the canonical
+ * input log written by the core; `loading` is set while a blocking request
+ * freezes time; `paused` is set when a breakpoint hit mid-step.
+ */
+export type StepReport = {
+  readonly stepsRun: number;
+  readonly stepAfter: number;
+  readonly consumed: readonly InputRecord[];
+  readonly audioCues: readonly AudioCue[];
+  readonly requests: readonly RunnerRequest[];
+  readonly diagnostics: readonly Diagnostic[];
+  readonly loading: boolean;
+  readonly paused: PausedState | null;
+  readonly stateHash: string;
+};
+
+/**
+ * The engine a runner drives (AD-1). Every argument and result is
+ * structured-cloneable plain data, so the core runs in a Worker.
+ */
+export interface Engine {
+  /**
+   * Run whole fixed steps, consuming `inputs` in array order. `maxSteps` caps
+   * catch-up; when omitted the engine's configured cap applies. Inputs
+   * arriving while `loading` are queued in state and consumed at the next real
+   * step.
+   */
+  advance(steps: number, inputs: readonly InputRecord[], maxSteps?: number): StepReport;
+
+  /** A pure function of current state; `alpha` is 0 in tests (AD-1). */
+  drawList(alpha?: number): DrawList;
+
+  /**
+   * The pixels of surface `id` at revision `rev`, or `null` when the surface
+   * is unknown or `rev` is no longer available (AD-27).
+   */
+  surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null;
+
+  /** Set source breakpoints as data; a hit stops mid-step (AD-1). */
+  setBreakpoints(breakpoints: readonly Breakpoint[]): void;
+}
