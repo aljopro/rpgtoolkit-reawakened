@@ -1,29 +1,19 @@
 /**
- * The extension → reader dispatch table `dump` walks a project with (G7).
+ * What `dump` does with a file, by extension (G7).
  *
- * Every row names the `docs/format-spec.md` section the reader behind it
- * implements, so a summary or a failure can always be traced back to the
- * document. A row is either a **data format** — a file this tool parses, whose
- * failure to parse is a failure — or a **skip**: a file the spec describes but
+ * The **data** side is not a table here any more: it is `core`'s format
+ * registry (AD-31). Every extension a core decoder claims is a file this tool
+ * parses, and the decoder itself names the reader family (`CoreFormatId`) and
+ * the `docs/format-spec.md` section it implements, so the dispatch lives in one
+ * place. What stays here is the **skip** side: a file the spec describes but
  * this tool deliberately does not read here (text, media, plugins, and the
- * formats no reader has been written for yet). A skip is never a failure.
+ * formats no core reader has been written for yet). A skip is never a failure.
  */
 
-import { BOARD_VECTOR_MINOR, PRE_VECTOR_MINOR_MAX, PRE_VECTOR_MINOR_MIN } from "@tk-reawakened/core";
+import { CORE_DECODERS, CORE_REGISTRY, type AssetDecoder, type CoreFormatId } from "@tk-reawakened/core";
 
-/** The data formats `dump` parses, one id per reader family. */
-export type DataFormatId =
-  | "gam"
-  | "board"
-  | "tileset"
-  | "animation"
-  | "character"
-  | "item"
-  | "enemy"
-  | "battle-background"
-  | "special-move"
-  | "status-effect"
-  | "image";
+/** The data formats `dump` parses, one id per reader family: the core decoder ids. */
+export type DataFormatId = CoreFormatId;
 
 /** A file `dump` parses; a parse failure is a failure. */
 export interface DataFormatClass {
@@ -70,36 +60,15 @@ const UNRECOGNISED = skip(
 );
 
 /**
- * Extension (lowercase, no dot) → what to do with it.
+ * Extension (lowercase, no dot) → why `dump` skips it.
  *
  * A file with no extension, or one not listed, is skipped as unrecognised. The
  * `.prg`, `.gph`, `.tan`, `.tbm`, `.sav`, `.bmp` and `.gif` rows are skipped
  * *by design*: §9 programs are text for a later epic, and §3.2/§3.5/§3.6/§11
- * plus §10's BMP and GIF have no reader in `core` yet, so reporting them as
+ * plus §10's BMP and GIF have no core decoder yet, so reporting them as
  * failures would fail every game that ships one.
  */
-const TABLE: Readonly<Record<string, FileClass>> = {
-  // §2 — the main game file.
-  gam: { kind: "data", format: "gam", section: "format-spec §2" },
-  // §4 — boards; the reader itself dispatches §4.1's minors (§4.2 vector, §4.8 pre-vector).
-  brd: { kind: "data", format: "board", section: "format-spec §4" },
-  // §3.1 — tilesets; `.iso` is the same layout, its tiles packed per §3.3.
-  tst: { kind: "data", format: "tileset", section: "format-spec §3.1" },
-  iso: { kind: "data", format: "tileset", section: "format-spec §3.1" },
-  // §7.1 — animations.
-  anm: { kind: "data", format: "animation", section: "format-spec §7.1" },
-  // §6.1–§6.3 — actors.
-  tem: { kind: "data", format: "character", section: "format-spec §6.1" },
-  itm: { kind: "data", format: "item", section: "format-spec §6.2" },
-  ene: { kind: "data", format: "enemy", section: "format-spec §6.3" },
-  // §8.1–§8.3 — battle data.
-  spc: { kind: "data", format: "special-move", section: "format-spec §8.1" },
-  ste: { kind: "data", format: "status-effect", section: "format-spec §8.2" },
-  bkg: { kind: "data", format: "battle-background", section: "format-spec §8.3" },
-  // §10 — the images `decodeTexture` matches by signature: PNG and JPEG.
-  png: { kind: "data", format: "image", section: "format-spec §10" },
-  jpg: { kind: "data", format: "image", section: "format-spec §10" },
-  jpeg: { kind: "data", format: "image", section: "format-spec §10" },
+const SKIP_TABLE: Readonly<Record<string, SkipFormatClass>> = {
   // §10 also lists BMP and GIF, but `core` has no decoder for either, so they
   // are skipped like the other formats with no reader — never a failure.
   bmp: skip("BMP image (format-spec §10): no decoder in core yet"),
@@ -133,10 +102,28 @@ const TABLE: Readonly<Record<string, FileClass>> = {
 };
 
 /**
+ * The data-format class of a core decoder, or `undefined` for a decoder whose
+ * id is not a core format.
+ *
+ * `classify` and `parse.ts` know only the core formats, so a decoder a host
+ * registered with an id of its own has no reader here: its claims fall back to
+ * the skip table rather than becoming an id `parse.ts` cannot decode. The
+ * assertion below is sound because the id is checked against `CORE_DECODERS`'s
+ * own keys first.
+ */
+function dataClass(decoder: AssetDecoder): DataFormatClass | undefined {
+  if (!Object.hasOwn(CORE_DECODERS, decoder.id)) {
+    return undefined;
+  }
+  return { kind: "data", format: decoder.id as DataFormatId, section: decoder.section };
+}
+
+/**
  * The dispatch for `path`: the data format to parse, or the reason to skip it.
  *
  * The extension is the last `.`-separated segment, lowercased, so the legacy
- * uppercase names (`.MID`, `.BMP`) land on the same row as their lowercase form.
+ * uppercase names (`.MID`, `.BMP`) land on the same row as their lowercase
+ * form. A core decoder for the extension wins; otherwise the skip table decides.
  */
 export function classify(path: string): FileClass {
   const dot = path.lastIndexOf(".");
@@ -144,24 +131,7 @@ export function classify(path: string): FileClass {
     return UNRECOGNISED;
   }
   const extension = path.slice(dot + 1).toLowerCase();
-  return TABLE[extension] ?? UNRECOGNISED;
-}
-
-/** How a `.brd` is read, from its stored minor version (format-spec §4.1). */
-export type BoardLayout = "vector" | "pre-vector" | "obsolete";
-
-/**
- * Which §4.1 branch a board minor takes, from `core`'s own thresholds: the §4.2
- * vector layout (`BOARD_VECTOR_MINOR` and above), the §4.8 pre-vector layout
- * (`PRE_VECTOR_MINOR_MIN`…`PRE_VECTOR_MINOR_MAX`), or one below those, which no
- * reader here accepts and `readBoard` refuses as obsolete.
- */
-export function boardLayout(minor: number): BoardLayout {
-  if (minor >= BOARD_VECTOR_MINOR) {
-    return "vector";
-  }
-  if (minor >= PRE_VECTOR_MINOR_MIN && minor <= PRE_VECTOR_MINOR_MAX) {
-    return "pre-vector";
-  }
-  return "obsolete";
+  const decoder = CORE_REGISTRY.byExtension(extension);
+  const data = decoder === undefined ? undefined : dataClass(decoder);
+  return data ?? SKIP_TABLE[extension] ?? UNRECOGNISED;
 }
