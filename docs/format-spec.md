@@ -85,6 +85,10 @@ A game is a **main file** plus a **project folder**:
 * **Engine startup requirement:** Games **cannot run without a `.gam` file**. At boot, the engine resolves the main file from the command line (`Main/<arg>`), from an embedded `main.gam` inside a standalone package or pakfile (§13), or prompts the user with an open-file dialog targeting `Main/*.gam`. If no valid `.gam` is loaded, the engine cannot boot: it relies on `.gam` to discover `projectPath`, `startupPrg`, `initBoard`, `initChar`, resolution, window mode, and active plugins.
 * The legacy separator is **backslash**. Treat `\` and `/` as equivalent.
 * Matching is **case-insensitive**, because the legacy platform's file system was. A modern reader on a case-sensitive file system needs a case-folding lookup.
+* **What the fold is.** Rewrite `\` as `/`, then fold `A`–`Z` to `a`–`z` and leave **every other code point exactly as it is**. A name containing `U+212A` (KELVIN SIGN) keeps that character and is a **different** name from the same name written with ASCII `k`; `U+0130` (LATIN CAPITAL LETTER I WITH DOT ABOVE) stays one code point instead of becoming `i` followed by `U+0307`. The same fold covers everything else these sections make case-insensitive for the same reason: a leading type-folder prefix, the `Game` first segment of a stored project path, and a three-character extension (§1.6). A reference and an index entry match when their folded forms are equal; two index entries with one folded form are one file to a reader, and a package holding such a pair is refused as ambiguous (§13, L10).
+* **Why the fold stops at ASCII.** The legacy platform's own fold is its **upper**-case table, in which `U+212A` maps to itself: a Unicode *lower*-case fold is therefore not the legacy behaviour — it merges two names Windows kept apart — and it also expands some code points into several. A full Unicode fold further depends on the runtime's Unicode tables, so two runners could key one project differently and disagree on a save hash (guard-rail G3), and folding bytes above `0x7F` would rest on the *assumed* Windows‑1252 decode of §1.1.
+* *Consequence:* a reference that differs from the stored name only in the case of a letter above `0x7F` (`Café.brd` for `CAFÉ.BRD`) resolved on the legacy platform and does not here; it is reported as a missing asset, never as a different file. No reference in the sample corpus needs such a match — all 161 file references match the stored spelling exactly and no stored string is non-ASCII — and a pinned non-ASCII table can be added by ADR if a real game needs one.
+<!-- OWNER: chose an ASCII-only fold over a full-Unicode fold because the legacy fold is the upper-case table (U+212A maps to itself, so Unicode lower-casing invents a collision Windows never had), because G3 wants one fold on every runner, and because folding bytes above 0x7F rests on an assumed code page. Revisit if the corpus ever ships a non-ASCII path. -->
 * Some saved paths include the type folder prefix (e.g. `Item\npc.itm`). Strip a leading type folder if it is present.
 ### 1.6 Tile references
 
@@ -684,34 +688,73 @@ The **text form** lists the header `RPGTLKIT BKG`, major, minor, then a 19×19 t
    * Classes: name; base names (end with ""); members as `name, i32 visibility`; methods as `name, i32 paramCount, u32 entryIndex, i32 visibility` (each list ends with "").
    * Then units: `i32 kind flags` (1 unset, 2 number, 4 string, 8 identifier, 16 call, 32 open-brace, 64 close-brace, 128 end-of-statement, 256 object, 512 label, 1024 plugin call), followed by an f64 for number/brace, a str for string/identifier/label/plugin, or `i32 functionIndex, i32 paramCount` for calls.
 
+**Loading rules.** A source program loads and runs exactly what it contains.
+
+* An **empty file** (0 bytes) is a valid, empty program: it loads and does nothing.
+* A file whose **last line has no final newline** is valid; that last line is still a statement.
+* A file whose **first byte is `0x00`** is a pre-compiled program (item 2 above), not source text. Rejecting it is allowed.
+
 ### 9.2 Lexical rules (3.1.0)
 
-* **Case-insensitive** keywords and identifiers. Identifiers are `[A-Za-z0-9_]`. They may start with digits (as long as a letter follows) and may have a leading `~` (destructors).
-* A trailing `!` (numeric) or `$` (string) on an identifier is a **legacy type sigil and is ignored**: `x!`, `x$` and `x` are the same variable.
-* Numbers: decimal, optional fraction, optional exponent (`1e+6`). `true` = 1, `false` = 0, `null` = 0.
-* Strings: `"…"`. There are no escape sequences, and a string cannot contain `"`.
-* **Statements end at a newline** or `;`. Semicolons are optional.
-* **Line continuation:** `_` at the end of a line (optionally followed by a `//` comment).
-* Comments: `// …` to end of line; `/* … */` block; legacy `* …` when `*` is the first non-blank character; `** …`.
-* A leading `#` on a line is ignored (legacy command prefix). `#include` is the include directive.
-* Board **constants** (§4.2) and engine constants are substituted at lex time.
+Source is single-byte Windows-1252 text (the ANSI code page of the era); the last line need not end in a newline.
+
+* **Case-insensitive** keywords, identifiers and built-in names. Identifiers are `[A-Za-z0-9_]`. An identifier may start with a digit as long as a letter follows, and a destructor name may have a leading `~`.
+* **Case normalisation.** Names are compared and stored after ASCII lower-casing (`A`–`Z` only). This covers keywords, variables, labels, class and member names, function names and built-in names. It does **not** cover string contents or map keys written as strings, and it never uses a locale-sensitive operation. Include file names are matched case-insensitively by the asset resolver (§1.5), not by lower-casing the program's text. <!-- OWNER: LEX-10 — alternatives: lower-case only variables (leave keywords fixed), or lower-case everything including path text. Decided: ASCII lower-case for names, resolver handles paths. -->
+* **Numbers.** A number token is `digits [ . digits ] [ e [ + | - ] digits ]` (for example `12`, `1.5`, `1e+6`): the longest run of characters that fits that shape. A run that starts with a digit but does not fit (for example `2x`, `1e`) is an **identifier**, not a malformed number. <!-- OWNER: LEX-2 — alternatives: make `2x` an error, or reserve `e` as the only exponent letter. Decided: longest-match, else identifier, because identifiers may legally start with a digit. -->
+* `true` = 1, `false` = 0 and `null` = 0 are reserved literals, matched case-insensitively; a variable may not be called `true`, `false` or `null`.
+* **Strings.** `"…"`, single-line. There are no escape sequences, a string cannot contain `"`, and a string cannot contain a newline; an unterminated string is an error at the end of its line. Non-ASCII bytes inside a string or comment decode as Windows-1252. <!-- OWNER: LEX-8 — alternatives: treat the bytes as raw/opaque, or as Latin-1. Decided: Windows-1252, the editor's ANSI code page. -->
+* **Sigils.** A trailing `!` (numeric) or `$` (string) directly after an identifier is a **legacy type sigil and is ignored**: `x!`, `x$` and `x` are the same variable, everywhere (parameters, array names and assignment targets included).
+* **`!=` is "not equal"**, a second spelling of `~=`. A `!` directly followed by `=` is always the operator; a `!` or `$` followed by anything else is a sigil. So `x!=1` is `x != 1`, while `x! = 1` is `x = 1` with the sigil ignored. `operator!` and `operator$` are single operator names, not a name plus a sigil. <!-- OWNER: LEX-3 — alternatives: (a) keep `!=` out of 3.1 and require `~=`; (b) always read `!` as a sigil so `x!=1` cannot be parsed. Decided: adjacency rule, which reproduces both corpus forms (`x! = 1` spaced, `if (opt!=1)` adjacent). -->
+* **`~` has three roles.** `~a` is bitwise NOT, `a ~= b` is "not equal", and `~Name` is a destructor name, recognised only directly after `method` or `::` (see §9.7).
+* **Statements end at a newline** or `;`; the semicolon is optional. A block header is not a statement: see the brace rule in §9.5.
+* **Line continuation.** A `_` that is its own token (whitespace before it) at the end of a line continues the statement onto the next line, optionally with a `//` comment after the `_`. An `_` that is part of an identifier or number (`foo_`) does not continue anything. A continued line is not "the first non-blank line", so a leading `*` on it is an operator, not a comment. <!-- OWNER: LEX-1, LEX-5 — alternatives: require `_` to hug the preceding token, or count a continued line as first-non-blank. Decided: standalone `_` token (all 6 corpus uses have the space) and no comment on a continued line. -->
+* **Comments.** `// …` to the end of the line; `/* … */` (may span lines); legacy `* …` when `*` is the first non-blank character; `** …`. In a legacy TK2 file `*` may also start a trailing comment after a complete statement (§9.9).
+* **`#` lines.** `#include` is the one directive read in 3.1 source; it is matched case-insensitively and `#` may be separated from `include` by whitespace. Any other leading `#` is a legacy command prefix and is ignored on that line. A `#` that is not at the start of a line is not special. Unquoted legacy arguments such as `#Mwin(Hello there)` are not 3.1 syntax and belong to the legacy frontends (§9.9). <!-- OWNER: LEX-6 — alternatives: reject every other `#` line, or accept `#Command` in 3.1 too. Decided: ignore other `#` lines (existing rule), `#Mwin` forms dialect-only. -->
+* **Board constants** (§4.2) and engine constants. Engine constants are folded into the compiled program. A board constant is not: the compiled code names the constant and reads its value from the board when the program runs for that board, so the compiled form of a file does not depend on which board loads it, and the program cache can key on the file alone. <!-- OWNER: LEX-7 — alternatives: (a) bake board constants at compile time and add the board's constant set to the cache key; (b) resolve every board constant at run time (as above). Decided: (b), because it keeps a compiled program valid across boards and matches compile-from-text plus cache-by-file. -->
+* **Unknown characters.** A character that belongs to no token — for example `@`, a backslash, or a `$` with no identifier before it — is a **lexical error**, reported with file and line. A legacy dialect frontend may accept the characters its own syntax uses (Toolkit 2.x uses `@` for a blank Message-Window line, §9.9). <!-- OWNER: LEX-11 — alternatives: silently ignore an unknown character. Decided: error, so a typo cannot be swallowed; no corpus file contains one. -->
 
 ### 9.3 Values and variables
 
 * Dynamic typing: number (double) or string. Mixing in `+` concatenates (`"Hello " + 32` → `"Hello 32"`). Object handles are numbers.
 * Variables need no declaration. **Scope defaults to global.** `local(x)` / `global(x)` select scope explicitly. `autoLocal(true)` makes new variables local to the current function or program. `kill(x)` unsets a variable.
+* **Declare and assign.** `local(x) = v` and `global(x) = v` declare the variable in the chosen scope and assign it in one statement; this is the ordinary form for a new local (for example in a `for` initialiser) and it uses the reference-return rule of §9.5. `local(x)` on its own declares the variable and leaves it unset. <!-- OWNER: FUN-2 — alternatives: make `local(x)` alone an error (must be assigned), or have it return the variable's value. Decided: it declares and leaves unset, matching an unset variable's `""`/0 read. -->
+* **`kill` forms.** `kill(x)` unsets a variable; `kill(a[i])` unsets one array element; `kill(a, b, …)` unsets several in one call. Whether `kill(a)` on a whole array differs from unsetting it element by element is settled by the entry that implements the built-ins. <!-- OWNER: SEM-1 — this is a runtime-meaning row; the forms the corpus uses are stated here so the parser is complete, and entry 12 confirms the binding semantics. Alternatives: element-only, or whole-array as a distinct form. -->
 * Arrays and maps: `a[0]`, `a[1][2]`, `m["key"]`. Any expression can be an index. Multi-dimensional arrays are allowed. Arrays are sparse.
+* An index written as a **bare identifier** (`a[i]`) is a variable lookup: `i` is evaluated as a variable. The legacy TK2 form where an unquoted word is taken as a string key (`m[key]` meaning `m["key"]`) is not 3.1 syntax and is handled by the TK2 frontend (§9.9).
 * Unset variables read as `""` / 0.
 
 ### 9.4 Operators
 
-Precedence follows C conventions. Every operator yields a value, including assignments.
+Every operator yields a value, including assignments. The table lists precedence from **highest** (binds tightest) to **lowest**; operators on one row have equal precedence.
 
-* Arithmetic: `+ - * / % ^`(power), unary `-`, `++`/`--` (prefix and postfix).
-* Comparison: `== ~= < <= > >=`. **`~=` is "not equal".**
-* Logical: `&& || !`, also the words `and`, `or`.
-* Bitwise: `& | ` and backtick `` ` `` (XOR), `~` (NOT), `<< >>`.
-* Assignment: `= += -= *= /= %= ^= &= |= `=  <<= >>=`.
+| Precedence | Operators | Associativity |
+|---|---|---|
+| 1 | `()` call, `[]` index, `->` member, postfix `++` `--` | left |
+| 2 | unary `-` `+` `!` `~`, prefix `++` `--` | right |
+| 3 | `^` (power) | right |
+| 4 | `*` `/` `%` | left |
+| 5 | `+` `-` | left |
+| 6 | `<<` `>>` | left |
+| 7 | `<` `<=` `>` `>=` | left |
+| 8 | `==` `~=` `!=` | left |
+| 9 | `&` (bitwise AND) | left |
+| 10 | `` ` `` (bitwise XOR) | left |
+| 11 | `\|` (bitwise OR) | left |
+| 12 | `&&`, the word `and` | left |
+| 13 | `\|\|`, the word `or` | left |
+| 14 | `?:` | right |
+| 15 | `=` `+=` `-=` `*=` `/=` `%=` `^=` `&=` `\|=` `` `= `` `<<=` `>>=` | right |
+
+<!-- OWNER: EXP-2 — the two judgement calls: (a) `^` is power and sits above unary minus, right-associative, so `-2^2` is `-(2^2)`; (b) the bitwise operators `&`, the backtick and `|` sit *below* the comparisons, as in C, so `x & y == z` is `x & (y == z)`. Alternatives: put `^` below unary minus (C-ish `-2^2` = `(-2)^2`), or rank the bitwise operators above comparisons (as some BASICs do). This is the table entry 5 must implement; change it here if you prefer the alternatives. -->
+
+* `^` is **power**, not XOR; the backtick `` ` `` is XOR.
+* Comparison: `==`, `~=`, `!=`, `<`, `<=`, `>`, `>=`. `~=` and `!=` both mean "not equal" (see §9.2).
+* Logical: `&&` and `||`, and the words `and` / `or`; `!` is logical NOT, `~` is bitwise NOT.
+* Arithmetic: `+ - * / % ^` (power), unary `-` and unary `+` (numeric identity), `++` / `--` (prefix and postfix).
+* **`&` has three roles**, told apart by position: a parameter written `&name` declares a by-reference parameter (§9.5); `return &lvalue` returns a reference (§9.5); everywhere else it is the bitwise AND operator. An explicit `&x` in an argument list is **not** how by-reference is expressed — the callee's parameter decides — so `&` in an argument position is the bitwise operator, or an error. <!-- OWNER: EXP-3 — alternatives: allow an explicit `&x` at the call site to force by-reference (older BASIC style). Decided: no; by-reference is the callee's `ParamSpec`, which avoids an unary/binary ambiguity. -->
+* **`=` in a condition.** In 3.1 syntax a single `=` in a condition is an **assignment** (its value is then tested), never a comparison; `==` is equality. The legacy reading of `=` as equality applies only inside files parsed by the TK2 dialect frontend (§9.9). <!-- OWNER: EXP-4 — alternatives: (a) treat `=` as equality everywhere (the legacy reading), so `x = 5` in an `if` never assigns; (b) gate the legacy reading on a file that is detected as TK2 (as decided). Decided: (b), because the one 3.1 corpus site reads as assignment and 293 TK2 sites are equality. -->
+* **Where `:` and `.` are legal.** `:` appears in the ternary `a ? b : c`, in a label `:name`, after a `case` value, after an access label (`public:` `private:` `protected:`), in a class base list (`class CName : CBase, COther`) and in the scope separator `::` (`method CName::CName`). `.` is not an operator: member access is `->`, and a `.` only separates the file and function names of an implicit include (`file.func`, §9.6) or appears inside a string a program builds itself. `++`/`--` may not be split across a line. <!-- OWNER: EXP-5 — alternatives: give `.` a member-access meaning, or allow `++` across lines. Decided: `:` in those six places only, `.` is not an operator. -->
+* **Indexing** is a postfix `[expr]` that may follow any primary value: a variable, a call result (`f(x)[i]`), a member access (`obj->arr[i]`), or another index, so `a[1][2]` indexes twice. `m["key"]` is a string-keyed map. <!-- OWNER: EXP-6 — the grammar was prose-only; alternatives: forbid indexing a call result, or make `[ ]` follow only names. Decided: postfix on any primary. -->
 * Ternary `a ? b : c`. Member access `obj->member` / `obj->method()`.
 
 ### 9.5 Statements and control flow
@@ -719,32 +762,42 @@ Precedence follows C conventions. Every operator yields a value, including assig
 ```
 if (expr) { … } elseif (expr) { … } else { … }
 while (expr) { … }
-until (expr) { … }            // loop until expr becomes true
-for (init; cond; step) { … }
+until (expr) { … }                   // check first; loop until expr is true
+for (init; cond; step) { … }         // any of the three parts may be empty
 switch (expr) { case v: { … }  default: { … } }   // no fall-through
 function name(a, b, &byRef) { … return expr; }   // "method" is a synonym
-inline function f(x) { … }    // hint: expand at call sites
-:label                         // label (used by error handling / branch)
+inline function f(x) { … }           // "inline" is a hint only
+:label                               // label (used by error handling / branch)
 ```
 
-* `return &var` returns a reference, so a function call can be an assignment target.
-* Overloading by **parameter count** is supported.
-* `end()` ends the current program. `branch(:label)` jumps.
+* **Braces are required.** Every block body is written `{ … }`; a brace-less body (`if (x) stmt`) is not 3.1 syntax. A newline is allowed between a block header and its `{`: the brace may be on the header line or on the line after it. A block header is not a complete statement until its `{`. <!-- OWNER: STX-1, STX-4 — alternatives: (a) require the brace on the header line (the old literal reading, which fails 6 of 9 sample programs); (b) allow brace-less single-statement bodies. Decided: brace on either line, brace-less bodies not allowed. -->
+* **`}` ends the statement before it**, so a statement immediately before a closing `}` needs no `;` or newline. <!-- OWNER: STX-6 — alternative: require `;`/newline before `}`. Decided: `}` terminates, so `{ x = 1 }` is well-formed. -->
+* **`else`** may be written on the closing `}` line or on a later line; `else if` (two words) is accepted as a synonym of `elseif`. <!-- OWNER: STX-3 — alternative: allow `else` only on the `}` line, and reject `else if`. Decided: both positions, and `else if` accepted. -->
+* **`case` and `default`.** A case value is a full expression. The colon is optional: `case (v):`, `case (v)` and `case v:` are the same label. `default` may take an optional colon. Blocks do not fall through. <!-- OWNER: STX-2 — the corpus uses the colon-less `case (1)` form and never uses `default`; alternatives: make the colon mandatory (the old text) or accept both (decided). -->
+* **`for` parts** are separated by `;` and may each be empty (`for (; cond; )`); those `;` are separators, not statement terminators.
+* **Parameters.** A parameter is `[Type] name [&]` — an optional class name, then the parameter name, then an optional `&` for by-reference. The type is documentation only: it is not checked at run time and it does not take part in choosing an overload. Overloading is by **parameter count** only. <!-- OWNER: FUN-1 — alternatives: (a) use the type in overload choice and check it; (b) require the type to name a real class; (c) ignore it (decided). The corpus has `method clone(CArray rhs)` but no evidence of a type check or a type-keyed overload. -->
+* **Default parameter values, variadics and declared return types do not exist** in 3.1, and an overload never matches on type.
+* `return &lvalue` returns a reference, so a function call can be an assignment target; any lvalue is allowed — a variable, an index (`return &a[i]`), or a member access. <!-- OWNER: FUN-3 — alternative: restrict `return &` to a plain variable. Decided: any lvalue, because the corpus returns `&m_data[idx]`. -->
+* **Labels** are scoped to the function (or program) that contains them; `branch(:label)` jumps within that scope and never crosses a function boundary. A label may also be passed as an argument (`branch(:label)`, `setErrorHandler(:label)`). <!-- OWNER: STX-5 — alternatives: program-wide labels, or labels that `branch` can cross out of a function. Decided: function/program scope, no crossing. -->
+* `end()`, `done` and `stop` end **the program whose code is running**: every thread and call frame of that program ends. A program started with `run(prg)` is its own program, so `end()` inside it ends only that one and the caller's `run()` call returns; the rest of the game keeps running. <!-- OWNER: FUN-7 — alternatives: (a) `end()` tears down the whole engine/game; (b) `end()` ends the current program, and a `run()` program is separate (decided). Entry 13 implements whichever ruling stands; the corpus has 5 `end()` calls and 1 `run()` and no counter-example. -->
 * A bare identifier on its own line is treated as a zero-argument call (legacy `end` → `end()`).
 
 ### 9.6 Modules
 
-* `#include "file.prg"` or `include("file.prg")`. Only functions and classes are imported; loose top-level code in an included file does not run.
-* **Implicit include:** `file.func(args)` includes `Prg/file.prg` on first use and then calls `func`.
-* `redirect("oldName", "newName")` remaps a function name globally (including built-ins). `killRedirect("name")` and `killAllRedirects()` undo it.
+* `#include "file.prg"` or `include("file.prg")`. Only functions and classes are imported; loose top-level code in an included file does not run. The include root is `Prg/` (§1.5); a name with no path separator resolves there, and matching is case-insensitive.
+* **Implicit include:** `file.func(args)` loads `Prg/file.prg` on first use and then calls `func`.
+* **Hoisting.** Definitions are hoisted per file, so a function may be called earlier in a file than the line that defines it, and a function defined in an included file may be called from the includer once the `#include` line has been read.
+* **One flat list of script functions (working rule).** `#include`, an implicit `file.func` call, and the first run of a file each add that file's functions to a single flat list of script-function names at that moment. When two entries in that list share a name, the **last one added wins**. The `file.` prefix always reaches that file's own definition, whatever the flat list holds. Every override raises a warning naming the old and new definition. <!-- OWNER: MOD-1 / entry 3.8 — one tutorial claims the unqualified name is also reachable across files after a first implicit call; the corpus only shows the intra-file case. The flat list and last-wins rule are the owner's working rule until evidence says otherwise; entry 3.8 rules the rest doc-first. -->
+* `redirect("oldName", "newName")` remaps a function name globally (including built-ins). `killRedirect("name")` and `killAllRedirects()` undo it. The legacy `#`-prefixed operands and an implicit `file.method` target (`#redirect(#a, #b.c)`) are dialect forms (§9.9).
+* **Still to rule (entry 3.8, doc-first):** whether the unqualified name is visible after `#include` across files, the include cycle rule (an include of a file already included, and an include inside a function), and the exact `redirect` chain behaviour.
 
 ### 9.7 Object orientation
 
 ```
 class CName : CBase, COther {          // "struct" = class with public default
 public:
-    method CName(a, b)                 // constructor (overloadable; 1-arg = cast ctor)
-    method ~CName()                    // destructor
+    method CName(a, b) { m_field = a; } // constructor with its body in the class
+    method ~CName() { clean(); }        // destructor
     method operator+(rhs)              // any operator except -> and .
     method operator[](i)
     method operator=(rhs)              // also copy semantics
@@ -752,11 +805,17 @@ public:
     method virtualThing() = 0          // pure virtual (class becomes abstract)
 private:
     var m_field                        // "var" declares a member inside a class
+    var m_data[]                       // empty brackets declare a growable member array
     m_array[10]                        // fixed-size member array
 }
-method CName::CName(a, b) { m_field = a; }
+method CName::CName(a, b) { m_field = a; }   // an out-of-class body is also accepted
 obj = CName(1, 2);  obj->method();  obj->release();   // release() runs destructor and frees
 ```
+
+* A method body may be written **inside the class** (the form used throughout the sample corpus) or as a body-less prototype in the class with a separate `method CName::CName(…)` definition outside; the two forms may be mixed.
+* `var name` declares a member field; `var name[]`, with empty brackets, declares a member array that grows as it is assigned (§9.3). `m_array[10]` declares one with an initial size.
+* `this` names the current object inside a method; it is an ordinary value that may be used and indexed (`this[i] = …`; whether that calls `operator[]` is an object-semantics question, below).
+* **Still to rule (entry 3.6, doc-first).** The paragraphs below state the current reading. Entry 3.6 confirms or corrects, before any code: the member-lookup order; when `operator=` is called for assignment between objects and when a new handle is merely stored; which operators the dispatcher consults for `a[i] = v` (read versus write); when a destructor runs and what `kill`/program end do to it; the access-label rules (`protected`, and the default for `class`); and inheritance order with virtual and pure-virtual dispatch.
 
 Inheritance is multiple. Methods are virtual (derived classes override). Objects are reference handles. **Assignment copies by calling `operator=` or a copy constructor if one is defined; otherwise the copy is shallow.** Objects are not garbage-collected: call `release()`.
 
@@ -770,19 +829,71 @@ Error handlers work inside functions only:
 
 Errors in nested calls are **not** caught by the caller's handler.
 
-### 9.9 Legacy (pre-3.1, "RPGCode 2") syntax a reader may meet
+* **Still to rule (entry 3.7, doc-first):** which failures are catchable at all, whether a handler can also see errors from nested calls and built-ins, where a handler's labels resolve, and what `resumeNext` resumes (whether mid-expression state is dropped). The behaviour above is the current reading.
 
-The 3.1 editor shipped an **update wizard**, so a rebuild should either accept these forms or provide an equivalent converter:
+### 9.9 Older dialects: Toolkit 2.x (RPGCode 2) and Toolkit 1.x
+
+> **Correction (3.1 amendment).** Earlier versions of this section — and ADR 0004 — said Toolkit 2.x used `< … >`
+> block delimiters. That is wrong. The `< … >` form with `then` is **Toolkit 1.x only**; Toolkit 2.x uses `{ }` blocks
+> exactly like 3.1. A Toolkit 2.x corpus of 268 programs contains 3,120 `{` and no `<`, while the Toolkit 1.4 demo uses
+> the `< >` form. ADR 0004 still carries the old claim; §9.14 lists that as a separate docs fix.
+
+A game from either dialect runs through that dialect's frontend — the Toolkit 2.x frontend, or a Toolkit 1.x frontend when
+one is added. The 3.1 parser never sees these forms, and a file written for the 3.1 editor uses none of them. The 3.1 editor
+shipped an **update wizard**, so a rebuild should either accept these forms or provide an equivalent converter.
+
+**Toolkit 2.x (the dialect most surviving games use).**
+
+* **`#` is the statement introducer**, stripped before parsing, and it appears on essentially every statement: commands
+  (`#MwinCls`), control flow (`#If`, `#While`, `#For`), assignments (`#x! = 1`, `#a$ = "…"`), `#Method`, `#Include`. A
+  keyword is case- and spacing-insensitive: `#if(cond)`, `#If (cond)` and `#IF` are the same.
+* **Blocks are `{ }`.** A block may be written on the header line (`#If (c) { … }`) or with its brace on the next line.
+* **`#For(init; cond; step)`** uses `;` between its three parts, like the 3.1 `for`; the parts may be empty.
+* **Labels and flow.** `:label` defines a label; `#Branch(:label)` jumps to it (goto); `#FBranch(:label)` calls a labelled
+  *section* as a subroutine and returns at the end of that section. `#FBranch` has no 3.1 twin — it and `#Empty` are the
+  only two Toolkit 2.x commands with no 3.1 name, and both live in the TK2 compatibility plugin.
+* **User commands.** `#Method name(params)` … `#ReturnMethod(v)` defines a command and returns a value. `#Method` is the current Toolkit 2.x keyword and is the same keyword as 3.1's `function` — neither is legacy. `#ReturnMethod(v)` is the Toolkit 2.x return and maps to 3.1 `return v`; there is no `returnMethod` in 3.1, so that one spelling is pre-3.1 only.
+* **Comparisons.** Inside a `#If` or `#While` condition a **single `=` is equality** (the help says "you can use one equal
+  sign"); the comparison set is `==`, `!=`, `~=`, `<`, `>`, `<=`, `>=`. `!=` is a second "not equal" spelling alongside
+  `~=` (3.1 accepts both, §9.2). This rule is Toolkit 2.x only: in 3.1 `=` is assignment (§9.4).
+* **Includes and redirects.** `#Include(filename$)`, an implicit namespace include `#lib.method(args)` (loads
+  `Prg/lib.prg` and calls `method`), `#Redirect(old, new)`, `#KillRedirect(name)` and `#KillAllRedirects()`. The
+  `#Redirect` operands may themselves be `#`-prefixed names and the target may be an implicit `file.method` — for example
+  `#redirect(#a, #b.c)`.
+* **`#RPGCode(expr)`** (or `rpgCode(expr)`) evaluates `expr` as a fresh RPGCode statement, a leading `#` allowed, in the
+  current scope. This is how a Toolkit 2.x program builds a variable name or emulates an instance: it concatenates a
+  command string and runs it.
+* **`<var>` splices a variable into message text.** A string passed to a message or text built-in (`mwin`, `text`, …) has
+  every `<name>` replaced by the value of `name` — the same expansion the `spliceVariables` built-in performs.
+* **`*` comment** starts a line comment when it is the first non-blank character, **and** it may follow a completed
+  statement on the same line (`#InternalMenu(3) * Opens Details Menu *`).
+* **`@` on a line of its own** writes a blank Message-Window line.
+* **Unquoted string arguments** (`#Mwin(Hello there)`, `#SetImage(title.gif, …)`) are read as strings, and a variable name
+  may be passed where a value is wanted.
+* **Loose text lines** with no `#`, `*`, `:` or brace are shown as dialogue.
+
+**Toolkit 1.x (RPGCode v1, not in the first release).**
+
+* Blocks are `< … >`, and an inline block is introduced by `then` (`if (c) then < … >`). Loose text lines are common. This
+  dialect is out of scope for the first release; a Toolkit 1.x frontend can be added later through the same seam.
+
+**Toolkit 2.x spellings a 3.1 reader may meet.**
 
 | Legacy form | 3.1 meaning |
 |---|---|
 | `#Mwin(Hello there)` with unquoted string args | `mwin("Hello there")` |
-| `if (x = 5)` (`=` as comparison inside conditions/function args) | `if (x == 5)` |
+| `if (x = 5)` (`=` as comparison inside a condition) | `if (x == 5)` |
 | unquoted map keys `m[key]` | `m["key"]` |
-| `x! = 1`, `name$ = "a"` | sigils ignored |
+| `x! = 1`, `name$ = "a"` | sigils ignored (`x = 1`, `name = "a"`) |
 | loose text lines (no `#`) shown as dialogue | `mwin("…")` |
-| `method` / `returnMethod(x)` | `function` / `return x` |
+| `#Method` | `function` — the same keyword; neither is legacy |
+| `#ReturnMethod(x)` | `return x` (pre-3.1 spelling; 3.1 has no `returnMethod`) |
 | `* comment` lines | comments |
+| `#Dos`, `#Windows`, `#Gone`, `#Over`, `#Reset`, `#Win` | obsolete engine controls, still listed in §9.11 |
+
+**`system.*`.** The engine exposes its own namespace through the same dot syntax: `#system.pause` (used by many Toolkit 2.x
+games) resolves to the engine's `pause`, not to a file. A game may also ship a `system.prg` library; it is an ordinary
+library file (§9.14). <!-- OWNER: PRG-1 — alternatives: (a) load `system.prg` automatically at boot, as a shared library; (b) treat it as an ordinary library reached only by `#include` or an implicit call (decided). The demo copy is referenced by nothing, so (a) would invent behaviour the corpus does not show. -->
 
 ### 9.10 Engine-provided variables and constants
 
@@ -830,7 +941,128 @@ Grouped by capability. Optional parameters are in `[ ]`. Most getters also accep
 * **Files (in game folders):** `openFileInput/Output/Append/Binary(file,folder)`, `closeFile`, `fileInput/filePrint`, `fileGet/filePut`, `fileEof`, `appPath`.
 * **Scope:** `local`, `global`, `autoLocal`, `kill`.
 
-Calls to names that no built-in or script function defines are offered to **RPGCode plugins** (engine doc §9).
+Calls to names that no built-in or script function defines are offered to **RPGCode plugins** (engine doc §9). Where a name's owning epic is not obvious from its group, §9.13 says who owns it.
+
+### 9.12 Rulings on the ambiguity list (3.1 amendment)
+
+This subsection settles the lexical, expression, statement, function and program questions a 3.1 parser needs. Each row
+comes from the RPGCode language-readiness study. **Ratified** means the sample corpus already answers the question;
+**ruled** means the evidence supports the reading given here; **deferred** means a later entry rules the question in its own
+docs commit before writing code. Rows the owner should check hardest carry an `<!-- OWNER: … -->` note where they appear,
+listing the alternatives. Short names below: LEX lexical, EXP expressions, STX statements, FUN functions, PRG program, OOP
+classes, SEM runtime meaning, MOD modules, ERR errors, THR threads.
+
+**Ruling summary:** 33 rows are settled in this amendment (8 ratified, 25 ruled) and 23 are deferred to the implementing
+entry. Twenty-seven `<!-- OWNER: … -->` notes flag the judgement calls and list the alternatives; the owner review list
+below names the ones worth the most attention.
+
+**Ratified — the corpus already settles these (8 of the 14 corpus-settled rows; the other 6 are class, module and runtime
+rows, listed under "deferred" because their implementing entries rule them).**
+
+| ID | Section | Rule |
+|---|---|---|
+| STX-1 | 9.2, 9.5 | A newline is allowed between a block header and its `{`; brace-on-header and brace-on-next-line are both accepted. |
+| STX-2 | 9.5 | `case` takes a parenthesised, colon-less form (`case (1)`); the colon form is also accepted and `default` may take a colon. No fall-through. |
+| STX-3 | 9.5 | `else` may be on the closing `}` line or on a later line. |
+| FUN-1 | 9.3, 9.5 | Typed parameters `Type name` are 3.1 syntax; the type is documentation only. |
+| FUN-2 | 9.3, 9.5 | `local(x) = v` and `global(x) = v` declare-and-assign; `local(x)` alone declares. |
+| FUN-3 | 9.5 | `return &` accepts any lvalue, including `a[i]`. |
+| EXP-1 | 9.3 | A bare identifier index is a variable lookup; unquoted map keys are legacy. |
+| FUN-4 | 9.5, 9.9 | `method` and `function` are interchangeable and neither is legacy; `returnMethod` is the legacy return. |
+
+**Ruled here — the corpus cannot settle them, so the amendment gives a reading and its reason.**
+
+| ID | Ruling | Reason |
+|---|---|---|
+| LEX-1 | A `_` that is its own token, at the end of a line, optionally followed by `//`. | All 6 corpus uses have a space before it; an `_` inside a name must stay part of the name. |
+| LEX-2 | Longest-match number `digits[.digits][e[+-]digits]`; otherwise a digit-leading run is an identifier. | No counter-example in the corpus; identifiers may legally start with a digit. |
+| LEX-3 | `!=` (adjacent) is "not equal"; `!` or `$` otherwise is a sigil; `operator!` and `operator$` are single names. | Reproduces both corpus forms: `x! = 1` (spaced) and `if (opt!=1)` (adjacent). |
+| LEX-4 | `~` is unary NOT; `~=` is "not equal"; a destructor `~` only directly after `method` or `::`. | The three uses never collide in one position. |
+| LEX-5 | A continued line is not "first non-blank": a leading `*` on it is an operator. | No corpus use; keeps `_` followed by `*` unambiguous. |
+| LEX-6 | In 3.1 source `#include` is the one directive, case-insensitive with optional space after `#`; other `#` lines are ignored legacy; `#Mwin(…)` unquoted args are dialect-only. | One `#include` and no other `#` in the 3.1 corpus; `#` is pervasive in Toolkit 2.x files. |
+| LEX-7 | Engine constants fold at compile time; board constants are read from the board when the program runs, so the compiled form does not depend on the board and the cache keys on the file alone. | Otherwise a program compiled for one board is stale on another, clashing with compile-from-text and cache-by-file. |
+| LEX-8 | Strings are single-line; source bytes decode as Windows-1252. | No corpus string spans a line; the original editor's ANSI code page is Windows-1252. |
+| LEX-9 | `true`, `false`, `null` are reserved case-insensitive literals. | `true` is used 9 times; reserving avoids a name that cannot be used back. |
+| LEX-10 | Case-insensitivity is ASCII-only and covers keywords, identifiers and built-in names; not string contents or string map keys; include paths are matched by the resolver. | Needed for the no-locale determinism rule; the corpus never relies on a second spelling. |
+| LEX-11 | An unknown character is a lexical error with file and line. | No occurrences; an error is the safe default. |
+| EXP-2 | The precedence table of §9.4 applies: postfix, unary, `^` (right), then `* / %`, `+ -`, shifts, comparisons, `== ~= !=`, `&`, backtick, `\|`, `&&`/`and`, `\|\|`/`or`, `?:`, assignment. `^` is power, above unary minus, right-associative; the bitwise operators sit below comparisons. | Keeps the C convention the section promised while honouring `^` = power and backtick = XOR. |
+| EXP-3 | `&` is bitwise AND except as a `&name` parameter or after `return`; no explicit `&x` at a call site. | Avoids an unary/binary ambiguity; by-reference is the callee's contract. |
+| EXP-4 | In 3.1 syntax `=` in a condition is assignment; the `=`-as-equality rule is Toolkit 2.x only. | The one 3.1 site reads as assignment-then-test; 293 Toolkit 2.x sites are equality. |
+| EXP-5 | `:` is legal only in the ternary, a label, a case label, an access label, a class base list and the `::` scope separator; `.` is not an operator. | Each symbol gets one job; no corpus conflict. |
+| EXP-6 | Indexing is a postfix that may follow a call result, a member or another index; multi-dimensional and string-keyed maps are allowed. | 14 corpus index sites, all `name[var]`; the grammar was prose-only. |
+| STX-4 | Braces are required; `for` parts may be empty. | No brace-less bodies and 6 complete `for`s; an empty part is harmless and C-like. |
+| STX-5 | Labels are function/program scoped; `branch` never crosses a function boundary. | No corpus labels; matches `branch(:label)` and `setErrorHandler(:label)`. |
+| STX-6 | `}` terminates the statement before it. | No uses; makes `{ x = 1 }` and a last statement before `}` well-formed. |
+| STX-7 | Loose text lines and `#Mwin` unquoted args exist only in legacy files; they are the frontends'/converter's job. | Two spec examples fail even leniently; 113 loose lines are legacy. |
+| FUN-5 | No default parameter values, no variadics, no declared return types, no overload by type. | Nothing in the corpus or the section uses them. |
+| FUN-6 | `inline` has no effect beyond its hint. | No uses; nothing observable can differ. |
+| FUN-7 | `end()`/`done`/`stop` end the program whose code is running; a `run(prg)` program is separate, so `end()` in it returns to the caller. | 5 corpus `end()` calls and 1 `run()`; no counter-example. |
+| PRG-1 | `system.prg` is an ordinary library, loaded only by `#include` or a `system.`/implicit call; the `system.` prefix is the engine namespace. | The demo copy is referenced by nothing; `#system.pause` is the engine's. |
+| PRG-2 | An empty file and a file with no final newline load; a first byte of `0x00` marks a pre-compiled file. | All 10 corpus files load; none starts with `0x00`. |
+
+**Deferred — a later entry rules these doc-first, before it writes code.**
+
+| ID | Affected entry | Note |
+|---|---|---|
+| OOP-1 … OOP-9 | 3.6 | Class and object syntax is in §9.7; the lookup order, `operator=`/`operator[]` dispatch, destructor timing, access labels and inheritance are ruled there. |
+| ERR-1, ERR-2 | 3.7 | Which failures are catchable, and handler, label and `resume` semantics (§9.8). |
+| MOD-1, MOD-2, MOD-3 | 3.8 | The unqualified-after-`#include` question, the include cycle rule (the `Prg/` root is already stated in §9.6), and the redirect chain. The owner's flat-list working rule is recorded in §9.6. |
+| THR-1, THR-2, THR-3 | 3.9 | `threadSleep` units, `source`/`target` lifetime, and the snapshot "step" definition. |
+| SEM-1 … SEM-6 | 3.12 | `kill` forms, `until` check-first, comparison and coercion, scope and visibility, unset reads, and by-reference write-back. The forms the corpus settles are stated in §9.3 and §9.5 so the parser can be written; entry 3.12 confirms the binding semantics. |
+
+**Owner review list.** The rulings below are judgement calls rather than corpus results, and the owner should weigh them
+hardest: EXP-2 (the precedence of `^` and of the bitwise operators), EXP-4 (`=` in conditions and its dialect gate),
+LEX-3 (`!=` versus a `!` sigil), LEX-7 (where board constants resolve and what the cache keys on), FUN-7 (`end()`
+unwinding across `run()`), FUN-1 (typed parameters ignored), STX-4 (braces required, empty `for` parts), STX-5 (label
+scope) and PRG-1 (`system.prg`). The ownership choices in §9.13 add one more. Change any of them at the
+`<!-- OWNER: … -->` note that carries it.
+
+### 9.13 Built-in ownership for names with no single owner
+
+The catalogue in §9.11 groups names by capability, not by which part of the engine implements them, and a few names fell
+between two owners. This is the map the build uses so that every name resolves exactly once. It follows the
+command-effect catalogue's proposal; where it differs from a §9.11 group label, this map wins.
+
+* **Input** (`wait`, `get`, `mouseClick`, `mouseMove`, `scan`, `mem`, `clearBuffer`, `setButton`, `checkButton`,
+  `clearButtons`) belongs to the **movement-and-input** part. The `input.key` and `sleep` wait *kinds* those commands
+  yield are the **VM's** (the VM owns the wait registry); the built-in itself is the input part's.
+* **Cursor maps and the mouse cursor** (`createCursorMap`, `cursorMapAdd`, `cursorMapRun`, `killCursorMap`,
+  `cursorMapHand`, `mouseCursor`) belong to **board-rendering**, even though §9.11 files them under Input: they draw onto
+  the `ui` surface, so the section owner decides.
+* **`wait`** is the input part's built-in and its `input.key` wait kind is the VM's — a split name, both parts stated.
+* **`dirSav`** (the save/load picker) belongs to **menu-and-save**, which owns the save list and the `menu.screen` wait;
+  board-rendering supplies the surface it draws on — a split name.
+* **Game lifecycle** (`reset`, `start`, `mainFile`, `win`, `gone`, `over`) belongs to **board-rendering**, which owns
+  boot, reset and quit. §9.11's "Game state" group does not imply the menu part. <!-- OWNER: §9.13 game lifecycle — alternatives: leave these with menu-and-save (where the catalogue guessed) or move them to board-rendering (the proposal). Decided: board-rendering, to match the boot/reset/quit owner. -->
+* **`menuGraphic`** belongs to **menu-and-save**, not battle, even though §9.11 lists it under Battle; `internalMenu`
+  and `fightMenuGraphic` stay with menu-and-save and battle respectively.
+* **`godos`, `dos` and `windows` are obsolete and dropped**: no owner registers them, and no game needs them to resolve.
+* The remaining names the catalogue's ownership table flags as ambiguous (`itemCount`, `giveExp`, `sourceHandle`,
+  `targetHandle`, `sourceLocation`, `targetLocation`, and the party/player movement names) are owned as that table says:
+  movement-and-input for the sprite and player movement names, battle for the fight stat writes, the VM for the
+  source/target handle reads.
+
+<!-- OWNER: §9.13 — the owner should confirm the game-lifecycle move (to board-rendering) and the two split names (`wait`,
+`dirSav`) hardest; the rest follows the catalogue. If the game-lifecycle names stay with menu-and-save, edit this bullet
+and the catalogue together. -->
+
+### 9.14 Follow-ups outside this document
+
+This amendment changes `format-spec.md` only. Two other places still carry statements it contradicts or completes, and each
+needs its own docs commit:
+
+1. **ADR 0004, decision 1** says Toolkit 2.x used `< >` block delimiters. It did not: `< … >` with `then` is Toolkit 1.x;
+   Toolkit 2.x uses `{ }` (§9.9). That sentence in the ADR needs correcting.
+2. **`system.prg`'s role and the ownership map** are recorded in §9.12 and §9.13 here; the epic and architecture documents
+   that name an owner should be checked against §9.13 when those entries are planned.
+
+Deferred by design: the class and object, error-handling, module, thread and runtime-meaning questions in §9.12 are ruled
+by entries 3.6 to 3.9 and 3.12, each in its own docs commit before any code.
+
+**References for this amendment.** The rulings above come from the RPGCode language-readiness study (the 12 doc-fix
+proposals and the ambiguity list), the Toolkit 2.x coverage study and the TK2/community material survey in
+`_bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/`, the command-effect catalogue (the ownership
+map), the guard-rail on clean-room provenance (`docs/guardrails.md`, G7), and [ADR 0004](adr/0004-script-ast-step-ir-and-plugins.md).
 
 ---
 
@@ -838,13 +1070,84 @@ Calls to names that no built-in or script function defines are offered to **RPGC
 
 | Kind | Formats seen/accepted | Where |
 |---|---|---|
-| Images | BMP, PNG, JPEG, GIF (incl. animated), ICO/WMF (import); anything the legacy image library loaded | `Bitmap/`, `Misc/` |
+| Images (game files) | PNG and JPEG are decoded (§10.2, §10.3); BMP and GIF are still owed a reader (§10.4) | `Bitmap/`, `Misc/` |
 | Music | MIDI (`.mid`) is dominant; also MP3, OGG, WAV and tracker modules through the audio library | `Media/` |
 | Sound effects | WAV, MP3, OGG | `Media/` |
 | Video | AVI (Windows media pipeline) | `Media/` |
 | Fonts | TrueType `.ttf`, registered for the game's lifetime | `Font/` |
 
-Images are matched by **colour-key transparency** (per frame or image), not alpha. A rebuild should still keep alpha in PNGs.
+Images are matched by **colour-key transparency** (per frame or image), not alpha, so the key is stored with whatever references the image and is never part of the image file itself. A rebuild should still keep alpha in PNGs. An animated GIF stands in for an `.anm` wherever one is accepted (§7.2).
+
+### 10.1 Decoding an image
+
+A game image is turned into pixels in one place, with one result, so that the rasteriser, every runner and the editor cannot disagree about what an image contains. The reader's result is **straight** (non-premultiplied) 8-bit RGBA of exactly `width × height × 4` bytes in row-major order, top row first: the file's own colours and its own alpha, nothing added. Because the colour key is not in the file (above), the reader never applies one; the key is tested against these decoded pixels by whatever blits the image.
+
+The image kind is chosen by **signature**: PNG `89 50 4E 47 0D 0A 1A 0A`, JPEG `FF D8 FF` (§10.2, §10.3). Any other signature is an error at offset 0. Every defect is a located error carrying the file's path, the offending byte offset and the section `format-spec §10` — never a throw and never a plausible wrong picture.
+
+Both readers refuse a zero dimension, and both refuse an image of more than **100,000,000 pixels**: `width × height` is untrusted input, so past that limit the allocation is not attempted and the file is refused instead. The limit is far above any game asset (the largest image in the legacy sample games is 640×480).
+
+### 10.2 PNG
+
+**Structure.** The 8-byte signature above, then chunks of `u32 length` (big-endian), a 4-byte type, `length` data bytes and a `u32` CRC-32. The CRC is the standard reflected polynomial `0xEDB88320` over the type **and** data, and every chunk's CRC is checked: a flipped bit is a located error, not a wrong colour. A length that runs past the end of the file is refused. `IHDR` must be the first chunk and is read on its own, so a wrong payload length (the spec fixes 13 bytes) is reported as that rather than as a malformed walk later. `IEND` must be the last chunk: the walk stops there, anything after it is ignored, and a chunk stream that ends without `IEND` is an error. The structure is then checked: `IHDR` appears exactly once, `PLTE` and `tRNS` come before the first `IDAT`, and an unknown **critical** chunk (first letter uppercase) is refused; unknown ancillary chunks are skipped.
+
+**`IHDR`.** Width and height are big-endian `u32` and neither may be 0. Bit depth and colour type must be a pairing the spec defines:
+
+| Colour type | Meaning | Permitted bit depths |
+|---|---|---|
+| 0 | greyscale | 1, 2, 4, 8, 16 |
+| 2 | truecolour | 8, 16 |
+| 3 | palette | 1, 2, 4, 8 |
+| 4 | greyscale + alpha | 8, 16 |
+| 6 | truecolour + alpha | 8, 16 |
+
+Compression method must be 0, filter method must be 0, and the interlace byte must be 0 or 1; any other value, an unlisted colour type, or a colour type paired with a depth the table does not give is refused at that `IHDR` field.
+
+**`IDAT`.** Every `IDAT` chunk's data, concatenated, is one zlib stream (the first `IDAT` is required). The header fixes the exact inflated size — for each pass, `height × (1 + ceil(width × channels × depth / 8))` — so the stream is inflated into a buffer of that size and cannot allocate past the declared layout; the output is measured against the header and a stream that inflates short or long, is not a valid zlib stream, or is so small that no deflate stream of its length could produce the declared output (deflate expands at most 1032:1, plus a little slack for framing) is refused at the first `IDAT` payload.
+
+**Filters.** Each scanline is prefixed by its filter-type byte and the filters are undone in place, with `bpp = ceil(channels × depth / 8)` and the previous scanline all zeros for the first row of each pass:
+
+| Type | Filter | Reconstruction (`x` = byte, `a` = left, `b` = above, `c` = above-left) |
+|---|---|---|
+| 0 | None | `x` |
+| 1 | Sub | `x + a` |
+| 2 | Up | `x + b` |
+| 3 | Average | `x + floor((a + b) / 2)` |
+| 4 | Paeth | `x + Paeth(a, b, c)` |
+
+`Paeth(a, b, c)` picks `a`, `b` or `c` by the smallest of `|a + b − c − a|`, `|a + b − c − b|`, `|a + b − c − c|`, ties going to `a` then `b`, all in exact integers. Any filter byte above 4 is refused.
+
+**Adam7.** With interlace byte 1 the image is seven passes, each `[x0, y0, dx, dy]`: `(0,0,8,8)`, `(4,0,8,8)`, `(0,4,4,8)`, `(2,0,4,4)`, `(0,2,2,4)`, `(1,0,2,2)`, `(0,1,1,2)`. A pass is `ceil((width − x0) / dx) × ceil((height − y0) / dy)` and an empty pass is omitted. Interlace byte 0 is one pass over the whole image. Each pass's scanlines filter against the previous scanline of that pass.
+
+**Palette and `tRNS`.** `PLTE` is 1–256 whole RGB triples (3–768 bytes), is required for colour type 3, and may hold no more entries than the bit depth can select (`2^depth`); a pixel whose index falls outside the palette is a located error. `tRNS` is byte-per-entry alpha for colour type 3 (never more bytes than palette entries; an entry with no `tRNS` byte is opaque), a single 2-byte greyscale or 6-byte RGB colour key for colour types 0 and 2 (a pixel equal to the key gets alpha 0, the rest 255), and is ignored for colour types 4 and 6, whose alpha is in the pixels. Elsewhere, alpha is 255.
+
+**Bit-depth scaling.** Sub-byte samples (depths 1, 2, 4) are read MSB-first within each byte and widened by the exact factor that maps their maximum to 255 — ×255, ×85, ×17. Depth 8 passes through. Depth 16 is reduced by `floor(v / 257)`, the exact inverse of the spec's `v × 257`, so 65535 maps to 255 without rounding error. A palette index is a sample, not a channel value, and is not scaled.
+
+Errors found in the inflated bytes (an unknown filter type, a palette index outside `PLTE`) are reported at the offset of the first `IDAT` payload, which is where those bytes come from; header errors point at the header field.
+
+### 10.3 JPEG
+
+The reader covers the **baseline sequential DCT** process (`SOF0`) and the **8-bit extended sequential** process (`SOF1`), which share one decoding path, and nothing else. One frame: sample precision 8; one component (greyscale) or three (YCbCr); per-component sampling factors 1×1 to 4×4 (the legacy sample files are 4:2:0); Huffman-coded entropy data with optional restart intervals; quantisation tables of 8 or 16 bits; dequantisation; a separable inverse DCT per 8×8 block, level-shifted by +128, rounded and clamped; chroma upsampled to full resolution by nearest neighbour; YCbCr→RGB. JPEG carries no alpha, so every decoded pixel has alpha 255 and any transparency is the per-image colour key of §10.
+
+**Marker walk.** `FF D8` (SOI), then `FF`-prefixed segments; a 2-byte big-endian length follows each marker and includes itself; `FF D9` (EOI) ends the walk and `FF 01` (TEM) and stray restart markers between segments are skipped. Handled: `DQT` (quantisation tables, ids 0–3, 8- or 16-bit entries in zig-zag order), `DHT` (canonical Huffman tables, T.81 Annex F), `DRI` (restart interval; length must be 4), `SOF0`/`SOF1`, `SOS`, and `APP14`: where its identifier is `Adobe`, the transform byte 0 means the three components are already R, G and B, and anything else — or no `APP14` — is YCbCr. Inside the entropy-coded data, `FF 00` is a stuffed data byte and `FF D0`–`FF D7` are restart markers, before which any repeated `FF` fill bytes are skipped and after which the DC predictors reset.
+
+**Boundary — refused, each a located error, never a wrong picture.** Progressive (`SOF2`) and every other frame marker type; a sample precision other than 8; a component count other than 1 or 3 (so CMYK/YCCK is out); a scan that is not baseline sequential (`Ss = 0`, `Se = 63`, `Ah = Al = 0`); more than 100,000,000 pixels or a zero dimension; a DC difference category above 11; an invalid Huffman code; an AC coefficient index past 63; an entropy stream that ends before the last MCU (a truncated file); a scan naming a component or Huffman/quantisation table the file does not define, or naming one twice; a component defined twice in the frame; a frame component that no scan decoded; a file with no `SOF0`/`SOF1` frame or no `SOS`. A bare `FF D8 FF` file is reported as too short.
+
+**Determinism.** The inverse-DCT basis is stored as literal double constants, never computed from `Math.cos`/`Math.PI`, and the transform runs rows then columns in a fixed order over add, subtract and multiply, so the same bytes give the same pixels on every JavaScript engine.
+
+### 10.4 The image kinds: what is decoded and what is dropped
+
+Archive use counted on 2026-10-11 inside the game and tool archives and across the 2,047 archived `.prg` scripts (the six TK2-era games, 25 archived community games, the community zip corpus and the site mirrors):
+
+| Kind | Archive use | Ruling |
+|---|---|---|
+| **PNG** | 97 files in the 25 community games, one in the shipped sample game; 187 script references | **Decoded** (§10.2) |
+| **JPEG** | 340 files in the 25 community games, 58 in four of the six TK2 games; 99 script references | **Decoded** (§10.3) |
+| **BMP** | 178 files in the 25 community games, 18 in four of the six TK2 games; 271 script references; one of the board-image export targets (T-32) | **Owed a reader.** It is the dominant TK2-era picture format, so a reader belongs beside the PNG and JPEG ones, chosen by the `BM` signature |
+| **GIF** | 520 files in the 25 community games, 58 in four of the six TK2 games; 232 script references | **Owed a reader**, and not only for a still frame: §7.2 lets an animated GIF replace an `.anm`, so the reader must yield every frame and its delay |
+| **ICO** | 10 files in the whole archive, every one an application or site icon (three of the Toolkit's own icons in two archives, one utility's icon in two uploads, one community game's icon); none in the six TK2 games, no script reference | **Dropped as a game format.** The only mention is the editor's image-import list (T-36). If that feature ever needs it, an ICO is a container of BMP or PNG images and belongs to the editor's import path, not to a game-image reader |
+| **WMF** | 0 files anywhere in the archive, no script reference | **Dropped.** The only mention is T-36's import list; no game file is a Windows metafile |
+
+The legacy Windows image library loaded more kinds than the rebuild does. The rebuild reads PNG and JPEG as §10.2 and §10.3 state, adds BMP and GIF readers as above, and refuses anything else with a located error rather than approximating a picture; ICO and WMF are not game formats and need no reader.
 
 ---
 
@@ -874,18 +1177,58 @@ Legacy plugins are native Windows libraries (`Plugin/*.dll`) of three kinds: **R
 
 ## 13. Packaging
 
-* **PakFile `.tpk`:** a standard ZIP archive with the project folder plus `main.gam`. When playing from a pak, ignore the main file's `projectPath`.
+Every form below carries the same files — the project folder of §1.5 plus the main file — and every one is **untrusted input**: a loader bounds it with §13.2's limits before allocating or parsing anything, treats a nested archive as an ordinary file (L14), and never throws.
+
+### 13.1 Package forms
+
+* **Loose folder.** A directory whose **own root is the package root**: the project folder's contents (the §1.5 type folders — `Tiles/`, `Boards/`, `Chrs/`, `Item/`, `Enemy/`, `SpcMove/`, `StatusE/`, `Bkrounds/`, `Misc/`, `Bitmap/`, `Media/`, `Prg/`, `Font/`, `Plugin/`) sit directly in it, together with the main file, *not* nested under `Game/<project>/`. The core performs no I/O (G2), so the host lists the folder's entries; each is a **file**, a **directory** (counted toward the entry limit but never served) or a **link** (refused, L23). The stored `projectPath` is ignored, exactly as for a `.tpk` — a package's root *is* the project folder. The folder form is subject to the same limits and path rules as an archive (L22–L26), so a game behaves identically whichever form it arrived in.
+* **PakFile `.tpk`:** a standard ZIP archive with the project folder plus the main file. The **archive root is the project folder**: the §1.5 type folders sit at the root (their contents, not wrapped in a folder named after the project), and a legacy pak embeds the main file at the archive root as `main.gam`. Entry names use `/` and follow §1.5's case and separator rules. When playing from a pak, ignore the main file's stored `projectPath` (§1.5). <!-- OWNER: chose "project folder's contents at the archive root" over "the project folder nested under its own name" because the package resolver keys a reference at the package root (the project folder is the root, AD-5), §1.5 already says a pak embeds `main.gam` inside it, and this project's own writer emits the flat form; §13's one sentence fits both readings and no sample package pins it. -->
 * **Standalone EXE:** an engine executable with a ZIP appended. Its **last 12 bytes** are a trailer:
   * `[end - 12 .. end - 9]`: ASCII string `CMP1` (4 bytes: `0x43 0x4D 0x50 0x31`).
   * `[end - 8 .. end - 5]`: `i32 offsetOfZip` (4 bytes, **little-endian**). This is the original executable length and marks the starting byte offset of the appended ZIP archive.
   * `[end - 4 .. end - 1]`: `i32 zipLength` (4 bytes, **little-endian**). This is the exact byte length of the appended ZIP archive.
-  Extracting `[offsetOfZip, offsetOfZip + zipLength)` yields the clean game ZIP. A rebuild can import legacy standalone games this way.
+  Extracting `[offsetOfZip, offsetOfZip + zipLength)` yields the clean game ZIP, laid out as a `.tpk` above. A rebuild can import legacy standalone games this way.
 * **Setup ZIP:** a plain ZIP of the `Main/` and `Game/` folders.
-* **Distribution package (this project's own):** a `.tpk`-compatible ZIP that also holds a `manifest.json` at the archive root, next to the game files. The manifest is UTF-8 JSON with exactly three fields:
+* **Distribution package (this project's own):** a `.tpk`-compatible ZIP — the project folder at the archive root, exactly as for a `.tpk`, with the main file kept at its §1.5 path `Main/<game>.gam` <!-- OWNER: chose to keep our main file at its §1.5 path `Main/<game>.gam` (and name it in the manifest) rather than the legacy pak's root `main.gam`, because a legacy pak's embedded main is found by the engine and our package names it in `manifest.json`; a reader that accepts both forms ignores the difference. --> — that also holds a `manifest.json` at the archive root, next to the game files. The manifest is UTF-8 JSON with exactly three fields:
   * `schema`: a non-negative integer, the project schema version.
   * `main`: the in-package path of the main file, for example `Main/demo.gam`. It must name a game file in the archive and must not be `manifest.json` itself.
   * `index`: the in-package path of every game file except `manifest.json`, each listed once.
   Paths use `/` and follow §1.5 (matching ignores case and treats `\` as `/`). A reader checks that `main` and every `index` entry name a file in the archive and that no game file is missing from `index`, and it refuses a manifest with any other field. A legacy package has no manifest and loads without one; only packages this project writes are required to carry it.
+
+### 13.2 Untrusted-package limits (L1–L26)
+
+Games are untrusted input, so a loader bounds what a package can make it spend — bytes in, entry count, declared and actual sizes, compression ratio, path shape and the appended-EXE trailer — before it allocates or parses anything, and every rejection **names the rule it hit** so a failure, a code comment or a review finding can cite one row. The rules are numbered **L1–L26**; the loose-folder rows (L22–L26) restate the archive rows rather than widening them, so both forms accept and reject the same games.
+
+**Every value is a proposal.** The numbers come from a 134-file, 6.3 MB corpus of two sample games plus `fflate`'s documented behaviour, and no sample ships a package, so the package numbers have no corpus evidence at all (the corpus only bounds the assets inside a package: largest file 430,086 bytes, max path depth 4 segments, max relative path 59 characters, max basename 47 characters). Change a value and its row together. <!-- OWNER: chose to make the discovery report's proposal values the spec's normative L1–L26 table because the code already enforces exactly these numbers under these ids, no sample package exists to measure them, and giving them ids is what lets a failure, a comment and a review finding cite one row; if you want a different value, it is a one-line change here and in `limits.ts`. -->
+
+| # | Rule | Value |
+|---|---|---|
+| L1 | Max compressed input (the whole file, before parsing) | 256 MiB (268,435,456 bytes) |
+| L2 | Max entries (files + directories) | 10,000 |
+| L3 | Max single entry uncompressed size, checked before inflating | 64 MiB (67,108,864 bytes) |
+| L4 | Max total uncompressed size (sum of declared sizes) | 512 MiB (536,870,912 bytes) |
+| L5 | Max per-entry compression ratio (uncompressed ÷ compressed) | 100:1 (zip-bomb guard) |
+| L6 | Max path length, UTF-8 bytes with `\` normalised to `/` | 256 |
+| L7 | Max path depth (segments) | 16 |
+| L8 | Max basename length (UTF-8 bytes) | 128 |
+| L9 | Path escape (zip-slip) | reject an absolute path, a drive letter (`X:`), a `..` segment, a NUL, or a path that names nothing |
+| L10 | Case-insensitive duplicates | reject two entries that differ only by case or separator |
+| L11 | Encrypted entries (general-purpose flag bit 0) | reject |
+| L12 | Compression methods | only 0 (stored) and 8 (deflate) |
+| L13 | ZIP64 records (EOCD64 locator or `0xFFFFFFFF` sentinel) | reject |
+| L14 | Nested archives | opaque: a nested `.zip`/`.tpk` is a file, never opened (nesting depth 0) |
+| L15 | End-of-central-directory search window | last 65,557 bytes (22-byte record + 65,535-byte comment) |
+| L16 | Declared size, before inflate | reject a declaration above L3 (defence in depth: L3 already refuses every entry that would reach it) |
+| L17 | Declared vs actual size, after inflate | reject when the inflated length differs from the declared size |
+| L18 | CRC-32 | verify the decoded bytes against the header's CRC-32 |
+| L19 | Local-header / central-directory consistency | reject when name, method, compressed size or uncompressed size disagree; the same rule covers a corrupt central directory or end-of-central-directory record |
+| L20 | Appended-EXE trailer validity | require `offsetOfZip ≥ 0`, `zipLength ≥ 0` and `offsetOfZip + zipLength ≤ fileLength − 12` |
+| L21 | Appended-EXE trailer present | the last 12 bytes must start with `CMP1` |
+| L22 | Loose folder: entry count | same as L2 |
+| L23 | Loose folder: symlinks and reparse points | reject |
+| L24 | Loose folder: total size | same as L4 |
+| L25 | Loose folder: per-file size | same as L3 |
+| L26 | Loose folder: path rules | same as L6–L10 |
 
 ---
 
