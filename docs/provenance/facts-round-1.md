@@ -1,8 +1,8 @@
 <!-- Reviewed fact sheet, clean-room extraction round 1 (ADR 0006). Status: reviewed prose facts, not yet folded into format-spec.md; each ruling that uses them is its own doc-first commit (G7). Questions: questions-round-1.md (Q1 to Q13). Q14 to Q18 were an addendum later moved into questions-round-2.md as R2-Q1 to R2-Q5; their answers here are brief and facts-round-2.md is authoritative for them. Legacy revisions consulted: 9191b919, and 08f2fe3d for the 2.x text board reader in Q1. Q8 to Q18 describe the 3.0.x and 3.1 runtimes, not TK2's own. Review: two independent reviewers; zero blockers after edits; see extraction-log.md. -->
 
-# Clean-room extraction, round 1: staging answers (edited after review)
+# Clean-room extraction, round 1: reviewed facts
 
-* **Source consulted:** legacy RPG Toolkit checkout at revision `9191b919` (HEAD of the checkout). For Q1 the 2.x text board reader no longer exists at HEAD, so the older revision `08f2fe3d` (dated 2004-08-06, "3.0.4 dev") in the same repository's history was read for that one reader only.
+* **Source consulted:** legacy RPG Toolkit checkout at revision `9191b919` (HEAD of the checkout). For Q1 the 2.x text board reader no longer exists at HEAD, so the older revision `08f2fe3d` (dated 2004-08-06, a development revision of the 3.0.4 era) in the same repository's history was read for that one reader only.
 * **Date of extraction:** 2026-10-12.
 * **Question list:** `docs/provenance/questions-round-1.md` (Q1 to Q18).
 * **Form:** prose facts in the extractor's own words. No code, no identifiers, no source comments or message text.
@@ -309,7 +309,7 @@ No bitmap atlas or other section follows. Reader can reach end of file with noth
 
 **Left unchanged / not converted.** `#` statement prefixes, `{ }` blocks (and `< >` blocks), `method`/`returnMethod`, `#Branch`/`#FBranch` and other command names, namespace or implicit `file.func` includes, `#Include`, bare dialogue lines (except that a dialogue line containing parentheses or `=` is altered by the rules above, and a `//` inside a string such as a URL truncates the line), star comments, labels. Constructs the wizard damages or leaves broken: object-oriented code; two variables differing only by sigil; dialogue lines with `=` or parentheses; `//` inside quotes; `<`/`>` used as block delimiters (the 3.1 scanner has no such block token and reads them as comparison operators, and the wizard does not convert them).
 
-**Runtime behaviour the 3.1 scanner/engine provides so unconverted constructs still run.** A `#` anywhere is discarded. `{` and `}` are blocks. `method` and `function` are synonyms; `return` and `returnmethod` are synonyms. Comments: `//` to end of line, `**` to end of line, a line beginning with `*`, and `/* ... */`. `true` is 1, `false` and `null` are 0. `and`/`or` words act as `&&`/`||`. Identifiers are case-insensitive (lower-cased). A line containing only an identifier is treated as a call with no arguments. `FBranch` is an alias of plain `Branch` in both runtimes (it does not return to the caller); the two commands differ in the original engine, and the legacy runtimes make the second an alias of the first. `=` inside a condition is an assignment, not a comparison, hence the wizard's rewrite. The 3.1 runtime does not strip `!`/`$` itself (the wizard does).
+**Runtime behaviour the 3.1 scanner/engine provides so unconverted constructs still run.** A `#` anywhere is discarded. `{` and `}` are blocks. `method` and `function` are synonyms; `return` and `returnmethod` are synonyms. Comments: `//` to end of line, `**` to end of line, a line beginning with `*`, and `/* ... */`. `true` is 1, `false` and `null` are 0. `and`/`or` words act as `&&`/`||`. Identifiers are case-insensitive (lower-cased). A line containing only an identifier is treated as a call with no arguments. `FBranch` is an alias of plain `Branch` in both runtimes (it does not return to the caller); whether the two commands differed in the original engine is not settled by this source; both legacy runtimes make the second an alias of the first and neither returns to the caller. `=` inside a condition is an assignment, not a comparison, hence the wizard's rewrite. The 3.1 runtime does not strip `!`/`$` itself (the wizard does).
 
 **Not settled:** anything about how TK2 scripts convert: the source has no TK2-aware converter.
 
@@ -354,7 +354,7 @@ In both runtimes the built-in table is consulted **before** any script method or
 
 ## Q13: does plugin dispatch stop at the first claim?
 
-Yes, in both runtimes. The engine goes through the loaded plugins one at a time; plugins that do not declare the RPGCode capability are skipped (an old-style DLL with no type export is assumed to support it); the name is passed in lower case to the plugin's query; the first plugin that answers "handles" is executed and no later plugin is asked. Consultation order is the plugin list from the main file in slot order, empty entries skipped (older runtime). In the C++ runtime the order is the order plugins were appended to its list; in this revision nothing in the tree appends to that list, so plugin dispatch there is inert. A plugin is never asked about a name that is an engine built-in (built-ins are matched first); in the older runtime plugins are asked before script methods of the same name.
+Yes, in both runtimes. The engine goes through the loaded plugins one at a time; plugins that do not declare the RPGCode capability are skipped (an old-style DLL with no type export is assumed to support it); the name is passed in lower case to the plugin's query; the first plugin that answers "handles" is executed and no later plugin is asked. Consultation order is the plugin list from the main file in slot order, empty entries skipped (older runtime). In the C++ runtime the list is built at game start-up from the main file's plugin entries in slot order, with empty entries skipped, keeping only plugins that declare the RPGCode capability; consultation follows that order. A plugin is never asked about a name that is an engine built-in (built-ins are matched first); in the older runtime plugins are asked before script methods of the same name.
 
 ---
 
@@ -389,20 +389,4 @@ These duplicate round 2's unclaimed-command questions and are kept brief. Both r
 
 ---
 
-## Edit log
-
-* B1 (Q14): replaced the quoted engine message with a plain description of what the message box reports; no quotation marks remain.
-* B2 (Q9): replaced the quoted not-found error text with a neutral "not-found runtime error" referring to Q14.
-* M1 (Q1): the 3.1 reader's test now stated as the byte at zero-based offset 14, consistent with the dispatch paragraph.
-* M2 (Q2): corrected; only the older VB reader has a text path, the 3.1 reader has none.
-* M3 (Q2): added a data-only synthetic worked example with a derived line count.
-* M4 (Q4): added a data-only synthetic worked example matching the 1179 line total.
-* M5 (Q5): replaced the quoted version labels with a neutral sentence.
-* M6 (Q5): stated that offsets cannot be fixed; stated that no comparison with format-spec §2 was made; removed the reference to the repo's current spec.
-* M7 (Q6): relabelled the tail-size explanation as inference; removed the reference to the repo spec's branch.
-* M8 (Q8): re-ordered the rules as one entry per construct, with a single closing sentence on ordering.
-* M9 (Q8): replaced the comment reference with a neutral statement about the two commands.
-* M10 (Q2): replaced the version 1 fallback layout with a one-sentence scope note.
-* M11 (Q7): removed the resampling clause; kept the CRLF line terminator.
-* M12 (Q2): added the header evidence and the statement that the table is for the 17-character header only.
-* Also: Q8 sigil-warning list and Q1 resave message paraphrased rather than echoed; Q15 evaluator internal detail described generically; Q3 position note simplified; Q14 to Q18 grouped and shortened with a note on overlap with R2-Q1 to R2-Q5; Q1 older-revision note and the Not settled list kept, with the caveat generalised to Q8 to Q18.
+* Q8 (added after review): whether the two branch commands differed in the original engine is not settled by this source.
