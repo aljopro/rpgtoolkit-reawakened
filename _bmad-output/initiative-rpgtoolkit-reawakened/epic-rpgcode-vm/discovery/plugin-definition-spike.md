@@ -85,6 +85,8 @@ This lands inside entries 3 and 14 as planned.
   - *A layer can wrap the one below.* A command receives `next`, the definition it shadows: `(view, args, next) -> { out, effects, wait? }`. A wrapper can adjust args, call `next`, then add or drop effects, or ignore `next` and replace. Because `next` is a pure function of `(view, args)`, nothing about VM internals leaks and G1 holds. Only a command that returns a non-wrappable result (it cannot, by contract: control transfer is IR) is out of reach.
   - *Cost:* one extra parameter on the command contract in entry 3, and a registry that keeps a per-name stack of layers instead of one winner. Last-registered-wins is then just "top of the stack runs first".
 - **Manifest layering.** Is a game manifest a full replacement of the default, or a patch over it (add, remove, disable by id)? Recommended: a patch, with "replace everything" expressed as removing every default id.
+- **Frozen versus per-thread waits.** AD-5 makes a blocking request freeze all time; only AD-9 waits park a single thread. A plugin author needs to know which one a call gets. Entry 9 settles which requests are which and documents it per request kind.
+- **Decoder duplicates.** The AssetDecoder registry in PR 37 refuses a duplicate decoder id or extension, unlike commands, which layer. Entry 14 rules it (recommended: layer, later wins with a warning).
 - **Foreign-code determinism.** If third-party code is ever run in-process as arbitrary JS, G3 and the step-budget question from `spike-23/spike-trust.md` apply to it. That is a correctness concern independent of trust.
 
 ## Decisions for you

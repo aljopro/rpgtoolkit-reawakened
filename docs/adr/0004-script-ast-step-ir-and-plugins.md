@@ -72,13 +72,14 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
    Heavy domains previously relegated to Win32 DLLs (battle engines, custom menu systems) are modeled as typed subsystem interfaces (`BattleSubsystem`, `MenuSubsystem`). Subsystems step deterministically and emit `DrawCommand` lists and audio cues, allowing complete system replacements (e.g. Turn-based vs. Active Time vs. Tactical Grid) while remaining 100% renderer-agnostic.
 
 7. **Async at the Boundary (modern JavaScript lives in the host):**
-   `core` has no Promises (**G1**), but plugin authors and the engine's own packs still need asynchronous work (file I/O, `fetch`, decoding, loading a module). The split is:
-   * **Command side (`core`):** a command that needs something external returns `wait: { request, then }`. `request` is a host request (AD-17); `then` names a continuation command and plain-data arguments. The VM parks that script thread and keeps stepping the others.
-   * **Host side:** the host runs the request with ordinary `async`/`await`, then pushes a reply record `{ requestId, result }` into an inbox. Promises never cross into `core`.
-   * **Resume:** at a fixed point each tick (the step boundary) the VM drains the inbox, applies each reply at the current tick and runs the continuation with the result prepended to its arguments. The reply and its tick are recorded, so replay and restore are deterministic. A thread with no reply yet stays parked and costs nothing.
-   * **Script side:** to an RPGCode author this is an ordinary blocking call; the next line runs when the reply has been applied.
+   `core` has no Promises (**G1**), but plugin authors and the engine's own packs still need asynchronous work (file I/O, `fetch`, decoding). This decision adds no mechanism of its own; it states how plugins use the ones AD-5, AD-8, AD-9 and AD-17 already define:
+   * **Requests and replies are AD-5's.** A command that needs something external asks for it through an AD-17 request. Every request is **blocking** (time freezes: `advance` returns `loading` and consumes no steps, so no thread moves) or **stream** (never touches state). Its reply is an input event, `asset { reqId, bytes }`, `blob.loaded` and so on, recorded in the canonical input log with its step, so replay and restore are deterministic. There is no per-thread asset wait.
+   * **Per-thread waits are AD-9's.** A command that must park one thread returns a `wait` of an AD-9 kind (`sleep`, `blob`, `input.key`, a plugin's own kind). Other threads keep stepping; the wait's `poll` resolves it.
+   * **Continuation.** A command that needs its reply to finish names a continuation command and plain-data arguments (AD-8's `resume`); the reply value is prepended. It is a named command, never a closure, so it survives save and restore.
+   * **Host side.** The host performs the request with ordinary `async`/`await` and delivers the reply as an input. Promises never cross into `core`.
+   * **Script side.** To an RPGCode author the call blocks. For a request that freezes time the whole engine waits (`loading`); for an AD-9 wait only that thread does.
 
-   A request that never gets a reply must not park a thread forever. The wait has a **timeout counted in ticks** (not wall-clock time, for determinism), layered like a test runner's timeout: engine default, then the plugin's manifest `options`, then a `timeout` on the `wait` record, then the test harness override; zero means no limit. On expiry the thread resumes with an error result and a located diagnostic that the script's error handler can catch. A host that fails a request (a missing file) delivers a failure reply that follows the same path. Separately, the VM detects a **deadlock**: every live thread is parked on another parked thread and no reply is outstanding. It reports the stuck threads and what each waits on, and in headless runs and goldens it is a hard failure.
+   A reply that never arrives must not hang the game. For a **frozen request** ticks do not advance, so the timeout lives in the host: its timer delivers a failure reply (`bytes: null` for an asset) as an ordinary input, which is recorded like any other. For a **per-thread wait** the timeout is a tick count in the wait payload, as `sleep`'s `until` is, layered like a test runner's timeout: engine default, plugin manifest `options`, the wait's own value, then the harness override; zero means no limit. On expiry the thread resumes with an error result and a located diagnostic its error handler can catch. Separately, the VM detects a **deadlock**: every live thread is parked on another parked thread and no reply is outstanding. It reports the stuck threads and what each waits on, and in headless runs and goldens it is a hard failure.
 
    Illustrative example (names are provisional until entry 3 fixes the contract):
 
@@ -92,13 +93,11 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
        showNote: (view, [path]) => ({
          out: {},
          effects: [],
-         wait: {
-           request: { kind: 'asset', key: { area: 'files', path } },
-           then: { command: 'showNote.done', args: [path] },
-         },
+         request: { kind: 'asset', key: { area: 'files', path } },
+         then: { command: 'showNote.done', args: [path] },
        }),
 
-       // Step 2: runs when the reply is applied. `bytes` was prepended.
+       // Step 2: runs when the reply input is applied. `bytes` was prepended.
        'showNote.done': (view, [bytes, path]) => ({
          out: {},
          effects: [{ kind: 'dialogue', text: firstLine(decodeText(bytes)), source: path }],
@@ -115,7 +114,7 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
    });
    ```
 
-   Rules that keep this safe: the continuation is a *named command* plus plain-data arguments, so it survives save and restore (a closure would not); a result needed inside one command invocation is split into request and continuation, or provided by the host as a synchronous lookup it can answer from memory; the headless harness scripts replies (`replies: [{ requestId, result }]`) so plugin tests need no host. A small helper that builds the `wait` record, and a test helper for scripted replies, belong with entry 3.
+   Rules that keep this safe: a result needed inside one command invocation is split into request and continuation, or provided by the host as a synchronous lookup it can answer from memory; the headless harness scripts replies as inputs, so plugin tests need no host. A small helper that builds the request-and-continuation record, and a test helper for scripted replies, belong with entry 3.
 
 ## Consequences
 
