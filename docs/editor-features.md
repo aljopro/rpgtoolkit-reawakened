@@ -181,15 +181,15 @@ The most important tool. A board is edited on a zoomable, scrollable canvas, wit
 
 ## 8. Build & distribution tools (T-70 … T-74)
 
-**T-70 Make EXE.** Package the game into one self-running executable (the engine with the game appended), with a custom icon and output path.
+**T-70 Make EXE.** Package the game into one self-running executable (the engine with the game appended), with a custom icon and output path. The appended archive is a **distribution package** (§13): the project folder at its root, with `manifest.json { schema, main, index }` naming the main file and the game files.
 
-**T-71 Pak file compiler.** Package the game as a single `.tpk` archive for an installed engine (legacy, superseded by EXE).
+**T-71 Pak file compiler.** Package the game as a single `.tpk` archive for an installed engine (legacy, superseded by EXE). A rebuild's build step writes the same archive as its **distribution package** — a `.tpk`-compatible ZIP with `manifest.json { schema, main, index }` at the archive root (§13) — so the build is one step for the `.tpk` and the self-running EXE.
 
 **T-72 Create setup.** A ZIP containing the game files plus a simple installer and uninstaller.
 
 **T-73 File-system upgrade.** Migrate a 2.x project layout (flat folders) into the 3.x project-folder structure.
 
-**T-74 Third-party distribution guidance.** Which files the engine needs at runtime.
+**T-74 Third-party distribution guidance.** Which files the engine needs at runtime. For a **distribution package** that list is the manifest's `index` (`manifest.json { schema, main, index }`, §13): every game file except the manifest, each once, so a consumer builds the resolver's index without walking the archive.
 
 ---
 

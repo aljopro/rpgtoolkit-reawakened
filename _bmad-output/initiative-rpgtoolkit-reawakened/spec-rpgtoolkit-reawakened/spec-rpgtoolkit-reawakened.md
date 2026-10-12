@@ -35,7 +35,7 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
   - **intent:** Programs fire from the legacy trigger points with the exact observable rules (E-40…E-49 and the fixed hooks).
   - **success:** Unit tests cover once-per-entry, repeat distance, key-press vs step-on, items-before-regions precedence, layer matching and run-if/then-set; the demo's NPC and battle triggers fire end-to-end headlessly.
 - **CAP-5**
-  - **intent:** Authors can run RPGCode 3.1 programs: the full language, every built-in in the catalogue, cooperative threads, blocking calls, source/target context, error handlers, sandboxed file I/O, and a sandboxed extension point replacing native plugins (E-33, E-90…E-99, format-spec §9).
+  - **intent:** Authors can run RPGCode 3.1 programs: the full language, every built-in in the catalogue, cooperative threads, blocking calls, source/target context, error handlers, sandboxed file I/O, and an extension point replacing native plugins: one plugin contract and an editable manifest (E-33, E-90…E-99, format-spec §9).
   - **success:** `system.prg` and `start.prg` of the sample games run to completion headlessly; every built-in name in format-spec §9.11 resolves; a mid-script snapshot restored into a fresh VM finishes identically (G1).
 - **CAP-6**
   - **intent:** The core emits ordered draw lists, and runners replay them, covering layer compositing, iso drawing, occlusion, translucency, shading, animations, message window, text and primitives, canvases, overlay, transitions, modal UI primitives, cursor and board preview (E-50…E-63).
@@ -90,7 +90,7 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
 - Script-readable pixels, image decoding, text layout and glyph rasterisation are core-owned so output is identical on every runner (architecture spine AD-4, AD-15, AD-28). This amends `architecture-options.md` §2 and the seam text of `packages.md`, and needs ADR 0002 before guard-rail scaffolding.
 - Cross-epic contracts (engine API, draw list and surfaces, requests and replies, VM state, `GameState` sections, step pipeline, platform-services) are fixed by the architecture spine and cited by id.
 - Every editor capability lands in `editor-ui` first; `host-*` packages hold only platform services and chrome.
-- Legacy native plugins cannot load. The stock menu and battle plugins are reimplemented natively; third-party extension is via a sandboxed mechanism.
+- Legacy native plugins cannot load. The stock menu and battle plugins are reimplemented natively; third-party extension uses the same plugin contract as the engine's own packs, ungated for now.
 - TypeScript is the language of the core, runners, editor, LSP, DAP and VS Code extension (ADR 0001); a hot path moves to Rust/wasm only behind an unchanged TS interface.
 - Scope ordering follows engine-features §14 must-haves, then editor P0 before P1 before P2.
 
@@ -121,6 +121,6 @@ The headless runner plays the legacy `demo` and `Basic` sample games end to end 
 - Is legacy `.sav` import (E-122) in scope for CAP-11, or only the new save format?
 - Are 2.x text boards, other text-era formats and pre-compiled `.prg` rejected with a clear message or supported?
 - AVI video (E-104): transcode on import via an editor tool, or drop?
-- What are the API and capability model of the sandboxed extension mechanism (E-99, CAP-5)?
+- How does a game package ship third-party plugin code (E-99, CAP-5)? The contract and manifest are decided (ADR 0004 decision 6).
 - Which sample tile sets are the source for rebuilding the auto-tiler variant order (T-25) under G7?
 - ADR 0002 must be accepted before guard-rail scaffolding: core rasteriser and glyph rasterisation, the `Math` allowlist and `**` ban as extra G3 enforcement, and an `ovsx` exemption note. Who writes it?
