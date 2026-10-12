@@ -8,7 +8,7 @@ import type {
   StepReport,
   SurfaceId,
   SurfacePixels,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 import { createNullAudio } from "../src/audio.ts";
 import { createTestEngine } from "../src/double/test-engine.ts";
 import { runLog } from "../src/driver.ts";

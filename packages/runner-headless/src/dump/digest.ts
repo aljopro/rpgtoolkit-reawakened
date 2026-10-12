@@ -16,7 +16,7 @@
  * a number array — and drops `undefined` keys, which `canon` rejects.
  */
 
-import { canon, fnv1a64, type PlainData } from "@rpgtoolkit/core";
+import { canon, fnv1a64, type PlainData } from "@tk-reawakened/core";
 
 /** Plain data never survives a `undefined` value, so `canon` would reject a model that has one. */
 function isPlainPrimitive(value: unknown): value is null | boolean | number | string {

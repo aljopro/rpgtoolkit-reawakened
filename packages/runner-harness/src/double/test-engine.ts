@@ -13,7 +13,7 @@ import {
   type StepReport,
   type SurfaceId,
   type SurfacePixels,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 
 export type TestEngineState = {
   step: number;

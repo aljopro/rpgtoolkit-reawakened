@@ -8,13 +8,13 @@ This file satisfies the requirements of Guard-rail G6 (Rule 3) and ADR 0003 for 
 
 ## Production Dependencies
 
-Production runtime dependencies bundled into or shipped with `@rpgtoolkit/*` packages have their copyright notices and license texts recorded below.
+Production runtime dependencies bundled into or shipped with `@tk-reawakened/*` packages have their copyright notices and license texts recorded below.
 
-`@rpgtoolkit/runner-headless` and `@rpgtoolkit/runner-harness` have no production runtime npm dependencies of their own beyond their workspace packages.
+`@tk-reawakened/runner-headless` and `@tk-reawakened/runner-harness` have no production runtime npm dependencies of their own beyond their workspace packages.
 
 ### fflate 0.8.3 — MIT
 
-A dependency of `@rpgtoolkit/core`, which imports only the `fflate/browser` subpath and only its synchronous APIs (AD-6). It decompresses the zlib/deflate streams inside PNG image data (`decodeTexture`, format-spec §10) and, in the package reader, inside `.tpk`/ZIP archives (format-spec §13).
+A dependency of `@tk-reawakened/core`, which imports only the `fflate/browser` subpath and only its synchronous APIs (AD-6). It decompresses the zlib/deflate streams inside PNG image data (`decodeTexture`, format-spec §10) and, in the package reader, inside `.tpk`/ZIP archives (format-spec §13).
 
 ```
 MIT License

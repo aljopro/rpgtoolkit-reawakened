@@ -1,6 +1,6 @@
 import { deepEqual, throws } from "node:assert/strict";
 import { test } from "node:test";
-import type { AudioCue, AudioCueKind } from "@rpgtoolkit/core";
+import type { AudioCue, AudioCueKind } from "@tk-reawakened/core";
 import { createNullAudio } from "../src/audio.ts";
 
 test("createNullAudio records all valid audio cue kinds in order", () => {

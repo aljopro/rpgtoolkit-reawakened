@@ -11,7 +11,7 @@ risk: high
 
 ## Description
 
-The RPGCode 3.1 language runs on an explicit step-machine VM whose entire state is plain JSON: parser, interpreter, functions, classes, includes, error handlers, cooperative threads, blocking by yielded status, source/target context and sandboxed file I/O. The VM executes a linear Step IR lowered from a Unified AST produced by distinct TK2 and TK3 dialect frontends (ADR 0004). Legacy TK2 commands and runtime shims are encapsulated in `@rpgtoolkit/plugin-tk2-compat`, keeping the core VM free of legacy heuristics. Core built-in commands register through the dogfooded `PluginDefinition` interface. The VM exposes a built-in registration API that every domain epic uses.
+The RPGCode 3.1 language runs on an explicit step-machine VM whose entire state is plain JSON: parser, interpreter, functions, classes, includes, error handlers, cooperative threads, blocking by yielded status, source/target context and sandboxed file I/O. The VM executes a linear Step IR lowered from a Unified AST produced by distinct TK2 and TK3 dialect frontends (ADR 0004). Legacy TK2 commands and runtime shims are encapsulated in `@tk-reawakened/plugin-tk2-compat`, keeping the core VM free of legacy heuristics. Core built-in commands register through the dogfooded `PluginDefinition` interface. The VM exposes a built-in registration API that every domain epic uses.
 
 ## Outcome
 
@@ -48,3 +48,9 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 - Decision: epic set approved by the user, 2026-10-10.
 - Waits on platform-baseline because: G1 lint and type rules.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Decision: Jensen, 2026-10-11: TK2 and TK3 games both play at launch, so this epic covers the TK2 RPGCode dialect; RPGCode v1 (TK 1.x) is a nice to have and not part of the MVP.
+- Decision: Jensen, 2026-10-11: `PluginDefinition` starts with `commands` only and grows as entries need it; every one of the catalogue's commands must respond and record its side effects in state, through the same contract third-party plugins will use, functional and immutable where viable. The sandboxed third-party mechanism (E-99) stays a separate question.
+- Decision: Jensen, 2026-10-11: the semantic open rows (OOP, ERR, THR, SEM, MOD) are ruled by a doc-first step inside the entry that implements them; the breakpoint hook, pause state and `createEngine` belong to epic board-rendering.
+- Source conflict: ADR 0004 and format-spec 9.9 attribute the `< >` inline-block form to TK2; it occurs only in TK 1.x (discovery/tk2-rpgcode-coverage.md). Entry 1 corrects the spec.
+- Source conflict: ADR 0004 (community plugins share the in-process `PluginDefinition` contract) vs AD-17 and E-99 (games are untrusted; the extension mechanism is sandboxed and goes through host requests). Unreconciled; this epic builds the first-party mechanism only.
+- Open question: the trust model for third-party plugins (E-99).

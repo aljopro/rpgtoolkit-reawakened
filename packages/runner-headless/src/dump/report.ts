@@ -10,7 +10,7 @@
  * digests.
  */
 
-import type { PackageFile } from "@rpgtoolkit/core";
+import type { PackageFile } from "@tk-reawakened/core";
 import type { DataFormatId } from "./formats.ts";
 import { parseFile } from "./parse.ts";
 

@@ -1,5 +1,5 @@
 {
-  "name": "@rpgtoolkit/core",
+  "name": "@tk-reawakened/core",
   "version": "0.0.0",
   "dependencies": {},
   "optionalDependencies": { "left-pad": "^1.3.0" },

@@ -190,16 +190,16 @@ importers:
 
   packages/runner-harness:
     dependencies:
-      '@rpgtoolkit/core':
+      '@tk-reawakened/core':
         specifier: workspace:*
         version: link:../core
 
   packages/runner-headless:
     dependencies:
-      '@rpgtoolkit/core':
+      '@tk-reawakened/core':
         specifier: workspace:*
         version: link:../core
-      '@rpgtoolkit/runner-harness':
+      '@tk-reawakened/runner-harness':
         specifier: workspace:*
         version: link:../runner-harness
     devDependencies:

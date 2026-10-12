@@ -34,7 +34,7 @@ import {
   type MainFile,
   type PackageFile,
   type Result,
-} from "@rpgtoolkit/core";
+} from "@tk-reawakened/core";
 import { digestModel, digestRgba } from "./digest.ts";
 import { boardLayout, classify, type DataFormatClass, type DataFormatId } from "./formats.ts";
 

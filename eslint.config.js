@@ -189,7 +189,7 @@ const restrictedImports = [
         message: "AD-6: core may import only the `fflate/browser` sync APIs.",
       },
       { regex: nodeBuiltinSource, message: "G2.1: core must not import Node built-ins." },
-      { group: ["@rpgtoolkit/*"], message: "G2.3: core must not import other workspace packages." },
+      { group: ["@tk-reawakened/*"], message: "G2.3: core must not import other workspace packages." },
     ],
   },
 ];

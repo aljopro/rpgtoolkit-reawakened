@@ -1,6 +1,6 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-import type { InputRecord } from "@rpgtoolkit/core";
+import type { InputRecord } from "@tk-reawakened/core";
 import { createTestEngine } from "../src/double/test-engine.ts";
 
 test("test double executes key down, pointer, key up and matches literals", () => {

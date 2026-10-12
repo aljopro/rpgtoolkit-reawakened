@@ -1,4 +1,4 @@
-import type { AudioCue, AudioCueKind } from "@rpgtoolkit/core";
+import type { AudioCue, AudioCueKind } from "@tk-reawakened/core";
 
 export interface AudioSink {
   handle(cue: AudioCue): void;
