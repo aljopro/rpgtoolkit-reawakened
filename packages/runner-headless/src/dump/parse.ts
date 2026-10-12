@@ -2,11 +2,13 @@
  * One file → one outcome: parse it, skip it with a reason, or report a located
  * failure (epic 2 Done-when 1).
  *
- * Every reader call is `core`'s and never throws (AD-18): an `ok: false` from a
- * reader *is* the failure outcome, and the one throw this module guards is the
- * digest's — `canon` rejects a value a reader accepted, which fails that file
- * alone. The dispatch is `classify` (formats.ts); the digest is `digestModel`
- * / `digestRgba` (digest.ts).
+ * The dispatch is `classify` (formats.ts) and the decode is `core`'s format
+ * registry (AD-31): a data format's bytes go to `CORE_DECODERS[format]`, so the
+ * reader that parses a file is the same registry entry the dispatch table named.
+ * Every decoder returns `core`'s non-throwing `Result` (AD-18): an `ok: false`
+ * from a decoder *is* the failure outcome, and the one throw this module guards
+ * is the digest's — `canon` rejects a value a reader accepted, which fails that
+ * file alone. The digest is `digestModel` / `digestRgba` (digest.ts).
  *
  * `runner-headless` is the Node host shell, so nothing here is subject to G2 —
  * but nothing here touches the file system either: bytes arrive from
@@ -15,20 +17,10 @@
  */
 
 import {
-  BinaryReader,
-  decodeTexture,
-  readAnimation,
-  readBattleBackground,
-  readBoard,
-  readCharacter,
-  readEnemy,
-  readItem,
-  readMainFile,
-  readPreVectorBoard,
-  readSpecialMove,
-  readStatusEffect,
-  readTileset,
-  convertPreVectorBoard,
+  CORE_DECODERS,
+  createAssetIndex,
+  PACKAGE_ROOT,
+  type AssetResolver,
   type Board,
   type FormatError,
   type MainFile,
@@ -36,7 +28,7 @@ import {
   type Result,
 } from "@tk-reawakened/core";
 import { digestModel, digestRgba } from "./digest.ts";
-import { boardLayout, classify, type DataFormatClass, type DataFormatId } from "./formats.ts";
+import { classify, type DataFormatClass, type DataFormatId } from "./formats.ts";
 
 /** The facts a parsed file contributes to the report. */
 export interface ParsedModel {
@@ -102,34 +94,34 @@ function boardSummary(model: Board, layout: "vector" | "pre-vector"): string {
   );
 }
 
-/** Parse one **data-format** file with the reader its dispatch row names (G7). */
-function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel> {
+/**
+ * The decode context a file gets when it is decoded outside a project (AD-31):
+ * an empty index at the package root.
+ *
+ * The CLI decodes with the loaded package's real index; the in-memory report
+ * tests need no project, and no landed decoder follows a reference at all, so
+ * the empty one is never read.
+ */
+const EMPTY_CONTEXT: AssetResolver = { index: createAssetIndex([]), root: PACKAGE_ROOT };
+
+/** Parse one **data-format** file with the core decoder its dispatch row names (G7). */
+function parseData(cls: DataFormatClass, file: PackageFile, context: AssetResolver): Result<ParsedModel> {
   const { bytes, path } = file;
   switch (cls.format) {
     case "gam": {
-      const read = readMainFile(new BinaryReader(bytes, path));
+      const read = CORE_DECODERS.gam.decode(bytes, context);
       return read.ok ? modelOutcome(read.value, read.warnings, gamSummary(read.value)) : read;
     }
     case "board": {
-      // §4.1 version dispatch: peek the header, then pick §4.2 or the §4.8
-      // pre-vector reader (and convert its model, so one board model comes out).
-      const header = new BinaryReader(bytes, path).header();
-      if (header.ok && boardLayout(header.value.minor) === "pre-vector") {
-        const pre = readPreVectorBoard(new BinaryReader(bytes, path));
-        if (!pre.ok) return pre;
-        const converted = convertPreVectorBoard(pre.value);
-        if (!converted.ok) return converted;
-        return modelOutcome(
-          converted.value,
-          [...pre.warnings, ...converted.warnings],
-          boardSummary(converted.value, "pre-vector"),
-        );
-      }
-      const read = readBoard(new BinaryReader(bytes, path));
-      return read.ok ? modelOutcome(read.value, read.warnings, boardSummary(read.value, "vector")) : read;
+      // §4.1 version dispatch happens inside the decoder: a pre-vector board
+      // comes back already converted to the §4.2 model, with its branch named.
+      const read = CORE_DECODERS.board.decode(bytes, context);
+      if (!read.ok) return read;
+      const { board, layout } = read.value;
+      return modelOutcome(board, read.warnings, boardSummary(board, layout));
     }
     case "tileset": {
-      const read = readTileset(bytes, path);
+      const read = CORE_DECODERS.tileset.decode(bytes, context);
       if (!read.ok) return read;
       const { version, detail, tiles, residue } = read.value;
       return modelOutcome(
@@ -141,7 +133,7 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
       );
     }
     case "animation": {
-      const read = readAnimation(new BinaryReader(bytes, path));
+      const read = CORE_DECODERS.animation.decode(bytes, context);
       if (!read.ok) return read;
       const model = read.value;
       const filled = model.frames.filter((frame) => frame.image !== "").length;
@@ -153,7 +145,7 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
       );
     }
     case "character": {
-      const read = readCharacter(new BinaryReader(bytes, path));
+      const read = CORE_DECODERS.character.decode(bytes, context);
       if (!read.ok) return read;
       const model = read.value;
       return modelOutcome(
@@ -166,7 +158,7 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
       );
     }
     case "item": {
-      const read = readItem(new BinaryReader(bytes, path));
+      const read = CORE_DECODERS.item.decode(bytes, context);
       if (!read.ok) return read;
       const model = read.value;
       return modelOutcome(
@@ -178,7 +170,7 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
       );
     }
     case "enemy": {
-      const read = readEnemy(new BinaryReader(bytes, path));
+      const read = CORE_DECODERS.enemy.decode(bytes, context);
       if (!read.ok) return read;
       const model = read.value;
       return modelOutcome(
@@ -190,7 +182,7 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
       );
     }
     case "special-move": {
-      const read = readSpecialMove(new BinaryReader(bytes, path));
+      const read = CORE_DECODERS["special-move"].decode(bytes, context);
       return read.ok
         ? modelOutcome(
             read.value,
@@ -201,7 +193,7 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
         : read;
     }
     case "status-effect": {
-      const read = readStatusEffect(new BinaryReader(bytes, path));
+      const read = CORE_DECODERS["status-effect"].decode(bytes, context);
       return read.ok
         ? modelOutcome(
             read.value,
@@ -213,7 +205,7 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
         : read;
     }
     case "battle-background": {
-      const read = readBattleBackground(new BinaryReader(bytes, path));
+      const read = CORE_DECODERS["battle-background"].decode(bytes, context);
       return read.ok
         ? modelOutcome(
             read.value,
@@ -224,8 +216,8 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
         : read;
     }
     case "image": {
-      // §10: `decodeTexture` matches the PNG/JPEG signature and returns straight RGBA.
-      const read = decodeTexture(bytes, path);
+      // §10: the decoder matches the PNG/JPEG signature and returns straight RGBA.
+      const read = CORE_DECODERS.image.decode(bytes, context);
       if (!read.ok) return read;
       const { w, h, rgba } = read.value;
       return imageOutcome(
@@ -240,22 +232,30 @@ function parseData(cls: DataFormatClass, file: PackageFile): Result<ParsedModel>
 /**
  * Decide one file's outcome: parse it (a data format), skip it with a reason
  * (text, media, a plugin, or a format with no reader yet), or fail with the
- * reader's located `FormatError` (a data format that would not parse).
+ * decoder's located `FormatError` (a data format that would not parse).
  *
- * A reader never throws (AD-18), so the only throw here is the digest: `canon`
+ * A decoder never throws (AD-18), so the only throw here is the digest: `canon`
  * rejects a value a reader accepted — a NaN delay in a `.anm`, say. That is
  * this one file's failure, never the whole dump's.
  */
-export function parseFile(file: PackageFile): FileOutcome {
+export function parseFile(file: PackageFile, context: AssetResolver = EMPTY_CONTEXT): FileOutcome {
   const cls = classify(file.path);
   if (cls.kind === "skip") {
     const detail = cls.describe?.(file.bytes);
     return { status: "skipped", reason: detail === undefined ? cls.reason : `${cls.reason} — ${detail}` };
   }
   try {
-    const parsed = parseData(cls, file);
+    const parsed = parseData(cls, file, context);
     if (!parsed.ok) {
-      return { status: "failed", format: cls.format, section: cls.section, error: parsed.error };
+      // A decoder follows its reader, and AD-31's decode takes bytes, not a
+      // path, so the reader's error has none; the file's path is added here so a
+      // located failure still names the file (AD-18).
+      return {
+        status: "failed",
+        format: cls.format,
+        section: cls.section,
+        error: parsed.error.path === undefined ? { ...parsed.error, path: file.path } : parsed.error,
+      };
     }
     return { status: "parsed", format: cls.format, section: cls.section, ...parsed.value };
   } catch (cause) {
