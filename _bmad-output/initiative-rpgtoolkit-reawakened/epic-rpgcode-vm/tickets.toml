@@ -42,8 +42,8 @@ references = [
 id = 3
 type = "story"
 title = "PluginDefinition (commands only) and the built-in registry assembly"
-description = "Defines `PluginDefinition` as `{ id, version, commands }` (ADR 0004 decision 2), where a command is an AD-8 `BuiltinSpec` with a functional contract: `(read-only view, args) -> { out, effects, wait? }`; commands never mutate state and the VM and owning modules apply their effects (amends AD-8 and AD-10 doc-first). Adds a pure assembly function over it: fixed module order, duplicate name and alias rejection, by-reference `out` write-back sharing the call and lvalue machinery entry 2 built, and the four-tier lookup skeleton (redirect, script function, built-in, empty extension tier). Replaces the tracer's provisional registry. Other fields (`subsystems`, `decoders`, a dialect hook) are added by the entry that first needs them; not `createEngine`, which epic 4 owns (D12)."
-verify = "The assembly function throws on a duplicate name or alias across two `PluginDefinition`s, a fixture command's `out` writes the caller's variable back, a command run twice on the same view and args returns equal results and leaves the view unchanged, stub tiers resolve in the documented order, and ADR 0004, AD-8 and AD-10 state the functional contract."
+description = "Defines `PluginDefinition` as `{ id, version, commands }` (ADR 0004 decision 2), where a command is an AD-8 `BuiltinSpec` with a functional contract: `(read-only view, args) -> { out, effects, wait? }`; commands never mutate state and the VM and owning modules apply their effects (amends AD-8 and AD-10 doc-first, including its duplicate rule). Adds a pure assembly function over it: fixed module order, last-registered-wins for a repeated name or alias with a warning diagnostic (replacing AD-8's duplicate rejection, which stays only as a lint for one plugin repeating itself), by-reference `out` write-back sharing the call and lvalue machinery entry 2 built, and the four-tier lookup skeleton (redirect, script function, built-in, empty extension tier). Replaces the tracer's provisional registry. Other fields (`subsystems`, `decoders`, a dialect hook) are added by the entry that first needs them; not `createEngine`, which epic 4 owns (D12)."
+verify = "The assembly function lets the later of two `PluginDefinition`s win a repeated name or alias and emits one warning diagnostic naming both, a fixture command's `out` writes the caller's variable back, a command run twice on the same view and args returns equal results and leaves the view unchanged, stub tiers resolve in the documented order, and ADR 0004, AD-8 and AD-10 state the functional contract."
 covers = ["CAP-5"]
 after = [2]
 hitl = true
@@ -158,7 +158,7 @@ references = [
   "provider - epic-legacy-formats entry 2.10 (asset resolver and package loader)",
 ]
 plan_checkpoint = true
-notes = ["#Include gives access to that file's functions under a namespace-like structure, a nested function name. (Jensen, 2026-10-11)"]
+notes = ["#Include gives access to that file's functions under a namespace-like structure, a nested function name. (Jensen, 2026-10-11)", "Working rule until evidence says otherwise: #Include, an implicit file.func call and first run each add the file's functions to one flat command list at that moment, a later definition replaces an earlier one with the same name, and the file. prefix always reaches that file's own definition. (Jensen, 2026-10-11)"]
 
 [[entry]]
 id = 9
