@@ -41,7 +41,7 @@ Booleans are stored as `i16` or `i8`: zero = false, and any non-zero value is tr
 
 ### 1.2 The "upper bound" count convention
 
-Most repeated sections start with an **upper bound**, not a count. The bound is an `i16` unless the section says otherwise (the custom-stance lists in §6.1, §6.2 and §6.3 use an `i32`). A value `n` means the entries are indexed `0..n`, so there are **`n + 1` entries**. A value of **`-1` means none**; no other negative value is valid, and a reader reports one as an error. A reader must also check `n` against the bytes that remain rather than trusting it, so that a damaged or untrusted file cannot make it read past the end or reserve a huge block up front. Where a format uses a true count, this spec says so. "None" is not the same as an empty entry: a board's tile lookup table, for example, reserves its index 0 for the empty "no tile" reference (§4.2), which is a real entry that keeps later indices stable.
+Most repeated sections start with an **upper bound**, not a count. The bound is an `i16` unless the section says otherwise (the custom-stance lists in §6.1, §6.2 and §6.3 use an `i32`). A value `n` means the entries are indexed `0..n`, so there are **`n + 1` entries**. A value of **`-1` means none**; no other negative value is valid, and a reader reports one as an error. A reader must also check `n` against the bytes that remain rather than trusting it, so that a damaged or untrusted file cannot make it read past the end or reserve a huge block up front. Where a format uses a true count, this spec says so. "None" is not the same as an empty entry: a board's tile lookup table, for example, reserves its index 0 for the empty "no tile" reference (§4.2), which is a real entry that keeps later indices stable — the table is absent entirely only when its `lutUpperBound` is `-1`.
 
 ### 1.3 Header strings and binary vs. text detection
 
@@ -109,7 +109,7 @@ Bytes after the last documented field of a binary file are not an error. A reade
 
 One per game. It holds global settings and the startup sequence. Binary only.
 
-The table below details all **43 logical rows** across the file's lifetime, including the **12 version-dependent fields** controlled by `minor`:
+The table below details all **43 logical rows** across the file's lifetime, including the **12 version-dependent fields** controlled by `minor`. Every row carries a unique number 1–43 in storage order, so a citation like "row 29" names exactly one row (the version-dependent summary below uses the same numbering):
 | # | Type | Field | Notes |
 |---|---|---|---|
 | 1 | str | magic `RPGTLKIT MAIN` | |
@@ -121,40 +121,40 @@ The table below details all **43 logical rows** across the file's lifetime, incl
 | 7 | i16 | screenType | 0/1 = full-screen accelerated, 2 = windowed |
 | 8 | i16 | extendToFullScreen | 0/1 |
 | 9 | i16 | resolution | 0 = 640×480, 1 = 800×600, 2 = 1024×768, other = custom (see resX/resY) |
-| — | i32 | *(minor < 3 only)* reserved | |
-| 10 | i16 | disableProtectReg | obsolete |
-| 11 | str | languageFile | obsolete |
-| 12 | str | **startupPrg** | program run at boot (required in practice) |
-| 13 | str | **initBoard** | first board; may be empty if the start program sends the player somewhere |
-| 14 | str | **initChar** | first player character (`.tem`); may be empty if the start program adds one |
-| 15 | str | runTimePrg | program bound to the run-time key |
-| 16 | i16 | runTimeKey | **ASCII code** of the key (uppercase letter/digit) |
-| 17 | i16 | menuKey | ASCII code of the key that opens the menu |
-| 18 | i16 | activationKey | ASCII code of the general "interact" key |
-| 19 | i16 | extKeys upper bound | then per entry: `i16 asciiKey`, `str program`. Extra run-time keys (up to 50). Skip entries with an empty program. |
-| — | | *(minor ≥ 3)* `str menuPlugin`, `str fightPlugin` | *(minor < 3)* `i32` reserved; defaults are the stock menu and battle plugins |
-| — | | *(minor ≤ 2)* `i32`, `i16` reserved | |
-| 20 | i16 | fightingDisabled | **inverted flag: 0 = fighting enabled**, non-zero = disabled |
-| 21 | i16 | enemy list upper bound | then per entry: `str enemyFile`, `i16 skillLevel` (random-encounter pool) |
-| 22 | i16 | fightType | 0 = random (1-in-*chances* per check), 1 = planned (every *chances* tiles) |
-| 23 | i32 | chances | |
-| 24 | i16 | useCustomFightPrg | 0/1 |
-| 25 | str | customFightPrg | RPGCode run instead of the built-in battle |
-| — | | *(minor < 3)* `i16` reserved | |
-| 26 | str | gameOverPrg | run when the party is defeated |
-| 27 | str | skinButton | legacy UI skin image |
-| 28 | str | skinWindow | legacy UI skin image |
-| 29 | i16 | plugin list upper bound | *(minor ≤ 2)* per entry `i16 enabled`; the plugin name is implied as `tkplug<N>`. *(minor ≥ 3)* per entry `str pluginFile`. |
-| 30 | i16 | useDayNight | 0/1 (largely unused at runtime) |
-| 31 | i16 | dayNightType | 0 = real clock, 1 = game clock |
-| 32 | i32 | dayLengthMinutes | |
-| — | | *(minor ≥ 3)* `str cursorMoveSound`, `str cursorSelectSound`, `str cursorCancelSound`, `u8 useJoystick`, `u8 colorDepth` | |
-| — | | *(minor ≥ 4)* `u8 gameSpeed`, `u8 pixelMovement` | gameSpeed: if minor ≥ 8 the stored byte is `speed + 128` (range −4…+4, each step ±10 %); if minor < 8 the byte is the raw speed. pixelMovement: 0 = tile steps, 1 = pixel steps. Default 0/0 when absent. |
-| — | | *(minor = 5)* `u8 cursorEnabled` → cursor is "TK DEFAULT" or none | |
-| — | | *(minor ≥ 6)* `str mouseCursor`, `u8 hotSpotX`, `u8 hotSpotY`, `color transparent` | `mouseCursor` = `"TK DEFAULT"` (built-in arrow, transparent colour pure red), `""` (none), or an image/tile reference. Before minor 5 the default cursor is used. |
-| — | | *(minor ≥ 7)* `i32 resX`, `i32 resY` | custom resolution |
-| — | | *(minor ≥ 8)* `u8 showFpsInTitle` | |
-| — | | *(minor ≥ 9)* `i16 pathfindHeuristic`, `i32 drawVectorsFlags`, `color pathColor`, `i32 movementControls`, then 8 × `i16 movementScanCode` | heuristic: axial / diagonal / vector (default diagonal before minor 9). drawVectors: debug-overlay bit flags (board vectors, sprite vectors, player path, destination). movementControls bits: 1 = keyboard, 2 = mouse, 4 = allow diagonals (default 1 + 4). The scan codes are **hardware keyboard scan codes**, ordered E, SE, S, SW, W, NW, N, NE. 0 = unbound. Defaults: arrow keys for E/S/W/N, diagonals unbound. |
+| 10 | i32 | *(minor < 3 only)* reserved | old parallax value; ignore |
+| 11 | i16 | disableProtectReg | obsolete |
+| 12 | str | languageFile | obsolete |
+| 13 | str | **startupPrg** | program run at boot (required in practice) |
+| 14 | str | **initBoard** | first board; may be empty if the start program sends the player somewhere |
+| 15 | str | **initChar** | first player character (`.tem`); may be empty if the start program adds one |
+| 16 | str | runTimePrg | program bound to the run-time key |
+| 17 | i16 | runTimeKey | **ASCII code** of the key (uppercase letter/digit) |
+| 18 | i16 | menuKey | ASCII code of the key that opens the menu |
+| 19 | i16 | activationKey | ASCII code of the general "interact" key |
+| 20 | i16 | extKeys upper bound | then per entry: `i16 asciiKey`, `str program`. Extra run-time keys (up to 50). Skip entries with an empty program. |
+| 21 | | *(minor ≥ 3)* `str menuPlugin`, `str fightPlugin` | *(minor < 3)* `i32` reserved; defaults are the stock menu and battle plugins |
+| 22 | | *(minor ≤ 2)* `i32`, `i16` reserved | multitask speed and memory protection; ignore |
+| 23 | i16 | fightingDisabled | **inverted flag: 0 = fighting enabled**, non-zero = disabled |
+| 24 | i16 | enemy list upper bound | then per entry: `str enemyFile`, `i16 skillLevel` (random-encounter pool) |
+| 25 | i16 | fightType | 0 = random (1-in-*chances* per check), 1 = planned (every *chances* tiles) |
+| 26 | i32 | chances | |
+| 27 | i16 | useCustomFightPrg | 0/1 |
+| 28 | str | customFightPrg | RPGCode run instead of the built-in battle |
+| 29 | | *(minor < 3)* `i16` reserved | old fight style; ignore |
+| 30 | str | gameOverPrg | run when the party is defeated |
+| 31 | str | skinButton | legacy UI skin image |
+| 32 | str | skinWindow | legacy UI skin image |
+| 33 | i16 | plugin list upper bound | *(minor ≤ 2)* per entry `i16 enabled`; the plugin name is implied as `tkplug<N>`. *(minor ≥ 3)* per entry `str pluginFile`. |
+| 34 | i16 | useDayNight | 0/1 (largely unused at runtime) |
+| 35 | i16 | dayNightType | 0 = real clock, 1 = game clock |
+| 36 | i32 | dayLengthMinutes | |
+| 37 | | *(minor ≥ 3)* `str cursorMoveSound`, `str cursorSelectSound`, `str cursorCancelSound`, `u8 useJoystick`, `u8 colorDepth` | |
+| 38 | | *(minor ≥ 4)* `u8 gameSpeed`, `u8 pixelMovement` | gameSpeed: if minor ≥ 8 the stored byte is `speed + 128` (range −4…+4, each step ±10 %); if minor < 8 the byte is the raw speed. pixelMovement: 0 = tile steps, 1 = pixel steps. Default 0/0 when absent. |
+| 39 | | *(minor = 5)* `u8 cursorEnabled` → cursor is "TK DEFAULT" or none | |
+| 40 | | *(minor ≥ 6)* `str mouseCursor`, `u8 hotSpotX`, `u8 hotSpotY`, `color transparent` | `mouseCursor` = `"TK DEFAULT"` (built-in arrow, transparent colour pure red), `""` (none), or an image/tile reference. Before minor 5 the default cursor is used. |
+| 41 | | *(minor ≥ 7)* `i32 resX`, `i32 resY` | custom resolution |
+| 42 | | *(minor ≥ 8)* `u8 showFpsInTitle` | |
+| 43 | | *(minor ≥ 9)* `i16 pathfindHeuristic`, `i32 drawVectorsFlags`, `color pathColor`, `i32 movementControls`, then 8 × `i16 movementScanCode` | heuristic: axial / diagonal / vector (default diagonal before minor 9). drawVectors: debug-overlay bit flags (board vectors, sprite vectors, player path, destination). movementControls bits: 1 = keyboard, 2 = mouse, 4 = allow diagonals (default 1 + 4). The scan codes are **hardware keyboard scan codes**, ordered E, SE, S, SW, W, NW, N, NE. 0 = unbound. Defaults: arrow keys for E/S/W/N, diagonals unbound. |
 
 **Version-dependent fields summary (12 conditional rows):**
 1. `minor < 3`: Row 10 (reserved `i32` old parallax value).
@@ -291,7 +291,7 @@ All coordinates in this layout are **pixels**, except tile grid indices.
 | i16 | sizeL (layers, 1-based) |
 | i16 | coordType (bit flags; §5) |
 
-*Effective grid*: for **isometric-rotated** boards the stored tile matrix is `(sizeX + sizeY) × (sizeX + sizeY)` per layer. Otherwise it is `sizeX × sizeY`.
+*Effective grid*: **isometric** boards are those whose `coordType` has bit 1 (`ISO_STACKED`) or bit 2 (`ISO_ROTATED`) set, i.e. `(coordType & 1) || (coordType & 2)` is non-zero (§5). Only the **isometric-rotated** style (bit 2) stores the tile matrix on rotated axes, as `(sizeX + sizeY) × (sizeX + sizeY)` per layer; every other style — 2D, iso-stacked, and any of them combined with the pixel-absolute bit 4 — stores `sizeX × sizeY` per layer.
 
 *Size limits*: a negative `sizeX`, `sizeY` or `sizeL` is invalid, and a reader reports it. A reader also refuses a board whose tile matrix would hold more than 4,194,304 cells (the effective grid times `sizeL`). That second rule is an implementation limit, not part of the format: a run marker fills up to 32,768 cells with four bytes, so without it a file of a few kilobytes could make a reader reserve gigabytes. Real boards are about a hundred times smaller. A writer refuses a board the reader would refuse.
 
@@ -300,11 +300,13 @@ All coordinates in this layout are **pixels**, except tile grid indices.
 | Type | Field |
 |---|---|
 | i16 | lutUpperBound |
-| str × (lutUpperBound + 1) | tile references. **Index 0 is always the "no tile" entry (empty string).** Unused slots may be empty. An empty slot is not the same as the table being absent: the table always has `lutUpperBound + 1` entries, and `-1` is the only value that means "none" (§1.2). |
+| str × (lutUpperBound + 1) | tile references. When the table exists (`lutUpperBound ≥ 0`) it has `lutUpperBound + 1` entries, and **index 0 is always the "no tile" entry (an empty string)**. `-1` means the board has **no table at all** (§1.2), and then there is no index 0; no other negative value is valid. Inside an existing table, unused slots may be empty; an empty slot is not the same as the table being absent, because it keeps later indices stable (§1.2). |
 
 **Tile matrix:** for each layer z = 1…sizeL, then each row y = 1…H, then each column x = 1…W (row-major within a layer), read an `i16`:
 * **≥ 0:** LUT index for this one cell.
-* **< 0:** run-length marker. `count = −value`. The next `i16` is the LUT index, which applies to the next `count` cells in the same traversal order. Runs may wrap rows and layers.
+* **< 0:** run-length marker. `count = −value`. The next `i16` is the LUT index, which applies to the next `count` cells in the same traversal order. Runs may wrap rows and layers. That index **MUST** be `≥ 0`: a negative value — a run marker whose cell index is itself a marker — is invalid (runs do not nest), and a reader reports it rather than reading a second run.
+
+A run may carry the traversal past the end of the grid — past a layer boundary, or past the last layer. A reader reads such a run in full, keeps the extra cell indices it produced, and reports a **warning**; it does not refuse the board, so an over-long run still round-trips (a writer re-emits the stored runs verbatim, AD-18). The same policy holds for a shading layer's records: they may cover more cells than the grid has, which a reader reports as a warning rather than an error.
 
 A cell whose LUT entry is a `.tan` file is an animated tile.
 
@@ -517,6 +519,10 @@ Directional graphics are stored in the order **S, N, E, W, NW, NE, SW, SE**. Thi
 
 Detection: byte at offset 13. Only the binary form is supported (text versions must be re-saved).
 
+**Versions:** accepted `minor` **0–8** (the range the rows below describe: `minor = 3`, `minor < 5`, `minor ≥ 5`, `≥ 6`, `≥ 7`, `≥ 8`). A reader refuses `minor` 9 or higher, a negative version field and the text form, rather than guessing a neighbouring layout (§1.4). The newest samples (`demo/Chrs/start.tem`, `Basic/Chrs/start.tem`) are `minor` 8. *Caveat:* the 2.x era also wrote `.tem` at `minor` 3 and 4 with a different field set, which this layout does not describe (a straight read leaves residue); those files belong to the TK2 support work, not to this layout.
+
+<!-- OWNER: chose 0–8 for §6.1 (the range the conditional rows span and the reader hard-codes) over a narrower 3–8, because §6.1's minor<5 rows exist and a TK2-era minor 3/4 file must at least be recognised; the mismatch is named rather than silently accepted. -->
+
 | Type | Field |
 |---|---|
 | str; i16, i16 | magic; major; minor |
@@ -548,6 +554,10 @@ Detection: byte at offset 13. Only the binary form is supported (text versions m
 ### 6.2 Item — `.itm` (`RPGTLKIT ITEM`)
 
 Items are inventory objects, equipment and **NPCs** (anything placed on a board).
+
+**Versions:** accepted `minor` **0–7** (the range the rows below describe: `i32` prices at `minor ≥ 3`, movement at `≥ 4`, idle and speed/idleTime at `≥ 5`, bases at `≥ 7`, legacy walk frames at `minor < 4`). A reader refuses `minor` 8 or higher, a negative version field and the text form (§1.4). The samples (`demo/Item/man.itm`, `demo/Item/oldman.itm`) are `minor` 7, and the 2.x era wrote `minor` 3, which this layout covers.
+
+<!-- OWNER: chose 0–7 for §6.2 (the range the conditional rows span and the reader hard-codes) over 3–7, because the minor<4 legacy walk-frame row is part of the layout and must be addressable. -->
 
 | Type | Field |
 |---|---|
@@ -635,6 +645,10 @@ Anywhere an `.anm` is accepted, an animated `.gif` in `Misc/` may be used instea
 
 Detection: byte at offset 16 (`0x00` = binary, non-zero = text).
 
+**Versions:** accepted `minor` **2–3**. The field list does not vary with `minor`, so it selects no layout; the 2.x-era binary archive writes 2 and the 3.1.0 sample family writes 3 (`.bkg`). A reader refuses `minor` 0, 1 and 4-or-more, and a negative version field (§1.4), rather than guessing a neighbouring layout; the 2.x text form is refused by the detection byte above, whatever `minor` it carries.
+
+<!-- OWNER: chose 2–3 for §8.1 over "any non-negative minor", because §1.4 wants a stated accepted set and the corpus shows only 2 (2.x-era) and 3 (3.1.0); if a 3.1.0-era `.spc` is ever found at another minor, widen the range rather than guess a layout. -->
+
 **Binary:**
 * Header: `str magic ("RPGTLKIT SPLMOVE")`, `i16 major`, `i16 minor`.
 * Fields: `str name`, `i32 damage (FP)`, `i32 smpCost (to user)`, `str program`, `i32 targetSmpDrain`, `i8 usableInBattle`, `i8 usableFromMenu`, `str statusEffect`, `str animation`, `str description`.
@@ -645,6 +659,10 @@ The **text form** lists the header `RPGTLKIT SPLMOVE`, major, minor, then the sa
 
 Detection: byte at offset 16 (`0x00` = binary, non-zero = text).
 
+**Versions:** accepted `minor` **2–3**. The field list does not vary with `minor`, so it selects no layout; the 2.x-era binary archive writes 2. A reader refuses `minor` 0, 1 and 4-or-more, and a negative version field (§1.4), rather than guessing a neighbouring layout; the 2.x text form is refused by the detection byte above, whatever `minor` it carries.
+
+<!-- OWNER: chose 2–3 for §8.2 for the same reason as §8.1; no binary `.ste` sample exists in either corpus beyond the 2.x-era minor 2. -->
+
 **Binary:**
 * Header: `str magic ("RPGTLKIT STATUSE")`, `i16 major`, `i16 minor`.
 * Fields: `str name`, `i16 rounds`, `i16 speedUp`, `i16 slowDown`, `i16 disable`, `i16 hpEnabled`, `i16 hpPerRound`, `i16 smpEnabled`, `i16 smpPerRound`, `i16 runProgram`, `str program`. Negative per-round amounts heal.
@@ -654,6 +672,10 @@ The **text form** lists the header `RPGTLKIT STATUSE`, major, minor, then the sa
 ### 8.3 Battle background — `.bkg` (`RPGTLKIT BKG`)
 
 Detection: byte at offset 12 (`0x00` = binary, non-zero = text).
+
+**Versions:** accepted `minor` **2–3**. The field list does not vary with `minor`, so it selects no layout; the 3.1.0 sample (`demo/Bkrounds/bkg.bkg`) is `minor` 3, and the family's 2.x-era binaries are `minor` 2. A reader refuses `minor` 0, 1 and 4-or-more, and a negative version field (§1.4), rather than guessing a neighbouring layout; the 2.x text form (the only `.bkg` form in the TK2 archive) is refused by the detection byte above.
+
+<!-- OWNER: chose 2–3 for §8.3 over "3 only", because §8.1–§8.3 share one header and era pattern and a 2.x-era binary `.bkg` (unobserved) would be minor 2, not 3. -->
 
 **Binary:**
 * Header: `str magic ("RPGTLKIT BKG")`, `i16 major`, `i16 minor`.
@@ -886,13 +908,15 @@ Legacy plugins are native Windows libraries (`Plugin/*.dll`) of three kinds: **R
 * In `.tem`, body slots are 7 bytes on disk: byte 0 is padding (0), followed by 6 body slots (1 head through 6 legs). Setting `maxLevel == 0` disables leveling entirely.
 * In `.tem` and `.itm`, the vector bases count field is an upper bound stored as `1` (indicating 2 bases: collision base, then activation base).
 * In `.brd`, the `closed` field is non-zero (specifically `-1` from legacy VB `CInt(True)`) for closed polygons and `0` for open polylines.
-* In `.brd`, coordinate types are bitmask flags: `0` = 2D, `1` = iso stacked, `2` = iso rotated, `4` = pixel absolute. Isometric detection is `(coordType & 1) || (coordType & 2)`.
+* In `.brd`, coordinate types are bitmask flags: `0` = 2D, `1` = iso stacked, `2` = iso rotated, `4` = pixel absolute (combinable with any of the first three). Isometric **detection** is `(coordType & 1) || (coordType & 2)` non-zero, but only the **iso-rotated** bit (2) expands the stored tile matrix to `(sizeX + sizeY)²` per layer; bit 1 and 2D store `sizeX × sizeY`, and bit 4 changes neither, so a reader keys the matrix shape on bit 2 alone (§4.2).
+* In `.brd`, a run marker's following `i16` must be a LUT index `≥ 0`: a negative value (a marker whose cell index is itself a marker) is invalid and a reader reports it (§4.2).
+* In `.brd`, a run that carries the traversal past the grid, and a shade layer whose records cover more cells than the grid, are **warnings**, not errors; the extra cells are kept and the stored runs are re-emitted verbatim (§4.2).
 * Battle formats (`.bkg`, `.spc`, `.ste`) all share standard binary headers: `str magic, i16 major, i16 minor`, with binary detection at byte 12 (`.bkg`) or byte 16 (`.spc`, `.ste`).
 * Standalone EXE appended ZIP trailer (`CMP1`) stores `offsetOfZip` and `zipLength` as little-endian 32-bit integers (`i32`).
 * Main file layout (`.gam`): `<root>/Main/<game>.gam` is separate from project assets in `<root>/Game/<project>/`. The engine requires `.gam` to boot.
 * Tile bitmaps store an extra padding row and column.
 * The `fightingDisabled` flag in `.gam` is inverted.
 * Shade-layer run records always carry an explicit count. The tile matrix uses negative counts.
-* Tile LUT index 0 is reserved for "no tile".
+* Tile LUT index 0 is reserved for "no tile" when the table exists; `lutUpperBound` `-1` means the board has no table at all, and then there is no index 0 (§4.2).
 * Inline-RPGCode fallback for program/sprite program fields applies when the file is missing.
 * Validate against `build/main/demo.gam` and project assets in `build/game/demo` and `build/game/Basic` from the legacy repo.
