@@ -25,7 +25,7 @@ id = 3
 slug = "epic-rpgcode-vm"
 title = "RPGCode runs on a saveable step-machine VM"
 covers = ["CAP-5"]
-after = [{ epic = 1, needs = "G1 lint and type rules" }]
+after = [{ epic = 1, needs = "G1 lint and type rules" }, { epic = 2, needs = "the asset resolver (2.10) and the AssetDecoder registry (2.13)" }]
 
 [[epic]]
 id = 4
