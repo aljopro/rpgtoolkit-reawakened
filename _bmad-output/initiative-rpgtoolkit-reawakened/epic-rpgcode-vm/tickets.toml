@@ -42,19 +42,34 @@ references = [
 id = 3
 type = "story"
 title = "PluginDefinition (commands only) and the built-in registry assembly"
-description = "Defines `PluginDefinition` as `{ id, version, commands }` (ADR 0004 decision 2), where a command is an AD-8 `BuiltinSpec` with a functional contract: `(read-only view, args) -> { out, effects, wait? }`; commands never mutate state and the VM and owning modules apply their effects (amends AD-8 and AD-10 doc-first, including its duplicate rule). Adds a pure assembly function over it: fixed module order, last-registered-wins for a repeated name or alias with a warning diagnostic (replacing AD-8's duplicate rejection, which stays only as a lint for one plugin repeating itself), by-reference `out` write-back sharing the call and lvalue machinery entry 2 built, and the four-tier lookup skeleton (redirect, script function, built-in, empty extension tier). Replaces the tracer's provisional registry. Other fields (`subsystems`, `decoders`, a dialect hook) are added by the entry that first needs them; not `createEngine`, which epic 4 owns (D12). The override warning goes through the AD-24 `Logger` port, which this entry defines minimally (levels and plain-data records) and entry 7 extends: a warn record with code `command.overridden` and data { name, kind (plugin or script), previous, replacement }."
-verify = "The assembly function lets the later of two `PluginDefinition`s win a repeated name or alias and emits one warning diagnostic naming both, a fixture command's `out` writes the caller's variable back, a command run twice on the same view and args returns equal results and leaves the view unchanged, stub tiers resolve in the documented order, and ADR 0004, AD-8 and AD-10 state the functional contract. and one `command.overridden` warn record per replaced name reaches the `Logger` port"
+description = "Defines `PluginDefinition` as `{ id, version, commands }` (ADR 0004 decisions 2 and 6), where a command is an AD-8 `BuiltinSpec` with a functional contract: `(read-only view, args, next) -> { out, effects, wait? }`, `next` being the definition of the same name in the layer below (command middleware, so a name is a stack of layers); commands never mutate state and the VM and owning modules apply their effects (amends AD-8 and AD-10 doc-first, including its duplicate rule). A result may also carry an AD-9 `wait`, or an AD-17 `request` with a `then` continuation (AD-8's `resume`, a named command plus plain-data args) (ADR 0004 decision 7; the VM side is entry 9). Adds a pure assembly function over an ordered list of `PluginDefinition`s (the manifest that selects and orders them is entry 25): the later layer runs first with `next` reaching the one below, the first definition's layer being the built-in `core` pack, and a warning diagnostic for a repeated name or alias (replacing AD-8's duplicate rejection, which stays only as a lint for one plugin repeating itself), by-reference `out` write-back sharing the call and lvalue machinery entry 2 built, and the four-tier lookup skeleton (redirect, script function, built-in, empty extension tier). Replaces the tracer's provisional registry. Other fields (`subsystems`, `decoders`, a dialect hook) are added by the entry that first needs them; not `createEngine`, which epic 4 owns (D12). The override warning goes through the AD-24 `Logger` port, which this entry defines minimally (levels and plain-data records) and entry 7 extends: a warn record with code `command.overridden` and data { name, kind (plugin or script), previous, replacement }."
+verify = "The assembly function lets the later of two `PluginDefinition`s run first for a repeated name or alias, emits one warning diagnostic naming both, and a wrapper fixture that calls `next` and one that ignores it both behave as documented, a fixture command that returns a `request` with a `then` continuation is accepted by the contract, a fixture command's `out` writes the caller's variable back, a command run twice on the same view and args returns equal results and leaves the view unchanged, stub tiers resolve in the documented order, and ADR 0004, AD-8 and AD-10 state the functional contract. and one `command.overridden` warn record per replaced name reaches the `Logger` port"
 covers = ["CAP-5"]
 after = [2]
 hitl = true
 risk = "medium"
 references = [
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-8 (assembly, duplicate rejection, precedence), AD-10 (vm section ownership)",
-  "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decision 2 (dogfooded standard library)",
+  "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decisions 2, 6 and 7 (dogfooded standard library, one contract and manifest, async at the boundary)",
   "reference - docs/format-spec.md, section 9.11",
   "contract - packages/core/src/ports/engine.ts, line 4 (createEngine deferred to the engine epic; epic 4 owns it)",
 ]
 plan_checkpoint = true
+
+[[entry]]
+id = 25
+type = "story"
+title = "Plugin manifest and the engine's default manifest"
+description = "Defines the plugin manifest as plain data (ADR 0004 decision 6): an ordered list of entries `{ id, enabled?, options? }` that selects and orders the `PluginDefinition`s entry 3's assembly function layers, with the engine's own default manifest listing the built-in `core` pack (pinned: it can be wrapped but not removed or disabled) and growing as optional packs land. A game or user manifest is a patch over the default (add, remove, disable, reorder or replace by id; replacing everything is removing every default id). The host resolves each `id` to a loadable definition and hands the resolved list to core; core loads nothing (G2), and an unresolvable id is a located diagnostic, not a crash. `options` is passed to the plugin and read by the VM for the request timeout default (entry 9). The engine's own wiring reads the default through this same path, with no private route. It is distinct from the distribution package's `manifest.json` (format-spec section 13)."
+verify = "The default manifest assembles to the same registry the engine uses, a user manifest that removes, disables, reorders, replaces and appends entries produces the documented chain, removing or disabling `core` is refused with a diagnostic, an unresolvable id yields a located diagnostic and the rest still load, and `core` imports no module loader or file API."
+covers = ["CAP-5"]
+after = [3]
+hitl = true
+risk = "medium"
+references = [
+  "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decision 6",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/plugin-definition-spike.md, 'The manifest is the configuration, and ships with defaults'",
+]
 
 [[entry]]
 id = 4
@@ -164,8 +179,8 @@ notes = ["#Include gives access to that file's functions under a namespace-like 
 id = 9
 type = "story"
 title = "Threads and waits: kinds, sleep, wake, tellThread, multiRun, step budget"
-description = "First step, doc-first (G7): a person rules THR-1 to THR-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements the four thread kinds (`blocking`, `board`, `persistent`, `item`) with `thread(file,persist)` and the E-93 operations (`threadSleep`, `threadWake`, `threadSleepRemaining`, `killThread`, `getThreadId`, `tellThread`) registered through entry 3's registry, the AD-9 wait registry with `poll`-only resolution and duplicate rejection, the VM-owned `input.key` and `sleep` kinds plus a test-double `movement` kind that movement-triggers takes over, per-thread source and target context, `multiRun` movement coupling, and the per-step budget tuned with movement-triggers (E-33, E-95, AD-26; spine Deferred, D10). Exposes the VM's `waits` and `threads` phase handlers and an instruction-granular resumable step for epic 4's `createEngine` to register (AD-26); the open-step cursor and pause state belong to `core/engine` (AD-10), so the breakpoint hook and the E-03 pause are epic 4's."
-verify = "The synthetic thread program (board, persistent and item threads, sleep and wake, `tellThread` injected inline code, a never-yielding loop preempted at the budget, `multiRun` over two sprites) runs deterministically and restores identically mid-wait."
+description = "First step, doc-first (G7): a person rules THR-1 to THR-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements the four thread kinds (`blocking`, `board`, `persistent`, `item`) with `thread(file,persist)` and the E-93 operations (`threadSleep`, `threadWake`, `threadSleepRemaining`, `killThread`, `getThreadId`, `tellThread`) registered through entry 3's registry, the AD-9 wait registry with `poll`-only resolution and duplicate rejection, the VM-owned `input.key` and `sleep` kinds plus a test-double `movement` kind that movement-triggers takes over, per-thread source and target context, `multiRun` movement coupling, and the per-step budget tuned with movement-triggers (E-33, E-95, AD-26; spine Deferred, D10). Implements ADR 0004 decision 7 on the VM side, on AD-5's existing request and reply inputs: running a command's `then` continuation with the reply prepended; a tick-counted timeout for AD-9 waits (layered engine default, plugin `options`, the wait's own value, harness override; zero means none) that resumes the thread with an error result and a located diagnostic; a failure reply delivered as an ordinary input for a frozen request, whose wall-clock timeout the host owns; deadlock detection (every live thread parked on another parked thread, no reply outstanding) reported with the stuck threads and what they wait on, a hard failure in headless runs; and scripted replies in the harness. Exposes the VM's `waits` and `threads` phase handlers and an instruction-granular resumable step for epic 4's `createEngine` to register (AD-26); the open-step cursor and pause state belong to `core/engine` (AD-10), so the breakpoint hook and the E-03 pause are epic 4's."
+verify = "The synthetic thread program (board, persistent and item threads, sleep and wake, `tellThread` injected inline code, a never-yielding loop preempted at the budget, `multiRun` over two sprites) runs deterministically and restores identically mid-wait, a scripted reply input is applied at its recorded step on replay, an AD-9 wait with no wake times out in ticks with an error result, a failure reply resumes a frozen request with the missing-asset result, and two threads parked on each other fail the headless run with both named."
 covers = ["CAP-5"]
 after = [3, 5]
 hitl = true
@@ -248,13 +263,13 @@ covers = ["CAP-5"]
 after = [3]
 hitl = true
 risk = "medium"
-notes = ["We do not have to define all of E-99, only the commands part first; the rest of PluginDefinition is research. (Jensen, 2026-10-11)"]
+notes = ["We do not have to define all of E-99, only the commands part first; the rest of PluginDefinition is research. (Jensen, 2026-10-11)", "Ruled 2026-10-12: one ungated plugin contract, composed as a middleware chain over a pinned core pack and selected by an editable manifest with an engine default; async work lives in the host with a reply inbox; see ADR 0004 decisions 6 and 7 and discovery/plugin-definition-spike.md. (Jensen, 2026-10-12)"]
 
 [[entry]]
 id = 14
 type = "story"
 title = "AssetDecoder wiring: add `decoders` to PluginDefinition"
-description = "Adds the `decoders` field to `PluginDefinition`, resolves the AD-31 vs ADR 0004 conflict by amending one document in a doc-first commit (G7), and wires it to the `AssetDecoder` registry that epic-2 entry 2.13 delivers, closing the hand-off epic 2 left unwired. First-party and in-process; E-99's sandboxed third-party mechanism is a separate question and does not gate this."
+description = "Adds the `decoders` field to `PluginDefinition`, resolves the AD-31 vs ADR 0004 conflict by amending one document in a doc-first commit (G7), and wires it to the `AssetDecoder` registry that epic-2 entry 2.13 delivers, closing the hand-off epic 2 left unwired. In-process like every plugin (ADR 0004 decision 6); decoders are pure over bytes (G2). Entry 2.13's registry refuses a duplicate decoder id or extension, whereas commands layer with last-registered-wins; this entry rules which applies to decoders (recommended: later layer wins with a warning, matching commands) and amends the registry if so."
 verify = "A test plugin definition registers through the assembly function, its `decoders` entries dispatch bytes through epic 2's format registry by extension and magic header, and the amended ADR 0004 (or AD-31) matches the shipped interface."
 covers = ["CAP-5"]
 after = [3, "2.13"]
@@ -272,10 +287,10 @@ references = [
 id = 15
 type = "story"
 title = "TK2 dialect frontend, command coverage and the TK2 compatibility plugin"
-description = "Adds a non-destructive TK2 grammar frontend (`{ }` blocks, `#` as statement introducer including `#x! = 1` assignments, labels with #Branch and #FBranch, #Method and #ReturnMethod, namespace includes, `=` as comparison) that emits raw argument text and lets lowering bind it through each command's `ParamSpec`, mapping TK2 commands onto the same `commands` as TK3: 141 of 301 observed commands already have a 3.1 name, 2 are compat-only (#Empty, #FBranch), 39 are unmapped plugin or library names, and 119 are user-defined #Method commands; signature adapters (#SetImage 5-arg, #WalkSpeed and #ItemWalkSpeed string to number, #NewPlyr to newPlayer) live in `@tk-reawakened/plugin-tk2-compat`, a `PluginDefinition` from entry 3. TK 1.x (RPGCode v1, the `< >` inline-block form) is out of the MVP by decision. Of the 39 unmapped TK2 commands, 24 are plugin commands (FTP.dll: #httpRead and #ftp*; filereadwrite.dll: #fileRead; GsMiscPlugins.dll, proplug.dll, TWButton, XFMWin, multip.dll), 11 are implicit-include libraries, 1 is the `system.*` namespace and 3 are undocumented (addplyr, cntrtext, sell); each plugin command answers through a recorded-effect stub in the compat plugin with a failure default and no real network or file access (AD-17) until E-99 decides real behaviour."
+description = "Adds a non-destructive TK2 grammar frontend (`{ }` blocks, `#` as statement introducer including `#x! = 1` assignments, labels with #Branch and #FBranch, #Method and #ReturnMethod, namespace includes, `=` as comparison) that emits raw argument text and lets lowering bind it through each command's `ParamSpec`, mapping TK2 commands onto the same `commands` as TK3: 141 of 301 observed commands already have a 3.1 name, 2 are compat-only (#Empty, #FBranch), 39 are unmapped plugin or library names, and 119 are user-defined #Method commands; signature adapters (#SetImage 5-arg, #WalkSpeed and #ItemWalkSpeed string to number, #NewPlyr to newPlayer) live in `@tk-reawakened/plugin-tk2-compat`, a `PluginDefinition` from entry 3. TK 1.x (RPGCode v1, the `< >` inline-block form) is out of the MVP by decision. Of the 39 unmapped TK2 commands, 24 are plugin commands (FTP.dll: #httpRead and #ftp*; filereadwrite.dll: #fileRead; GsMiscPlugins.dll, proplug.dll, TWButton, XFMWin, multip.dll), 11 are implicit-include libraries, 1 is the `system.*` namespace and 3 are undocumented (addplyr, cntrtext, sell); each plugin command answers through a recorded-effect stub in the compat plugin with a failure default and no real network or file access (AD-17) until entry 24's native packs replace it; the plugin is activated by a manifest entry read from the `.gam` plugin list (ADR 0004 decision 6)."
 verify = "Every command in the TK2 coverage matrix is mapped to a built-in, supplied by the compat plugin, answered by the extension tier with a located diagnostic, or listed unsupported with its program count; a synthetic TK2 program and the TK2 programs of the archived games lower to the same AST shapes as their TK3 equivalents."
 covers = ["CAP-5"]
-after = [1, 5, 7, 21]
+after = [1, 5, 7, 21, 25]
 hitl = false
 risk = "medium"
 references = [
@@ -289,7 +304,7 @@ notes = ["We should support TK2 games and TK3 games on launch. There are so many
 id = 16
 type = "story"
 title = "Sandboxed file I/O built-ins through the AD-17 requests"
-description = "Registers `openFileInput`/`Output`/`Append`/`Binary`, `closeFile`, `fileInput`, `filePrint`, `fileGet`, `filePut`, `fileEof` and `appPath` as blocking built-ins that read through `asset` requests (saves first, then shipped folders, read-only), write only to the `saves` and `files` blob areas, register the `blob` wait kind (AD-9), key the save area by the core-derived `GameId`, and reuse entry 7's harness report change (E-97, AD-17)."
+description = "Registers `openFileInput`/`Output`/`Append`/`Binary`, `closeFile`, `fileInput`, `filePrint`, `fileGet`, `filePut`, `fileEof` and `appPath` as blocking built-ins that read through `asset` requests (saves first, then shipped folders, read-only), write only to the `saves` and `files` blob areas, register the `blob` wait kind (AD-9), key the save area by the core-derived `GameId`, and reuse entry 7's harness report change (E-97, AD-17). This is the first real pack written against the request, `then` and timeout contract of ADR 0004 decision 7; if the two-step split is painful, report it before more packs are written."
 verify = "A synthetic script round-trips a text and a binary file through the harness blob port, a read of a missing shipped file yields the ruled result, a write outside the `saves`/`files` areas is refused, and `core` imports no `node:fs`."
 covers = ["CAP-5"]
 after = [7, 9, 12, "1.8", "1.9"]
@@ -319,13 +334,29 @@ references = [
 ]
 
 [[entry]]
+id = 24
+type = "story"
+title = "Native packs for the most-used legacy plugins and the legacy-name table"
+description = "Adds a static table mapping each legacy plugin identity (the `tkplug0` to `tkplug4` slots and file names in the `.gam` plugin list, plus Multi-Plug `plugins.ini` entries) to a native pack or to a declined diagnostic, and the packs themselves as `PluginDefinition`s in the default manifest, replacing entry 15's recorded-effect stubs: GsMiscPlugins, the Triuken pack, `filereadwrite` (file I/O through host requests), `proplug` string and math helpers, then XFMWin and Kaimu as aliases. Ranked by occurrences in the 2,783 archived units (discovery/plugin-definition-spike.md). FTP, E-Mail, sockets (multip), DragSound, Flash and anything needing Win32 handles are declined with a located not-supported diagnostic. Packs record their effects for the domain epics to apply; domain behaviour stays with those epics."
+verify = "Every legacy plugin identity in the archived corpus maps to a native pack or a declined diagnostic with its program count, each pack registers through the assembly function from the default manifest and can be removed or wrapped by a user manifest, and a corpus program that calls a pack command runs headlessly with its effects recorded."
+covers = ["CAP-5"]
+after = [15, 22, 25]
+hitl = false
+risk = "medium"
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/plugin-definition-spike.md",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/spike-23/spike-legacy.md",
+  "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decisions 3, 6 and 7",
+]
+
+[[entry]]
 id = 18
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-5"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25]
 hitl = false
 risk = "low"
 
