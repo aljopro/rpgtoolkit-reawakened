@@ -11,7 +11,7 @@ risk: high
 
 ## Description
 
-Every data file of the Toolkit 2 (2.x) era games reads in pure TypeScript from bytes, through the format registry of epic legacy-formats: the line-oriented text forms of boards, characters, items, main files, enemies, animations, special moves, status effects and battle backgrounds, the corrected binary 2.2 main file and character layouts, and the animated tile, single tile and font files that have no reader today. TK2 scripts are epic rpgcode-vm's.
+Every data file of the Toolkit 2 (2.x) era games reads in pure TypeScript from bytes, through the format registry of epic legacy-formats: the line-oriented text forms of boards, characters, items, main files, enemies, animations, special moves, status effects and battle backgrounds, the corrected binary 2.2 main file and character layouts, and the animated tile, single tile and font files that have no reader today, and the BMP and GIF images that Toolkit 2 games use (the six archived TK2 games hold 18 BMP and 58 GIF files and no PNG). TK2 scripts are epic rpgcode-vm's.
 
 ## Outcome
 
@@ -47,3 +47,4 @@ Byte and text readers in `core`, their spec amendment, registry registration and
 - Open question: where the six TK2 games are fetched from as fixtures, and their pinned hashes.
 - Open question: zero-byte placeholder files (1 `.itm`, 1 `.spc`, 3 empty-name `.brd`): skip or tolerate.
 - Decision: Jensen, 2026-10-11: Toolkit 1.x (v1) data formats and RPGCode are a nice to have and not part of the MVP; this epic covers 2.x only.
+- Decision: 2026-10-11: BMP and GIF decoders (entries 11 and 12) are this epic's, since epic legacy-formats decodes only PNG and JPEG and TK2 games use GIF, JPG and BMP. ICO and WMF are dropped (no use in the archived games), pending the owner's approval of the section 10 ruling in PR 2.19.
