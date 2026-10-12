@@ -1059,13 +1059,84 @@ map), the guard-rail on clean-room provenance (`docs/guardrails.md`, G7), and [A
 
 | Kind | Formats seen/accepted | Where |
 |---|---|---|
-| Images | BMP, PNG, JPEG, GIF (incl. animated), ICO/WMF (import); anything the legacy image library loaded | `Bitmap/`, `Misc/` |
+| Images (game files) | PNG and JPEG are decoded (§10.2, §10.3); BMP and GIF are still owed a reader (§10.4) | `Bitmap/`, `Misc/` |
 | Music | MIDI (`.mid`) is dominant; also MP3, OGG, WAV and tracker modules through the audio library | `Media/` |
 | Sound effects | WAV, MP3, OGG | `Media/` |
 | Video | AVI (Windows media pipeline) | `Media/` |
 | Fonts | TrueType `.ttf`, registered for the game's lifetime | `Font/` |
 
-Images are matched by **colour-key transparency** (per frame or image), not alpha. A rebuild should still keep alpha in PNGs.
+Images are matched by **colour-key transparency** (per frame or image), not alpha, so the key is stored with whatever references the image and is never part of the image file itself. A rebuild should still keep alpha in PNGs. An animated GIF stands in for an `.anm` wherever one is accepted (§7.2).
+
+### 10.1 Decoding an image
+
+A game image is turned into pixels in one place, with one result, so that the rasteriser, every runner and the editor cannot disagree about what an image contains. The reader's result is **straight** (non-premultiplied) 8-bit RGBA of exactly `width × height × 4` bytes in row-major order, top row first: the file's own colours and its own alpha, nothing added. Because the colour key is not in the file (above), the reader never applies one; the key is tested against these decoded pixels by whatever blits the image.
+
+The image kind is chosen by **signature**: PNG `89 50 4E 47 0D 0A 1A 0A`, JPEG `FF D8 FF` (§10.2, §10.3). Any other signature is an error at offset 0. Every defect is a located error carrying the file's path, the offending byte offset and the section `format-spec §10` — never a throw and never a plausible wrong picture.
+
+Both readers refuse a zero dimension, and both refuse an image of more than **100,000,000 pixels**: `width × height` is untrusted input, so past that limit the allocation is not attempted and the file is refused instead. The limit is far above any game asset (the largest image in the legacy sample games is 640×480).
+
+### 10.2 PNG
+
+**Structure.** The 8-byte signature above, then chunks of `u32 length` (big-endian), a 4-byte type, `length` data bytes and a `u32` CRC-32. The CRC is the standard reflected polynomial `0xEDB88320` over the type **and** data, and every chunk's CRC is checked: a flipped bit is a located error, not a wrong colour. A length that runs past the end of the file is refused. `IHDR` must be the first chunk and is read on its own, so a wrong payload length (the spec fixes 13 bytes) is reported as that rather than as a malformed walk later. `IEND` must be the last chunk: the walk stops there, anything after it is ignored, and a chunk stream that ends without `IEND` is an error. The structure is then checked: `IHDR` appears exactly once, `PLTE` and `tRNS` come before the first `IDAT`, and an unknown **critical** chunk (first letter uppercase) is refused; unknown ancillary chunks are skipped.
+
+**`IHDR`.** Width and height are big-endian `u32` and neither may be 0. Bit depth and colour type must be a pairing the spec defines:
+
+| Colour type | Meaning | Permitted bit depths |
+|---|---|---|
+| 0 | greyscale | 1, 2, 4, 8, 16 |
+| 2 | truecolour | 8, 16 |
+| 3 | palette | 1, 2, 4, 8 |
+| 4 | greyscale + alpha | 8, 16 |
+| 6 | truecolour + alpha | 8, 16 |
+
+Compression method must be 0, filter method must be 0, and the interlace byte must be 0 or 1; any other value, an unlisted colour type, or a colour type paired with a depth the table does not give is refused at that `IHDR` field.
+
+**`IDAT`.** Every `IDAT` chunk's data, concatenated, is one zlib stream (the first `IDAT` is required). The header fixes the exact inflated size — for each pass, `height × (1 + ceil(width × channels × depth / 8))` — so the stream is inflated into a buffer of that size and cannot allocate past the declared layout; the output is measured against the header and a stream that inflates short or long, is not a valid zlib stream, or is so small that no deflate stream of its length could produce the declared output (deflate expands at most 1032:1, plus a little slack for framing) is refused at the first `IDAT` payload.
+
+**Filters.** Each scanline is prefixed by its filter-type byte and the filters are undone in place, with `bpp = ceil(channels × depth / 8)` and the previous scanline all zeros for the first row of each pass:
+
+| Type | Filter | Reconstruction (`x` = byte, `a` = left, `b` = above, `c` = above-left) |
+|---|---|---|
+| 0 | None | `x` |
+| 1 | Sub | `x + a` |
+| 2 | Up | `x + b` |
+| 3 | Average | `x + floor((a + b) / 2)` |
+| 4 | Paeth | `x + Paeth(a, b, c)` |
+
+`Paeth(a, b, c)` picks `a`, `b` or `c` by the smallest of `|a + b − c − a|`, `|a + b − c − b|`, `|a + b − c − c|`, ties going to `a` then `b`, all in exact integers. Any filter byte above 4 is refused.
+
+**Adam7.** With interlace byte 1 the image is seven passes, each `[x0, y0, dx, dy]`: `(0,0,8,8)`, `(4,0,8,8)`, `(0,4,4,8)`, `(2,0,4,4)`, `(0,2,2,4)`, `(1,0,2,2)`, `(0,1,1,2)`. A pass is `ceil((width − x0) / dx) × ceil((height − y0) / dy)` and an empty pass is omitted. Interlace byte 0 is one pass over the whole image. Each pass's scanlines filter against the previous scanline of that pass.
+
+**Palette and `tRNS`.** `PLTE` is 1–256 whole RGB triples (3–768 bytes), is required for colour type 3, and may hold no more entries than the bit depth can select (`2^depth`); a pixel whose index falls outside the palette is a located error. `tRNS` is byte-per-entry alpha for colour type 3 (never more bytes than palette entries; an entry with no `tRNS` byte is opaque), a single 2-byte greyscale or 6-byte RGB colour key for colour types 0 and 2 (a pixel equal to the key gets alpha 0, the rest 255), and is ignored for colour types 4 and 6, whose alpha is in the pixels. Elsewhere, alpha is 255.
+
+**Bit-depth scaling.** Sub-byte samples (depths 1, 2, 4) are read MSB-first within each byte and widened by the exact factor that maps their maximum to 255 — ×255, ×85, ×17. Depth 8 passes through. Depth 16 is reduced by `floor(v / 257)`, the exact inverse of the spec's `v × 257`, so 65535 maps to 255 without rounding error. A palette index is a sample, not a channel value, and is not scaled.
+
+Errors found in the inflated bytes (an unknown filter type, a palette index outside `PLTE`) are reported at the offset of the first `IDAT` payload, which is where those bytes come from; header errors point at the header field.
+
+### 10.3 JPEG
+
+The reader covers the **baseline sequential DCT** process (`SOF0`) and the **8-bit extended sequential** process (`SOF1`), which share one decoding path, and nothing else. One frame: sample precision 8; one component (greyscale) or three (YCbCr); per-component sampling factors 1×1 to 4×4 (the legacy sample files are 4:2:0); Huffman-coded entropy data with optional restart intervals; quantisation tables of 8 or 16 bits; dequantisation; a separable inverse DCT per 8×8 block, level-shifted by +128, rounded and clamped; chroma upsampled to full resolution by nearest neighbour; YCbCr→RGB. JPEG carries no alpha, so every decoded pixel has alpha 255 and any transparency is the per-image colour key of §10.
+
+**Marker walk.** `FF D8` (SOI), then `FF`-prefixed segments; a 2-byte big-endian length follows each marker and includes itself; `FF D9` (EOI) ends the walk and `FF 01` (TEM) and stray restart markers between segments are skipped. Handled: `DQT` (quantisation tables, ids 0–3, 8- or 16-bit entries in zig-zag order), `DHT` (canonical Huffman tables, T.81 Annex F), `DRI` (restart interval; length must be 4), `SOF0`/`SOF1`, `SOS`, and `APP14`: where its identifier is `Adobe`, the transform byte 0 means the three components are already R, G and B, and anything else — or no `APP14` — is YCbCr. Inside the entropy-coded data, `FF 00` is a stuffed data byte and `FF D0`–`FF D7` are restart markers, before which any repeated `FF` fill bytes are skipped and after which the DC predictors reset.
+
+**Boundary — refused, each a located error, never a wrong picture.** Progressive (`SOF2`) and every other frame marker type; a sample precision other than 8; a component count other than 1 or 3 (so CMYK/YCCK is out); a scan that is not baseline sequential (`Ss = 0`, `Se = 63`, `Ah = Al = 0`); more than 100,000,000 pixels or a zero dimension; a DC difference category above 11; an invalid Huffman code; an AC coefficient index past 63; an entropy stream that ends before the last MCU (a truncated file); a scan naming a component or Huffman/quantisation table the file does not define, or naming one twice; a component defined twice in the frame; a frame component that no scan decoded; a file with no `SOF0`/`SOF1` frame or no `SOS`. A bare `FF D8 FF` file is reported as too short.
+
+**Determinism.** The inverse-DCT basis is stored as literal double constants, never computed from `Math.cos`/`Math.PI`, and the transform runs rows then columns in a fixed order over add, subtract and multiply, so the same bytes give the same pixels on every JavaScript engine.
+
+### 10.4 The image kinds: what is decoded and what is dropped
+
+Archive use counted on 2026-10-11 inside the game and tool archives and across the 2,047 archived `.prg` scripts (the six TK2-era games, 25 archived community games, the community zip corpus and the site mirrors):
+
+| Kind | Archive use | Ruling |
+|---|---|---|
+| **PNG** | 97 files in the 25 community games, one in the shipped sample game; 187 script references | **Decoded** (§10.2) |
+| **JPEG** | 340 files in the 25 community games, 58 in four of the six TK2 games; 99 script references | **Decoded** (§10.3) |
+| **BMP** | 178 files in the 25 community games, 18 in four of the six TK2 games; 271 script references; one of the board-image export targets (T-32) | **Owed a reader.** It is the dominant TK2-era picture format, so a reader belongs beside the PNG and JPEG ones, chosen by the `BM` signature |
+| **GIF** | 520 files in the 25 community games, 58 in four of the six TK2 games; 232 script references | **Owed a reader**, and not only for a still frame: §7.2 lets an animated GIF replace an `.anm`, so the reader must yield every frame and its delay |
+| **ICO** | 10 files in the whole archive, every one an application or site icon (three of the Toolkit's own icons in two archives, one utility's icon in two uploads, one community game's icon); none in the six TK2 games, no script reference | **Dropped as a game format.** The only mention is the editor's image-import list (T-36). If that feature ever needs it, an ICO is a container of BMP or PNG images and belongs to the editor's import path, not to a game-image reader |
+| **WMF** | 0 files anywhere in the archive, no script reference | **Dropped.** The only mention is T-36's import list; no game file is a Windows metafile |
+
+The legacy Windows image library loaded more kinds than the rebuild does. The rebuild reads PNG and JPEG as §10.2 and §10.3 state, adds BMP and GIF readers as above, and refuses anything else with a located error rather than approximating a picture; ICO and WMF are not game formats and need no reader.
 
 ---
 
