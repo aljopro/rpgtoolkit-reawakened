@@ -353,7 +353,7 @@ A custom menu image can be set (`menuGraphic`). Cursor sounds come from the main
 ## 13. Distribution features (E-130 … E-132)
 
 **E-130 Folder play.** The main file plus the project folder.
-**E-131 Single-file package.** The legacy `.tpk` ZIP and standalone EXE (engine + appended ZIP). A rebuild needs its own equivalents (e.g. a web bundle, a desktop binary with an embedded archive) and should **import** the legacy ones.
+**E-131 Single-file package.** The legacy `.tpk` ZIP and standalone EXE (engine + appended ZIP). A rebuild needs its own equivalents (e.g. a web bundle, a desktop binary with an embedded archive) and should **import** the legacy ones. The rebuild's own single-file package is the **distribution package** of format-spec §13: a `.tpk`-compatible ZIP carrying `manifest.json { schema, main, index }`, so a runner boots from `main` and builds its asset index from `index` without listing the archive, and a loose folder and a package load to the same files.
 **E-132 Private fonts.** Game fonts are available to text rendering for the session only.
 
 ---

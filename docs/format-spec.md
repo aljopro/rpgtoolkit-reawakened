@@ -1095,18 +1095,58 @@ Legacy plugins are native Windows libraries (`Plugin/*.dll`) of three kinds: **R
 
 ## 13. Packaging
 
-* **PakFile `.tpk`:** a standard ZIP archive with the project folder plus `main.gam`. When playing from a pak, ignore the main file's `projectPath`.
+Every form below carries the same files — the project folder of §1.5 plus the main file — and every one is **untrusted input**: a loader bounds it with §13.2's limits before allocating or parsing anything, treats a nested archive as an ordinary file (L14), and never throws.
+
+### 13.1 Package forms
+
+* **Loose folder.** A directory whose **own root is the package root**: the project folder's contents (the §1.5 type folders — `Tiles/`, `Boards/`, `Chrs/`, `Item/`, `Enemy/`, `SpcMove/`, `StatusE/`, `Bkrounds/`, `Misc/`, `Bitmap/`, `Media/`, `Prg/`, `Font/`, `Plugin/`) sit directly in it, together with the main file, *not* nested under `Game/<project>/`. The core performs no I/O (G2), so the host lists the folder's entries; each is a **file**, a **directory** (counted toward the entry limit but never served) or a **link** (refused, L23). The stored `projectPath` is ignored, exactly as for a `.tpk` — a package's root *is* the project folder. The folder form is subject to the same limits and path rules as an archive (L22–L26), so a game behaves identically whichever form it arrived in.
+* **PakFile `.tpk`:** a standard ZIP archive with the project folder plus the main file. The **archive root is the project folder**: the §1.5 type folders sit at the root (their contents, not wrapped in a folder named after the project), and a legacy pak embeds the main file at the archive root as `main.gam`. Entry names use `/` and follow §1.5's case and separator rules. When playing from a pak, ignore the main file's stored `projectPath` (§1.5). <!-- OWNER: chose "project folder's contents at the archive root" over "the project folder nested under its own name" because the package resolver keys a reference at the package root (the project folder is the root, AD-5), §1.5 already says a pak embeds `main.gam` inside it, and this project's own writer emits the flat form; §13's one sentence fits both readings and no sample package pins it. -->
 * **Standalone EXE:** an engine executable with a ZIP appended. Its **last 12 bytes** are a trailer:
   * `[end - 12 .. end - 9]`: ASCII string `CMP1` (4 bytes: `0x43 0x4D 0x50 0x31`).
   * `[end - 8 .. end - 5]`: `i32 offsetOfZip` (4 bytes, **little-endian**). This is the original executable length and marks the starting byte offset of the appended ZIP archive.
   * `[end - 4 .. end - 1]`: `i32 zipLength` (4 bytes, **little-endian**). This is the exact byte length of the appended ZIP archive.
-  Extracting `[offsetOfZip, offsetOfZip + zipLength)` yields the clean game ZIP. A rebuild can import legacy standalone games this way.
+  Extracting `[offsetOfZip, offsetOfZip + zipLength)` yields the clean game ZIP, laid out as a `.tpk` above. A rebuild can import legacy standalone games this way.
 * **Setup ZIP:** a plain ZIP of the `Main/` and `Game/` folders.
-* **Distribution package (this project's own):** a `.tpk`-compatible ZIP that also holds a `manifest.json` at the archive root, next to the game files. The manifest is UTF-8 JSON with exactly three fields:
+* **Distribution package (this project's own):** a `.tpk`-compatible ZIP — the project folder at the archive root, exactly as for a `.tpk`, with the main file kept at its §1.5 path `Main/<game>.gam` <!-- OWNER: chose to keep our main file at its §1.5 path `Main/<game>.gam` (and name it in the manifest) rather than the legacy pak's root `main.gam`, because a legacy pak's embedded main is found by the engine and our package names it in `manifest.json`; a reader that accepts both forms ignores the difference. --> — that also holds a `manifest.json` at the archive root, next to the game files. The manifest is UTF-8 JSON with exactly three fields:
   * `schema`: a non-negative integer, the project schema version.
   * `main`: the in-package path of the main file, for example `Main/demo.gam`. It must name a game file in the archive and must not be `manifest.json` itself.
   * `index`: the in-package path of every game file except `manifest.json`, each listed once.
   Paths use `/` and follow §1.5 (matching ignores case and treats `\` as `/`). A reader checks that `main` and every `index` entry name a file in the archive and that no game file is missing from `index`, and it refuses a manifest with any other field. A legacy package has no manifest and loads without one; only packages this project writes are required to carry it.
+
+### 13.2 Untrusted-package limits (L1–L26)
+
+Games are untrusted input, so a loader bounds what a package can make it spend — bytes in, entry count, declared and actual sizes, compression ratio, path shape and the appended-EXE trailer — before it allocates or parses anything, and every rejection **names the rule it hit** so a failure, a code comment or a review finding can cite one row. The rules are numbered **L1–L26**; the loose-folder rows (L22–L26) restate the archive rows rather than widening them, so both forms accept and reject the same games.
+
+**Every value is a proposal.** The numbers come from a 134-file, 6.3 MB corpus of two sample games plus `fflate`'s documented behaviour, and no sample ships a package, so the package numbers have no corpus evidence at all (the corpus only bounds the assets inside a package: largest file 430,086 bytes, max path depth 4 segments, max relative path 59 characters, max basename 47 characters). Change a value and its row together. <!-- OWNER: chose to make the discovery report's proposal values the spec's normative L1–L26 table because the code already enforces exactly these numbers under these ids, no sample package exists to measure them, and giving them ids is what lets a failure, a comment and a review finding cite one row; if you want a different value, it is a one-line change here and in `limits.ts`. -->
+
+| # | Rule | Value |
+|---|---|---|
+| L1 | Max compressed input (the whole file, before parsing) | 256 MiB (268,435,456 bytes) |
+| L2 | Max entries (files + directories) | 10,000 |
+| L3 | Max single entry uncompressed size, checked before inflating | 64 MiB (67,108,864 bytes) |
+| L4 | Max total uncompressed size (sum of declared sizes) | 512 MiB (536,870,912 bytes) |
+| L5 | Max per-entry compression ratio (uncompressed ÷ compressed) | 100:1 (zip-bomb guard) |
+| L6 | Max path length, UTF-8 bytes with `\` normalised to `/` | 256 |
+| L7 | Max path depth (segments) | 16 |
+| L8 | Max basename length (UTF-8 bytes) | 128 |
+| L9 | Path escape (zip-slip) | reject an absolute path, a drive letter (`X:`), a `..` segment, a NUL, or a path that names nothing |
+| L10 | Case-insensitive duplicates | reject two entries that differ only by case or separator |
+| L11 | Encrypted entries (general-purpose flag bit 0) | reject |
+| L12 | Compression methods | only 0 (stored) and 8 (deflate) |
+| L13 | ZIP64 records (EOCD64 locator or `0xFFFFFFFF` sentinel) | reject |
+| L14 | Nested archives | opaque: a nested `.zip`/`.tpk` is a file, never opened (nesting depth 0) |
+| L15 | End-of-central-directory search window | last 65,557 bytes (22-byte record + 65,535-byte comment) |
+| L16 | Declared size, before inflate | reject a declaration above L3 (defence in depth: L3 already refuses every entry that would reach it) |
+| L17 | Declared vs actual size, after inflate | reject when the inflated length differs from the declared size |
+| L18 | CRC-32 | verify the decoded bytes against the header's CRC-32 |
+| L19 | Local-header / central-directory consistency | reject when name, method, compressed size or uncompressed size disagree; the same rule covers a corrupt central directory or end-of-central-directory record |
+| L20 | Appended-EXE trailer validity | require `offsetOfZip ≥ 0`, `zipLength ≥ 0` and `offsetOfZip + zipLength ≤ fileLength − 12` |
+| L21 | Appended-EXE trailer present | the last 12 bytes must start with `CMP1` |
+| L22 | Loose folder: entry count | same as L2 |
+| L23 | Loose folder: symlinks and reparse points | reject |
+| L24 | Loose folder: total size | same as L4 |
+| L25 | Loose folder: per-file size | same as L3 |
+| L26 | Loose folder: path rules | same as L6–L10 |
 
 ---
 
