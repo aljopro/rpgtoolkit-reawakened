@@ -239,6 +239,18 @@ references = [
 ]
 
 [[entry]]
+id = 23
+type = "spike"
+title = "PluginDefinition beyond commands: trust model, subsystems, decoders, dialect hook, extension.call"
+description = "Research, producing a written proposal: how the rest of PluginDefinition should look once commands work (entry 3). Covers the trust model for third-party plugins (in-process first-party versus the sandboxed E-99 mechanism and its capability model over AD-17 requests), the `subsystems` field (battle, menu, dialogue), `decoders` (entry 14), a dialect hook for frontends, event hooks, lifecycle and activation from the .gam plugin list, and how it reconciles ADR 0004 with AD-17. Each field is later added by the entry that first needs it."
+verify = "A proposal document lists each candidate field with its first consumer, its trust implications and a recommendation, and the user rules on it; no code changes."
+covers = ["CAP-5"]
+after = [3]
+hitl = true
+risk = "medium"
+notes = ["We do not have to define all of E-99, only the commands part first; the rest of PluginDefinition is research. (Jensen, 2026-10-11)"]
+
+[[entry]]
 id = 14
 type = "story"
 title = "AssetDecoder wiring: add `decoders` to PluginDefinition"
@@ -313,7 +325,7 @@ title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-5"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23]
 hitl = false
 risk = "low"
 

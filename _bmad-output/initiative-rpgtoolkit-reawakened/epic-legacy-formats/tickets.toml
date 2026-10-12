@@ -144,12 +144,101 @@ hitl = false
 risk = "medium"
 
 [[entry]]
+id = 15
+type = "story"
+title = "Format-spec section 4.8 amendment: pre-vector conversion rules"
+description = "Applies, in its own commit (G7), the rules the entry 2.8 converter had to guess, each recorded in deferred-work.md: the default vector bases for pre-vector items, the sizeX by sizeY to (sizeX+sizeY) squared mapping and rotated program regions, how per-layer shades combine, geometry for empty program and sprite slots, activationType with repeatDistance, unclamped shade sums, tile types 5 to 10 and above 18, dropped fields, the numeric-constant and layer-title mappings, the cell polygon, PRG_STOPS_MOVEMENT on old programs, backgroundDrawType and the (64,64) start fallback. A person rules each; where the sample corpus has no minor 2 to 3 board, the ruling says so."
+verify = "Every item in the two section 4.8 deferral entries is stated in section 4.8 as a rule or named as deliberately unspecified, the commit touches only docs/, and a person approved it."
+covers = ["CAP-1"]
+after = [8]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+[[entry]]
+id = 16
+type = "story"
+title = "Align the pre-vector converter with the amended section 4.8"
+description = "Changes the converter to the entry 15 rules: generate or omit bases as ruled, convert or keep refusing rotated boards, apply the shade rule, handle empty slots, fix the repeat-distance passthrough, and warn on dropped tile types, so Done-when 4 is met as section 4.8 states."
+verify = "Synthetic pre-vector boards for each ruled case convert to the geometry section 4.8 states, the iso-rotated case behaves as ruled, and no deferral item of the two section 4.8 entries remains open."
+covers = ["CAP-1"]
+after = [15]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 17
+type = "story"
+title = "Format-spec precision amendment: boards, actors, battle files and the main file"
+description = "Applies, in its own commit (G7), the rules the reviews found missing: section 4.2 and 14 (a run marker followed by a negative LUT index, the overrun-warning policy, the empty-LUT contradiction between 1.2 and 4.2, isometric detection bit 1 or 2), the accepted minor ranges of sections 6.1 and 6.2 and of 8.1 to 8.3 that section 1.4 requires, and the section 2 row numbering collisions."
+verify = "Each listed rule is stated in the spec or named unspecified, section 2 rows number uniquely, and the commit touches only docs/."
+covers = ["CAP-1"]
+after = []
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+[[entry]]
+id = 18
+type = "story"
+title = "Enforce the amended boards, actors and battle rules in the readers"
+description = "Makes the board reader refuse or warn as entry 17 rules, makes the actor and battle readers validate the stated minor ranges, and makes the .ste and .bkg readers report a short read before probing the detection byte, as the .spc reader now does."
+verify = "A synthetic file for each rule is refused or warned as the spec says, a truncated .ste and .bkg report a short read, and the sample files still round-trip."
+covers = ["CAP-1"]
+after = [17]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 19
+type = "story"
+title = "Format-spec section 10 and the image kinds"
+description = "Extends section 10, in its own commit (G7), with what the PNG and JPEG decoders implement (chunk and CRC structure, filters, Adam7, palette and tRNS, bit-depth scaling, the baseline-only JPEG boundary, the 100 megapixel refusal) and rules on BMP, GIF, ICO and WMF: implement them, in which entry, or remove them from the table."
+verify = "Section 10 documents every behaviour the decoders implement and every image kind in its table has a decoder, a ticket, or a stated drop."
+covers = ["CAP-1"]
+after = []
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 20
+type = "story"
+title = "Format-spec section 13 and the feature catalogues: packages and the manifest"
+description = "Extends section 13, in its own commit (G7), with the loose-folder package form, the L1 to L26 limits the loader enforces, and the in-package layout of a .tpk, and adds the distribution manifest to docs/editor-features.md T-70 to T-74 and docs/engine-features.md E-131."
+verify = "Section 13 states the loose-folder form, the limit ids and the .tpk layout the loader assumes, the catalogues name the manifest, and the commit touches only docs/."
+covers = ["CAP-1"]
+after = []
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 21
+type = "story"
+title = "Rule the path case-fold: AD-5 against the foldPath helper"
+description = "Decides whether path lookup folds ASCII only (restrict foldPath) or full Unicode (amend AD-5), then makes code and spine agree: today K.brd and k.brd collide and U+0130 folds to two code points."
+verify = "AD-5 and foldPath state the same rule and a test covers the Kelvin sign and U+0130."
+covers = ["CAP-1"]
+after = []
+hitl = true
+risk = "low"
+
+[[entry]]
+id = 22
+type = "story"
+title = "Fixtures that exercise the untested paths"
+description = "Sources or synthesises samples the corpus lacks, through the fixture tool and never committed if they are legacy files: isometric and detail 2, 4 and 6 tilesets, a palette tileset, .spc and .ste files, and a real .tpk, EXE and Setup ZIP, then replaces the self-built test buffers that pass by sharing the writer primitives. The archived Toolkit 2 games are candidate sources."
+verify = "Each listed path has a sample or an independently authored fixture, the previously synthetic-only readers parse it, and nothing legacy is tracked."
+covers = ["CAP-1"]
+after = []
+hitl = true
+risk = "medium"
+
+[[entry]]
 id = 14
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts, from their plans and the deferred review findings. It takes cleanup only."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-1"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]
 hitl = false
 risk = "low"
+notes = ["Sweep candidates from the reviews: resolveReference is unused while the resolver recomposes the same path logic, the dead L16 branch in readZip, and the other cleanup items of deferred-work.md."]
