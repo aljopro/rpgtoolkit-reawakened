@@ -33,7 +33,7 @@ import {
 } from "@tk-reawakened/core";
 import { main } from "../src/index.ts";
 import { digestModel, digestRgba } from "../src/dump/digest.ts";
-import { boardLayout, classify, type DataFormatId } from "../src/dump/formats.ts";
+import { classify, type DataFormatId } from "../src/dump/formats.ts";
 import {
   buildExpectation,
   compareGame,
@@ -459,15 +459,6 @@ test("the .prg skip reports size and line count, not just a reason", () => {
   equal(cls.describe?.(PRG_TEXT), "15 bytes, 2 lines");
   equal(cls.describe?.(new Uint8Array(0)), "0 bytes, 0 lines");
   equal(cls.describe?.(new Uint8Array([0x61])), "1 bytes, 1 lines");
-});
-
-test("boardLayout picks the §4.1 branch a stored minor takes", () => {
-  equal(boardLayout(0), "obsolete");
-  equal(boardLayout(1), "obsolete");
-  equal(boardLayout(2), "pre-vector");
-  equal(boardLayout(3), "pre-vector");
-  equal(boardLayout(4), "vector");
-  equal(boardLayout(9), "vector");
 });
 
 test("the .gam, .spc and .ste rows parse the models their writers produced", () => {

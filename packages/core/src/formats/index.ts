@@ -3,6 +3,8 @@
 // primitives, animations, tilesets, battle data and game images (§10, AD-28),
 // plus the resolution of a reference to an asset key (§1.5, AD-5) and the
 // package loader for loose folders, `.tpk` and appended-ZIP EXEs (§13, AD-6).
+// The core format registry (AD-31) dispatches a file to the decoder for its
+// extension or magic header.
 export * from "./result.ts";
 export * from "./binary/index.ts";
 export * from "./animation/index.ts";
@@ -14,3 +16,4 @@ export * from "./main-file/index.ts";
 export * from "./actor/index.ts";
 export * from "./resolver/index.ts";
 export * from "./package/index.ts";
+export * from "./registry/index.ts";

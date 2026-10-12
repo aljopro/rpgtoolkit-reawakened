@@ -10,7 +10,7 @@
  * digests.
  */
 
-import type { PackageFile } from "@tk-reawakened/core";
+import type { AssetResolver, PackageFile } from "@tk-reawakened/core";
 import type { DataFormatId } from "./formats.ts";
 import { parseFile } from "./parse.ts";
 
@@ -72,12 +72,14 @@ function byPath(a: string, b: string): number {
  * Parse every file of a loaded project and collect the report.
  *
  * `files` is what `loadPackage` returned, so a folder, a `.tpk` and an appended
- * ZIP all report the same paths. The count of failures is the exit verdict.
+ * ZIP all report the same paths. `context` is the decode context (AD-31); when it
+ * is left out the files decode against an empty index, which is what an
+ * in-memory test wants. The count of failures is the exit verdict.
  */
-export function buildReport(files: readonly PackageFile[]): DumpReport {
+export function buildReport(files: readonly PackageFile[], context?: AssetResolver): DumpReport {
   const entries: DumpEntry[] = [];
   for (const file of [...files].sort((a, b) => byPath(a.path, b.path))) {
-    const outcome = parseFile(file);
+    const outcome = parseFile(file, context);
     switch (outcome.status) {
       case "parsed":
         entries.push({
