@@ -1,35 +1,53 @@
-# Spike 3.23: the rest of `PluginDefinition`, the trust model and E-99
+# Spike 3.23: the rest of `PluginDefinition`, extensibility and E-99
 
-Status: proposal for the owner's review, revised after an independent critique (`spike-23/spike-critique.md`, 19 findings, all applied or listed below). Three independent researchers produced `spike-23/spike-shape.md` (fields and first consumers), `spike-23/spike-trust.md` (threat model and sandbox options) and `spike-23/spike-legacy.md` (what legacy plugins did). This page is the synthesis; the three documents are the evidence.
+Status: proposal for the owner's review. **Revised 2026-10-12 after the owner's ruling: one ungated, composable plugin contract; no trust tiers for now.** Three independent researchers produced `spike-23/spike-shape.md` (fields and first consumers), `spike-23/spike-trust.md` (threat model and sandbox options) and `spike-23/spike-legacy.md` (what legacy plugins did); `spike-23/spike-critique.md` reviewed the earlier two-tier synthesis. Those four are evidence. Where they argue for a gated untrusted tier, this page supersedes them.
+
+## Ruling
+
+Plugins are extensions of the application and may do what they need to. A command pack, a domain module, a compat layer and a game-shipped plugin are all the same thing: a `PluginDefinition` registered into the engine. There is **no untrusted tier and no capability gating** for now. A less-trusting model can be added later; this page keeps the seam for it (see "What stays open") but does not build it.
+
+The mental model is polyfills and modules, not an inheritance hierarchy. Plugins are composed, not subclassed: each contributes pieces (commands, decoders, activation, state, subsystems, events), the registry layers them in a fixed order, and a later contribution to the same name overrides the earlier one, as a polyfill replaces a missing or older implementation.
 
 ## Recommendation in one paragraph
 
-Ship v1 with **no third-party plugin code** (no foreign code and no author-shipped plugins). `PluginDefinition` stays a trusted, in-process registration shape that grows one field at a time, added by the entry that first needs it. Legacy plugins are replaced by **first-party native command packs** (the most-used ones) and a located diagnostic for the rest. The sandboxed extension point of E-99 is designed at the boundary level now and built after gates. **This defers part of CAP-5's stated intent** (a sandboxed extension point replacing native plugins); CAP-5's success check is still met by entries 21 and 22. Decision 5 below records that deferral in the spec.
+`PluginDefinition` is the single extension contract, in-process and ungated. It starts as `{ id, version, commands }` and grows one optional field at a time, added by the entry that first needs it. First-party native command packs, the TK2 compat layer and any third-party plugin register through the same shape, in the same fixed order, with last-registered-wins and one warning diagnostic on a repeated name. Legacy plugins are replaced by native packs (most-used first) and a located diagnostic for the rest. A third-party plugin is just another definition handed to the registry by the host.
 
-## What all three agree on
+## What the research still tells us
 
-1. ADR 0004 says community plugins share the in-process contract; AD-17 and E-99 say games are untrusted and the extension mechanism is sandboxed. Both stay true if they are **two tiers**: a trusted in-process `PluginDefinition` (built-ins, domain modules, `plugin-tk2-compat`) and an untrusted tier reached only through host requests (`extension.call` and `extension.result`, already in AD-5 and AD-17).
-2. The untrusted tier answers commands by name only. It cannot add decoders, subsystems, dialects, event hooks or state. Invariant: **capability gating applies only to the untrusted tier; the trusted tier is ungated by design**, and the untrusted tier's returned effects are validated against its manifest's grants.
-3. Every legacy plugin the corpus uses is a TK2-era command pack. Menu, battle and event plugin kinds are TK3-only and unused by the archived games, so `subsystems` and `events` wait for their first consumer (epics 7, 8, 5).
-4. Unknown commands already get a recorded-effect stub and a located diagnostic (entries 21 and 22), which satisfies "every command responds" without loading anything.
-5. A foreign-code sandbox needs determinism proof (G3) and a snapshot story (G1) before any implementation. If those cannot be met, keep the declarative and RPGCode tier (author-shipped manifests plus `.prg` run inside the VM, which pass G1, G2 and G3 by construction) and drop foreign code. That declarative tier is the realistic untrusted tier; it is Phase 1 and is **not** in the MVP.
-6. Guard-rail check: nothing in this recommendation breaks G1, G2, G3, G6 or G7.
+1. **Legacy plugins are command packs.** Every plugin the corpus uses is a TK2-era command pack. Menu, battle and event plugin kinds are TK3-only and unused by the archived games, so `subsystems` and `events` wait for their first consumer (epics 7, 8, 5).
+2. **Unknown commands already respond.** Entries 21 and 22 give an unregistered name a recorded-effect stub and a located diagnostic.
+3. **Composition falls out of decisions already made.** Fixed registration order plus last-registered-wins (`tickets.toml:45-49`) is the override mechanism. AD-8's duplicate rejection survives only for one plugin repeating itself.
 
-## Where they differed, and the ruling I recommend
+## The manifest is the configuration, and ships with defaults
 
-| Question | Shape said | Trust said | Recommended |
-|---|---|---|---|
-| Is the sandboxed tier a `PluginDefinition`? | No, a separate game manifest answering command names | One interface with a `kind` and `capabilities` field, two trust tiers | **Separate manifest.** A trusted registration shape that also described untrusted plugins would carry fields (subsystems, decoders) an untrusted plugin must never have. `capabilities` lives on the manifest only; the trusted tier is ungated and its safety is code review, not enforcement. |
-| `dialects` field | Never; core-internal registry | An id list | **Never a field.** Rejects even the id-list form; the TK2 and TK3 frontends are a core-internal registry (ADR 0004 decision 1). |
-| Can an untrusted plugin shadow a built-in? | not addressed | No: untrusted plugins may not replace built-in or first-party names | **Already guaranteed by construction, so no new rule for you to rule on.** The untrusted tier is reached only through `extension.call`, the last lookup tier (AD-8), so it never sees a name a built-in already owns. Your last-registered-wins rule stays as set, for the trusted tier. If an in-registry untrusted tier (Phase 1) is ever built, built-ins win by the same ordering; that is stated here so it is not forgotten. |
-| Build the sandbox entry now? | Add entry 24 | Phase 2, gated, unscheduled | **Do not slice an implementation yet.** Record it as post-MVP, behind the gates below. |
+Owner ruling, 2026-10-12: if there is a manifest, the engine's own code uses it too. There is no separate, privileged way the built-in packs are wired in.
+
+- **One manifest shape, plain data (G1).** An ordered list of plugin entries: `{ id, version?, enabled?, options? }`. Order is registration order, so last-registered-wins is simply "later in the list wins".
+- **The engine ships a default manifest** that lists the packs we expect to be useful out of the box (the native packs of entry 24, the TK2 compat layer, and whichever domain modules are optional). It is the same file format a game or user writes, not a special case.
+- **Nothing is sacred about the defaults.** A game or user manifest can remove a default entry, disable it, reorder it, replace it with their own plugin of the same id, or append new ones. Starting from the default and editing it is the normal path; starting from an empty list is allowed.
+- **Resolution stays in the host (G2).** The manifest names plugins; the host maps each `id` to code it can load and hands the resulting `PluginDefinition` list to the registry. `core` never reads files or loads modules. An id the host cannot resolve is a located diagnostic, not a crash.
+- **Where the line falls.** The RPGCode language itself (control flow, expressions, the step machine) is not a plugin and is not in the manifest: removing it would leave nothing to run. Command packs are plugins and are removable. Which commands belong to the language and which to a pack is a per-command call made when entries 21 and 22 register the catalogue; see the open question below.
+- **This replaces the informational `needs` idea.** The manifest is the seam where a later trust model, consent prompt or per-entry grants would attach, as extra fields on the entry. Nothing needs to be carried on the definition now.
+
+## What ungated does not mean: the engine rules still bind plugins
+
+Removing the trust gate removes a *permission* check. It does not remove the correctness rules, because they are what make save, restore, replay and golden tests work for everyone's plugins:
+
+| Rule | What it means for a plugin |
+|---|---|
+| G1 | State is plain JSON data; commands are step-machine friendly. A plugin that keeps a closure, a Promise or a class instance in state breaks restore. |
+| G2 | `core` touches no DOM, Node, I/O or timers. A plugin that needs a file, a socket or a clock asks the host through a request (`extension.call` and the AD-17 requests); it does not reach out itself. This is a platform seam, not a sandbox. |
+| G3 | Deterministic: no `Math.random`, `Date`, `Intl`; use the injected clock and seeded RNG. A non-deterministic command breaks replay and goldens. |
+| G6 | Dependencies under a Bronze-or-better licence. |
+
+For first-party packs these are enforced by lint and types. For plugins from outside the repo they are the documented contract, and the contract's own checks (effects validated against the plugin's declared schema, not against grants) catch most violations at registration or first use.
 
 ## Field add-order
 
 | Order | Field | Added by | Note |
 |---|---|---|---|
 | 1 | `id`, `version`, `commands` | entry 3 | the only seam anything needs now |
-| 2 | `decoders` | entry 14 | closes the AD-31 conflict; trusted only |
+| 2 | `decoders` | entry 14 | closes the AD-31 conflict |
 | 3 | `activation` | entry 15 | TK2 compat plugins turn on from the `.gam` plugin list |
 | 4 | `state` | first plugin needing persistent state | namespaced slot under `vm`, versioned in the schema; absent plugin on restore keeps the data and warns |
 | 5 | `subsystems.battle`, `.menu` | epics 7, 8 | singletons per kind |
@@ -37,25 +55,42 @@ Ship v1 with **no third-party plugin code** (no foreign code and no author-shipp
 | 7 | `subsystems.dialogue` | epic 4 or the dialogue entry, not sliced | deferred; no consumer yet |
 | 8 | editor metadata | epic 11 | last |
 
-## Doc amendments to approve (doc-first, one commit)
+The earlier objection to one shape (that a trusted registration shape described untrusted plugins with fields they must never have) no longer applies, since there is nothing a plugin must never have. `dialects` is still never a field: the TK2 and TK3 frontends are a core-internal registry (ADR 0004 decision 1).
 
-ADR 0004: add `decoders?` to the interface, say clashes use last-registered-wins with a warning, soften "community extensions share the exact same runtime contract", add a decision stating the trust boundary, and rewrite the two Consequences bullets that contradict the new rules (the ecosystem-parity bullet and the command-collision mitigation that still says collisions are rejected). AD-31 is already right once the field exists. Also record the deferral: CAP-5's intent and the spec's open question on the extension API (`spec-rpgtoolkit-reawakened.md` lines 38 and 124), the spine open question (AD-17), and `epic-rpgcode-vm.md` Done-when 6 get a note that the sandboxed extension point is post-MVP behind the gates. The exact ADR text is in `spike-23/spike-shape.md` section 6. This lands inside entries 3 and 14 as planned.
+## Doc amendments (doc-first, one commit)
 
-## New ticket recommended (replaces the sandbox implementation entry)
+The direction of the conflict flips. ADR 0004 already says community plugins share the in-process contract, so it is now the accurate one, and what needs amending is the sandbox language:
 
-**Native packs for the most-used legacy plugins**, ranked by use in 2,783 archived programs (`spike-23/spike-legacy.md`): Triuken pack (71 programs), GsMiscPlugins (57), filereadwrite (47), FTP (41, declined), XFMWin (16), proplug (13), E-Mail (10, declined), TWButton (6), Kaimu (3). The counts are **occurrences across source files and packages** in a corpus of 2,783 `.prg` and `.gam` units, not numbers of programs. Multiplayer (`multip.dll`, 4 occurrences) uses sockets and is declined. Rebuild first: GsMiscPlugins, the Triuken pack, `filereadwrite` (as the sandboxed file I/O of E-97), `proplug` string and math helpers, then XFMWin and Kaimu as aliases.
+- **AD-17, E-99, and the "games are untrusted" statements in the spec**: say that plugins are first-class extensions and ungated for now, that the engine rules above still bind them, and that a tighter trust model is a future decision rather than a design constraint.
+- **ADR 0004**: add `decoders?` to the interface; say clashes use last-registered-wins with a warning; rewrite the command-collision mitigation that still says collisions are rejected; state the composition model in one decision.
+- **`epic-rpgcode-vm.md`**: resolve the "Source conflict" and "Open question: trust model" Notes; Done-when 6 and CAP-5's "sandboxed extension point" wording become "a single plugin contract any author can use".
+- `spec-rpgtoolkit-reawakened.md` lines 38 and 124 and the spine's AD-17 open question get the same note.
 
-**Owner and shape (proposed entry 24, not yet added to `tickets.toml`):** these are TK2-era compat commands, so they live in the compat plugin, not in new domain code. One story in this epic, `after` entries 15 and 22, `covers` CAP-5: a static table maps each legacy plugin identity (the `tkplug0` to `tkplug4` slots and file names in the `.gam` plugin list, plus Multi-Plug `plugins.ini` entries) to a native pack or to a declined diagnostic, and each pack's commands register through `PluginDefinition.commands` and record their effects for the domain epics to apply. Legacy-name mapping is therefore owned by entry 15 (activation) plus entry 24 (the table and packs). Domain behaviour stays with the domain epics. It also adds entry 24 to the sweep's `after`. FTP, sockets, E-Mail, DragSound, Flash and anything that needs Win32 handles are declined with a diagnostic (they break AD-17 and have no portable equivalent).
+This lands inside entries 3 and 14 as planned.
 
-## Gates before any foreign-code sandbox (Phase 2)
+## New ticket recommended
 
-Demand (3 documented plugin requests that RPGCode plus a manifest cannot serve), consent UI in both editor hosts, a determinism proof of the step budget across Node and a headless browser, a Worker-hosted path that can always be stopped, a written snapshot policy (a plugin call is a blocking host request whose reply is recorded), and a licence and size check (QuickJS in wasm is the only foreign-code candidate that passes both the licence gate and the authoring bar; several others, such as wasmtime, wasm3, Duktape and JerryScript, also pass the licence gate: `spike-23/spike-trust.md` lines 218 to 227). If determinism cannot be shown, drop foreign code.
+**Native packs for the most-used legacy plugins**, ranked by occurrences across 2,783 archived `.prg` and `.gam` units (`spike-23/spike-legacy.md`): Triuken pack (71), GsMiscPlugins (57), filereadwrite (47), FTP (41, declined), XFMWin (16), proplug (13), E-Mail (10, declined), TWButton (6), Kaimu (3). Multiplayer (`multip.dll`, 4) uses sockets and is declined. Rebuild first: GsMiscPlugins, the Triuken pack, `filereadwrite` (file I/O through a host request, per G2), `proplug` string and math helpers, then XFMWin and Kaimu as aliases.
+
+**Proposed entry 24, not yet added to `tickets.toml`:** one story in this epic, `after` entries 15 and 22, `covers` CAP-5. A static table maps each legacy plugin identity (the `tkplug0` to `tkplug4` slots and file names in the `.gam` plugin list, plus Multi-Plug `plugins.ini` entries) to a native pack or to a declined diagnostic. Each pack registers through `PluginDefinition.commands` and records its effects for the domain epics to apply. FTP, sockets, E-Mail, DragSound, Flash and anything that needs Win32 handles are declined with a located "not supported" diagnostic (no portable equivalent).
+
+## What stays open
+
+- **Loading third-party code.** `core` cannot load modules itself (G2). The host loads a plugin and hands the `PluginDefinition` to the registry. How a game package ships plugin code, and in what form (JS module, wasm, `.prg` plus manifest), is a host and distribution question for a later entry. It is not blocked by anything here.
+- **Reaching the thing you override.** Resolved above under "Core versus pack": a command receives `next`. Decide in entry 3 whether it is part of the first contract (recommended, since adding a parameter later breaks every pack) or added later.
+- **Tightening later.** A less-trusting model (consent prompts, grants, a sandbox) attaches to the manifest entry as extra fields, so the plugin contract does not change.
+- **Core versus pack (owner: a small core is expected; wrappers welcome if cheap).** Recommended split, with no per-command marking needed:
+  - *Language constructs are IR, not commands.* Control flow, assignment, labels, calls and returns compile to step-IR ops (ADR 0004) that move the program counter and stack. They are not in the command chain, so they cannot be removed or wrapped. This is the genuine core and it stays small.
+  - *Everything callable by name is a command in a chain.* The engine's own implementations form a built-in `core` pack at the bottom of the default manifest, pinned (it cannot be removed or disabled). Other packs layer above it.
+  - *A layer can wrap the one below.* A command receives `next`, the definition it shadows: `(view, args, next) -> { out, effects, wait? }`. A wrapper can adjust args, call `next`, then add or drop effects, or ignore `next` and replace. Because `next` is a pure function of `(view, args)`, nothing about VM internals leaks and G1 holds. Only a command that returns a non-wrappable result (it cannot, by contract: control transfer is IR) is out of reach.
+  - *Cost:* one extra parameter on the command contract in entry 3, and a registry that keeps a per-name stack of layers instead of one winner. Last-registered-wins is then just "top of the stack runs first".
+- **Manifest layering.** Is a game manifest a full replacement of the default, or a patch over it (add, remove, disable by id)? Recommended: a patch, with "replace everything" expressed as removing every default id.
+- **Foreign-code determinism.** If third-party code is ever run in-process as arbitrary JS, G3 and the step-budget question from `spike-23/spike-trust.md` apply to it. That is a correctness concern independent of trust.
 
 ## Decisions for you
 
-1. Two tiers, with the untrusted tier a separate manifest (not a `PluginDefinition`). Yes or no.
-2. (Dropped: shadowing is impossible by construction, see the table.) Confirm only that the trusted tier is ungated.
-3. No sandbox implementation entry in the MVP; add the native-packs entry instead. Yes or no.
-4. Declined plugins (FTP, E-Mail, sockets, DragSound, Flash): answer them with a located "not supported" diagnostic now, and revisit only if the Phase 2 demand gate is met. Recommended: yes.
-5. Accept that CAP-5's sandboxed extension point is post-MVP, and amend the spec, the spine open question and the epic Done-when to say so. Recommended: yes. If you say no, the MVP needs the declarative tier built, which adds a story.
-6. Plugin shapes deferred, each to the entry that first needs it: `kind`, `aliases`/`legacyNames` on the definition (the legacy-name table is entry 24's instead), and event-hook shape. Recommended: defer.
+1. Confirm the single, ungated contract (this page), replacing the two-tier recommendation. Yes or no.
+2. The engine ships a default manifest of the useful packs, in the same format a game or user edits, and the engine's own wiring reads it. Recommended: yes. Plus the two open questions above (core versus pack, patch versus replace).
+3. Add entry 24 (native packs and the legacy-name table). Recommended: yes.
+4. Declined plugins (FTP, E-Mail, sockets, DragSound, Flash) answer with a located "not supported" diagnostic. Recommended: yes.
+5. Defer `kind`, `aliases`/`legacyNames` on the definition (the legacy-name table is entry 24's), the event-hook shape, and `super`-style delegation to the entries that first need them. Recommended: defer.

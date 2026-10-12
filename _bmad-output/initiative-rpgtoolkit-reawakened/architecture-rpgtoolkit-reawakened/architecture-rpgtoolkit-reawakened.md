@@ -245,7 +245,7 @@ graph TD
 
 - **Binds:** CAP-5, CAP-7, CAP-11, CAP-12
 - **Prevents:** scripts or the extension mechanism reaching files or the network directly; saves colliding across games or hosts.
-- **Rule:** the core's only path to the host is `StepReport.requests`: `asset`, `loadBlob`, `saveBlob`, `listBlobs`, `extension.call`, `quit`, `openUrl`, `playVideo`. Blob keys are `{ area: 'saves' | 'files', path }`, case-folded in core. RPGCode file reads try `saves` then fall back to shipped game folders, read-only, through `asset` requests; writes go only to `saves` or `files`. `GameId` is derived in core as a hash of the main file plus the package identity and is the save-area key in every host; only the physical location is a host choice. `openUrl` allows only `https:` and always asks the user. Games are untrusted input. The E-99 extension mechanism uses these same requests.
+- **Rule:** the core's only path to the host is `StepReport.requests`: `asset`, `loadBlob`, `saveBlob`, `listBlobs`, `extension.call`, `quit`, `openUrl`, `playVideo`. Blob keys are `{ area: 'saves' | 'files', path }`, case-folded in core. RPGCode file reads try `saves` then fall back to shipped game folders, read-only, through `asset` requests; writes go only to `saves` or `files`. `GameId` is derived in core as a hash of the main file plus the package identity and is the save-area key in every host; only the physical location is a host choice. `openUrl` allows only `https:` and always asks the user. Game data is untrusted input and is validated on read. Plugins are ungated extensions of the application (ADR 0004 decision 6); they reach files and the network only through these same requests, which is a platform seam, not a sandbox.
 - **Check:** headless round-trip tests for `save`, `load`, `openFileOutput`/`openFileInput` and `dirSav`.
 
 ### AD-18 — Format models round-trip
@@ -479,7 +479,7 @@ Primary governing ADs per capability. Each AD's `Binds` line lists every capabil
 - Legacy `.sav` import (E-122): changes AD-10 and AD-23 if in scope.
 - Are 2.x text boards, other text-era formats and compiled `.prg` rejected with a clear message or supported? Changes AD-18's error contract.
 - AVI video (E-104): transcode on import, or drop? Changes `playVideo` in AD-17.
-- API and capability model of the E-99 extension mechanism: AD-17 fixes its boundary, not its API.
+- E-99 extension mechanism: resolved as the single ungated `PluginDefinition` plus a manifest (ADR 0004 decision 6). A less-trusting model is a future decision; how a game package ships plugin code is a host and distribution question.
 - Which sample tile sets are the source for rebuilding the auto-tiler variant order (T-25) under G7?
 - Desktop shell: Tauri, Electron or Electrobun (spike); changes AD-20 capabilities only.
 
