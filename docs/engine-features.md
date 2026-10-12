@@ -308,7 +308,7 @@ A custom menu image can be set (`menuGraphic`). Cursor sounds come from the main
 
 **E-98 Debugging.** A debug window with runtime error messages ("near line N"). Errors include the file and line. `debugger(msg)` writes to the window. A debug toggle exists.
 
-**E-99 Plugins (extension point).** Legacy native plugins could add script functions, replace the menu, or replace the battle UI. They were offered every unknown function call. A rebuild should provide an equivalent **sandboxed** extension mechanism. Legacy binary plugins cannot be supported. The two stock plugins (menu, battle) must be re-implemented natively.
+**E-99 Plugins (extension point).** Legacy native plugins could add script functions, replace the menu, or replace the battle UI. They were offered every unknown function call. A rebuild should provide an equivalent extension mechanism: one plugin contract used by the engine's own packs and by third parties, selected by an editable manifest, with external effects going through host requests. It is not trust-gated for now. Legacy binary plugins cannot be supported. The two stock plugins (menu, battle) must be re-implemented natively.
 
 ---
 
@@ -353,7 +353,7 @@ A custom menu image can be set (`menuGraphic`). Cursor sounds come from the main
 ## 13. Distribution features (E-130 … E-132)
 
 **E-130 Folder play.** The main file plus the project folder.
-**E-131 Single-file package.** The legacy `.tpk` ZIP and standalone EXE (engine + appended ZIP). A rebuild needs its own equivalents (e.g. a web bundle, a desktop binary with an embedded archive) and should **import** the legacy ones.
+**E-131 Single-file package.** The legacy `.tpk` ZIP and standalone EXE (engine + appended ZIP). A rebuild needs its own equivalents (e.g. a web bundle, a desktop binary with an embedded archive) and should **import** the legacy ones. The rebuild's own single-file package is the **distribution package** of format-spec §13: a `.tpk`-compatible ZIP carrying `manifest.json { schema, main, index }`, so a runner boots from `main` and builds its asset index from `index` without listing the archive, and a loose folder and a package load to the same files.
 **E-132 Private fonts.** Game fonts are available to text rendering for the session only.
 
 ---
