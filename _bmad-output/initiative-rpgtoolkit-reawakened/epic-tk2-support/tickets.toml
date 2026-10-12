@@ -3,9 +3,9 @@
 [[entry]]
 id = 1
 type = "story"
-title = "Accept ADR 0006 and write the extraction question list"
-description = "Accepts ADR 0006 (clean-room spec extraction), names the extractor and the reviewer, and writes the numbered question list: every TK2 layout or rule that the archive evidence and the allowed data files cannot answer (text .brd, .gam, .itm, .tem; the .gam 2.2 and .tem 3 to 4 field sets; .fnt; the 3.x update wizard conversion rules). Questions the data can answer are listed as derived, not asked."
-verify = "ADR 0006 is Accepted, the extractor and reviewer are named in it, and each question names the evidence that could not answer it."
+title = "Write the extraction question list"
+description = "Writes the numbered question list (ADR 0006 is Accepted): every TK2 layout or rule that the archive evidence and the allowed data files cannot answer (text .brd, .gam, .itm, .tem; the .gam 2.2 and .tem 3 to 4 field sets; .fnt; the 3.x update wizard conversion rules). Questions the data can answer are listed as derived, not asked."
+verify = "The question list is numbered, each question names the evidence that could not answer it, and a person approved it."
 covers = ["CAP-1"]
 after = []
 hitl = true
@@ -17,8 +17,8 @@ references = ["adr - docs/adr/0006-clean-room-spec-extraction.md", "research - _
 id = 2
 type = "story"
 title = "Extraction round: answer the question list from the legacy source"
-description = "A disposable extractor session, which never writes code for this epic, reads the legacy source only to answer entry 1 questions and writes prose facts (layouts, tables, rules in its own words) to a staging file; a person other than the extractor reviews it for copied expression and runs the provenance scan. May close with no source read if entry 1 lists no questions."
-verify = "The reviewed staging file answers every listed question in prose with no code, identifiers or comments from the source, the provenance scan passes, and the round is recorded with source revision, date, extractor and reviewer."
+description = "A disposable extractor subagent, which never writes code for this epic, reads the legacy source only to answer entry 1 questions and writes prose facts (layouts, tables, rules in its own words) to a staging file; a second, separate agent session reviews it for copied expression and reports its findings, and the assistant writes the audit entry and tells the user. May close with no source read if entry 1 lists no questions."
+verify = "The reviewed staging file answers every listed question in prose with no code, identifiers or comments from the source, the reviewer found no copied expression, and the round is recorded in docs/provenance/extraction-log.md with source revision, date, extractor and reviewer."
 covers = ["CAP-1"]
 after = [1]
 hitl = true

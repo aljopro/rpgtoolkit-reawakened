@@ -27,7 +27,7 @@ Legacy authors and the engine can open any file of a legacy project; the CAP-1 s
 
 ## Boundaries
 
-Byte readers and writers, the asset resolver, package import and pre-vector upgrade, all in `core`. Not the editor's use of them, not rendering, and not optional formats (text-era formats, compiled `.prg`, legacy `.sav`) pending the open questions. The upgrade logic of T-31 is built here and reused by the editor later.
+Byte readers and writers, the asset resolver, package import and pre-vector upgrade, all in `core`. Not the editor's use of them, not rendering, and not the optional formats compiled `.prg` and legacy `.sav` pending the open questions. The Toolkit 2 (2.x) text-era formats are epic tk2-support's (decision 2026-10-11). The upgrade logic of T-31 is built here and reused by the editor later.
 
 ## References
 
@@ -38,7 +38,8 @@ Byte readers and writers, the asset resolver, package import and pre-vector upgr
 
 ## Notes
 
-- Open question: are 2.x text boards, other text-era formats and compiled `.prg` rejected with a clear message or supported? Entries for them wait on the spec's answer.
+- Decision: Jensen, 2026-10-11: 2.x text boards and the other text-era formats are supported, so TK2 games load. Their readers are epic tk2-support's (it builds on entries 2.13 and 2.14 of this epic); this epic's readers refuse them with a clear message until then. Compiled `.prg` and legacy `.sav` stay open questions.
+- Decision: Jensen, 2026-10-11: the review deferrals of entries 1 to 12 became entries 15 to 22; the closing sweep (14) waits on them.
 - Unknown: the exact legacy `Basic` and `demo` file versions present; discover at inception.
 - Decision: epic set approved by the user, 2026-10-10.
 - Waits on platform-baseline because: the monorepo, CI and fixture fetch.
