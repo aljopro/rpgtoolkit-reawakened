@@ -46,3 +46,4 @@ Byte and text readers in `core`, their spec amendment, registry registration and
 - Unknown: exact text layouts of `.brd`, `.gam`, `.itm`, `.tem`; the true `.gam` 2.2 and `.tem` 3 to 4 field sets; `.fnt` internals. Whether 2.0 and 2.07 era data differs from the observed 2.1.4.a and 2.1.7.a files.
 - Open question: where the six TK2 games are fetched from as fixtures, and their pinned hashes.
 - Open question: zero-byte placeholder files (1 `.itm`, 1 `.spc`, 3 empty-name `.brd`): skip or tolerate.
+- Decision: Jensen, 2026-10-11: Toolkit 1.x (v1) data formats and RPGCode are a nice to have and not part of the MVP; this epic covers 2.x only.
