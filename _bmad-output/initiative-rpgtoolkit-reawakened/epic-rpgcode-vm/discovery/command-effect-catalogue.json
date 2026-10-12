@@ -1,0 +1,7094 @@
+{
+ "meta": {
+  "title": "TK Reawakened \u2014 3.1 command effect catalogue",
+  "source": [
+   "docs/format-spec.md \u00a79.10, \u00a79.11",
+   "docs/engine-features.md \u00a79 (E-90\u2026E-99)",
+   "spine AD-8, AD-9, AD-10, AD-17, AD-26",
+   "tickets.toml epics 3,4,5,6,7,8",
+   "TK2 evidence: archive-org 2.20b help/rpgcodeEN.ref (language spec v2.1, list last updated for 2.19b)"
+  ],
+  "cleanRoom": "No legacy source read (G7). TK2 command names taken from the shipped help file, which is an allowed artifact.",
+  "note": "Behaviour the docs do not state is marked [INFERENCE]."
+ },
+ "names": [
+  {
+   "name": "mwin",
+   "group": "Dialogue & text",
+   "params": "text",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-55; appends a line to the message window"
+  },
+  {
+   "name": "mwinCls",
+   "group": "Dialogue & text",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "mwinSize",
+   "group": "Dialogue & text",
+   "params": "%",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "setMwinTranslucency",
+   "group": "Dialogue & text",
+   "params": "%",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "winGraphic",
+   "group": "Dialogue & text",
+   "params": "file",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "world"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "file name implies an AD-17 asset request"
+  },
+  {
+   "name": "winColor",
+   "group": "Dialogue & text",
+   "params": "dos",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "winColorRgb",
+   "group": "Dialogue & text",
+   "params": "r,g,b",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "text",
+   "group": "Dialogue & text",
+   "params": "x,y,s[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "tile-cell units; cnv selects a canvas"
+  },
+  {
+   "name": "pixelText",
+   "group": "Dialogue & text",
+   "params": "x,y,s[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "font",
+   "group": "Dialogue & text",
+   "params": "file",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "world"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "E-132 private fonts"
+  },
+  {
+   "name": "fontSize",
+   "group": "Dialogue & text",
+   "params": "size",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "bold",
+   "group": "Dialogue & text",
+   "params": "bool",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "italics",
+   "group": "Dialogue & text",
+   "params": "bool",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "underline",
+   "group": "Dialogue & text",
+   "params": "bool",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "color",
+   "group": "Dialogue & text",
+   "params": "dos",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "colorRgb",
+   "group": "Dialogue & text",
+   "params": "r,g,b",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "getColor",
+   "group": "Dialogue & text",
+   "params": "&r,&g,&b",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getFontSize",
+   "group": "Dialogue & text",
+   "params": "&size",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getTextWidth",
+   "group": "Dialogue & text",
+   "params": "&w",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "getTextHeight",
+   "group": "Dialogue & text",
+   "params": "&h",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "textSpeed",
+   "group": "Dialogue & text",
+   "params": "speed",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "get/set speed"
+  },
+  {
+   "name": "prompt",
+   "group": "Dialogue & text",
+   "params": "question[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "input"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "wait",
+   "waitKind": "render.msgbox",
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-60 prompt"
+  },
+  {
+   "name": "msgBox",
+   "group": "Dialogue & text",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "input"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "wait",
+   "waitKind": "render.msgbox",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-60 OK / Yes-No box"
+  },
+  {
+   "name": "print",
+   "group": "Dialogue & text",
+   "params": "text",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "TK2 #Print draws at current text position"
+  },
+  {
+   "name": "show",
+   "group": "Dialogue & text",
+   "params": "var",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "legacy: show a variable in the message window"
+  },
+  {
+   "name": "staticText",
+   "group": "Dialogue & text",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "wait",
+   "group": "Input",
+   "params": "[&dest]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "input"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "wait",
+   "waitKind": "input.key",
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "returns the key name (E-110)"
+  },
+  {
+   "name": "get",
+   "group": "Input",
+   "params": "[&dest]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "input"
+   ],
+   "sectionsWrite": [
+    "input"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "non-blocking; consumes from the key queue [INFERENCE]"
+  },
+  {
+   "name": "mouseClick",
+   "group": "Input",
+   "params": "&x,&y[,noWait]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "input"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "wait",
+   "waitKind": "input.mouse",
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "wait kind NOT in the AD-9 illustrative list"
+  },
+  {
+   "name": "mouseMove",
+   "group": "Input",
+   "params": "&x,&y",
+   "paramsSource": "inferred",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "input"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "scan",
+   "group": "Input",
+   "params": "x,y,layer,&mem",
+   "paramsSource": "inferred",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "9.11 groups scan/mem under Input, but TK2 shows they stage board tiles (world)"
+  },
+  {
+   "name": "mem",
+   "group": "Input",
+   "params": "x,y[,layer],mem",
+   "paramsSource": "inferred",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "same staging pair as scan"
+  },
+  {
+   "name": "clearBuffer",
+   "group": "Input",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "input"
+   ],
+   "sectionsWrite": [
+    "input"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "setButton",
+   "group": "Input",
+   "params": "file,num,x,y,w,h",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "input"
+   ],
+   "sectionsWrite": [
+    "input"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "on-screen buttons (E-60)"
+  },
+  {
+   "name": "checkButton",
+   "group": "Input",
+   "params": "x,y,&num",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "input"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "clearButtons",
+   "group": "Input",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "input"
+   ],
+   "sectionsWrite": [
+    "input"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "createCursorMap",
+   "group": "Input",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "AD-10 puts cursor maps in ui (core/render), not input"
+  },
+  {
+   "name": "cursorMapAdd",
+   "group": "Input",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "same owner conflict as createCursorMap"
+  },
+  {
+   "name": "cursorMapRun",
+   "group": "Input",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "input"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "wait",
+   "waitKind": "input.key",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "returns the chosen index; wait kind inferred"
+  },
+  {
+   "name": "killCursorMap",
+   "group": "Input",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "cursorMapHand",
+   "group": "Input",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "mouseCursor",
+   "group": "Input",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "E-61 cursor image lives in ui"
+  },
+  {
+   "name": "clear",
+   "group": "Screen & drawing",
+   "params": "[cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "bitmap",
+   "group": "Screen & drawing",
+   "params": "file[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces",
+    "world"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "asset request implied"
+  },
+  {
+   "name": "setImage",
+   "group": "Screen & drawing",
+   "params": "file,x,y,w,h",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces",
+    "world"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "spelling confirmed by the TK2 ref (#SetImage)"
+  },
+  {
+   "name": "setImageTransparent",
+   "group": "Screen & drawing",
+   "params": "file,x,y,w,h,r,g,b",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces",
+    "world"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "setImageTranslucent",
+   "group": "Screen & drawing",
+   "params": "file,x,y,w,h[,%]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces",
+    "world"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "setImageAdditive",
+   "group": "Screen & drawing",
+   "params": "file,x,y,w,h,%",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces",
+    "world"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "drawLine",
+   "group": "Screen & drawing",
+   "params": "x1,y1,x2,y2[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "drawRect",
+   "group": "Screen & drawing",
+   "params": "x1,y1,x2,y2[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "fillRect",
+   "group": "Screen & drawing",
+   "params": "x1,y1,x2,y2[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "drawCircle",
+   "group": "Screen & drawing",
+   "params": "x,y,r[,a0,a1[,cnv]]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "fillCircle",
+   "group": "Screen & drawing",
+   "params": "x,y,r[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "setPixel",
+   "group": "Screen & drawing",
+   "params": "x,y[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getPixel",
+   "group": "Screen & drawing",
+   "params": "x,y,&r,&g,&b[,cnv]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "saveScreen",
+   "group": "Screen & drawing",
+   "params": "[slot,x1,y1,x2,y2]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-58 screen slots"
+  },
+  {
+   "name": "restoreScreen",
+   "group": "Screen & drawing",
+   "params": "[slot,x1,y1,x2,y2,xd,yd]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "restoreScreenArray",
+   "group": "Screen & drawing",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "fade",
+   "group": "Screen & drawing",
+   "params": "type",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "fx"
+   ],
+   "sectionsWrite": [
+    "fx"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-59"
+  },
+  {
+   "name": "wipe",
+   "group": "Screen & drawing",
+   "params": "file,effect[,speed]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "fx",
+    "world"
+   ],
+   "sectionsWrite": [
+    "fx"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "zoom",
+   "group": "Screen & drawing",
+   "params": "%",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "fx",
+    "camera"
+   ],
+   "sectionsWrite": [
+    "fx"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "earthquake",
+   "group": "Screen & drawing",
+   "params": "intensity",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "fx",
+    "camera"
+   ],
+   "sectionsWrite": [
+    "fx"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "borderColor",
+   "group": "Screen & drawing",
+   "params": "r,g,b",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "fx"
+   ],
+   "sectionsWrite": [
+    "fx"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "TK2 signature #BorderColor(r,g,b)"
+  },
+  {
+   "name": "forceRedraw",
+   "group": "Screen & drawing",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "engine",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-52; note that \u00a79.10 says call it after ambient writes"
+  },
+  {
+   "name": "renderNow",
+   "group": "Screen & drawing",
+   "params": "bool",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-57 render-now overlay"
+  },
+  {
+   "name": "viewBrd",
+   "group": "Screen & drawing",
+   "params": "file[,x,y[,cnv]]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-63 board preview"
+  },
+  {
+   "name": "getRes",
+   "group": "Screen & drawing",
+   "params": "&x,&y",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getCorner",
+   "group": "Screen & drawing",
+   "params": "&x,&y",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "camera"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "drawEnemy",
+   "group": "Screen & drawing",
+   "params": "file,x,y",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "battle",
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "reads a .ene battle asset; draw-then-battle owner is ambiguous"
+  },
+  {
+   "name": "createCanvas",
+   "group": "Canvases",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "off-screen surface (E-56)"
+  },
+  {
+   "name": "killCanvas",
+   "group": "Canvases",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "drawCanvas",
+   "group": "Canvases",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "drawCanvasTransparent",
+   "group": "Canvases",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "canvasDrawPart",
+   "group": "Canvases",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "draw-audio-cue",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "canvasGetScreen",
+   "group": "Canvases",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "send",
+   "group": "Board",
+   "params": "board,x,y[,layer]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world",
+    "sprites",
+    "camera"
+   ],
+   "sectionsWrite": [
+    "world",
+    "camera",
+    "sprites",
+    "vm",
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "kills board threads then transitions (E-19, AD-26)"
+  },
+  {
+   "name": "getBoardName",
+   "group": "Board",
+   "params": "[&name]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "put",
+   "group": "Board",
+   "params": "x,y,[layer,]tile",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "runtime board edit (E-10\u2026E-19)"
+  },
+  {
+   "name": "layerPut",
+   "group": "Board",
+   "params": "x,y,layer,tile",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getBoardTile",
+   "group": "Board",
+   "params": "x,y,layer,&dest",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "TK2 name is #GetBoardTile; 3.1 also has boardGetTile"
+  },
+  {
+   "name": "boardGetTile",
+   "group": "Board",
+   "params": "x,y,layer,&dest",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "getBoardTileType",
+   "group": "Board",
+   "params": "x,y,layer,&dest",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "tileType",
+   "group": "Board",
+   "params": "x,y,type[,layer]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "9.11 reads it as a query; TK2 #TileType SETS the type \u2014 conflict"
+  },
+  {
+   "name": "animatedTiles",
+   "group": "Board",
+   "params": "[&list]",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "parallax",
+   "group": "Board",
+   "params": "setting",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "setAmbientLevel",
+   "group": "Board",
+   "params": "r,g,b",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "\u00a79.10 says call forceRedraw() after"
+  },
+  {
+   "name": "boardGetVector",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "boardSetVector",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "boardGetVectorPoint",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "boardSetVectorPoint",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "boardGetProgram",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "boardSetProgram",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "boardGetProgramPoint",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "boardSetProgramPoint",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "prg",
+   "group": "Board",
+   "params": "num,x,y[,layer]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "legacy: place a program on the board"
+  },
+  {
+   "name": "setConstants",
+   "group": "Board",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "board constants (world)"
+  },
+  {
+   "name": "addPlayer",
+   "group": "Party & players",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "party",
+    "world"
+   ],
+   "sectionsWrite": [
+    "party",
+    "inventory"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "asset request; roster lives in party (E-85)"
+  },
+  {
+   "name": "removePlayer",
+   "group": "Party & players",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "party"
+   ],
+   "sectionsWrite": [
+    "party"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "newPlayer",
+   "group": "Party & players",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "party",
+    "sprites",
+    "world"
+   ],
+   "sectionsWrite": [
+    "party",
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "swaps graphics; touches party and sprites"
+  },
+  {
+   "name": "activePlayer",
+   "group": "Party & players",
+   "params": "[handle]",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "party"
+   ],
+   "sectionsWrite": [
+    "party"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "selected/visible member"
+  },
+  {
+   "name": "putPlayer",
+   "group": "Party & players",
+   "params": "h,x,y,layer",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "erasePlayer",
+   "group": "Party & players",
+   "params": "h",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "destroyPlayer",
+   "group": "Party & players",
+   "params": "h",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites",
+    "party"
+   ],
+   "sectionsWrite": [
+    "sprites",
+    "party"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "destroys the handle; also drops it from the roster"
+  },
+  {
+   "name": "restorePlayer",
+   "group": "Party & players",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "party",
+    "sprites",
+    "world"
+   ],
+   "sectionsWrite": [
+    "party",
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "callPlayerSwap",
+   "group": "Party & players",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "party"
+   ],
+   "sectionsWrite": [
+    "party"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-85 swap menu"
+  },
+  {
+   "name": "playerLocation",
+   "group": "Party & players",
+   "params": "h,&x,&y,&layer",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "playerDirection",
+   "group": "Party & players",
+   "params": "[h,]dir",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "playerSpeed",
+   "group": "Party & players",
+   "params": "[h,]speed",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "playerStance",
+   "group": "Party & players",
+   "params": "slot[,h]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "characterSpeed",
+   "group": "Party & players",
+   "params": "speed",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "legacy alias of playerSpeed"
+  },
+  {
+   "name": "walkSpeed",
+   "group": "Party & players",
+   "params": "fast/slow",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "createItem",
+   "group": "Items & NPCs",
+   "params": "file[,mem]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites",
+    "world"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "asset request; returns the slot number"
+  },
+  {
+   "name": "destroyItem",
+   "group": "Items & NPCs",
+   "params": "mem",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "putItem",
+   "group": "Items & NPCs",
+   "params": "h,x,y,layer",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "eraseItem",
+   "group": "Items & NPCs",
+   "params": "itemnum",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "itemLocation",
+   "group": "Items & NPCs",
+   "params": "itemnum,&x,&y,&layer",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "itemDirection",
+   "group": "Items & NPCs",
+   "params": "[h,]dir",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "itemSpeed",
+   "group": "Items & NPCs",
+   "params": "[h,]speed",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "itemStance",
+   "group": "Items & NPCs",
+   "params": "slot[,h]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "itemCount",
+   "group": "Items & NPCs",
+   "params": "item,&n",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "counts carried items, so it reads inventory (epic 8)"
+  },
+  {
+   "name": "onBoard",
+   "group": "Items & NPCs",
+   "params": "[h,]&flag",
+   "paramsSource": "inferred",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "spriteTranslucency",
+   "group": "Items & NPCs",
+   "params": "%",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-31"
+  },
+  {
+   "name": "push",
+   "group": "Movement",
+   "params": "dirs[,h[,flags]]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "movement",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "tkMV_PAUSE_THREAD makes it blocking (E-33)"
+  },
+  {
+   "name": "pushItem",
+   "group": "Movement",
+   "params": "itemnum,dirs",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "playerStep",
+   "group": "Movement",
+   "params": "h,x,y[,flags]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "movement",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "itemStep",
+   "group": "Movement",
+   "params": "itemnum,x,y[,flags]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "movement",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "playerPath",
+   "group": "Movement",
+   "params": "h,flags,\u2026",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "movement",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "itemPath",
+   "group": "Movement",
+   "params": "h,flags,\u2026",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "movement",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "playerGetPath",
+   "group": "Movement",
+   "params": "h,&path",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "itemGetPath",
+   "group": "Movement",
+   "params": "h,&path",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "wander",
+   "group": "Movement",
+   "params": "h[,restrict]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites",
+    "rng"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "draws from RngPort (AD-12)"
+  },
+  {
+   "name": "pathFind",
+   "group": "Movement",
+   "params": "x1,y1,x2,y2,&dest[,layer]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "smartStep",
+   "group": "Movement",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "pixelMovement",
+   "group": "Movement",
+   "params": "[bool[,push]]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "movement mode lives in world (AD-10)"
+  },
+  {
+   "name": "gameSpeed",
+   "group": "Movement",
+   "params": "n",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "game-speed offset lives in world (AD-10)"
+  },
+  {
+   "name": "move",
+   "group": "Movement",
+   "params": "x,y[,layer]",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "stance",
+   "group": "Movement",
+   "params": "slot,handle",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "posture",
+   "group": "Movement",
+   "params": "slot,handle",
+   "paramsSource": "9.11",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "hp",
+   "group": "Stats & progression",
+   "params": "h,amount",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "stat globals named in the .tem file"
+  },
+  {
+   "name": "getHp",
+   "group": "Stats & progression",
+   "params": "h,&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "giveHp",
+   "group": "Stats & progression",
+   "params": "h,amount",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "maxHp",
+   "group": "Stats & progression",
+   "params": "h,level",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getMaxHp",
+   "group": "Stats & progression",
+   "params": "h,&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "smp",
+   "group": "Stats & progression",
+   "params": "h,amount",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getSmp",
+   "group": "Stats & progression",
+   "params": "h,&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "giveSmp",
+   "group": "Stats & progression",
+   "params": "h,amount",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "maxSmp",
+   "group": "Stats & progression",
+   "params": "h,level",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getMaxSmp",
+   "group": "Stats & progression",
+   "params": "h,&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getDp",
+   "group": "Stats & progression",
+   "params": "h,&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getFp",
+   "group": "Stats & progression",
+   "params": "h,&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getLevel",
+   "group": "Stats & progression",
+   "params": "h,&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "giveExp",
+   "group": "Stats & progression",
+   "params": "h,amount",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm",
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "may level up, run the level-up program and bring up the battle rewards path (E-78)"
+  },
+  {
+   "name": "giveGp",
+   "group": "Stats & progression",
+   "params": "amount",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory"
+   ],
+   "sectionsWrite": [
+    "inventory"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "gold lives in inventory (AD-10, E-86)"
+  },
+  {
+   "name": "takeGp",
+   "group": "Stats & progression",
+   "params": "amount",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory"
+   ],
+   "sectionsWrite": [
+    "inventory"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getGp",
+   "group": "Stats & progression",
+   "params": "&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "inn",
+   "group": "Stats & progression",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-84 full restore (script may hold the inn thread)"
+  },
+  {
+   "name": "giveItem",
+   "group": "Inventory & equipment",
+   "params": "file[,qty]",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory"
+   ],
+   "sectionsWrite": [
+    "inventory"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "takeItem",
+   "group": "Inventory & equipment",
+   "params": "file[,qty]",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory"
+   ],
+   "sectionsWrite": [
+    "inventory"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "equip",
+   "group": "Inventory & equipment",
+   "params": "h,slot,item",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory",
+    "vm"
+   ],
+   "sectionsWrite": [
+    "inventory",
+    "vm"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "runs the equip program; stats move in vm.globals"
+  },
+  {
+   "name": "remove",
+   "group": "Inventory & equipment",
+   "params": "h,slot",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory",
+    "vm"
+   ],
+   "sectionsWrite": [
+    "inventory",
+    "vm"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getItemName",
+   "group": "Inventory & equipment",
+   "params": "item,&dest",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory",
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "reads the .itm file (asset request)"
+  },
+  {
+   "name": "getItemDesc",
+   "group": "Inventory & equipment",
+   "params": "item,&dest",
+   "paramsSource": "inferred",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory",
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "getItemCost",
+   "group": "Inventory & equipment",
+   "params": "item,&dest",
+   "paramsSource": "inferred",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory",
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "getItemSellPrice",
+   "group": "Inventory & equipment",
+   "params": "item,&dest",
+   "paramsSource": "inferred",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory",
+    "world"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "callShop",
+   "group": "Inventory & equipment",
+   "params": "item1,\u2026",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "inventory",
+    "menu"
+   ],
+   "sectionsWrite": [
+    "menu"
+   ],
+   "effectKind": "wait",
+   "waitKind": "menu.screen",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-83"
+  },
+  {
+   "name": "fight",
+   "group": "Battle",
+   "params": "skill,bkg",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "world",
+    "battle",
+    "audio"
+   ],
+   "sectionsWrite": [
+    "battle",
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-70 scripted start"
+  },
+  {
+   "name": "fightEnemy",
+   "group": "Battle",
+   "params": "e1,\u2026,bkg",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "battle",
+    "world",
+    "audio"
+   ],
+   "sectionsWrite": [
+    "battle",
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "attackAll",
+   "group": "Battle",
+   "params": "fp",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "battle",
+    "vm"
+   ],
+   "sectionsWrite": [
+    "battle",
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "damage lands in vm.globals via StatsPort (AD-10)"
+  },
+  {
+   "name": "drainAll",
+   "group": "Battle",
+   "params": "fp",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "battle",
+    "vm"
+   ],
+   "sectionsWrite": [
+    "battle",
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "ai",
+   "group": "Battle",
+   "params": "level",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "battle"
+   ],
+   "sectionsWrite": [
+    "battle"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-76"
+  },
+  {
+   "name": "applyStatus",
+   "group": "Battle",
+   "params": "h,file",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "battle",
+    "world"
+   ],
+   "sectionsWrite": [
+    "battle"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "loads a .ste file; status only in battle (AD-10)"
+  },
+  {
+   "name": "removeStatus",
+   "group": "Battle",
+   "params": "h,file",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "battle"
+   ],
+   "sectionsWrite": [
+    "battle"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "fightMenuGraphic",
+   "group": "Battle",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "ui",
+    "world"
+   ],
+   "sectionsWrite": [
+    "ui",
+    "battle"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "menuGraphic",
+   "group": "Battle",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "ui",
+    "world"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-80 custom menu image; owner is menu (epic 8) despite the Battle group"
+  },
+  {
+   "name": "internalMenu",
+   "group": "Battle",
+   "params": "n",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "menu"
+   ],
+   "sectionsWrite": [
+    "menu"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-80; opens a screen"
+  },
+  {
+   "name": "fightStyle",
+   "group": "Battle",
+   "params": "0/1",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "battle"
+   ],
+   "sectionsWrite": [
+    "battle"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "battleSpeed",
+   "group": "Battle",
+   "params": "speed",
+   "paramsSource": "9.11",
+   "owner": 7,
+   "ownerEpic": "battle",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "sourceHandle",
+   "group": "Battle",
+   "params": "&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-95 source/target context"
+  },
+  {
+   "name": "targetHandle",
+   "group": "Battle",
+   "params": "&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "sourceLocation",
+   "group": "Battle",
+   "params": "&x,&y",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm",
+    "sprites"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "targetLocation",
+   "group": "Battle",
+   "params": "&x,&y",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm",
+    "sprites"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "mediaPlay",
+   "group": "Audio & video",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio",
+    "world"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "looping music, E-100"
+  },
+  {
+   "name": "mediaStop",
+   "group": "Audio & video",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "wav",
+   "group": "Audio & video",
+   "params": "file[,block]",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio",
+    "world"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "audio.sfx",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-101; optionally blocking"
+  },
+  {
+   "name": "sound",
+   "group": "Audio & video",
+   "params": "file[,block]",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio",
+    "world"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "audio.sfx",
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "alias of wav"
+  },
+  {
+   "name": "wavStop",
+   "group": "Audio & video",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "mp3pause",
+   "group": "Audio & video",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio",
+    "world"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "setVolume",
+   "group": "Audio & video",
+   "params": "%",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-102"
+  },
+  {
+   "name": "playAvi",
+   "group": "Audio & video",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "video",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "AD-17 playVideo request; E-104"
+  },
+  {
+   "name": "playAviSmall",
+   "group": "Audio & video",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "video",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "midiPlay",
+   "group": "Audio & video",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio",
+    "world"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "legacy alias of mediaPlay"
+  },
+  {
+   "name": "playMidi",
+   "group": "Audio & video",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio",
+    "world"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "midiRest",
+   "group": "Audio & video",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "mediaRest",
+   "group": "Audio & video",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "mp3",
+   "group": "Audio & video",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 6,
+   "ownerEpic": "audio-synth",
+   "sectionsRead": [
+    "audio",
+    "world"
+   ],
+   "sectionsWrite": [
+    "audio"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "animation",
+   "group": "Animations",
+   "params": "file,x,y[,persist]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "fx",
+    "world"
+   ],
+   "sectionsWrite": [
+    "fx"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-54"
+  },
+  {
+   "name": "sizedAnimation",
+   "group": "Animations",
+   "params": "file,x,y,xs,ys[,persist]",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "fx",
+    "world"
+   ],
+   "sectionsWrite": [
+    "fx"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "endAnimation",
+   "group": "Animations",
+   "params": "id",
+   "paramsSource": "9.11",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "fx"
+   ],
+   "sectionsWrite": [
+    "fx"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "run",
+   "group": "Program flow & threads",
+   "params": "prg",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "spawn-thread",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-93"
+  },
+  {
+   "name": "change",
+   "group": "Program flow & threads",
+   "params": "prg",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "swaps the current program"
+  },
+  {
+   "name": "rpgCode",
+   "group": "Program flow & threads",
+   "params": "line",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "executes a line in the current context"
+  },
+  {
+   "name": "multiRun",
+   "group": "Program flow & threads",
+   "params": "block",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "wait",
+   "waitKind": "movement",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "AD-26: collects movement starts then yields one movement wait"
+  },
+  {
+   "name": "delay",
+   "group": "Program flow & threads",
+   "params": "sec",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm",
+    "time"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "wait",
+   "waitKind": "sleep",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "end",
+   "group": "Program flow & threads",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "\u00a79.5 ends the current program"
+  },
+  {
+   "name": "done",
+   "group": "Program flow & threads",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "legacy alias of end"
+  },
+  {
+   "name": "stop",
+   "group": "Program flow & threads",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "legacy alias of end"
+  },
+  {
+   "name": "thread",
+   "group": "Program flow & threads",
+   "params": "file,persist",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "spawn-thread",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-93"
+  },
+  {
+   "name": "killThread",
+   "group": "Program flow & threads",
+   "params": "id",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getThreadId",
+   "group": "Program flow & threads",
+   "params": "&id",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "threadSleep",
+   "group": "Program flow & threads",
+   "params": "[sec]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "wait",
+   "waitKind": "sleep",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "threadWake",
+   "group": "Program flow & threads",
+   "params": "id",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "threadSleepRemaining",
+   "group": "Program flow & threads",
+   "params": "id,&sec",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "tellThread",
+   "group": "Program flow & threads",
+   "params": "id,code",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-93"
+  },
+  {
+   "name": "branch",
+   "group": "Program flow & threads",
+   "params": ":label",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "\u00a79.5"
+  },
+  {
+   "name": "autoCommand",
+   "group": "Program flow & threads",
+   "params": "...",
+   "paramsSource": "inferred",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "debug",
+   "group": "Program flow & threads",
+   "params": "on/off",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-98 debug window toggle"
+  },
+  {
+   "name": "debugger",
+   "group": "Program flow & threads",
+   "params": "msg",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine",
+    "vm"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "E-98 / AD-24 diagnostics"
+  },
+  {
+   "name": "save",
+   "group": "Game state",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "AD-17 saveBlob request; E-120"
+  },
+  {
+   "name": "load",
+   "group": "Game state",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "world",
+    "sprites",
+    "party",
+    "inventory",
+    "triggers",
+    "vm",
+    "battle",
+    "menu",
+    "ui",
+    "camera",
+    "fx",
+    "audio",
+    "surfaces",
+    "rng",
+    "time"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "AD-17 loadBlob; E-121 restores everything"
+  },
+  {
+   "name": "dirSav",
+   "group": "Game state",
+   "params": "...",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine",
+    "menu"
+   ],
+   "sectionsWrite": [
+    "menu"
+   ],
+   "effectKind": "mixed",
+   "waitKind": "menu.screen",
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "AD-17 listBlobs + E-60 picker"
+  },
+  {
+   "name": "reset",
+   "group": "Game state",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine",
+    "world"
+   ],
+   "sectionsWrite": [
+    "world",
+    "sprites",
+    "party",
+    "inventory",
+    "triggers",
+    "vm",
+    "battle",
+    "menu",
+    "ui",
+    "camera",
+    "fx",
+    "audio",
+    "surfaces",
+    "rng",
+    "time"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "start",
+   "group": "Game state",
+   "params": "file",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm",
+    "engine"
+   ],
+   "sectionsWrite": [
+    "vm",
+    "engine"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "mainFile",
+   "group": "Game state",
+   "params": "gam",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "world",
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "starts the game named by a .gam"
+  },
+  {
+   "name": "win",
+   "group": "Game state",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "gone",
+   "group": "Game state",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "sprites",
+    "engine"
+   ],
+   "sectionsWrite": [
+    "sprites",
+    "engine"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "removes this program from the board"
+  },
+  {
+   "name": "over",
+   "group": "Game state",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "game-over message"
+  },
+  {
+   "name": "godos",
+   "group": "Game state",
+   "params": "command",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": true,
+   "confidence": "stated",
+   "note": "9.11 marks godos/dos/windows obsolete"
+  },
+  {
+   "name": "dos",
+   "group": "Game state",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": true,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "windows",
+   "group": "Game state",
+   "params": "",
+   "paramsSource": "9.11",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": true,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "len",
+   "group": "Strings & math",
+   "params": "s,&n",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "length",
+   "group": "Strings & math",
+   "params": "s,&n",
+   "paramsSource": "inferred",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "left",
+   "group": "Strings & math",
+   "params": "s,n[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "right",
+   "group": "Strings & math",
+   "params": "s,n[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "mid",
+   "group": "Strings & math",
+   "params": "s,start,n[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "inStr",
+   "group": "Strings & math",
+   "params": "s,find[,&pos]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "replace",
+   "group": "Strings & math",
+   "params": "s,find,with[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "regExpReplace",
+   "group": "Strings & math",
+   "params": "s,pattern,with[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "split",
+   "group": "Strings & math",
+   "params": "str,delim,arr",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "arr is an output array (byRef)"
+  },
+  {
+   "name": "trim",
+   "group": "Strings & math",
+   "params": "s[,&dest]",
+   "paramsSource": "inferred",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "lcase",
+   "group": "Strings & math",
+   "params": "s[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "ucase",
+   "group": "Strings & math",
+   "params": "s[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "asc",
+   "group": "Strings & math",
+   "params": "s,&n",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "chr",
+   "group": "Strings & math",
+   "params": "n,&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "charAt",
+   "group": "Strings & math",
+   "params": "s,pos,dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "castNum",
+   "group": "Strings & math",
+   "params": "s,&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "castInt",
+   "group": "Strings & math",
+   "params": "n,&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "castLit",
+   "group": "Strings & math",
+   "params": "n,&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "spliceVariables",
+   "group": "Strings & math",
+   "params": "s[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "expands <var> from globals, so it reads vm"
+  },
+  {
+   "name": "random",
+   "group": "Strings & math",
+   "params": "max[,&dest]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "rng"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "draws from RngPort (AD-12)"
+  },
+  {
+   "name": "sin",
+   "group": "Strings & math",
+   "params": "deg,&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "core/fmath (G3, AD-13)"
+  },
+  {
+   "name": "cos",
+   "group": "Strings & math",
+   "params": "deg,&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "tan",
+   "group": "Strings & math",
+   "params": "deg,&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "sqrt",
+   "group": "Strings & math",
+   "params": "n,&dest",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "log",
+   "group": "Strings & math",
+   "params": "n,&dest",
+   "paramsSource": "inferred",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": "must come from core/fmath, not Math.log (G3)"
+  },
+  {
+   "name": "iif",
+   "group": "Strings & math",
+   "params": "c,a,b",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "getTickCount",
+   "group": "Strings & math",
+   "params": "[&ms]",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "time"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "G3 bans Date/performance.now; use the injected clock (time.step)"
+  },
+  {
+   "name": "openFileInput",
+   "group": "Files",
+   "params": "file,folder",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "request",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "AD-17 asset request; reads saves then shipped folders"
+  },
+  {
+   "name": "openFileOutput",
+   "group": "Files",
+   "params": "file,folder",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "request",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "AD-17 saveBlob request"
+  },
+  {
+   "name": "openFileAppend",
+   "group": "Files",
+   "params": "file,folder",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "request",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "openFileBinary",
+   "group": "Files",
+   "params": "file,folder",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "request",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "closeFile",
+   "group": "Files",
+   "params": "handle",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "fileInput",
+   "group": "Files",
+   "params": "handle,&line",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "request-backed read"
+  },
+  {
+   "name": "filePrint",
+   "group": "Files",
+   "params": "handle,text",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "request-backed write"
+  },
+  {
+   "name": "fileGet",
+   "group": "Files",
+   "params": "handle,&byte",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "filePut",
+   "group": "Files",
+   "params": "handle,byte",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "fileEof",
+   "group": "Files",
+   "params": "handle,&flag",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "appPath",
+   "group": "Files",
+   "params": "[&path]",
+   "paramsSource": "inferred",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "inferred",
+   "note": ""
+  },
+  {
+   "name": "local",
+   "group": "Scope",
+   "params": "x",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "\u00a79.3 scope directive"
+  },
+  {
+   "name": "global",
+   "group": "Scope",
+   "params": "x",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "autoLocal",
+   "group": "Scope",
+   "params": "bool",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": ""
+  },
+  {
+   "name": "kill",
+   "group": "Scope",
+   "params": "x",
+   "paramsSource": "9.11",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "unsets a variable"
+  }
+ ],
+ "variables": [
+  {
+   "name": "playerHandle[i]",
+   "sections": [
+    "sprites",
+    "party"
+   ],
+   "access": "read-write",
+   "note": "indexes party slots 0-4",
+   "confidence": "stated"
+  },
+  {
+   "name": "playerX[i]",
+   "sections": [
+    "sprites"
+   ],
+   "access": "read-write",
+   "note": "party slot pixel x",
+   "confidence": "stated"
+  },
+  {
+   "name": "playerY[i]",
+   "sections": [
+    "sprites"
+   ],
+   "access": "read-write",
+   "note": "party slot pixel y",
+   "confidence": "stated"
+  },
+  {
+   "name": "playerLayer[i]",
+   "sections": [
+    "sprites"
+   ],
+   "access": "read-write",
+   "note": "party slot layer",
+   "confidence": "stated"
+  },
+  {
+   "name": "boardBackground",
+   "sections": [
+    "world"
+   ],
+   "access": "read-write",
+   "note": "world",
+   "confidence": "stated"
+  },
+  {
+   "name": "boardSkill",
+   "sections": [
+    "world"
+   ],
+   "access": "read-write",
+   "note": "board battle skill level",
+   "confidence": "stated"
+  },
+  {
+   "name": "boardTitle[i]",
+   "sections": [
+    "world"
+   ],
+   "access": "read-write",
+   "note": "indexed board title",
+   "confidence": "stated"
+  },
+  {
+   "name": "constant[i]",
+   "sections": [
+    "world"
+   ],
+   "access": "read-write",
+   "note": "board constants",
+   "confidence": "stated"
+  },
+  {
+   "name": "music",
+   "sections": [
+    "audio"
+   ],
+   "access": "read-write",
+   "note": "current music",
+   "confidence": "stated"
+  },
+  {
+   "name": "threads[i]",
+   "sections": [
+    "vm"
+   ],
+   "access": "read",
+   "note": "indexes vm.threads",
+   "confidence": "stated"
+  },
+  {
+   "name": "ambientRed",
+   "sections": [
+    "world"
+   ],
+   "access": "read-write",
+   "note": "call forceRedraw() after assigning",
+   "confidence": "stated"
+  },
+  {
+   "name": "ambientGreen",
+   "sections": [
+    "world"
+   ],
+   "access": "read-write",
+   "note": "call forceRedraw() after assigning",
+   "confidence": "stated"
+  },
+  {
+   "name": "ambientBlue",
+   "sections": [
+    "world"
+   ],
+   "access": "read-write",
+   "note": "call forceRedraw() after assigning",
+   "confidence": "stated"
+  },
+  {
+   "name": "cnvRenderNow",
+   "sections": [
+    "surfaces",
+    "ui"
+   ],
+   "access": "read-write",
+   "note": "overlay canvas handle (E-57)",
+   "confidence": "stated"
+  },
+  {
+   "name": "gameTime",
+   "sections": [
+    "time",
+    "party"
+   ],
+   "access": "read",
+   "note": "seconds played; E-87",
+   "confidence": "inferred"
+  }
+ ],
+ "constants": [
+  {
+   "name": "tkMV_PAUSE_THREAD",
+   "value": 1
+  },
+  {
+   "name": "tkMV_CLEAR_QUEUE",
+   "value": 2
+  },
+  {
+   "name": "tkMV_PATHFIND",
+   "value": 4
+  },
+  {
+   "name": "tkMV_WAYPOINT_PATH",
+   "value": 8
+  },
+  {
+   "name": "tkMV_WAYPOINT_LINK",
+   "value": 16
+  },
+  {
+   "name": "tkVT_SOLID",
+   "value": 1
+  },
+  {
+   "name": "tkVT_UNDER",
+   "value": 2
+  },
+  {
+   "name": "tkVT_STAIRS",
+   "value": 8
+  },
+  {
+   "name": "tkVT_WAYPOINT",
+   "value": 16
+  },
+  {
+   "name": "tkVT_BKGIMAGE",
+   "value": 1
+  },
+  {
+   "name": "tkVT_ALL_LAYERS_BELOW",
+   "value": 2
+  },
+  {
+   "name": "tkVT_FRAME_INTERSECT",
+   "value": 4
+  },
+  {
+   "name": "tkPRG_STEP",
+   "value": 0
+  },
+  {
+   "name": "tkPRG_KEYPRESS",
+   "value": 1
+  },
+  {
+   "name": "tkPRG_REPEAT",
+   "value": 2
+  },
+  {
+   "name": "tkPRG_STOPS_MOVEMENT",
+   "value": 4
+  },
+  {
+   "name": "tkDIR_E",
+   "value": 1
+  },
+  {
+   "name": "tkDIR_SE",
+   "value": 2
+  },
+  {
+   "name": "tkDIR_S",
+   "value": 3
+  },
+  {
+   "name": "tkDIR_SW",
+   "value": 4
+  },
+  {
+   "name": "tkDIR_W",
+   "value": 5
+  },
+  {
+   "name": "tkDIR_NW",
+   "value": 6
+  },
+  {
+   "name": "tkDIR_N",
+   "value": 7
+  },
+  {
+   "name": "tkDIR_NE",
+   "value": 8
+  }
+ ],
+ "languageLevelCommandsNotIn911": [
+  {
+   "sig": "include(file)",
+   "note": "\u00a79.6 module import (directive)"
+  },
+  {
+   "sig": "redirect(old,new)",
+   "note": "\u00a79.6 remaps a function name globally, including built-ins"
+  },
+  {
+   "sig": "killRedirect(name)",
+   "note": "\u00a79.6"
+  },
+  {
+   "sig": "killAllRedirects()",
+   "note": "\u00a79.6"
+  },
+  {
+   "sig": "release()",
+   "note": "\u00a79.7 object destructor/free call"
+  },
+  {
+   "sig": "setErrorHandler(:label)",
+   "note": "\u00a79.8"
+  },
+  {
+   "sig": "setResumeNextHandler()",
+   "note": "\u00a79.8"
+  },
+  {
+   "sig": "resumeNext()",
+   "note": "\u00a79.8"
+  },
+  {
+   "sig": "return [&var]",
+   "note": "\u00a79.5"
+  },
+  {
+   "sig": "method/struct/class",
+   "note": "\u00a79.5/\u00a79.7 declarations"
+  }
+ ],
+ "tk2Commands": [
+  {
+   "command": "@",
+   "signature": "@",
+   "note": "places a blank line in the message window"
+  },
+  {
+   "command": "* Comment",
+   "signature": "* Comment",
+   "note": "comment"
+  },
+  {
+   "command": "#AddPlayer(filename$)",
+   "signature": "#AddPlayer(filename$)",
+   "note": "add a party member from a .tem file"
+  },
+  {
+   "command": "#AI(level!)",
+   "signature": "#AI(level!)",
+   "note": ""
+  },
+  {
+   "command": "#Animation(file$,x!,y!)",
+   "signature": "#Animation(file$,x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#ApplyStatus(handle$,file$)",
+   "signature": "#ApplyStatus(handle$,file$)",
+   "note": ""
+  },
+  {
+   "command": "#AttackAll(fp!)",
+   "signature": "#AttackAll(fp!)",
+   "note": ""
+  },
+  {
+   "command": "#BattleSpeed(speed!)",
+   "signature": "#BattleSpeed(speed!)",
+   "note": ""
+  },
+  {
+   "command": "#Bitmap(filename$)",
+   "signature": "#Bitmap(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#Bold(on/off)",
+   "signature": "#Bold(on/off)",
+   "note": ""
+  },
+  {
+   "command": "#BorderColor(r!,g!,b!)",
+   "signature": "#BorderColor(r!,g!,b!)",
+   "note": ""
+  },
+  {
+   "command": "#Branch(:label)",
+   "signature": "#Branch(:label)",
+   "note": ""
+  },
+  {
+   "command": "#Break()",
+   "signature": "#Break()",
+   "note": "debugger breakpoint"
+  },
+  {
+   "command": "#CallPlayerSwap()",
+   "signature": "#CallPlayerSwap()",
+   "note": ""
+  },
+  {
+   "command": "#CallShop(item1$,\u2026)",
+   "signature": "#CallShop(item1$,\u2026)",
+   "note": ""
+  },
+  {
+   "command": "#Change(program$)",
+   "signature": "#Change(program$)",
+   "note": ""
+  },
+  {
+   "command": "#CharAt(text$,pos!,dest$)",
+   "signature": "#CharAt(text$,pos!,dest$)",
+   "note": ""
+  },
+  {
+   "command": "#CastInt(source!,dest!)",
+   "signature": "#CastInt(source!,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#CastLit(source!,dest$)",
+   "signature": "#CastLit(source!,dest$)",
+   "note": ""
+  },
+  {
+   "command": "#CastNum(source$,dest!)",
+   "signature": "#CastNum(source$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#CharacterSpeed(speed!)",
+   "signature": "#CharacterSpeed(speed!)",
+   "note": ""
+  },
+  {
+   "command": "#CheckButton(x!,y!,num!)",
+   "signature": "#CheckButton(x!,y!,num!)",
+   "note": ""
+  },
+  {
+   "command": "#Clear()",
+   "signature": "#Clear()",
+   "note": ""
+  },
+  {
+   "command": "#ClearBuffer()",
+   "signature": "#ClearBuffer()",
+   "note": ""
+  },
+  {
+   "command": "#ClearButtons()",
+   "signature": "#ClearButtons()",
+   "note": ""
+  },
+  {
+   "command": "#Color(code!)",
+   "signature": "#Color(code!)",
+   "note": ""
+  },
+  {
+   "command": "#ColorRGB(r!,g!,b!)",
+   "signature": "#ColorRGB(r!,g!,b!)",
+   "note": ""
+  },
+  {
+   "command": "#Cos(deg!,dest!)",
+   "signature": "#Cos(deg!,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#CreateItem(filename$,mem!)",
+   "signature": "#CreateItem(filename$,mem!)",
+   "note": ""
+  },
+  {
+   "command": "#Debug(on/off)",
+   "signature": "#Debug(on/off)",
+   "note": ""
+  },
+  {
+   "command": "#Delay(seconds!)",
+   "signature": "#Delay(seconds!)",
+   "note": ""
+  },
+  {
+   "command": "#DestroyItem(mem!)",
+   "signature": "#DestroyItem(mem!)",
+   "note": ""
+  },
+  {
+   "command": "#DestroyPlayer(handle$)",
+   "signature": "#DestroyPlayer(handle$)",
+   "note": ""
+  },
+  {
+   "command": "#DirSav()",
+   "signature": "#DirSav()",
+   "note": ""
+  },
+  {
+   "command": "#Done()",
+   "signature": "#Done()",
+   "note": ""
+  },
+  {
+   "command": "#Dos()",
+   "signature": "#Dos()",
+   "note": "obsolete"
+  },
+  {
+   "command": "#DrainAll(smp!)",
+   "signature": "#DrainAll(smp!)",
+   "note": ""
+  },
+  {
+   "command": "#DrawCircle(x!,y!,r![,a0!,a1!])",
+   "signature": "#DrawCircle(x!,y!,r![,a0!,a1!])",
+   "note": ""
+  },
+  {
+   "command": "#DrawEnemy(file$,x!,y!)",
+   "signature": "#DrawEnemy(file$,x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#DrawLine(x1!,y1!,x2!,y2!)",
+   "signature": "#DrawLine(x1!,y1!,x2!,y2!)",
+   "note": ""
+  },
+  {
+   "command": "#DrawRect(x1!,y1!,x2!,y2!)",
+   "signature": "#DrawRect(x1!,y1!,x2!,y2!)",
+   "note": ""
+  },
+  {
+   "command": "#Earthquake(intensity!)",
+   "signature": "#Earthquake(intensity!)",
+   "note": ""
+  },
+  {
+   "command": "#Empty()",
+   "signature": "#Empty()",
+   "note": "clears all variables (TK2 only)"
+  },
+  {
+   "command": "#End()",
+   "signature": "#End()",
+   "note": ""
+  },
+  {
+   "command": "#Equip(handle$,slot!,filename$)",
+   "signature": "#Equip(handle$,slot!,filename$)",
+   "note": ""
+  },
+  {
+   "command": "#EraseItem(itemnum!)",
+   "signature": "#EraseItem(itemnum!)",
+   "note": ""
+  },
+  {
+   "command": "#ErasePlayer(handle$)",
+   "signature": "#ErasePlayer(handle$)",
+   "note": ""
+  },
+  {
+   "command": "#Fade(type!)",
+   "signature": "#Fade(type!)",
+   "note": ""
+  },
+  {
+   "command": "#Fbranch(:label)",
+   "signature": "#Fbranch(:label)",
+   "note": "TK2 subroutine call"
+  },
+  {
+   "command": "#Fight(skill!,background$)",
+   "signature": "#Fight(skill!,background$)",
+   "note": ""
+  },
+  {
+   "command": "#FightEnemy(enemy$,background$)",
+   "signature": "#FightEnemy(enemy$,background$)",
+   "note": ""
+  },
+  {
+   "command": "#FightMenuGraphic(file$)",
+   "signature": "#FightMenuGraphic(file$)",
+   "note": ""
+  },
+  {
+   "command": "#FightStyle(0/1)",
+   "signature": "#FightStyle(0/1)",
+   "note": ""
+  },
+  {
+   "command": "#FillCircle(x!,y!,r!)",
+   "signature": "#FillCircle(x!,y!,r!)",
+   "note": ""
+  },
+  {
+   "command": "#FillRect(x1!,y1!,x2!,y2!)",
+   "signature": "#FillRect(x1!,y1!,x2!,y2!)",
+   "note": ""
+  },
+  {
+   "command": "#Font(filename$)",
+   "signature": "#Font(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#FontSize(size!)",
+   "signature": "#FontSize(size!)",
+   "note": ""
+  },
+  {
+   "command": "#For(init;cond;inc)",
+   "signature": "#For(init;cond;inc)",
+   "note": "statement"
+  },
+  {
+   "command": "#ForceRedraw()",
+   "signature": "#ForceRedraw()",
+   "note": ""
+  },
+  {
+   "command": "#GiveEXP(handle$,amount!)",
+   "signature": "#GiveEXP(handle$,amount!)",
+   "note": ""
+  },
+  {
+   "command": "#GiveGP(amount!)",
+   "signature": "#GiveGP(amount!)",
+   "note": ""
+  },
+  {
+   "command": "#GiveHP(handle$,amount!)",
+   "signature": "#GiveHP(handle$,amount!)",
+   "note": ""
+  },
+  {
+   "command": "#GiveItem(filename$)",
+   "signature": "#GiveItem(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#GiveSMP(handle$,amount!)",
+   "signature": "#GiveSMP(handle$,amount!)",
+   "note": ""
+  },
+  {
+   "command": "#Get(target$)",
+   "signature": "#Get(target$)",
+   "note": "non-blocking key read"
+  },
+  {
+   "command": "#GetBoardTile(x!,y!,layer!,dest$)",
+   "signature": "#GetBoardTile(x!,y!,layer!,dest$)",
+   "note": ""
+  },
+  {
+   "command": "#GetBoardTileType(x!,y!,layer!,dest$)",
+   "signature": "#GetBoardTileType(x!,y!,layer!,dest$)",
+   "note": ""
+  },
+  {
+   "command": "#GetColor(r!,g!,b!)",
+   "signature": "#GetColor(r!,g!,b!)",
+   "note": ""
+  },
+  {
+   "command": "#GetCorner(x!,y!)",
+   "signature": "#GetCorner(x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#GetDP(handle$,dest!)",
+   "signature": "#GetDP(handle$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetFontSize(dest!)",
+   "signature": "#GetFontSize(dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetFP(handle$,dest!)",
+   "signature": "#GetFP(handle$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetGP(dest!)",
+   "signature": "#GetGP(dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetHP(handle$,dest!)",
+   "signature": "#GetHP(handle$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetRes(x!,y!)",
+   "signature": "#GetRes(x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#GetSMP(handle$,dest!)",
+   "signature": "#GetSMP(handle$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetLevel(handle$,dest!)",
+   "signature": "#GetLevel(handle$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetMaxHP(handle$,dest!)",
+   "signature": "#GetMaxHP(handle$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetMaxSMP(handle$,dest!)",
+   "signature": "#GetMaxSMP(handle$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#GetPixel(x!,y!,r!,g!,b!)",
+   "signature": "#GetPixel(x!,y!,r!,g!,b!)",
+   "note": ""
+  },
+  {
+   "command": "#GoDos(command$)",
+   "signature": "#GoDos(command$)",
+   "note": "obsolete"
+  },
+  {
+   "command": "#Gone()",
+   "signature": "#Gone()",
+   "note": ""
+  },
+  {
+   "command": "#HP(handle$,hp!)",
+   "signature": "#HP(handle$,hp!)",
+   "note": ""
+  },
+  {
+   "command": "#If(condition){\u2026}",
+   "signature": "#If(condition){\u2026}",
+   "note": "statement"
+  },
+  {
+   "command": "#include(filename$)",
+   "signature": "#Include(filename$)",
+   "note": "module import"
+  },
+  {
+   "command": "#Inn()",
+   "signature": "#Inn()",
+   "note": ""
+  },
+  {
+   "command": "#InternalMenu(menuNum!)",
+   "signature": "#InternalMenu(menuNum!)",
+   "note": ""
+  },
+  {
+   "command": "#Italics(on/off)",
+   "signature": "#Italics(on/off)",
+   "note": ""
+  },
+  {
+   "command": "#ItemCount(handle$,dest!)",
+   "signature": "#ItemCount(handle$,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#ItemLocation(itemnum$,x!,y!,layer!)",
+   "signature": "#ItemLocation(itemnum$,x!,y!,layer!)",
+   "note": ""
+  },
+  {
+   "command": "#ItemStep(itemnum!,x!,y!)",
+   "signature": "#ItemStep(itemnum!,x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#ItemWalkSpeed(fast/slow)",
+   "signature": "#ItemWalkSpeed(fast/slow)",
+   "note": "TK2 only (no 9.11 name)"
+  },
+  {
+   "command": "#Kill(var)",
+   "signature": "#Kill(var)",
+   "note": ""
+  },
+  {
+   "command": "#KillAllRedirects()",
+   "signature": "#KillAllRedirects()",
+   "note": ""
+  },
+  {
+   "command": "#KillRedirect(method$)",
+   "signature": "#KillRedirect(method$)",
+   "note": ""
+  },
+  {
+   "command": "#LayerPut(x!,y!,layer!,file$)",
+   "signature": "#LayerPut(x!,y!,layer!,file$)",
+   "note": ""
+  },
+  {
+   "command": "#Load(filename$)",
+   "signature": "#Load(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#MainFile(filename$)",
+   "signature": "#MainFile(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#MaxHP(handle$,level!)",
+   "signature": "#MaxHP(handle$,level!)",
+   "note": ""
+  },
+  {
+   "command": "#MaxSMP(handle$,level!)",
+   "signature": "#MaxSMP(handle$,level!)",
+   "note": ""
+  },
+  {
+   "command": "#Mem(x!,y!,mem!)",
+   "signature": "#Mem(x!,y!,mem!)",
+   "note": ""
+  },
+  {
+   "command": "#MenuGraphic(file$)",
+   "signature": "#MenuGraphic(file$)",
+   "note": ""
+  },
+  {
+   "command": "#MediaPlay(filename$)",
+   "signature": "#MediaPlay(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#MediaRest()",
+   "signature": "#MediaRest()",
+   "note": ""
+  },
+  {
+   "command": "#Method(name)(params)",
+   "signature": "#Method(name)(params)",
+   "note": "declaration"
+  },
+  {
+   "command": "#MidiPlay(filename$)",
+   "signature": "#MidiPlay(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#MidiRest()",
+   "signature": "#MidiRest()",
+   "note": ""
+  },
+  {
+   "command": "#MouseClick(x!,y!)",
+   "signature": "#MouseClick(x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#MouseMove(x!,y!)",
+   "signature": "#MouseMove(x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#Move(x!,y![,layer!])",
+   "signature": "#Move(x!,y![,layer!])",
+   "note": ""
+  },
+  {
+   "command": "#MP3(filename$)",
+   "signature": "#MP3(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#MP3Pause(filename$)",
+   "signature": "#MP3Pause(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#MWin(text$)",
+   "signature": "#MWin(text$)",
+   "note": ""
+  },
+  {
+   "command": "#MWinCls()",
+   "signature": "#MWinCls()",
+   "note": ""
+  },
+  {
+   "command": "#MWinSize(percent!)",
+   "signature": "#MWinSize(percent!)",
+   "note": ""
+  },
+  {
+   "command": "#Newplyr(filename$)",
+   "signature": "#Newplyr(filename$)",
+   "note": "maps to 3.1 newPlayer"
+  },
+  {
+   "command": "#Over()",
+   "signature": "#Over()",
+   "note": ""
+  },
+  {
+   "command": "#Parallax(type!)",
+   "signature": "#Parallax(type!)",
+   "note": ""
+  },
+  {
+   "command": "#PathFind(x1!,y1!,x2!,y2!,dest$[,layer!])",
+   "signature": "#PathFind(...)",
+   "note": ""
+  },
+  {
+   "command": "#PlayAvi(file$)",
+   "signature": "#PlayAvi(file$)",
+   "note": ""
+  },
+  {
+   "command": "#PlayAviSmall(file$)",
+   "signature": "#PlayAviSmall(file$)",
+   "note": ""
+  },
+  {
+   "command": "#PlayerStep(handle$,x!,y!)",
+   "signature": "#PlayerStep(handle$,x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#Posture(slot!,handle$)",
+   "signature": "#Posture(slot!,handle$)",
+   "note": ""
+  },
+  {
+   "command": "#Prg(prgnum!,x!,y![,layer!])",
+   "signature": "#Prg(prgnum!,x!,y![,layer!])",
+   "note": ""
+  },
+  {
+   "command": "#Print(text$)",
+   "signature": "#Print(text$)",
+   "note": ""
+  },
+  {
+   "command": "#Prompt(question$,dest$)",
+   "signature": "#Prompt(question$,dest$)",
+   "note": ""
+  },
+  {
+   "command": "#Push(dir$[,handle$])",
+   "signature": "#Push(dir$[,handle$])",
+   "note": ""
+  },
+  {
+   "command": "#PushItem(itemnum!,dir$)",
+   "signature": "#PushItem(itemnum!,dir$)",
+   "note": ""
+  },
+  {
+   "command": "#Put(x!,y!,graphic$[,layer!])",
+   "signature": "#Put(x!,y!,graphic$[,layer!])",
+   "note": ""
+  },
+  {
+   "command": "#PutItem(itemNum!,x!,y!,layer!)",
+   "signature": "#PutItem(itemNum!,x!,y!,layer!)",
+   "note": ""
+  },
+  {
+   "command": "#PutPlayer(handle$,x!,y!,layer!)",
+   "signature": "#PutPlayer(handle$,x!,y!,layer!)",
+   "note": ""
+  },
+  {
+   "command": "#Random(range!,dest!)",
+   "signature": "#Random(range!,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#Redirect(old$,new$)",
+   "signature": "#Redirect(old$,new$)",
+   "note": ""
+  },
+  {
+   "command": "#Remove(handle$,slot!)",
+   "signature": "#Remove(handle$,slot!)",
+   "note": ""
+  },
+  {
+   "command": "#RemovePlayer(filename$)",
+   "signature": "#RemovePlayer(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#RemoveStatus(handle$,file$)",
+   "signature": "#RemoveStatus(handle$,file$)",
+   "note": ""
+  },
+  {
+   "command": "#Reset()",
+   "signature": "#Reset()",
+   "note": ""
+  },
+  {
+   "command": "#RestorePlayer(filename$)",
+   "signature": "#RestorePlayer(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#RestoreScreen([...])",
+   "signature": "#RestoreScreen([...])",
+   "note": ""
+  },
+  {
+   "command": "#Return()",
+   "signature": "#Return()",
+   "note": "refresh the screen"
+  },
+  {
+   "command": "#ReturnMethod(var)",
+   "signature": "#ReturnMethod(var)",
+   "note": "returns a value from a method"
+  },
+  {
+   "command": "#RPGCode(command$)",
+   "signature": "#RPGCode(command$)",
+   "note": ""
+  },
+  {
+   "command": "#Run(program$)",
+   "signature": "#Run(program$)",
+   "note": ""
+  },
+  {
+   "command": "#Save(filename$)",
+   "signature": "#Save(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#SaveScreen()",
+   "signature": "#SaveScreen()",
+   "note": ""
+  },
+  {
+   "command": "#Scan(x!,y!,mem![,layer!])",
+   "signature": "#Scan(x!,y!,mem![,layer!])",
+   "note": ""
+  },
+  {
+   "command": "#Send(board$,x!,y![,layer!])",
+   "signature": "#Send(board$,x!,y![,layer!])",
+   "note": ""
+  },
+  {
+   "command": "#SetButton(file$,num!,x!,y!,w!,h!)",
+   "signature": "#SetButton(file$,num!,x!,y!,w!,h!)",
+   "note": ""
+  },
+  {
+   "command": "#SetImage(file$,x!,y!,w!,h!)",
+   "signature": "#SetImage(file$,x!,y!,w!,h!)",
+   "note": ""
+  },
+  {
+   "command": "#SetImageAdditive(file$,x!,y!,w!,h!,percent!)",
+   "signature": "#SetImageAdditive(...)",
+   "note": ""
+  },
+  {
+   "command": "#SetImageTranslucent(file$,x!,y!,w!,h!)",
+   "signature": "#SetImageTranslucent(...)",
+   "note": ""
+  },
+  {
+   "command": "#SetImageTransparent(file$,x!,y!,w!,h!,r!,g!,b!)",
+   "signature": "#SetImageTransparent(...)",
+   "note": ""
+  },
+  {
+   "command": "#SetPixel(x!,y!)",
+   "signature": "#SetPixel(x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#Show(var)",
+   "signature": "#Show(var)",
+   "note": "show a variable in the message window"
+  },
+  {
+   "command": "#Sin(deg!,dest!)",
+   "signature": "#Sin(deg!,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#SizedAnimation(file$,x!,y!,xsize!,ysize!)",
+   "signature": "#SizedAnimation(...)",
+   "note": ""
+  },
+  {
+   "command": "#SMP(handle$,smp!)",
+   "signature": "#SMP(handle$,smp!)",
+   "note": ""
+  },
+  {
+   "command": "#SourceHandle(dest$)",
+   "signature": "#SourceHandle(dest$)",
+   "note": ""
+  },
+  {
+   "command": "#SourceLocation(x!,y!)",
+   "signature": "#SourceLocation(x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#Sqrt(source!,dest!)",
+   "signature": "#Sqrt(source!,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#Stance(pos!,handle$)",
+   "signature": "#Stance(pos!,handle$)",
+   "note": ""
+  },
+  {
+   "command": "#Start(filename$)",
+   "signature": "#Start(filename$)",
+   "note": "shell start"
+  },
+  {
+   "command": "#TakeGP(amount!)",
+   "signature": "#TakeGP(amount!)",
+   "note": ""
+  },
+  {
+   "command": "#TakeItem(filename$)",
+   "signature": "#TakeItem(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#Tan(deg!,dest!)",
+   "signature": "#Tan(deg!,dest!)",
+   "note": ""
+  },
+  {
+   "command": "#TargetHandle(dest$)",
+   "signature": "#TargetHandle(dest$)",
+   "note": ""
+  },
+  {
+   "command": "#TargetLocation(x!,y!)",
+   "signature": "#TargetLocation(x!,y!)",
+   "note": ""
+  },
+  {
+   "command": "#TileType(x!,y!,type$[,layer!])",
+   "signature": "#TileType(x!,y!,type$[,layer!])",
+   "note": "TK2 SETS the tile type"
+  },
+  {
+   "command": "#Text(x!,y!,text$)",
+   "signature": "#Text(x!,y!,text$)",
+   "note": ""
+  },
+  {
+   "command": "#TextSpeed(speed!)",
+   "signature": "#TextSpeed(speed!)",
+   "note": ""
+  },
+  {
+   "command": "#UnderArrow(on/off)",
+   "signature": "#UnderArrow(on/off)",
+   "note": "TK2 only (no 9.11 name)"
+  },
+  {
+   "command": "#Underline(on/off)",
+   "signature": "#Underline(on/off)",
+   "note": ""
+  },
+  {
+   "command": "#Viewbrd(filename$)",
+   "signature": "#Viewbrd(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#Wait(dest$)",
+   "signature": "#Wait(dest$)",
+   "note": ""
+  },
+  {
+   "command": "#WalkSpeed(fast/slow)",
+   "signature": "#WalkSpeed(fast/slow)",
+   "note": ""
+  },
+  {
+   "command": "#Wander(itemnum!)",
+   "signature": "#Wander(itemnum!)",
+   "note": ""
+  },
+  {
+   "command": "#Wav(filename$)",
+   "signature": "#Wav(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#WavStop()",
+   "signature": "#WavStop()",
+   "note": ""
+  },
+  {
+   "command": "#While(cond){\u2026}",
+   "signature": "#While(cond){\u2026}",
+   "note": "statement"
+  },
+  {
+   "command": "#Win()",
+   "signature": "#Win()",
+   "note": ""
+  },
+  {
+   "command": "#WinColor(code!)",
+   "signature": "#WinColor(code!)",
+   "note": ""
+  },
+  {
+   "command": "#WinColorRGB(r!,g!,b!)",
+   "signature": "#WinColorRGB(r!,g!,b!)",
+   "note": ""
+  },
+  {
+   "command": "#WinGraphic(filename$)",
+   "signature": "#WinGraphic(filename$)",
+   "note": ""
+  },
+  {
+   "command": "#Wipe(file$,type![,speed!])",
+   "signature": "#Wipe(file$,type![,speed!])",
+   "note": ""
+  },
+  {
+   "command": "#Zoom(percent!)",
+   "signature": "#Zoom(percent!)",
+   "note": ""
+  }
+ ],
+ "tk2OnlyNames": [
+  "* Comment",
+  "#Break()",
+  "#Empty()",
+  "#Fbranch(:label)",
+  "#For(init;cond;inc)",
+  "#If(condition){\u2026}",
+  "#include(filename$)",
+  "#ItemWalkSpeed(fast/slow)",
+  "#KillAllRedirects()",
+  "#KillRedirect(method$)",
+  "#Method(name)(params)",
+  "#Newplyr(filename$)",
+  "#Redirect(old$,new$)",
+  "#Return()",
+  "#ReturnMethod(var)",
+  "#UnderArrow(on/off)",
+  "#While(cond){\u2026}"
+ ],
+ "summaries": {
+  "totalNames": 271,
+  "byEffectKind": {
+   "state-write": 84,
+   "mixed": 67,
+   "draw-audio-cue": 17,
+   "pure": 69,
+   "wait": 9,
+   "spawn-thread": 2,
+   "flow-control": 19,
+   "request": 4
+  },
+  "byOwnerEpic": {
+   "audio-synth": 14,
+   "battle": 11,
+   "board-rendering": 89,
+   "menu-party-save": 46,
+   "movement-triggers": 45,
+   "rpgcode-vm": 66
+  },
+  "bySectionWrite": {
+   "vm": 34,
+   "sprites": 33,
+   "ui": 30,
+   "surfaces": 27,
+   "engine": 26,
+   "world": 18,
+   "audio": 14,
+   "battle": 11,
+   "fx": 10,
+   "party": 9,
+   "inventory": 9,
+   "menu": 5,
+   "input": 4,
+   "camera": 3,
+   "triggers": 2,
+   "time": 2,
+   "rng": 2
+  },
+  "bySectionRead": {
+   "world": 60,
+   "vm": 46,
+   "ui": 41,
+   "sprites": 39,
+   "engine": 29,
+   "surfaces": 28,
+   "audio": 14,
+   "inventory": 13,
+   "input": 11,
+   "battle": 9,
+   "fx": 8,
+   "party": 7,
+   "camera": 4,
+   "menu": 3,
+   "rng": 2,
+   "time": 2
+  },
+  "obsolete": [
+   "godos",
+   "dos",
+   "windows"
+  ],
+  "legacyAliases": [
+   "show",
+   "scan",
+   "mem",
+   "getBoardTile",
+   "prg",
+   "characterSpeed",
+   "walkSpeed",
+   "pathFind",
+   "move",
+   "stance",
+   "posture",
+   "fightStyle",
+   "battleSpeed",
+   "sound",
+   "midiPlay",
+   "playMidi",
+   "midiRest",
+   "mediaRest",
+   "mp3",
+   "done",
+   "stop",
+   "autoCommand"
+  ],
+  "byRefOutCount": 78,
+  "waitNames": [
+   [
+    "prompt",
+    "render.msgbox"
+   ],
+   [
+    "msgBox",
+    "render.msgbox"
+   ],
+   [
+    "wait",
+    "input.key"
+   ],
+   [
+    "mouseClick",
+    "input.mouse"
+   ],
+   [
+    "cursorMapRun",
+    "input.key"
+   ],
+   [
+    "callShop",
+    "menu.screen"
+   ],
+   [
+    "multiRun",
+    "movement"
+   ],
+   [
+    "delay",
+    "sleep"
+   ],
+   [
+    "threadSleep",
+    "sleep"
+   ]
+  ],
+  "noClearOwner": [
+   [
+    "createCursorMap",
+    "Input",
+    "9.11 group implies epic 5, sections put it with epic 4"
+   ],
+   [
+    "cursorMapAdd",
+    "Input",
+    "9.11 group implies epic 5, sections put it with epic 4"
+   ],
+   [
+    "cursorMapRun",
+    "Input",
+    "9.11 group implies epic 5, sections put it with epic 4"
+   ],
+   [
+    "killCursorMap",
+    "Input",
+    "9.11 group implies epic 5, sections put it with epic 4"
+   ],
+   [
+    "cursorMapHand",
+    "Input",
+    "9.11 group implies epic 5, sections put it with epic 4"
+   ],
+   [
+    "mouseCursor",
+    "Input",
+    "9.11 group implies epic 5, sections put it with epic 4"
+   ],
+   [
+    "putPlayer",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "erasePlayer",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "destroyPlayer",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "playerLocation",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "playerDirection",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "playerSpeed",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "playerStance",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "characterSpeed",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "walkSpeed",
+    "Party & players",
+    "9.11 group implies epic 8, sections put it with epic 5"
+   ],
+   [
+    "itemCount",
+    "Items & NPCs",
+    "9.11 group implies epic 5, sections put it with epic 8"
+   ],
+   [
+    "giveExp",
+    "Stats & progression",
+    "9.11 group implies epic 8, sections put it with epic 7"
+   ],
+   [
+    "menuGraphic",
+    "Battle",
+    "9.11 group implies epic 7, sections put it with epic 8"
+   ],
+   [
+    "internalMenu",
+    "Battle",
+    "9.11 group implies epic 7, sections put it with epic 8"
+   ],
+   [
+    "sourceHandle",
+    "Battle",
+    "9.11 group implies epic 7, sections put it with epic 3"
+   ],
+   [
+    "targetHandle",
+    "Battle",
+    "9.11 group implies epic 7, sections put it with epic 3"
+   ],
+   [
+    "sourceLocation",
+    "Battle",
+    "9.11 group implies epic 7, sections put it with epic 3"
+   ],
+   [
+    "targetLocation",
+    "Battle",
+    "9.11 group implies epic 7, sections put it with epic 3"
+   ],
+   [
+    "start",
+    "Game state",
+    "9.11 group implies epic 8, sections put it with epic 3"
+   ]
+  ],
+  "stubSafeCount": 170,
+  "needsOwnerCodeCount": 101
+ }
+}
