@@ -9,7 +9,7 @@
  * formats no reader has been written for yet). A skip is never a failure.
  */
 
-import { BOARD_VECTOR_MINOR, PRE_VECTOR_MINOR_MAX, PRE_VECTOR_MINOR_MIN } from "@rpgtoolkit/core";
+import { BOARD_VECTOR_MINOR, PRE_VECTOR_MINOR_MAX, PRE_VECTOR_MINOR_MIN } from "@tk-reawakened/core";
 
 /** The data formats `dump` parses, one id per reader family. */
 export type DataFormatId =
