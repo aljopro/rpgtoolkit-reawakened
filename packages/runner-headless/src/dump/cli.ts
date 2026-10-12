@@ -20,6 +20,7 @@
 
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { PACKAGE_ROOT, type AssetResolver } from "@tk-reawakened/core";
 import {
   buildExpectation,
   compareGame,
@@ -45,7 +46,8 @@ function reportOf(
     const error = loaded.error;
     return { ok: false, message: `${error.section} at offset ${error.offset}: ${error.message}` };
   }
-  return { ok: true, report: buildReport(loaded.value.files) };
+  const context: AssetResolver = { index: loaded.value.index, root: PACKAGE_ROOT };
+  return { ok: true, report: buildReport(loaded.value.files, context) };
 }
 
 /** `dump <path>`: the readable summary, or the JSON report, and the exit verdict. */
