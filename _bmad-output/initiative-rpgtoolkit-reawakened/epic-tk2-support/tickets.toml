@@ -12,7 +12,7 @@ hitl = true
 risk = "medium"
 plan_checkpoint = true
 done_checkpoint = true
-references = ["adr - docs/adr/0006-clean-room-spec-extraction.md", "research - /tmp/tk2-formats-research.md, Unknowns"]
+references = ["adr - docs/adr/0006-clean-room-spec-extraction.md", "research - _bmad-output/initiative-rpgtoolkit-reawakened/epic-tk2-support/discovery/tk2-formats-research.md, Unknowns"]
 [[entry]]
 id = 2
 type = "story"

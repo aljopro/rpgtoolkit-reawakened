@@ -36,7 +36,7 @@ Byte and text readers in `core`, their spec amendment, registry registration and
 - constraint - docs/guardrails.md, section G7
 - constraint - docs/adr/0006-clean-room-spec-extraction.md
 - reference - docs/format-spec.md, sections 1.3, 1.4, 3, 4, 6, 7, 8
-- research - /tmp/tk2-formats-research.md (coverage table, gap list, evidence index; move into the discovery folder when this epic is approved)
+- research - _bmad-output/initiative-rpgtoolkit-reawakened/epic-tk2-support/discovery/tk2-formats-research.md (coverage table, gap list, evidence index)
 
 ## Notes
 
