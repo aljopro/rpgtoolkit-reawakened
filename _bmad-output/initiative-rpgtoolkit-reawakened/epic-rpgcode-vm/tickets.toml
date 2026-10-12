@@ -158,6 +158,7 @@ references = [
   "provider - epic-legacy-formats entry 2.10 (asset resolver and package loader)",
 ]
 plan_checkpoint = true
+notes = ["#Include gives access to that file's functions under a namespace-like structure, a nested function name. (Jensen, 2026-10-11)"]
 
 [[entry]]
 id = 9

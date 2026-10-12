@@ -56,3 +56,4 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 - Open question: the trust model for third-party plugins (E-99).
 - Decision: Jensen, 2026-10-11: #httpRead, #ftpConnect, #ftpWrite and similar came from plugin DLLs shipped in the games (for example ftpPlugin.dll); they are not built-ins. They answer through recorded-effect stubs until E-99 is decided.
 - Unknown: which of the 39 unmapped TK2 commands belong to which DLL; the discovery lists them in tk2-rpgcode-commands.csv with class unknown.
+- Decision: Jensen, 2026-10-11: `#Include` makes the included file's functions reachable under a namespace-like nested name (file.func), the same shape as an implicit include. Open for the MOD-1/MOD-2 ruling in entry 1 and entry 8: whether the unqualified name is also visible after `#Include`, and what happens on a name clash.
