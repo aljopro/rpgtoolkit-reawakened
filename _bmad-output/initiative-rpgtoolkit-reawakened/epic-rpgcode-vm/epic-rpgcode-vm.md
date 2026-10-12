@@ -54,3 +54,5 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 - Source conflict: ADR 0004 and format-spec 9.9 attribute the `< >` inline-block form to TK2; it occurs only in TK 1.x (discovery/tk2-rpgcode-coverage.md). Entry 1 corrects the spec.
 - Source conflict: ADR 0004 (community plugins share the in-process `PluginDefinition` contract) vs AD-17 and E-99 (games are untrusted; the extension mechanism is sandboxed and goes through host requests). Unreconciled; this epic builds the first-party mechanism only.
 - Open question: the trust model for third-party plugins (E-99).
+- Decision: Jensen, 2026-10-11: #httpRead, #ftpConnect, #ftpWrite and similar came from plugin DLLs shipped in the games (for example ftpPlugin.dll); they are not built-ins. They answer through recorded-effect stubs until E-99 is decided.
+- Unknown: which of the 39 unmapped TK2 commands belong to which DLL; the discovery lists them in tk2-rpgcode-commands.csv with class unknown.
