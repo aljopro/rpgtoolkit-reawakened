@@ -43,7 +43,7 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 ## Notes
 
 - Assumption: the CAP-5 success check 'every built-in resolves' is met across epics: each domain epic registers its built-ins and epic rpgcode-tooling asserts the whole catalogue resolves. Confirm.
-- Open question: the sandboxed extension mechanism replacing native plugins (E-99); its API is undefined, so entries for it wait on a decision.
+- Decision: Jensen, 2026-10-12: the E-99 extension mechanism is the single ungated `PluginDefinition` plus an editable manifest (ADR 0004 decision 6); no separate sandboxed API is built.
 - Waits on platform-baseline because: it needs the G1 lint and plain-data type constraint.
 - Decision: epic set approved by the user, 2026-10-10.
 - Waits on platform-baseline because: G1 lint and type rules.
@@ -52,8 +52,8 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 - Decision: Jensen, 2026-10-11: `PluginDefinition` starts with `commands` only and grows as entries need it; every one of the catalogue's commands must respond and record its side effects in state, through the same contract third-party plugins will use, functional and immutable where viable. The sandboxed third-party mechanism (E-99) stays a separate question.
 - Decision: Jensen, 2026-10-11: the semantic open rows (OOP, ERR, THR, SEM, MOD) are ruled by a doc-first step inside the entry that implements them; the breakpoint hook, pause state and `createEngine` belong to epic board-rendering.
 - Source conflict: ADR 0004 and format-spec 9.9 attribute the `< >` inline-block form to TK2; it occurs only in TK 1.x (discovery/tk2-rpgcode-coverage.md). Entry 1 corrects the spec.
-- Source conflict: ADR 0004 (community plugins share the in-process `PluginDefinition` contract) vs AD-17 and E-99 (games are untrusted; the extension mechanism is sandboxed and goes through host requests). Unreconciled; this epic builds the first-party mechanism only.
-- Open question: the trust model for third-party plugins (E-99).
+- Decision: Jensen, 2026-10-12: one ungated plugin contract; plugins compose as a middleware chain over a pinned built-in `core` pack, selected by an editable manifest with an engine default; AD-17's "games are untrusted" now covers game data, not plugins. Resolves the ADR 0004 vs AD-17/E-99 conflict (spike 3.23).
+- Open question: how a game package ships third-party plugin code (host and distribution question; not blocking).
 - Decision: Jensen, 2026-10-11: #httpRead, #ftpConnect, #ftpWrite and similar came from plugin DLLs shipped in the games (for example ftpPlugin.dll); they are not built-ins. They answer through recorded-effect stubs until E-99 is decided.
 - Unknown: which of the 39 unmapped TK2 commands belong to which DLL; the discovery lists them in tk2-rpgcode-commands.csv with class unknown.
 - Decision: Jensen, 2026-10-11: `#Include` makes the included file's functions reachable under a namespace-like nested name (file.func), the same shape as an implicit include. Open for the MOD-1/MOD-2 ruling in entry 1 and entry 8: whether the unqualified name is also visible after `#Include`, and what happens on a name clash.

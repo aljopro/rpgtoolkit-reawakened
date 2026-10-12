@@ -30,6 +30,7 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
      id: string;
      version: string;
      commands?: Record<string, CommandHandler>;
+     decoders?: Record<string, AssetDecoder>;
      subsystems?: {
        battle?: BattleSubsystem;
        menu?: MenuSubsystem;
@@ -38,6 +39,11 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
    }
    ```
    No command has private backdoors into the VM.
+
+   A `CommandHandler` is a pure function `(view, args, next) -> { out, effects, wait? }`. `next` is the definition the same name has in the layer below. A handler may call `next` and adjust its result, or ignore it and replace the command. Each name is therefore a stack of layers (command middleware), not a single winner. The language constructs themselves (control flow, assignment, labels, calls, returns) are `StepIR` ops and are not in the command chain, so they can be neither removed nor wrapped.
+
+6. **One Contract, Composition, No Trust Tiers (for now):**
+   Plugins are extensions of the application and are not gated. First-party packs, the TK2 compat plugin, domain modules and game-shipped plugins all use the one `PluginDefinition`. A manifest (an ordered list of plugin entries, plain data) selects and orders them; the engine ships a default manifest of its useful packs, in the same format a game or user edits, and anything in it may be removed, disabled, reordered or added to. The built-in `core` pack is pinned at the bottom of the chain: it can be wrapped but not removed. The host resolves manifest ids to code and hands `PluginDefinition` values to the registry; core loads nothing (**G2**). Plugins remain bound by **G1** (plain-data state, no Promises in script threads), **G2** (external effects go through host requests) and **G3** (deterministic): these are correctness rules, not permission checks. A less-trusting model may be added later by extending manifest entries; it needs no change to the plugin contract.
 
 3. **TK2 Compatibility Plugin (`@tk-reawakened/plugin-tk2-compat`):**
    Legacy TK2-specific commands (`#Mwin`, `#Prompt`, `#Item`, legacy `#Fbranch` subroutine call stacks, and integer `WalkSpeed` frame rate adapters) are encapsulated within a dedicated compatibility plugin. When a TK2 project loads, the TK2 plugin activates automatically. The core VM remains clean of legacy heuristics.
@@ -65,6 +71,51 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
 5. **Typed Subsystems Emitting Draw Lists (G4):**
    Heavy domains previously relegated to Win32 DLLs (battle engines, custom menu systems) are modeled as typed subsystem interfaces (`BattleSubsystem`, `MenuSubsystem`). Subsystems step deterministically and emit `DrawCommand` lists and audio cues, allowing complete system replacements (e.g. Turn-based vs. Active Time vs. Tactical Grid) while remaining 100% renderer-agnostic.
 
+7. **Async at the Boundary (modern JavaScript lives in the host):**
+   `core` has no Promises (**G1**), but plugin authors and the engine's own packs still need asynchronous work (file I/O, `fetch`, decoding). This decision adds no mechanism of its own; it states how plugins use the ones AD-5, AD-8, AD-9 and AD-17 already define:
+   * **Requests and replies are AD-5's.** A command that needs something external asks for it through an AD-17 request. Every request is **blocking** (time freezes: `advance` returns `loading` and consumes no steps, so no thread moves) or **stream** (never touches state). Its reply is an input event, `asset { reqId, bytes }`, `blob.loaded` and so on, recorded in the canonical input log with its step, so replay and restore are deterministic. There is no per-thread asset wait.
+   * **Per-thread waits are AD-9's.** A command that must park one thread returns a `wait` of an AD-9 kind (`sleep`, `blob`, `input.key`, a plugin's own kind). Other threads keep stepping; the wait's `poll` resolves it.
+   * **Continuation.** A command that needs its reply to finish names a continuation command and plain-data arguments (AD-8's `resume`); the reply value is prepended. It is a named command, never a closure, so it survives save and restore.
+   * **Host side.** The host performs the request with ordinary `async`/`await` and delivers the reply as an input. Promises never cross into `core`.
+   * **Script side.** To an RPGCode author the call blocks. For a request that freezes time the whole engine waits (`loading`); for an AD-9 wait only that thread does.
+
+   A reply that never arrives must not hang the game. For a **frozen request** ticks do not advance, so the timeout lives in the host: its timer delivers a failure reply (`bytes: null` for an asset) as an ordinary input, which is recorded like any other. For a **per-thread wait** the timeout is a tick count in the wait payload, as `sleep`'s `until` is, layered like a test runner's timeout: engine default, plugin manifest `options`, the wait's own value, then the harness override; zero means no limit. On expiry the thread resumes with an error result and a located diagnostic its error handler can catch. Separately, the VM detects a **deadlock**: every live thread is parked on another parked thread and no reply is outstanding. It reports the stuck threads and what each waits on, and in headless runs and goldens it is a hard failure.
+
+   Illustrative example (names are provisional until entry 3 fixes the contract):
+
+   ```typescript
+   // Plugin: shows the first line of a game file.
+   export const notes: PluginDefinition = {
+     id: 'example.notes',
+     version: '1.0.0',
+     commands: {
+       // Step 1: ask the host. Plain data only; no await, no closure.
+       showNote: (view, [path]) => ({
+         out: {},
+         effects: [],
+         request: { kind: 'asset', key: { area: 'files', path } },
+         then: { command: 'showNote.done', args: [path] },
+       }),
+
+       // Step 2: runs when the reply input is applied. `bytes` was prepended.
+       'showNote.done': (view, [bytes, path]) => ({
+         out: {},
+         effects: [{ kind: 'dialogue', text: firstLine(decodeText(bytes)), source: path }],
+       }),
+     },
+   };
+   ```
+
+   ```typescript
+   // Host side: ordinary modern JavaScript.
+   host.handle('asset', async ({ key }) => {
+     const res = await fetch(resolveUrl(key));
+     return new Uint8Array(await res.arrayBuffer());
+   });
+   ```
+
+   Rules that keep this safe: a result needed inside one command invocation is split into request and continuation, or provided by the host as a synchronous lookup it can answer from memory; the headless harness scripts replies as inputs, so plugin tests need no host. A small helper that builds the request-and-continuation record, and a test helper for scripted replies, belong with entry 3.
+
 ## Consequences
 
 **Positive**
@@ -76,7 +127,8 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
 **Negative / risks, with mitigations**
 * *IR Lowering overhead:* Compiling AST to Step IR introduces a small compilation step. **Mitigation:** IR is cached by source hash (`ProgramCache`, E-91); compilation occurs at asset load time.
 * *Plugin execution budget:* Malicious or buggy plugins could loop indefinitely. **Mitigation:** VM step machine enforces a maximum step budget per tick; commands must yield cooperatively.
-* *Command collisions:* Two plugins could register the same command name. **Mitigation:** Command registry enforces namespace registration with explicit collision rejection.
+* *Command collisions:* Two plugins could register the same command name. **Mitigation:** layers stack in manifest order and the later layer runs first, with `next` reaching the one below; a repeated name raises one warning diagnostic. Only one plugin repeating its own name is rejected.
+* *Untrusted plugin code:* Plugins are ungated, so a game-shipped plugin runs with the engine's authority. **Accepted for now.** The seam for a stricter model is the manifest entry (see decision 6); the engine rules G1 to G3 still bind every plugin.
 
 ## Alternatives considered
 
