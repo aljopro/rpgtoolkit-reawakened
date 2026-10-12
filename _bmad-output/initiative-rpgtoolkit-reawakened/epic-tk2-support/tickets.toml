@@ -1,0 +1,116 @@
+# tickets.toml — planned entries of epic-tk2-support, in build order. tickets.py reads it.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Accept ADR 0006 and write the extraction question list"
+description = "Accepts ADR 0006 (clean-room spec extraction), names the extractor and the reviewer, and writes the numbered question list: every TK2 layout or rule that the archive evidence and the allowed data files cannot answer (text .brd, .gam, .itm, .tem; the .gam 2.2 and .tem 3 to 4 field sets; .fnt; the 3.x update wizard conversion rules). Questions the data can answer are listed as derived, not asked."
+verify = "ADR 0006 is Accepted, the extractor and reviewer are named in it, and each question names the evidence that could not answer it."
+covers = ["CAP-1"]
+after = []
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+done_checkpoint = true
+references = ["adr - docs/adr/0006-clean-room-spec-extraction.md", "research - _bmad-output/initiative-rpgtoolkit-reawakened/epic-tk2-support/discovery/tk2-formats-research.md, Unknowns"]
+[[entry]]
+id = 2
+type = "story"
+title = "Extraction round: answer the question list from the legacy source"
+description = "A disposable extractor session, which never writes code for this epic, reads the legacy source only to answer entry 1 questions and writes prose facts (layouts, tables, rules in its own words) to a staging file; a person other than the extractor reviews it for copied expression and runs the provenance scan. May close with no source read if entry 1 lists no questions."
+verify = "The reviewed staging file answers every listed question in prose with no code, identifiers or comments from the source, the provenance scan passes, and the round is recorded with source revision, date, extractor and reviewer."
+covers = ["CAP-1"]
+after = [1]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+[[entry]]
+id = 3
+type = "story"
+title = "Format-spec amendment for TK2 (2.x) formats"
+description = "Extends docs/format-spec.md, in its own commit (G7), with the text layouts of .brd, .gam, .itm and .tem, the corrected .gam 2.2 and .tem 3 to 4 branches, the verified .anm, .ene, .spc, .ste and .bkg text forms, the .tan, .gph v2 and new .fnt sections, and the TST 8-bit detail palette from the official 2.0 tileset spec; each section cites its evidence and the question it answers."
+verify = "Every new or changed section cites its archive evidence path and file count or its entry 2 answer, and the four previously undocumented text layouts have a worked example checked against at least two games."
+covers = ["CAP-1"]
+after = [1, 2]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+done_checkpoint = true
+[[entry]]
+id = 4
+type = "story"
+title = "TK2 text readers: .brd, .tem, .itm, .gam"
+description = "Adds text-form branches to the board, character, item and main-file readers for the layouts entry 3 documents, selected by the spec detection byte; text boards convert to the vector model through the pre-vector path, and zero-byte placeholder files are tolerated or skipped as decided here."
+verify = "All 17 text .brd, 2 text .tem, 16 text .itm and 2 text .gam files in the six games parse with 0 trailing bytes."
+covers = ["CAP-1"]
+after = [3, "2.5", "2.6", "2.8", "2.9"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 5
+type = "story"
+title = "TK2 text readers: .ene, .anm, .spc, .ste, .bkg"
+description = "Adds text-form branches for the minor-0 text enemies, the .anm text form (currently a generic read error), the .spc and .ste text forms and the 19 by 19 .bkg grid, with a clear message for forms the spec leaves optional."
+verify = "All 52 text .ene, 16 text .anm, 8 text .spc and 23 text .bkg files in the six games parse with 0 trailing bytes."
+covers = ["CAP-1"]
+after = [3, "2.4", "2.6", "2.7"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Correct the TK2-era binary .gam 2.2 and .tem 3 to 4 layouts"
+description = "Fixes the .gam minor-2 record list (1506 residue bytes on BusDriver, an EOF failure on FinalDestiny) and the .tem minor 3 to 4 field set (407 to 797 residue bytes) to the layouts entry 3 records."
+verify = "The 15 binary .gam files (including FinalDestiny) and 16 .tem minor 3 to 4 files read with 0 trailing bytes and the TK3 samples still round-trip."
+covers = ["CAP-1"]
+after = [3, "2.6", "2.9"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Readers for .tan, .gph v2 and .fnt"
+description = "Adds readers for animated tiles .tan (binary 2.0), single tiles .gph v2 and the .fnt font file (RPGTLKIT FONT), using the sections entry 3 adds, so boards and animations that reference them resolve."
+verify = "The 33 .tan, 6 .gph and 5 .fnt files parse with 0 trailing bytes and the referencing boards resolve them."
+covers = ["CAP-1"]
+after = [3]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 8
+type = "story"
+title = "Register the TK2 decoders in the format registry"
+description = "Registers the entry 4 to 7 decoders through the AssetDecoder interface and core format registry that epic legacy-formats entry 2.13 delivers, dispatching by extension and magic (AD-31), and moves the dump rows onto it."
+verify = "Every TK2 sample file with a registered extension decodes through the registry to the model its reader returns and the dump expectation still matches."
+covers = ["CAP-1"]
+after = [4, 5, 6, 7, "2.13"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Corpus gate over the six TK2 games"
+description = "Fetches the six TK2 games as CI fixtures at test time (never committed), extends the dump corpus expectation so FinalDestiny, LittleMan, BusDriver, Caoquest, School2Demo and ChimeranEmpire must reach 0 failures and 0 residue, and records pinned hashes."
+verify = "The corpus job fails when any listed file fails or leaves residue, passes on the fixtures, and nothing under fixtures/ is tracked."
+covers = ["CAP-1"]
+after = [8, "2.14"]
+hitl = false
+risk = "medium"
+unknown = "Where the six TK2 games are fetched from and their pinned hashes."
+[[entry]]
+id = 10
+type = "story"
+title = "Refactor sweep"
+description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
+verify = "All required checks stay green and each cleanup traces to a deferred review finding."
+covers = ["CAP-1"]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+hitl = false
+risk = "low"
+
