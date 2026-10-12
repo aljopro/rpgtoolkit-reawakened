@@ -4,6 +4,7 @@
 // §4.8 (minors 2–3) have their own reader and their converter to the §4.2
 // model.
 export * from "./model.ts";
+export * from "./layout.ts";
 export * from "./reader.ts";
 export * from "./writer.ts";
 export * from "./pre-vector-reader.ts";
