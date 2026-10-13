@@ -12,6 +12,11 @@
  * index. `convertPreVectorBoard` (in `pre-vector-convert.ts`) turns the model
  * this reader returns into the vector board model of §4.2. Every slot is kept,
  * empty ones included, so program and sprite indices stay stable.
+ *
+ * The declared grid is bounded by `BOARD_MAX_CELLS` (§4.2 "Size limits"), the
+ * same limit the §4.2 reader applies: a run marker expands up to 32,768 cells
+ * from four bytes, so without the bound a crafted file of a few kilobytes could
+ * make the reader reserve gigabytes (AD-17, untrusted input).
  */
 
 import { err, ok, type Result } from "../result.ts";
@@ -20,6 +25,7 @@ import type { Colorref } from "../binary/color.ts";
 import {
   BOARD_DETECT_OFFSET,
   BOARD_MAGIC,
+  BOARD_MAX_CELLS,
   BOARD_SECTION,
   BOARD_VECTOR_MINOR,
   type BoardLinks,
@@ -528,6 +534,19 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
       reader.path,
     );
   }
+  // §4.2 "Size limits", applied to the §4.8 grid: the dimensions bound the tile
+  // matrix, so an over-large declared cell count is refused here — before the
+  // LUT or a single run is read or expanded — so a crafted file cannot make the
+  // reader reserve gigabytes (AD-17).
+  const totalCells = sizeX.value * sizeY.value * sizeL.value;
+  if (totalCells > BOARD_MAX_CELLS) {
+    return fail(
+      reader.offset - 6,
+      PRE_VECTOR_SECTION,
+      `the tile matrix would hold ${totalCells} cells (${sizeX.value}×${sizeY.value}×${sizeL.value}) but the limit is ${BOARD_MAX_CELLS}`,
+      reader.path,
+    );
+  }
 
   const startX = reader.i16();
   if (!startX.ok) {
@@ -555,7 +574,6 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
     return lut;
   }
 
-  const totalCells = sizeX.value * sizeY.value * sizeL.value;
   const matrix = readTileMatrix(reader, totalCells, warnings);
   if (!matrix.ok) {
     return matrix;
