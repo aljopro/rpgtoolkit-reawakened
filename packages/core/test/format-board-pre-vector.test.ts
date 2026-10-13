@@ -2,7 +2,8 @@
 // (minors 2–3) and its conversion to the vector model of §4.2. The sample
 // corpus ships no minor 2–3 board (all three fixture `.brd` files are minor 4),
 // so the layout and the conversion are pinned by synthetic boards built byte
-// by byte here, including runs that wrap rows and layers.
+// by byte here, including runs that wrap rows and layers, and the §4.2 cell
+// limit the reader applies to the declared grid.
 //
 // The reader never throws, so the tests assert on values and on the error's
 // offset and section rather than on exceptions. Conversion is deterministic
@@ -14,6 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BOARD_MAGIC,
+  BOARD_MAX_CELLS,
   BinaryReader,
   BinaryWriter,
   convertPreVectorBoard,
@@ -1091,6 +1093,60 @@ test("reports a located error for a truncated board", () => {
     equal(result.error.section, "format-spec §1.1");
     equal(result.error.offset, 30, "the startY field has no bytes left");
   }
+});
+
+test("refuses a pre-vector board whose tile matrix would exceed the cell limit", () => {
+  // A few bytes declare 8000 × 8000 × 1 = 64,000,000 cells — a run marker
+  // expands 32,768 of them from four bytes — so the reader must refuse on the
+  // dimensions before it reads or expands a single run, and must return a
+  // located `FormatError` rather than allocating (or throwing). This is the
+  // regression for the 21 KB file that reached ~1.4 GiB RSS.
+  const bytes = buildPreVectorBoard({ sizeX: 8000, sizeY: 8000, sizeL: 1, cells: [] });
+  equal(8000 * 8000, 64_000_000, "the crafted grid is far over the limit");
+  const result = readPreVectorBoard(new BinaryReader(bytes));
+  equal(result.ok, false, "an over-limit board is refused, not expanded");
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §4.8");
+  equal(result.error.offset, 22, "the sizeX field");
+  equal(result.error.message.includes("64000000"), true, "the error names the declared grid");
+  equal(result.error.message.includes("4194304"), true, "the error names the limit");
+});
+
+test("refuses a board one cell over the limit, at any size", () => {
+  // 397 × 2113 × 5 = BOARD_MAX_CELLS + 1 cells, and the crafted file holds no
+  // matrix bytes at all, so only the §4.2 "Size limits" rule can refuse it.
+  equal(397 * 2113 * 5, BOARD_MAX_CELLS + 1, "the crafted grid is one cell over the limit");
+  const result = readPreVectorBoard(
+    new BinaryReader(buildPreVectorBoard({ sizeX: 397, sizeY: 2113, sizeL: 5, cells: [] })),
+  );
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §4.8");
+  equal(result.error.offset, 22, "the sizeX field");
+});
+
+test("accepts a pre-vector board of exactly BOARD_MAX_CELLS cells built from 128 maximum runs", () => {
+  equal(2048 * 2048, BOARD_MAX_CELLS, "2048 × 2048 × 1 is exactly the limit");
+  equal(128 * 32_768, BOARD_MAX_CELLS, "128 runs of 32768 cells fill it");
+  const cells = Array.from({ length: 128 }, () => ({
+    count: 32_768,
+    index: 1,
+    r: 0,
+    g: 0,
+    b: 0,
+    tileType: 0,
+  }));
+  const { board, converted } = readAndConvert(
+    buildPreVectorBoard({ minor: 2, sizeX: 2048, sizeY: 2048, sizeL: 1, cells }),
+  );
+  equal(board.tileMatrix.length, BOARD_MAX_CELLS);
+  equal(board.tileRuns.length, 128);
+  equal(converted.sizeX, 2048);
+  equal(converted.sizeY, 2048);
 });
 
 test("refuses to convert an iso-rotated board", () => {
