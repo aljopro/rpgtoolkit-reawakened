@@ -124,7 +124,7 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 
 - **Binds:** CAP-1, CAP-12, CAP-15
 - **Prevents:** each runner shipping its own package reader; `core` importing Node through a dependency.
-- **Rule:** `core/formats/package` reads legacy `.tpk` and appended-ZIP EXE (format-spec §13) and reads and writes the project's own distribution package: a `.tpk`-compatible ZIP plus `manifest.json { schema, main, index }`; web and desktop bundles embed it unchanged. `core` imports `fflate/browser` (explicit subpath) and the synchronous APIs only (`unzipSync`, `inflateSync`, and `Inflate` used only in its synchronous `push` form, never with an async callback, with the `unzip` filter for size limits). `fflate` is the first entry on the `core` runtime allowlist (G2). [ASSUMPTION: `fflate`; ZIP methods beyond store and deflate are out.]
+- **Rule:** `core/formats/package` reads legacy `.tpk` and appended-ZIP EXE (format-spec §13) and reads and writes the project's own distribution package: a `.tpk`-compatible ZIP plus `manifest.json { schema, main, index }`; web and desktop bundles embed it unchanged. `core` imports `fflate/browser` (explicit subpath) and the synchronous APIs only (no async exports; today `unzipSync`, `unzlibSync`, `deflateSync`, `strToU8`/`strFromU8`, and `Inflate` used only in its synchronous `push` form, with the `unzip` filter for size limits). `fflate` is the first entry on the `core` runtime allowlist (G2). [ASSUMPTION: `fflate`; ZIP methods beyond store and deflate are out.]
 - **Check:** lint bans the bare `fflate` specifier and its async exports in `core`; CI asserts the allowlist matches `package.json`.
 
 ### AD-7 — VM state shape
