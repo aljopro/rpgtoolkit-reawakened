@@ -199,10 +199,12 @@ function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
 
     // The finished container's length is known from the headers alone, and this
     // is a lower bound on it: the entries compressed so far, the local headers
-    // still to come, the whole central directory and the record. It is exact at
-    // the last entry, so the L1 budget is proved *while* the entries are
-    // compressed rather than after every one of them has been (a tree over the
-    // limit used to pay for its whole compression before being refused).
+    // still to come, the whole central directory and the record. It never
+    // over-states the finished size and is exact at the last entry, so checking
+    // it here refuses a tree over the L1 limit at the entry that crosses it,
+    // instead of after every entry has been compressed: the saving is the work of
+    // the entries past the crossing (small for a tree of few large entries, large
+    // for a tree of many), and the cost is one addition per entry.
     const lowerBound = localBytes + (headerBytes - headersSoFar) + centralBytes + EOCD_BYTES;
     if (lowerBound > PACKAGE_LIMITS.maxCompressedInputBytes) {
       return err(

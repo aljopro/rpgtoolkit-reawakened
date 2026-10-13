@@ -287,6 +287,48 @@ test("a tree that would exceed the entry limit is refused, naming L2", () => {
   equal(result.ok && result.value.length > 0, true);
 });
 
+test("a tree over the L1 budget is refused at the entry that crosses it", () => {
+  // The L1 budget is on the written container, so it can only be proved while
+  // the entries are compressed: the check runs after each entry against a lower
+  // bound on the finished archive (the entries so far, the local headers still to
+  // come, the whole central directory and the record), which is exact at the last
+  // entry. This tree is 319 MiB of bytes that deflate past the reader's 100:1
+  // guard, so the writer stores them whole, with the L1 limit at 256 MiB: the
+  // first four entries fill the budget to the byte (4 x 64 MiB) and the headers
+  // push the bound past it, so the fifth entry must never be compressed. The old
+  // post-loop check could only report the finished total, which counts every
+  // body — the reported number is therefore the observable that says where the
+  // refusal landed.
+  const sixtyFourMiB = new Uint8Array(64 * 1024 * 1024);
+  const full: readonly PackageFile[] = [0, 1, 2, 3].map((index) => ({
+    path: `F/p${index}.bin`,
+    bytes: sixtyFourMiB,
+  }));
+  const files: readonly PackageFile[] = [
+    ...full,
+    { path: "F/p4.bin", bytes: sixtyFourMiB.subarray(0, 63 * 1024 * 1024) },
+  ];
+  const manifest: DistributionManifest = { schema: 1, main: "F/p0.bin", index: files.map((file) => file.path) };
+
+  const result = writeDistributionPackage({ files, manifest });
+  if (result.ok) throw new Error("expected a failure naming L1");
+  equal(result.error.section, "format-spec §13");
+  equal(result.error.message.includes("max compressed input, L1"), true, result.error.message);
+
+  // The refusal is at the crossing, not after the last entry: the reported bound
+  // is over the 256 MiB limit, and within the limit plus the fourth entry and
+  // the headers that follow it — far below the 319 MiB of bodies it would report
+  // if every entry had been compressed first.
+  const reported = Number(/(\d+) bytes/.exec(result.error.message)?.[1]);
+  equal(Number.isInteger(reported), true, result.error.message);
+  equal(reported > PACKAGE_LIMITS.maxCompressedInputBytes, true, `${reported} should exceed the L1 limit`);
+  equal(
+    reported < PACKAGE_LIMITS.maxCompressedInputBytes + 1024,
+    true,
+    `${reported} should be the fourth entry's crossing, not the finished total of 319 MiB of bodies`,
+  );
+});
+
 test("a path over the length limit is refused, naming L6", () => {
   const long = `${"a".repeat(300)}.brd`;
   const files: readonly PackageFile[] = [{ path: long, bytes: bytesOf("x") }];
