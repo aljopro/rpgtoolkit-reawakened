@@ -806,12 +806,27 @@ inline function f(x) { … }           // "inline" is a hint only
 
 ### 9.6 Modules
 
-* `#include "file.prg"` or `include("file.prg")`. Only functions and classes are imported; loose top-level code in an included file does not run. The include root is `Prg/` (§1.5); a name with no path separator resolves there, and matching is case-insensitive.
-* **Implicit include:** `file.func(args)` loads `Prg/file.prg` on first use and then calls `func`.
+* `#include "file.prg"` or `include("file.prg")`. Only functions and classes are imported; loose top-level code in an included file does not run. The include root is `Prg/` (§1.5); a name with no path separator resolves there, and matching is case-insensitive. — legacy behaviour (R2-Q21); **our rule** resolves includes through the asset resolver, so the `Prg/` root, its subfolders and the ASCII-only fold of §1.5 are the one path rule the readers and the scripts share.
+* **Implicit include:** `file.func(args)` queues `Prg/file.prg` for inclusion while the program is loaded, and only then is `func` an ordinary name to call. If `func` names a built-in, the built-in is called. — legacy behaviour (R2-Q21); it corrects the earlier "on first use" reading.
 * **Hoisting.** Definitions are hoisted per file, so a function may be called earlier in a file than the line that defines it, and a function defined in an included file may be called from the includer once the `#include` line has been read.
-* **One flat list of script functions (working rule).** `#include`, an implicit `file.func` call, and the first run of a file each add that file's functions to a single flat list of script-function names at that moment. When two entries in that list share a name, the **last one added wins**. The `file.` prefix always reaches that file's own definition, whatever the flat list holds. Every override raises a warning naming the old and new definition. <!-- OWNER: MOD-1 / entry 3.8 — one tutorial claims the unqualified name is also reachable across files after a first implicit call; the corpus only shows the intra-file case. The flat list and last-wins rule are the owner's working rule until evidence says otherwise; entry 3.8 rules the rest doc-first. -->
+* **One flat list of script functions (working rule).** `#include`, an implicit `file.func` call, and the first run of a file each add that file's functions to a single flat list of script-function names at that moment. When two entries in that list share a name (and parameter count), the **last one added wins**. The `file.` prefix always reaches that file's own definition, whatever the flat list holds. Every override raises a warning naming the old and new definition. **This ordering is our rule and it is not the legacy behaviour:** legacy kept the first definition and silently skipped a later one of the same name and parameter count (R2-Q21, R1-Q9). Entry 3.8 keeps the owner's last-wins rule on purpose, with the divergence recorded here so a later fidelity review can reverse it. <!-- OWNER: MOD-1 / entry 3.8 — alternatives: adopt the legacy first-wins ordering (silent skip) or keep the owner's last-wins ordering with a warning (decided). The unqualified-after-include question is answered below: an include merges the file into the program, so the unqualified name is reachable once the include has been read. -->
+* **Ruled (entry 3.8, doc-first) — includes: repeats, cycles, missing files and visibility.**
+  * An included file is merged into the including program, so its functions and classes become part of that program and an unqualified name in it is reachable once the include has been read. — legacy behaviour (R2-Q21).
+  * The same file (the same folded path) is included once; a repeated include does not add its definitions a second time. — legacy behaviour (R2-Q21).
+  * An include inside a function is allowed but has no scoping effect: it is a program-wide include. — legacy behaviour (R2-Q21).
+  * A missing file is ignored silently at load time; an empty file imports nothing and is not an error; `include()` of a missing file at run time raises a runtime error. — legacy behaviour (R2-Q21).
+  * An include cycle is not guarded in legacy: each included file is parsed afresh and cached only after its own parse finishes, so A including B including A recursed without end. — legacy behaviour (R2-Q21, inferred). **Our rule:** an include whose file is already being parsed is treated as already included and reported as a cycle diagnostic, so parsing always terminates; a rebuild must not hang or crash on a cycle.
 * `redirect("oldName", "newName")` remaps a function name globally (including built-ins). `killRedirect("name")` and `killAllRedirects()` undo it. The legacy `#`-prefixed operands and an implicit `file.method` target (`#redirect(#a, #b.c)`) are dialect forms (§9.9).
-* **Still to rule (entry 3.8, doc-first):** whether the unqualified name is visible after `#include` across files, the include cycle rule (an include of a file already included, and an include inside a function), and the exact `redirect` chain behaviour.
+* **Ruled (entry 3.8, doc-first) — redirects.**
+  * There is one redirect table for the whole run. — legacy behaviour (R2-Q22); **our rule** holds it as the VM's `redirects` state section, so it travels in a saved game and a snapshot restores it.
+  * `redirect`, `killRedirect` and `killAllRedirects` take effect when source text is parsed, in textual order, and only on text parsed after them; a program already compiled keeps its old bindings. — legacy behaviour (R2-Q22).
+  * A target may be a built-in name; after substitution the name is looked up like any other call name. — legacy behaviour (R2-Q22).
+  * There is no chaining: one substitution is made, so with a→b and b→c the name a becomes b only. — legacy behaviour (R2-Q22).
+  * A target of the form `file.func` also queues that file for inclusion. — legacy behaviour (R2-Q22).
+  * A redirect stops applying only through `killRedirect`/`killAllRedirects` or by loading a saved game, never because a program ended. It applies to call syntax only. — legacy behaviour (R2-Q22).
+  * **Our rule:** redirect names fold like every other name (the ASCII fold of §1.5), so a redirect and the call it matches agree on every runner.
+
+**References.** R2-Q21, R2-Q22, R1-Q9 (`docs/provenance/facts-round-2.md`, `docs/provenance/facts-round-1.md`); §1.5 (paths and the ASCII fold), §9.1 (pre-compiled refusal, entry 3.8's other work), §9.9 (dialect forms); AD-5 and AD-7 (`redirects` state section), AD-17 (host boundary) in the architecture spine.
 
 ### 9.7 Object orientation
 
@@ -1063,7 +1078,7 @@ rows, listed under "deferred" because their implementing entries rule them).**
 | ID | Affected entry | Note |
 |---|---|---|
 | OOP-1 … OOP-9 | 3.6 | Class and object syntax is in §9.7; the lookup order, `operator=`/`operator[]` dispatch, destructor timing, access labels and inheritance are ruled there. |
-| MOD-1, MOD-2, MOD-3 | 3.8 | The unqualified-after-`#include` question, the include cycle rule (the `Prg/` root is already stated in §9.6), and the redirect chain. The owner's flat-list working rule is recorded in §9.6. |
+| MOD-1 | 3.8 | The unqualified-after-`#include` question is answered in §9.6 (an include merges the file into the program); the flat list's name-clash ordering is the owner's last-wins working rule, recorded there as a deliberate departure from the legacy first-wins order. |
 | THR-1, THR-2, THR-3 | 3.9 | `threadSleep` units, `source`/`target` lifetime, and the snapshot "step" definition. |
 | SEM-1 … SEM-6 | 3.12 | `kill` forms, `until` check-first, comparison and coercion, scope and visibility, unset reads, and by-reference write-back. The forms the corpus settles are stated in §9.3 and §9.5 so the parser can be written; entry 3.12 confirms the binding semantics. |
 
@@ -1072,6 +1087,7 @@ rows, listed under "deferred" because their implementing entries rule them).**
 | ID | Entry | Rule |
 |---|---|---|
 | ERR-1, ERR-2 | 3.7 | Handler, label and `resume` semantics, and which failures are catchable (§9.8). Modulo by zero stays open pending the round-3 extraction. |
+| MOD-2, MOD-3 | 3.8 | Include repeats, cycles, missing files and where the unqualified name is visible, and the redirect chain (§9.6). The name-clash ordering keeps the owner's last-wins rule, recorded there as a deliberate departure from the legacy first-wins order. |
 
 **Owner review list.** The rulings below are judgement calls rather than corpus results, and the owner should weigh them
 hardest: EXP-2 (the precedence of `^` and of the bitwise operators), EXP-4 (`=` in conditions and its dialect gate),
