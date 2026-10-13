@@ -670,19 +670,59 @@ test("a wrong magic is a located error at offset 0 in each section", () => {
   }
 });
 
+test("each actor format accepts the ends of its minor range", () => {
+  for (const minor of [0, 8]) {
+    const character = unwrap(readCharacter(new BinaryReader(buildCharacter({ minor }))));
+    equal(character.minor, minor, `character minor ${minor}`);
+  }
+  for (const minor of [0, 7]) {
+    const item = unwrap(readItem(new BinaryReader(buildItem({ minor }))));
+    equal(item.minor, minor, `item minor ${minor}`);
+  }
+  const enemy = unwrap(readEnemy(new BinaryReader(buildEnemy({ minor: 1 }))));
+  equal(enemy.minor, 1, "enemy minor 1");
+});
+
 test("an unsupported minor is a located error on the minor field", () => {
-  const tem = readError(buildCharacter({ minor: 99 }), readCharacter);
-  equal(tem.offset, 16, "character minor field");
-  equal(tem.section, CHARACTER_SECTION);
+  // One above each accepted range's top: 9 > 8 (§6.1), 8 > 7 (§6.2) and the
+  // only binary enemy minor is 1 (§6.3). An enemy at minor 0 is a binary
+  // 2.0-form file (byte 14 is 0), so it too is refused on the version.
+  const above: readonly [string, number, Uint8Array, string][] = [
+    ["character", 16, buildCharacter({ minor: 9 }), CHARACTER_SECTION],
+    ["character", 16, buildCharacter({ minor: 99 }), CHARACTER_SECTION],
+    ["item", 16, buildItem({ minor: 8 }), ITEM_SECTION],
+    ["item", 16, buildItem({ minor: 99 }), ITEM_SECTION],
+    ["enemy", 17, buildEnemy({ minor: 0 }), ENEMY_SECTION],
+    ["enemy", 17, buildEnemy({ minor: 2 }), ENEMY_SECTION],
+  ];
+  const readers: Record<string, (reader: BinaryReader) => Result<{ readonly minor: number }>> = {
+    character: readCharacter,
+    item: readItem,
+    enemy: readEnemy,
+  };
+  for (const [name, offset, bytes, section] of above) {
+    const error = readError(bytes, readers[name]!);
+    equal(error.offset, offset, `${name} minor field`);
+    equal(error.section, section, `${name} section`);
+  }
+});
 
-  const itm = readError(buildItem({ minor: 99 }), readItem);
-  equal(itm.offset, 16, "item minor field");
-  equal(itm.section, ITEM_SECTION);
-
-  // Only minor 1 is binary; minor 0 is the 2.0 text form (§6.3).
-  const ene = readError(buildEnemy({ minor: 0 }), readEnemy);
-  equal(ene.offset, 17, "enemy minor field");
-  equal(ene.section, ENEMY_SECTION);
+test("a negative minor is refused at its own byte in each actor format (§1.4)", () => {
+  const cases: readonly [string, number, Uint8Array][] = [
+    ["character", 16, buildCharacter({ minor: -1 })],
+    ["item", 16, buildItem({ minor: -1 })],
+    ["enemy", 17, buildEnemy({ minor: -1 })],
+  ];
+  const readers: Record<string, (reader: BinaryReader) => Result<{ readonly minor: number }>> = {
+    character: readCharacter,
+    item: readItem,
+    enemy: readEnemy,
+  };
+  for (const [name, offset, bytes] of cases) {
+    const error = readError(bytes, readers[name]!);
+    equal(error.offset, offset, `${name} minor field`);
+    equal(error.section, "format-spec §1.4", `${name} negative minor section`);
+  }
 });
 
 test("a 2.x text file is a located error at the detection byte", () => {

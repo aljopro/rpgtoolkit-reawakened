@@ -52,6 +52,21 @@ export const BATTLE_BACKGROUND_DETECT_OFFSET = 12;
 /** The format-spec section the battle-background reader and writer implement (G7). */
 export const BATTLE_BACKGROUND_SECTION = "format-spec §8.3";
 
+/**
+ * The lowest `minor` the three battle formats accept (format-spec §8.1–§8.3):
+ * the 2.x-era binary archive writes 2. Their field list does not vary across
+ * the accepted range, so `minor` selects no layout; a lower value is reported
+ * rather than guessed at (§1.4).
+ */
+export const BATTLE_MIN_MINOR = 2;
+
+/**
+ * The highest `minor` the three battle formats accept (format-spec §8.1–§8.3):
+ * the 3.1.0 sample family writes 3. A higher value is reported rather than
+ * guessed at (§1.4).
+ */
+export const BATTLE_MAX_MINOR = 3;
+
 /** A parsed special move (format-spec §8.1). */
 export interface SpecialMove {
   /** The magic string, `"RPGTLKIT SPLMOVE"` in a binary file (§1.3, §8.1). */
@@ -171,5 +186,26 @@ export function unsupportedTextForm(
     offset,
     section,
     message: `${magic}: unsupported 2.x line-oriented text form (byte at offset ${offset} is non-NUL); only the binary 3.x layout is implemented`,
+  };
+}
+
+/**
+ * Build the located `FormatError` a battle reader returns for a `minor` outside
+ * the accepted `BATTLE_MIN_MINOR..BATTLE_MAX_MINOR` range (format-spec
+ * §8.1–§8.3, §1.4). `offset` is the minor field's first byte; the error names
+ * the range so the caller never guesses a neighbouring layout.
+ */
+export function unsupportedBattleMinor(
+  reader: BinaryReader,
+  offset: number,
+  section: string,
+  magic: string,
+  minor: number,
+): FormatError {
+  return {
+    ...(reader.path === undefined ? {} : { path: reader.path }),
+    offset,
+    section,
+    message: `${magic}: unsupported minor version ${minor}: this reader implements ${BATTLE_MIN_MINOR}..${BATTLE_MAX_MINOR} (format-spec §1.4)`,
   };
 }

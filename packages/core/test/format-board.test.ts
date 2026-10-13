@@ -124,6 +124,8 @@ interface BuildOptions {
   readonly sizeL?: number;
   readonly coordType?: number;
   readonly lut?: readonly string[];
+  /** The raw `i16` LUT upper bound, to craft an invalid one (−1 means none). */
+  readonly lutBound?: number;
   /** The raw `i16` tile-matrix tokens, markers included (negative = a run marker). */
   readonly tokens?: readonly number[];
   readonly shadeLayers?: readonly ShadeSpec[];
@@ -178,7 +180,7 @@ function buildBoard(options: BuildOptions = {}): Uint8Array {
   writer.i16(options.coordType ?? 0);
 
   const lut = options.lut ?? ["", "default.tst1"];
-  writer.i16(bound(lut.length));
+  writer.i16(options.lutBound ?? bound(lut.length));
   for (const reference of lut) {
     writer.str(reference);
   }
@@ -348,6 +350,53 @@ test("reads the header, the dimensions and the reserved LUT index 0", () => {
   deepEqual(model.lut, ["", "a.tst1", "b.iso2"]);
   equal(model.lut[0], "", "index 0 is the reserved 'no tile' entry");
   deepEqual(unwrap(writeBoard(model)), bytes);
+});
+
+test("a board with lutUpperBound -1 has no LUT at all, and one below -1 is refused", () => {
+  // -1 means the table is absent: no entries and therefore no index 0 (§1.2, §4.2).
+  const absent = buildBoard({ lutBound: -1, lut: [] });
+  const none = unwrap(readBoard(new BinaryReader(absent)));
+  deepEqual(none.lut, [], "an absent LUT has no index 0");
+  deepEqual(unwrap(writeBoard(none)), absent, "an absent LUT round-trips");
+
+  // No other negative bound is valid; the reader reports it at the bound's byte.
+  const result = readBoard(new BinaryReader(buildBoard({ lutBound: -2, lut: [] })));
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §1.2");
+  equal(result.error.offset, 27, "the LUT upper bound's first byte");
+});
+
+test("isometric detection is bit 1 or bit 2, but only bit 2 expands the tile grid", () => {
+  // coordType bit 1 (ISO_STACKED) is isometric yet stores sizeX × sizeY per
+  // layer; bit 2 (ISO_ROTATED) alone expands it to (sizeX + sizeY)² per layer;
+  // bit 4 (pixel-absolute) changes neither, alone or combined (§4.2, §5, §14).
+  const cases: readonly [string, number, number, readonly number[]][] = [
+    ["2D (bit 0 none)", 0, 6, [-6, 1]],
+    ["iso stacked (bit 1)", 1, 6, [-6, 1]],
+    ["iso rotated (bit 2)", 2, 25, [-25, 1]],
+    ["pixel absolute (bit 4)", 4, 6, [-6, 1]],
+    ["iso stacked + pixel absolute", 1 | 4, 6, [-6, 1]],
+  ];
+  for (const [name, coordType, cells, tokens] of cases) {
+    const model = unwrap(
+      readBoard(
+        new BinaryReader(
+          buildBoard({
+            sizeX: 3,
+            sizeY: 2,
+            sizeL: 1,
+            coordType,
+            tokens,
+            shadeLayers: [{ castLayer: 1, records: [[cells, 0, 0, 0]] }],
+          }),
+        ),
+      ),
+    );
+    equal(model.tileMatrix.length, cells, `${name}: grid cell count`);
+  }
 });
 
 test("expands a matrix run that wraps a row end and one that wraps a layer boundary", () => {
