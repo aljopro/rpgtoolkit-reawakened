@@ -5,7 +5,7 @@ import type {
   DrawList,
   Engine,
   InputRecord,
-  StepReport,
+  TickReport,
   SurfaceId,
   SurfacePixels,
 } from "@tk-reawakened/core";
@@ -30,11 +30,11 @@ const VALID_VECTORS = JSON.stringify({
 
 const VALID_RUN = JSON.stringify({
   schema: 1,
-  steps: 3,
+  ticks: 3,
   log: [
-    { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
-    { step: 1, event: { kind: "pointer", x: 10, y: 20, buttons: 1 } },
-    { step: 2, event: { kind: "key", name: "A", code: "KeyA", char: null, down: false } },
+    { tick: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
+    { tick: 1, event: { kind: "pointer", x: 10, y: 20, buttons: 1 } },
+    { tick: 2, event: { kind: "key", name: "A", code: "KeyA", char: null, down: false } },
   ],
 });
 
@@ -47,7 +47,7 @@ test("goldenJob records golden when record: true and subsequent compare succeeds
   equal(typeof recordOutcome.golden, "string");
   deepEqual(recordOutcome.lines, [
     "vectors: 2 rows ok",
-    "run: 3 steps",
+    "run: 3 ticks",
     "batching: 1,3,S ok",
     "golden: 3 recorded",
   ]);
@@ -63,7 +63,7 @@ test("goldenJob records golden when record: true and subsequent compare succeeds
 
   deepEqual(compareOutcome.lines, [
     "vectors: 2 rows ok",
-    "run: 3 steps",
+    "run: 3 ticks",
     "batching: 1,3,S ok",
     "golden: 3 compared",
   ]);
@@ -90,10 +90,10 @@ test("goldenJob returns ok: false with failure on last line when golden differs"
 
   equal(compareOutcome.lines.length, 4);
   equal(compareOutcome.lines[0], "vectors: 2 rows ok");
-  equal(compareOutcome.lines[1], "run: 3 steps");
+  equal(compareOutcome.lines[1], "run: 3 ticks");
   equal(compareOutcome.lines[2], "batching: 1,3,S ok");
   equal(
-    compareOutcome.lines[3]!.includes("golden: step 1: state hash differs"),
+    compareOutcome.lines[3]!.includes("golden: tick 1: state hash differs"),
     true,
   );
 });
@@ -101,7 +101,7 @@ test("goldenJob returns ok: false with failure on last line when golden differs"
 test("goldenJob rejects empty log, records, or vector rows without throwing", () => {
   const emptyLogOutcome = goldenJob({
     vectors: VALID_VECTORS,
-    run: JSON.stringify({ schema: 1, steps: 3, log: [] }),
+    run: JSON.stringify({ schema: 1, ticks: 3, log: [] }),
   });
   equal(emptyLogOutcome.ok, false);
   if (!emptyLogOutcome.ok) {
@@ -154,14 +154,14 @@ test("goldenJob handles absent files without throwing", () => {
 
 test("goldenJob detects batching disagreement without throwing", () => {
   const createBatchDependentEngine = (): Engine => {
-    let currentStep = 0;
+    let currentTick = 0;
     return {
-      advance(steps: number, inputs: readonly InputRecord[], maxSteps?: number): StepReport {
-        currentStep += steps;
-        const stateHash = maxSteps === 3 ? "3333333333333333" : "1111111111111111";
+      advance(ticks: number, inputs: readonly InputRecord[], maxTicks?: number): TickReport {
+        currentTick += ticks;
+        const stateHash = maxTicks === 3 ? "3333333333333333" : "1111111111111111";
         return {
-          stepsRun: steps,
-          stepAfter: currentStep,
+          ticksRun: ticks,
+          tickAfter: currentTick,
           consumed: inputs,
           audioCues: [],
           requests: [],
@@ -172,7 +172,7 @@ test("goldenJob detects batching disagreement without throwing", () => {
         };
       },
       drawList(): DrawList {
-        return { step: currentStep, width: 320, height: 240, commands: [] };
+        return { tick: currentTick, width: 320, height: 240, commands: [] };
       },
       surfacePixels(_id: SurfaceId, _rev: number): SurfacePixels | null {
         return null;
@@ -191,7 +191,7 @@ test("goldenJob detects batching disagreement without throwing", () => {
   if (!outcome.ok) {
     equal(outcome.lines.length, 3);
     equal(outcome.lines[0], "vectors: 2 rows ok");
-    equal(outcome.lines[1], "run: 3 steps");
-    equal(outcome.lines[2], "batching: step 3: n=1 and n=3 mismatch");
+    equal(outcome.lines[1], "run: 3 ticks");
+    equal(outcome.lines[2], "batching: tick 3: n=1 and n=3 mismatch");
   }
 });

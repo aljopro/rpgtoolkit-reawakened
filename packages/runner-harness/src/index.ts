@@ -7,7 +7,7 @@ export {
   parseRun,
   type Golden,
   type Run,
-  type StepRecord,
+  type TickRecord,
 } from "./golden.ts";
 export { checkVectors } from "./vectors.ts";
 export {

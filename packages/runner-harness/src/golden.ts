@@ -7,21 +7,21 @@ import {
   type PortData,
 } from "@tk-reawakened/core";
 
-export type StepRecord = {
-  readonly step: number;
+export type TickRecord = {
+  readonly tick: number;
   readonly state: string;
   readonly draw: string;
 };
 
 export type Run = {
   readonly schema: 1;
-  readonly steps: number;
+  readonly ticks: number;
   readonly log: readonly InputRecord[];
 };
 
 export type Golden = {
   readonly schema: 1;
-  readonly records: readonly StepRecord[];
+  readonly records: readonly TickRecord[];
 };
 
 function checkNoExtraKeys(
@@ -113,17 +113,17 @@ export function parseRun(text: string): Run {
     throw new Error("run.json: root must be an object");
   }
   const root = parsed as Record<string, unknown>;
-  checkNoExtraKeys(root, ["schema", "steps", "log"], "run.json");
+  checkNoExtraKeys(root, ["schema", "ticks", "log"], "run.json");
 
   if (root.schema !== 1) {
     throw new Error("run.json: schema must be 1");
   }
   if (
-    typeof root.steps !== "number" ||
-    !Number.isInteger(root.steps) ||
-    root.steps < 1
+    typeof root.ticks !== "number" ||
+    !Number.isInteger(root.ticks) ||
+    root.ticks < 1
   ) {
-    throw new Error("run.json: steps must be an integer >= 1");
+    throw new Error("run.json: ticks must be an integer >= 1");
   }
   if (!Array.isArray(root.log)) {
     throw new Error("run.json: log must be an array");
@@ -140,39 +140,39 @@ export function parseRun(text: string): Run {
       throw new Error(`run.json: record ${i}: must be an object`);
     }
     const rec = rawRec as Record<string, unknown>;
-    checkNoExtraKeys(rec, ["step", "event"], `run.json: record ${i}`);
+    checkNoExtraKeys(rec, ["tick", "event"], `run.json: record ${i}`);
 
     if (
-      typeof rec.step !== "number" ||
-      !Number.isInteger(rec.step) ||
-      rec.step < 0
+      typeof rec.tick !== "number" ||
+      !Number.isInteger(rec.tick) ||
+      rec.tick < 0
     ) {
       throw new Error(
-        `run.json: record ${i}: step must be a finite integer >= 0`,
+        `run.json: record ${i}: tick must be a finite integer >= 0`,
       );
     }
-    if (rec.step >= root.steps) {
+    if (rec.tick >= root.ticks) {
       throw new Error(
-        `run.json: record ${i}: step ${rec.step} must be < steps ${root.steps}`,
+        `run.json: record ${i}: tick ${rec.tick} must be < ticks ${root.ticks}`,
       );
     }
-    if (i > 0 && rec.step < log[i - 1]!.step) {
+    if (i > 0 && rec.tick < log[i - 1]!.tick) {
       throw new Error(
-        `run.json: record ${i}: step ${rec.step} violates non-decreasing order`,
+        `run.json: record ${i}: tick ${rec.tick} violates non-decreasing order`,
       );
     }
 
     const event = parseEvent(rec, i);
 
     log.push({
-      step: rec.step,
+      tick: rec.tick,
       event,
     });
   }
 
   return {
     schema: 1,
-    steps: root.steps,
+    ticks: root.ticks,
     log,
   };
 }
@@ -201,18 +201,18 @@ export function parseGolden(text: string): Golden {
   }
 
   const hex16 = /^[0-9a-f]{16}$/;
-  const records: StepRecord[] = [];
+  const records: TickRecord[] = [];
   for (let i = 0; i < root.records.length; i++) {
     const raw = root.records[i];
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
       throw new Error(`golden.json: record ${i}: must be an object`);
     }
     const rec = raw as Record<string, unknown>;
-    checkNoExtraKeys(rec, ["step", "state", "draw"], `golden.json: record ${i}`);
+    checkNoExtraKeys(rec, ["tick", "state", "draw"], `golden.json: record ${i}`);
 
-    if (rec.step !== i + 1) {
+    if (rec.tick !== i + 1) {
       throw new Error(
-        `golden.json: record ${i}: step must be ${i + 1}, got ${String(rec.step)}`,
+        `golden.json: record ${i}: tick must be ${i + 1}, got ${String(rec.tick)}`,
       );
     }
     if (typeof rec.state !== "string" || !hex16.test(rec.state)) {
@@ -226,7 +226,7 @@ export function parseGolden(text: string): Golden {
       );
     }
     records.push({
-      step: rec.step,
+      tick: rec.tick,
       state: rec.state,
       draw: rec.draw,
     });
@@ -238,13 +238,13 @@ export function parseGolden(text: string): Golden {
   };
 }
 
-export function formatGolden(records: readonly StepRecord[]): string {
+export function formatGolden(records: readonly TickRecord[]): string {
   const lines: string[] = ['{\n  "schema": 1,\n  "records": ['];
   for (let i = 0; i < records.length; i++) {
     const rec = records[i]!;
     const comma = i < records.length - 1 ? "," : "";
     lines.push(
-      `    {"step": ${rec.step}, "state": "${rec.state}", "draw": "${rec.draw}"}${comma}`,
+      `    {"tick": ${rec.tick}, "state": "${rec.state}", "draw": "${rec.draw}"}${comma}`,
     );
   }
   lines.push("  ]\n}\n");
@@ -252,14 +252,14 @@ export function formatGolden(records: readonly StepRecord[]): string {
 }
 
 export function compareGolden(
-  actual: readonly StepRecord[],
-  expected: readonly StepRecord[],
+  actual: readonly TickRecord[],
+  expected: readonly TickRecord[],
 ): { ok: true } | { ok: false; message: string } {
   const minLen = Math.min(actual.length, expected.length);
   for (let i = 0; i < minLen; i++) {
     const act = actual[i]!;
     const exp = expected[i]!;
-    const step = act.step;
+    const tick = act.tick;
 
     const stateDiff = act.state !== exp.state;
     const drawDiff = act.draw !== exp.draw;
@@ -278,24 +278,24 @@ export function compareGolden(
       }
       return {
         ok: false,
-        message: `golden: step ${step}: ${parts.join("; ")}`,
+        message: `golden: tick ${tick}: ${parts.join("; ")}`,
       };
     }
   }
 
   if (actual.length > expected.length) {
-    const extraStep = actual[expected.length]!.step;
+    const extraTick = actual[expected.length]!.tick;
     return {
       ok: false,
-      message: `golden: run has step ${extraStep} the golden lacks`,
+      message: `golden: run has tick ${extraTick} the golden lacks`,
     };
   }
 
   if (actual.length < expected.length) {
-    const missingStep = expected[actual.length]!.step;
+    const missingTick = expected[actual.length]!.tick;
     return {
       ok: false,
-      message: `golden: golden has step ${missingStep} the run lacks`,
+      message: `golden: golden has tick ${missingTick} the run lacks`,
     };
   }
 

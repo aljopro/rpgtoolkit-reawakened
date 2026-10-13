@@ -115,9 +115,9 @@
           "hp": 100,
           "name": "Hero"
         },
-        "step": 10
+        "tick": 10
       },
-      "hash": "d845bf6718fb7adf"
+      "hash": "32ea6801e5683996"
     },
     {
       "id": "unicode",
@@ -170,17 +170,17 @@
           }
         ],
         "height": 240,
-        "step": 1,
+        "tick": 1,
         "width": 320
       },
-      "hash": "889e401aebda0d4f"
+      "hash": "8205b04436cb3ce0"
     }
   ],
   "rev": [
     {
       "id": "blit-rev-diff",
       "a": {
-        "step": 0,
+        "tick": 0,
         "width": 320,
         "height": 200,
         "commands": [
@@ -215,7 +215,7 @@
         ]
       },
       "b": {
-        "step": 0,
+        "tick": 0,
         "width": 320,
         "height": 200,
         "commands": [

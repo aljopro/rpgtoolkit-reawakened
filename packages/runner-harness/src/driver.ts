@@ -6,37 +6,37 @@ import {
   type InputRecord,
 } from "@tk-reawakened/core";
 import type { AudioSink } from "./audio.ts";
-import type { Run, StepRecord } from "./golden.ts";
+import type { Run, TickRecord } from "./golden.ts";
 
 export function runLog(
   engine: Engine,
   run: Run,
   n: number,
   audio: AudioSink,
-): StepRecord[] {
+): TickRecord[] {
   if (!Number.isInteger(n) || n < 1) {
     throw new RangeError("runLog: n must be an integer >= 1");
   }
 
-  const records: StepRecord[] = [];
-  let currentStep = 0;
+  const records: TickRecord[] = [];
+  let currentTick = 0;
   let callIndex = 0;
   let inputIndex = 0;
 
-  while (currentStep < run.steps) {
-    const stepsToRun = Math.min(n, run.steps - currentStep);
-    const before = currentStep;
-    const endWindow = before + stepsToRun;
+  while (currentTick < run.ticks) {
+    const ticksToRun = Math.min(n, run.ticks - currentTick);
+    const before = currentTick;
+    const endWindow = before + ticksToRun;
 
     const fedInputs: InputRecord[] = [];
     while (
       inputIndex < run.log.length &&
-      run.log[inputIndex]!.step < endWindow
+      run.log[inputIndex]!.tick < endWindow
     ) {
       const rec = run.log[inputIndex]!;
-      if (rec.step < before) {
+      if (rec.tick < before) {
         throw new RangeError(
-          `runLog: call ${callIndex}: record step ${rec.step} is before window [${before}, ${endWindow})`,
+          `runLog: call ${callIndex}: record tick ${rec.tick} is before window [${before}, ${endWindow})`,
         );
       }
       fedInputs.push(rec);
@@ -44,16 +44,16 @@ export function runLog(
     }
 
     const fedCanon = canon(encodeLog(fedInputs));
-    const report = engine.advance(stepsToRun, fedInputs, n);
+    const report = engine.advance(ticksToRun, fedInputs, n);
 
-    if (report.stepsRun !== stepsToRun) {
+    if (report.ticksRun !== ticksToRun) {
       throw new Error(
-        `runLog: call ${callIndex}: stepsRun ${report.stepsRun} does not match expected ${stepsToRun}`,
+        `runLog: call ${callIndex}: ticksRun ${report.ticksRun} does not match expected ${ticksToRun}`,
       );
     }
-    if (report.stepAfter !== before + report.stepsRun) {
+    if (report.tickAfter !== before + report.ticksRun) {
       throw new Error(
-        `runLog: call ${callIndex}: stepAfter ${report.stepAfter} does not match expected ${before + report.stepsRun}`,
+        `runLog: call ${callIndex}: tickAfter ${report.tickAfter} does not match expected ${before + report.ticksRun}`,
       );
     }
     if (report.loading !== false) {
@@ -90,12 +90,12 @@ export function runLog(
     }
 
     records.push({
-      step: report.stepAfter,
+      tick: report.tickAfter,
       state: report.stateHash,
       draw: hashDrawList(engine.drawList(0)),
     });
 
-    currentStep = report.stepAfter;
+    currentTick = report.tickAfter;
     callIndex++;
   }
 

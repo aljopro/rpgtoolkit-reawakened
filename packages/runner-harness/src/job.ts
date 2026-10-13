@@ -7,7 +7,7 @@ import {
   formatGolden,
   parseGolden,
   parseRun,
-  type StepRecord,
+  type TickRecord,
 } from "./golden.ts";
 import { checkVectors } from "./vectors.ts";
 
@@ -44,7 +44,7 @@ export function goldenJob(
     if (run.log.length === 0) {
       throw new Error("run.json: log is empty");
     }
-    lines.push(`run: ${run.steps} steps`);
+    lines.push(`run: ${run.ticks} ticks`);
 
     // Stage 3: batching
     // Each batching run parses the run text afresh and uses fresh engine & audio.
@@ -58,22 +58,22 @@ export function goldenJob(
 
     const engineS = engineFactory();
     const audioS = createNullAudio();
-    const recordsS = runLog(engineS, parseRun(texts.run), run.steps, audioS);
+    const recordsS = runLog(engineS, parseRun(texts.run), run.ticks, audioS);
 
-    // Verify shared steps between n=1 and n=3
+    // Verify shared ticks between n=1 and n=3
     for (const r3 of records3) {
-      const r1 = records1[r3.step - 1];
+      const r1 = records1[r3.tick - 1];
       if (!r1 || r1.state !== r3.state || r1.draw !== r3.draw) {
-        throw new Error(`batching: step ${r3.step}: n=1 and n=3 mismatch`);
+        throw new Error(`batching: tick ${r3.tick}: n=1 and n=3 mismatch`);
       }
     }
 
-    // Verify shared steps between n=1 and n=S
+    // Verify shared ticks between n=1 and n=S
     for (const rS of recordsS) {
-      const r1 = records1[rS.step - 1];
+      const r1 = records1[rS.tick - 1];
       if (!r1 || r1.state !== rS.state || r1.draw !== rS.draw) {
         throw new Error(
-          `batching: step ${rS.step}: n=1 and n=${run.steps} mismatch`,
+          `batching: tick ${rS.tick}: n=1 and n=${run.ticks} mismatch`,
         );
       }
     }
@@ -83,7 +83,7 @@ export function goldenJob(
     // Stage 4: golden
     if (record) {
       const formatted = formatGolden(records1);
-      lines.push(`golden: ${run.steps} recorded`);
+      lines.push(`golden: ${run.ticks} recorded`);
       return { ok: true, lines, golden: formatted };
     }
 
@@ -100,7 +100,7 @@ export function goldenJob(
       throw new Error(cmp.message);
     }
 
-    lines.push(`golden: ${run.steps} compared`);
+    lines.push(`golden: ${run.ticks} compared`);
     return { ok: true, lines };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
