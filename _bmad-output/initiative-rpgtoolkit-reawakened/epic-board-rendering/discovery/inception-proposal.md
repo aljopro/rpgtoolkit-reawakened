@@ -72,7 +72,7 @@ Lanes: **R** render/raster, **W** world/engine, **B** boundary/integration. Ever
 | 19 | Refactor sweep | 1–18, 21, 22 | | |
 | 20 | *(offered)* End-to-end render suite | 18, 19 | | |
 
-Bold `after` ids are other epics' entries: `3.2` the `GameState` shell, `3.3` the built-in registry assembly, `3.7` the harness report change, `3.8` program loading, `3.9` the thread kinds, phase handlers and resumable step, `3.12` the virtual-variable port, `3.13` `core/time`'s `frameAt` and conversions, `3.21` and `3.22` the generic and mixed-command stubs, `3.25` the plugin manifest, `3.26` the tick rename; `2.18` the amended board-reader rules, `2.22` the iso and detail-2/4/6 tileset fixtures, `16.7` the `.tan` reader.
+Bold `after` ids are other epics' entries: `3.2` the `GameState` shell, `3.3` the built-in registry assembly, `3.7` the harness report change, `3.8` program loading, `3.9` the thread kinds, phase handlers and instruction-granular resumable step, `3.12` the virtual-variable port, `3.13` `core/time`'s `frameAt` and conversions, `3.21` and `3.22` the generic and mixed-command stubs, `3.25` the plugin manifest, `3.26` the tick rename; `2.18` the amended board-reader rules, `2.22` the iso and detail-2/4/6 tileset fixtures, `16.7` the `.tan` reader.
 
 **Entry count and justification.** 20 build entries (+ sweep + offered suite). Above the typical band, deliberately: 30 E-ids across two capabilities, one entry per requirement cluster on the render side, and — added at the review — a doc-first rulings entry and a fixtures entry that the corpus forces (D16, D17). The honest way lower is D8's split, not merging entries.
 
@@ -99,7 +99,7 @@ Bold `after` ids are other epics' entries: `3.2` the `GameState` shell, `3.3` th
 | `3.3` built-in registry assembly | 13, 17 | the startup and enter programs, and this epic's built-ins |
 | `3.7` harness report change | 12 | a report may carry the asset requests the engine emits |
 | `3.8` modules: includes, redirects, program cache | 13 | the startup and enter programs load `.prg` through the resolver |
-| `3.9` thread kinds, phase handlers, resumable step | 12, 13, 15, 16 | running programs and threads, and the `render.msgbox` wait |
+| `3.9` thread kinds, phase handlers, instruction-granular resumable step | 12, 13, 15, 16 | running programs and threads, and the `render.msgbox` wait |
 | `3.13` `core/time`: `frameAt`, `secondsToSteps`, `fpsToSteps` | 9 | frame selection for animated tiles and animations (AD-2) |
 | `3.12` virtual-variable port | 15 | `constant[i]`, `boardTitle[i]` and named constants |
 | `3.21` generic command stubs, `3.22` mixed-command stubs | 17 | this epic's real definitions layer above both sets of stubs for the same names |
@@ -112,7 +112,7 @@ Epic 4's initiative-level `after` lines (epics 1, 2 and 3) are now pinned per en
 
 ## 5. Why nobody is blocked
 
-**The epic's front gate is epic rpgcode-vm entry `3.26`, the tick rename** — a docs-and-rename entry that is startable today, as is 3.1. Entry 21 (the rulings) amends the same spine sections and documents, so it follows the rename; entry 1 implements the `Engine` contract and the golden formats and follows it too. **Start 3.26 and the epic's own chain opens: 21 → {22 ∥ 1} → 2 → 3 → 4.**
+**Epic rpgcode-vm entry `3.26`, the tick rename, landed 2026-10-12** (it is in review), and the port is now `advance(ticks, …, maxTicks) -> TickReport`, with the spine's tick counter and tick-based smoothing. Entry 21 (the rulings) followed it so the two sets of spine and doc amendments could not collide; entry 1 implements the renamed contract. **The epic's own chain is open: 21 → {22 ∥ 1} → 2 → 3 → 4** (4.21 and 3.2 are both in `tickets.py next`, so the wall-clock gate below is live).
 
 Nothing in that chain needs the RPGCode VM, the `GameState` shell or any other epic-3 code.
 

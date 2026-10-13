@@ -221,14 +221,14 @@ references = [
 id = 11
 type = "story"
 title = "Camera and viewport, including the earthquake shake"
-description = "Adds the camera section and AD-33's model: follow-player tracking and tracking of an arbitrary entity or point, step-based smoothing with a deadzone box, bounds clamping with center-if-small for scenes smaller than the viewport, re-alignment on board entry and player switch, the scriptable calls (cameraPanTo, cameraFollow, cameraReset, cameraShake) with plain-data easing curves, the whole of it advanced by a per-tick function entry 12's phase list calls, and the logical viewport whose mapping to physical pixels stays a runner setting."
+description = "Adds the camera section and AD-33's model: follow-player tracking and tracking of an arbitrary entity or point, tick-based smoothing with a deadzone box, bounds clamping with center-if-small for scenes smaller than the viewport, re-alignment on board entry and player switch, the scriptable calls (cameraPanTo, cameraFollow, cameraReset, cameraShake) with plain-data easing curves, the whole of it advanced by a per-tick function entry 12's phase list calls, and the logical viewport whose mapping to physical pixels stays a runner setting."
 verify = "A replay of a moving target gives identical camera coordinates and pan curves across fixed ticks; a small board is centred with clean borders; a clamped camera never shows outside the board; a cutscene pan detaches, cameraReset re-attaches and cameraShake leaves no residue; no subpixel jitter appears inside the deadzone."
 covers = ["CAP-2", "CAP-6"]
 after = [21, 10]
 hitl = false
 risk = "medium"
 references = [
-  "spine - architecture-rpgtoolkit-reawakened.md, AD-33 (dynamic camera and viewport), AD-2 (step-based smoothing), AD-10 (the camera section's owner)",
+  "spine - architecture-rpgtoolkit-reawakened.md, AD-33 (dynamic camera and viewport, tick-based smoothing), AD-2 (time is the tick counter), AD-10 (the camera section's owner)",
   "reference - docs/engine-features.md, E-50, E-51",
 ]
 
@@ -236,7 +236,7 @@ references = [
 id = 12
 type = "story"
 title = "The engine: createEngine, the phase list and the world loop"
-description = "Adds core/engine: createEngine(init) returning AD-1's Engine over a loaded project with E-01's single-program test mode, AD-26's fixed named phase list with modules registering into named phases by rank and epic rpgcode-vm's waits and threads handlers and resumable script step called from it, whole-tick advance with the maxSteps catch-up cap, drawList(alpha) built through composeBoard, surfacePixels wired to the surfaces section, the core-written input log, the time phase and the world section's game-speed offset (E-04), the AD-5 asset request and reply path with the loading flag, and the harness and golden integration in which this engine supersedes entry 1's board test host."
+description = "Adds core/engine: createEngine(init) returning AD-1's Engine over a loaded project with E-01's single-program test mode, AD-26's fixed named phase list with modules registering into named phases by rank and epic rpgcode-vm's `waits` and `threads` handlers and its instruction-granular resumable step called from it, whole-tick advance with the `maxTicks` catch-up cap of the renamed contract (`advance(ticks, …, maxTicks) -> TickReport`), drawList(alpha) built through composeBoard, surfacePixels wired to the surfaces section, the core-written input log, the time phase and the world section's game-speed offset (E-04), the AD-5 asset request and reply path with the loading flag, and the harness and golden integration in which this engine supersedes entry 1's board test host."
 verify = "The golden job runs a real createEngine over a fixture project with the board test host retired; batching the same input log at different tick counts per call gives identical state and draw-list hashes; every report carries stateHash; a requested asset is replied to, a slow reply changes no other result, and the loading flag clears; a phase-list snapshot test pins the order."
 covers = ["CAP-2", "CAP-6"]
 after = [21, 2, 4, 5, 6, 7, 8, 9, 10, 11, "3.2", "3.7", "3.9"]
@@ -287,7 +287,7 @@ references = [
 id = 15
 type = "story"
 title = "The VM-facing engine: breakpoints, focus pause and board data"
-description = "Adds this epic's breakpoint hook (setBreakpoints as data; a hit stops mid-tick and returns paused with thread, frame and line, with the open-step cursor stored in the engine section so a paused tick resumes from it), the E-03 focus-pause state (after focus.lost advance consumes no ticks until focus.gained, closing the deferred harness-double finding), and E-15's board constants and titles as virtual variables and named constant substitution with setConstants, through epic rpgcode-vm's port."
+description = "Adds this epic's breakpoint hook (setBreakpoints as data; a hit stops mid-tick and returns paused with thread, frame and line, with the open-tick cursor stored in the engine section so a paused tick resumes from it), the E-03 focus-pause state (after focus.lost advance consumes no ticks until focus.gained, closing the deferred harness-double finding), and E-15's board constants and titles as virtual variables and named constant substitution with setConstants, through epic rpgcode-vm's port."
 verify = "A breakpoint hit returns the documented paused state with its cursor readable by the next advance; the paused engine state is plain data that canonicalises identically and an unbroken golden run still reports paused null; a focus-lost and focus-gained pair consumes no ticks and replays identically; constant[i], boardTitle[i] and a named constant read the active board's values through the port, and setConstants writes one back; restoring a paused engine across a save is epic menu-party-save's check (handoff)."
 covers = ["CAP-2", "CAP-6"]
 after = [21, 12, 13, 14, "3.9", "3.12"]
@@ -297,7 +297,7 @@ plan_checkpoint = true
 references = [
   "spine - architecture-rpgtoolkit-reawakened.md, AD-1 (the breakpoint rule), AD-14 (focus pause is core-owned), AD-26 (the phase list)",
   "deferred - _bmad-output/initiative-rpgtoolkit-reawakened/deferred-work.md, the golden double throwing on focus and on zero ticks run",
-  "handoff - epic rpgcode-vm entries 3.9 and 3.12 supply the phase handlers and the virtual-variable port; the open-step cursor and the engine section are core/engine's own (AD-10), and the save and restore path across a pause is epic menu-party-save's",
+  "handoff - epic rpgcode-vm entries 3.9 and 3.12 supply the phase handlers and the virtual-variable port; the open-tick cursor and the engine section are core/engine's own (AD-10), and the save and restore path across a pause is epic menu-party-save's",
   "source conflict - epic rpgcode-vm entry 3.11's text says it wires hashState into advance; the engine is this epic's, so 3.11 owns the canon cost fixes and entry 12 the wiring",
 ]
 
