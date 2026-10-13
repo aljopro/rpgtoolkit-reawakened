@@ -224,7 +224,9 @@ const MANIFEST: DistributionManifest = {
 test("a written package's manifest reads back deep-equal to the input", () => {
   const bytes = unwrap(writeDistributionPackage({ files: FILES, manifest: MANIFEST }));
   const manifest = unwrap(readDistributionManifest(load(bytes)));
-  deepEqual(manifest, MANIFEST);
+  // The writer puts `index` in code-unit order (plain `sort()` on strings), not
+  // the caller's, so a manifest is byte-identical however the caller ordered it.
+  deepEqual(manifest, { ...MANIFEST, index: [...MANIFEST.index].sort() });
 });
 
 test("a package with no manifest.json fails naming the missing manifest", () => {

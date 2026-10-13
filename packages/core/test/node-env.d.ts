@@ -42,6 +42,10 @@ declare module "node:util" {
   }
 }
 
+declare module "node:perf_hooks" {
+  export const performance: { now(): number };
+}
+
 declare const process: { execPath: string };
 
 // `lib: ["ES2022"]` has no `ImportMeta.url` (that lives in the DOM lib), so

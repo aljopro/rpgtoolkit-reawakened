@@ -12,9 +12,10 @@
  *   package ignores the main file's `projectPath` (AD-5), so this names the file
  *   rather than a game-folder root.
  * * `index` — the relative paths the resolver keys on (AD-5): every game file in
- *   the tree, once each. `manifest.json` is the descriptor itself, so it is not
- *   part of the index the writer takes; the reader's index does list it, being
- *   built from every archive entry.
+ *   the tree, once each, written in code-unit order rather than the caller's.
+ *   `manifest.json` is the descriptor itself, so it is not part of the index the
+ *   writer takes; the reader's index does list it, being built from every
+ *   archive entry.
  *
  * The writer's contract is that a package it emits is always one the landed
  * reader (`readZip`) accepts: every entry carries a CRC-32, entries are ordered
@@ -162,14 +163,25 @@ interface PreparedEntry {
  * depend on when and where they were written (G3). Every field is derived from
  * the input alone: the store/deflate choice keeps the reader's ratio limit (L5),
  * the CRC-32 is `formats/image/crc32.ts`'s, and the entries appear in the order
- * given (path order). The result is bounded by the reader's L1 limit.
+ * given (path order). The result is bounded by the reader's L1 limit, which is
+ * checked as each entry is compressed: a tree over the limit is refused without
+ * paying to compress whatever is left of it.
  */
 function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
+  const names = entries.map((entry) => strToU8(entry.path));
+  let centralBytes = 0;
+  let headerBytes = 0;
+  for (const name of names) {
+    centralBytes += CENTRAL_HEADER_BYTES + name.length;
+    headerBytes += LOCAL_HEADER_BYTES + name.length;
+  }
+
   const prepared: PreparedEntry[] = [];
   let localBytes = 0;
-  let centralBytes = 0;
-  for (const entry of entries) {
-    const name = strToU8(entry.path);
+  let headersSoFar = 0;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index] as PackageFile;
+    const name = names[index] as Uint8Array;
     const { method, body } = compress(entry.bytes);
     prepared.push({
       name,
@@ -183,20 +195,28 @@ function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
       offset: localBytes,
     });
     localBytes += LOCAL_HEADER_BYTES + name.length + body.length;
-    centralBytes += CENTRAL_HEADER_BYTES + name.length;
+    headersSoFar += LOCAL_HEADER_BYTES + name.length;
+
+    // The finished container's length is known from the headers alone, and this
+    // is a lower bound on it: the entries compressed so far, the local headers
+    // still to come, the whole central directory and the record. It never
+    // over-states the finished size and is exact at the last entry, so checking
+    // it here refuses a tree over the L1 limit at the entry that crosses it,
+    // instead of after every entry has been compressed: the saving is the work of
+    // the entries past the crossing (small for a tree of few large entries, large
+    // for a tree of many), and the cost is one addition per entry.
+    const lowerBound = localBytes + (headerBytes - headersSoFar) + centralBytes + EOCD_BYTES;
+    if (lowerBound > PACKAGE_LIMITS.maxCompressedInputBytes) {
+      return err(
+        failure(
+          0,
+          `The written package would be at least ${lowerBound} bytes; the limit is ${PACKAGE_LIMITS.maxCompressedInputBytes} bytes (max compressed input, L1).`,
+        ),
+      );
+    }
   }
 
-  // The container's own length is known from the headers alone, so the L1
-  // budget is proved before a single byte is allocated.
   const totalBytes = localBytes + centralBytes + EOCD_BYTES;
-  if (totalBytes > PACKAGE_LIMITS.maxCompressedInputBytes) {
-    return err(
-      failure(
-        0,
-        `The written package is ${totalBytes} bytes; the limit is ${PACKAGE_LIMITS.maxCompressedInputBytes} bytes (max compressed input, L1).`,
-      ),
-    );
-  }
   const out = new Uint8Array(totalBytes);
   for (const entry of prepared) {
     const at = entry.offset;
@@ -259,9 +279,11 @@ function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
  * schema, a main file that is in the tree, an index that matches it) and every
  * file is checked against the same `PACKAGE_LIMITS` and path rules the reader
  * applies, so the writer cannot emit a package the reader would refuse. Entries
- * are ordered by path and each is compressed or stored deterministically, so the
- * same input always yields byte-identical output (G3). The finished bytes are
- * read back through `readZip` before being returned. Never throws (AD-18).
+ * are ordered by path, the manifest's `index` is written in the same code-unit
+ * order rather than the caller's, and each entry is compressed or stored
+ * deterministically, so the same input always yields byte-identical output (G3).
+ * The finished bytes are read back through `readZip` before being returned.
+ * Never throws (AD-18).
  */
 export function writeDistributionPackage(input: DistributionInput): Result<Uint8Array> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -375,12 +397,16 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
   // the caller's object happens to hold (G3, AD-25). The schema version is the
   // project-level integer of AD-23; `schema` is written first, `main`, `index`.
   // `main` and every index entry take the tree's own spelling, so the manifest
-  // names the archive's normalised paths (§1.5) rather than the caller's strings.
+  // names the archive's normalised paths (§1.5) rather than the caller's strings,
+  // and `index` is then put in the same code-unit order the archive's entries
+  // are, so the caller's array order cannot reach the written bytes (G3).
+  const index = manifest.index.map((value) => tree.get(foldPath(value)) ?? value);
+  index.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
   const manifestBytes = strToU8(
     JSON.stringify({
       schema: manifest.schema,
       main: tree.get(foldPath(manifest.main)) ?? manifest.main,
-      index: manifest.index.map((value) => tree.get(foldPath(value)) ?? value),
+      index,
     }),
   );
   ordered.push({ path: MANIFEST_FILE_NAME, bytes: manifestBytes });
