@@ -82,13 +82,37 @@ hitl = false
 risk = "medium"
 
 [[entry]]
+id = 11
+type = "story"
+title = "BMP decoder"
+description = "Adds a BMP reader to core/formats/image behind decodeTexture (AD-28), dispatched by the BM signature as format-spec section 10 will rule in entry 2.19: straight RGBA out, the located-error and 100 megapixel refusal contract shared with PNG and JPEG, no Node or DOM."
+verify = "The 18 BMP files of the six TK2 games decode to their stated dimensions and a golden RGBA digest, malformed and oversized files are refused with a located error, and the other decoders still pass."
+covers = ["CAP-1"]
+after = [3, "2.3", "2.19"]
+hitl = false
+risk = "medium"
+references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; image-kind counts in the format-spec section 10 amendment PR (2.19): six TK2 games use bmp 18, gif 58, jpg 58, png 0"]
+
+[[entry]]
+id = 12
+type = "story"
+title = "GIF decoder, still and animated"
+description = "Adds a GIF87a and GIF89a reader to core/formats/image: LZW, global and local colour tables, interlace, and the graphic-control extension (transparent index, delay, disposal). A still GIF decodes to one RGBA frame through decodeTexture; an animated GIF yields frames and delays for the animation path (section 7.2, E-54)."
+verify = "The 58 GIF files of the six TK2 games decode to their stated dimensions and a golden RGBA digest, an animated sample yields its frame count and delays, malformed files are refused with a located error, and the decodeTexture contract is unchanged."
+covers = ["CAP-1"]
+after = [3, "2.3", "2.19"]
+hitl = false
+risk = "medium"
+references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; image-kind counts in the format-spec section 10 amendment PR (2.19): six TK2 games use bmp 18, gif 58, jpg 58, png 0"]
+
+[[entry]]
 id = 8
 type = "story"
 title = "Register the TK2 decoders in the format registry"
 description = "Registers the entry 4 to 7 decoders through the AssetDecoder interface and core format registry that epic legacy-formats entry 2.13 delivers, dispatching by extension and magic (AD-31), and moves the dump rows onto it."
 verify = "Every TK2 sample file with a registered extension decodes through the registry to the model its reader returns and the dump expectation still matches."
 covers = ["CAP-1"]
-after = [4, 5, 6, 7, "2.13"]
+after = [4, 5, 6, 7, 11, 12, "2.13"]
 hitl = false
 risk = "low"
 
@@ -110,7 +134,7 @@ title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-1"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12]
 hitl = false
 risk = "low"
 
