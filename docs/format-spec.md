@@ -1079,7 +1079,6 @@ rows, listed under "deferred" because their implementing entries rule them).**
 |---|---|---|
 | OOP-1 … OOP-9 | 3.6 | Class and object syntax is in §9.7; the lookup order, `operator=`/`operator[]` dispatch, destructor timing, access labels and inheritance are ruled there. |
 | MOD-1 | 3.8 | The unqualified-after-`#include` question is answered in §9.6 (an include merges the file into the program); the flat list's name-clash ordering is the owner's last-wins working rule, recorded there as a deliberate departure from the legacy first-wins order. |
-| THR-1, THR-2, THR-3 | 3.9 | `threadSleep` units, `source`/`target` lifetime, and the snapshot "step" definition. |
 | SEM-1 … SEM-6 | 3.12 | `kill` forms, `until` check-first, comparison and coercion, scope and visibility, unset reads, and by-reference write-back. The forms the corpus settles are stated in §9.3 and §9.5 so the parser can be written; entry 3.12 confirms the binding semantics. |
 
 **Ruled by a later entry (doc-first, before any code).** Each row below was deferred to an implementing entry and is now settled in its own docs commit inside section 9; the section named carries the rule.
@@ -1088,6 +1087,7 @@ rows, listed under "deferred" because their implementing entries rule them).**
 |---|---|---|
 | ERR-1, ERR-2 | 3.7 | Handler, label and `resume` semantics, and which failures are catchable (§9.8). Modulo by zero stays open pending the round-3 extraction. |
 | MOD-2, MOD-3 | 3.8 | Include repeats, cycles, missing files and where the unqualified name is visible, and the redirect chain (§9.6). The name-clash ordering keeps the owner's last-wins rule, recorded there as a deliberate departure from the legacy first-wins order. |
+| THR-1, THR-2, THR-3 | 3.9 | The sleep unit, the `source`/`target` lifetime and the snapshot "step" definition (§9.15). |
 
 **Owner review list.** The rulings below are judgement calls rather than corpus results, and the owner should weigh them
 hardest: EXP-2 (the precedence of `^` and of the bitwise operators), EXP-4 (`=` in conditions and its dialect gate),
@@ -1142,6 +1142,36 @@ by entries 3.6 to 3.9 and 3.12, each in its own docs commit before any code.
 proposals and the ambiguity list), the Toolkit 2.x coverage study and the TK2/community material survey in
 `_bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/`, the command-effect catalogue (the ownership
 map), the guard-rail on clean-room provenance (`docs/guardrails.md`, G7), and [ADR 0004](adr/0004-script-ast-step-ir-and-plugins.md).
+
+---
+
+### 9.15 Threads (ruled by entry 3.9)
+
+This subsection settles the three thread questions the code needs before it is written: the time unit of a sleep, who owns the `source` and `target` handles, and how a snapshot counts time while a thread is preempted. Each rule is marked **legacy behaviour** (the extraction fact that fixes it) or **our rule** (with the reason it departs).
+
+**THR-1 — the sleep, its unit and wake order.**
+
+* `threadSleep(id, seconds)` takes real seconds, and a fraction is allowed; a duration of `0` means sleep until `threadWake`; `threadSleepRemaining` reports the time left, or `0` while the thread sleeps indefinitely or is not sleeping. — legacy behaviour (R2-Q23).
+* A negative duration was not defined in legacy. — **our rule:** a negative or non-finite duration is a catchable runtime error, so a bad value cannot park a thread forever.
+* **Our rule — the unit is the tick.** Our clock is a fixed 60 Hz tick, so a duration in seconds is converted by the time module to whole ticks, with one rounding rule: round to the nearest tick, halves rounding up, and a positive duration that would round to zero becomes one tick. So only an exact `0` means "sleep until woken", and a small positive sleep can never be confused with it. The wait stores the absolute tick at which it ends, never a duration, so a snapshot restores it with nothing else in state.
+  * Reason: the legacy engine truncated the seconds to whole milliseconds and woke on a wall clock (R2-Q23), which cannot be replayed; nearest-tick rounding keeps the error under half a tick.
+* **Our rule — wake order.** When several threads are due to wake on the same tick they resume in ascending thread id. Legacy stepped threads in an unspecified order (a pointer-ordered set), so this is a determinism choice; it also matches the wait phase, which polls waiting threads in ascending id.
+
+**THR-2 — the `source` and `target` handles.**
+
+* Legacy kept `source` and `target` as two engine-wide slots shared by everything: whoever started an entity event (an item's thread, an equip or a fight) set and restored them, a plain thread left them alone, and `tellThread` code saw whatever the caller had left in them. — legacy behaviour (R2-Q24).
+* **Our rule — one pair per thread.** Each thread carries its own `source` and `target`, set when an entity event starts that thread and cleared when it ends. They are part of a snapshot, so a thread restored mid-run sees the same context.
+  * Reason: the legacy shared slots make one thread's context depend on unrelated events and cannot be replayed; a per-thread pair is deterministic. This departs from the legacy engine on purpose.
+* **Our rule — `tellThread`.** Injected code runs in the target thread's frames, so it sees the target thread's `source` and `target`, not the caller's.
+
+**THR-3 — what a "step" is, and the preemption budget.**
+
+* **Our rule — a step is one VM instruction.** In this spec a `step` is one instruction the VM executes, and it is not the same as a `tick`, which is one fixed simulation update (the whole phase list). A snapshot may be taken between any two steps, and a test that compares "the same state hash after N steps" counts VM steps, not ticks.
+* **Our rule — the budget.** A thread's preemption budget counts the VM steps that thread runs in one tick. A thread that reaches the budget without yielding keeps its state and continues at the next tick, so being preempted is not an error.
+* **Our rule — waiting and the budget.** A waiting thread runs no VM steps and so uses no budget. The wait phase polls waiting threads in ascending id before the threads phase, so a thread that wakes in a tick runs in that same tick and spends that tick's budget.
+* The budget's number stays provisional; the entry that implements threads tunes it against the demo, together with the movement entry that shares it.
+
+**References.** R2-Q23, R2-Q24 (`docs/provenance/facts-round-2.md`); the engine-provided variables and the thread operations in §9.10 and §9.11; AD-2 (fixed tick), AD-7 (`Thread.source`/`target` in state), AD-9 (one wait contract, ascending-id polling) and AD-26 (phase list and the per-tick budget) in the architecture spine.
 
 ---
 
