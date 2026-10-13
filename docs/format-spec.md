@@ -1079,7 +1079,7 @@ rows, listed under "deferred" because their implementing entries rule them).**
 |---|---|---|
 | OOP-1 … OOP-9 | 3.6 | Class and object syntax is in §9.7; the lookup order, `operator=`/`operator[]` dispatch, destructor timing, access labels and inheritance are ruled there. |
 | MOD-1 | 3.8 | The unqualified-after-`#include` question is answered in §9.6 (an include merges the file into the program); the flat list's name-clash ordering is the owner's last-wins working rule, recorded there as a deliberate departure from the legacy first-wins order. |
-| SEM-1 … SEM-6 | 3.12 | `kill` forms, `until` check-first, comparison and coercion, scope and visibility, unset reads, and by-reference write-back. The forms the corpus settles are stated in §9.3 and §9.5 so the parser can be written; entry 3.12 confirms the binding semantics. |
+| SEM-1, SEM-2 | 3.12 | `kill` forms (element, whole array, variadic) and the `until` check-first reading. The forms the corpus settles are stated in §9.3 and §9.5 so the parser can be written; entry 3.12 confirms the binding semantics. |
 
 **Ruled by a later entry (doc-first, before any code).** Each row below was deferred to an implementing entry and is now settled in its own docs commit inside section 9; the section named carries the rule.
 
@@ -1088,6 +1088,7 @@ rows, listed under "deferred" because their implementing entries rule them).**
 | ERR-1, ERR-2 | 3.7 | Handler, label and `resume` semantics, and which failures are catchable (§9.8). Modulo by zero stays open pending the round-3 extraction. |
 | MOD-2, MOD-3 | 3.8 | Include repeats, cycles, missing files and where the unqualified name is visible, and the redirect chain (§9.6). The name-clash ordering keeps the owner's last-wins rule, recorded there as a deliberate departure from the legacy first-wins order. |
 | THR-1, THR-2, THR-3 | 3.9 | The sleep unit, the `source`/`target` lifetime and the snapshot "step" definition (§9.15). |
+| SEM-3, SEM-4, SEM-5, SEM-6 | 3.12 | Comparison and conversion, scope and visibility, unset reads and array elements, and by-reference write-back (§9.16). |
 
 **Owner review list.** The rulings below are judgement calls rather than corpus results, and the owner should weigh them
 hardest: EXP-2 (the precedence of `^` and of the bitwise operators), EXP-4 (`=` in conditions and its dialect gate),
@@ -1172,6 +1173,72 @@ This subsection settles the three thread questions the code needs before it is w
 * The budget's number stays provisional; the entry that implements threads tunes it against the demo, together with the movement entry that shares it.
 
 **References.** R2-Q23, R2-Q24 (`docs/provenance/facts-round-2.md`); the engine-provided variables and the thread operations in §9.10 and §9.11; AD-2 (fixed tick), AD-7 (`Thread.source`/`target` in state), AD-9 (one wait contract, ascending-id polling) and AD-26 (phase list and the per-tick budget) in the architecture spine.
+
+---
+
+### 9.16 Runtime meaning (ruled by entry 3.12)
+
+This subsection fixes how values are compared and converted, what scope a variable has, what an unset value reads as, and how a by-reference output is written back. Each rule is marked **legacy behaviour** (the extraction fact that fixes it) or **our rule** (with the reason it departs).
+
+**SEM-3 — comparison and conversion.**
+
+* A value is a number (double) or a string; a variable that was never assigned counts as a number. — legacy behaviour (R2-Q12).
+* `==` and `~=`: numeric when both sides are number-typed, otherwise both become strings and compare exactly, byte for byte, case-sensitively. — legacy behaviour (R2-Q12).
+* `<`, `<=`, `>`, `>=` always compare numerically, with a string side converted by the leading-numeric rule below; string ordering is not available. — legacy behaviour (R2-Q12).
+* `&&`, `||` and `!` use numeric truthiness, and both sides of `&&`/`||` are always evaluated (there is no short-circuit). — legacy behaviour (R2-Q12).
+* String to number: the leading numeric prefix is parsed (optional sign, digits, fraction, exponent), the rest is ignored, and no prefix gives 0. — legacy behaviour (R2-Q12).
+* Number to string: the shortest form with six significant digits, and exponent form for large or small values. — legacy behaviour (R2-Q12); **our rule** fixes the exact exponent form (the legacy form depended on the build's C runtime), so every runner prints a number the same way.
+* **The name-read truncation.** A number read from a variable *by name* — not from a literal or a computed temporary — is truncated toward zero to a whole 32-bit integer before it is used in arithmetic, in a comparison, in `castNum` or as a numeric argument. Assigning it and converting it to a string keep the full value, so with `x = 2.5`, `y = x * 2` is 4 while `y = 2.5 * 2` is 5. — legacy behaviour (R2-Q12).
+* Division by zero gives infinity or NaN, not an error. — legacy behaviour (R2-Q12).
+* `%`, the shifts and the bitwise operators first convert their operands to 32-bit signed integers (truncating). — legacy behaviour (R2-Q12); **our rule** pins an out-of-range input or shift count to JavaScript's defined 32-bit result instead of the legacy dependence on the host CPU, because two runners must agree.
+* `castLit`, `castNum` and `castInt` take one value and return the conversion, or take a second argument naming a variable to store it in. — legacy behaviour (R2-Q12).
+* Worked values (all legacy behaviour, R2-Q12):
+
+| Expression | Value |
+|---|---|
+| `"abc" == "ABC"` | 0 |
+| `5 == "5"` | 1 |
+| `"5.0" == 5` | 0 |
+| `"abc" < "abd"` | 0 |
+| `"10" < "9"` | 0 |
+| `"Hello " + 32` | `"Hello 32"` |
+| `1 + "2"` | `"12"` |
+| `7 / 2` | 3.5 (so `1 / 0` is infinity) |
+| `castInt(-2.7)` | -2 |
+| `castInt("3.9abc")` | 3 |
+| `castNum("12abc")` | 12 (`castNum("abc")` is 0) |
+| `castLit(2.50)` | `"2.5"` |
+| `castLit(1234567)` | `"1.23457e+06"` |
+
+**SEM-4 — scope and visibility.**
+
+* Inside a frame, a name is looked up in this order, first match wins: an explicit `:name` global; a parameter; a member of the current object (inside a method); then an ordinary name, which is the frame's local if one exists and otherwise the global of that name, created if it is missing. — legacy behaviour (R2-Q13); the member step belongs to the classes entry.
+* Locals live in one flat list per call and are discarded on return. There is no block scope, so an `if` and a loop share the frame. — legacy behaviour (R2-Q13).
+* A plain assignment creates a global, unless `autoLocal(true)` is in force. — legacy behaviour (R2-Q13).
+* `local(x)` inside a function is visible only in that call, from where it is declared until return; `local(x)` at program top level is visible only to that program's own top-level code, whose functions see the global of the same name instead; `global(x)` reaches the global table past a same-named local; `autoLocal(true)` makes a new name local to the current frame but still resolves a name that already exists as a global. — legacy behaviour (R2-Q13).
+* A parameter is visible in its frame only; a class member is visible by name inside its object's methods. — legacy behaviour (R2-Q13).
+* A `run()` program is a separate program with its own locals and the shared globals; an included file is merged into the including program, so an included function behaves as a local one. — legacy behaviour (R2-Q13).
+* `autoLocal` is set per program and is not reset at a function boundary. — legacy behaviour (R2-Q13).
+* **Our rule:** the global table is the VM's globals state section and a frame's locals are its own list, both inside the snapshot, so scope state restores with the snapshot.
+
+**SEM-5 — unset variables and array elements.**
+
+* An unset variable reads as the number 0 in numeric use and as the empty string in string use; its type is number, so `==`/`~=` against a number is numeric and against a string compares with the empty string. Reading a variable creates it. — legacy behaviour (R2-Q14).
+* Each array element is its own variable, named by the array name plus the formatted index, so `a[1]`, `a["1"]` and `a[1.0]` are the same element; reading one creates it; an unset element reads unset; there is no bound. — legacy behaviour (R2-Q14).
+* An index is held as text in a fixed numeric format, and a string key keeps its case, so `a["Key"]` and `a["key"]` differ even though a bare identifier index is lower-cased like any name. — legacy behaviour (R2-Q14).
+* **Our rule:** the index format is the number-to-string rule above (six significant digits), so every runner keys an array the same way.
+
+**SEM-6 — by-reference write-back.**
+
+* A built-in's output parameters are variable names. There is no atomic write-back: each is resolved by the ordinary scope rules, created if it does not exist, and written left to right in parameter order. — legacy behaviour (R2-Q15).
+* For the getters that return several values, every output variable is given numeric type before the object is looked up, so a failed lookup leaves them numeric (0 or unchanged) rather than untouched. — legacy behaviour (R2-Q15).
+* A non-variable argument in an output position is treated as a variable named by its text. — legacy behaviour (R2-Q15).
+* **Our rule:** every built-in declares its `byRef` parameters in its registry entry, and the catalogue test asserts that each getter taking a trailing output declares one; a name not listed in the catalogue has no output parameters. A getter's trailing output is its last parameter and is also returned normally.
+* The getters with a single trailing optional output are: `appPath`, `asc`, `castInt`, `castLit`, `castNum`, `charAt`, `chr`, `cos`, `createCanvas`, `createCursorMap`, `createItem` (position), `cursorMapRun`, `fileEof`, `fileGet`, `fileInput`, `get`, `getBoardName`, `getBoardTile`, `getBoardTileType`, `getDp`, `getFontSize`, `getFp`, `getGp`, `getHp`, `getItemCost`, `getItemDesc`, `getItemName`, `getItemSellPrice`, `getLevel`, `getMaxHp`, `getMaxSmp`, `getSmp`, `getThreadId`, `global` (second argument), `itemCount`, `lcase`, `left`, `len`, `local` (second argument), `log`, `mid`, `prompt`, `random`, `replace`, `right`, `sin`, `sourceHandle`, `sqrt`, `tan`, `targetHandle`, `thread` (third argument), `threadSleepRemaining`, `trim`, `ucase`, `wait` (all legacy behaviour, R2-Q15).
+* The getters that write several output parameters (positions one-based) are the location, vector, colour, path, corner, resolution, pixel and cursor readers — for example `playerLocation(handle, x, y, layer)` writes parameters 2–4, `getColor(r, g, b)` writes 1–3, and `pathFind(x1, y1, x2, y2, result)` writes parameter 5. — legacy behaviour (R2-Q15); the extraction's list (`docs/provenance/facts-round-2.md`, R2-Q15) names every one and is the authority the registry follows.
+* `split(string, delimiter, array)` writes array elements 0 to n−1 as separate variables and returns the count plus one. — legacy behaviour (R2-Q15).
+
+**References.** R2-Q12, R2-Q13, R2-Q14, R2-Q15 (`docs/provenance/facts-round-2.md`); §9.3 (values and variables), §9.10 and §9.11 (engine variables, the catalogue); AD-7 (globals and frame locals in state), AD-8 (`byRef` on a `ParamSpec`), AD-10 (one owner per state section) in the architecture spine.
 
 ---
 
