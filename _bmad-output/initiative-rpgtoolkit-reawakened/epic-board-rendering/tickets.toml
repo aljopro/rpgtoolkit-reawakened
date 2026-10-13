@@ -6,15 +6,57 @@
 # Assumptions A1..A14 and the open questions the user must rule are listed in discovery/inception-proposal.md
 # and echoed in the epic's Notes. The order of the tables is the build order. A provider in another epic is
 # pinned as <epic id>.<entry id>.
+# Entries 21 and 22 were added at the inception review and stand first in build order: 21 is the doc-first
+# rulings entry every render-lane entry consumes, and 22 is the shared fixture set the corpus cannot supply.
+# An id names an entry for good and is not an order; the order of the tables is the build order.
+
+[[entry]]
+id = 21
+type = "story"
+title = "Render-lane rulings and the epic-3 interface pins (doc-first)"
+description = "The epic's first step, doc-first under G7 in its own commits: a person rules every under-specified rule the render lane depends on, from the discovery's render-readiness audit — the iso2d resampling filter, sampling grid and diamond clip; the iso draw traversal order for stacked and rotated boards and the sprite z-order tie-breaker; under-vector promotion geometry and how it combines with E-31's sprite translucency; the multi-layer shade combination, the light bake formulas and the ambient application boundary; the parallax degenerate cases and background tiling; the debug overlay flags and colours; the message-window geometry, font defaults, wrap, reveal units and overflow; the modal widget signatures and layout; the screen save and restore slot rules; the canvas signatures and renderNow's binding; the transition durations, easing and earthquake decay; the camera deadzone, smoothing constants, easing curves and small-board border; viewBrd's coordinate semantics; the .tan fallbacks; animation completion and sizedAnimation's arguments; board constants against the board's unnamed array; put and layerPut coordinates and redraw timing; text defaults and cell-unit alignment; native alpha against blit alpha; and the send visual cutover — amending docs/format-spec.md and docs/engine-features.md; the +8 px iso sprite offset being an editor-display rule or a runtime one; and amends the spine for the four cross-epic contracts epic rpgcode-vm's entries 3.2, 3.7, 3.8, 3.9 and 3.25 must code against, each landed in the AD that owns it: the waits and threads phase-handler signatures and how a module registers into the phase list (AD-26), the GameState section-typing and replacement rule against 3.2's placeholder aliases (AD-10), the harness request and reply seam the driver needs once an engine emits asset requests (AD-1 and AD-5), the call the lifecycle makes to load a program and start a thread (AD-5 and AD-8), and the rendering pack's place in the default manifest's order (ADR 0004 decision 6, which entry 3.25 cites)."
+verify = "A person approves a commit set that touches only docs/, the spine's AD amendments and the affected plan notes; every finding in discovery/render-readiness.md is ruled or explicitly deferred with the entry it affects named; and the spine names the phase-handler signature and the registration seam, the GameState section replacement rule, the harness reply seam, the program-loading and thread-starting call, and the rendering pack's manifest place, each in the AD that owns it; the two answers 3.2's draft plan already chose are corrected in its plan."
+covers = ["CAP-2", "CAP-6"]
+after = ["3.26"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/discovery/render-readiness.md (the audit, its findings and the entry each blocks)",
+  "spine - architecture-rpgtoolkit-reawakened.md, AD-1, AD-2, AD-3, AD-5, AD-7, AD-8, AD-10, AD-15, AD-25 to AD-28, AD-33",
+  "handoff - epic tk2-support entry 16.3 writes the format-spec §3.5 text; where it does, its text governs the file format and this entry rules only the render-side fallbacks",
+  "reference - docs/guardrails.md, section G7 (fix the doc first, in its own commit)",
+  "handoff - the pins land in the ADs named in the description, and epic rpgcode-vm's entries cite the spine they build on (3.2 AD-1, AD-7, AD-10 and AD-26; 3.7 AD-24 plus the harness seam this entry lands in AD-1 and AD-5; 3.8 AD-5 and AD-7; 3.9 AD-9 and AD-26; 3.25 ADR 0004), so their builders read the ruling; where 3.2's draft plan has already chosen an answer (its Q3 placeholder aliases and Q6 advanceScriptStep), the ruling supersedes it and the plan is corrected in this entry's commit set",
+  "sequencing - run this entry before epic rpgcode-vm's 3.2, in the same moment 3.26 lands: the initiative's order puts epic 3 first, so this is a wall-clock ordering gate and not an after edge, and 3.2's builder must not start until this entry has landed the pins (otherwise a pin that contradicts 3.2's own plan choice means rewriting code rather than correcting the plan)",
+  "note - the tick names are 3.26's own spine amendment, not this entry's; the core/time rounding rule belongs to 3.9 and the command.overridden warning to 3.3",
+  "assumption A1 - the golden-image reference is this renderer's reviewed output; see the epic Notes",
+]
+
+[[entry]]
+id = 22
+type = "story"
+title = "Fixture boards, a fixture project and the .tan and font fixtures"
+description = "Authors or sources the fixtures the render-lane verifies need, because the fetched corpus is 2D-only, two-layer, image-free, light-free and font-free: a 2D board and iso-stacked and iso-rotated boards; one three-layer 2D board carrying a background image, normal, parallax and stretched board images, overlapping sprites and an under-vector together, and a lit board carrying a shade record, a board image, a sprite, a baked spotlight and gradient and a non-zero board ambient, with the global ambient the test supplies, for conditional items with linked boards, and for the promotion and overlap cases in isolation; a small scripted fixture project with a main file, a startup program, a startup variant that deliberately leaves no player, arrival regions, a board thread and a persistent thread, board music and two boards for send; a .tan fixture with at least two frames at a stated fps, synthesised from the §3.5 shape; and a TrueType font fixture, the format the AD-15 rasteriser renders, with metrics a test asserts."
+verify = "Each fixture exists and is reachable through the fixture fetch; the boards and the project parse through the epic 2 readers under the 2.18 rules and the iso boards carry the documented coordinate grids; the .tan fixture matches the §3.5 shape its reader (epic tk2-support entry 16.7) expects and its frame records are written down as data; the font fixture is a Permissively Licensed .ttf and its metric values are recorded beside it for entry 6 to assert against; nothing legacy is tracked and pnpm fixtures:check passes."
+covers = ["CAP-2", "CAP-6"]
+after = [21, "2.5", "2.9", "2.18", "2.22", "16.7"]
+hitl = true
+risk = "medium"
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/discovery/corpus-inventory.md and spec-readiness.md (what the corpus does and does not contain)",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-tk2-support/discovery/tk2-formats-research.md (the archive inventory: 33 .tan and 5 .fnt files in the archived TK2 games, fetched by that epic's entry 16.9 if a sourced fixture is preferred later)",
+  "constraint - docs/guardrails.md, sections G5 and G7 (fixtures fetched at test time, never committed)",
+  "handoff - entries 3, 4, 5, 6, 9, 10, 13, 18 and 20 consume these fixtures and name the one each uses",
+]
 
 [[entry]]
 id = 1
 type = "story"
 title = "Tracer bullet: one sample board to a golden PNG"
-description = "Renders one sample board end to end: adds core/render's draw-list builder and a minimal composeBoard (background colour plus layer-1 2D tiles, AD-29's signature), core/raster's RGBA surface with fill and a keyed blit (AD-3's tint clamp and normal blend only) plus the PNG writer, a board test host in runner-harness that implements the Engine port over composeBoard and is deliberately kept out of the harness's pinned public surface (the test host that entry 12's createEngine supersedes, as epic rpgcode-vm entry 3.2's VM test host is), the golden-job wiring that renders the board to a PNG artefact and a frozen pixel hash, and the shared load-compose-raster-hash helper later entries reuse, with the fixture's logical resolution supplied by the runner's RunConfig because the sample games ship no .gam, and with the golden job used unchanged through its existing engineFactory parameter so this entry adds its own host module and golden fixture and does not edit job.ts."
+description = "Renders one sample board end to end: adds core/render's draw-list builder and a minimal composeBoard (background colour plus layer-1 2D tiles, AD-29's signature), core/raster's RGBA surface with fill and a keyed blit (AD-3's tint clamp and normal blend only) plus the PNG writer, a board test host in runner-harness that implements the Engine port over composeBoard and is deliberately kept out of the harness's pinned public surface (the test host that entry 12's createEngine supersedes, as epic rpgcode-vm entry 3.2's VM test host is), the golden-job wiring that renders the board to a PNG artefact and a frozen pixel hash, and the shared load-compose-raster-hash helper later entries reuse, with the fixture's logical resolution taken from the main file the fetch supplies (demo only) and from the runner's RunConfig otherwise, and with the golden job used unchanged through its existing engineFactory parameter so this entry adds its own host module and golden fixture and does not edit job.ts."
 verify = "The golden job renders demo's start.brd to a PNG whose pixel hash is stable across runs and batch sizes; a person reviews that PNG against the sample game and freezes it as the 2D reference for later goldens; the harness's pinned public surface and every existing golden are unchanged."
 covers = ["CAP-2", "CAP-6"]
-after = ["1.7", "1.8", "1.9", "2.2", "2.3", "2.5", "2.9", "2.10", "2.13", "3.26"]
+after = [21, "1.7", "1.8", "1.9", "2.2", "2.3", "2.5", "2.9", "2.10", "2.13", "3.26"]
 hitl = true
 risk = "high"
 plan_checkpoint = true
@@ -32,7 +74,7 @@ title = "core/raster: the pixel pipeline and the screen primitives"
 description = "Completes core/raster to AD-3's normative pipeline — skip a format-transparent or key-equal pixel tested on the untinted source, one clamped src-plus-tint sum, and the normal, translucent and additive integer blends with percentToAlpha — plus the remaining draw commands (fill, line, rect, ellipse; filled and outline), pixel get and set, the pushTarget and popTarget scratch targets (ScratchId frame-scoped, dead at frame end, AD-27), and ownership of core/raster's public entry, which later entries extend one module at a time."
 verify = "Per-command CPU fixtures pin each formula's exact integers (key skipped before tint, tint clamped once, each of the three blends, percentToAlpha); a scratch target renders and reads back within one frame and is dead after it; a 1 px line has inclusive endpoints; no other package reaches a rasteriser internal (AD-22)."
 covers = ["CAP-6"]
-after = [1]
+after = [21, 1]
 hitl = false
 risk = "medium"
 references = [
@@ -44,10 +86,10 @@ references = [
 id = 3
 type = "story"
 title = "Tiles and coordinate systems: 2D and both iso modes"
-description = "Adds core/render's tile-to-pixel and pixel-to-tile transforms for 2D, iso-stacked and iso-rotated with the PX_ABSOLUTE flag and the board pixel dimensions, the 45-degree projection of a 32x32 2D tile into a 64x32 diamond with its mask, the per-mode draw order that occludes stacked and rotated boards correctly, the +8 px iso display offset for sprite anchors, and and the once-per-tileset 16x16-to-32x32 pixel doubling with its cache (the 2026-10-11 decision); this entry also authors the iso fixture boards as Board models in the test fixtures (writing them out through epic legacy-formats entry 2.5's writer only if a binary form is wanted), because the sample corpus is 2D-only and epic legacy-formats entry 2.22 supplies the iso, detail-2/4/6 and palette tilesets but no boards."
-verify = "Fixture boards this entry authors in all three modes, drawing the tilesets of epic legacy-formats entry 2.22, give the documented grid and pixel geometry and a golden PNG each, reviewed by a person on first render; tile-to-pixel round-trips over every grid cell; a detail-2 tileset renders each stored pixel as a 2x2 block and builds its doubled cache once; a 2D-on-iso blit clips to the diamond and not its bounding box."
+description = "Adds core/render's tile-to-pixel and pixel-to-tile transforms for 2D, iso-stacked and iso-rotated with the PX_ABSOLUTE flag and the board pixel dimensions, the 45-degree projection of a 32x32 2D tile into a 64x32 diamond with its mask, the per-mode draw order that occludes stacked and rotated boards correctly, the +8 px iso display offset for sprite anchors, and the once-per-tileset 16x16-to-32x32 pixel doubling with its cache (the 2026-10-11 decision), against the iso fixture boards of entry 22 and the iso, detail-2/4/6 and palette tilesets of epic legacy-formats entry 2.22, because the sample corpus is 2D-only and ships no such tileset."
+verify = "Entry 22's fixture boards in all three modes, drawn with the tilesets of epic legacy-formats entry 2.22, give the documented grid and pixel geometry and a golden PNG each, reviewed by a person on first render; tile-to-pixel round-trips over every grid cell; a detail-2 tileset renders each stored pixel as a 2x2 block and builds its doubled cache once; a 2D-on-iso blit clips to the diamond and not its bounding box."
 covers = ["CAP-2", "CAP-6"]
-after = [1, 2, "2.18", "2.22"]
+after = [21, 1, 2, 22, "2.18", "2.22"]
 hitl = true
 risk = "medium"
 references = [
@@ -60,10 +102,10 @@ references = [
 id = 4
 type = "story"
 title = "composeBoard: layers, images, parallax, sprite z-order and debug overlays"
-description = "Grows composeBoard to format-spec 4.3 and E-52's order: background colour then background image, each tile layer in order, that layer's board images with their own colour keys and drawType normal/parallax/stretch (the scroll factor formula, a board-sized image treated as normal), sprites z-ordered within their layer by their bottom-centre anchor, under-vector promotion, and E-05's board-vector and tile-grid debug overlays in the main file's configured colours — all behind the view's camera, layers and include flags, with viewBrd as the same compositor on an unentered board, and its command list left open for the shading, animation and overlay steps later entries add."
+description = "Grows composeBoard to format-spec 4.3 and E-52's order, against entry 22's three-layer board with its background image and normal, parallax and stretched board images: background colour then background image, each tile layer in order, that layer's board images with their own colour keys and drawType normal/parallax/stretch (the scroll factor formula, a board-sized image treated as normal), sprites z-ordered within their layer by their bottom-centre anchor, under-vector promotion, and E-05's board-vector and tile-grid debug overlays in the main file's configured colours — all behind the view's camera, layers and include flags, with viewBrd as the same compositor on an unentered board, and its command list left open for the shading, animation and overlay steps later entries add."
 verify = "A fixture board with a background image, three layers, overlapping sprites and an under-vector promotes and orders exactly as 4.3; a parallax image scrolls by the documented factor; each include flag removes its class; the board-vector overlays appear only when their flags are on; viewBrd on an unentered board emits the same commands and touches no world state."
 covers = ["CAP-2", "CAP-6"]
-after = [1, 2, 3]
+after = [21, 1, 2, 3, 22]
 hitl = false
 risk = "high"
 references = [
@@ -77,10 +119,10 @@ references = [
 id = 5
 type = "story"
 title = "Shading arithmetic: shade layers, baked lights and ambient"
-description = "Adds format-spec 4.5's shade arithmetic as a pure function of a board and a view: per-cell shade records applied to layers up to their cast layer, the load-time bake of spotlights and gradients into shade layer 0, and the additive per-channel tint of shade layer plus board ambient plus global ambient, summed once into a Tint in the plus or minus 1020 range for core/raster to clamp, with transparent pixels left untouched; the world section's ambient state and the setAmbientLevel built-in land in entry 10."
+description = "Adds format-spec 4.5's shade arithmetic as a pure function of a board and a view, against entry 22's board with baked lights and non-zero ambient: per-cell shade records applied to layers up to their cast layer, the load-time bake of spotlights and gradients into shade layer 0, and the additive per-channel tint of shade layer plus board ambient plus global ambient, summed once into a Tint in the plus or minus 1020 range for core/raster to clamp, with transparent pixels left untouched; the world section's ambient state and the setAmbientLevel built-in land in entry 10."
 verify = "A fixture board carrying a shade record, a bakeable light and board plus global ambient gives 4.5's exact per-channel result on tiles, board images and sprite frames; the sum is computed in one place and clamped once; a transparent pixel is unchanged."
 covers = ["CAP-6"]
-after = [2, 4]
+after = [21, 2, 4, 22]
 hitl = false
 risk = "medium"
 references = [
@@ -92,10 +134,10 @@ references = [
 id = 6
 type = "story"
 title = "Text: glyph rasterisation, layout and the message window"
-description = "First step, doc-first: a person rules the rasteriser choice (AD-15's pure-TypeScript assumption written by hand, or a permissive library with a G6 licence note) and the glyph-metric source, recording it in ADR 0002 and the epic's Notes; then adds core/raster's glyph rasteriser for game fonts with the bundled bitmap fallback and test font, core/render's line breaking and glyph advances, the text command filled with a FontRef and per-glyph advances, and E-55's message window — position, background colour or image, screen-size percentage, translucency, font family, size, bold, italic and underline, text colour and reveal speed in ticks — as ui state advanced by a per-tick function entry 12's phase list calls, with the text it renders arriving expanded by the VM layer in entry 17."
+description = "First step, doc-first: a person rules the rasteriser choice (AD-15's pure-TypeScript assumption written by hand, or a permissive library with a G6 licence note) and the glyph-metric source, recording it in ADR 0002 and the epic's Notes; then adds core/raster's glyph rasteriser for game fonts with the bundled bitmap fallback and the fixture font of entry 22, core/render's line breaking and glyph advances, the text command filled with a FontRef and per-glyph advances, and E-55's message window — position, background colour or image, screen-size percentage, translucency, font family, size, bold, italic and underline, text colour and reveal speed in ticks — as ui state advanced by a per-tick function entry 12's phase list calls, with the text it renders arriving expanded by the VM layer in entry 17."
 verify = "A fixture font rasterises each glyph identically on every engine and lands on the same advance; a wrapped paragraph breaks at the documented points; the window reveals one character per its speed in ticks and mwinCls clears it; a re-run from the same state and tick gives identical ui state and draw commands."
 covers = ["CAP-6"]
-after = [2, 4]
+after = [21, 2, 4, 22]
 hitl = true
 risk = "high"
 plan_checkpoint = true
@@ -113,7 +155,7 @@ title = "Persistent surfaces, canvases, the overlay and screen save and restore"
 description = "Adds the surfaces section per AD-27: core-owned bitmaps mutated only by core/raster, SurfaceId and ScratchId as separate branded types from a monotonic never-reused counter, rev incremented on every mutation, surfacePixels(id, rev) returning null for a stale rev, the stored bitmap form with its decoded cache held outside state and keyed by rev, E-56's script-owned canvases (createCanvas, killCanvas, drawCanvas, drawCanvasTransparent and canvasGetScreen), E-57's overlay surface composited after the board composite every tick until cleared, and E-58's screen save and restore to numbered slots including sub-rectangles; entry 12 wires the section into the engine."
 verify = "A replay that flushes every cache each frame produces identical pixels (the AD-27 check); a stale rev yields null and an id is never reused; a canvas is created, drawn to and read back; an overlay drawn once persists across frames and clears on command; a screen save then restore replays the same rectangle, and the stored bitmap canonicalises identically."
 covers = ["CAP-6"]
-after = [2, 4]
+after = [21, 2, 4]
 hitl = false
 risk = "high"
 references = [
@@ -129,7 +171,7 @@ title = "Fades, wipes, zoom, border colour and the earthquake shake"
 description = "Adds E-59 as fx state driven by a per-tick function entry 12's phase list calls over a duration in ticks: colour fades in and out, image wipes with their mask image and speed, zoom, border colour, and the earthquake shake as decaying draw offsets with its audio cue, which format-spec 9.11 and the command catalogue place in fx while AD-33's cameraShake script call is camera state in entry 11."
 verify = "Each effect over its duration produces the documented per-tick command sequence; the earthquake offsets decay to zero and its cue is emitted through the audio port; a re-run from the same state and tick gives identical fx state and commands; a mid-effect state is plain data that canonicalises identically; each effect ends by clearing its own fx entry."
 covers = ["CAP-6"]
-after = [2, 4, 7]
+after = [21, 2, 4, 7]
 hitl = false
 risk = "medium"
 references = [
@@ -143,10 +185,10 @@ references = [
 id = 9
 type = "story"
 title = "Animations: .anm playback and animated tiles"
-description = "Adds core/render's animation player: standalone animation and sizedAnimation, persistent looping animations ended by endAnimation, .anm frames scheduled by their own delay in ticks and blitted with their own transparent key with textures cached per asset, and animated tiles whose .tan frame table selects a frame for the tick, the first frame standing in when animation is off, both driven by per-tick functions entry 12's phase list calls and both emitting their per-frame sounds as AD-16 cues through the audio port, whose cueId counter and audio section belong to epic audio-synth with a test implementation standing in (A13), plus the §3.5 .tan reader."
-verify = "A standalone and a persistent animation play at their delays in ticks; each frame blits with its own key; a .tan cycles at its fps, is a pure function of the tick and freezes to frame 0 with animation off; a frame's sound is emitted as a cue through the audio port; a re-run from the same state and tick gives identical frames."
+description = "Adds core/render's animation player: standalone animation and sizedAnimation, persistent looping animations ended by endAnimation, .anm frames scheduled by their own delay in ticks and blitted with their own transparent key with textures cached per asset, and animated tiles whose .tan frame table selects a frame for the tick, the first frame standing in when animation is off, both driven by per-tick functions entry 12's phase list calls and both emitting their per-frame sounds as AD-16 cues through the audio port, whose cueId counter and audio section belong to epic audio-synth with a test implementation standing in (A13), using the §3.5 reader epic tk2-support's entry 16.7 supplies, against entry 22's .tan fixture, and with a frame that references a tile keyed on the tile's own key rather than the frame's."
+verify = "A standalone and a persistent animation play at their delays in ticks; a frame whose image is its own picture blits with the frame key while one referencing a tile keys on the tile's key (the recorded source conflict); a .tan cycles at its fps, is a pure function of the tick and freezes to frame 0 with animation off; a frame's sound is emitted as a cue through the audio port; a re-run from the same state and tick gives identical frames."
 covers = ["CAP-2", "CAP-6"]
-after = [2, 3, 4, 8, "3.13"]
+after = [21, 2, 3, 4, 8, 22, "3.13", "16.7"]
 hitl = false
 risk = "medium"
 references = [
@@ -154,18 +196,19 @@ references = [
   "reference - docs/engine-features.md, E-13, E-54",
   "spine - architecture-rpgtoolkit-reawakened.md, AD-2 (frameAt from origin 0), AD-16 (frame sounds are cues), AD-10 (the cueId counter and the audio section are epic audio-synth's)",
   "handoff - epic rpgcode-vm entry 3.13 supplies core/time's frameAt, secondsToSteps and fpsToSteps; this entry does not write core/time",
-  "open question D12 - the .tan reader's home: a new epic legacy-formats entry, or this entry (the draft has this entry)",
+  "resolved - epic tk2-support entry 16.7 owns the .tan reader; this entry pins it and does not write one (D12 closed)",
   "assumption A5 - animated GIF is out of v1; see the epic Notes",
+  "sequenced - runs after entry 8, which introduces the audio-port test implementation both entries emit cues through",
 ]
 
 [[entry]]
 id = 10
 type = "story"
 title = "Board world model: instantiation, layer isolation, ambient and disableSaving"
-description = "Adds core/world: a loaded Board becomes world state — its layers and tile matrices, board images, under-vectors and the disableSaving flag (E-18) — with E-12's layer isolation, E-10's conditional item loading (variable equals value) and its side-effect-free test load used by board links, the board's declared items and sprites placed at load through epic movement-triggers' sprite port with a test implementation standing in (A7, A13), the world section's ambient values with the setAmbientLevel built-in and the redraw it forces, and the game-speed offset field entry 12 reads."
+description = "Adds core/world: a loaded Board becomes world state — its layers and tile matrices, board images, under-vectors and the disableSaving flag (E-18) — with E-12's layer isolation, E-10's conditional item loading (variable equals value) and its side-effect-free test load used by board links, the board's declared items and sprites placed at load through epic movement-triggers' sprite port with a test implementation standing in (A7, A13) and entry 22's conditional-item board, the world section's ambient values with the setAmbientLevel built-in and the redraw it forces, and the game-speed offset field entry 12 reads."
 verify = "A fixture board places its declared items and sprites through the sprite port at the right layers and skips the conditional items whose variables do not match; a test-load of another board changes no state; disableSaving reads back from the active board; setAmbientLevel changes the world ambient values; the section canonicalises identically."
 covers = ["CAP-2"]
-after = [2, 4]
+after = [21, 2, 4, 22]
 hitl = false
 risk = "high"
 references = [
@@ -181,7 +224,7 @@ title = "Camera and viewport, including the earthquake shake"
 description = "Adds the camera section and AD-33's model: follow-player tracking and tracking of an arbitrary entity or point, step-based smoothing with a deadzone box, bounds clamping with center-if-small for scenes smaller than the viewport, re-alignment on board entry and player switch, the scriptable calls (cameraPanTo, cameraFollow, cameraReset, cameraShake) with plain-data easing curves, the whole of it advanced by a per-tick function entry 12's phase list calls, and the logical viewport whose mapping to physical pixels stays a runner setting."
 verify = "A replay of a moving target gives identical camera coordinates and pan curves across fixed ticks; a small board is centred with clean borders; a clamped camera never shows outside the board; a cutscene pan detaches, cameraReset re-attaches and cameraShake leaves no residue; no subpixel jitter appears inside the deadzone."
 covers = ["CAP-2", "CAP-6"]
-after = [10]
+after = [21, 10]
 hitl = false
 risk = "medium"
 references = [
@@ -196,7 +239,7 @@ title = "The engine: createEngine, the phase list and the world loop"
 description = "Adds core/engine: createEngine(init) returning AD-1's Engine over a loaded project with E-01's single-program test mode, AD-26's fixed named phase list with modules registering into named phases by rank and epic rpgcode-vm's waits and threads handlers and resumable script step called from it, whole-tick advance with the maxSteps catch-up cap, drawList(alpha) built through composeBoard, surfacePixels wired to the surfaces section, the core-written input log, the time phase and the world section's game-speed offset (E-04), the AD-5 asset request and reply path with the loading flag, and the harness and golden integration in which this engine supersedes entry 1's board test host."
 verify = "The golden job runs a real createEngine over a fixture project with the board test host retired; batching the same input log at different tick counts per call gives identical state and draw-list hashes; every report carries stateHash; a requested asset is replied to, a slow reply changes no other result, and the loading flag clears; a phase-list snapshot test pins the order."
 covers = ["CAP-2", "CAP-6"]
-after = [2, 4, 5, 6, 7, 8, 9, 10, 11, "3.2", "3.7", "3.9"]
+after = [21, 2, 4, 5, 6, 7, 8, 9, 10, 11, "3.2", "3.7", "3.9"]
 hitl = false
 risk = "high"
 plan_checkpoint = true
@@ -211,10 +254,10 @@ references = [
 id = 13
 type = "story"
 title = "Lifecycle: the startup sequence and send"
-description = "Adds E-02's seven startup phases in order (plugins, movement mode and speed offset, initChar, engine variables, the startup program, the player assertion, then initBoard with placement through the sprite port, camera alignment, z-ordering, music, thread start and the enter program) and E-19's send(board, x, y, layer) (open, position, re-align, re-sort, clear pathfinding caches, deactivate the arrival region through the trigger port, switch music through an AD-16 cue, kill board threads while persistent threads survive, run the enter program), with the quit request and plugin teardown first."
+description = "Adds E-02's seven startup phases in order, against entry 22's scripted fixture project (plugins, movement mode and speed offset, initChar, engine variables, the startup program, the player assertion, then initBoard with placement through the sprite port, camera alignment, z-ordering, music, thread start and the enter program) and E-19's send(board, x, y, layer) (open, position, re-align, re-sort, clear pathfinding caches, deactivate the arrival region through the trigger port, switch music through an AD-16 cue, kill board threads while persistent threads survive, run the enter program), with the quit request and plugin teardown first."
 verify = "A scripted fixture project boots through all seven phases and fails with the documented error when the startup program leaves no player; send lands the player on the target board with the arrival region deactivated, music switched and board threads gone while persistent ones survive, with the sprite and trigger ports' test implementations standing in until epic movement-triggers lands; the re-entry after send canonicalises identically to the same state reached directly."
 covers = ["CAP-2"]
-after = [12, "3.3", "3.8", "3.9", "3.25"]
+after = [21, 12, 22, "3.3", "3.8", "3.9", "3.25"]
 hitl = false
 risk = "high"
 references = [
@@ -231,7 +274,7 @@ title = "Runtime board edits and redraw"
 description = "Adds E-14's runtime edits as operations registered with the VM in entry 17: put and layerPut writing a tile cell, reading a tile back, changing a cell's legacy tile type, and adding, modifying and deleting vectors and programs point by point, each forcing the redraw the compositor reads, with the pathfinding graph rebuild handed to epic movement-triggers."
 verify = "Calling the edit operations on a fixture board changes the world state and the draw list of the same tick shows the new tile; a vector, program or tile-type edit changes the state and forces the redraw; a read-back returns what was written; an edit naming a cell or layer outside the board is refused with the documented diagnostic."
 covers = ["CAP-2"]
-after = [13]
+after = [21, 13]
 hitl = false
 risk = "medium"
 references = [
@@ -247,7 +290,7 @@ title = "The VM-facing engine: breakpoints, focus pause and board data"
 description = "Adds this epic's breakpoint hook (setBreakpoints as data; a hit stops mid-tick and returns paused with thread, frame and line, with the open-step cursor stored in the engine section so a paused tick resumes from it), the E-03 focus-pause state (after focus.lost advance consumes no ticks until focus.gained, closing the deferred harness-double finding), and E-15's board constants and titles as virtual variables and named constant substitution with setConstants, through epic rpgcode-vm's port."
 verify = "A breakpoint hit returns the documented paused state with its cursor readable by the next advance; the paused engine state is plain data that canonicalises identically and an unbroken golden run still reports paused null; a focus-lost and focus-gained pair consumes no ticks and replays identically; constant[i], boardTitle[i] and a named constant read the active board's values through the port, and setConstants writes one back; restoring a paused engine across a save is epic menu-party-save's check (handoff)."
 covers = ["CAP-2", "CAP-6"]
-after = [12, 13, 14, "3.9", "3.12"]
+after = [21, 12, 13, 14, "3.9", "3.12"]
 hitl = false
 risk = "high"
 plan_checkpoint = true
@@ -265,7 +308,7 @@ title = "Modal widgets, cursor maps and the message-box wait"
 description = "Adds E-60's and E-61's modal drawing and the cursor-map widget: message boxes (OK and Yes/No), text prompts, cursor maps (createCursorMap, cursorMapAdd, cursorMapHand, killCursorMap and the cursorMapRun wait, which AD-9's kind list has no mouse kind for and the catalogue resolves as input.key) and the mouse cursor as default, hidden or a custom bitmap with its hotspot and transparent key, each waiting state registered against its AD-9 kind with its widget state in the ui section, fed by the input section through epic movement-triggers' port."
 verify = "A scripted message box pauses the script, draws its overlay, returns the chosen index under a scripted key or pointer input and resumes; a cursor map returns the clicked index; a custom cursor blits with its key at the hotspot offset; each waiting state is plain data that canonicalises identically mid-wait; the widget state survives a re-run from the same tick."
 covers = ["CAP-6"]
-after = [6, 7, 12, 15, "3.9"]
+after = [21, 6, 7, 12, 15, "3.9"]
 hitl = false
 risk = "high"
 references = [
@@ -283,7 +326,7 @@ title = "Rendering built-ins register with the VM"
 description = "Registers this epic's operations as a PluginDefinition through epic rpgcode-vm's registry assembly (draw, text and E-55's mwin with its variable splicing, primitives, surfaces, transitions, animations, widgets and cursor, camera pan, board edits, viewBrd and send), layered above epic rpgcode-vm's generic catalogue stubs and the plugin manifest's default order."
 verify = "A scripted program in the harness calls each rendering built-in and observes the documented effect in the draw list, the world state or the returned value; every rendering built-in name of format-spec 9.11 that this epic owns resolves with its byRef parameters declared; a name that repeats a lower layer's runs the later definition and emits one command.overridden warning naming both, per epic rpgcode-vm entry 3.3's ruling."
 covers = ["CAP-2", "CAP-6"]
-after = [14, 15, 16, "3.3", "3.21", "3.22", "3.25"]
+after = [21, 14, 15, 16, "3.3", "3.21", "3.22", "3.25"]
 hitl = false
 risk = "high"
 references = [
@@ -296,7 +339,7 @@ references = [
 id = 18
 type = "story"
 title = "The golden corpus: 2D, both iso modes and the cache-flush replay"
-description = "Completes the epic's Done-when 1, 4 and 6: golden PNGs and frozen pixel hashes in 2D, iso-stacked and iso-rotated on the sample boards and the fixture boards of epic legacy-formats entry 2.22, with camera tracking, small-scene centering and multi-layer parallax; a scripted startup, send, board-edit and reset-cycle run leaving the expected state on a fixture board; the message window, text, primitives and transitions asserted as draw-list operations that replay identically; and a replay that flushes every cache each frame and still gives identical pixels."
+description = "Completes the epic's Done-when 1, 4 and 6 using entry 22's fixtures: golden PNGs and frozen pixel hashes in 2D on the sample boards and in iso-stacked and iso-rotated on entry 22's fixture boards, with the tilesets of epic legacy-formats entry 2.22, with camera tracking, small-scene centering and multi-layer parallax; a scripted startup, send, board-edit and reset-cycle run leaving the expected state on a fixture board; the message window, text, primitives and transitions asserted as draw-list operations that replay identically; and a replay that flushes every cache each frame and still gives identical pixels."
 verify = "Every golden regenerates identically on a fresh run and at every batch size; the scripted board run's state and draw-list hashes are frozen; the cache-flush replay gives identical pixels; each new or changed golden carries its stated reason and a person has reviewed the new modes' images; the golden and required CI jobs pass."
 covers = ["CAP-2", "CAP-6"]
 after = [17]
@@ -315,7 +358,7 @@ title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts, from the plans and the review findings this epic deferred, and takes cleanup only."
 verify = "All required checks stay green and every cleanup traces to a deferred review finding or a plan's recorded follow-up."
 covers = ["CAP-2", "CAP-6"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 22]
 hitl = false
 risk = "low"
 

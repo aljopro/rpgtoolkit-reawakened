@@ -32,7 +32,7 @@ id = 4
 slug = "epic-board-rendering"
 title = "Boards render through draw lists in 2D and both iso modes"
 covers = ["CAP-2", "CAP-6"]
-after = [{ epic = 1, needs = "the headless runner skeleton" }, { epic = 2, needs = "loaded boards, tiles and sprites" }, { epic = 3, needs = "the VM registration API and program execution for rendering built-ins" }]
+after = [{ epic = 1, needs = "the headless runner skeleton" }, { epic = 2, needs = "loaded boards, tiles and sprites" }, { epic = 3, needs = "the VM registration API and program execution for rendering built-ins" }, { epic = 16, needs = "the .tan tileset-animation reader (16.7)" }]
 
 [[epic]]
 id = 5
