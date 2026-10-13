@@ -134,7 +134,7 @@ function makePlainData(random: () => number, depth: number): PlainData {
 
 function drawList(surfaceRev: number): DrawList {
   return {
-    step: 0,
+    tick: 0,
     width: 320,
     height: 200,
     commands: [
@@ -364,11 +364,11 @@ test("hashState matches fixed external Python vector", () => {
   const state: PlainData = {
     active: true,
     player: { hp: 100, name: "Hero" },
-    step: 10,
+    tick: 10,
   };
-  const expectedCanon = '{"active":true,"player":{"hp":100,"name":"Hero"},"step":10}';
+  const expectedCanon = '{"active":true,"player":{"hp":100,"name":"Hero"},"tick":10}';
   equal(canon(state), expectedCanon);
-  equal(hashState(state), "d845bf6718fb7adf");
+  equal(hashState(state), "32ea6801e5683996");
 });
 
 test("hashState matches fixed external Python vector with escapes and non-ASCII", () => {
@@ -386,7 +386,7 @@ test("hashDrawList covers surface revs and is stable", () => {
 
 test("hashDrawList matches fixed external Python vector", () => {
   const dl: DrawList = {
-    step: 1,
+    tick: 1,
     width: 320,
     height: 240,
     commands: [
@@ -408,9 +408,9 @@ test("hashDrawList matches fixed external Python vector", () => {
     ],
   };
   const expectedCanon =
-    '{"commands":[{"kind":"fill","rgb":{"b":0,"g":0,"r":0}},{"alpha":255,"blend":"normal","dst":{"h":16,"w":16,"x":32,"y":64},"iso2d":false,"key":null,"kind":"blit","source":{"rev":3,"surface":1},"src":{"h":16,"w":16,"x":0,"y":0},"tint":{"b":0,"g":0,"r":0}}],"height":240,"step":1,"width":320}';
+    '{"commands":[{"kind":"fill","rgb":{"b":0,"g":0,"r":0}},{"alpha":255,"blend":"normal","dst":{"h":16,"w":16,"x":32,"y":64},"iso2d":false,"key":null,"kind":"blit","source":{"rev":3,"surface":1},"src":{"h":16,"w":16,"x":0,"y":0},"tint":{"b":0,"g":0,"r":0}}],"height":240,"tick":1,"width":320}';
   equal(canon(dl), expectedCanon);
-  equal(hashDrawList(dl), "889e401aebda0d4f");
+  equal(hashDrawList(dl), "8205b04436cb3ce0");
 });
 
 test("encodeLog writes a lowercase-hex tag for bytes", () => {
@@ -428,11 +428,11 @@ test("encodeLog refuses non-plain records instead of emptying them", () => {
 
 test("a log round-trips through encodeLog, canon and decodeLog", () => {
   const log: PortData = [
-    { step: 0, event: { kind: "key", name: "ENTER", code: "Enter", char: null, down: true } },
-    { step: 4, event: { kind: "asset", reqId: 1, bytes: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) } },
-    { step: 9, event: { kind: "blob.loaded", reqId: 2, bytes: null } },
-    { step: 9, event: { kind: "blob.listed", reqId: 3, names: ["a", "b"] } },
-    { step: 12, event: { kind: "audio.ended", cueId: 7 } },
+    { tick: 0, event: { kind: "key", name: "ENTER", code: "Enter", char: null, down: true } },
+    { tick: 4, event: { kind: "asset", reqId: 1, bytes: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) } },
+    { tick: 9, event: { kind: "blob.loaded", reqId: 2, bytes: null } },
+    { tick: 9, event: { kind: "blob.listed", reqId: 3, names: ["a", "b"] } },
+    { tick: 12, event: { kind: "audio.ended", cueId: 7 } },
   ];
   const text = canon(encodeLog(log));
   deepEqual(decodeLog(JSON.parse(text) as PlainData), log);
@@ -443,10 +443,10 @@ test("an explicit null survives the log and differs from an absent key", () => {
   equal(canon({ char: null }) !== canon({}), true);
 
   const withNull: PortData = [
-    { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
+    { tick: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
   ];
   const absent: PortData = [
-    { step: 0, event: { kind: "key", name: "A", code: "KeyA", down: true } },
+    { tick: 0, event: { kind: "key", name: "A", code: "KeyA", down: true } },
   ];
   equal(canon(encodeLog(withNull)) !== canon(encodeLog(absent)), true);
 

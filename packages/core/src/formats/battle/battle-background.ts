@@ -15,33 +15,36 @@ import {
   BATTLE_BACKGROUND_DETECT_OFFSET,
   BATTLE_BACKGROUND_MAGIC,
   BATTLE_BACKGROUND_SECTION,
+  BATTLE_MAX_MINOR,
+  BATTLE_MIN_MINOR,
   type BattleBackground,
+  unsupportedBattleMinor,
   unsupportedTextForm,
 } from "./model.ts";
 
 /**
  * Read a battle background from `reader` (format-spec §8.3).
  *
- * The detection byte at offset 12 (§1.3, §8.3) is checked first: a non-NUL
+ * §8.3 lists the detection byte at offset 12 before the header; the probe does
+ * not move the cursor, so the header is read first and the detection checked
+ * before any header error — a text file has no NUL-terminated magic to read,
+ * and a file too short to carry the detection byte reports the header's own
+ * short read rather than the probe's out-of-range error. A non-NUL detection
  * byte means the 2.x text form, which is refused with a located `FormatError`
- * rather than parsed as binary. Otherwise the magic, major/minor header and
- * the six `str` fields of §8.3 are read in order; bytes after the last sound
+ * rather than parsed as binary. Otherwise the magic, the `minor`-range check
+ * and the six `str` fields of §8.3 are read in order; bytes after the last sound
  * are kept as `residue` (§1.7).
  */
 export function readBattleBackground(reader: BinaryReader): Result<BattleBackground> {
-  const detectAt = reader.offset + BATTLE_BACKGROUND_DETECT_OFFSET;
+  const start = reader.offset;
+  const header = reader.header();
+  const detectAt = start + BATTLE_BACKGROUND_DETECT_OFFSET;
   const probe = reader.isBinaryAt(detectAt);
-  if (!probe.ok) {
-    return probe;
-  }
-  if (!probe.value) {
+  if (probe.ok && !probe.value) {
     return err(
       unsupportedTextForm(reader, detectAt, BATTLE_BACKGROUND_SECTION, BATTLE_BACKGROUND_MAGIC),
     );
   }
-
-  const start = reader.offset;
-  const header = reader.header();
   if (!header.ok) {
     return header;
   }
@@ -52,6 +55,17 @@ export function readBattleBackground(reader: BinaryReader): Result<BattleBackgro
       section: BATTLE_BACKGROUND_SECTION,
       message: `not a battle background: magic is "${header.value.magic}", expected "${BATTLE_BACKGROUND_MAGIC}"`,
     });
+  }
+  if (header.value.minor < BATTLE_MIN_MINOR || header.value.minor > BATTLE_MAX_MINOR) {
+    return err(
+      unsupportedBattleMinor(
+        reader,
+        reader.offset - 2,
+        BATTLE_BACKGROUND_SECTION,
+        BATTLE_BACKGROUND_MAGIC,
+        header.value.minor,
+      ),
+    );
   }
 
   const image = reader.str();

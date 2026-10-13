@@ -7,6 +7,8 @@
  * the asset resolver (§1.5).
  */
 
+import { asciiLower } from "../main-file/layout.ts";
+
 /**
  * What a frame's `image` string denotes (§7.1): nothing (an empty slot, skipped
  * at playback), a tile reference (`set.tstN` / `set.isoN`, §1.6), a tile bitmap
@@ -48,7 +50,7 @@ export function classifyImageReference(image: string): ImageReference {
   if (dot < 0) {
     return { kind: "picture", path: image };
   }
-  const ext = image.slice(dot + 1, dot + 4).toLowerCase();
+  const ext = asciiLower(image.slice(dot + 1, dot + 4));
   const rest = image.slice(dot + 4);
   if ((ext === "tst" || ext === "iso") && isDigitRun(rest)) {
     return { kind: "tile", tileset: image.slice(0, dot + 4), index: Number(rest) };

@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "steps": 24,
+  "ticks": 24,
   "log": [
-    { "step": 2, "event": { "kind": "pointer", "x": 32, "y": 64, "buttons": 1 } },
-    { "step": 3, "event": { "kind": "key", "name": "foo\"bar\\baz", "code": "KeyA", "char": "😀", "down": true } },
-    { "step": 3, "event": { "kind": "gamepad" } },
-    { "step": 6, "event": { "kind": "key", "name": "foo\"bar\\baz", "code": "KeyA", "char": null, "down": false } },
-    { "step": 10, "event": { "kind": "asset", "reqId": 1, "bytes": { "t": "bytes", "hex": "00050f" } } },
-    { "step": 10, "event": { "kind": "audio.ended", "cueId": 1 } },
-    { "step": 14, "event": { "kind": "video.ended" } }
+    { "tick": 2, "event": { "kind": "pointer", "x": 32, "y": 64, "buttons": 1 } },
+    { "tick": 3, "event": { "kind": "key", "name": "foo\"bar\\baz", "code": "KeyA", "char": "😀", "down": true } },
+    { "tick": 3, "event": { "kind": "gamepad" } },
+    { "tick": 6, "event": { "kind": "key", "name": "foo\"bar\\baz", "code": "KeyA", "char": null, "down": false } },
+    { "tick": 10, "event": { "kind": "asset", "reqId": 1, "bytes": { "t": "bytes", "hex": "00050f" } } },
+    { "tick": 10, "event": { "kind": "audio.ended", "cueId": 1 } },
+    { "tick": 14, "event": { "kind": "video.ended" } }
   ]
 }

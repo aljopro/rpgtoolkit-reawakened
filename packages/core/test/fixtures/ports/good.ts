@@ -44,7 +44,7 @@ import type {
   RunnerRequest,
   SaveBlobRequest,
   ScratchId,
-  StepReport,
+  TickReport,
   SurfaceId,
   SurfacePixels,
   TexRef,
@@ -57,7 +57,7 @@ type Thread = { id: number; status: string };
 type VmState = { threads: Thread[]; globals: { [key: string]: PlainData } };
 type GameState = {
   vm: VmState;
-  time: { step: number };
+  time: { tick: number };
   surfaces: { id: number; rev: number }[];
 };
 export type VmStateIsPlainData = AssertPlainData<VmState>;
@@ -68,7 +68,7 @@ export type DrawListIsPlainData = AssertPlainData<DrawList>;
 export type AudioCueIsPlainData = AssertPlainData<AudioCue>;
 
 // Port positions carry bytes as `Uint8Array` leaves (AD-1).
-export type StepReportIsPortData = AssertPortData<StepReport>;
+export type TickReportIsPortData = AssertPortData<TickReport>;
 export type InputRecordIsPortData = AssertPortData<InputRecord>;
 export type InputEventIsPortData = AssertPortData<InputEvent>;
 export type RunnerRequestIsPortData = AssertPortData<RunnerRequest>;
@@ -204,12 +204,12 @@ export function checkFocusStateExhaustive(state: FocusInput["state"]): void {
 }
 
 // Value literals pinning every AD-named shape.
-export const pinStepReport: StepReport = {
-  stepsRun: 1,
-  stepAfter: 1,
+export const pinTickReport: TickReport = {
+  ticksRun: 1,
+  tickAfter: 1,
   consumed: [
     {
-      step: 0,
+      tick: 0,
       event: {
         kind: "key",
         name: "A",
@@ -251,9 +251,9 @@ export const pinStepReport: StepReport = {
   stateHash: "0000000000000000",
 };
 
-export const pinStepReportEmpty: StepReport = {
-  stepsRun: 0,
-  stepAfter: 0,
+export const pinTickReportEmpty: TickReport = {
+  ticksRun: 0,
+  tickAfter: 0,
   consumed: [],
   audioCues: [],
   requests: [],
@@ -433,7 +433,7 @@ export const pinBreakpoint: Breakpoint = {
 };
 
 export const pinInputRecordPointer: InputRecord = {
-  step: 2,
+  tick: 2,
   event: pinPointerInput,
 };
 
@@ -509,7 +509,7 @@ export const pinPopTarget: PopTargetCommand = {
 };
 
 export const pinDrawList: DrawList = {
-  step: 0,
+  tick: 0,
   width: 320,
   height: 240,
   commands: [pinFill, pinBlitTexRefWithTile, pinBlitSurfaceRef],
@@ -517,8 +517,8 @@ export const pinDrawList: DrawList = {
 
 // Conforming Engine object and call verification (Item 4).
 export const conformingEngine: Engine = {
-  advance(_steps: number, _inputs: readonly InputRecord[], _maxSteps?: number): StepReport {
-    return pinStepReport;
+  advance(_ticks: number, _inputs: readonly InputRecord[], _maxTicks?: number): TickReport {
+    return pinTickReport;
   },
   drawList(_alpha?: number): DrawList {
     return pinDrawList;

@@ -5,7 +5,7 @@ import type {
   DrawList,
   Engine,
   InputRecord,
-  StepReport,
+  TickReport,
   SurfaceId,
   SurfacePixels,
 } from "@tk-reawakened/core";
@@ -14,16 +14,16 @@ import { createTestEngine } from "../src/double/test-engine.ts";
 import { runLog } from "../src/driver.ts";
 import type { Run } from "../src/golden.ts";
 
-test("runLog partitions steps into windows and passes maxSteps = n", () => {
-  const calls: { steps: number; inputs: readonly InputRecord[]; maxSteps?: number | undefined }[] = [];
+test("runLog partitions ticks into windows and passes maxTicks = n", () => {
+  const calls: { ticks: number; inputs: readonly InputRecord[]; maxTicks?: number | undefined }[] = [];
 
   const spyEngine: Engine = {
-    advance(steps: number, inputs: readonly InputRecord[], maxSteps?: number): StepReport {
-      const before = calls.reduce((acc, c) => acc + c.steps, 0);
-      calls.push({ steps, inputs, maxSteps });
+    advance(ticks: number, inputs: readonly InputRecord[], maxTicks?: number): TickReport {
+      const before = calls.reduce((acc, c) => acc + c.ticks, 0);
+      calls.push({ ticks, inputs, maxTicks });
       return {
-        stepsRun: steps,
-        stepAfter: before + steps,
+        ticksRun: ticks,
+        tickAfter: before + ticks,
         consumed: inputs,
         audioCues: [],
         requests: [],
@@ -34,7 +34,7 @@ test("runLog partitions steps into windows and passes maxSteps = n", () => {
       };
     },
     drawList(_alpha?: number): DrawList {
-      return { step: 0, width: 320, height: 240, commands: [] };
+      return { tick: 0, width: 320, height: 240, commands: [] };
     },
     surfacePixels(_id: SurfaceId, _rev: number): SurfacePixels | null {
       return null;
@@ -44,11 +44,11 @@ test("runLog partitions steps into windows and passes maxSteps = n", () => {
 
   const run: Run = {
     schema: 1,
-    steps: 7,
+    ticks: 7,
     log: [
-      { step: 0, event: { kind: "gamepad" } },
-      { step: 3, event: { kind: "gamepad" } },
-      { step: 6, event: { kind: "gamepad" } },
+      { tick: 0, event: { kind: "gamepad" } },
+      { tick: 3, event: { kind: "gamepad" } },
+      { tick: 6, event: { kind: "gamepad" } },
     ],
   };
 
@@ -58,19 +58,19 @@ test("runLog partitions steps into windows and passes maxSteps = n", () => {
   equal(records.length, 3);
   equal(calls.length, 3);
 
-  // Call 1: steps = 3, maxSteps = 3, window [0, 3)
-  equal(calls[0]!.steps, 3);
-  equal(calls[0]!.maxSteps, 3);
+  // Call 1: ticks = 3, maxTicks = 3, window [0, 3)
+  equal(calls[0]!.ticks, 3);
+  equal(calls[0]!.maxTicks, 3);
   deepEqual(calls[0]!.inputs, [run.log[0]]);
 
-  // Call 2: steps = 3, maxSteps = 3, window [3, 6)
-  equal(calls[1]!.steps, 3);
-  equal(calls[1]!.maxSteps, 3);
+  // Call 2: ticks = 3, maxTicks = 3, window [3, 6)
+  equal(calls[1]!.ticks, 3);
+  equal(calls[1]!.maxTicks, 3);
   deepEqual(calls[1]!.inputs, [run.log[1]]);
 
-  // Call 3: steps = 1, maxSteps = 3, window [6, 7)
-  equal(calls[2]!.steps, 1);
-  equal(calls[2]!.maxSteps, 3);
+  // Call 3: ticks = 1, maxTicks = 3, window [6, 7)
+  equal(calls[2]!.ticks, 1);
+  equal(calls[2]!.maxTicks, 3);
   deepEqual(calls[2]!.inputs, [run.log[2]]);
 });
 
@@ -78,19 +78,19 @@ test("runLog returns records on empty log", () => {
   const engine = createTestEngine();
   const run: Run = {
     schema: 1,
-    steps: 24,
+    ticks: 24,
     log: [],
   };
   const audio = createNullAudio();
   const records = runLog(engine, run, 1, audio);
   equal(records.length, 24);
-  equal(records[0]!.step, 1);
-  equal(records[23]!.step, 24);
+  equal(records[0]!.tick, 1);
+  equal(records[23]!.tick, 24);
 });
 
 test("runLog throws on invalid n", () => {
   const engine = createTestEngine();
-  const run: Run = { schema: 1, steps: 5, log: [] };
+  const run: Run = { schema: 1, ticks: 5, log: [] };
   const audio = createNullAudio();
   throws(() => runLog(engine, run, 0, audio), RangeError);
   throws(() => runLog(engine, run, -1, audio), RangeError);
@@ -100,15 +100,15 @@ test("runLog throws on invalid n", () => {
 test("runLog throws naming call and cause for engine violations", () => {
   const run: Run = {
     schema: 1,
-    steps: 5,
-    log: [{ step: 0, event: { kind: "gamepad" } }],
+    ticks: 5,
+    log: [{ tick: 0, event: { kind: "gamepad" } }],
   };
 
-  const createFaultyEngine = (modifyReport: (base: StepReport) => StepReport): Engine => ({
-    advance(steps: number, inputs: readonly InputRecord[]): StepReport {
-      const base: StepReport = {
-        stepsRun: steps,
-        stepAfter: steps,
+  const createFaultyEngine = (modifyReport: (base: TickReport) => TickReport): Engine => ({
+    advance(ticks: number, inputs: readonly InputRecord[]): TickReport {
+      const base: TickReport = {
+        ticksRun: ticks,
+        tickAfter: ticks,
         consumed: inputs,
         audioCues: [],
         requests: [],
@@ -120,7 +120,7 @@ test("runLog throws naming call and cause for engine violations", () => {
       return modifyReport(base);
     },
     drawList(): DrawList {
-      return { step: 0, width: 320, height: 240, commands: [] };
+      return { tick: 0, width: 320, height: 240, commands: [] };
     },
     surfacePixels(): SurfacePixels | null {
       return null;
@@ -129,7 +129,7 @@ test("runLog throws naming call and cause for engine violations", () => {
   });
   const failureCases: readonly {
     name: string;
-    modifier: (b: StepReport) => StepReport;
+    modifier: (b: TickReport) => TickReport;
     expectedSnippet: string;
   }[] = [
     {
@@ -141,29 +141,29 @@ test("runLog throws naming call and cause for engine violations", () => {
       name: "alters consumed record",
       modifier: (b) => ({
         ...b,
-        consumed: [{ step: 0, event: { kind: "video.ended" } }],
+        consumed: [{ tick: 0, event: { kind: "video.ended" } }],
       }),
       expectedSnippet: "consumed inputs do not match fed inputs",
     },
     {
-      name: "stepsRun 0",
-      modifier: (b) => ({ ...b, stepsRun: 0 }),
-      expectedSnippet: "stepsRun 0 does not match expected 3",
+      name: "ticksRun 0",
+      modifier: (b) => ({ ...b, ticksRun: 0 }),
+      expectedSnippet: "ticksRun 0 does not match expected 3",
     },
     {
-      name: "stepsRun below n",
-      modifier: (b) => ({ ...b, stepsRun: 1 }),
-      expectedSnippet: "stepsRun 1 does not match expected 3",
+      name: "ticksRun below n",
+      modifier: (b) => ({ ...b, ticksRun: 1 }),
+      expectedSnippet: "ticksRun 1 does not match expected 3",
     },
     {
-      name: "stepsRun above n",
-      modifier: (b) => ({ ...b, stepsRun: 10 }),
-      expectedSnippet: "stepsRun 10 does not match expected 3",
+      name: "ticksRun above n",
+      modifier: (b) => ({ ...b, ticksRun: 10 }),
+      expectedSnippet: "ticksRun 10 does not match expected 3",
     },
     {
-      name: "stepAfter mismatch",
-      modifier: (b) => ({ ...b, stepAfter: 99 }),
-      expectedSnippet: "stepAfter 99 does not match expected",
+      name: "tickAfter mismatch",
+      modifier: (b) => ({ ...b, tickAfter: 99 }),
+      expectedSnippet: "tickAfter 99 does not match expected",
     },
     {
       name: "loading true",
@@ -213,10 +213,10 @@ test("runLog forwards report.audioCues to audio.handle", () => {
   const engine = createTestEngine();
   const run: Run = {
     schema: 1,
-    steps: 2,
+    ticks: 2,
     log: [
-      { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
-      { step: 1, event: { kind: "key", name: "B", code: "KeyB", char: null, down: true } },
+      { tick: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
+      { tick: 1, event: { kind: "key", name: "B", code: "KeyB", char: null, down: true } },
     ],
   };
   const audio = createNullAudio();

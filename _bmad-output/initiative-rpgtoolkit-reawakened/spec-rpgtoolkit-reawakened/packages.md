@@ -4,7 +4,7 @@ Monorepo, one language (TypeScript). Dependency direction is fixed (G2): `core �
 
 | Package | Responsibility | Capabilities |
 |---|---|---|
-| `core` | Formats incl. image decoding, asset resolver, world, movement, triggers, RPGCode step VM, battle and menu rules, step pipeline, draw-list and audio-cue builders, text layout and glyph rasterisation, reference rasteriser, save model. No DOM, no Node. | CAP-1…6, 8…11 |
+| `core` | Formats incl. image decoding, asset resolver, world, movement, triggers, RPGCode step VM, battle and menu rules, tick pipeline, draw-list and audio-cue builders, text layout and glyph rasterisation, reference rasteriser, save model. No DOM, no Node. | CAP-1…6, 8…11 |
 | `synth` | MIDI via SpessaSynth (Apache-2.0) behind a small interface; FluidR3_GM default SoundFont, lazy-loaded; user `.sf2` allowed. | CAP-7 |
 | `render-webgl2` | WebGL2 draw-list replayer, imported by `runner-web` and `editor-ui`. | CAP-6, 12, 15 |
 | `runner-web` | Web Audio/AudioWorklet output (spessasynth_lib), fetch/OPFS asset source, wraps `render-webgl2`. Also the preview runner inside editor hosts. | CAP-12 |
@@ -23,8 +23,8 @@ Monorepo, one language (TypeScript). Dependency direction is fixed (G2): `core �
 
 Fixed by the architecture spine (AD-1, AD-3, AD-5, AD-14, AD-27); summary:
 
-- In: `advance(steps, inputs: { step, event }[])`. Events are keys, pointer, gamepad, `focus`, `audio.ended`, `video.ended`, and the replies to requests (`asset`, `blob.loaded`, `blob.saved`, `blob.listed`, `extension.result`).
-- Out: `StepReport` (steps run, consumed inputs as the canonical log, audio cues, requests with `reqId`, diagnostics, `loading`, `paused`) and a pure `drawList(alpha?)`: an ordered, integer-pixel list of `blit`, `fill`, `line`, `rect`, `ellipse`, `text`, `pushTarget`, `popTarget`. Persistent surfaces are core-owned; runners pull pixels with `surfacePixels(id, rev)`.
+- In: `advance(ticks, inputs: { tick, event }[])`. Events are keys, pointer, gamepad, `focus`, `audio.ended`, `video.ended`, and the replies to requests (`asset`, `blob.loaded`, `blob.saved`, `blob.listed`, `extension.result`).
+- Out: `TickReport` (ticks run, consumed inputs as the canonical log, audio cues, requests with `reqId`, diagnostics, `loading`, `paused`) and a pure `drawList(alpha?)`: an ordered, integer-pixel list of `blit`, `fill`, `line`, `rect`, `ellipse`, `text`, `pushTarget`, `popTarget`. Persistent surfaces are core-owned; runners pull pixels with `surfacePixels(id, rev)`.
 - Requests are blocking (they freeze simulation time) or stream. The core asks for assets by canonical key through a shared resolver. Text layout, glyph rasterisation and image decoding are core-owned, so script-read pixels match the screen on every runner. Blocking script calls never block the host: the VM yields and the runner keeps calling `advance`.
 
 ## Milestone order (stack-independent)

@@ -42,15 +42,15 @@ const VALID_VECTORS = {
   hashDrawList: [
     {
       id: "draw-simple",
-      input: { step: 0, width: 320, height: 240, commands: [] },
-      hash: "3653e9f6a0644f13",
+      input: { tick: 0, width: 320, height: 240, commands: [] },
+      hash: "a4c8af5374ed8af0",
     },
   ],
   rev: [
     {
       id: "rev-diff",
       a: {
-        step: 0,
+        tick: 0,
         width: 320,
         height: 240,
         commands: [
@@ -68,7 +68,7 @@ const VALID_VECTORS = {
         ],
       },
       b: {
-        step: 0,
+        tick: 0,
         width: 320,
         height: 240,
         commands: [

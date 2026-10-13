@@ -13,7 +13,7 @@
  *
  * §1.5 rules applied here:
  * - the legacy separator is backslash; `\` and `/` are equivalent;
- * - matching is case-insensitive, so `foldPath` lower-cases a path for lookup;
+ * - matching is case-insensitive, so `foldPath` folds ASCII letters of a path for lookup;
  * - a saved reference may repeat the type-folder prefix (`Item\npc.itm`); a
  *   leading prefix is stripped when present.
  */
@@ -72,11 +72,27 @@ export function toSlashes(path: string): string {
 }
 
 /**
+ * Fold `A`-`Z` to `a`-`z` and leave every other code point as it is (§1.5).
+ * `String.prototype.toLowerCase` is not used: it follows the runtime's Unicode
+ * tables, merges `U+212A` with `k` and expands `U+0130` into two code points,
+ * so two runners could key one project differently (G3).
+ */
+export function asciiLower(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    out += code >= 0x41 && code <= 0x5a ? String.fromCharCode(code + 0x20) : text[i];
+  }
+  return out;
+}
+
+/**
  * Case-fold a path for the case-insensitive lookup §1.5 requires, with the
- * separators normalised first. The asset resolver keys its index on this.
+ * separators normalised first: ASCII letters only (see `asciiLower`). The
+ * asset resolver keys its index on this.
  */
 export function foldPath(path: string): string {
-  return toSlashes(path).toLowerCase();
+  return asciiLower(toSlashes(path));
 }
 
 /**
@@ -86,9 +102,9 @@ export function foldPath(path: string): string {
  * returned with its separators normalised.
  */
 export function stripTypeFolder(kind: AssetKind, reference: string): string {
-  const folder = ASSET_FOLDERS[kind].toLowerCase();
+  const folder = asciiLower(ASSET_FOLDERS[kind]);
   const normalised = toSlashes(reference);
-  const lower = normalised.toLowerCase();
+  const lower = asciiLower(normalised);
   if (lower === folder) {
     return "";
   }
@@ -113,7 +129,7 @@ export function projectFolder(root: string, project: MainFileProject): string {
     return `${prefix}Game/`;
   }
   const segments = projectPath.split("/");
-  if (segments.length > 1 && segments[0]!.toLowerCase() === "game") {
+  if (segments.length > 1 && asciiLower(segments[0]!) === "game") {
     return `${prefix}Game/${segments.slice(1).join("/")}/`;
   }
   return `${prefix}Game/${projectPath}/`;

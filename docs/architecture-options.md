@@ -18,7 +18,7 @@ Most stack debates about 2D engines are settled by a few hard requirements. For 
 |---|---|---|---|
 | R1 | **Resumable script interpreter.** Blocking programs (`wait()`, blocking movement, modal menus) and cooperative threads must run on a runtime with **no OS threads**, i.e. the browser. | E-33, E-90…E-96, §1.2 of engine doc | The RPGCode VM must be an **explicit step machine** (instruction pointer + frame stack you can pause after N steps). Do not rely on host threads, blocking I/O, or language-level async that cannot be serialised. This is the single most important design constraint. |
 | R2 | **Serialisable live state**, including running threads. | E-120/E-121 | VM state is plain data (frames, locals, IP), not closures or host coroutines. That rules out "just use JS generators / Rust async" as the thread model. |
-| R3 | **Deterministic simulation** independent of frame rate. | E-04, E-22…E-34 | Fixed-step core with an injected clock and RNG. The legacy fps-coupled speed maths is replaced by real-time equivalents. |
+| R3 | **Deterministic simulation** independent of frame rate. | E-04, E-22…E-34 | Fixed-tick core with an injected clock and RNG. The legacy fps-coupled speed maths is replaced by real-time equivalents. |
 | R4 | **Layered 2D compositing** with colour-key transparency, per-pixel **additive RGB tint** (−255…+255), translucency, masked iso diamonds, off-screen canvases, read-back (`getPixel`, `canvasGetScreen`). | E-52…E-59, E-17 | Needs render-to-texture and a simple tint shader, *or* a CPU compositor. Any WebGL2-class renderer is enough. 3D engines are overkill. Read-back rules out "fire-and-forget" GPU-only APIs unless the runner supports copies back to the CPU (under [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md), read-back is served by `core/raster`, so runners need no CPU copy). |
 | R5 | **General MIDI playback everywhere.** | E-100, E-103 | Browsers and mobile have no OS MIDI synth, so a **SoundFont synthesiser must ship with the runner**, together with a permissively licensed SoundFont. This is a licensing trap (FluidSynth is LGPL; some popular SoundFonts are GPL or have unclear provenance). |
 | R6 | **Binary legacy formats + ZIP + appended-ZIP EXE import.** | format-spec §1–13, E-01, E-131 | Byte-level readers in the core, kept I/O-free. The runner provides bytes. Needs a permissive ZIP reader. |
@@ -39,7 +39,7 @@ Whatever language you pick, keep this interface **data-only and narrow**. That i
  inputs → │ formats · world · movement/collision/pathfinding · triggers · RPGCode VM │ → outputs
           │ battle/menu rules · save model · render-list builder · audio-cue builder │
           └───────────────────────────────────────────────────────────────────────────┘
-inputs:  advance(steps, inputs), where inputs are key (name / scan code), pointer and gamepad events
+inputs:  advance(ticks, inputs), where inputs are key (name / scan code), pointer and gamepad events
          and the replies to requests (asset bytes for "need asset X", persisted blobs)
 outputs: frame = ordered draw list   [blit(tex | surface, src, dst, key, tint, alpha, blend),
                                       fill/line/rect/ellipse/text,
@@ -205,7 +205,7 @@ How each hard capability lands in an Option A build, with notes on alternatives.
 |---|---|---|
 | Format readers (format-spec §2–9), legacy upgrades (E-10, T-31) | core `formats` module | Same code serves runners, editor and a CLI converter. In B, TS DataView readers work equally well. |
 | Coordinates & iso (E-11, E-53) | core | Pure maths. |
-| Collision, sliding, stairs, edges, z-order, pathfinding (E-26…E-34) | core | Fixed-step, deterministic. Golden tests from the legacy demo games. |
+| Collision, sliding, stairs, edges, z-order, pathfinding (E-26…E-34) | core | Fixed-tick, deterministic. Golden tests from the legacy demo games. |
 | Trigger rules (E-40…E-49) | core | Data-driven. Unit-testable without a renderer. |
 | RPGCode VM, threads, blocking, error handlers, ~280 built-ins (E-90…E-96) | core `script` module | Explicit step VM (R1/R2). Built-ins call core services. Drawing built-ins emit draw-list ops. |
 | Rendering: layers, colour-key, tint, translucency, canvases, transitions (E-52…E-63) | runner replays the draw list; the core builds it | WebGL2 replayer (web), wgpu or SDL3 renderer (native), CPU rasteriser (tests). |

@@ -781,6 +781,20 @@ test("matching is case-insensitive", () => {
   );
 });
 
+test("the fold is ASCII only: U+212A and U+0130 keep their own identity (§1.5)", () => {
+  equal(foldPath("K.BRD"), "k.brd");
+  // KELVIN SIGN is a different name from ASCII k, and is not lower-cased.
+  equal(foldPath("\u212A.brd"), "\u212A.brd");
+  equal(foldPath("\u212A.brd") === foldPath("k.brd"), false);
+  // LATIN CAPITAL I WITH DOT ABOVE stays one code point, not `i` + U+0307.
+  equal(foldPath("\u0130.brd"), "\u0130.brd");
+  equal(foldPath("\u0130.brd").length, 5);
+  // Letters above 0x7F do not fold by case.
+  equal(foldPath("Caf\u00C9.brd") === foldPath("Caf\u00E9.brd"), false);
+  // The same rule covers the type-folder prefix.
+  equal(stripTypeFolder("items", "ITEM/\u212A.itm"), "\u212A.itm");
+});
+
 test("a leading type-folder prefix is stripped, case-insensitively", () => {
   equal(stripTypeFolder("items", "Item\\npc.itm"), "npc.itm");
   equal(stripTypeFolder("items", "ITEM/npc.itm"), "npc.itm");

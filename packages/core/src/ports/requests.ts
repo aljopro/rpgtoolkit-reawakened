@@ -1,9 +1,9 @@
 /**
  * Host requests: the core's only path to the host (AD-5, AD-17).
  *
- * Requests leave through `StepReport.requests`. Every one carries a
+ * Requests leave through `TickReport.requests`. Every one carries a
  * core-assigned `reqId` and is either blocking (time freezes; `advance`
- * returns `loading` and consumes no steps) or stream (music and video bytes;
+ * returns `loading` and consumes no ticks) or stream (music and video bytes;
  * never touches state). Every request that needs a reply has a matching
  * `InputEvent` reply (see `input.ts`).
  */

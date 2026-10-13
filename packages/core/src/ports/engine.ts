@@ -2,9 +2,9 @@
  * The engine runner boundary: one API every runner drives (AD-1, AD-24).
  *
  * `createEngine(init)` returns an `Engine` (deferred to the engine epic).
- * `advance` runs whole fixed steps and reports what happened; `drawList` is a
+ * `advance` runs whole fixed ticks and reports what happened; `drawList` is a
  * pure function of current state; `surfacePixels` is the pixel accessor
- * (AD-27); `setBreakpoints` takes data and a hit stops mid-step.
+ * (AD-27); `setBreakpoints` takes data and a hit stops mid-tick.
  */
 
 import type { AudioCue } from "./audio.ts";
@@ -51,11 +51,11 @@ export type SurfacePixels = {
 /**
  * The result of one `advance` batch (AD-1, AD-14). `consumed` is the canonical
  * input log written by the core; `loading` is set while a blocking request
- * freezes time; `paused` is set when a breakpoint hit mid-step.
+ * freezes time; `paused` is set when a breakpoint hit mid-tick.
  */
-export type StepReport = {
-  readonly stepsRun: number;
-  readonly stepAfter: number;
+export type TickReport = {
+  readonly ticksRun: number;
+  readonly tickAfter: number;
   readonly consumed: readonly InputRecord[];
   readonly audioCues: readonly AudioCue[];
   readonly requests: readonly RunnerRequest[];
@@ -71,12 +71,12 @@ export type StepReport = {
  */
 export interface Engine {
   /**
-   * Run whole fixed steps, consuming `inputs` in array order. `maxSteps` caps
+   * Run whole fixed ticks, consuming `inputs` in array order. `maxTicks` caps
    * catch-up; when omitted the engine's configured cap applies. Inputs
    * arriving while `loading` are queued in state and consumed at the next real
-   * step.
+   * tick.
    */
-  advance(steps: number, inputs: readonly InputRecord[], maxSteps?: number): StepReport;
+  advance(ticks: number, inputs: readonly InputRecord[], maxTicks?: number): TickReport;
 
   /** A pure function of current state; `alpha` is 0 in tests (AD-1). */
   drawList(alpha?: number): DrawList;
@@ -87,6 +87,6 @@ export interface Engine {
    */
   surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null;
 
-  /** Set source breakpoints as data; a hit stops mid-step (AD-1). */
+  /** Set source breakpoints as data; a hit stops mid-tick (AD-1). */
   setBreakpoints(breakpoints: readonly Breakpoint[]): void;
 }

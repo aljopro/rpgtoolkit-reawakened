@@ -10,7 +10,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 |---|---|---|---|
 | **G1** | Step-machine script VM with saveable state | Language async/generators make thread state unsaveable | Lint ban + snapshot/restore test |
 | **G2** | Hard package boundaries (pure core; host-agnostic editor UI) | Nothing in TS stops DOM/Node/IO leaking into the core | `tsconfig` libs + lint + dependency graph check |
-| **G3** | Determinism (injected clock and RNG, fixed step) | Easy access to `Date.now`, `Math.random` and frame-time coupling | Lint ban + replay hash test |
+| **G3** | Determinism (injected clock and RNG, fixed tick) | Easy access to `Date.now`, `Math.random` and frame-time coupling | Lint ban + replay hash test |
 | **G4** | Renderers only replay draw lists | Game frameworks want to own the loop and the state | Dependency graph check + review |
 | **G5** | Headless golden tests on every change | Regressions are invisible without a reference | CI job (required) |
 | **G6** | Licence gate | npm transitive dependencies can quietly pull in copyleft | CI job (required) |
@@ -58,7 +58,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 
 **Rule.**
 1. `core` **MUST** obtain time only from an injected clock and randomness only from an injected, seedable RNG whose state is part of the save state.
-2. Simulation **MUST** advance on a **fixed time step**. Runners convert real elapsed time into a whole number of fixed steps. Rendering may interpolate, but game state **MUST NOT** depend on frame rate.
+2. Simulation **MUST** advance on a **fixed time tick**. Runners convert real elapsed time into a whole number of fixed ticks. Rendering may interpolate, but game state **MUST NOT** depend on frame rate.
 3. Given the same game data, seed and input log, `core` **MUST** produce identical state and draw lists on every runner and machine.
 4. `core` **MUST NOT** depend on iteration order that the language does not guarantee, or on locale- or time-zone-sensitive APIs.
 
@@ -67,7 +67,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 **Enforcement.**
 * Lint (`core`): ban `Math.random`, `Date`, `Date.now`, `performance.now`, `Intl` and `toLocale*`.
 * Lint (`core`), added by [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md): `Math` is an allowlist (`abs`, `ceil`, `floor`, `round`, `trunc`, `sign`, `min`, `max`, `fround`, `imul`, `clz32`, `sqrt`); every other `Math` member and the `**` and `**=` operators are banned, because their results may differ between JavaScript engines. Other maths comes from `core/fmath`.
-* Test (required): replay recorded input logs twice, and once under Node and once in a headless browser, asserting identical per-step state hashes and draw-list hashes.
+* Test (required): replay recorded input logs twice, and once under Node and once in a headless browser, asserting identical per-tick state hashes and draw-list hashes.
 
 ---
 
@@ -92,7 +92,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 
 **Rule.**
 1. A headless runner (Node/Bun, CPU rasteriser, null audio, scripted input) **MUST** exist from milestone 1 and **MUST** run in CI on every pull request as a **required** check.
-2. The suite **MUST** cover: format round-trips; scripted play-throughs of the legacy sample games (`build/game/demo`, `build/game/Basic`) with recorded inputs; golden images at defined steps; G1 snapshot/restore; and G3 replay hashes.
+2. The suite **MUST** cover: format round-trips; scripted play-throughs of the legacy sample games (`build/game/demo`, `build/game/Basic`) with recorded inputs; golden images at defined ticks; G1 snapshot/restore; and G3 replay hashes.
 3. Golden files change only in a pull request that says why, reviewed as a behaviour change.
 4. Legacy sample games are **test fixtures fetched at CI time** from their source. They are **not** committed to this repository (see G7).
 

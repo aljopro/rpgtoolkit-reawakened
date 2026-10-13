@@ -37,7 +37,7 @@ export type PortData =
  * is assignable to `PortData`:
  *
  * ```ts
- * type _ReportIsPortData = AssertPortData<StepReport>;
+ * type _ReportIsPortData = AssertPortData<TickReport>;
  * ```
  *
  * A function-typed or `undefined` field fails the constraint (AD-1).

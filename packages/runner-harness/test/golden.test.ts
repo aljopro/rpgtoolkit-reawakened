@@ -5,60 +5,60 @@ import {
   formatGolden,
   parseGolden,
   parseRun,
-  type StepRecord,
+  type TickRecord,
 } from "../src/golden.ts";
 
 test("parseRun parses valid run with all 11 event kinds including non-BMP char and bytes", () => {
   const runText = JSON.stringify({
     schema: 1,
-    steps: 12,
+    ticks: 12,
     log: [
       {
-        step: 0,
+        tick: 0,
         event: { kind: "key", name: 'quote"and\\slash', code: "KeyQ", char: "𐍈", down: true },
       },
       {
-        step: 1,
+        tick: 1,
         event: { kind: "pointer", x: 10, y: 20, buttons: 2 },
       },
       {
-        step: 2,
+        tick: 2,
         event: { kind: "gamepad" },
       },
       {
-        step: 3,
+        tick: 3,
         event: { kind: "focus", state: "lost" },
       },
       {
-        step: 4,
+        tick: 4,
         event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "0a0b0c" } },
       },
       {
-        step: 5,
+        tick: 5,
         event: { kind: "asset", reqId: 2, bytes: null },
       },
       {
-        step: 6,
+        tick: 6,
         event: { kind: "blob.loaded", reqId: 3, bytes: { t: "bytes", hex: "de" } },
       },
       {
-        step: 7,
+        tick: 7,
         event: { kind: "blob.saved", reqId: 4, ok: true },
       },
       {
-        step: 8,
+        tick: 8,
         event: { kind: "blob.listed", reqId: 5, names: ["file1", "file2"] },
       },
       {
-        step: 9,
+        tick: 9,
         event: { kind: "extension.result", reqId: 6, result: { val: 123 } },
       },
       {
-        step: 10,
+        tick: 10,
         event: { kind: "audio.ended", cueId: 7 },
       },
       {
-        step: 11,
+        tick: 11,
         event: { kind: "video.ended" },
       },
     ],
@@ -66,7 +66,7 @@ test("parseRun parses valid run with all 11 event kinds including non-BMP char a
 
   const run = parseRun(runText);
   equal(run.schema, 1);
-  equal(run.steps, 12);
+  equal(run.ticks, 12);
   equal(run.log.length, 12);
 
   const keyEv = run.log[0]!.event;
@@ -90,15 +90,15 @@ test("parseRun rejects bad files and root schema", () => {
   const badFiles: readonly { name: string; text: string }[] = [
     { name: "not json", text: "invalid-json" },
     { name: "root not object", text: "[]" },
-    { name: "schema 2", text: JSON.stringify({ schema: 2, steps: 1, log: [] }) },
-    { name: "schema missing", text: JSON.stringify({ steps: 1, log: [] }) },
-    { name: "steps missing", text: JSON.stringify({ schema: 1, log: [] }) },
-    { name: "steps 0", text: JSON.stringify({ schema: 1, steps: 0, log: [] }) },
-    { name: "steps negative", text: JSON.stringify({ schema: 1, steps: -5, log: [] }) },
-    { name: "steps fractional", text: JSON.stringify({ schema: 1, steps: 3.5, log: [] }) },
-    { name: "steps string", text: JSON.stringify({ schema: 1, steps: "3", log: [] }) },
-    { name: "log not array", text: JSON.stringify({ schema: 1, steps: 1, log: "bad" }) },
-    { name: "root extra key", text: JSON.stringify({ schema: 1, steps: 1, log: [], extra: true }) },
+    { name: "schema 2", text: JSON.stringify({ schema: 2, ticks: 1, log: [] }) },
+    { name: "schema missing", text: JSON.stringify({ ticks: 1, log: [] }) },
+    { name: "ticks missing", text: JSON.stringify({ schema: 1, log: [] }) },
+    { name: "ticks 0", text: JSON.stringify({ schema: 1, ticks: 0, log: [] }) },
+    { name: "ticks negative", text: JSON.stringify({ schema: 1, ticks: -5, log: [] }) },
+    { name: "ticks fractional", text: JSON.stringify({ schema: 1, ticks: 3.5, log: [] }) },
+    { name: "ticks string", text: JSON.stringify({ schema: 1, ticks: "3", log: [] }) },
+    { name: "log not array", text: JSON.stringify({ schema: 1, ticks: 1, log: "bad" }) },
+    { name: "root extra key", text: JSON.stringify({ schema: 1, ticks: 1, log: [], extra: true }) },
   ];
 
   for (const { name, text } of badFiles) {
@@ -115,58 +115,58 @@ test("parseRun rejects bad records naming record index and field", () => {
     {
       name: "stamps 3 then 2",
       record: [
-        { step: 3, event: { kind: "gamepad" } },
-        { step: 2, event: { kind: "gamepad" } },
+        { tick: 3, event: { kind: "gamepad" } },
+        { tick: 2, event: { kind: "gamepad" } },
       ],
       fieldSnippet: "violates non-decreasing order",
     },
     {
       name: "negative stamp",
-      record: [{ step: -1, event: { kind: "gamepad" } }],
-      fieldSnippet: "step must be a finite integer >= 0",
+      record: [{ tick: -1, event: { kind: "gamepad" } }],
+      fieldSnippet: "tick must be a finite integer >= 0",
     },
     {
       name: "fractional stamp",
-      record: [{ step: 1.5, event: { kind: "gamepad" } }],
-      fieldSnippet: "step must be a finite integer >= 0",
+      record: [{ tick: 1.5, event: { kind: "gamepad" } }],
+      fieldSnippet: "tick must be a finite integer >= 0",
     },
     {
-      name: "stamp >= steps",
-      record: [{ step: 5, event: { kind: "gamepad" } }],
-      fieldSnippet: "step 5 must be < steps 5",
+      name: "stamp >= ticks",
+      record: [{ tick: 5, event: { kind: "gamepad" } }],
+      fieldSnippet: "tick 5 must be < ticks 5",
     },
     {
       name: "record without an event",
-      record: [{ step: 0 }],
+      record: [{ tick: 0 }],
       fieldSnippet: "record 0: event",
     },
     {
       name: "record with a non-object event",
-      record: [{ step: 0, event: 5 }],
+      record: [{ tick: 0, event: 5 }],
       fieldSnippet: "record 0: event",
     },
     {
       name: "second record is bad",
       record: [
-        { step: 0, event: { kind: "gamepad" } },
-        { step: 1, event: { kind: "unknown_kind" } },
+        { tick: 0, event: { kind: "gamepad" } },
+        { tick: 1, event: { kind: "unknown_kind" } },
       ],
       fieldSnippet: "record 1: kind",
     },
     {
       name: "unknown kind",
-      record: [{ step: 0, event: { kind: "unknown_kind" } }],
+      record: [{ tick: 0, event: { kind: "unknown_kind" } }],
       fieldSnippet: "kind: unknown input event kind",
     },
     {
       name: "missing field in key",
-      record: [{ step: 0, event: { kind: "key", name: "A", down: true } }],
+      record: [{ tick: 0, event: { kind: "key", name: "A", down: true } }],
       fieldSnippet: "code: missing required key",
     },
     {
       name: "wrong type for down",
       record: [
-        { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: "yes" } },
+        { tick: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: "yes" } },
       ],
       fieldSnippet: "down: expected a boolean",
     },
@@ -174,7 +174,7 @@ test("parseRun rejects bad records naming record index and field", () => {
       name: "extra key missing on a reply",
       record: [
         {
-          step: 0,
+          tick: 0,
           event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "00" }, missing: true },
         },
       ],
@@ -182,48 +182,48 @@ test("parseRun rejects bad records naming record index and field", () => {
     },
     {
       name: "extra key in record",
-      record: [{ step: 0, event: { kind: "gamepad" }, extra: 1 }],
+      record: [{ tick: 0, event: { kind: "gamepad" }, extra: 1 }],
       fieldSnippet: "unexpected extra field 'extra'",
     },
     {
       name: "extra key in event",
-      record: [{ step: 0, event: { kind: "gamepad", extra: 1 } }],
+      record: [{ tick: 0, event: { kind: "gamepad", extra: 1 } }],
       fieldSnippet: "extra: unexpected key",
     },
     {
       name: "invalid hex digits zz",
-      record: [{ step: 0, event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "zz" } } }],
+      record: [{ tick: 0, event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "zz" } } }],
       fieldSnippet: "decodeLog: at event.bytes: invalid hex digit",
     },
     {
       name: "odd-length hex",
-      record: [{ step: 0, event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "abc" } } }],
+      record: [{ tick: 0, event: { kind: "asset", reqId: 1, bytes: { t: "bytes", hex: "abc" } } }],
       fieldSnippet: "decodeLog: at event.bytes: odd-length hex string",
     },
     {
       name: "empty name in key",
       record: [
-        { step: 0, event: { kind: "key", name: "", code: "KeyA", char: null, down: true } },
+        { tick: 0, event: { kind: "key", name: "", code: "KeyA", char: null, down: true } },
       ],
       fieldSnippet: "name: expected a non-empty string",
     },
     {
       name: "multi-code-point char in key",
       record: [
-        { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: "AB", down: true } },
+        { tick: 0, event: { kind: "key", name: "A", code: "KeyA", char: "AB", down: true } },
       ],
       fieldSnippet: "char: expected null or a single code point",
     },
     {
       name: "extension.result missing result",
-      record: [{ step: 0, event: { kind: "extension.result", reqId: 1 } }],
+      record: [{ tick: 0, event: { kind: "extension.result", reqId: 1 } }],
       fieldSnippet: "result: missing required key",
     },
     {
       name: "extension.result malformed hex payload",
       record: [
         {
-          step: 0,
+          tick: 0,
           event: { kind: "extension.result", reqId: 1, result: { t: "bytes", hex: "zz" } },
         },
       ],
@@ -234,7 +234,7 @@ test("parseRun rejects bad records naming record index and field", () => {
   for (const { name, record, fieldSnippet } of badRecords) {
     const text = JSON.stringify({
       schema: 1,
-      steps: 5,
+      ticks: 5,
       log: record,
     });
     throws(
@@ -252,9 +252,9 @@ test("parseRun rejects bad records naming record index and field", () => {
 });
 
 test("parseGolden and formatGolden round-trip correctly", () => {
-  const records: StepRecord[] = [
-    { step: 1, state: "0123456789abcdef", draw: "abcdef0123456789" },
-    { step: 2, state: "1123456789abcdef", draw: "bbcdef0123456789" },
+  const records: TickRecord[] = [
+    { tick: 1, state: "0123456789abcdef", draw: "abcdef0123456789" },
+    { tick: 2, state: "1123456789abcdef", draw: "bbcdef0123456789" },
   ];
 
   const formatted = formatGolden(records);
@@ -271,18 +271,18 @@ test("parseGolden rejects bad files and fields", () => {
     { name: "schema 2", text: JSON.stringify({ schema: 2, records: [] }), snippet: "schema must be 1" },
     { name: "records not array", text: JSON.stringify({ schema: 1, records: 123 }), snippet: "records must be an array" },
     {
-      name: "step not 1..N",
+      name: "tick not 1..N",
       text: JSON.stringify({
         schema: 1,
-        records: [{ step: 2, state: "0123456789abcdef", draw: "0123456789abcdef" }],
+        records: [{ tick: 2, state: "0123456789abcdef", draw: "0123456789abcdef" }],
       }),
-      snippet: "step must be 1",
+      snippet: "tick must be 1",
     },
     {
       name: "state bad hex",
       text: JSON.stringify({
         schema: 1,
-        records: [{ step: 1, state: "bad_hex_chars!!", draw: "0123456789abcdef" }],
+        records: [{ tick: 1, state: "bad_hex_chars!!", draw: "0123456789abcdef" }],
       }),
       snippet: "state must be a 16-character lowercase hex string",
     },
@@ -290,7 +290,7 @@ test("parseGolden rejects bad files and fields", () => {
       name: "state too short",
       text: JSON.stringify({
         schema: 1,
-        records: [{ step: 1, state: "0123456789", draw: "0123456789abcdef" }],
+        records: [{ tick: 1, state: "0123456789", draw: "0123456789abcdef" }],
       }),
       snippet: "state must be a 16-character lowercase hex string",
     },
@@ -298,7 +298,7 @@ test("parseGolden rejects bad files and fields", () => {
       name: "draw uppercase hex",
       text: JSON.stringify({
         schema: 1,
-        records: [{ step: 1, state: "0123456789abcdef", draw: "0123456789ABCDEF" }],
+        records: [{ tick: 1, state: "0123456789abcdef", draw: "0123456789ABCDEF" }],
       }),
       snippet: "draw must be a 16-character lowercase hex string",
     },
@@ -306,7 +306,7 @@ test("parseGolden rejects bad files and fields", () => {
       name: "extra field in record",
       text: JSON.stringify({
         schema: 1,
-        records: [{ step: 1, state: "0123456789abcdef", draw: "0123456789abcdef", extra: true }],
+        records: [{ tick: 1, state: "0123456789abcdef", draw: "0123456789abcdef", extra: true }],
       }),
       snippet: "unexpected extra field 'extra'",
     },
@@ -322,10 +322,10 @@ test("parseGolden rejects bad files and fields", () => {
 });
 
 test("compareGolden detects differences table-driven", () => {
-  const baseRecords: readonly StepRecord[] = [
-    { step: 1, state: "0000000000000001", draw: "aaaaaaaaaaaaaaaa" },
-    { step: 2, state: "0000000000000002", draw: "bbbbbbbbbbbbbbbb" },
-    { step: 3, state: "0000000000000003", draw: "cccccccccccccccc" },
+  const baseRecords: readonly TickRecord[] = [
+    { tick: 1, state: "0000000000000001", draw: "aaaaaaaaaaaaaaaa" },
+    { tick: 2, state: "0000000000000002", draw: "bbbbbbbbbbbbbbbb" },
+    { tick: 3, state: "0000000000000003", draw: "cccccccccccccccc" },
   ];
 
   // identical matches
@@ -334,65 +334,65 @@ test("compareGolden detects differences table-driven", () => {
 
   const diffCases: readonly {
     name: string;
-    actual: readonly StepRecord[];
-    expected: readonly StepRecord[];
+    actual: readonly TickRecord[];
+    expected: readonly TickRecord[];
     expectedMessage: string;
   }[] = [
     {
-      name: "state altered at step 2",
+      name: "state altered at tick 2",
       actual: [
         baseRecords[0]!,
-        { step: 2, state: "9999999999999999", draw: "bbbbbbbbbbbbbbbb" },
+        { tick: 2, state: "9999999999999999", draw: "bbbbbbbbbbbbbbbb" },
         baseRecords[2]!,
       ],
       expected: baseRecords,
       expectedMessage:
-        "golden: step 2: state hash differs (expected 0000000000000002, actual 9999999999999999)",
+        "golden: tick 2: state hash differs (expected 0000000000000002, actual 9999999999999999)",
     },
     {
-      name: "draw altered at step 2",
+      name: "draw altered at tick 2",
       actual: [
         baseRecords[0]!,
-        { step: 2, state: "0000000000000002", draw: "9999999999999999" },
+        { tick: 2, state: "0000000000000002", draw: "9999999999999999" },
         baseRecords[2]!,
       ],
       expected: baseRecords,
       expectedMessage:
-        "golden: step 2: draw-list hash differs (expected bbbbbbbbbbbbbbbb, actual 9999999999999999)",
+        "golden: tick 2: draw-list hash differs (expected bbbbbbbbbbbbbbbb, actual 9999999999999999)",
     },
     {
-      name: "both state and draw altered at step 2",
+      name: "both state and draw altered at tick 2",
       actual: [
         baseRecords[0]!,
-        { step: 2, state: "9999999999999999", draw: "8888888888888888" },
+        { tick: 2, state: "9999999999999999", draw: "8888888888888888" },
         baseRecords[2]!,
       ],
       expected: baseRecords,
       expectedMessage:
-        "golden: step 2: state hash differs (expected 0000000000000002, actual 9999999999999999); draw-list hash differs (expected bbbbbbbbbbbbbbbb, actual 8888888888888888)",
+        "golden: tick 2: state hash differs (expected 0000000000000002, actual 9999999999999999); draw-list hash differs (expected bbbbbbbbbbbbbbbb, actual 8888888888888888)",
     },
     {
-      name: "two steps altered (reports only first differing step)",
+      name: "two ticks altered (reports only first differing tick)",
       actual: [
         baseRecords[0]!,
-        { step: 2, state: "9999999999999999", draw: "bbbbbbbbbbbbbbbb" },
-        { step: 3, state: "8888888888888888", draw: "cccccccccccccccc" },
+        { tick: 2, state: "9999999999999999", draw: "bbbbbbbbbbbbbbbb" },
+        { tick: 3, state: "8888888888888888", draw: "cccccccccccccccc" },
       ],
       expected: baseRecords,
       expectedMessage:
-        "golden: step 2: state hash differs (expected 0000000000000002, actual 9999999999999999)",
+        "golden: tick 2: state hash differs (expected 0000000000000002, actual 9999999999999999)",
     },
     {
-      name: "golden shorter (run has extra step)",
+      name: "golden shorter (run has extra tick)",
       actual: baseRecords,
       expected: [baseRecords[0]!, baseRecords[1]!],
-      expectedMessage: "golden: run has step 3 the golden lacks",
+      expectedMessage: "golden: run has tick 3 the golden lacks",
     },
     {
-      name: "golden longer (run missing step)",
+      name: "golden longer (run missing tick)",
       actual: [baseRecords[0]!, baseRecords[1]!],
       expected: baseRecords,
-      expectedMessage: "golden: golden has step 3 the run lacks",
+      expectedMessage: "golden: golden has tick 3 the run lacks",
     },
   ];
 
