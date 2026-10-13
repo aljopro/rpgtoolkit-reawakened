@@ -1,6 +1,6 @@
 ---
 title: 'Tracer bullet: one sample board to a golden PNG'
-type: 'story'
+type: 'chore'
 ticket: '1'
 created: '2026-10-13'
 status: 'in-review'
