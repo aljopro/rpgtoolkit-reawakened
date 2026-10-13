@@ -18,7 +18,9 @@
  *    `unzipSync`'s `filter` hook;
  * 3. each deflate entry's own stream is inflated independently and must yield
  *    exactly the declared number of bytes, so a silently truncated decode
- *    cannot pass;
+ *    cannot pass — and the decode is abandoned the moment it passes the
+ *    declaration, so the *work* an entry can command is bounded too, not just
+ *    the memory it can command (`proveDeclaredSize`);
  * 4. the decoded bytes' CRC-32 must match the header.
  *
  * Every rejection names the rule it hit. Nothing is written, nothing recurses
@@ -26,7 +28,7 @@
  * package is a located `FormatError` (AD-18).
  */
 
-import { inflateSync, strFromU8, unzipSync } from "fflate/browser";
+import { Inflate, strFromU8, unzipSync } from "fflate/browser";
 import type { Unzipped, UnzipFileInfo } from "fflate/browser";
 import { crc32 } from "../image/crc32.ts";
 import { foldPath } from "../main-file/layout.ts";
@@ -57,6 +59,16 @@ const DOS_DIRECTORY = 0x10;
 // The only methods AD-6's `fflate` surface supports (L12).
 const METHOD_STORED = 0;
 const METHOD_DEFLATE = 8;
+
+/**
+ * The smallest number of compressed bytes the declared-size proof hands the
+ * streaming inflater at a time (the chunk is one 1,024th of the declaration for
+ * a bigger entry — see `proveDeclaredSize`).
+ */
+const MIN_INFLATE_CHUNK_BYTES = 1024;
+
+/** Thrown to stop `fflate` mid-stream the instant a decode passes its declaration. */
+const DECLARED_SIZE_PASSED = Symbol("declared size passed");
 
 /** One entry of the central directory, as parsed (§13). */
 interface CentralEntry {
@@ -361,6 +373,72 @@ function readLocalHeaders(
   return ok(dataOffsets);
 }
 
+/** What proving one deflate entry's own stream against its declaration found. */
+type DeclaredSizeProof =
+  /** The stream holds exactly the declared number of bytes. */
+  | { readonly kind: "exact" }
+  /** The stream ended after fewer bytes than declared; `produced` is its length. */
+  | { readonly kind: "short"; readonly produced: number }
+  /** The stream decodes past the declared number of bytes. */
+  | { readonly kind: "oversize" }
+  /** `fflate` refused the stream: it is corrupt or truncated. */
+  | { readonly kind: "invalid" };
+
+/**
+ * Prove that a deflate entry's own stream holds exactly `declared` bytes (L17),
+ * doing no more work than that proof needs.
+ *
+ * `fflate`'s one-shot inflate stops *writing* at the end of the caller's buffer
+ * but carries on decoding, and a write past a typed array's end is a silent
+ * no-op — so a stream that really holds 200 MiB under a header declaring 1,000
+ * bytes burns the full 200 MiB of CPU before a length check can run. Neither L1
+ * (input bytes) nor L5 (declared bytes ÷ compressed bytes, which reads the
+ * attacker's own declaration) bounds that. So the stream is fed to fflate's
+ * *streaming* inflater in chunks and the decode is abandoned the moment the
+ * produced length passes `declared`: the work is bounded by the declaration plus
+ * one chunk's ceiling, not by what the entry really holds.
+ *
+ * The chunk is one 1,024th of the declaration — the inverse of DEFLATE's ~1,032:1
+ * decoded-per-input ceiling — so one push can produce about one declaration's
+ * worth before the abort lands, whatever the declaration is. A flat chunk would
+ * be wrong in one direction or the other: 1 KiB pushes bound an over-declared
+ * stream's transient decode to ~1 MiB but make fflate re-copy the input it has
+ * not consumed on every push (a *stored*-block stream, what a level-0 compressor
+ * writes, is not consumed until a whole 65,535-byte block has arrived, so a
+ * 32 MiB level-0 entry paid ~50x its decode time that way), while a large flat
+ * chunk would let a 1,000-byte declaration decode tens of MiB into memory before
+ * the abort. `MIN_INFLATE_CHUNK_BYTES` keeps small declarations cheap.
+ *
+ * Letting the sentinel out of the inflate callback is what stops fflate; the
+ * inflater is then thrown away with the half-read stream.
+ */
+function proveDeclaredSize(span: Uint8Array, declared: number): DeclaredSizeProof {
+  let produced = 0;
+  const inflate = new Inflate((chunk: Uint8Array) => {
+    if (produced + chunk.length > declared) {
+      throw DECLARED_SIZE_PASSED;
+    }
+    produced += chunk.length;
+  });
+  const scaled = declared >>> 10;
+  const chunkBytes = scaled > MIN_INFLATE_CHUNK_BYTES ? scaled : MIN_INFLATE_CHUNK_BYTES;
+  try {
+    if (span.length === 0) {
+      // An empty stream is still a stream: the final push is what makes fflate
+      // finish (and answer) rather than wait for more input.
+      inflate.push(span, true);
+    } else {
+      for (let at = 0; at < span.length; at += chunkBytes) {
+        const end = at + chunkBytes > span.length ? span.length : at + chunkBytes;
+        inflate.push(span.subarray(at, end), end === span.length);
+      }
+    }
+  } catch (error) {
+    return error === DECLARED_SIZE_PASSED ? { kind: "oversize" } : { kind: "invalid" };
+  }
+  return produced === declared ? { kind: "exact" } : { kind: "short", produced };
+}
+
 /**
  * Read a ZIP archive — a `.tpk`, or the ZIP appended to a standalone EXE
  * (format-spec §13) — and return its files in archive order.
@@ -390,10 +468,9 @@ export function readZip(bytes: Uint8Array, name: string): Result<readonly Packag
   // The entry's own stream must hold exactly what its header declares (L17).
   // fflate trusts the declared size, so this is proved here, before anything is
   // decoded: a lying header is a located failure, never a silently truncated
-  // buffer. `out` is one byte larger than the declared size, so a huffman
-  // stream that decodes to more than it claims cannot return the declared
-  // length and pass the check below; the produced length is required to be
-  // exactly the declared size.
+  // buffer. The proof abandons the decode as soon as it passes the declaration,
+  // so an entry's *work* is bounded by what it declares and the limits that
+  // bound a declaration (L3, L4) — not by what its stream really holds.
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index] as CentralEntry;
     if (entry.directory) continue;
@@ -410,10 +487,8 @@ export function readZip(bytes: Uint8Array, name: string): Result<readonly Packag
     }
     const dataOffset = dataOffsets[index] as number;
     const span = bytes.subarray(dataOffset, dataOffset + entry.compressedSize);
-    let inflated: Uint8Array;
-    try {
-      inflated = inflateSync(span, { out: new Uint8Array(entry.uncompressedSize + 1) });
-    } catch {
+    const proof = proveDeclaredSize(span, entry.uncompressedSize);
+    if (proof.kind === "invalid") {
       return err(
         failure(
           entry.localOffset,
@@ -421,11 +496,14 @@ export function readZip(bytes: Uint8Array, name: string): Result<readonly Packag
         ),
       );
     }
-    if (inflated.length !== entry.uncompressedSize) {
+    if (proof.kind === "oversize" || proof.kind === "short") {
+      // An abandoned decode measured the declared size plus one — the first byte
+      // the stream cannot hold; a finished one measured its real length.
+      const produced = proof.kind === "oversize" ? entry.uncompressedSize + 1 : proof.produced;
       return err(
         failure(
           entry.localOffset,
-          `Entry "${entry.path}" inflates to ${inflated.length} bytes but its header declares ${entry.uncompressedSize}; the package is corrupt (declared vs actual size, L17).`,
+          `Entry "${entry.path}" inflates to ${produced} bytes but its header declares ${entry.uncompressedSize}; the package is corrupt (declared vs actual size, L17).`,
         ),
       );
     }

@@ -119,10 +119,15 @@ test("a written package round-trips its asset tree and its manifest", () => {
   equal(empty !== undefined, true);
   equal(empty?.bytes.length, 0);
 
-  // The manifest survives the read path unchanged.
+  // The manifest survives the read path unchanged, except that `index` is
+  // written in code-unit order (plain `sort()` on strings) rather than the
+  // caller's: that is what keeps two writes of one tree byte-identical (G3).
   const manifestFile = files.find((file) => file.path === MANIFEST_FILE_NAME);
   equal(manifestFile !== undefined, true);
-  deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, MANIFEST);
+  deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, {
+    ...MANIFEST,
+    index: [...MANIFEST.index].sort(),
+  });
   // It sits at the archive root (no folder segment).
   equal((manifestFile?.path ?? "").includes("/"), false);
 });
@@ -138,6 +143,26 @@ test("the written bytes are deterministic", () => {
     bytes: Uint8Array.from(file.bytes),
   }));
   deepEqual(unwrap(writeDistributionPackage(input(copied))), first);
+});
+
+test("the caller's index order cannot reach the written bytes", () => {
+  // The same tree and the same manifest, listed in the caller's two orders: the
+  // manifest's `index` is written in code-unit order, so both writes are
+  // byte-identical (G3). Before that, the caller's order reached the manifest
+  // bytes (the reversed list was three bytes longer here).
+  const forward = unwrap(writeDistributionPackage(input()));
+  const reversed = unwrap(
+    writeDistributionPackage(input(FILES, { ...MANIFEST, index: [...MANIFEST.index].reverse() })),
+  );
+  deepEqual(reversed, forward);
+
+  // The manifest still lists every file once, in code-unit order.
+  const loaded = unwrap(loadPackage({ kind: "tpk", name: "game.tpk", bytes: reversed }));
+  const manifestFile = loaded.files.find((file) => file.path === MANIFEST_FILE_NAME);
+  deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, {
+    ...MANIFEST,
+    index: [...MANIFEST.index].sort(),
+  });
 });
 
 test("the written package passes the reader's checks and matches the loose folder", () => {
@@ -294,13 +319,14 @@ test("a backslash-separated path is written with forward slashes", () => {
     readBack.map((file) => file.path).sort(),
     [MANIFEST_FILE_NAME, "Boards/Village/inn.brd", "Main/demo.gam"].sort(),
   );
-  // The manifest names the archive's own spelling, not the caller's backslashes.
+  // The manifest names the archive's own spelling, not the caller's backslashes,
+  // and in code-unit order (`Boards/…` sorts before `Main/…`).
   const manifestFile = readBack.find((file) => file.path === MANIFEST_FILE_NAME);
   equal(manifestFile !== undefined, true);
   deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, {
     schema: 1,
     main: "Main/demo.gam",
-    index: ["Main/demo.gam", "Boards/Village/inn.brd"],
+    index: ["Boards/Village/inn.brd", "Main/demo.gam"],
   });
 });
 
