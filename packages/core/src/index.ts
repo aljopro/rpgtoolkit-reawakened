@@ -8,3 +8,7 @@ export * from "./validate/index.ts";
 // (AD-18, format-spec §1).
 export * from "./formats/index.ts";
 export * from "./fmath/index.ts";
+// The reference rasteriser and the draw-list builder: one surface model, one
+// pixel pipeline, one compositor (AD-4, AD-29).
+export * from "./raster/index.ts";
+export * from "./render/index.ts";

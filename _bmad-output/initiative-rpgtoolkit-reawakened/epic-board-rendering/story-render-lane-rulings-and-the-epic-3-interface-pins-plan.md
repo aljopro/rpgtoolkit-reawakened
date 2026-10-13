@@ -3,14 +3,14 @@ title: 'Render-lane rulings and the epic-3 interface pins (doc-first)'
 type: 'chore'
 ticket: '21'
 created: '2026-10-12'
-status: 'review'
+status: 'in-review'
 baseline_revision: 'e6f65e8'
 route: 'full'
 route_source: 'auto'
 risk: 'high'
-review: 'owner'
+review: 'none'
 review_source: 'pinned'
-lenses_ran: ['owner']
+lenses_ran: []
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/docs/engine-features.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -91,6 +91,8 @@ sections are the only place the rulings live.
 | AD-10 | spine | a section's type is its module's; the owner's entry replaces the placeholder alias and bumps the schema |
 | AD-5 | spine | the harness takes a reply resolver and answers `asset` and `loadBlob` from its fixture folder |
 | AD-8 | spine | a domain pack sits above the stub packs in the default manifest; the replacement warns on the Logger port |
+
+No review lens ran: the change is documentation and decisions, and the review of record is the owner's ruling on the six items below.
 
 ## Open for the owner at review
 
