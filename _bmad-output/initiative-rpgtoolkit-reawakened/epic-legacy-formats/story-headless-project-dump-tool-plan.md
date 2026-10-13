@@ -8,10 +8,10 @@ baseline_revision: 'acf48f83c0ddf6ea9e3d909a6653f2cefd4fdf37'
 route: 'full'
 route_source: 'auto'
 risk: 'low'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -71,6 +71,17 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - 2026-10-11 — initial plan; `runner-headless` gains a `dump/` module tree, the corpus expectation lands in `golden/legacy-corpus.json`, and the gate is a step in the existing `golden` job rather than a new required check.
 
 ## Review Triage Log
+
+### Round 2 — 2026-10-13 (`review-r3-package-ci`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | intent-alignment | At `2aa135e` `.bmp`/`.gif` were data formats, so a real BMP failed the dump instead of skipping (violates the AC and §10's listing) | confirmed (fixed in 93efb03) | rejected — STALE on re-baseline: already fixed by round 1 (`93efb03`) |
+| 2 | intent-alignment | The plan's AC ("demo 29 parsed", "45 digests") contradicts the committed `golden/legacy-corpus.json` and the live gate output (30 parsed, 46 digests) | confirmed (open at HEAD) | open — needs the plan owner; the acceptance text is frozen and left unchanged |
+| 3 | verification-gap | Digest reproducibility is proven on Node 26.8.1 only; CI pins 24.21.0 | unverified risk (not reproducible here) | deferred — recorded in `deferred-work.md` |
+| 4 | blind-hunter | Report/expectation carry no absolute path, clock, locale comparison or listing-order dependence; `canon`/`fnv1a64` are engine-independent | verified-ok | rejected |
+| 5 | blind-hunter | `["core","runner-headless"]` edge direction and `pnpm graph` | verified-ok | rejected |
+| 6 | blind-hunter | The gate is deliberately self-recorded (drift reference, not an oracle) — documented, and it does catch parsed↔skipped moves via counts | verified-ok | rejected |
 
 ## Design Notes
 
@@ -136,3 +147,7 @@ Scope: 2aa135e; diff excludes the ticket's own plan file. Lenses run: blind-hunt
 - intent-alignment: The gate omits the readable surface — low: the plan makes the rendering a debugging aid, not the gate's subject.
 - intent-alignment: The expectation is a snapshot, not an independent oracle — false: the plan's Design Notes define it as a drift reference, so the described property is the intended design.
 - intent-alignment: The digest is over a normalised model — false: the hex fold and `undefined` drop are documented in `digest.ts`, the plan and the digest tests.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, independent reviewer `review-r3-package-ci`).** Verdict: PASS WITH FINDINGS. 2 live findings (1 MINOR, 1 unverified risk). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`): F1 (`.bmp`/`.gif` failing the dump) was already fixed by round 1 (`93efb03`), so it is rejected as stale. Open (needs the plan owner): the acceptance text says "demo 29 parsed, 45 digests" while the committed `golden/legacy-corpus.json` and the live gate say 30 parsed / 46 digests — left unchanged under the frozen-intent rule. Deferred and recorded in `deferred-work.md`: the digest reproducibility is proven on Node 26.8.1 only, while CI pins 24.21.0. Round 1 above is unchanged.

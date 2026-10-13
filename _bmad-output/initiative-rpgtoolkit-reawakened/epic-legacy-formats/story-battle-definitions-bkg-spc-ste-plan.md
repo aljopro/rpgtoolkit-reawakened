@@ -8,10 +8,10 @@ baseline_revision: 'cca70e3681e5ee6ae064bae5ab9e9c33d75fcb3b'
 route: 'full'
 route_source: 'auto'
 risk: 'low'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -62,6 +62,16 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 
 ## Review Triage Log
 
+### Round 2 — 2026-10-13 (`review-r2-formats`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | blind-hunter | readers accept any minor; §8.1–§8.3 (spec, post-code) require refusing 0, 1, ≥4 | real, spec divergence | rejected — STALE on re-baseline: fixed by epic 2.18 (`e79d972`) |
+| 2 | edge-case-hunter | `.ste`/`.bkg` probe first, so short files report §1.3 instead of a short read (`.spc` was fixed) | real, low | rejected — STALE on re-baseline: fixed by epic 2.18 (`e79d972`) |
+| 3 | blind-hunter | writers silently wrap an out-of-range i16 and do not check magic/minor (`status-effect.ts:123`); a `minor: 7` model now writes a file the reader refuses | real, low | deferred — recorded in `deferred-work.md` |
+| 4 | intent-alignment | `.bkg`'s text form is not "line-oriented" (inaccurate shared message) | nit | accepted — the message still names the form unsupported |
+| 5 | verification-gap | no `.spc`/`.ste` real bytes exist; those layouts rest on synthetic fixtures only | inherent, recorded | accepted — recorded (2026-10-11) |
+
 ## Design Notes
 
 - No new dependency: `Uint8Array`/`DataView` via the existing binary primitives only.
@@ -107,3 +117,7 @@ Scope: 44fb20f; diff excludes the ticket's own plan file. Lenses run: blind-hunt
 - intent-alignment: writers key on `model.magic` — low: same as the writer-magic finding above.
 - intent-alignment: the plan says "ten `i16` fields" but lists nine — rejected: its fix is to edit the plan under review; the reader follows §8.2's nine fields.
 - intent-alignment: the shared message calls `.bkg`'s text form "line-oriented" — low: the message still names the text form as unsupported, which the acceptance criterion requires; accurate wording would need a parameter or duplicated messages.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, independent reviewer `review-r2-formats`).** Verdict: PASS WITH FINDINGS. 3 live findings (1 MINOR, 1 NIT, 1 inherent). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`): F1 (readers accept any `minor`) and F2 (`.ste`/`.bkg` probe before the header) are STALE — both fixed on `origin/main` by epic 2.18 (`e79d972`) — so they are rejected. Deferred and recorded in `deferred-work.md`: the unguarded writers (silent i16 wrap, no magic/minor check). Accepted: the `.bkg` "line-oriented" wording and the no-real-bytes corpus gap. Round 1 above is unchanged.

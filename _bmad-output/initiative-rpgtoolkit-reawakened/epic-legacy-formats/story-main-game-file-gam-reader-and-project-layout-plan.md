@@ -8,10 +8,10 @@ baseline_revision: 'edf9d3840b748d6cd587c0a12ac406db139f0fa1'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -79,6 +79,15 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 
 ## Review Triage Log
 
+### Round 2 — 2026-10-13 (`review-r3-package-ci`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | blind-hunter | `layout.ts:79` (and :89,:91,:116): Unicode `toLowerCase` fold contradicts §1.5's normative ASCII-only fold and AD-5's "never `String.prototype.toLowerCase`"; AD-5's required fold test is missing | confirmed (open at HEAD) | rejected — STALE on re-baseline: fixed by epic 2.21 (`ac71468`) |
+| 2 | edge-case-hunter | `writer.ts:124-125` `checkModel` accepts `major: -1` and emits a file its own reader rejects (§1.4) | confirmed (open at HEAD) | open — needs `Number.isInteger(model.major) && model.major >= 0` |
+| 3 | verification-gap | Row-number citations in `model.ts`/`reader.ts`/`writer.ts` use a second numbering scheme that contradicts §2's unique 1–43 rows | confirmed (open at HEAD) | deferred — recorded in `deferred-work.md` |
+| 4 | verification-gap | `format-main-file.test.ts:4-5` stale "corpus ships no `.gam`" comment; `:415` restates the implementation's conditions instead of testing the reader | confirmed (open at HEAD) | deferred — recorded in `deferred-work.md` |
+
 ## Design Notes
 
 - No new dependency: `Uint8Array`/`DataView` through the existing `BinaryReader`/`BinaryWriter`.
@@ -136,3 +145,7 @@ Scope: d7bd3a6; diff excludes the ticket's own plan file. Lenses run: blind-hunt
 - intent-alignment: Divergence (b) layout takes a one-field projection, not "a main-file model" — false: `Pick<MainFile,"projectPath">` is a structural supertype any main-file model satisfies.
 - intent-alignment: Divergence (d) plugins are raw entries, not "active plugins" — false: the model carries both stored shapes and the implied `tkplug<N>` name is derivable from the entry index, so no file information is lost.
 - intent-alignment: Divergence (g) four conditional runs are opaque residue — false: §2 calls those runs "reserved — ignore"; keeping the raw bytes is what makes the writer byte-identical.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, independent reviewer `review-r3-package-ci`).** Verdict: PASS WITH FINDINGS. 3 live findings (2 MINOR, 1 NIT). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`): F1 (the Unicode `toLowerCase` fold) is STALE — fixed on `origin/main` by epic 2.21 (`ac71468`, ASCII-only `asciiLower()` plus AD-5's fold test) — so it is rejected. Open: `writeMainFile`'s `checkModel` still accepts `major: -1` and emits a file its own reader rejects. Deferred and recorded in `deferred-work.md`: the second row-numbering scheme in the citations and the stale "corpus ships no `.gam`" comment / restated-conditions test. Round 1 above is unchanged.

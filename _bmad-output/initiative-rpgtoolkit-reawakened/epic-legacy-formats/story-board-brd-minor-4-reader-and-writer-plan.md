@@ -8,10 +8,10 @@ baseline_revision: 'edf9d3840b748d6cd587c0a12ac406db139f0fa1'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -61,6 +61,16 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - 2026-10-11 — initial implementation; spec §4.2 verified field-by-field against the three sample boards before the TypeScript reader was written.
 
 ## Review Triage Log
+
+### Round 2 — 2026-10-13 (`review-r2-formats`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | blind-hunter | `writeBoard` accepts a shade layer that under-covers the grid, writing a file that fails to re-read (`board/writer.ts:248-262`) | real | deferred — recorded in `deferred-work.md` |
+| 2 | edge-case-hunter | negative shade `runCount` silently treated as one cell; §4.2 silent, plan unrecorded (`board/reader.ts:283-300`) | real, low | accepted — harmless today (value kept verbatim, round-trip holds) and a spec decision |
+| 3 | verification-gap | §4.2's LUT index-0 invariant and light node/colour counts unvalidated | real, low | accepted — crafted-input only |
+| 4 | verification-gap | synthetic builder mirrors the implementation; only the real boards + hand-written values anchor field order | real, inherent | accepted — the three real boards anchor field order |
+| 5 | intent-alignment | residue canary verified to fail on a 2-byte width drift (`/tmp/r2-bmut4.out`) | no defect | rejected |
 
 ## Design Notes
 
@@ -121,3 +131,7 @@ Scope: 943aef2, 05de90c; diff excludes the ticket's own plan file. Lenses run: b
 - intent-alignment: The header is read before the byte-14 probe — false: outcome-equivalent, documented in the code comment and the plan's Implementation Notes.
 - intent-alignment: The text/minor 0-3 tests are not real files — false: both refusals happen on the detection byte or the version field before any body byte is parsed.
 - intent-alignment: Non-ASCII byte-exactness is delegated to cp1252 — false: the codec is total and lossless and format-binary.test.ts:80,101 round-trips all five undefined bytes.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, independent reviewer `review-r2-formats`).** Verdict: PASS WITH FINDINGS. 4 live findings (2 MINOR, 2 NIT). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`); all LIVE, none stale. `writeBoard` accepting a shade layer that under-covers the grid is deferred (recorded in `deferred-work.md`); the negative shade `runCount`, the unvalidated LUT index-0/light counts and the self-mirroring test builder are accepted; the residue canary was verified to fail on a width drift. Round 1 above is unchanged.
