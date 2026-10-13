@@ -307,6 +307,15 @@ function decodeHuffman(reader: BitReader, table: HuffmanTable): number {
  * Run the separable IDCT over the dequantised coefficients and write the 8×8
  * samples (level-shifted by +128, rounded, clamped) into the component plane.
  * Rows then columns, fixed order, IEEE-754 `+ ·` only (G3).
+ *
+ * An interleaved scan can ask a component for blocks past its own block grid:
+ * the frame's MCU grid is `ceil(width / (8·maxH)) × ceil(height / (8·maxV))` and
+ * each MCU carries `h × v` blocks, while the component's plane holds only
+ * `ceil(width·h / (8·maxH)) × ceil(height·v / (8·maxV))` of them (T.81 §A.2.2).
+ * Those dummy blocks are decoded to keep the entropy stream in step but are not
+ * part of the picture; writing one at this flat offset would land in the next
+ * plane row and overwrite samples already decoded, so it is dropped here
+ * (format-spec §10.3).
  */
 function idct(
   coeff: Float64Array,
@@ -315,6 +324,9 @@ function idct(
   blockRow: number,
   blockCol: number,
 ): void {
+  if (blockRow >= component.blocksPerColumn || blockCol >= component.blocksPerLine) {
+    return;
+  }
   for (let y = 0; y < 8; y += 1) {
     const row = y * 8;
     for (let x = 0; x < 8; x += 1) {
