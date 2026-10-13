@@ -8,10 +8,10 @@ baseline_revision: '05de90ce8dd865a5ad69d53662c9d85e7040683a'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -64,6 +64,20 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - 2026-10-11 — initial implementation; the three layouts were verified field-by-field against the five sample actor files before the readers were finalised, including the 34-byte vector-bases tail and the enemy's 2-byte `i32` tail.
 
 ## Review Triage Log
+
+### Round 2 — 2026-10-13 (`review-r2-formats`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | verification-gap | seven §6.1/§6.2 minor thresholds survive mutation; no minor-3 item, no minor 2/5/6/7 character anywhere | real | deferred — recorded in `deferred-work.md` (narrowed: epic 2.18 now pins 3 of 8) |
+| 2 | verification-gap | a consistent same-width field swap (enemy crits) is undetectable; stats/prices/rewards/crits unasserted | real | deferred — recorded in `deferred-work.md` |
+| 3 | edge-case-hunter | `writeBases` wraps the i16 bound above 32768 points and writes a corrupt file (`model.ts:628-636`) | real | deferred — recorded in `deferred-work.md` |
+| 4 | blind-hunter | missing `idleTime`/`speed` written as 0, not the §6.1 defaults (`character.ts:516`) | real, low | deferred — recorded in `deferred-work.md` |
+| 5 | blind-hunter | i16 scalars wrap silently on write (`character.ts:447`; the same pattern in `item.ts`/`enemy.ts` by inspection) | real, low | deferred — recorded in `deferred-work.md` |
+| 6 | intent-alignment | §6.2's legacy walk-frame string order unstated; code's choice unrecorded (G7 doc-first) | doc gap | deferred — recorded in `deferred-work.md` |
+| 7 | edge-case-hunter | wrong-type actor reported as "text" at 13/14 instead of a wrong magic | real, low | accepted — §1.3's detection rule permits the diagnosis |
+| 8 | verification-gap | two of five named samples can disappear without a failure (`format-actor.test.ts:790-843`) | real, low | deferred — recorded in `deferred-work.md` |
+| 9 | edge-case-hunter | `readBases` skips the §1.2 count-vs-remaining check; enemy stance count unenforced | low | rejected |
 
 ## Design Notes
 
@@ -136,3 +150,7 @@ Scope: 8bc1111; diff excludes the ticket's own plan file. Lenses run: blind-hunt
 - intent-alignment: D4 — R3 vs R4 (text forms): the diff refuses the text forms rather than converting them — false: the plan's frozen "Never" clause mandates refusing the 2.x text forms and §6.3's minor 0
 - intent-alignment: D5 — R5 vs R6 (normalisation): the diff stores raw values rather than applying §6 consumer rules — false: the byte-exact-write requirement and the plan's "Never: drop empty slots" require verbatim storage
 - intent-alignment: D6 — R7 vs R8 (six enemy stances): the reader is bound-driven, not structurally six — low: §6.3 documents the bound as "stored as 5"
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, independent reviewer `review-r2-formats`).** Verdict: PASS WITH FINDINGS. 9 live findings (2 MAJOR, 6 MINOR, 1 NIT). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`); all LIVE (F1 narrowed — epic 2.18 now pins 3 of the 8 minor thresholds, 5 still survive mutation) and none is stale. Deferred and recorded in `deferred-work.md`: the unpinned §6.1/§6.2 minor thresholds, the undetectable same-width field swap, the `writeBases` i16 bound wrap, the `idleTime`/`speed` zero default, the silent i16 scalar wrap, the unstated §6.2 walk-frame order (G7 doc-first) and the two unrequired named samples. Accepted: the wrong-type actor diagnosed as "text". Round 1 above is unchanged.

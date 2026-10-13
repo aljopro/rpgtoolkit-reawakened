@@ -8,10 +8,10 @@ baseline_revision: '44fb20fae368e4a5d06c5039ca9ad73ddfa97f1c'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/discovery/decoders-and-containers.md']
 ---
 
@@ -72,6 +72,18 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 
 ## Review Triage Log
 
+### Round 2 — 2026-10-13 (`review-r1`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | blind-hunter | `idct()` writes padding blocks outside the component plane's block grid; the flat-array write wraps into the next pixel row and corrupts already-decoded luma — 27/65 corpus JPEGs change output when those writes are suppressed, incl. `mwin.jpg`; max channel error 244 | real, wrong output | fixed — branch `fix/epic2-jpeg-padding-blocks` (`3f9ec9f` docs, `6e98dfe` fix) |
+| 2 | verification-gap | the Pillow cross-check used only `bkg.jpg` (MCU-aligned) and `mwin.jpg` (spill invisible); the synthetic matrix is 8/16 px only; the golden image digest is recorded *from this decoder*, so no gate can fail | real | open — the branch adds a 24×16 hard-coded-pixel regression test, but M-1's externally-produced image digest is still missing |
+| 3 | guardrail-sweep | G7 rule 4/rule 1 breached for §10: `edf9d38` is an ancestor of `bf0de55`, whose message states §10 was written *from* `png.ts`/`jpeg.ts` | real | deferred — already logged as deferred (2026-10-11); doc-before-code for the remaining decoders (BMP/GIF, §10.4) |
+| 4 | edge-case-hunter | an AC ZRL (`k += 16`) can push the coefficient index past 63 with no refusal, unlike the `k += run` path | real, low impact | open — needs a `k > 63` guard on the ZRL path |
+| 5 | intent-alignment | the `jpeg-js` rejection evidence is genuine (unpkg `index.d.ts` 0.4.4 names `Buffer` at lines 7/11; `skipLibCheck: true` is set) | clean | — |
+| 6 | independent-oracle | PNG byte-identical to Pillow on all 68 fixture PNGs, on a hand-built interlaced 9×7 RGB8 cycling all five filters, and across 1/2/4/8/16-bit + palette + `tRNS` forms; CRC-as-error matches §10.2 | clean | — |
+| 7 | independent-oracle | JPEG matches ffmpeg to ≤ 3 on every MCU-aligned size (8×8 aside, see #1); greyscale, 4:4:4/4:2:2/4:2:0 and the Adobe-transform rule follow §10.3 | clean except #1 | — |
+
 ## Design Notes
 
 - **No host global and no module state.** Neither decoder touches `Buffer`, `window`, `process`, a timer or a file; all state is per-call, so two decodes cannot influence each other and the same bytes always give the same pixels (G3). The `crc32` table and the IDCT basis are the only module-level values, both immutable after construction and built from constants.
@@ -117,3 +129,7 @@ Scope: commit `edf9d38` (epic 2, entry 3); diff excludes the ticket's own plan f
 - intent-alignment: Divergence 1, nothing consumes `decodeTexture` — false: no other image decoder exists in the tree at `edf9d38`, so no consumer can disagree about pixels; the missing caller is the epic's sequencing.
 - intent-alignment: Divergence 5, cross-runner determinism only tested same-process — low: unobservable at this commit (no second runner exists) and the property follows from the single pure implementation, no host globals and fixed-order arithmetic over literal basis constants.
 - intent-alignment: Divergence 9, the plan arguing the B1/F2 readings is excluded from the diff — false: the plan is part of commit `edf9d38`, present in the checkout and read by every lens; its exclusion from `diff.patch` is the review harness's choice.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, second independent reviewer `review-r1`).** Verdict: FAIL. 5 live findings (2 BLOCKER, 2 MAJOR, 1 MINOR) plus 3 NIT. The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`); all findings are LIVE there and none is stale. B-1, the JPEG IDCT writing padding blocks past a component plane's block grid (27 of 65 corpus JPEGs changed output, including the shipped `mwin.jpg`, first differing pixel `(0,1)`), is fixed on branch `fix/epic2-jpeg-padding-blocks` (`3f9ec9f` docs, `6e98dfe` fix), which drops the dummy blocks and adds a non-MCU-aligned hard-coded-pixel regression test and re-records the golden. B-2 (the §10 rules written after the decoder, a G7 ordering breach) and M-2 stay deferred (already recorded on 2026-10-11); M-1's remaining ask — an image digest produced outside this repo — and m-6 (the AC ZRL index past 63) are open. Round 1 above is unchanged.

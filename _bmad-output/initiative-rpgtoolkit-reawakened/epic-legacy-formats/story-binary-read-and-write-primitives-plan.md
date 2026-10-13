@@ -8,10 +8,10 @@ baseline_revision: 'e2f4fd77add2664306b3310e88b3dd64f947ded9'
 route: 'full'
 route_source: 'auto'
 risk: 'low'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -68,6 +68,24 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 
 ## Review Triage Log
 
+### Round 2 — 2026-10-13 (`review-r1`, tickets 2.1–2.4 + chore `68d7839`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | blind-hunter | `readBytes`/`take` accept `NaN` (cursor set to `NaN`, later reads silently from offset 0) and fractional lengths (cursor desync) | real | open — needs `Number.isInteger(size)` in `take` |
+| 2 | intent-alignment | exported `upperBoundCount`/`trueCount` return a value for invalid negatives that `readUpperBound` rejects — two behaviours for the §1.2 rule | real | open — needs the two helpers to return `Result` or be made private |
+| 3 | edge-case-hunter | on a semantically invalid field (`readUpperBound` `< -1`, `header()` negative version) the cursor has already advanced, but the acceptance criterion says "the cursor does not advance" (it only covers truncation) | real, low impact | accepted — harmless (every caller aborts) and a documented contract choice |
+| 4 | guardrail-sweep | G2/G3/G6/G7 clean (`check-core-deps` 1 allowlisted dep, no banned `Math`/`Date`/`Intl`, `Math` allowlist is enforced by eslint) | clean | — |
+| 5 | independent-oracle | cp1252 table, count rules, f64 `-0`/`NaN`/`±Infinity`, little-endian layout all verified against §1 | clean | — |
+
+Chore `68d7839` (§1 amendment), covered by the same report:
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | verification-gap | §1.2's new "a reader must also check `n` against the bytes that remain" is not implemented by the animation or board readers, so "the readers already follow these rules" is not accurate | real, low impact | open — needs a softened §1.2 sentence or the explicit checks |
+| 2 | intent-alignment | the §1.2 `i32` claim matches §6.1/§6.2/§6.3; the §1.3 offset list is complete; "sample files all carry `major` 2" is true of every magic-bearing fixture; §3.1 true-count and §3.6 inclusive-bounds additions match the code | clean | — |
+| 3 | guardrail-sweep | G7 provenance unaffected (docs-only commit) | clean | — |
+
 ## Design Notes
 
 - No new dependency: `Uint8Array` and `DataView` only. `core` was already `lib: ["ES2022"], types: []`, so a host global would not even compile.
@@ -117,3 +135,7 @@ Scope: e8f2d43, 68d7839; diff excludes the ticket's own plan file. Lenses run: b
 - intent-alignment: only an `i16` `bool` helper exists — false: `bool()` documents `i16`, the `i8` form is `u8()/i8() !== 0`, and no caller is misled.
 - intent-alignment: the count rules are single-sourced forward only — false: same as the write-side rejection.
 - intent-alignment: the writer silently wraps out-of-range values — low: documented, permitted by AD-18 and the frozen criteria, and in-repo writers pass in-range values.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, second independent reviewer `review-r1`).** Verdict: PASS WITH FINDINGS. 3 live findings (3 MINOR), plus 1 MINOR on the chore `68d7839` this ticket's review also covered. The reviewer's first pass ran against a stale checkout (`docs/epic3-2-plan-refresh` @ `3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`); every finding is LIVE there and none is stale. All four findings are open (the `readBytes`/`take` `NaN` and fractional-length guard; the two exported count helpers that skip §1.2 validation; and §1.2's "check `n` against the bytes that remain" MUST, which no reader implements); the cursor-advance asymmetry is accepted as a documented contract choice. Round 1 above is unchanged.

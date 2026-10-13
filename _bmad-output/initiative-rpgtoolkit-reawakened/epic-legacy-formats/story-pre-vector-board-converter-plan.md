@@ -8,10 +8,10 @@ baseline_revision: '05de90ce8dd865a5ad69d53662c9d85e7040683a'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -59,6 +59,20 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - **Constants and titles.** §4.8's eleven constants are numeric and become their decimal strings in the §4.2 `constants` list; the nine fixed layer titles fill `sizeL + 1` entries, padded with empty strings when `sizeL + 1 > 9`.
 - **Unused fields dropped on conversion:** the foreground and border images, the border colour, the day/night fields and the reserved trailing string have no §4.2 field; the background image becomes a parallax background (`backgroundDrawType = 1`), and the ambient preset maps to its §4.8 offsets (unknown presets become none, with a warning).
 
+## Review Triage Log
+
+### Round 2 — 2026-10-13 (`review-r2-formats`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | intent-alignment | Empty program slot becomes a closed rect with `closed:-1`; §4.8 says no points, `closed 0` (`pre-vector-convert.ts:403-418`) | blocker, spec divergence | rejected — STALE on re-baseline: fixed by epic 2.16 (`1a42973`) |
+| 2 | intent-alignment | Empty sprite slot is placed at the stored tile's pixels (`(16,63)`, `(-16,-1)`), not `(0,0)` (`pre-vector-convert.ts:419-437`) | blocker, spec divergence | rejected — STALE on re-baseline: fixed by epic 2.16 (`1a42973`) |
+| 3 | edge-case-hunter | No cell cap: 21 KB → 1.0 GB RSS, 360 KB → OOM abort `exit=134` (`pre-vector-reader.ts:558-560`) | blocker | fixed — branch `fix/epic2-prevector-and-battle-validation` (`f56e694` fix, `9caaeaf` docs) |
+| 4 | verification-gap | G7 doc-first skipped: §4.8 rules written 8 h after the code, closing Done-when 4 by description | real, process | deferred — recorded in `deferred-work.md` |
+| 5 | blind-hunter | Over-long runs clamped, not kept with a warning as in §4.2; unrecorded | real, low | deferred — recorded in `deferred-work.md` |
+| 6 | verification-gap | No tests for empty slots, the cell cap, the overrun warning or the negative-run refusal | real | deferred — recorded in `deferred-work.md` (the cell-cap and empty-slot tests have since landed) |
+| 7 | blind-hunter | Pre-vector residue is carried into the converted §4.2 board's residue | low | accepted — §4.8/§4.2 do not address it |
+
 ## Code Review
 
 ### 2026-10-11
@@ -88,3 +102,7 @@ Scope: 06b250e; diff excludes the ticket's own plan file. Lenses run: blind-hunt
 - blind-hunter: The corpus test asserts almost nothing and re-derives the header by hand — low: true, but the corpus holds no pre-vector board and the ticket's fixtures are synthetic; the hand-rolled header parse is a hygiene nit.
 - edge-case-hunter: A matrix LUT index at or beyond `lut.length` is accepted — false: the sibling reader applies no such check, neither §4.2 nor §4.8 requires it, and no code resolves LUT indices, so the claimed harm has no consumer.
 - intent-alignment: Tests are self-referential and cannot be an oracle — low: unavoidable with no pre-vector sample; the ticket's verify line claims only synthetic fixtures, which the unconditional unit tests run.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, independent reviewer `review-r2-formats`).** Verdict: FAIL. 5 live findings (1 BLOCKER, 1 MAJOR, 2 MINOR, 1 low). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`): B1 (empty program/sprite slots inventing geometry) is STALE — fixed on `origin/main` by epic 2.16 (`1a42973`) — so it is rejected. B2, the missing cell-count cap (a 360 KB crafted board aborted the process with `exit=134`), is fixed on branch `fix/epic2-prevector-and-battle-validation` (`f56e694` fix, `9caaeaf` docs), which bounds the declared grid by `BOARD_MAX_CELLS`. The G7 doc-first ordering, the clamped over-long runs and the missing tests are deferred (recorded in `deferred-work.md`); the carried-over pre-vector residue is accepted. Round 1 above is unchanged.

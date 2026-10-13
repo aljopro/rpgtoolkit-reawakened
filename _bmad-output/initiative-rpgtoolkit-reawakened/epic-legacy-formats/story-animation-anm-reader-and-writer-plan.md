@@ -8,10 +8,10 @@ baseline_revision: '68d7839ca5b6a416a5316f0bf171e99b162e1c7a'
 route: 'full'
 route_source: 'auto'
 risk: 'low'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -63,6 +63,15 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 
 ## Review Triage Log
 
+### Round 2 — 2026-10-13 (`review-r1`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | intent-alignment | `classifyImageReference` returns `picture` for `rock.gph`/`water.tan`, two of the four tile-reference forms §1.6 enumerates; `ImageReference` has no variant for them | real, low impact | open — needs the kinds added, or §1.6's animation-frame forms scoped |
+| 2 | blind-hunter | `equal(reader.remaining, 0, …)` is a tautology (the reader always consumes the remainder as residue) | cosmetic | open — delete the line |
+| 3 | independent-oracle | §7.1 layout, minor-3 enforcement at the minor's own offset, `-1`/`n+1` bound round-trip, empty slots kept, per-frame colour, byte-identical writer all verified | clean | — |
+| 4 | guardrail-sweep | G2/G3 clean | clean | — |
+
 ## Design Notes
 
 - No new dependency: `Uint8Array`/`DataView` via the existing binary primitives only.
@@ -109,3 +118,7 @@ Scope: 9eaf6bc, cca70e3; diff excludes the ticket's own plan file. Lenses run: b
 - intent-alignment: D3 — Intent §1.6 citation vs classifier scope — low: same substance as #5; .gph and .tan are not used in animations, and the plan explicitly specified set.tstN; fixing it adds branches and modifies public types
 - intent-alignment: D4 — Writer version enforcement vs "rejects any minor other than 3" — false: same substance as #9; the plan specifies reader rejection of minor !== 3 and writer verbatim re-emission; writer emission of model.minor verbatim matches all writers in the repo
 - intent-alignment: D5 — "Verbatim" scope: transparent stored as struct (Colorref) — false: COLORREF high byte is ignored on read and 0 on write per §1.1; unpacked Colorref struct is uniform across core; all sample files round-trip byte-identically
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, second independent reviewer `review-r1`).** Verdict: PASS WITH FINDINGS. 1 live finding (1 MINOR) plus 1 NIT. The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`); both are LIVE and none is stale. Open: `classifyImageReference` covers two of §1.6's four tile-reference forms (`rock.gph`/`water.tan` fall through to `picture`), and the tautological `equal(reader.remaining, 0, …)` assertion. §7.1 layout, minor-3 enforcement and writer exactness are verified. Round 1 above is unchanged.
