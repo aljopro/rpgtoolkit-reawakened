@@ -3,14 +3,14 @@ title: 'Align the pre-vector converter with the amended section 4.8'
 type: 'feature'
 ticket: '16'
 created: '2026-10-12'
-status: 'in-progress'
+status: 'built'
 baseline_revision: 'ac714685be47b029aa7de07daeca228db0aa0597'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
-review: ''
-review_source: ''
-lenses_ran: []
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 review_loop_iteration: 0
 context: ['docs/guardrails.md', 'CLAUDE.md']
 ---
@@ -82,3 +82,10 @@ Dependencies and fixtures are installed in this worktree.
 - `pnpm typecheck && pnpm lint && pnpm test:strict && pnpm golden && pnpm dump:check && pnpm graph && pnpm provenance` -- expected: all pass, no skipped tests
 
 **Results (2026-10-12):** all seven commands pass; `test:strict` runs 464 tests, 0 skipped. Focused `node --test packages/core/test/format-board-pre-vector.test.ts` runs 31 tests, 0 skipped. No golden file or hash vector changed (the synthetic corpus and the three sample boards are unaffected: the sample boards are all minor 4, and the `runner-headless` dump fixture has no programs or sprites).
+
+Pass 1 (quick lens): high 0, medium 0, low 4 (all patched), false 0. The lens also checked every 4.8 bullet against the converter and found no second behavioural disagreement.
+
+| Verdict | Route | Finding and evidence |
+|---|---|---|
+| low | patch | `passageEdges`, `buildShadeLayers` and `buildTileVectors` doc comments still described withdrawn pre-amendment wording; verified at the cited lines, reworded to the ruled bullets. |
+| medium | patch | Plan item "summed unclamped shades" had no test that sums past ±255 (existing cases sum 10+5); added +255+255=+510 and -255-255=-510. |
