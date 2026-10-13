@@ -841,8 +841,8 @@ public:
     method ~CName() { clean(); }        // destructor
     method operator+(rhs)              // any operator except -> and .
     method operator[](i)
-    method operator=(rhs)              // also copy semantics
-    method operator$()                 // conversion to string (or operator! to number; only one)
+    method operator=(rhs)              // replacement for the plain handle store (OOP-4)
+    method operator$()                 // declared conversion operator; never consulted (OOP-7)
     method virtualThing() = 0          // pure virtual (class becomes abstract)
 private:
     var m_field                        // "var" declares a member inside a class
@@ -855,10 +855,10 @@ obj = CName(1, 2);  obj->method();  obj->release();   // release() runs destruct
 
 * A method body may be written **inside the class** (the form used throughout the sample corpus) or as a body-less prototype in the class with a separate `method CName::CName(…)` definition outside; the two forms may be mixed.
 * `var name` declares a member field; `var name[]`, with empty brackets, declares a member array that grows as it is assigned (§9.3). `m_array[10]` declares one with an initial size.
-* `this` names the current object inside a method; it is an ordinary value that may be used and indexed (`this[i] = …`; whether that calls `operator[]` is an object-semantics question, below).
-* **Still to rule (entry 3.6, doc-first).** The paragraphs below state the current reading. Entry 3.6 confirms or corrects, before any code: the member-lookup order; when `operator=` is called for assignment between objects and when a new handle is merely stored; which operators the dispatcher consults for `a[i] = v` (read versus write); when a destructor runs and what `kill`/program end do to it; the access-label rules (`protected`, and the default for `class`); and inheritance order with virtual and pure-virtual dispatch.
+* `this` names the current object inside a method; it is an ordinary object value that may be used and indexed, and `this[i] = …` reaches the object's `operator[]` like any other indexed assignment (see the classes ruling below).
+* **Ruled (entry 3.6, doc-first):** the class and object rules are in the classes ruling below. It settles the member-lookup order, `operator=` and `operator[]` dispatch, destructor timing, the access labels and inheritance order, so the paragraphs here are read with it.
 
-Inheritance is multiple. Methods are virtual (derived classes override). Objects are reference handles. **Assignment copies by calling `operator=` or a copy constructor if one is defined; otherwise the copy is shallow.** Objects are not garbage-collected: call `release()`.
+Inheritance is multiple and methods are virtual: a call uses the object's actual class, not the declared type of the expression. An object is a reference handle; ordinary assignment stores the handle rather than copying members, though a class may define `operator=` to change that. `release()` runs the object's own-class destructor and then frees it; the ruling below also says what `kill` and program end do, and when an unreferenced object is freed.
 
 ### 9.8 Error handling
 
@@ -1081,13 +1081,13 @@ rows, listed under "deferred" because their implementing entries rule them).**
 
 | ID | Affected entry | Note |
 |---|---|---|
-| OOP-1 … OOP-9 | 3.6 | Class and object syntax is in §9.7; the lookup order, `operator=`/`operator[]` dispatch, destructor timing, access labels and inheritance are ruled there. |
 | SEM-1, SEM-2 | 3.12 | `kill` forms (element, whole array, variadic) and the `until` check-first reading. The forms the corpus settles are stated in §9.3 and §9.5 so the parser can be written; entry 3.12 confirms the binding semantics. |
 
 **Ruled by a later entry (doc-first, before any code).** Each row below was deferred to an implementing entry and is now settled in its own docs commit inside section 9; the section named carries the rule.
 
 | ID | Entry | Rule |
 |---|---|---|
+| OOP-1 … OOP-9 | 3.6 | Class and object syntax and semantics: assignment, lifetime, lookup order, operator dispatch, inheritance and access labels (§9.7, §9.17). |
 | ERR-1, ERR-2 | 3.7 | Handler, label and `resume` semantics, and which failures are catchable, including modulo by zero (§9.8). |
 | MOD-1, MOD-2, MOD-3 | 3.8 | The unqualified name after an include, include repeats, cycles and missing files, and the redirect chain (§9.6). The name-clash ordering keeps the owner's last-wins rule, recorded there as a deliberate departure from the legacy first-wins order. |
 | THR-1, THR-2, THR-3 | 3.9 | The sleep unit, the `source`/`target` lifetime and the snapshot "step" definition (§9.15). |
@@ -1098,9 +1098,11 @@ hardest: EXP-2 (the precedence of `^` and of the bitwise operators), EXP-4 (`=` 
 LEX-3 (`!=` versus a `!` sigil), LEX-7 (where board constants resolve and what the cache keys on), FUN-7 (`end()`
 unwinding across `run()`), FUN-1 (typed parameters ignored), STX-4 (braces required, empty `for` parts), STX-5 (label
 scope) and PRG-1 (`system.prg`); and, from the later rulings, the in-function error-label scope (ERR-1), the last-wins
-name-clash ordering (MOD-1), the nearest-tick sleep rounding (THR-1), the per-thread `source`/`target` pair (THR-2), and
-the exact number format (SEM-3, SEM-5). The ownership choices in §9.13 add one more. Change any of them at the
-`<!-- OWNER: … -->` note that carries it.
+name-clash ordering (MOD-1) and the `file.`-qualified call (MOD-2), the nearest-tick sleep rounding (THR-1), the
+per-thread `source`/`target` pair (THR-2), the exact number format (SEM-3, SEM-5), and the class rules: the transitive
+base order (OOP-8), freeing an object at the end of the tick it becomes unreferenced (OOP-5), freeing an object after its
+own destructor (OOP-5), the handle-numbering rule (OOP-5) and rejecting `protected` at load (OOP-9). The ownership
+choices in §9.13 add one more. Change any of them at the `<!-- OWNER: … -->` note that carries it.
 
 ### 9.13 Built-in ownership for names with no single owner
 
@@ -1143,7 +1145,7 @@ The amendments and rulings change `format-spec.md` only. Other documents still c
 6. **AD-7's compiled-program cache key must cover the redirect table in force at compile time** (§9.6), so a restore does not silently rebind a program compiled before a later `redirect`.
 7. **AD-10's `GameState` sections carry no VM-step counter**, while §9.15 defines a snapshot "step" as one VM instruction; the entry that adds per-step snapshot comparisons must place that counter or fold it into the time section.
 
-Deferred by design: the class-and-object questions in §9.12 are ruled by entry 3.6 in its own docs commit, and the runtime-meaning questions `SEM-1` and `SEM-2` by entry 3.12; the error-handling, module and thread questions listed there have now been ruled (§9.6, §9.8, §9.15, §9.16).
+Deferred by design: only the runtime-meaning questions `SEM-1` and `SEM-2` in §9.12 remain for entry 3.12's own docs commit; the class-and-object, error-handling, module and thread questions listed there are now ruled (§9.6, §9.7, §9.8, §9.15, §9.16, §9.17).
 
 **References for this amendment.** The rulings above come from the RPGCode language-readiness study (the 12 doc-fix
 proposals and the ambiguity list), the Toolkit 2.x coverage study and the TK2/community material survey in
@@ -1234,7 +1236,7 @@ This subsection fixes how values are compared and converted, what scope a variab
 
 **SEM-4 — scope and visibility.**
 
-* Inside a frame, a name is looked up in this order, first match wins: an explicit `:name` global; a parameter; a member of the current object (inside a method); then an ordinary name, which is the frame's local if one exists and otherwise the global of that name, created if it is missing. — legacy behaviour (R2-Q13); the member step belongs to the classes entry.
+* Inside a frame, a name is looked up in this order, first match wins: an explicit `:name` global; a parameter; a member of the current object (inside a method); then an ordinary name, which is the frame's local if one exists and otherwise the global of that name, created if it is missing. — legacy behaviour (R2-Q13); the member step belongs to the classes ruling (§9.17).
 * Locals live in one flat list per call and are discarded on return. There is no block scope, so an `if` and a loop share the frame. — legacy behaviour (R2-Q13).
 * A plain assignment creates a global, unless `autoLocal(true)` is in force. — legacy behaviour (R2-Q13).
 * `local(x)` inside a function is visible only in that call, from where it is declared until return; `local(x)` at program top level is visible only to that program's own top-level code, whose functions see the global of the same name instead; `global(x)` reaches the global table past a same-named local; `autoLocal(true)` makes a new name local to the current frame but still resolves a name that already exists as a global. — legacy behaviour (R2-Q13).
@@ -1261,6 +1263,58 @@ This subsection fixes how values are compared and converted, what scope a variab
 * `split(string, delimiter, array)` writes array elements 0 to n−1 as separate variables and returns the count plus one. — legacy behaviour (R2-Q15).
 
 **References.** R2-Q12, R2-Q13, R2-Q14, R2-Q15 (`docs/provenance/facts-round-2.md`); §9.3 (values and variables), §9.10 and §9.11 (engine variables, the catalogue); AD-7 (globals and frame locals in state), AD-8 (`byRef` on a `ParamSpec`), AD-10 (one owner per state section) in the architecture spine.
+
+---
+
+### 9.17 Classes and objects (ruled by entry 3.6)
+
+This subsection settles the class and object questions the code needs before it is written: assignment, lifetime, lookup order, operator dispatch, inheritance and access. Each rule is marked **legacy behaviour** (the extraction fact that fixes it) or **our rule** (with the reason it departs). Terms used below: a **class** is a set of members and methods; an **object** is a live instance named by a small number, its **handle**; a **member** is a stored field and a **method** is a callable definition; a **base** is a class another class inherits from; **dispatch** is choosing which method definition a call runs.
+
+**OOP-4 — assignment between objects.**
+
+* An ordinary assignment stores the right-hand value, including its object handle and type, into the left-hand variable; afterwards both variables name the same object and no member is copied. — legacy behaviour (R2-Q16).
+* If the left-hand variable currently holds an object whose class defines `operator=` taking one parameter, that method runs instead, with the left object as `this` and the right value as its argument, and the plain store does not happen; a class with no such method stores the handle silently. — legacy behaviour (R2-Q16).
+* There is no copy constructor: a one-parameter constructor runs only when an object is built by name (`Cls(a)`), never as part of an assignment. Assigning a fresh construction to a variable that is unset or holds a non-object is a plain handle store. — legacy behaviour (R2-Q16). The earlier "copy constructor" wording is dropped, since neither the corpus nor the source has one.
+
+**OOP-5 — object lifetime.**
+
+* `release()` runs the destructor of the object's **own** class, and only if that class declared one; base-class destructors never run and there is no chaining. — legacy behaviour (R3-Q2, R2-Q17).
+* **Our rule — free after the destructor.** When the destructor returns (or at once, when the class has none), the object's members and its handle are freed. Legacy freed an object only when its class had no destructor, and otherwise left it alive; freeing it keeps state bounded, keeps snapshots small, and makes the handle table the whole of the object state.
+* `kill(obj)` removes the variable name only: it runs no destructor and frees nothing at that moment. — legacy behaviour (R2-Q17).
+* **Our rule — unreferenced objects.** When no global, frame local, operand or member of another object names an object's handle, that object is freed at the end of the tick in which it became unreferenced, in a fixed order, and no destructor runs. Two objects that name each other are never freed. Legacy used a background collector that woke every ten minutes and never ran destructors (R2-Q17); a deterministic per-tick pass replaces it because a timer cannot be snapshotted, and the format spec previously said objects were never collected.
+* At program end (`end()`, or falling off the program's end) the program's frames are dropped and its objects are freed by the same pass; no destructor runs. — legacy behaviour (R2-Q17).
+* **Our rule — handle numbers.** A new object takes the smallest number that is not in the handle table and is greater than the table's size. With an empty table that is 1; with handle 1 live and handle 2 free, the next is 2; with handle 1 free and handle 2 live, the next is 3. — the numbering rule is legacy behaviour (R3-Q2); **our rule** is that it needs nothing but the current handle table, because our always-free `release` keeps every freed handle out of it, so a restore allocates the same next number.
+
+**OOP-6 — where a name resolves.**
+
+* Inside a method, a variable name is looked up in this order, first match wins: an explicit `:name` global; a parameter; a member field of the current object's class (its own and inherited, any visibility); then a frame local or, failing that, the global of that name. — legacy behaviour (R2-Q18).
+* An unqualified call `f(...)` resolves in this order: a built-in; inside a method, a method of the current object's class with that name and parameter count (an implicit `this` call); a script function of the program or its includes; a plugin that claims the name; otherwise the unknown-call error. — legacy behaviour (R2-Q18). (A `file.`-qualified call is the one exception, and reaches that file's own definitions first; see the module ruling.)
+* `this` is available inside a method as an ordinary local named `this`, and `this->x` need not be written. — legacy behaviour (R2-Q18).
+* Reaching a non-public member or method from outside its class is an error; the access levels are under OOP-9. — legacy behaviour (R2-Q18).
+
+**OOP-7 — operator dispatch.**
+
+* The first operand decides: when it is an object, the interpreter looks in that object's class for `operator` plus the operator's symbol, taking exactly one parameter for a binary operator and none for a unary one; only the left operand is consulted, and the parameter count tells a unary form from a binary one. A missing method is a runtime error except where a rule below gives a fallback. — legacy behaviour (R2-Q19).
+* `a == b` and `a ~= b` use `operator==` and `operator~=`, and fall back to comparing the handles when the method is missing. `a = b` uses `operator=`, else a plain handle store. `a[i]` uses `operator[]`, else a plain element variable. A compound assignment (`+=` and the rest) calls its own method (`operator+=`) and does not fall back to the plain binary method. — legacy behaviour (R2-Q19).
+* `a[i] = v`: `operator[]` is consulted first on `a`; when it returns a reference, the store goes through that reference and `operator=` runs only if the referenced variable currently holds an object, and otherwise the value is stored directly. — legacy behaviour (R2-Q19).
+* `->`, the ternary, call-style `()` and any string or number conversion operator are never dispatched; a `$` or `!` after a name is a sigil (the `operator$` and `operator!` declarations are never consulted for a conversion). — legacy behaviour (R2-Q19).
+
+**OOP-8 — inheritance and construction.**
+
+* Only the constructor of the class named in the construction call runs; a base constructor never runs before or after it, and there is no base sub-object, so a derived constructor assigns inherited members itself. — legacy behaviour (R3-Q1).
+* A derived class's own method (same name and parameter count) beats a base's; when several bases define the same name and parameter count, the earliest-written base wins. — legacy behaviour (R3-Q1).
+* A call on an object uses the object's **actual** class, not the declared type of the expression. There is no syntax to call a method's base version; a call is a plain name and resolves to the override. — legacy behaviour (R3-Q1).
+* **Our rule — the transitive order.** A class's methods and members are its own definitions plus those of its ancestor classes. The ancestors are collected by a walk from the class that takes each base list in declaration order and uses a class only the first time it is met; the class's own definition wins, and between two ancestor definitions of the same name the one met first in that walk wins. This is deterministic and independent of class names, replacing the legacy order that depended on how the class names happened to sort (R3-Q1, inferred for the transitive case).
+* A method declared `= 0` is pure virtual and makes its class abstract. — legacy behaviour (R3-Q1). **Our rule:** constructing an abstract class is a catchable runtime error of the invalid-object class in the failure table.
+
+**OOP-9 — access labels.**
+
+* A `class` body starts `private`; a `struct` body starts `public`; a member with no label takes the current access; the `public` and `private` labels switch it for the rest of the body. — legacy behaviour (R3-Q1).
+* `protected` is not a word of the language. — legacy behaviour (R3-Q1). **Our rule:** the loader rejects it with a located diagnostic, because a file that uses it is not valid 3.1 and ignoring it would quietly change a program's meaning.
+* Access is checked at each access, at run time, and a blocked access is a catchable runtime error. An access from outside any method, or from a method running on a different class, needs `public`; a method of the same class may also reach `private`. — legacy behaviour (R3-Q1).
+* The check compares class identities, not instances: any method of class `C` may reach the private members of any `C` object. — legacy behaviour (R3-Q1).
+
+**References.** R2-Q16, R2-Q17, R2-Q18, R2-Q19 (`docs/provenance/facts-round-2.md`); R3-Q1, R3-Q2 (`docs/provenance/facts-round-3.md`); §9.3 (values and variables), §9.5 (functions, `return &`, labels), §9.6 (the `file.`-qualified call), §9.7 (the syntax), §9.8 (the failure table), §9.16 (comparison and scope); AD-8 (call precedence), AD-10 (the vm state section) in the architecture spine.
 
 ---
 
