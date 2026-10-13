@@ -16,7 +16,7 @@
 
 Only the constructor of the class named in the construction call is run. Base-class constructors are **not** run automatically, before or after the derived constructor; there is no separate base sub-object to initialise. Inherited state is the derived constructor's own job: it assigns the inherited members directly, and the shipped help's own example does exactly that rather than calling a base constructor.
 
-The bases are consulted in the order they are written in the class declaration. A base's own inherited members reach a class only when the base's name sorts before the derived class's name, so transitive inheritance can depend on name order (inferred; see "what the source does not decide").
+The bases are consulted in the order they are written in the class declaration. Whether a base's own inherited members carry through to a derived class is not reliable: it appears to depend on how the class names happen to order (inferred; see "what the source does not decide").
 
 ### Overriding and calling the base version
 
@@ -28,7 +28,7 @@ Within a `class` body the starting access is private; within a `struct` body it 
 
 Access is enforced at each access, at run time, not at load time. An access is allowed only if the member's or method's visibility is at least the visibility the access requires. An access made from outside any method, or from a method running on an object of a *different* class, requires public; an access made from a method running on an object of the *same* class may also see private. Because the comparison is between class identities, not instances, any method of class C may reach the private members of any C object. A blocked access raises an ordinary catchable runtime error.
 
-**Confidence:** observed: constructor selection, how inherited declarations are combined, the access levels and the run-time access check, and the absence of a protected label. The name-order dependence of transitive bases is inferred.
+**Confidence:** observed: constructor selection, how inherited declarations are combined (including that the earliest-written base wins a clash), the access levels and the run-time access check, and the absence of a protected label. The name-order dependence of transitive bases is inferred.
 
 **What the source does not decide:** the loader promises no order-independent combination of transitive bases, so the exact result of a diamond or of a base sorting after its derived class is not settled; and it offers no syntax by which a base constructor could be invoked explicitly, so "how a derived class initialises base state" is left entirely to the script.
 
@@ -42,11 +42,11 @@ Access is enforced at each access, at run time, not at load time. An access is a
 
 The shipped help describes release as always freeing the object after its destructor; the runtime does that only when there is no destructor. When a destructor exists, release runs it and does not itself remove the members or the handle at that point. Nothing else ever frees a handle (R2-Q17).
 
-**Confidence:** observed in the source (the release path looks the destructor up by the object's actual class name; the immediate free path runs only when that lookup finds no destructor). The claim that a class *with* a destructor is not freed by release is observed; whether that is intended is not decided by the source.
+**Confidence:** observed in the source: release runs only the destructor of the object's own class, and frees the object straight away only when that class has no destructor. The claim that a class *with* a destructor is not freed by release is observed; whether that is intended is not decided by the source.
 
 ### Handle reuse
 
-Handle numbers **are** reused. A new object receives the smallest unused handle number greater than the count of objects currently holding handles. A freed number is therefore reused only when it is at or above that threshold. For example, with nothing holding a handle the next object is 1; with handles 1 and 2 live, freeing 2 makes 2 the next number, but freeing 1 makes 3 the next number. An object whose class declared a destructor keeps its handle after release, and objects with destructors that were never released still count toward the threshold.
+Handle numbers **are** reused. A new object receives the smallest unused handle number greater than the count of objects currently holding handles. A freed number is therefore reused only when it is greater than the number of objects still holding handles. For example, with nothing holding a handle the next object is 1; with handles 1 and 2 live, freeing 2 makes 2 the next number, but freeing 1 makes 3 the next number. An object whose class declared a destructor keeps its handle after release, and objects with destructors that were never released still count toward the threshold.
 
 **Confidence:** observed in the source (both the allocation rule and that the only removal of a handle is the no-destructor release path).
 
