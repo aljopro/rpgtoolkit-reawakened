@@ -54,7 +54,7 @@ Internally it had these subsystems (described here as responsibilities, not code
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The core should be **deterministic given its inputs** (time step, input events, RNG seed) and produce **draw commands and audio commands**, not pixels or sound. That keeps runners swappable (browser, desktop, mobile, headless test). See architecture-options.md.
+The core should be **deterministic given its inputs** (time tick, input events, RNG seed) and produce **draw commands and audio commands**, not pixels or sound. That keeps runners swappable (browser, desktop, mobile, headless test). See architecture-options.md.
 
 ---
 
@@ -78,7 +78,7 @@ The core should be **deterministic given its inputs** (time step, input events, 
 4. **Edge check** for the selected player (board links, §3.6). If none fires, **finish the player's move**: add the step count, run the trigger test (§5), then the random-battle test (§7.1).
 5. **Render** (§6).
 
-**E-04 Timing.** Frame rate is uncapped up to about 120 fps. The engine keeps a running **frames-per-millisecond** estimate and converts every sprite's "seconds per step" into a **frame count per move**, so movement speed is time-based. A global **game speed** offset (−4…+4, ±10 % per step) adjusts this. The legacy engine also saved the last measured average frame time per resolution so the first frames started with a sensible estimate. A rebuild should use a fixed simulation step with real elapsed time and drop the frame-rate-dependent quirks, while keeping the *perceived* speeds.
+**E-04 Timing.** Frame rate is uncapped up to about 120 fps. The engine keeps a running **frames-per-millisecond** estimate and converts every sprite's "seconds per step" into a **frame count per move**, so movement speed is time-based. A global **game speed** offset (−4…+4, ±10 % per step) adjusts this. The legacy engine also saved the last measured average frame time per resolution so the first frames started with a sensible estimate. A rebuild should use a fixed simulation tick with real elapsed time and drop the frame-rate-dependent quirks, while keeping the *perceived* speeds.
 
 **E-05 Optional FPS display** in the title bar, and **debug overlays**: board vectors, sprite vectors, the player's queued path, the destination marker, in colours from the main file.
 

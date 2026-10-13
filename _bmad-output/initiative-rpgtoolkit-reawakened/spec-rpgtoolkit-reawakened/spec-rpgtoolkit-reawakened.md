@@ -26,7 +26,7 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
   - **intent:** A runner or tool can load any legacy RPG Toolkit 3 project from a folder, a `.tpk`, or an appended-ZIP EXE, upgrading pre-vector boards to the vector model (E-01, E-10, E-130, E-131, format-spec §2–9, §13).
   - **success:** A headless dump of every file in the legacy `demo` and `Basic` sample games parses, and re-serialising the formats we write round-trips byte-for-byte or semantically as format-spec states.
 - **CAP-2**
-  - **intent:** The engine boots a game (discovery, startup sequence), runs a fixed-step main loop with legacy-perceived timing, resets and shuts down, and models boards, layers, 2D and both isometric coordinate systems, tiles (incl. animated), runtime board edits, lighting and ambient shading, and board transitions (E-01…E-06, E-10…E-19).
+  - **intent:** The engine boots a game (discovery, startup sequence), runs a fixed-tick main loop with legacy-perceived timing, resets and shuts down, and models boards, layers, 2D and both isometric coordinate systems, tiles (incl. animated), runtime board edits, lighting and ambient shading, and board transitions (E-01…E-06, E-10…E-19).
   - **success:** Scripted startup, board loads, edits, `send` transitions and lighting on 2D and both iso boards produce the expected state and golden draw-list images; `reset()` reruns startup cleanly.
 - **CAP-3**
   - **intent:** Players and items move, animate, collide, path-find and follow waypoints as in legacy (E-20…E-34).
@@ -39,7 +39,7 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
   - **success:** `system.prg` and `start.prg` of the sample games run to completion headlessly; every built-in name in format-spec §9.11 resolves; a mid-script snapshot restored into a fresh VM finishes identically (G1).
 - **CAP-6**
   - **intent:** The core emits ordered draw lists, and runners replay them, covering layer compositing, iso drawing, occlusion, translucency, shading, animations, message window, text and primitives, canvases, overlay, transitions, modal UI primitives, cursor and board preview (E-50…E-63).
-  - **success:** Golden images at defined steps match legacy-reference expectations for 2D and both iso modes within the golden tolerance, and the CPU rasteriser and WebGL2 replayer agree.
+  - **success:** Golden images at defined ticks match legacy-reference expectations for 2D and both iso modes within the golden tolerance, and the CPU rasteriser and WebGL2 replayer agree.
 - **CAP-7**
   - **intent:** Games play looping music (incl. General MIDI through a shared synth and a permissively licensed SoundFont), sound effects and volume control, with AVI video handled by an import-time conversion (E-100…E-104).
   - **success:** A legacy MIDI-driven game plays music identically on every web-based runner; sound cues are asserted in headless tests via null audio.
@@ -81,14 +81,14 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
 
 - G1: the RPGCode VM is an explicit step machine; all VM state is plain JSON data; no generators, async/await, Promises, workers or timers for script threads; blocking built-ins yield a status.
 - G2: `core` touches no DOM, Node, I/O or timers; assets enter as bytes; dependencies flow `core ← synth ← runner-*/lsp/dap/editor-ui ← host-*`; `editor-ui` reaches the host only through platform-services; core runtime npm dependencies are an allowlist, initially empty.
-- G3: no `Math.random`, `Date`, `performance.now` or `Intl` in `core`; injected clock and seedable RNG (state saved); fixed time step; same game data, seed and input log give identical state and draw lists on every runner. Legacy perceived speeds are kept; frame-rate-coupled quirks are dropped (E-04).
+- G3: no `Math.random`, `Date`, `performance.now` or `Intl` in `core`; injected clock and seedable RNG (state saved); fixed time tick; same game data, seed and input log give identical state and draw lists on every runner. Legacy perceived speeds are kept; frame-rate-coupled quirks are dropped (E-04).
 - G4: renderers only replay draw lists, never own the loop or state; Phaser/Pixi-class engines only under `runner-*/src/render/**`.
 - G5: headless golden tests run on every PR; goldens change only deliberately with a stated reason; legacy sample games are fetched at CI time and never committed.
 - G6: shipped dependencies are under licences rated Bronze or better on the Blue Oak Council list (pinned version; MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, BlueOak and the like; CC0 assets), minus an exception list that starts with MS-PL (ADR 0003); copyleft (GPL, LGPL, AGPL, MPL-2.0, EPL, SSPL) and source-available or restricted are blocked; Lead-rated and unlisted licences need an ADR; bundled assets are listed in `THIRD_PARTY_NOTICES`; own code is MIT and/or Apache-2.0.
 - G7: clean-room. Implement from `docs/` only; never open, copy or translate the legacy GPL source; fix a wrong or missing doc first in its own commit; code and PRs cite the E-xx, T-xx and format-spec sections they implement.
 - Legacy observable behaviour is the compatibility bar (trigger rules, battle rules, collision and movement semantics). Pixel parity is not required for projecting 2D tiles on iso boards (format-spec §3.4) or for scroll-cache behaviour.
 - Script-readable pixels, image decoding, text layout and glyph rasterisation are core-owned so output is identical on every runner (architecture spine AD-4, AD-15, AD-28). This amends `architecture-options.md` §2 and the seam text of `packages.md`, and needs ADR 0002 before guard-rail scaffolding.
-- Cross-epic contracts (engine API, draw list and surfaces, requests and replies, VM state, `GameState` sections, step pipeline, platform-services) are fixed by the architecture spine and cited by id.
+- Cross-epic contracts (engine API, draw list and surfaces, requests and replies, VM state, `GameState` sections, tick pipeline, platform-services) are fixed by the architecture spine and cited by id.
 - Every editor capability lands in `editor-ui` first; `host-*` packages hold only platform services and chrome.
 - Legacy native plugins cannot load. The stock menu and battle plugins are reimplemented natively; third-party extension uses the same plugin contract as the engine's own packs, ungated for now.
 - TypeScript is the language of the core, runners, editor, LSP, DAP and VS Code extension (ADR 0001); a hot path moves to Rust/wasm only behind an unchanged TS interface.
@@ -111,7 +111,7 @@ The headless runner plays the legacy `demo` and `Basic` sample games end to end 
 
 - The spec covers the whole rebuild at capability altitude. `bmad-ticket` orders and slices the work; detail stays in the adopted docs.
 - `guardrails.md` G6 prevails over `architecture-options.md` §7.2, which lists MPL-2.0 as allowed.
-- The architecture spine's `[ASSUMPTION]` tags (60 Hz step, ASCII-only case fold, `fflate`, a pure-TypeScript TrueType rasteriser, editor-model in the VS Code extension host, restart-on-compiler-mismatch, FNV-1a, xoshiro128**, semver and PWA update policy) stand until corrected.
+- The architecture spine's `[ASSUMPTION]` tags (60 Hz tick, ASCII-only case fold, `fflate`, a pure-TypeScript TrueType rasteriser, editor-model in the VS Code extension host, restart-on-compiler-mismatch, FNV-1a, xoshiro128**, semver and PWA update policy) stand until corrected.
 - Engine-features §14 "nice-to-have" items are outside the must-have contract. Legacy-syntax conversion ships as LSP quick fixes (CAP-14).
 - The non-goals T-71 (separate Pak compiler) and T-73 (2.x file-system upgrade) are my inference: editor-features calls T-71 superseded by the EXE route and T-73 serves only 2.x projects. T-72 setup builder stays in CAP-17. Overturn either if wrong.
 
