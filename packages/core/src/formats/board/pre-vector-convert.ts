@@ -6,12 +6,12 @@
  * the reader returned, with no clock, randomness or host access, so the same
  * bytes always convert to the identical `Board`.
  *
- * §4.8 gives no geometry for a tile type beyond "trace contiguous tiles", so
- * the shapes here are the ones §5 (tile → pixel) and §4.6 (tile size) pin
- * down: an axis-aligned 32×32 cell in 2D, a 64×32 diamond for an iso-stacked
- * board. Objects that §4.8 leaves without a mapping (the sprite/item collision
- * base, the unused fields, an iso-rotated grid) are recorded rather than
- * invented — see the story plan and `deferred-work.md`.
+ * §4.8's "Conversion rules" pin the geometry per tile type; the shapes here
+ * are the ones §5 (tile → pixel) and §4.6 (tile size) give: an axis-aligned
+ * 32×32 cell in 2D, a 64×32 diamond for an iso-stacked board. §4.8 leaves
+ * iso-rotated boards unspecified, so they are refused with a located error,
+ * and it generates no vector base for the sprites (the bases come from each
+ * sprite's own actor file, §6).
  */
 
 import { err, ok, type Result } from "../result.ts";
@@ -140,11 +140,9 @@ function tileDiamond(x: number, y: number, sizeX: number): BoardPoint[] {
 
 /**
  * The two open blocking-edge polylines of a passage tile (§4.8): a north–south
- * passage lets the player travel north–south, so its west and east edges block;
- * an east–west passage blocks its north and south edges. §4.8 names the shape
- * ("open polylines along the blocking edges") but not which edges block, so
- * the reading — travel direction open, the two perpendicular sides blocked —
- * is recorded as an ambiguity.
+ * passage blocks its **west and east** edges, an east–west passage blocks its
+ * **north and south** edges, as §4.8's "Tile type vectorization" bullet rules;
+ * the polylines are open (`closed = 0`) and passages are never merged.
  */
 function passageEdges(type: number, x: number, y: number, layer: number, board: PreVectorBoard): BoardVector[] {
   const iso = (board.coordType & 1) !== 0;
@@ -195,11 +193,11 @@ function passageEdges(type: number, x: number, y: number, layer: number, board: 
  * polygons with the background attribute, passages open polylines along their
  * blocking edges, and stairs closed polygons carrying the target layer.
  *
- * On a 2D board each maximal horizontal run of one type becomes one rectangle
- * ("merge contiguous non-zero tiles"); on an iso-stacked board each tile is its
- * own diamond, because the merged-run rule has no diamond analogue. Tile types
- * §4.7 does not list (5…10 and values above 18) emit nothing rather than an
- * invented shape.
+ * Per §4.8's "Merge" bullet, a 2D board merges each **maximal horizontal run
+ * of one type within one layer** into one polygon; an iso-stacked board emits
+ * one diamond per tile, because the horizontal-run rule has no diamond
+ * analogue. Tile types §4.7 does not list (5…10 and values above 18) emit
+ * nothing rather than an invented shape.
  */
 function buildTileVectors(board: PreVectorBoard): BoardVector[] {
   const vectors: BoardVector[] = [];
@@ -274,11 +272,11 @@ function encodeTileRuns(indices: readonly number[]): BoardTileRun[] {
 }
 
 /**
- * Flatten the per-tile shades of every layer into shade layer 0 (§4.8), with
- * its cast layer set to the highest layer that carried non-zero shading. The
- * planes are combined additively — §4.5 makes shades additive offsets — and a
- * board with no shading at all gets no shade layer. §4.8 does not say how to
- * combine differing per-layer shades, so the additive reading is recorded.
+ * Flatten the per-tile shades of every layer into shade layer 0 (§4.8
+ * "Shading"): the per-cell RGB of every layer are **summed**, not clamped, and
+ * the cast layer is the **highest** layer that carried any non-zero shade; a
+ * board whose cells are all unshaded gets no shade layer. §4.5's clamp is a
+ * render-time concern, so a cell shaded `+255` on two layers becomes `+510`.
  */
 function buildShadeLayers(board: PreVectorBoard): BoardShadeLayer[] {
   const cellsPerLayer = board.sizeX * board.sizeY;
@@ -364,9 +362,11 @@ function ambientFromPreset(preset: number, warnings: string[]): BoardRgb {
  * source's.
  *
  * The start falls back to `(64, 64)` on layer 1 when its tile coordinates are
- * ≤ 0 (§4.8). §4.8 also says pre-vector items "receive standard default vector
- * bases", but the vector sprite model carries no base — a sprite's collision
- * comes from its own `.itm` — so no base is generated; the gap is recorded.
+ * ≤ 0 (§4.8). An empty program or sprite slot invents no geometry either: an
+ * empty program slot keeps an empty point list with `closed = 0`, an empty
+ * sprite slot sits at `(0, 0)` on its stored layer (§4.8 "Empty slots"). §4.8
+ * "Default vector bases" makes this conversion generate no base — a sprite's
+ * collision and activation bases come from its own `.itm`/`.tem` (§6).
  */
 export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
   const coordStyle = board.coordType & ~COORD_PX_ABSOLUTE;
@@ -400,25 +400,39 @@ export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
   }
 
   const iso = (board.coordType & 1) !== 0;
-  const programs: BoardProgram[] = board.programs.map((program) => ({
-    program: program.file,
-    graphic: program.graphic,
-    initialVar: stripLegacySuffix(program.initialVar),
-    initialValue: program.initialValue,
-    finalVar: stripLegacySuffix(program.finalVar),
-    finalValue: program.finalValue,
-    activate: program.activate,
-    activationType: program.activationType | PRG_STOPS_MOVEMENT,
-    repeatDistance: 0,
-    layer: program.layer,
-    points: iso ? tileDiamond(program.x, program.y, board.sizeX) : tileCellRect(program.x, program.y, program.x),
-    closed: -1,
-    handle: "",
-  }));
+  // §4.8 "Empty slots": an empty program slot (empty `program` string) carries
+  // no region — its point list is empty and `closed` is 0 — rather than a
+  // region around an invented tile. Every slot is kept so the indices stay
+  // stable, and every slot still receives PRG_STOPS_MOVEMENT and distance 0.
+  const programs: BoardProgram[] = board.programs.map((program) => {
+    const empty = program.file === "";
+    return {
+      program: program.file,
+      graphic: program.graphic,
+      initialVar: stripLegacySuffix(program.initialVar),
+      initialValue: program.initialValue,
+      finalVar: stripLegacySuffix(program.finalVar),
+      finalValue: program.finalValue,
+      activate: program.activate,
+      activationType: program.activationType | PRG_STOPS_MOVEMENT,
+      repeatDistance: 0,
+      layer: program.layer,
+      points: empty
+        ? []
+        : iso
+          ? tileDiamond(program.x, program.y, board.sizeX)
+          : tileCellRect(program.x, program.y, program.x),
+      closed: empty ? 0 : -1,
+      handle: "",
+    };
+  });
 
   const sprites: BoardSprite[] = board.sprites.map((sprite) => {
     const initialVar = stripLegacySuffix(sprite.initialVar);
-    const pixel = tilePixel(sprite.x, sprite.y, board.sizeX, board.coordType);
+    // §4.8 "Empty slots": an empty sprite slot (empty `itemFile`) carries
+    // position (0, 0) and its stored layer, and nothing is drawn — never a §5
+    // mapping of an invented tile.
+    const pixel = sprite.file === "" ? { x: 0, y: 0 } : tilePixel(sprite.x, sprite.y, board.sizeX, board.coordType);
     return {
       itemFile: sprite.file,
       activationPrg: sprite.activationPrg,
