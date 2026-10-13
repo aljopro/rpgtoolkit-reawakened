@@ -21,13 +21,31 @@ references = [
 ]
 
 [[entry]]
+id = 26
+type = "story"
+title = "Rename step to tick: spine, ports, engine contract and goldens"
+description = "Jensen, 2026-10-12: the unit of simulation time is a tick, not a step. It runs before entry 2 so the tracer and every later entry are written with tick from the start. Doc-first (G7): amend the architecture spine (AD-2 and every AD that says step, including AD-9's wait payload, AD-26's phase list and the step budget wording), `docs/engine-features.md`, `docs/format-spec.md` and `docs/guardrails.md` wherever they use step for the simulation unit, in their own commit. Then rename in code: the `Engine` contract (`advance(steps, ...)`, `StepReport`, `stepsRun`, `stepAfter`), the log and golden formats that carry those names, and the harness driver. The `core/time` names (`TimeState`, `ClockPort`, `WaitView`) do not exist yet; entry 2 writes them as tick from the start. Changing a golden or a recorded-log field name is a deliberate G5 change: each regenerated golden is explained in the commit. Leave alone any use of step that means something else (a build step, a migration step, a path-finding step, `playerStep`/`itemStep` movement commands)."
+verify = "A repository-wide search shows no remaining use of step for the simulation unit outside the listed exceptions; the spine, engine-features, format-spec and guardrails say tick throughout; the golden job, the dump check and every required CI check pass; and each regenerated golden and log fixture differs from its predecessor only by the renamed fields."
+covers = ["CAP-5"]
+after = ["1.3", "1.8", "1.9"]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+references = [
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-2 (time is the step counter), AD-9, AD-26",
+  "constraint - docs/guardrails.md, sections G3 and G5",
+  "contract - packages/core/src/ports/engine.ts (Engine, StepReport) and packages/runner-harness/src/driver.ts",
+]
+notes = ["Ruled by Jensen, 2026-10-12: the simulation unit is called a tick, and this entry runs before entry 2 so no later entry adds uses of step.", "Entry 2 waits on this entry; its plan must be updated to the tick names once this lands."]
+
+[[entry]]
 id = 2
 type = "story"
 title = "Tracer bullet: source text to a restored snapshot through the harness"
 description = "Parses one inline program (`ProgramRef` kind inline, AD-7), lowers it to linear Step IR, registers `end` and `sleep` in a provisional built-in registry, steps it through one AD-9 yield, takes a snapshot mid-run that restores into a fresh VM, and runs it through a VM-backed test host in `runner-harness`; also creates the `GameState`/`VmState` shell (with per-section slots that entries 6, 7, 9 and 10 fill and entry 11 reconciles), `core/rng` (AD-12: xoshiro128** with SplitMix32 seed expansion, `RngPort`, `GameState.rng`), variable read/assign and call-site argument and lvalue binding at the call boundary, and the shared random-step snapshot-restore-hash test helper later entries reuse."
 verify = "`runner-harness` runs the inline program to completion across the yield, the mid-run snapshot restores into a fresh VM and finishes with the identical state hash, and the golden job stays green."
 covers = ["CAP-5"]
-after = ["1.3", "1.8", "1.9"]
+after = ["1.3", "1.8", "1.9", 26]
 hitl = false
 risk = "high"
 plan_checkpoint = true
@@ -37,24 +55,6 @@ references = [
   "reference - docs/format-spec.md, sections 9.3, 9.5, 9.11",
   "spec companion - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/packages.md, 'Core/runner seam'",
 ]
-
-[[entry]]
-id = 26
-type = "story"
-title = "Rename step to tick: spine, ports, engine contract and goldens"
-description = "Jensen, 2026-10-12: the unit of simulation time is a tick, not a step. Entry 2 introduces `sleep(ticks)` and a tick-based wait but leaves the older names alone, so this entry makes the vocabulary one thing. Doc-first (G7): amend the architecture spine (AD-2 and every AD that says step, including AD-9's wait payload, AD-26's phase list and the step budget wording), `docs/engine-features.md`, `docs/format-spec.md` and `docs/guardrails.md` wherever they use step for the simulation unit, in their own commit. Then rename in code: the `Engine` contract (`advance(steps, ...)`, `StepReport`, `stepsRun`, `stepAfter`), the log and golden formats that carry those names, `core/time` (`TimeState.step`, `ClockPort.step()`, `WaitView.step`), the harness driver, and entry 2's new script and save code. Changing a golden or a recorded-log field name is a deliberate G5 change: each regenerated golden is explained in the commit. Leave alone any use of step that means something else (a build step, a migration step, a path-finding step, `playerStep`/`itemStep` movement commands)."
-verify = "A repository-wide search shows no remaining use of step for the simulation unit outside the listed exceptions; the spine, engine-features, format-spec and guardrails say tick throughout; the golden job, the dump check and every required CI check pass; and each regenerated golden and log fixture differs from its predecessor only by the renamed fields."
-covers = ["CAP-5"]
-after = [2]
-hitl = true
-risk = "medium"
-plan_checkpoint = true
-references = [
-  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-2 (time is the step counter), AD-9, AD-26",
-  "constraint - docs/guardrails.md, sections G3 and G5",
-  "contract - packages/core/src/ports/engine.ts (Engine, StepReport) and packages/runner-harness/src/driver.ts",
-]
-notes = ["Ruled by Jensen, 2026-10-12: the simulation unit is called a tick. Entry 2's plan keeps the old names for the code it writes and records the mismatch (plan Q8). Cheaper the earlier it lands: every later entry adds more uses of step.", "Open: whether this should run before entry 3 so entries 3 to 13 are written with tick from the start. As entered it only waits on entry 2, which introduces the new code."]
 
 [[entry]]
 id = 3
