@@ -851,7 +851,42 @@ Error handlers work inside functions only:
 
 Errors in nested calls are **not** caught by the caller's handler.
 
-* **Still to rule (entry 3.7, doc-first):** which failures are catchable at all, whether a handler can also see errors from nested calls and built-ins, where a handler's labels resolve, and what `resumeNext` resumes (whether mid-expression state is dropped). The behaviour above is the current reading.
+* **Ruled (entry 3.7, doc-first):** these paragraphs settle which failures are catchable and how a handler, its label and `resumeNext` behave. Each rule is marked **legacy behaviour** (the extraction fact that fixes it) or **our rule** (with the reason it departs).
+
+**ERR-1 — the handler, its label and `resumeNext`.**
+
+* A handler can be set inside a function only. Setting one at program top level is itself an error, so a runtime error at top level is always reported. — legacy behaviour (R2-Q10).
+* The handler belongs to the function frame that set it and lasts until that frame returns. It stays active after it fires; it is cleared only when its label cannot be found. — legacy behaviour (R2-Q10).
+* A built-in that fails inside a frame is seen by that frame's handler. An error raised inside a called script function is seen only by that function's own handler; with none there it is reported and the callee continues, and it never reaches the caller's handler. This restates the "nested calls" line above. — legacy behaviour (R2-Q10).
+* A handler's label must be in the function that set the handler; a label never crosses a function boundary. — **our rule:** the label scope already ruled for `branch` is kept as the one label rule, instead of the legacy program-wide scan that could jump a handler into another function (R2-Q10 found legacy labels resolved over the whole loaded program by a first-match scan; see the note below).
+* `resumeNext()` continues at the statement after the one that was executing when the error was raised. The return point is remembered per frame and used once; calling it with no handler active, or outside a function, is itself an error. — legacy behaviour (R2-Q10).
+* When a labelled handler takes over, the failing statement's partial operand state is dropped. — legacy behaviour (R2-Q10); **our rule** restates it as plain state so a snapshot taken inside a handler restores identically (AD-7 `Frame.errorHandler`).
+
+**ERR-2 — which failures are errors, and which are catchable.**
+
+* Without a handler, a runtime error is reported and the program continues with the next instruction; a runtime error never stops the program. — legacy behaviour (R2-Q11).
+* Reports are suppressed while `debug(false)` has turned messages off (they are on by default). A failure that is not one of the interpreter's own kinds is always reported and is not affected by `debug`. — legacy behaviour (R2-Q11).
+* **Our rule:** every catchable runtime error is also handed to the host as a diagnostic carrying a code, the file, the line and a message, so a script error is both catchable by the script and visible to the harness.
+
+| Failure | Outcome | Catchable |
+|---|---|---|
+| A name no built-in, script function or plugin defines, or the wrong argument count for a script function | Runtime error; the call yields the unset value (0 / empty string) | Yes |
+| Wrong argument count, or an invalid argument, for a built-in | Runtime error naming the required count | Yes |
+| A value of the wrong type for an ordinary parameter | Not an error; values are coerced (see the runtime-meaning ruling) | — |
+| A typed parameter given an object of the wrong class | Runtime error | Yes |
+| An invalid object handle, a missing class, or an inaccessible member or method | Runtime error | Yes |
+| An array index out of range | Not an error: an array is a sparse map and the read yields an unset element | — |
+| Division by zero (`/`) | Not an error: infinity or NaN | — |
+| Modulo by zero (`%`) | **Open** — not settled for the legacy build; a round-3 extraction is in flight | Unknown |
+| A failing built-in (a missing file, item, player or board index) | Runtime error; a few built-ins instead return nothing silently | Yes, where raised |
+| An obsolete built-in | Runtime error for most, a warning for a few; both go through handlers the same way | Yes |
+| A load-time problem (a syntax error, an unmatched brace, a missing base class or constructor) | Reported once while loading; the partly built program still runs | No — no frame exists yet |
+
+Every row above except modulo by zero is legacy behaviour (R2-Q11). The modulo row stays open: the question that settles it is whether the legacy build turned a modulo-by-zero fault into a catchable error, and round 3 answers it.
+
+**Note (unreconciled).** Legacy error labels were found to be program-wide, so a handler could jump into another function (R2-Q10); the label ruling above keeps labels inside the function. Entry 3.7's rule follows the earlier label ruling, and the difference between the legacy engine and this spec is recorded here rather than hidden.
+
+**References.** R2-Q10, R2-Q11 (`docs/provenance/facts-round-2.md`); the label scope in the statements and control-flow subsection; AD-7 (`Frame.errorHandler`) and AD-24 (diagnostics) in the architecture spine.
 
 ### 9.9 Older dialects: Toolkit 2.x (RPGCode 2) and Toolkit 1.x
 
@@ -974,8 +1009,9 @@ docs commit before writing code. Rows the owner should check hardest carry an `<
 listing the alternatives. Short names below: LEX lexical, EXP expressions, STX statements, FUN functions, PRG program, OOP
 classes, SEM runtime meaning, MOD modules, ERR errors, THR threads.
 
-**Ruling summary:** 33 rows are settled in this amendment (8 ratified, 25 ruled) and 23 are deferred to the implementing
-entry. Twenty-seven `<!-- OWNER: … -->` notes flag the judgement calls and list the alternatives; the owner review list
+**Ruling summary:** 33 rows are settled in this amendment (8 ratified, 25 ruled) and 23 were deferred to the implementing
+entries; every deferred row that has since been ruled is listed under "Ruled by a later entry" below, and the rest stay
+deferred. Twenty-seven `<!-- OWNER: … -->` notes flag the judgement calls and list the alternatives; the owner review list
 below names the ones worth the most attention.
 
 **Ratified — the corpus already settles these (8 of the 14 corpus-settled rows; the other 6 are class, module and runtime
@@ -1027,10 +1063,15 @@ rows, listed under "deferred" because their implementing entries rule them).**
 | ID | Affected entry | Note |
 |---|---|---|
 | OOP-1 … OOP-9 | 3.6 | Class and object syntax is in §9.7; the lookup order, `operator=`/`operator[]` dispatch, destructor timing, access labels and inheritance are ruled there. |
-| ERR-1, ERR-2 | 3.7 | Which failures are catchable, and handler, label and `resume` semantics (§9.8). |
 | MOD-1, MOD-2, MOD-3 | 3.8 | The unqualified-after-`#include` question, the include cycle rule (the `Prg/` root is already stated in §9.6), and the redirect chain. The owner's flat-list working rule is recorded in §9.6. |
 | THR-1, THR-2, THR-3 | 3.9 | `threadSleep` units, `source`/`target` lifetime, and the snapshot "step" definition. |
 | SEM-1 … SEM-6 | 3.12 | `kill` forms, `until` check-first, comparison and coercion, scope and visibility, unset reads, and by-reference write-back. The forms the corpus settles are stated in §9.3 and §9.5 so the parser can be written; entry 3.12 confirms the binding semantics. |
+
+**Ruled by a later entry (doc-first, before any code).** Each row below was deferred to an implementing entry and is now settled in its own docs commit inside section 9; the section named carries the rule.
+
+| ID | Entry | Rule |
+|---|---|---|
+| ERR-1, ERR-2 | 3.7 | Handler, label and `resume` semantics, and which failures are catchable (§9.8). Modulo by zero stays open pending the round-3 extraction. |
 
 **Owner review list.** The rulings below are judgement calls rather than corpus results, and the owner should weigh them
 hardest: EXP-2 (the precedence of `^` and of the bitwise operators), EXP-4 (`=` in conditions and its dialect gate),
