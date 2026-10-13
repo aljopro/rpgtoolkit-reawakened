@@ -191,6 +191,7 @@ references = [
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-9, AD-26, and its Deferred list (per-step budget owners rpgcode-vm and movement-triggers)",
 ]
 plan_checkpoint = true
+notes = ["THR-1 starting point (Jensen, 2026-10-12): legacy `threadSleep(id, seconds)` takes real seconds, `0` means sleep until woken, and a sleeping thread just skips its turn (docs/provenance/facts-round-2.md R2-Q23; the archive's research note rpgcode-threads-for-implementers.md). Our simulation is a fixed 60 Hz step (AD-2, G3.2), so `core/time`'s `secondsToSteps` converts seconds to a whole number of steps and the wait stores an absolute `until` step, which keeps snapshots, restores and replays identical at any frame rate. The ruling still has to pick the rounding rule, what `0` maps to (an indefinite sleep), and the wake order when several threads wake on the same step. The tracer's provisional `sleep(steps)` (entry 2) is not `threadSleep`; this entry replaces its callers."]
 
 [[entry]]
 id = 22
