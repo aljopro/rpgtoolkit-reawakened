@@ -373,3 +373,59 @@ A custom menu image can be set (`menuGraphic`). Cursor sounds come from the main
 | Audio | looping music incl. **MIDI**, effects, volume | tracker modules |
 | Save | full state incl. threads | legacy `.sav` import |
 | Packaging | load a folder | import `.tpk` / appended-ZIP EXE |
+
+---
+
+## 15. Rulings on the rendering ambiguity list (3.1 amendment) — engine behaviour
+
+This section carries the engine-side half of the rendering ambiguity list: what the message window looks like by default,
+how modal widgets are laid out and what they return, how many screen slots exist and how long they live, what the canvas
+and overlay calls take, how a transition is timed and how the earthquake decays, the camera's deadzone and smoothing
+numbers, what `viewBrd`'s coordinates mean, how an animation ends and how `sizedAnimation` takes its size, the boot
+defaults for text, and what `send` does to the visible frame. The file-level half of the same list — the isometric
+resample, draw order, under vectors, shading and ambient arithmetic, parallax edges, debug overlay bits, animated-tile
+frames, board constants, `put`/`layerPut` and transparency — is section 15 of `docs/format-spec.md`. Each rule gives a
+rebuild one deterministic answer instead of a default it would otherwise invent.
+
+Names below continue the RND list. `<!-- OWNER: … -->` judgement calls are collected at the end.
+
+**Ruling summary:** 10 rows ruled here (6 with evidence, 4 as the rebuild's choice), 2 ratified, none deferred.
+
+### 15.1 Ratified
+
+| ID | Section | Rule |
+|---|---|---|
+| RND-A9 | E-50 | The sample games' logical resolution is 640×480: the shipped background image is 640×480 and the message-window frame is 600×100. |
+| RND-A10 | E-55 | The recovered Toolkit 2 manual shows the message window as a bar across the **top** of the screen with a textured frame and the text left-aligned inside it, which is the placement E-55 describes. |
+
+### 15.2 Ruled here
+
+| ID | Section | Ruling | Reason |
+|---|---|---|---|
+| RND-4 | E-55 | The message window defaults to the full logical width and 25 % of the logical height at the top of the screen, with 8 px of interior padding, a line height of the font size + 4 px, the bundled fallback face at 12 px, white text, and wrapping at spaces. `textSpeed(n)` sets characters per second (default 30), revealed at `max(1, round(60 / n))` ticks per character. A line that does not fit pushes the oldest line out of the top. | E-55 names the properties but gives no default and no unit for the speed; ticks keep the reveal deterministic and a percentage plus padding is what every fixture needs. |
+| RND-10 | E-60, E-61 | A message box is centred, 60 % of the logical width, as tall as its text needs plus 16 px, with its buttons in a row at the bottom right; `msgBox` returns 1 for OK or Yes and 0 for No; `prompt` returns the typed text (empty on cancel); `cursorMapRun` returns the chosen hotspot's index or −1 on cancel; a hotspot is a rectangle. A custom cursor draws at the pointer minus its hotspot; "hidden" draws nothing. | E-60 gives the widget kinds and their returns but no geometry, and one geometry keeps the reference rasteriser and every runner identical. |
+| RND-11 | E-58 | Ten screen slots, 0…9. `saveScreen(slot[, x, y, w, h])` and `restoreScreen(slot[, …])` hold one logical-screen rectangle each; `restoreScreenArray` replays the rectangle a save used. Slots survive `send` and are cleared by `load`; restoring an empty slot draws nothing and warns. | E-58 says "numbered slots" with no count and no lifetime; ten bounds the surface section and covers the sample programs. |
+| RND-12 | E-56, E-57 | `createCanvas([w, h])` returns a handle and defaults to the logical screen's size; `drawCanvas(handle[, x, y])`, `drawCanvasTransparent(handle, key[, x, y])`, `canvasDrawPart(handle, sx, sy, sw, sh, dx, dy)` and `canvasGetScreen(handle)` use logical canvas pixels. `renderNow(true)` designates the **first canvas created while none is designated** as the overlay; `renderNow(false)` clears it. | The catalogue gives the names with no signatures; designating the first canvas needs no new state field. |
+| RND-13 | E-59 | Fade types: 0 out to black, 1 in from black, 2 out to white, 3 in from white. Wipe effects 0…3 are mask writes in the mask's own colours, `speed` in pixels per tick (default 8). Every effect runs 30 ticks unless its built-in takes a duration, and effects are **non-blocking** — the script continues while the `fx` phase advances them. `earthquake(intensity)` offsets the camera by `intensity` px and halves that every 8 ticks until it reaches 0, and emits no cue. | The catalogue gives effect counts and speeds with no units or default duration; halving is the simplest decay that ends in a finite number of ticks. |
+| RND-14 | E-51 | The deadzone is a 64×48 box centred on the camera's target: inside it the camera does not move; outside it the camera moves at most 4 px per tick towards the point that would put the target at the deadzone's edge. `cameraPanTo` easing: 0 linear, 1 ease-in, 2 ease-out, 3 ease-in-out, as integer quadratics over the pan. A scene smaller than the viewport is centred on black. | AD-33 asks for a deadzone and step-based smoothing and gives no numbers; integers per tick stay deterministic and jitter-free. |
+| RND-15 | E-63 | `viewBrd(file[, x, y[, cnv]])`: `x` and `y` are a focus point in **board pixels**, defaulting to the board's centre; the board's sprites and its shading are drawn and ambient is not; the result is clipped to the target's bounds; the live board is untouched. | E-63 says "a board (or part of one)" without defining the coordinates; a camera focus is the one reading that also serves the editor's preview. |
+| RND-17 | E-54 | A non-persistent animation ends after its last frame, holds that frame for one tick, then is dropped. `sizedAnimation(file, x, y, w, h[, persist])`. A looping animation re-emits its frame sounds on every pass. | The catalogue writes `sizedAnimation(...)`; one tick of hold stops a one-shot animation from disappearing mid-frame. |
+| RND-20 | E-56 | Text boots as the bundled fallback face at 12 px in white. `text(x, y, s)` takes 1-based cell coordinates and anchors at the cell's top-left plus 4 px; `pixelText(x, y, s)` anchors at its own top-left. Family, size and colour stay as `font`, `fontSize` and `color` last set them. | E-56 names the two coordinate units but not the anchor, and the boot defaults are what every fixture assumes. |
+| RND-22 | E-19 | `send` presents the target board on the tick it is entered: no blank frame and no held previous frame. The enter program runs inside that tick, and if it blocks the tick's draw list still shows the target board's state. Music switches on the same tick. | E-19 lists the state work and is silent on the visual cutover; one tick with no blanking keeps the loop pure and a golden reproducible. |
+
+**Judgement calls worth the owner's attention:**
+
+* **RND-4** — a fixed pixel window size instead of a percentage, and a character-per-second speed rather than one character per
+  tick. The percentage and the ticks-per-character form are chosen so the reveal rate survives a different font size.
+* **RND-10** — a fixed 60 % box and bottom-right buttons, against reproducing an unrecoverable legacy layout; no legacy
+  screenshot of a modal box survives.
+* **RND-12** — naming the overlay by creation order, against giving `renderNow` a handle argument (a built-in signature
+  change) or adding a dedicated "overlay canvas" call.
+* **RND-13** — superlinear (quadratic) eases and an exponential earthquake decay, against the integer quadratics and the
+  halving rule chosen here.
+
+**References.** Rows come from the render-readiness study
+(`_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/discovery/render-readiness.md`), which names the entry
+each row blocks. Ratified rows: `epic-legacy-formats/discovery/corpus-inventory.md` (image sizes) and
+`research-what-survived-of-rpg-toolkit/legacy-ui-visual-archaeology.md` (the window's placement). Constraints:
+`docs/guardrails.md` G3 and G7; the architecture spine's AD-33 (camera), AD-27 (surfaces) and AD-15 (text).

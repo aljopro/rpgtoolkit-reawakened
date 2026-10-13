@@ -1274,3 +1274,82 @@ Games are untrusted input, so a loader bounds what a package can make it spend �
 * Tile LUT index 0 is reserved for "no tile" when the table exists; `lutUpperBound` `-1` means the board has no table at all, and then there is no index 0 (§4.2).
 * Inline-RPGCode fallback for program/sprite program fields applies when the file is missing.
 * Validate against `build/main/demo.gam` and project assets in `build/game/demo` and `build/game/Basic` from the legacy repo.
+
+---
+
+## 15. Rulings on the rendering ambiguity list (3.1 amendment)
+
+This section fixes what a renderer does where the file format and the engine inventory leave it open: how a normal tile is
+projected onto an isometric board, in what order tiles and sprites are drawn, what an *under* vector promotes, how shade
+layers and lights combine, where ambient light stops, what parallax does at its edges, which debug overlays the flag
+toggles, how an animated tile picks its frame, how `put` writes a cell, and how an image file's own transparency combines
+with the translucency a script asks for. Each rule is here so a rebuild can be deterministic pixel-for-pixel instead of
+inventing a default. Where the legacy behaviour cannot be recovered from the surviving material, the rule says so and
+gives the rebuild's choice with its reason. The engine-side rules of the same list are in section 15 of the engine
+inventory.
+
+Names below: RND rendering. `<!-- OWNER: … -->` notes mark the judgement calls and list the alternative; the review list
+at the end collects them.
+
+**Ruling summary:** 23 rows are ruled here (18 with evidence from the format or the sample data, 5 as the rebuild's choice
+where the legacy behaviour is unknowable), 8 rows are ratified because the sample data already settles them, and 1 row is
+deferred to the entry that builds it. Entry ids and section numbers for the deferred row are in the References list at the
+end.
+
+### 15.1 Ratified — the sample data already settles these
+
+| ID | Section | Rule |
+|---|---|---|
+| RND-A1 | 3.1 | 24-bit tiles store R, G, B in that byte order, and the transparent key is exactly the triple 0, 1, 2: the survived tilesets carry it 49 190 and 10 136 times and the reversed triple 2, 1, 0 occurs once in 232 448 pixels. |
+| RND-A2 | 3.1 | Tile pixels are stored column-major (`x` outer, `y` inner). Rendered row-major, the sample tilesets' letters lie on their side. |
+| RND-A3 | 3.3 | The diamond mask is exactly 1024 pixels, 256 per quadrant, symmetric left-to-right and top-to-bottom. |
+| RND-A4 | 4.2 | Shade run records in the sample boards carry signed offsets from 0 down to −30, one shade layer each, casting on layer 1. |
+| RND-A5 | 4.3 | All three sample boards store `backgroundDrawType` 1 (parallax) with an **empty** background image, so a parallax background with no image is a normal condition, not a corrupt board. |
+| RND-A6 | 4.5 | The sample boards store board ambient `0, 0, 0` and no lights, so shading must be exercisable without either. |
+| RND-A7 | 7.1 | Every non-empty `.anm` frame in the corpus (64 of 64) stores the frame transparent colour `0x00FFFFFF`, and every frame's picture is a tile reference. |
+| RND-A8 | 9.11 | The shipped message-window graphic is `Bitmap/mwin.jpg`, 600×100 pixels, so the window's stock frame at the default size is a 600×100 image at the top of a 640×480 screen. |
+
+### 15.2 Ruled here — a reading with its reason
+
+| ID | Section | Ruling | Reason |
+|---|---|---|---|
+| RND-1 | 3.4 | A 2D tile on an isometric board is resampled **nearest-neighbour**, once, by mapping each destination pixel of the 64×32 diamond to the source point `su = floor(y + (x − 31) / 2)`, `sv = floor(y − (x − 31) / 2)` and taking the pixel there; a destination pixel outside the diamond (3.3) or a source point outside 0…31 draws nothing. | 3.4 waives pixel parity but a golden image needs one answer; nearest neighbour is the only resample that is exact in integers on every engine. |
+| RND-2 | 4.3, 5 | Within a layer, cells are drawn in a single total order on the drawn geometry: the cell's bottom edge first (`y` of the tile's diamond bottom point, or the cell's pixel `y + 31` in 2D), ties by `x`, then by the cell's storage index. No per-mode traversal loop is defined, and the reader's stored order is not the draw order. | The format states no traversal for either iso mode; a total order on geometry is mode-agnostic, survives the reader's RLE and the rotated 2D↔matrix reindexing, and is what AD-25 requires. |
+| RND-3 | 4.4 | An *under* vector promotes the **cells whose tile centre lies inside its polygon** (a cell-bounding promotion, not a pixel stencil): with attribute bit 1 the board background image is drawn at those cells, and with bit 2 the layers below it are redrawn there, over the sprite. Two overlapping under vectors promote the union of their cells once, so translucency never stacks. | The command union has no polygon clip (AD-3); promoting whole cells is expressible as ordinary `blit` commands and matches "the board graphics it encloses". |
+| RND-5 | 4.5 | Shade layers combine **additively** per channel, and the sum is clamped once at draw time. A cell a shade layer's run records do not reach is tinted `0, 0, 0` by that layer. A baked light adds: a spotlight interpolates linearly from its inner colour at distance 0 to its outer colour at the outer node's radius and adds nothing beyond it; a gradient interpolates linearly between its two node colours along the node axis, sampled at each tile's centre as 4.2 already says. | The counts of nodes and colours are given but no curve is; linear is the simplest curve that uses every stored value and stays exact in integers. |
+| RND-6 | 4.5 | Board ambient and global ambient tint **only** what compositing the board draws: tiles, tile-built sprites, board images and sprite frames. They never tint the message window, the script overlay, a canvas, a modal widget or a transition; those commands carry a zero tint. | 4.5 and E-17 enumerate exactly the first set, and AD-3 makes the tint a property of each command, so the boundary is drawn where the builder sets it. |
+| RND-7 | 4.3 | Sprites sort within their layer by their bottom-centre anchor `y` ascending, then by their board index (the order they appear in the board's sprite list) ascending — a total order that does not change when a sprite is re-sorted. | E-29's re-insert-on-move rule leaves equal anchors to history; AD-25 forbids an order that depends on when a sprite moved. |
+| RND-8 | 4.3 | Parallax: the factor is `(imageSize − screenSize) / (boardPixelSize − screenSize)` per axis, and where the denominator is zero, or either operand is smaller than the screen, the factor is **0** on that axis (the image does not scroll). The image's stored `left`/`top` is its origin in board pixel space and the camera displacement is multiplied by the factor before it is subtracted. A background image in normal mode is drawn once at its stored position and is **not tiled**. | The stated formula divides by zero when a board is screen-sized; 0 keeps the image still, which is what "treated as normal" already does for a board-sized image. |
+| RND-9 | 2 (row 43), E-05 | `drawVectorsFlags` bits: 0 board vectors, 1 sprite vectors, 2 the player's queued path, 3 the destination marker, 4 the tile grid. Unused bits are 0. Colours come from the main file's `pathColor` for the path, and from fixed fallbacks for the rest: board vectors `255, 0, 0`, sprite vectors `0, 255, 0`, the marker `255, 255, 0` and the tile grid `0, 0, 255`. The destination marker is a 9×9 cross centred on the destination. | The flag word exists with no bit assignment and the main file stores one colour; fixed fallbacks make the overlays usable without a new field. |
+| RND-16 | 3.5, 4.3 | An animated tile's frame is `frameAt(0, tick, ticksPerFrame, frameCount, true)` with `ticksPerFrame = max(1, round(60 / framesPerSecond))`. It is "static" when `animatedTiles(false)` has been called or its board is not the live board, and then frame 0 stands in. A `.tan` that is missing, empty, or names another `.tan` draws nothing and warns once per board visit. | The file carries a frame rate but not the tick conversion; one integer conversion in one place keeps every runner identical, and drawing nothing is the only safe reading for a broken reference. |
+| RND-18 | 4.2, E-15 | The board's constants are **positional**: `constant[i]` reads index `i` of the stored array and `setConstants` writes it. The named substitution E-15 describes is not a board-file feature — a name becomes an index when a project is authored — so a legacy project has no name table and a rebuild needs none. | 4.2 stores an unnamed 0-indexed list, so a name cannot come from board data; keeping names an authoring concern avoids inventing a file field. |
+| RND-19 | E-14, 9.11 | `put` and `layerPut` take **1-based tile cells** and are unaffected by `PX_ABSOLUTE`; the layer defaults to the layer the board's stored order implies (the topmost written layer); a cell or layer outside the board is refused with a located diagnostic and changes nothing; the redraw is **flagged** and the next draw-list build reflects it, never a synchronous rebuild inside the call. | 1-based cells match every other tile coordinate in this document, and a flagged redraw keeps one draw-list build per tick. |
+| RND-21 | 10.1, E-56 | A decoded texture's own alpha multiplies the blit's alpha: the effective alpha is `(alpha · nativeA + 127) / 255`. A script's translucency percentage becomes `percentToAlpha(p)`; the "50 %" in the legacy catalogue is the value the script layer passes by default, not a fixed engine constant. | AD-28 decodes straight alpha and AD-3 blends with one `alpha`; multiplying keeps a script's 0 % and 100 % exact. |
+| RND-23 | 4.2 | The `+8 px` vertical offset stated for sprites on isometric boards **does apply in runtime draw lists**, not only in the editor's display: a sprite's anchor on an iso board is its bottom-centre point plus 8 px. | The offset is described against "display" and the engine's compositor is what displays; applying it in one place keeps the editor canvas and the runner's frame identical (AD-29). |
+
+### 15.3 Deferred
+
+| ID | Section | Deferred to |
+|---|---|---|
+| RND-24 | 3.3 | The legacy per-mode traversal loop, which RND-2 supersedes with a total order. If a sample golden disagrees with RND-2, the entry that builds the iso renderer revisits the order in its own plan and amends this row. |
+
+**Judgement calls worth the owner's attention** (each lists the alternative taken against):
+
+* **RND-1** — bilinear resampling, or rotating the source once at load and caching it. Nearest neighbour is chosen to keep
+  the resample integer-exact; a cached rotated tile would be a renderer detail, not a format rule.
+* **RND-2** — reconstructing the legacy traversal (row-major over the stored matrix, which the corpus cannot confirm because
+  no sample board is isometric). The total order is chosen because a golden can be frozen against it without a legacy
+  reference.
+* **RND-3** — a polygon stencil, which would need a `clip` command in the draw list (a format change, AD-3) or a per-cell
+  mask surface.
+* **RND-5** — a quadratic spotlight falloff and a maximum rather than a sum where two shade layers overlap.
+* **RND-23** — the offset being editor-only. Applying it at runtime is chosen because one compositor draws both and the
+  offset is stated as part of drawing.
+
+**References.** Rows come from the render-readiness study
+(`_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/discovery/render-readiness.md`), which names the entry
+each row blocks. Ratified rows are measured in
+`_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/discovery/spec-readiness.md` and `corpus-inventory.md`.
+Constraints: `docs/guardrails.md` G3 (one answer on every engine) and G7 (implement from the documents). The engine-side
+rows of the list — the message window's geometry and defaults, the primitives' defaults, the canvases, screen slots,
+transitions, the camera, `viewBrd`, animations and `send`'s cutover — are section 15 of `docs/engine-features.md`.
