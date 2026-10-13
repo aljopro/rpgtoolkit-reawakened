@@ -119,10 +119,15 @@ test("a written package round-trips its asset tree and its manifest", () => {
   equal(empty !== undefined, true);
   equal(empty?.bytes.length, 0);
 
-  // The manifest survives the read path unchanged.
+  // The manifest survives the read path unchanged, except that `index` is
+  // written in code-unit order (plain `sort()` on strings) rather than the
+  // caller's: that is what keeps two writes of one tree byte-identical (G3).
   const manifestFile = files.find((file) => file.path === MANIFEST_FILE_NAME);
   equal(manifestFile !== undefined, true);
-  deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, MANIFEST);
+  deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, {
+    ...MANIFEST,
+    index: [...MANIFEST.index].sort(),
+  });
   // It sits at the archive root (no folder segment).
   equal((manifestFile?.path ?? "").includes("/"), false);
 });
@@ -138,6 +143,26 @@ test("the written bytes are deterministic", () => {
     bytes: Uint8Array.from(file.bytes),
   }));
   deepEqual(unwrap(writeDistributionPackage(input(copied))), first);
+});
+
+test("the caller's index order cannot reach the written bytes", () => {
+  // The same tree and the same manifest, listed in the caller's two orders: the
+  // manifest's `index` is written in code-unit order, so both writes are
+  // byte-identical (G3). Before that, the caller's order reached the manifest
+  // bytes (the reversed list was three bytes longer here).
+  const forward = unwrap(writeDistributionPackage(input()));
+  const reversed = unwrap(
+    writeDistributionPackage(input(FILES, { ...MANIFEST, index: [...MANIFEST.index].reverse() })),
+  );
+  deepEqual(reversed, forward);
+
+  // The manifest still lists every file once, in code-unit order.
+  const loaded = unwrap(loadPackage({ kind: "tpk", name: "game.tpk", bytes: reversed }));
+  const manifestFile = loaded.files.find((file) => file.path === MANIFEST_FILE_NAME);
+  deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, {
+    ...MANIFEST,
+    index: [...MANIFEST.index].sort(),
+  });
 });
 
 test("the written package passes the reader's checks and matches the loose folder", () => {
@@ -262,6 +287,48 @@ test("a tree that would exceed the entry limit is refused, naming L2", () => {
   equal(result.ok && result.value.length > 0, true);
 });
 
+test("a tree over the L1 budget is refused at the entry that crosses it", () => {
+  // The L1 budget is on the written container, so it can only be proved while
+  // the entries are compressed: the check runs after each entry against a lower
+  // bound on the finished archive (the entries so far, the local headers still to
+  // come, the whole central directory and the record), which is exact at the last
+  // entry. This tree is 319 MiB of bytes that deflate past the reader's 100:1
+  // guard, so the writer stores them whole, with the L1 limit at 256 MiB: the
+  // first four entries fill the budget to the byte (4 x 64 MiB) and the headers
+  // push the bound past it, so the fifth entry must never be compressed. The old
+  // post-loop check could only report the finished total, which counts every
+  // body — the reported number is therefore the observable that says where the
+  // refusal landed.
+  const sixtyFourMiB = new Uint8Array(64 * 1024 * 1024);
+  const full: readonly PackageFile[] = [0, 1, 2, 3].map((index) => ({
+    path: `F/p${index}.bin`,
+    bytes: sixtyFourMiB,
+  }));
+  const files: readonly PackageFile[] = [
+    ...full,
+    { path: "F/p4.bin", bytes: sixtyFourMiB.subarray(0, 63 * 1024 * 1024) },
+  ];
+  const manifest: DistributionManifest = { schema: 1, main: "F/p0.bin", index: files.map((file) => file.path) };
+
+  const result = writeDistributionPackage({ files, manifest });
+  if (result.ok) throw new Error("expected a failure naming L1");
+  equal(result.error.section, "format-spec §13");
+  equal(result.error.message.includes("max compressed input, L1"), true, result.error.message);
+
+  // The refusal is at the crossing, not after the last entry: the reported bound
+  // is over the 256 MiB limit, and within the limit plus the fourth entry and
+  // the headers that follow it — far below the 319 MiB of bodies it would report
+  // if every entry had been compressed first.
+  const reported = Number(/(\d+) bytes/.exec(result.error.message)?.[1]);
+  equal(Number.isInteger(reported), true, result.error.message);
+  equal(reported > PACKAGE_LIMITS.maxCompressedInputBytes, true, `${reported} should exceed the L1 limit`);
+  equal(
+    reported < PACKAGE_LIMITS.maxCompressedInputBytes + 1024,
+    true,
+    `${reported} should be the fourth entry's crossing, not the finished total of 319 MiB of bodies`,
+  );
+});
+
 test("a path over the length limit is refused, naming L6", () => {
   const long = `${"a".repeat(300)}.brd`;
   const files: readonly PackageFile[] = [{ path: long, bytes: bytesOf("x") }];
@@ -294,13 +361,14 @@ test("a backslash-separated path is written with forward slashes", () => {
     readBack.map((file) => file.path).sort(),
     [MANIFEST_FILE_NAME, "Boards/Village/inn.brd", "Main/demo.gam"].sort(),
   );
-  // The manifest names the archive's own spelling, not the caller's backslashes.
+  // The manifest names the archive's own spelling, not the caller's backslashes,
+  // and in code-unit order (`Boards/…` sorts before `Main/…`).
   const manifestFile = readBack.find((file) => file.path === MANIFEST_FILE_NAME);
   equal(manifestFile !== undefined, true);
   deepEqual(JSON.parse(decoder.decode(manifestFile?.bytes)) as unknown, {
     schema: 1,
     main: "Main/demo.gam",
-    index: ["Main/demo.gam", "Boards/Village/inn.brd"],
+    index: ["Boards/Village/inn.brd", "Main/demo.gam"],
   });
 });
 

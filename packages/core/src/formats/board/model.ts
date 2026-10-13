@@ -34,10 +34,11 @@ export const COORD_ISO_ROTATED = 2;
 
 /**
  * The most cells a board's tile matrix may declare (format-spec §4.2, "Size
- * limits"): the effective grid times `sizeL`. A reader refuses a board above
- * this, so that a run-length marker — four bytes for up to 32,768 cells —
- * cannot make it reserve gigabytes, and a writer refuses a board the reader
- * would refuse.
+ * limits"): the effective grid times `sizeL`. The §4.8 pre-vector grid is the
+ * same measure — `sizeX × sizeY × sizeL` — and its reader applies this bound
+ * too. A reader refuses a board above this, so that a run-length marker — four
+ * bytes for up to 32,768 cells — cannot make it reserve gigabytes, and a writer
+ * refuses a board the reader would refuse.
  */
 export const BOARD_MAX_CELLS = 4_194_304;
 

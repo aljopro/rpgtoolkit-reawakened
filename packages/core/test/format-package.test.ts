@@ -8,8 +8,9 @@
 // Malformed fixtures patch single header fields, so each test pins one rule.
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import { TextEncoder } from "node:util";
-import { deflateSync } from "fflate/browser";
+import { deflateSync, inflateSync } from "fflate/browser";
 import {
   loadPackage,
   PACKAGE_LIMITS,
@@ -402,6 +403,55 @@ test("a deflate stream shorter than its declared size is rejected (L17)", () => 
   equal(error.message.includes("L17"), true, error.message);
 });
 
+test("a lying entry is refused without inflating past its declaration (L17)", () => {
+  // The bound is the *work*, not just the memory. `fflate`'s one-shot inflate
+  // stops writing at the end of the caller's buffer but carries on decoding, and
+  // a write past a typed array's end is a silent no-op, so a stream really
+  // holding 200 MiB under a header declaring 1,000 bytes costs the full 200 MiB
+  // of CPU before a length check can refuse it — and neither L1 (input bytes)
+  // nor L5 (declared ÷ compressed, both the attacker's numbers) constrains that.
+  // The reference call below is exactly that old path; the reader must now
+  // refuse in a fraction of its time.
+  const payload = new Uint8Array(200 * 1024 * 1024);
+  const body = deflateSync(payload, { level: 9 });
+  const bytes = buildZip([
+    {
+      name: "Boards/fat.brd",
+      content: payload,
+      method: 8,
+      body,
+      crc: crc32Of(payload.subarray(0, 1000)),
+      uncompressedSize: 1000,
+    },
+  ]);
+
+  const referenceStarted = performance.now();
+  inflateSync(body, { out: new Uint8Array(1001) });
+  const unboundedMs = performance.now() - referenceStarted;
+
+  const started = performance.now();
+  const error = tpkFailure(bytes, "declared vs actual size", 0);
+  const boundedMs = performance.now() - started;
+
+  // The outcome first: still refused, by the same rule, naming the 1,001st byte.
+  equal(error.message.includes("L17"), true, error.message);
+  equal(error.message.includes("1001"), true, error.message);
+  equal(loadPackage({ kind: "tpk", name: "bad.tpk", bytes }).ok, false);
+
+  // And the work is bounded: the reader may not have paid the stream's real
+  // size. Compared against the unbounded decode measured just above rather than
+  // against a wall-clock constant, so a slow or busy machine moves both numbers;
+  // the guard skips the comparison if even the unbounded decode was too quick to
+  // time (which no machine in use is: it is hundreds of milliseconds of work).
+  if (unboundedMs >= 100) {
+    equal(
+      boundedMs < unboundedMs / 5,
+      true,
+      `the reader spent ${boundedMs.toFixed(1)} ms against an unbounded decode's ${unboundedMs.toFixed(1)} ms`,
+    );
+  }
+});
+
 test("CRC-32 corruption is caught (L18)", () => {
   const bytes = buildZip([
     { name: "bad.txt", content: bytesOf("hello"), method: 8, body: storedDeflate(bytesOf("hellp")) },
@@ -522,6 +572,39 @@ test("an entry duplicated by case is rejected (L10)", () => {
     { name: "boards/INN.BRD", content: bytesOf("two") },
   ]);
   const error = tpkFailure(bytes, "case-insensitive duplicates");
+  equal(error.message.includes("L10"), true, error.message);
+});
+
+test("the L10 fold is ASCII only: U+212A is not ASCII k (§1.5, AD-5)", () => {
+  // U+212A (KELVIN SIGN) is a different name from ASCII `k` and does not fold,
+  // so these two entries are two files, not one ambiguity; a K/k pair still is.
+  const kelvin = loadPackage({
+    kind: "tpk",
+    name: "kelvin.tpk",
+    bytes: tpkBytes([
+      { name: "Tiles/k.tst", content: bytesOf("ascii"), method: 0 },
+      // Flag bit 11 says the name is UTF-8, so U+212A arrives as one code point
+      // rather than the three ANSI bytes its UTF-8 encoding has (L10 folds the
+      // decoded name).
+      { name: "Tiles/\u212A.tst", content: bytesOf("kelvin"), method: 0, flags: 0x0800 },
+    ]),
+  });
+  const loaded = unwrap(kelvin);
+  deepEqual(
+    loaded.files.map((file) => file.path),
+    ["Tiles/k.tst", "Tiles/\u212A.tst"],
+  );
+  // Both keys exist and differ, and a reference resolves to exactly one of them.
+  equal(loaded.index.byKey.has("tiles/k.tst"), true);
+  equal(loaded.index.byKey.has("tiles/\u212A.tst"), true);
+  equal(unwrap(resolveAsset(loaded.index, PACKAGE_ROOT, "tiles", "\u212A.tst")), "tiles/\u212A.tst");
+  equal(unwrap(resolveAsset(loaded.index, PACKAGE_ROOT, "tiles", "K.TST")), "tiles/k.tst");
+
+  const ascii = buildZip([
+    { name: "Tiles/K.tst", content: bytesOf("one") },
+    { name: "Tiles/k.tst", content: bytesOf("two") },
+  ]);
+  const error = tpkFailure(ascii, "case-insensitive duplicates");
   equal(error.message.includes("L10"), true, error.message);
 });
 

@@ -75,6 +75,22 @@ test("the lookup is case-insensitive in both directions", () => {
   equal(unwrap(resolveAsset(index, PACKAGE_ROOT, "characters", "HERO.TEM")), "chrs/hero.tem");
 });
 
+test("the fold is ASCII only: a letter above 0x7F never matches another (§1.5, AD-5)", () => {
+  // Rewriting `A`-`Z` and nothing else is what §1.5 rules. A reference that
+  // differs from the stored name only in the case of a letter above 0x7F is a
+  // miss, never a different file, and U+212A (KELVIN SIGN) is not ASCII `k`.
+  const index = createAssetIndex(["Boards/CAF\u00C9.BRD", "Boards/shop.brd", "Tiles/K.tst", "Tiles/\u212A.tst"]);
+  equal(unwrap(resolveAsset(index, PACKAGE_ROOT, "boards", "CAF\u00C9.BRD")), "boards/caf\u00C9.brd");
+  equal(unwrap(resolveAsset(index, PACKAGE_ROOT, "boards", "shop.BRD")), "boards/shop.brd");
+  for (const reference of ["Caf\u00E9.brd", "caf\u00E9.brd", "CAF\u00e9.BRD"]) {
+    equal(resolveAsset(index, PACKAGE_ROOT, "boards", reference).ok, false, reference);
+  }
+  equal(unwrap(resolveAsset(index, PACKAGE_ROOT, "tiles", "\u212A.tst")), "tiles/\u212A.tst");
+  equal(unwrap(resolveAsset(index, PACKAGE_ROOT, "tiles", "k.TST")), "tiles/k.tst");
+  equal(assetKey("Tiles/\u212A.tst") === assetKey("Tiles/k.tst"), false);
+  equal(assetKey("Tiles/\u0130.tst"), "tiles/\u0130.tst");
+});
+
 test("backslash and slash are equivalent", () => {
   const index = createAssetIndex(PACKAGE_PATHS);
   equal(unwrap(resolveAsset(index, PACKAGE_ROOT, "boards", "Village\\Shop.BRD")), "boards/village/shop.brd");
