@@ -233,6 +233,8 @@ interface JpegSpec {
   readonly components: readonly FrameComponent[];
   /** The flat sample level (0–255) of each frame component. */
   readonly levels: readonly number[];
+  /** Per-block sample levels (0–255) for every MCU, in the decoder's own order; overrides `levels`. */
+  readonly mcuLevels?: readonly (readonly number[])[];
   /** The frame marker: 0xc0 (baseline), 0xc1 (extended sequential) or 0xc2 (progressive). */
   readonly frameMarker?: number;
   /** The frame's sample precision; 8 unless a test asks otherwise. */
@@ -282,7 +284,8 @@ function buildJpeg(spec: JpegSpec): Uint8Array {
 
   const mcus: number[][] = [];
   for (let mcu = 0; mcu < mcuColumns * mcuRows; mcu += 1) {
-    mcus.push(slots.map((slot) => dcForLevel(spec.levels[slot]!)));
+    const levels = spec.mcuLevels?.[mcu];
+    mcus.push(slots.map((slot, block) => dcForLevel(levels?.[block] ?? spec.levels[slot]!)));
   }
   if (spec.firstBlockDc !== undefined) {
     mcus[0]![0] = spec.firstBlockDc;
@@ -385,6 +388,55 @@ test("4:4:4 and 4:2:0 sampling both decode to flat RGB through APP14 transform 0
   for (let y = 0; y < 16; y += 1) {
     for (let x = 0; x < 16; x += 1) {
       deepEqual(pixel(fourTwoZero.rgba, 16, x, y), [200, 100, 50, 255], `pixel ${x},${y}`);
+    }
+  }
+});
+
+test("a partial MCU's dummy blocks are decoded but never written into the picture", () => {
+  // 24×16 at 4:2:0: the frame's MCU grid is ceil(24/16) × ceil(16/16) = 2 × 1, so
+  // each MCU carries 2 h × 2 v luma blocks, four per MCU row — but the luma
+  // component's own block grid, the grid its sample plane holds, is only
+  // ceil(24 × 2 / (2 × 8)) = 3 blocks wide. The fourth block of each MCU row lies
+  // past the right edge of the component (T.81 §A.2.2): it is decoded to keep the
+  // entropy stream in step and then dropped, never stored. Stored at the plane's
+  // flat offset it would land in the *next* plane row and overwrite samples that
+  // were already decoded (format-spec §10.3).
+  const jpeg = buildJpeg({
+    width: 24,
+    height: 16,
+    components: [
+      { id: 1, h: 2, v: 2 },
+      { id: 2, h: 1, v: 1 },
+      { id: 3, h: 1, v: 1 },
+    ],
+    levels: [10, 128, 128],
+    mcuLevels: [
+      [10, 20, 40, 50, 128, 128],
+      [30, 200, 60, 210, 128, 128],
+    ],
+  });
+  const image = unwrap(decodeTexture(jpeg));
+  equal(image.w, 24);
+  equal(image.h, 16);
+  equal(image.rgba.length, 24 * 16 * 4);
+  // Chroma is neutral, so every pixel is its luma sample. The three luma block
+  // columns the component actually holds keep their own samples...
+  deepEqual(pixel(image.rgba, 24, 0, 1), [10, 10, 10, 255]);
+  deepEqual(pixel(image.rgba, 24, 8, 1), [20, 20, 20, 255]);
+  deepEqual(pixel(image.rgba, 24, 16, 1), [30, 30, 30, 255]);
+  deepEqual(pixel(image.rgba, 24, 23, 1), [30, 30, 30, 255]);
+  deepEqual(pixel(image.rgba, 24, 0, 8), [40, 40, 40, 255]);
+  deepEqual(pixel(image.rgba, 24, 0, 9), [40, 40, 40, 255]);
+  deepEqual(pixel(image.rgba, 24, 7, 15), [40, 40, 40, 255]);
+  deepEqual(pixel(image.rgba, 24, 8, 8), [50, 50, 50, 255]);
+  deepEqual(pixel(image.rgba, 24, 16, 15), [60, 60, 60, 255]);
+  deepEqual(pixel(image.rgba, 24, 23, 15), [60, 60, 60, 255]);
+  // ...and no sample of the fourth column's blocks (200 and 210) appears in the
+  // row below the one they were coded for.
+  for (let y = 0; y < 16; y += 1) {
+    for (let x = 0; x < 8; x += 1) {
+      const sample = pixel(image.rgba, 24, x, y)[0];
+      equal(sample !== 200 && sample !== 210, true, `pixel ${x},${y} holds a dummy block: ${sample}`);
     }
   }
 });
