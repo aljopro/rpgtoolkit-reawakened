@@ -3,8 +3,8 @@ name: 'rpgtoolkit-reawakened'
 type: architecture-spine
 purpose: build-substrate
 altitude: initiative
-paradigm: 'hexagonal (ports and adapters) around a deterministic step-machine simulation core'
-scope: 'Cross-epic contracts of the RPG Toolkit Reawakened rebuild: core API, step pipeline, draw list and surfaces, assets and requests, RPGCode VM, state, determinism, editor platform-services, language servers, packaging, and the operational envelope'
+paradigm: 'hexagonal (ports and adapters) around a deterministic tick-driven simulation core'
+scope: 'Cross-epic contracts of the RPG Toolkit Reawakened rebuild: core API, tick pipeline, draw list and surfaces, assets and requests, RPGCode VM, state, determinism, editor platform-services, language servers, packaging, and the operational envelope'
 status: final
 created: '2026-10-10'
 updated: '2026-10-10'
@@ -24,11 +24,11 @@ companions:
 
 ## Design Paradigm
 
-Hexagonal. The **core** is a pure, deterministic simulation: bytes and input events in; state, draw lists, audio cues and requests out. Every platform thing (display, sound, devices, files, editor host) is an **adapter** behind a port the core or the editor defines. The core is a step machine, never event-driven or async.
+Hexagonal. The **core** is a pure, deterministic simulation: bytes and input events in; state, draw lists, audio cues and requests out. Every platform thing (display, sound, devices, files, editor host) is an **adapter** behind a port the core or the editor defines. The core is tick-driven, never event-driven or async.
 
 | Layer | Package | Role |
 | --- | --- | --- |
-| Domain | `core` | formats, resolver, image and font decoding, world, sprites, triggers, script VM, battle, menu, save, step pipeline, draw-list and cue builders, reference rasteriser |
+| Domain | `core` | formats, resolver, image and font decoding, world, sprites, triggers, script VM, battle, menu, save, tick pipeline, draw-list and cue builders, reference rasteriser |
 | Ports | `core/ports` | service interfaces for the VM and domain modules; the runner-facing engine API |
 | Driving adapters | `runner-*`, `lsp`, `dap`, `editor-ui` | call the core |
 | Driven adapters | `synth`, `render-webgl2`, asset sources | realise cues, draw lists and asset requests |
@@ -73,7 +73,7 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 | --- | --- | --- |
 | G1 step-machine VM, plain-data state | guardrails | AD-7 to AD-10, AD-26 |
 | G2 package boundaries, platform-services only | guardrails | AD-1, AD-6, AD-20, AD-22 |
-| G3 determinism: injected clock and RNG, fixed step | guardrails | AD-2, AD-5, AD-11 to AD-14, AD-25, AD-26 |
+| G3 determinism: injected clock and RNG, fixed tick | guardrails | AD-2, AD-5, AD-11 to AD-14, AD-25, AD-26 |
 | G4 renderers only replay draw lists | guardrails | AD-3, AD-4, AD-27 |
 | G5 headless goldens required | guardrails | AD-11, AD-14 make hashes and logs the test substrate |
 | G6 licence test (Blue Oak Bronze or better, minus MS-PL; ADR 0003) | guardrails | Stack; Deferred names the `ovsx` exemption |
@@ -86,22 +86,22 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 ### AD-1 — One engine API: advance, drawList
 
 - **Binds:** CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-12, CAP-13, CAP-14
-- **Prevents:** runners and tests driving the core differently; replays that depend on how a runner batches steps; mid-step debug states.
-- **Rule:** `createEngine(init)` returns `Engine`. `advance(steps, inputs: { step, event }[]) -> StepReport` runs whole fixed steps. A `maxSteps` cap bounds catch-up. `StepReport` carries `stepsRun`, `stepAfter`, `consumed` (the canonical input log, written by the core), audio cues, requests, diagnostics, `loading`, and `paused`. `drawList(alpha?) -> DrawList` is a pure function of current state; `alpha` is 0 in tests. `engine.surfacePixels(id, rev)` is the pixel accessor (AD-27). `engine.setBreakpoints(bps)` takes data; a hit stops mid-step and returns `paused { thread, frame, line }`, with the open-step cursor stored in `GameState` so it snapshots; debug hooks read state and never write it. Every argument and result is structured-cloneable plain data, so the core runs in a Worker. Outputs never alias state: every emitted `Uint8Array` owns its whole buffer (`byteOffset` 0) and is a copy; a host may transfer a buffer only when the core marks it handed off.
-- **Check:** type-checked API; a Worker contract test that transfers and mutates every returned buffer and asserts `stateHash` unchanged; a replay test that batches the same input log with different `steps` per call.
+- **Prevents:** runners and tests driving the core differently; replays that depend on how a runner batches ticks; mid-tick debug states.
+- **Rule:** `createEngine(init)` returns `Engine`. `advance(ticks, inputs: { tick, event }[]) -> TickReport` runs whole fixed ticks. A `maxTicks` cap bounds catch-up. `TickReport` carries `ticksRun`, `tickAfter`, `consumed` (the canonical input log, written by the core), audio cues, requests, diagnostics, `loading`, and `paused`. `drawList(alpha?) -> DrawList` is a pure function of current state; `alpha` is 0 in tests. `engine.surfacePixels(id, rev)` is the pixel accessor (AD-27). `engine.setBreakpoints(bps)` takes data; a hit stops mid-tick and returns `paused { thread, frame, line }`, with the open-tick cursor stored in `GameState` so it snapshots; debug hooks read state and never write it. Every argument and result is structured-cloneable plain data, so the core runs in a Worker. Outputs never alias state: every emitted `Uint8Array` owns its whole buffer (`byteOffset` 0) and is a copy; a host may transfer a buffer only when the core marks it handed off.
+- **Check:** type-checked API; a Worker contract test that transfers and mutates every returned buffer and asserts `stateHash` unchanged; a replay test that batches the same input log with different `ticks` per call.
 
-### AD-2 — Time is the step counter
+### AD-2 — Time is the tick counter
 
 - **Binds:** CAP-2, CAP-3, CAP-4, CAP-9, CAP-11
 - **Prevents:** wall-clock or frame-rate leaking into state; animation phases rounded differently per epic.
-- **Rule:** the simulation step is fixed at 60 Hz. The injected clock of G3.1 **is** the step counter supplied through `advance`; `getTickCount` and `gameTime = steps / 60` derive from it. `core/time` alone owns `secondsToSteps`, `fpsToSteps` and `frameAt(originStep, step, stepsPerFrame, count, loop)`; animated tiles use origin 0. [ASSUMPTION: 60 Hz; rounding values are Deferred.]
-- **Check:** lint bans `Date` and `performance` in `core` (G3); only `core/time` may convert seconds or fps to steps.
+- **Rule:** the simulation tick is fixed at 60 Hz. The injected clock of G3.1 **is** the tick counter supplied through `advance`; `getTickCount` and `gameTime = ticks / 60` derive from it. `core/time` alone owns `secondsToTicks`, `fpsToTicks` and `frameAt(originTick, tick, ticksPerFrame, count, loop)`; animated tiles use origin 0. [ASSUMPTION: 60 Hz; rounding values are Deferred.]
+- **Check:** lint bans `Date` and `performance` in `core` (G3); only `core/time` may convert seconds or fps to ticks.
 
 ### AD-3 — Draw list: flat, ordered, plain-data, integer pixels
 
 - **Binds:** CAP-6, CAP-12, CAP-13, CAP-15
 - **Prevents:** runners interpreting scenes differently; renderers holding state (G4); unhashable frames; tint and blend results differing between replayers.
-- **Rule:** a `DrawList` is `{ step, width, height, commands[] }` rebuilt per frame, with no deltas. `core/ports` publishes one `DrawCommand` union: `blit`, `fill`, `line`, `rect`, `ellipse`, `text`, `pushTarget`, `popTarget`. Types: `Rgb = { r, g, b }` integers 0–255; coordinates are integers in logical-resolution pixels; rectangles are `x, y, w, h`, half-open; `filled: boolean`; lines are 1 px with inclusive endpoints; ellipses are given by bounding box. A texture is a `TexRef = { asset: AssetKey, tile: number | null }` with `tile` 1-based (`null` means no tile; format-spec §1.6). `.tan` and `.tbm` never cross the seam: the builder resolves them to tile `TexRef`s plus per-cell tint. `blit` carries `src` and `dst` integer rectangles, `key`, `tint`, `alpha` 0–255, `blend` (`normal` | `additive` | `translucent`) and an `iso2d` projection flag, with nearest-neighbour sampling. A blit source is a `TexRef` or a persistent surface `{ surface, rev }` (AD-27). `text` carries a `FontRef` and per-glyph advances (AD-15). The core draws the mouse cursor as the last command. Runners replay top to bottom and may cache, but discarding a cache changes nothing observable.
+- **Rule:** a `DrawList` is `{ tick, width, height, commands[] }` rebuilt per frame, with no deltas. `core/ports` publishes one `DrawCommand` union: `blit`, `fill`, `line`, `rect`, `ellipse`, `text`, `pushTarget`, `popTarget`. Types: `Rgb = { r, g, b }` integers 0–255; coordinates are integers in logical-resolution pixels; rectangles are `x, y, w, h`, half-open; `filled: boolean`; lines are 1 px with inclusive endpoints; ellipses are given by bounding box. A texture is a `TexRef = { asset: AssetKey, tile: number | null }` with `tile` 1-based (`null` means no tile; format-spec §1.6). `.tan` and `.tbm` never cross the seam: the builder resolves them to tile `TexRef`s plus per-cell tint. `blit` carries `src` and `dst` integer rectangles, `key`, `tint`, `alpha` 0–255, `blend` (`normal` | `additive` | `translucent`) and an `iso2d` projection flag, with nearest-neighbour sampling. A blit source is a `TexRef` or a persistent surface `{ surface, rev }` (AD-27). `text` carries a `FontRef` and per-glyph advances (AD-15). The core draws the mouse cursor as the last command. Runners replay top to bottom and may cache, but discarding a cache changes nothing observable.
 - **Pixel pipeline (normative, in `core/raster`):** (1) skip a pixel that is format-transparent or equals `key`, tested on the untinted source; (2) `c = clamp(src + tint, 0, 255)` once, where `tint` is the full pre-summed shade, board and global ambient offset (range ±1020, format-spec §4.5); (3) blend: `normal` → `c`; `translucent` → `(dst·(255−a) + c·a + 127) / 255`; `additive` → `min(255, dst + (c·a + 127) / 255)`, integer division; `percentToAlpha(p) = (p·255 + 50) / 100`.
 - **Check:** one exported union; a lint rule that tint is computed only in `core/render/shade.ts`; per-command CPU-vs-WebGL2 conformance fixtures with exact match for key and tint.
 
@@ -116,8 +116,8 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 
 - **Binds:** CAP-1, CAP-2, CAP-7, CAP-11, CAP-12, CAP-15
 - **Prevents:** asset or file latency changing simulation results; per-runner path handling; requests with no way back into the core.
-- **Rule:** the runner gives the core an `AssetIndex` (list of relative paths) at start. The shared resolver maps a logical path to a canonical `AssetKey` with an **ASCII-only case fold** (`A`–`Z` to `a`–`z`, every other code point unchanged; the rule and its reason are format-spec §1.5), `/` separators, the type-folder prefix rules of format-spec §1.5, and `projectPath` ignored inside a package. The fold is written out, never `String.prototype.toLowerCase`, because a full-Unicode fold follows the engine's Unicode tables (G3 wants one answer on every runner), merges `U+212A` with ASCII `k` where the legacy upper-case fold kept them apart, and turns `U+0130` into two code points; the former `[ASSUMPTION: ASCII-only case fold]` therefore becomes a ruling, not an assumption. Every request carries a core-assigned `reqId` and is **blocking** (time freezes: `advance` returns `loading` and consumes no steps) or **stream** (music and video bytes: never touches state). Every request that needs a reply has a matching input event: `asset → asset { reqId, bytes: Bytes | null }` (`null` means the asset is missing), `loadBlob → blob.loaded`, `saveBlob → blob.saved`, `listBlobs → blob.listed`, `extension.call → extension.result`. There is no per-thread asset wait. Inputs arriving during `loading` are queued in state and consumed at the next real step. Prefetch hints are allowed and cannot change state. `core` never fetches. [ASSUMPTION: async request and deliver, not a synchronous provider.]
-- **Check:** exhaustive `switch` with a `never` default on the request and event unions; a latency-fuzz replay test (random delivery delays) expecting identical per-step hashes; a fold test pinning that `A`–`Z` still fold and that `U+212A` and `U+0130` do not fold into `k`-shaped or expanded keys, so `foldPath`, `stripTypeFolder`, `projectFolder`'s `Game` test and the §1.6 extension match share one rule.
+- **Rule:** the runner gives the core an `AssetIndex` (list of relative paths) at start. The shared resolver maps a logical path to a canonical `AssetKey` with an **ASCII-only case fold** (`A`–`Z` to `a`–`z`, every other code point unchanged; the rule and its reason are format-spec §1.5), `/` separators, the type-folder prefix rules of format-spec §1.5, and `projectPath` ignored inside a package. The fold is written out, never `String.prototype.toLowerCase`, because a full-Unicode fold follows the engine's Unicode tables (G3 wants one answer on every runner), merges `U+212A` with ASCII `k` where the legacy upper-case fold kept them apart, and turns `U+0130` into two code points; the former `[ASSUMPTION: ASCII-only case fold]` therefore becomes a ruling, not an assumption. Every request carries a core-assigned `reqId` and is **blocking** (time freezes: `advance` returns `loading` and consumes no ticks) or **stream** (music and video bytes: never touches state). Every request that needs a reply has a matching input event: `asset → asset { reqId, bytes: Bytes | null }` (`null` means the asset is missing), `loadBlob → blob.loaded`, `saveBlob → blob.saved`, `listBlobs → blob.listed`, `extension.call → extension.result`. There is no per-thread asset wait. Inputs arriving during `loading` are queued in state and consumed at the next real tick. Prefetch hints are allowed and cannot change state. `core` never fetches. [ASSUMPTION: async request and deliver, not a synchronous provider.]
+- **Check:** exhaustive `switch` with a `never` default on the request and event unions; a latency-fuzz replay test (random delivery delays) expecting identical per-tick hashes; a fold test pinning that `A`–`Z` still fold and that `U+212A` and `U+0130` do not fold into `k`-shaped or expanded keys, so `foldPath`, `stripTypeFolder`, `projectFolder`'s `Game` test and the §1.6 extension match share one rule.
 <!-- OWNER: chose to write the fold out instead of calling String.prototype.toLowerCase because a Unicode fold follows the engine's tables, so two runners can key one project differently; the code half (foldPath, stripTypeFolder, projectFolder, the §1.6 extension match) is listed in the PR and lands in its own commit, so until then the helper still disagrees with this line. -->
 
 ### AD-6 — Packages and compression live in core formats
@@ -172,8 +172,8 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 | `audio` | `core/audio` | playing music and effects, `cueId` counter |
 | `surfaces` | `core/raster` | persistent bitmaps, `SurfaceId` counter, saved screens |
 | `rng` | `core/rng` | generator state |
-| `time` | `core/time` | step counter |
-| `engine` | `core/engine` | phase state, pending requests, queued inputs, open-step cursor |
+| `time` | `core/time` | tick counter |
+| `engine` | `core/engine` | phase state, pending requests, queued inputs, open-tick cursor |
 
 Character stats have one owner: `vm.globals` behind `StatsPort` (E-85). `SaveState` is `GameState`; snapshot, save, hash and restore use one canonical form.
 
@@ -211,7 +211,7 @@ graph TD
 
 - **Binds:** CAP-3, CAP-4, CAP-5, CAP-9, CAP-11
 - **Prevents:** per-module randomness breaking replay and saves; correlated streams from similar seeds.
-- **Rule:** one xoshiro128** instance in `core/rng`. `RunConfig.seed` is a `u32`, expanded into the four state words by SplitMix32 with a non-zero guard. Any core module draws through `RngPort` (random built-ins, battle, the random-battle test, `wander`); draw order is fixed by the step pipeline (AD-26). State is in `GameState.rng`. [ASSUMPTION: xoshiro128**.]
+- **Rule:** one xoshiro128** instance in `core/rng`. `RunConfig.seed` is a `u32`, expanded into the four state words by SplitMix32 with a non-zero guard. Any core module draws through `RngPort` (random built-ins, battle, the random-battle test, `wander`); draw order is fixed by the tick pipeline (AD-26). State is in `GameState.rng`. [ASSUMPTION: xoshiro128**.]
 - **Check:** dependency-cruiser rule that only `core/rng` constructs the generator.
 
 ### AD-13 — Deterministic maths
@@ -225,7 +225,7 @@ graph TD
 
 - **Binds:** CAP-3, CAP-7, CAP-8, CAP-12, CAP-13
 - **Prevents:** replays that depend on delivery timing, audio or window events; runners recording the same session differently.
-- **Rule:** inputs are `{ step, event }`, where `step` is `time.step` at the start of the consuming step; inputs apply in array order within a step. The core returns the consumed list in `StepReport.consumed`; the canonical log is the concatenation of those lists. Events: `key { name, code, char: string | null, down }` (`null` means no typed character), `pointer { x, y, buttons }` in logical integer pixels, `gamepad`, the replies of AD-5, `audio.ended { cueId }`, `video.ended`, `focus { lost | gained }`. Key `name` is the legacy logical name (`"ENTER"`, `"LEFT"`, `"A"`); the DOM-to-legacy table lives in `core/input`. The core owns the Pause state of E-03: after `focus.lost`, `advance` consumes no steps until `focus.gained`, and runners keep calling it. The headless runner emits `audio.ended` and `video.ended` after the parsed (or transcoded) duration. Replay feeds exactly the log. Every port-contract field is required, and a field with no value holds `null` — never an omitted key and never `undefined` — so every event and cue has one fixed set of keys; `exactOptionalPropertyTypes` in `tsconfig.base.json` stays on as a backstop for this rule, not as the rule itself.
+- **Rule:** inputs are `{ tick, event }`, where `tick` is `time.tick` at the start of the consuming tick; inputs apply in array order within a tick. The core returns the consumed list in `TickReport.consumed`; the canonical log is the concatenation of those lists. Events: `key { name, code, char: string | null, down }` (`null` means no typed character), `pointer { x, y, buttons }` in logical integer pixels, `gamepad`, the replies of AD-5, `audio.ended { cueId }`, `video.ended`, `focus { lost | gained }`. Key `name` is the legacy logical name (`"ENTER"`, `"LEFT"`, `"A"`); the DOM-to-legacy table lives in `core/input`. The core owns the Pause state of E-03: after `focus.lost`, `advance` consumes no ticks until `focus.gained`, and runners keep calling it. The headless runner emits `audio.ended` and `video.ended` after the parsed (or transcoded) duration. Replay feeds exactly the log. Every port-contract field is required, and a field with no value holds `null` — never an omitted key and never `undefined` — so every event and cue has one fixed set of keys; `exactOptionalPropertyTypes` in `tsconfig.base.json` stays on as a backstop for this rule, not as the rule itself.
 - **Check:** exhaustive `switch` on the event union; the latency-fuzz and batching replay tests of AD-1 and AD-5.
 
 ### AD-15 — Text, fonts and layout are core-owned
@@ -246,7 +246,7 @@ graph TD
 
 - **Binds:** CAP-5, CAP-7, CAP-11, CAP-12
 - **Prevents:** scripts or the extension mechanism reaching files or the network directly; saves colliding across games or hosts.
-- **Rule:** the core's only path to the host is `StepReport.requests`: `asset`, `loadBlob`, `saveBlob`, `listBlobs`, `extension.call`, `quit`, `openUrl`, `playVideo`. Blob keys are `{ area: 'saves' | 'files', path }`, case-folded in core. RPGCode file reads try `saves` then fall back to shipped game folders, read-only, through `asset` requests; writes go only to `saves` or `files`. `GameId` is derived in core as a hash of the main file plus the package identity and is the save-area key in every host; only the physical location is a host choice. `openUrl` allows only `https:` and always asks the user. Game data is untrusted input and is validated on read. Plugins are ungated extensions of the application (ADR 0004 decision 6); they reach files and the network only through these same requests, which is a platform seam, not a sandbox.
+- **Rule:** the core's only path to the host is `TickReport.requests`: `asset`, `loadBlob`, `saveBlob`, `listBlobs`, `extension.call`, `quit`, `openUrl`, `playVideo`. Blob keys are `{ area: 'saves' | 'files', path }`, case-folded in core. RPGCode file reads try `saves` then fall back to shipped game folders, read-only, through `asset` requests; writes go only to `saves` or `files`. `GameId` is derived in core as a hash of the main file plus the package identity and is the save-area key in every host; only the physical location is a host choice. `openUrl` allows only `https:` and always asks the user. Game data is untrusted input and is validated on read. Plugins are ungated extensions of the application (ADR 0004 decision 6); they reach files and the network only through these same requests, which is a platform seam, not a sandbox.
 - **Check:** headless round-trip tests for `save`, `load`, `openFileOutput`/`openFileInput` and `dirSav`.
 
 ### AD-18 — Format models round-trip
@@ -295,7 +295,7 @@ graph TD
 
 - **Binds:** CAP-5, CAP-13, CAP-14
 - **Prevents:** logging reaching `console` in core; unlocated script errors.
-- **Rule:** `core` takes a `Logger` port with levels and plain-data records. A runtime script error is visible to RPGCode handlers and is also a `StepReport` diagnostic `{ code, file, line, message }`.
+- **Rule:** `core` takes a `Logger` port with levels and plain-data records. A runtime script error is visible to RPGCode handlers and is also a `TickReport` diagnostic `{ code, file, line, message }`.
 - **Check:** lint bans `console` in `core`.
 
 ### AD-25 — Total order everywhere
@@ -305,11 +305,11 @@ graph TD
 - **Rule:** every search, queue and tie-break uses an explicit total order. Code relies on `Array.prototype.sort` stability and never on object key order for non-string keys.
 - **Check:** pathfinding golden tests with equal-cost ties.
 
-### AD-26 — Step pipeline and program modes
+### AD-26 — Tick pipeline and program modes
 
 - **Binds:** CAP-2, CAP-3, CAP-4, CAP-5, CAP-8, CAP-9, CAP-10
 - **Prevents:** epics inserting their phase wherever convenient; changing RNG draw order; undefined behaviour for blocking programs.
-- **Rule:** `core/engine` runs a fixed, named phase list each step: `input`, `waits`, `threads`, `movement`, `edges`, `triggers`, `battle`, `animation`, `audio`, `time` (E-03). Modules register into named phases only; order inside a phase is fixed by module rank. `Thread.kind` is `blocking`, `board`, `persistent` or `item`; lifecycle owners are `core/script` for kinds and `core/world` for killing board threads on `send` and item threads on removal (E-19, E-93). At most one `blocking` thread exists; it suspends Idle input and triggers but not other threads. `multiRun` defers movement starts and then yields one `movement` wait over the collected sprites (E-33). A blocking program that never yields is preempted at the per-step budget.
+- **Rule:** `core/engine` runs a fixed, named phase list each tick: `input`, `waits`, `threads`, `movement`, `edges`, `triggers`, `battle`, `animation`, `audio`, `time` (E-03). Modules register into named phases only; order inside a phase is fixed by module rank. `Thread.kind` is `blocking`, `board`, `persistent` or `item`; lifecycle owners are `core/script` for kinds and `core/world` for killing board threads on `send` and item threads on removal (E-19, E-93). At most one `blocking` thread exists; it suspends Idle input and triggers but not other threads. `multiRun` defers movement starts and then yields one `movement` wait over the collected sprites (E-33). A blocking program that never yields is preempted at the per-tick budget.
 - **Check:** a unit test snapshots the phase list; a test of exclusive-program mode with `multiRun`.
 
 ### AD-27 — Surface model
@@ -364,11 +364,11 @@ graph TD
 - **Prevents:** Fixed-resolution CRT lock-in (640×480), camera clamping glitches on scenes smaller than the screen, and lack of cinematic cutscene camera control.
 - **Rule:** The camera is deterministic state in `GameState.camera` (G1, G3).
   * *Tracking modes:* Follow player (default), track arbitrary entity, focus on coordinate point, or follow waypoint path.
-  * *Viewport physics:* Step-based smoothing and deadzone bounding box (prevents subpixel jitter).
+  * *Viewport physics:* Tick-based smoothing and deadzone bounding box (prevents subpixel jitter).
   * *Bounds clamping:* `clamp-to-scene` or `center-if-small` (automatically centers scenes smaller than the viewport with clean borders instead of void bugs).
   * *Scriptable cutscenes:* Cutscenes can detach the camera and pan to off-screen action leaving the player behind (`cameraPanTo(x, y, duration, easing)`, `cameraFollow(entityId)`, `cameraReset()`, `cameraShake()`). Interpolation curves are plain JSON state.
   * *Responsive scaling:* Core emits `DrawList` for a logical viewport. Runners map the logical viewport to physical displays via runner-configurable modes (integer-scaled pixel-perfect letterbox vs responsive expand-viewport).
-- **Check:** Headless replay verifying identical camera coordinates, panning curves, and draw lists across fixed steps; small-scene centering test.
+- **Check:** Headless replay verifying identical camera coordinates, panning curves, and draw lists across fixed ticks; small-scene centering test.
 
 ## Consistency Conventions
 
@@ -376,7 +376,7 @@ graph TD
 | --- | --- |
 | Naming | files `kebab-case.ts`; types and classes `PascalCase`; functions and values `camelCase`; ids are branded types (`AssetKey`, `SurfaceId`, `ScratchId`, `GameId`); asset keys use `/` |
 | Spec cites | code that implements legacy behaviour carries a comment naming the E-xx, T-xx or format-spec section (G7) |
-| Data and formats | JSON (JCS) for state and logs; integers for pixels and steps; doubles for script numbers; no `Date`; no locale APIs |
+| Data and formats | JSON (JCS) for state and logs; integers for pixels and ticks; doubles for script numbers; no `Date`; no locale APIs |
 | Errors | readers return `Result`; the VM raises RPGCode errors; `core` throws only for programmer errors |
 | Cross-cutting | `GameSettings` (from `.gam`) plus `RunConfig` (seed, scale, logical resolution, `platformFonts`) from the runner; no globals or singletons in `core` |
 | Testing | every domain epic ships a replay test (input log → state and draw-list hashes), a snapshot/restore test, and a latency-fuzz run; goldens change only with a stated reason (G5) |
@@ -418,7 +418,7 @@ packages/
   core/src/
     index.ts            # public entry only (AD-22)
     ports/              # engine API, DrawCommand, Value, service ports
-    engine/             # step pipeline (AD-26)
+    engine/             # tick pipeline (AD-26)
     canon/  fmath/  rng/  time/  input/
     formats/            # readers, writers, package, image
     asset/              # resolver, AssetIndex
@@ -487,7 +487,7 @@ Primary governing ADs per capability. Each AD's `Binds` line lists every capabil
 ## Deferred
 
 - ADR 0002, needed before the guard-rail checks are scaffolded: reference rasteriser and glyph rasterisation in `core` (AD-4, AD-15) amending `architecture-options.md` §2 seam bullets (tick, read-back, text layout), the `packages.md` seam section and G4 rule 1 wording; the `Math` allowlist and `**` ban as extra G3 enforcement (AD-13); an `ovsx` exemption note (EPL-2.0, publish-only, never shipped).
-- Per-step thread budget and the legacy seconds-per-step → steps conversion with rounding: tuned against the demo; owners are epics rpgcode-vm and movement-triggers. AD-2 and AD-26 keep them from diverging.
+- Per-tick thread budget and the legacy seconds-per-step → ticks conversion with rounding: tuned against the demo; owners are epics rpgcode-vm and movement-triggers. AD-2 and AD-26 keep them from diverging.
 - TrueType rasteriser and JPEG decoder choices (AD-15, AD-28): owners are epics board-rendering and legacy-formats; both go on the `core` allowlist after a licence check.
 - Restore policy on compiler or hash mismatch: AD-7 states restart-the-thread; the epic rpgcode-vm confirms against format-spec §11.
 - Resource limits for untrusted package import (zip bombs, oversized boards): epic legacy-formats.

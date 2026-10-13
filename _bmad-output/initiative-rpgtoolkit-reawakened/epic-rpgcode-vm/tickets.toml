@@ -21,13 +21,31 @@ references = [
 ]
 
 [[entry]]
+id = 26
+type = "story"
+title = "Rename step to tick: spine, ports, engine contract and goldens"
+description = "Jensen, 2026-10-12: the unit of simulation time is a tick, not a step. It runs before entry 2 so the tracer and every later entry are written with tick from the start. Doc-first (G7): amend the architecture spine (AD-2 and every AD that says step, including AD-9's wait payload, AD-26's phase list and the step budget wording), `docs/engine-features.md`, `docs/format-spec.md` and `docs/guardrails.md` wherever they use step for the simulation unit, in their own commit. Then rename in code: the `Engine` contract (`advance(steps, ...)`, `StepReport`, `stepsRun`, `stepAfter`), the log and golden formats that carry those names, and the harness driver. The `core/time` names (`TimeState`, `ClockPort`, `WaitView`) do not exist yet; entry 2 writes them as tick from the start. Changing a golden or a recorded-log field name is a deliberate G5 change: each regenerated golden is explained in the commit. Leave alone any use of step that means something else (a build step, a migration step, a path-finding step, `playerStep`/`itemStep` movement commands)."
+verify = "A repository-wide search shows no remaining use of step for the simulation unit outside the listed exceptions; the spine, engine-features, format-spec and guardrails say tick throughout; the golden job, the dump check and every required CI check pass; and each regenerated golden and log fixture differs from its predecessor only by the renamed fields."
+covers = ["CAP-5"]
+after = ["1.3", "1.8", "1.9"]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+references = [
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-2 (time is the step counter), AD-9, AD-26",
+  "constraint - docs/guardrails.md, sections G3 and G5",
+  "contract - packages/core/src/ports/engine.ts (Engine, StepReport) and packages/runner-harness/src/driver.ts",
+]
+notes = ["Ruled by Jensen, 2026-10-12: the simulation unit is called a tick, and this entry runs before entry 2 so no later entry adds uses of step.", "Entry 2 waits on this entry; its plan must be updated to the tick names once this lands."]
+
+[[entry]]
 id = 2
 type = "story"
 title = "Tracer bullet: source text to a restored snapshot through the harness"
 description = "Parses one inline program (`ProgramRef` kind inline, AD-7), lowers it to linear Step IR, registers `end` and `sleep` in a provisional built-in registry, steps it through one AD-9 yield, takes a snapshot mid-run that restores into a fresh VM, and runs it through a VM-backed test host in `runner-harness`; also creates the `GameState`/`VmState` shell (with per-section slots that entries 6, 7, 9 and 10 fill and entry 11 reconciles), `core/rng` (AD-12: xoshiro128** with SplitMix32 seed expansion, `RngPort`, `GameState.rng`), variable read/assign and call-site argument and lvalue binding at the call boundary, and the shared random-step snapshot-restore-hash test helper later entries reuse."
 verify = "`runner-harness` runs the inline program to completion across the yield, the mid-run snapshot restores into a fresh VM and finishes with the identical state hash, and the golden job stays green."
 covers = ["CAP-5"]
-after = ["1.3", "1.8", "1.9"]
+after = ["1.3", "1.8", "1.9", 26]
 hitl = false
 risk = "high"
 plan_checkpoint = true
@@ -92,7 +110,7 @@ references = [
 id = 21
 type = "story"
 title = "Effect records and generic command stubs: every catalogue name responds"
-description = "Defines the plain-data effect record (seq, step, thread, name, kind, args, out, result, patch, wait, request) stored in the `vm` section behind an AD-23 schema entry, and registers one generic stub per catalogue name that is safe to stub (170 of the 271 names in format-spec 9.11) through `PluginDefinition.commands`: it validates args against the name's `ParamSpec`, records its side effect as an effect record naming the owning state section, writes by-reference outputs, and returns a documented default. Owner epics later replace a stub with real behaviour and apply its effects to their section. Log growth is bounded (drained per step by the owning module, ring-capped in headless runs)."
+description = "Defines the plain-data effect record (seq, tick, thread, name, kind, args, out, result, patch, wait, request) stored in the `vm` section behind an AD-23 schema entry, and registers one generic stub per catalogue name that is safe to stub (170 of the 271 names in format-spec 9.11) through `PluginDefinition.commands`: it validates args against the name's `ParamSpec`, records its side effect as an effect record naming the owning state section, writes by-reference outputs, and returns a documented default. Owner epics later replace a stub with real behaviour and apply its effects to their section. Log growth is bounded (drained per tick by the owning module, ring-capped in headless runs)."
 verify = "A catalogue test resolves every one of the 170 stub names with its documented arity and byRef parameters, calls each with valid args and sees one effect record of the catalogue's kind naming the catalogue's section, a snapshot taken after the calls restores with an identical state hash, and the same call twice on the same view returns equal results."
 covers = ["CAP-5"]
 after = [3]
@@ -141,7 +159,7 @@ plan_checkpoint = true
 id = 7
 type = "story"
 title = "Error handling, located diagnostics, Logger and the harness report change"
-description = "First step, doc-first (G7): a person rules ERR-1 and ERR-2 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements `setErrorHandler`, `setResumeNextHandler`, `resumeNext` and the legacy `on error goto` / `on error resume next` forms inside functions, with handler state in `Frame.errorHandler`, `debugger(msg)` and `debug`, the `core` `Logger` port with levels and plain-data records (AD-24), every runtime error reported as a `StepReport` diagnostic `{ code, file, line, message }`, and the entry-1.9 harness driver change so a step report may carry non-empty requests and diagnostics (format-spec section 9.8, E-98, `deferred-work.md`, audit row 3). Extends the entry 3 `Logger` port with the remaining levels and sinks."
+description = "First step, doc-first (G7): a person rules ERR-1 and ERR-2 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements `setErrorHandler`, `setResumeNextHandler`, `resumeNext` and the legacy `on error goto` / `on error resume next` forms inside functions, with handler state in `Frame.errorHandler`, `debugger(msg)` and `debug`, the `core` `Logger` port with levels and plain-data records (AD-24), every runtime error reported as a `TickReport` diagnostic `{ code, file, line, message }`, and the entry-1.9 harness driver change so a tick report may carry non-empty requests and diagnostics (format-spec section 9.8, E-98, `deferred-work.md`, audit row 3). Extends the entry 3 `Logger` port with the remaining levels and sinks."
 verify = "A synthetic bad program reports the file and line, its handler runs and `resumeNext` continues after the failing statement, a nested-call error escapes the caller's handler, a `Logger` record reaches the port with no `console` call in `core`, and the harness accepts the report."
 covers = ["CAP-5"]
 after = [5]
@@ -160,7 +178,7 @@ plan_checkpoint = true
 id = 8
 type = "story"
 title = "Modules: includes, implicit includes, redirects, hoisting, program cache"
-description = "First step, doc-first (G7): a person rules MOD-2 and MOD-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements `#include` and `include()`, implicit include `file.func(args)`, `redirect`/`killRedirect`/`killAllRedirects` with their `redirects` state section, per-file hoisting and visibility after include, `Prg/` path resolution through the epic-2 asset resolver, `ProgramCache` keyed by `sourceHash` (E-91), and the refusal of a pre-compiled `.prg` (first byte `0x00`) with the section 9.1 message. Function names clash across files in real code (two queue and stack libraries both define AddLit and PopLit, told apart only by the `file.` prefix), and the unqualified-after-first-use rule is claimed by one community tutorial but not seen across files, so this entry's doc-first ruling decides it. A script function replaced by a later include or definition raises a `command.overridden` warn record and a located `StepReport` diagnostic { code, file, line, message } so script authors and handlers can see it."
+description = "First step, doc-first (G7): a person rules MOD-2 and MOD-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements `#include` and `include()`, implicit include `file.func(args)`, `redirect`/`killRedirect`/`killAllRedirects` with their `redirects` state section, per-file hoisting and visibility after include, `Prg/` path resolution through the epic-2 asset resolver, `ProgramCache` keyed by `sourceHash` (E-91), and the refusal of a pre-compiled `.prg` (first byte `0x00`) with the section 9.1 message. Function names clash across files in real code (two queue and stack libraries both define AddLit and PopLit, told apart only by the `file.` prefix), and the unqualified-after-first-use rule is claimed by one community tutorial but not seen across files, so this entry's doc-first ruling decides it. A script function replaced by a later include or definition raises a `command.overridden` warn record and a located `TickReport` diagnostic { code, file, line, message } so script authors and handlers can see it."
 verify = "An include cycle, an implicit include and a redirect chain each resolve as documented, a cached program is not re-parsed, and a `.prg` whose first byte is `0x00` is refused with the section 9.1 message."
 covers = ["CAP-5"]
 after = [7, "2.10"]
@@ -178,9 +196,9 @@ notes = ["#Include gives access to that file's functions under a namespace-like 
 [[entry]]
 id = 9
 type = "story"
-title = "Threads and waits: kinds, sleep, wake, tellThread, multiRun, step budget"
-description = "First step, doc-first (G7): a person rules THR-1 to THR-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements the four thread kinds (`blocking`, `board`, `persistent`, `item`) with `thread(file,persist)` and the E-93 operations (`threadSleep`, `threadWake`, `threadSleepRemaining`, `killThread`, `getThreadId`, `tellThread`) registered through entry 3's registry, the AD-9 wait registry with `poll`-only resolution and duplicate rejection, the VM-owned `input.key` and `sleep` kinds plus a test-double `movement` kind that movement-triggers takes over, per-thread source and target context, `multiRun` movement coupling, and the per-step budget tuned with movement-triggers (E-33, E-95, AD-26; spine Deferred, D10). Implements ADR 0004 decision 7 on the VM side, on AD-5's existing request and reply inputs: running a command's `then` continuation with the reply prepended; a tick-counted timeout for AD-9 waits (layered engine default, plugin `options`, the wait's own value, harness override; zero means none) that resumes the thread with an error result and a located diagnostic; a failure reply delivered as an ordinary input for a frozen request, whose wall-clock timeout the host owns; deadlock detection (every live thread parked on another parked thread, no reply outstanding) reported with the stuck threads and what they wait on, a hard failure in headless runs; and scripted replies in the harness. Exposes the VM's `waits` and `threads` phase handlers and an instruction-granular resumable step for epic 4's `createEngine` to register (AD-26); the open-step cursor and pause state belong to `core/engine` (AD-10), so the breakpoint hook and the E-03 pause are epic 4's."
-verify = "The synthetic thread program (board, persistent and item threads, sleep and wake, `tellThread` injected inline code, a never-yielding loop preempted at the budget, `multiRun` over two sprites) runs deterministically and restores identically mid-wait, a scripted reply input is applied at its recorded step on replay, an AD-9 wait with no wake times out in ticks with an error result, a failure reply resumes a frozen request with the missing-asset result, and two threads parked on each other fail the headless run with both named."
+title = "Threads and waits: kinds, sleep, wake, tellThread, multiRun, tick budget"
+description = "First step, doc-first (G7): a person rules THR-1 to THR-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements the four thread kinds (`blocking`, `board`, `persistent`, `item`) with `thread(file,persist)` and the E-93 operations (`threadSleep`, `threadWake`, `threadSleepRemaining`, `killThread`, `getThreadId`, `tellThread`) registered through entry 3's registry, the AD-9 wait registry with `poll`-only resolution and duplicate rejection, the VM-owned `input.key` and `sleep` kinds plus a test-double `movement` kind that movement-triggers takes over, per-thread source and target context, `multiRun` movement coupling, and the per-tick budget tuned with movement-triggers (E-33, E-95, AD-26; spine Deferred, D10). Implements ADR 0004 decision 7 on the VM side, on AD-5's existing request and reply inputs: running a command's `then` continuation with the reply prepended; a tick-counted timeout for AD-9 waits (layered engine default, plugin `options`, the wait's own value, harness override; zero means none) that resumes the thread with an error result and a located diagnostic; a failure reply delivered as an ordinary input for a frozen request, whose wall-clock timeout the host owns; deadlock detection (every live thread parked on another parked thread, no reply outstanding) reported with the stuck threads and what they wait on, a hard failure in headless runs; and scripted replies in the harness. Exposes the VM's `waits` and `threads` phase handlers and an instruction-granular resumable step for epic 4's `createEngine` to register (AD-26); the open-tick cursor and pause state belong to `core/engine` (AD-10), so the breakpoint hook and the E-03 pause are epic 4's."
+verify = "The synthetic thread program (board, persistent and item threads, sleep and wake, `tellThread` injected inline code, a never-yielding loop preempted at the budget, `multiRun` over two sprites) runs deterministically and restores identically mid-wait, a scripted reply input is applied at its recorded tick on replay, an AD-9 wait with no wake times out in ticks with an error result, a failure reply resumes a frozen request with the missing-asset result, and two threads parked on each other fail the headless run with both named."
 covers = ["CAP-5"]
 after = [3, 5]
 hitl = true
@@ -188,9 +206,10 @@ risk = "high"
 references = [
   "reference - docs/engine-features.md, E-33, E-93, E-95",
   "reference - docs/format-spec.md, sections 9.10, 9.11 (program flow and threads)",
-  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-9, AD-26, and its Deferred list (per-step budget owners rpgcode-vm and movement-triggers)",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-9, AD-26, and its Deferred list (per-tick budget owners rpgcode-vm and movement-triggers)",
 ]
 plan_checkpoint = true
+notes = ["THR-1 starting point (Jensen, 2026-10-12): legacy `threadSleep(id, seconds)` takes real seconds, `0` means sleep until woken, and a sleeping thread just skips its turn (docs/provenance/facts-round-2.md R2-Q23; the archive's research note rpgcode-threads-for-implementers.md). Our simulation is a fixed 60 Hz tick (AD-2, G3.2), so `core/time`'s `secondsToTicks` converts seconds to a whole number of ticks (a tick is one fixed simulation update) and the wait stores an absolute `until` tick, which keeps snapshots, restores and replays identical at any frame rate. The ruling still has to pick the rounding rule, what `0` maps to (an indefinite sleep), and the wake order when several threads wake on the same tick. The tracer's provisional `sleep(ticks)` (entry 2) is not `threadSleep`; this entry replaces its callers."]
 
 [[entry]]
 id = 22
@@ -241,8 +260,8 @@ plan_checkpoint = true
 id = 13
 type = "story"
 title = "Pure built-ins: maths, seeded random and flow"
-description = "Registers the maths names (`sin`, `cos`, `tan`, `sqrt`, `log` and the rest) by consuming `core/fmath` (entry 4), draws `random` through entry 2's single seeded RNG with the draw order fixed by the step pipeline, and registers the flow built-ins `run`, `change`, `rpgCode`, `delay`, `end`/`done`/`stop`, `branch`, `iif` and `getTickCount` (AD-12, AD-13)."
-verify = "A fixed seed gives identical `random` sequences that round-trip through a snapshot, and `run`/`end` unwinding across nested frames matches the ruled FUN-7 behaviour."
+description = "Registers the maths names (`sin`, `cos`, `tan`, `sqrt`, `log` and the rest) by consuming `core/fmath` (entry 4), draws `random` through entry 2's single seeded RNG with the draw order fixed by the tick pipeline, and registers the flow built-ins `run`, `change`, `rpgCode`, `delay`, `end`/`done`/`stop`, `branch`, `iif` and `getTickCount` (AD-12, AD-13)."
+verify = "A fixed seed gives identical `random` sequences that round-trip through a snapshot, and `end()` unwinds fully as format-spec §9.5 rules (FUN-7, R2-Q20): called inside nested function calls, inside an included function (ending the including program) and inside a `run()` program (ending the whole chain), it stops the program immediately and abandons every pending frame, and a snapshot taken before the `end()` restores and ends identically."
 covers = ["CAP-5"]
 after = [4, 5, 8, 9, 12]
 hitl = false
@@ -356,7 +375,7 @@ title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-5"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 26]
 hitl = false
 risk = "low"
 
@@ -364,7 +383,7 @@ risk = "low"
 id = 19
 type = "story"
 title = "End-to-end corpus suite"
-description = "Offered closing suite: one job that runs the whole fetched corpus (both games) headlessly with scripted input, using a defined finish line for programs that never end (`same state hash after N steps`, per the discovery)."
+description = "Offered closing suite: one job that runs the whole fetched corpus (both games) headlessly with scripted input, using a defined finish line for programs that never end (`same state hash after N ticks`, per the discovery)."
 verify = "The suite passes on the fetched fixtures and fails when any program's result or restore hash drifts under the defined finish line."
 covers = ["CAP-5"]
 after = [17]

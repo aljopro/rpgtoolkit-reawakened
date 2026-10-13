@@ -13,34 +13,37 @@ import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import {
+  BATTLE_MAX_MINOR,
+  BATTLE_MIN_MINOR,
   STATUS_EFFECT_DETECT_OFFSET,
   STATUS_EFFECT_MAGIC,
   STATUS_EFFECT_SECTION,
   type StatusEffect,
+  unsupportedBattleMinor,
   unsupportedTextForm,
 } from "./model.ts";
 
 /**
  * Read a status effect from `reader` (format-spec §8.2).
  *
- * The detection byte at offset 16 (§1.3, §8.2) is checked first: a non-NUL
+ * §8.2 lists the detection byte at offset 16 before the header; the probe does
+ * not move the cursor, so the header is read first and the detection checked
+ * before any header error — a text file has no NUL-terminated magic to read,
+ * and a file too short to carry the detection byte reports the header's own
+ * short read rather than the probe's out-of-range error. A non-NUL detection
  * byte means the 2.x text form, which is refused with a located `FormatError`
- * rather than parsed as binary. Otherwise the magic, major/minor header and
- * the §8.2 field list are read in order; bytes after the program are kept as
- * `residue` (§1.7).
+ * rather than parsed as binary. Otherwise the magic, the `minor`-range check
+ * and the §8.2 field list are read in order; bytes after the program are kept
+ * as `residue` (§1.7).
  */
 export function readStatusEffect(reader: BinaryReader): Result<StatusEffect> {
-  const detectAt = reader.offset + STATUS_EFFECT_DETECT_OFFSET;
-  const probe = reader.isBinaryAt(detectAt);
-  if (!probe.ok) {
-    return probe;
-  }
-  if (!probe.value) {
-    return err(unsupportedTextForm(reader, detectAt, STATUS_EFFECT_SECTION, STATUS_EFFECT_MAGIC));
-  }
-
   const start = reader.offset;
   const header = reader.header();
+  const detectAt = start + STATUS_EFFECT_DETECT_OFFSET;
+  const probe = reader.isBinaryAt(detectAt);
+  if (probe.ok && !probe.value) {
+    return err(unsupportedTextForm(reader, detectAt, STATUS_EFFECT_SECTION, STATUS_EFFECT_MAGIC));
+  }
   if (!header.ok) {
     return header;
   }
@@ -51,6 +54,17 @@ export function readStatusEffect(reader: BinaryReader): Result<StatusEffect> {
       section: STATUS_EFFECT_SECTION,
       message: `not a status effect: magic is "${header.value.magic}", expected "${STATUS_EFFECT_MAGIC}"`,
     });
+  }
+  if (header.value.minor < BATTLE_MIN_MINOR || header.value.minor > BATTLE_MAX_MINOR) {
+    return err(
+      unsupportedBattleMinor(
+        reader,
+        reader.offset - 2,
+        STATUS_EFFECT_SECTION,
+        STATUS_EFFECT_MAGIC,
+        header.value.minor,
+      ),
+    );
   }
 
   const name = reader.str();

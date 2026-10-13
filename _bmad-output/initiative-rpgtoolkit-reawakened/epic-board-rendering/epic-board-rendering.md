@@ -11,7 +11,7 @@ risk: high
 
 ## Description
 
-The core boots a game, runs the fixed-step main loop, models boards, layers, coordinate systems, tiles, lighting and transitions, and builds ordered draw lists through one `composeBoard` for layer compositing, iso drawing, occlusion, translucency, shading, animations and the message window. Implements the Spatial Scene model (AD-32) and Dynamic Camera & Viewport model (AD-33), supporting camera tracking, scriptable cutscene panning, deadzones, small-scene centering, multi-layer parallax (§4.3, E-52), and decoupled responsive viewport scaling. The reference rasteriser in `core/raster` (also used for script read-back) replays them to PNG, with core-owned text layout, glyphs and surfaces.
+The core boots a game, runs the fixed-tick main loop, models boards, layers, coordinate systems, tiles, lighting and transitions, and builds ordered draw lists through one `composeBoard` for layer compositing, iso drawing, occlusion, translucency, shading, animations and the message window. Implements the Spatial Scene model (AD-32) and Dynamic Camera & Viewport model (AD-33), supporting camera tracking, scriptable cutscene panning, deadzones, small-scene centering, multi-layer parallax (§4.3, E-52), and decoupled responsive viewport scaling. The reference rasteriser in `core/raster` (also used for script read-back) replays them to PNG, with core-owned text layout, glyphs and surfaces.
 
 ## Outcome
 
@@ -28,7 +28,7 @@ A runner can show any legacy board as the legacy game did; the CAP-2 and CAP-6 s
 
 ## Boundaries
 
-Core world model, the step pipeline's main loop, draw-list builder, `composeBoard`, the surface model, text layout and glyph rasterisation, and the reference rasteriser. Not sprite movement and triggers (epic movement-triggers), not the WebGL2 replayer (epic web-runner-packaging), not audio. Pixel parity for 2D tiles projected on iso boards and the legacy scroll cache are non-goals.
+Core world model, the tick pipeline's main loop, draw-list builder, `composeBoard`, the surface model, text layout and glyph rasterisation, and the reference rasteriser. Not sprite movement and triggers (epic movement-triggers), not the WebGL2 replayer (epic web-runner-packaging), not audio. Pixel parity for 2D tiles projected on iso boards and the legacy scroll cache are non-goals.
 
 - Touch point: VM built-in registration API - draw and board built-ins register here; owner: this epic
 
@@ -52,4 +52,4 @@ Core world model, the step pipeline's main loop, draw-list builder, `composeBoar
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
 - Decision: 16×16 tiles (tileset details 2, 4 and 6) are stored at 16×16 and doubled to 32×32 by pixel doubling in the renderer, once per tileset, with the result cached (format-spec §3.1); the format reader keeps the stored size. Decided by the user at the epic legacy-formats code review, 2026-10-11.
 - Carry-forward: colour keys are tested by `core/raster` on decoded pixels (the `key` of a `blit`, AD-3); `decodeTexture` applies none (AD-28, clarified 2026-10-11). If scripts need a key applied outside a blit, add one shared helper to `core/raster`.
-- Decision: Jensen, 2026-10-11: the breakpoint hook (`setBreakpoints`, `paused`), the E-03 focus-pause state and `createEngine` belong to this epic (core/engine owns the open-step cursor and the phase list, AD-10 and AD-26); epic rpgcode-vm exposes the `waits` and `threads` phase handlers and a resumable step for it to register.
+- Decision: Jensen, 2026-10-11: the breakpoint hook (`setBreakpoints`, `paused`), the E-03 focus-pause state and `createEngine` belong to this epic (core/engine owns the open-tick cursor and the phase list, AD-10 and AD-26); epic rpgcode-vm exposes the `waits` and `threads` phase handlers and a resumable step for it to register.

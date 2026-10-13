@@ -14,10 +14,13 @@ import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import {
+  BATTLE_MAX_MINOR,
+  BATTLE_MIN_MINOR,
   SPECIAL_MOVE_DETECT_OFFSET,
   SPECIAL_MOVE_MAGIC,
   SPECIAL_MOVE_SECTION,
   type SpecialMove,
+  unsupportedBattleMinor,
   unsupportedTextForm,
 } from "./model.ts";
 
@@ -28,8 +31,9 @@ import {
  * probed without moving the cursor: a non-NUL byte means the 2.x text form,
  * which is refused with a located `FormatError` rather than parsed as binary.
  * A file too short to carry the detection byte is not an error here — the
- * header's own error is reported instead. Otherwise the §8.1 field list is
- * read in order; bytes after the description are kept as `residue` (§1.7).
+ * header's own error is reported instead. Otherwise the `minor`-range check and
+ * the §8.1 field list are read in order; bytes after the description are kept as
+ * `residue` (§1.7).
  */
 export function readSpecialMove(reader: BinaryReader): Result<SpecialMove> {
   const start = reader.offset;
@@ -53,6 +57,17 @@ export function readSpecialMove(reader: BinaryReader): Result<SpecialMove> {
       section: SPECIAL_MOVE_SECTION,
       message: `not a special move: magic is "${header.value.magic}", expected "${SPECIAL_MOVE_MAGIC}"`,
     });
+  }
+  if (header.value.minor < BATTLE_MIN_MINOR || header.value.minor > BATTLE_MAX_MINOR) {
+    return err(
+      unsupportedBattleMinor(
+        reader,
+        reader.offset - 2,
+        SPECIAL_MOVE_SECTION,
+        SPECIAL_MOVE_MAGIC,
+        header.value.minor,
+      ),
+    );
   }
 
   const name = reader.str();

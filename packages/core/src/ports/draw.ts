@@ -14,7 +14,7 @@
  * implicit index signature, so it could not satisfy `PlainData`.
  * `DrawList.commands` and `GlyphAdvance` arrays are mutable arrays because
  * `DrawList` must be assignable to `PlainData` (whose arrays are mutable),
- * while `StepReport` arrays are readonly.
+ * while `TickReport` arrays are readonly.
  */
 
 import type { AssetKey, ScratchId, SurfaceId } from "./keys.ts";
@@ -168,9 +168,9 @@ export type DrawCommand =
   | PushTargetCommand
   | PopTargetCommand;
 
-/** One frame's replay: `step`, logical resolution and ordered commands (AD-3). */
+/** One frame's replay: `tick`, logical resolution and ordered commands (AD-3). */
 export type DrawList = {
-  readonly step: number;
+  readonly tick: number;
   readonly width: number;
   readonly height: number;
   readonly commands: DrawCommand[];

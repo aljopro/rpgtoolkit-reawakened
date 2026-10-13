@@ -74,7 +74,7 @@ function buildSpc(options: SpcOptions = {}): Uint8Array {
   const writer = new BinaryWriter();
   writer.str(options.magic ?? SPECIAL_MOVE_MAGIC);
   writer.i16(options.major ?? 2);
-  writer.i16(options.minor ?? 0);
+  writer.i16(options.minor ?? 2);
   writer.str(options.name ?? "Fireball");
   writer.i32(options.damage ?? 40);
   writer.i32(options.smpCost ?? 5);
@@ -116,7 +116,7 @@ function buildSte(options: SteOptions = {}): Uint8Array {
   const writer = new BinaryWriter();
   writer.str(options.magic ?? STATUS_EFFECT_MAGIC);
   writer.i16(options.major ?? 2);
-  writer.i16(options.minor ?? 0);
+  writer.i16(options.minor ?? 2);
   writer.str(options.name ?? "Poison");
   writer.i16(options.rounds ?? 3);
   writer.i16(options.speedUp ?? 0);
@@ -154,7 +154,7 @@ function buildBkg(options: BkgOptions = {}): Uint8Array {
   const writer = new BinaryWriter();
   writer.str(options.magic ?? BATTLE_BACKGROUND_MAGIC);
   writer.i16(options.major ?? 2);
-  writer.i16(options.minor ?? 0);
+  writer.i16(options.minor ?? 2);
   writer.str(options.image ?? "field.bmp");
   writer.str(options.music ?? "battle.mid");
   writer.str(options.menuMoveSound ?? "move.wav");
@@ -174,7 +174,7 @@ test("reads a special move's header and every field", () => {
   const move = unwrap(readSpecialMove(reader));
   equal(move.magic, SPECIAL_MOVE_MAGIC);
   equal(move.major, 2);
-  equal(move.minor, 0);
+  equal(move.minor, 2);
   equal(move.name, "Fireball");
   equal(move.damage, 40);
   equal(move.smpCost, 5);
@@ -302,7 +302,7 @@ test("an unencodable special-move string fails the writer", () => {
   const model: SpecialMove = {
     magic: SPECIAL_MOVE_MAGIC,
     major: 2,
-    minor: 0,
+    minor: 2,
     name: "bad\u0100",
     damage: 1,
     smpCost: 1,
@@ -329,7 +329,7 @@ test("reads a status effect's header and every field", () => {
   const effect = unwrap(readStatusEffect(reader));
   equal(effect.magic, STATUS_EFFECT_MAGIC);
   equal(effect.major, 2);
-  equal(effect.minor, 0);
+  equal(effect.minor, 2);
   equal(effect.name, "Poison");
   equal(effect.rounds, 3);
   equal(effect.speedUp, 4);
@@ -430,7 +430,7 @@ test("reads a battle background's header and six string fields", () => {
   const background = unwrap(readBattleBackground(reader));
   equal(background.magic, BATTLE_BACKGROUND_MAGIC);
   equal(background.major, 2);
-  equal(background.minor, 0);
+  equal(background.minor, 2);
   equal(background.image, "field.bmp");
   equal(background.music, "battle.mid");
   equal(background.menuMoveSound, "move.wav");
@@ -520,7 +520,7 @@ test("an unencodable battle-background string fails the writer", () => {
   const model: BattleBackground = {
     magic: BATTLE_BACKGROUND_MAGIC,
     major: 2,
-    minor: 0,
+    minor: 2,
     image: "",
     music: "bad\u0100.mid",
     menuMoveSound: "",
@@ -530,6 +530,81 @@ test("an unencodable battle-background string fails the writer", () => {
     residue: new Uint8Array(0),
   };
   equal(writeBattleBackground(model).ok, false);
+});
+
+// --- Version ranges (§8.1–§8.3, §1.4) ---------------------------------------
+
+/** A battle format's reader with its magic-derived minor-field offset (§1.3). */
+const battleVersionCases: readonly {
+  readonly name: string;
+  readonly section: string;
+  readonly minorOffset: number;
+  readonly read: (reader: BinaryReader) => Result<{ readonly minor: number }>;
+  readonly build: (minor: number) => Uint8Array;
+}[] = [
+  { name: ".spc", section: SPECIAL_MOVE_SECTION, minorOffset: 19, read: readSpecialMove, build: (minor) => buildSpc({ minor }) },
+  { name: ".ste", section: STATUS_EFFECT_SECTION, minorOffset: 19, read: readStatusEffect, build: (minor) => buildSte({ minor }) },
+  { name: ".bkg", section: BATTLE_BACKGROUND_SECTION, minorOffset: 15, read: readBattleBackground, build: (minor) => buildBkg({ minor }) },
+];
+
+test("each battle format accepts minor 2 and 3", () => {
+  for (const { name, read, build } of battleVersionCases) {
+    for (const minor of [2, 3]) {
+      equal(unwrap(read(new BinaryReader(build(minor)))).minor, minor, `${name}: minor ${minor} is accepted`);
+    }
+  }
+});
+
+test("each battle format refuses a minor outside 2..3 at the minor field", () => {
+  for (const { name, section, minorOffset, read, build } of battleVersionCases) {
+    for (const minor of [0, 1, 4, 99]) {
+      const result = read(new BinaryReader(build(minor)));
+      equal(result.ok, false, `${name}: minor ${minor} is refused`);
+      if (result.ok) {
+        continue;
+      }
+      equal(result.error.section, section, `${name}: minor ${minor} section`);
+      equal(result.error.offset, minorOffset, `${name}: minor ${minor} offset`);
+    }
+  }
+});
+
+test("each battle format refuses a negative minor at its own byte (§1.4)", () => {
+  for (const { name, minorOffset, read, build } of battleVersionCases) {
+    const result = read(new BinaryReader(build(-1)));
+    equal(result.ok, false, `${name}: negative minor is refused`);
+    if (result.ok) {
+      continue;
+    }
+    equal(result.error.section, "format-spec §1.4", `${name}: negative minor section`);
+    equal(result.error.offset, minorOffset, `${name}: negative minor offset`);
+  }
+});
+
+test("a truncated status effect reports the header's short read before the detection byte", () => {
+  // 16 bytes is the whole magic with no terminator, so the header read fails at
+  // offset 0 (§1.1); the detection byte at offset 16 is past the end and must
+  // not be the error a caller sees (it was, before the reader read the header
+  // first).
+  const result = readStatusEffect(new BinaryReader(buildSte().slice(0, 16)));
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §1.1");
+  equal(result.error.offset, 0);
+});
+
+test("a truncated battle background reports the header's short read before the detection byte", () => {
+  // 12 bytes is the whole magic with no terminator: the header read fails at
+  // offset 0 (§1.1) rather than the detection probe at offset 12.
+  const result = readBattleBackground(new BinaryReader(buildBkg().slice(0, 12)));
+  equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  equal(result.error.section, "format-spec §1.1");
+  equal(result.error.offset, 0);
 });
 
 // --- Sample fixtures (guard-rail G5 rule 4: fetched, never committed) --------

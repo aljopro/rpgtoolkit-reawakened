@@ -1,9 +1,9 @@
 /**
  * Everything from outside is an input (AD-5, AD-14).
  *
- * Inputs are `{ step, event }`, where `step` is `time.step` at the start of
- * the consuming step; inputs apply in array order within a step. The core
- * returns the consumed list in `StepReport.consumed` and that concatenation is
+ * Inputs are `{ tick, event }`, where `tick` is `time.tick` at the start of
+ * the consuming tick; inputs apply in array order within a tick. The core
+ * returns the consumed list in `TickReport.consumed` and that concatenation is
  * the canonical replay log.
  */
 
@@ -40,7 +40,7 @@ export type GamepadInput = {
 
 /**
  * The window gained or lost focus. The core owns the E-03 pause: after
- * `focus.lost` `advance` consumes no steps until `focus.gained` (AD-14).
+ * `focus.lost` `advance` consumes no ticks until `focus.gained` (AD-14).
  */
 export type FocusInput = {
   readonly kind: "focus";
@@ -110,8 +110,8 @@ export type InputEvent =
   | AudioEnded
   | VideoEnded;
 
-/** One external input, stamped with the step that consumes it (AD-14). */
+/** One external input, stamped with the tick that consumes it (AD-14). */
 export type InputRecord = {
-  readonly step: number;
+  readonly tick: number;
   readonly event: InputEvent;
 };

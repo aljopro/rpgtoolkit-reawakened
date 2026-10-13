@@ -13,6 +13,7 @@
  */
 
 import type { AssetDecoder } from "./decoder.ts";
+import { asciiLower } from "../main-file/layout.ts";
 
 /**
  * How many leading bytes the magic-header test sees.
@@ -31,7 +32,7 @@ export interface AssetRegistry {
    * Add a decoder. Throws when its id is taken, when an extension is not a
    * bare dotless name, or when it claims an extension another decoder already
    * claims — each a programmer error, not bad file data. Extensions are stored
-   * lowercased, matching `byExtension`'s lookup.
+   * ASCII-folded (`asciiLower`), matching `byExtension`'s lookup.
    */
   register(decoder: AssetDecoder): void;
   /** The decoder that claims `extension` (case-insensitive, no dot), or `undefined`. */
@@ -71,7 +72,7 @@ export function createAssetRegistry(initial: readonly AssetDecoder[] = []): Asse
           `decoder "${decoder.id}" declares extension "${extension}"; an extension is a bare, dotless name such as "png"`,
         );
       }
-      const key = extension.toLowerCase();
+      const key = asciiLower(extension);
       const owner = byExtensionKey.get(key);
       if (owner !== undefined) {
         throw new Error(
@@ -92,7 +93,7 @@ export function createAssetRegistry(initial: readonly AssetDecoder[] = []): Asse
   }
 
   const byExtension = (extension: string): AssetDecoder | undefined =>
-    byExtensionKey.get(extension.toLowerCase());
+    byExtensionKey.get(asciiLower(extension));
 
   const byHeader = (bytes: Uint8Array): AssetDecoder | undefined => {
     const header = bytes.subarray(0, HEADER_BYTES);

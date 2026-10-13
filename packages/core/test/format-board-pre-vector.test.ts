@@ -478,6 +478,39 @@ test("equal flattened shades merge into one record", () => {
   ]);
 });
 
+test("the flattened shade sums are not clamped to ±255", () => {
+  // One 1×1 cell on each of two layers, both shaded: §4.8 "Shading" sums them
+  // without clamping, so +255 on two layers is +510 (and −510 for two −255s).
+  const positive = readAndConvert(
+    buildPreVectorBoard({
+      sizeX: 1,
+      sizeY: 1,
+      sizeL: 2,
+      cells: [
+        { count: 1, index: 1, r: 255, g: 0, b: 0, tileType: 0 },
+        { count: 1, index: 1, r: 255, g: 0, b: 0, tileType: 0 },
+      ],
+    }),
+  );
+  deepEqual(positive.converted.shadeLayers, [
+    { castLayer: 2, records: [{ runCount: 1, r: 510, g: 0, b: 0 }] },
+  ]);
+  const negative = readAndConvert(
+    buildPreVectorBoard({
+      sizeX: 1,
+      sizeY: 1,
+      sizeL: 2,
+      cells: [
+        { count: 1, index: 1, r: -255, g: 0, b: 0, tileType: 0 },
+        { count: 1, index: 1, r: -255, g: 0, b: 0, tileType: 0 },
+      ],
+    }),
+  );
+  deepEqual(negative.converted.shadeLayers, [
+    { castLayer: 2, records: [{ runCount: 1, r: -510, g: 0, b: 0 }] },
+  ]);
+});
+
 test("a board with no shading gets no shade layer", () => {
   const bytes = buildPreVectorBoard({ cells: [{ count: 4, index: 1, r: 0, g: 0, b: 0, tileType: 0 }] });
   const { converted } = readAndConvert(bytes);
@@ -536,6 +569,203 @@ test("the start falls back to (64, 64) on layer 1 when its tiles are ≤ 0", () 
   deepEqual(zero.converted.properties.start, { x: 64, y: 64, layer: 1 });
   const negative = readAndConvert(buildPreVectorBoard({ startX: 2, startY: -1 }));
   deepEqual(negative.converted.properties.start, { x: 64, y: 64, layer: 1 });
+});
+
+test("empty program and sprite slots invent no geometry, and keep their indices", () => {
+  // The empty slots sit at a positive tile to prove the empty rule wins over a
+  // §5 mapping of that tile. §4.8: an empty program slot has an empty point
+  // list and `closed = 0`; an empty sprite slot is at (0, 0) on its stored layer.
+  for (const coordType of [0, 1]) {
+    const bytes = buildPreVectorBoard({
+      minor: 3,
+      coordType,
+      sizeX: 4,
+      sizeY: 4,
+      sizeL: 2,
+      programs: [
+        {
+          file: "p.prg",
+          x: 1,
+          y: 1,
+          layer: 1,
+          graphic: "",
+          activate: 0,
+          initialVar: "",
+          finalVar: "",
+          initialValue: "",
+          finalValue: "",
+          activationType: 0,
+        },
+        {
+          file: "",
+          x: 3,
+          y: 2,
+          layer: 2,
+          graphic: "",
+          activate: 0,
+          initialVar: "",
+          finalVar: "",
+          initialValue: "",
+          finalValue: "",
+          activationType: 2,
+        },
+      ],
+      sprites: [
+        {
+          file: "npc.itm",
+          x: 2,
+          y: 2,
+          layer: 1,
+          activate: 0,
+          initialVar: "",
+          finalVar: "",
+          initialValue: "",
+          finalValue: "",
+          activationType: 0,
+          activationPrg: "",
+          multitaskPrg: "",
+        },
+        {
+          file: "",
+          x: 3,
+          y: 3,
+          layer: 2,
+          activate: 0,
+          initialVar: "",
+          finalVar: "",
+          initialValue: "",
+          finalValue: "",
+          activationType: 0,
+          activationPrg: "",
+          multitaskPrg: "",
+        },
+      ],
+    });
+    const { converted } = readAndConvert(bytes);
+    equal(converted.programs.length, 2, "the empty program slot is kept");
+    deepEqual(converted.programs[1]?.points, [], `coordType ${coordType}: no region is invented`);
+    equal(converted.programs[1]?.closed, 0, `coordType ${coordType}: an empty region is open`);
+    equal(
+      converted.programs[1]?.activationType,
+      6,
+      `coordType ${coordType}: an empty slot still receives PRG_STOPS_MOVEMENT and keeps bit 2`,
+    );
+    equal(converted.programs[1]?.repeatDistance, 0);
+    equal(converted.sprites.length, 2, "the empty sprite slot is kept");
+    equal(converted.sprites[1]?.itemFile, "");
+    equal(converted.sprites[1]?.x, 0, `coordType ${coordType}: the empty sprite sits at x = 0`);
+    equal(converted.sprites[1]?.y, 0, `coordType ${coordType}: the empty sprite sits at y = 0`);
+    equal(converted.sprites[1]?.layer, 2, `coordType ${coordType}: the empty sprite keeps its stored layer`);
+  }
+});
+
+test("a legacy repeat bit is passed through with repeatDistance 0", () => {
+  const bytes = buildPreVectorBoard({
+    programs: [
+      {
+        file: "r.prg",
+        x: 1,
+        y: 1,
+        layer: 1,
+        graphic: "",
+        activate: 1,
+        initialVar: "",
+        finalVar: "",
+        initialValue: "",
+        finalValue: "",
+        activationType: 2,
+      },
+    ],
+  });
+  const { converted } = readAndConvert(bytes);
+  equal(
+    converted.programs[0]?.activationType,
+    6,
+    "bit 2 (repeat) stays set alongside PRG_STOPS_MOVEMENT (§4.8 chose passthrough)",
+  );
+  equal(converted.programs[0]?.repeatDistance, 0, "§4.8 gives the pre-vector record no distance field");
+});
+
+test("legacy tile types §4.7 does not define emit nothing and are not reported", () => {
+  const types = [5, 6, 7, 8, 9, 10, 19, 25];
+  const bytes = buildPreVectorBoard({
+    sizeX: types.length,
+    sizeY: 1,
+    sizeL: 1,
+    cells: types.map((tileType) => ({ count: 1, index: 1, r: 0, g: 0, b: 0, tileType })),
+  });
+  const result = convertPreVectorBoard(unwrap(readPreVectorBoard(new BinaryReader(bytes))));
+  equal(result.ok, true);
+  if (result.ok) {
+    deepEqual(result.value.vectors, [], "an undefined type emits no vector");
+    deepEqual(result.warnings, [], "an undefined type is not reported");
+  }
+});
+
+test("the conversion generates no vector base for a sprite", () => {
+  const { converted } = readAndConvert(
+    buildPreVectorBoard({
+      sprites: [
+        {
+          file: "npc.itm",
+          x: 1,
+          y: 1,
+          layer: 1,
+          activate: 0,
+          initialVar: "",
+          finalVar: "",
+          initialValue: "",
+          finalValue: "",
+          activationType: 0,
+          activationPrg: "",
+          multitaskPrg: "",
+        },
+      ],
+    }),
+  );
+  // §4.8 "Default vector bases": the vector `BoardSprite` carries no base — the
+  // bases come from the actor file (§6) — so the converted sprite has exactly
+  // the model's fields and no invented collision/activation base.
+  deepEqual(
+    Object.keys(converted.sprites[0] ?? {}).sort(),
+    [
+      "activate",
+      "activationPrg",
+      "activationType",
+      "finalValue",
+      "finalVar",
+      "initialValue",
+      "initialVar",
+      "itemFile",
+      "layer",
+      "loadingValue",
+      "loadingVar",
+      "multitaskPrg",
+      "reserved",
+      "x",
+      "y",
+    ].sort(),
+  );
+});
+
+test("the fields with no §4.2 home are dropped from the converted board", () => {
+  const { board, converted } = readAndConvert(buildPreVectorBoard({}));
+  // The pre-vector board carries them …
+  equal("registrationFlag" in board, true);
+  equal("foregroundImage" in board, true);
+  equal("dayNight" in board, true);
+  // … and the §4.2 vector board has no field for any of them (§4.8 "Dropped fields").
+  for (const key of [
+    "registrationFlag",
+    "registrationKey",
+    "foregroundImage",
+    "borderImage",
+    "borderColour",
+    "dayNight",
+    "reserved",
+  ]) {
+    equal(key in converted, false, `${key} is dropped`);
+  }
 });
 
 test("an iso-stacked tile and program become 64×32 diamonds", () => {

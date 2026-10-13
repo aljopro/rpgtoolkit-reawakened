@@ -8,23 +8,23 @@ test("test double executes key down, pointer, key up and matches literals", () =
 
   const inputs: InputRecord[] = [
     {
-      step: 0,
+      tick: 0,
       event: { kind: "key", name: "A", code: "KeyA", char: null, down: true },
     },
     {
-      step: 1,
+      tick: 1,
       event: { kind: "pointer", x: 100, y: 50, buttons: 1 },
     },
     {
-      step: 2,
+      tick: 2,
       event: { kind: "key", name: "A", code: "KeyA", char: null, down: false },
     },
   ];
 
   const report = engine.advance(3, inputs);
 
-  equal(report.stepsRun, 3);
-  equal(report.stepAfter, 3);
+  equal(report.ticksRun, 3);
+  equal(report.tickAfter, 3);
   equal(report.loading, false);
   equal(report.paused, null);
   deepEqual(report.requests, []);
@@ -39,7 +39,7 @@ test("test double executes key down, pointer, key up and matches literals", () =
   });
 
   const dl = engine.drawList(0);
-  equal(dl.step, 3);
+  equal(dl.tick, 3);
   equal(dl.width, 320);
   equal(dl.height, 240);
   // Key A is released, so keys is empty; commands should be fill then pointer rect
@@ -58,12 +58,12 @@ test("test double key-up for an unheld key removes nothing and does not throw", 
   const engine = createTestEngine();
   const report = engine.advance(1, [
     {
-      step: 0,
+      tick: 0,
       event: { kind: "key", name: "UNHELD", code: "KeyU", char: null, down: false },
     },
   ]);
 
-  equal(report.stepsRun, 1);
+  equal(report.ticksRun, 1);
   equal(report.audioCues.length, 0);
   const dl = engine.drawList(0);
   deepEqual(dl.commands, [
@@ -83,7 +83,7 @@ test("test double throws RangeError on past-stamped and future-stamped input", (
     () =>
       engine1.advance(2, [
         {
-          step: -1,
+          tick: -1,
           event: { kind: "gamepad" },
         },
       ]),
@@ -95,7 +95,7 @@ test("test double throws RangeError on past-stamped and future-stamped input", (
     () =>
       engine2.advance(2, [
         {
-          step: 2,
+          tick: 2,
           event: { kind: "gamepad" },
         },
       ]),
@@ -109,7 +109,7 @@ test("test double throws plain Error naming focus pause", () => {
     () =>
       engine.advance(1, [
         {
-          step: 0,
+          tick: 0,
           event: { kind: "focus", state: "lost" },
         },
       ]),
@@ -128,18 +128,18 @@ test("test double increments other counter for remaining events and returns null
   const bytes = new Uint8Array([1, 2, 3]);
 
   const inputs: InputRecord[] = [
-    { step: 0, event: { kind: "gamepad" } },
-    { step: 1, event: { kind: "asset", reqId: 1, bytes } },
-    { step: 2, event: { kind: "blob.loaded", reqId: 2, bytes: null } },
-    { step: 3, event: { kind: "blob.saved", reqId: 3, ok: true } },
-    { step: 4, event: { kind: "blob.listed", reqId: 4, names: ["save1"] } },
-    { step: 5, event: { kind: "extension.result", reqId: 5, result: 42 } },
-    { step: 6, event: { kind: "audio.ended", cueId: 10 } },
-    { step: 7, event: { kind: "video.ended" } },
+    { tick: 0, event: { kind: "gamepad" } },
+    { tick: 1, event: { kind: "asset", reqId: 1, bytes } },
+    { tick: 2, event: { kind: "blob.loaded", reqId: 2, bytes: null } },
+    { tick: 3, event: { kind: "blob.saved", reqId: 3, ok: true } },
+    { tick: 4, event: { kind: "blob.listed", reqId: 4, names: ["save1"] } },
+    { tick: 5, event: { kind: "extension.result", reqId: 5, result: 42 } },
+    { tick: 6, event: { kind: "audio.ended", cueId: 10 } },
+    { tick: 7, event: { kind: "video.ended" } },
   ];
 
   const report = engine.advance(8, inputs);
-  equal(report.stepsRun, 8);
+  equal(report.ticksRun, 8);
   equal(report.consumed.length, 8);
 
   const ev1 = report.consumed[1]!.event;
@@ -159,8 +159,8 @@ test("test double increments other counter for remaining events and returns null
 test("test double key-down deduplicates held keys", () => {
   const engine = createTestEngine();
   engine.advance(2, [
-    { step: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
-    { step: 1, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
+    { tick: 0, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
+    { tick: 1, event: { kind: "key", name: "A", code: "KeyA", char: null, down: true } },
   ]);
 
   const dl = engine.drawList(0);

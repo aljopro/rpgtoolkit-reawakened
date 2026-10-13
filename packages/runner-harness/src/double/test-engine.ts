@@ -10,13 +10,13 @@ import {
   type Engine,
   type InputEvent,
   type InputRecord,
-  type StepReport,
+  type TickReport,
   type SurfaceId,
   type SurfacePixels,
 } from "@tk-reawakened/core";
 
 export type TestEngineState = {
-  step: number;
+  tick: number;
   keys: string[];
   pointer: { x: number; y: number; buttons: number };
   other: number;
@@ -45,7 +45,7 @@ function deepCopyValue<T>(value: T): T {
 
 export function createTestEngine(): Engine {
   const state: TestEngineState = {
-    step: 0,
+    tick: 0,
     keys: [],
     pointer: { x: 0, y: 0, buttons: 0 },
     other: 0,
@@ -55,19 +55,19 @@ export function createTestEngine(): Engine {
 
   return {
     advance(
-      steps: number,
+      ticks: number,
       inputs: readonly InputRecord[],
-      maxSteps?: number,
-    ): StepReport {
-      const actualSteps =
-        maxSteps !== undefined && maxSteps < steps ? maxSteps : steps;
-      const before = state.step;
-      const endStep = before + actualSteps;
+      maxTicks?: number,
+    ): TickReport {
+      const actualTicks =
+        maxTicks !== undefined && maxTicks < ticks ? maxTicks : ticks;
+      const before = state.tick;
+      const endTick = before + actualTicks;
 
       for (const input of inputs) {
-        if (input.step < before || input.step >= endStep) {
+        if (input.tick < before || input.tick >= endTick) {
           throw new RangeError(
-            `test double: input step ${input.step} is outside window [${before}, ${endStep})`,
+            `test double: input tick ${input.tick} is outside window [${before}, ${endTick})`,
           );
         }
       }
@@ -130,17 +130,17 @@ export function createTestEngine(): Engine {
 
         state.log = fnv1a64(state.log + canon(encodeLog(record)));
         consumed.push({
-          step: record.step,
+          tick: record.tick,
           event: deepCopyValue(record.event as InputEvent),
         });
       }
 
-      state.step = endStep;
+      state.tick = endTick;
       const stateHash = hashState(state);
 
       return {
-        stepsRun: actualSteps,
-        stepAfter: state.step,
+        ticksRun: actualTicks,
+        tickAfter: state.tick,
         consumed,
         audioCues,
         requests: [],
@@ -176,7 +176,7 @@ export function createTestEngine(): Engine {
       });
 
       return {
-        step: state.step,
+        tick: state.tick,
         width: 320,
         height: 240,
         commands,

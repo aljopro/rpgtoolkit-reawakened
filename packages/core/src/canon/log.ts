@@ -1,8 +1,8 @@
 /**
  * The self-contained log codec (AD-5, AD-14).
  *
- * A recorded run is HAR-like: the concatenation of every `StepReport.consumed`
- * list, stamped with the integer `step` that consumed it. `canon` rejects raw
+ * A recorded run is HAR-like: the concatenation of every `TickReport.consumed`
+ * list, stamped with the integer `tick` that consumed it. `canon` rejects raw
  * `Bytes`, so `encodeLog` replaces each `Bytes` leaf with `{ t: 'bytes', hex }`
  * (lowercase hex) and `decodeLog` reverses it. A log therefore survives
  * `canon` and `JSON.parse` and replays with no other input:

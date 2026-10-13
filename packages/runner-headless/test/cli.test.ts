@@ -69,7 +69,7 @@ test("replay matches committed golden tree or records first if absent", () => {
     const result = runCli(["golden", REPO_ROOT]);
     equal(result.status, 0, `CLI failed with stderr: ${result.stderr}`);
     ok(result.stdout.includes("vectors: 20 rows ok"));
-    ok(result.stdout.includes("run: 24 steps"));
+    ok(result.stdout.includes("run: 24 ticks"));
     ok(result.stdout.includes("batching: 1,3,"));
     ok(result.stdout.includes("golden: 24 compared"));
   } else {
@@ -83,7 +83,7 @@ test("replay matches committed golden tree or records first if absent", () => {
       const replayResult = runCli(["golden", temp.root]);
       equal(replayResult.status, 0, `Replay failed: ${replayResult.stderr}`);
       ok(replayResult.stdout.includes("vectors: 20 rows ok"));
-      ok(replayResult.stdout.includes("run: 24 steps"));
+      ok(replayResult.stdout.includes("run: 24 ticks"));
       ok(replayResult.stdout.includes("batching: 1,3,"));
       ok(replayResult.stdout.includes("golden: 24 compared"));
     } finally {
@@ -92,7 +92,7 @@ test("replay matches committed golden tree or records first if absent", () => {
   }
 });
 
-test("golden differs: state mismatch at step 7 exits 1 and names step 7 and state hash", () => {
+test("golden differs: state mismatch at tick 7 exits 1 and names tick 7 and state hash", () => {
   const temp = createTempGoldenRoot();
   try {
     const recordResult = runCli(["golden", temp.root, "--record"]);
@@ -102,24 +102,24 @@ test("golden differs: state mismatch at step 7 exits 1 and names step 7 and stat
     const goldenContent = readFileSync(goldenFile, "utf8");
 
     const mutatedGolden = goldenContent.replace(
-      /"step":\s*7,\s*"state":\s*"[0-9a-f]{16}"/,
-      '"step": 7, "state": "0000000000000000"',
+      /"tick":\s*7,\s*"state":\s*"[0-9a-f]{16}"/,
+      '"tick": 7, "state": "0000000000000000"',
     );
     writeFileSync(goldenFile, mutatedGolden, "utf8");
 
     const result = runCli(["golden", temp.root]);
     equal(result.status, 1);
     ok(result.stdout.includes("vectors: 20 rows ok"));
-    ok(result.stdout.includes("run: 24 steps"));
+    ok(result.stdout.includes("run: 24 ticks"));
     ok(result.stdout.includes("batching: 1,3,"));
-    ok(result.stderr.includes("step 7"));
+    ok(result.stderr.includes("tick 7"));
     ok(result.stderr.includes("state hash differs"));
   } finally {
     temp.cleanup();
   }
 });
 
-test("golden differs: draw mismatch at step 7 exits 1 and names step 7 and draw-list hash", () => {
+test("golden differs: draw mismatch at tick 7 exits 1 and names tick 7 and draw-list hash", () => {
   const temp = createTempGoldenRoot();
   try {
     const recordResult = runCli(["golden", temp.root, "--record"]);
@@ -129,21 +129,21 @@ test("golden differs: draw mismatch at step 7 exits 1 and names step 7 and draw-
     const goldenContent = readFileSync(goldenFile, "utf8");
 
     const mutatedGolden = goldenContent.replace(
-      /"step":\s*7,\s*"state":\s*"([0-9a-f]{16})",\s*"draw":\s*"[0-9a-f]{16}"/,
-      '"step": 7, "state": "$1", "draw": "ffffffffffffffff"',
+      /"tick":\s*7,\s*"state":\s*"([0-9a-f]{16})",\s*"draw":\s*"[0-9a-f]{16}"/,
+      '"tick": 7, "state": "$1", "draw": "ffffffffffffffff"',
     );
     writeFileSync(goldenFile, mutatedGolden, "utf8");
 
     const result = runCli(["golden", temp.root]);
     equal(result.status, 1);
-    ok(result.stderr.includes("step 7"));
+    ok(result.stderr.includes("tick 7"));
     ok(result.stderr.includes("draw-list hash differs"));
   } finally {
     temp.cleanup();
   }
 });
 
-test("golden differs: extra or missing steps exit 1", () => {
+test("golden differs: extra or missing ticks exit 1", () => {
   const temp = createTempGoldenRoot();
   try {
     const recordResult = runCli(["golden", temp.root, "--record"]);
@@ -165,7 +165,7 @@ test("golden differs: extra or missing steps exit 1", () => {
       schema: golden.schema,
       records: [
         ...golden.records,
-        { step: 25, state: "1111222233334444", draw: "5555666677778888" },
+        { tick: 25, state: "1111222233334444", draw: "5555666677778888" },
       ],
     };
     writeFileSync(goldenFile, JSON.stringify(longer), "utf8");
@@ -190,7 +190,7 @@ test("changed log: mutating a record in run.json exits 1", () => {
 
     const result = runCli(["golden", temp.root]);
     equal(result.status, 1);
-    ok(result.stderr.includes("step 4"));
+    ok(result.stderr.includes("tick 4"));
   } finally {
     temp.cleanup();
   }
@@ -244,7 +244,7 @@ test("offline execution in temp root with no fixtures directory exits 0", () => 
     const result = runCli(["golden", temp.root]);
     equal(result.status, 0);
     ok(result.stdout.includes("vectors: 20 rows ok"));
-    ok(result.stdout.includes("run: 24 steps"));
+    ok(result.stdout.includes("run: 24 ticks"));
     ok(result.stdout.includes("golden: 24 compared"));
   } finally {
     temp.cleanup();

@@ -160,7 +160,7 @@ const MAIN_FILE_BYTES = unwrap(writeMainFile(MAIN_FILE));
 const SPECIAL_MOVE: SpecialMove = {
   magic: "RPGTLKIT SPLMOVE",
   major: 2,
-  minor: 0,
+  minor: 2,
   name: "Fireball",
   damage: 40,
   smpCost: 5,
@@ -179,7 +179,7 @@ const SPECIAL_MOVE_BYTES = unwrap(writeSpecialMove(SPECIAL_MOVE));
 const STATUS_EFFECT: StatusEffect = {
   magic: "RPGTLKIT STATUSE",
   major: 2,
-  minor: 0,
+  minor: 2,
   name: "Poison",
   rounds: 3,
   speedUp: 0,
