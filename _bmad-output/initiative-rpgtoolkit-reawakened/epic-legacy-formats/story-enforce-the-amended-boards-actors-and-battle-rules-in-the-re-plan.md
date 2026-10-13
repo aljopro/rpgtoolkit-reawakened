@@ -3,14 +3,14 @@ title: 'Enforce the amended boards, actors and battle rules in the readers'
 type: 'feature'
 ticket: '18'
 created: '2026-10-12'
-status: 'in-progress'
+status: 'built'
 baseline_revision: '71a0c1fb1f31626906987ec0c0c4ccb33b6624d8'
 route: 'full'
 route_source: 'auto'
 risk: 'low'
-review: ''
-review_source: ''
-lenses_ran: []
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 review_loop_iteration: 0
 context: ['docs/guardrails.md', 'CLAUDE.md']
 ---
@@ -40,10 +40,10 @@ context: ['docs/guardrails.md', 'CLAUDE.md']
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Audit each rule above against its reader; record agree/disagree in Implementation Notes.
-- [ ] Fix each disagreement.
-- [ ] A synthetic test per rule: negative index after a run marker refused; over-long run warns, keeps extra indices and round-trips; negative LUT bound other than -1 refused; index 0 of an existing LUT; iso detection for bit 1 and bit 2; each accepted minor range edge (accepted lowest and highest, refused one below and one above, negative, text form); truncated `.ste` and `.bkg` report a short read.
-- [ ] Commit `feat(core): enforce the amended board, actor and battle rules in the readers (epic 2.18)`, staging only your files.
+- [x] Audit each rule above against its reader; record agree/disagree in Implementation Notes.
+- [x] Fix each disagreement.
+- [x] A synthetic test per rule: negative index after a run marker refused; over-long run warns, keeps extra indices and round-trips; negative LUT bound other than -1 refused; index 0 of an existing LUT; iso detection for bit 1 and bit 2; each accepted minor range edge (accepted lowest and highest, refused one below and one above, negative, text form); truncated `.ste` and `.bkg` report a short read.
+- [x] Commit `feat(core): enforce the amended board, actor and battle rules in the readers (epic 2.18)`, staging only your files.
 
 **Acceptance Criteria:**
 - Given a synthetic file for each rule, when read, then it is refused or warned as the spec says.
@@ -84,3 +84,12 @@ Dependencies and fixtures are installed in this worktree.
 
 **Commands:**
 - `pnpm typecheck && pnpm lint && pnpm test:strict && pnpm golden && pnpm dump:check && pnpm graph && pnpm provenance` -- expected: all pass, no skipped tests
+
+Verification (orchestrator): typecheck, lint, test:strict (474 pass, 0 skipped), golden, dump:check (Basic 16, demo 30 digests match), graph, provenance all pass; samples round-trip.
+
+Pass 1 (quick lens): high 0, medium 0, low 2, false 0.
+
+| Verdict | Route | Finding and evidence |
+|---|---|---|
+| low | patch | The test named "isometric detection is bit 1 or bit 2…" only checks grid cell counts; no code exposes an is-isometric predicate (grep finds none), so the name overclaimed. Renamed to what it checks. |
+| low | patch | Plan checkboxes and Verification results were unrecorded; recorded here. |

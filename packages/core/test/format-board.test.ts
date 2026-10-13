@@ -369,7 +369,7 @@ test("a board with lutUpperBound -1 has no LUT at all, and one below -1 is refus
   equal(result.error.offset, 27, "the LUT upper bound's first byte");
 });
 
-test("isometric detection is bit 1 or bit 2, but only bit 2 expands the tile grid", () => {
+test("only the rotated style (bit 2) expands the tile grid; bits 1 and 4 keep sizeX by sizeY", () => {
   // coordType bit 1 (ISO_STACKED) is isometric yet stores sizeX × sizeY per
   // layer; bit 2 (ISO_ROTATED) alone expands it to (sizeX + sizeY)² per layer;
   // bit 4 (pixel-absolute) changes neither, alone or combined (§4.2, §5, §14).
