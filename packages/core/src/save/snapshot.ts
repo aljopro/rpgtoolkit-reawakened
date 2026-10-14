@@ -1,13 +1,14 @@
 /**
- * Snapshot and restore (AD-10/AD-11; decisions Q4/Q11).
+ * Snapshot and restore (AD-10/AD-11; decisions Q4, Q5/Q12).
  *
  * `snapshot(state)` is the canonical form of the whole state tree, so a
  * snapshot, a save, a hash and a restore all share one representation
- * (`canon`, RFC 8785). `restoreGameState(json)` parses it and checks the
+ * (`canon`, RFC 8785) — Q4. `restoreGameState(json)` parses it and checks the
  * compiler version and the presence of every section; bounds and the
- * restore-versus-restart policy for a mismatch are entry 11's. Compiled
- * programs are not in state (AD-7), so a restored host recompiles lazily
- * through its own program memo.
+ * restore-versus-restart policy for a mismatch are entry 11's. Q5/Q12 place the
+ * shared snapshot→restore→hash check in `runner-harness`. Compiled programs are
+ * not in state (AD-7), so a restored host recompiles lazily through its own
+ * program memo.
  *
  * Two errors are pinned: a different `schema.compiler` is
  * `restore.compiler-mismatch`, and a missing section is `restore.shape`.
@@ -28,7 +29,12 @@ export function snapshot(state: GameState): string {
 
 /** Parse and check a snapshot's canonical form (see the file header). */
 export function restoreGameState(json: string): GameState {
-  const parsed: unknown = JSON.parse(json);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new ScriptError("restore.shape", "a snapshot must be valid JSON");
+  }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new ScriptError("restore.shape", "a snapshot must be a JSON object");
   }

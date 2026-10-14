@@ -83,6 +83,20 @@ test("the host satisfies the Engine contract with empty requests, diagnostics an
   equal(typeof report.stateHash, "string");
 });
 
+test("an empty batch changes nothing and maxTicks clamps the advance", () => {
+  const host = tracerHost();
+  const before = host.stateHash();
+
+  const empty = host.advance(0, []);
+  equal(empty.ticksRun, 0);
+  equal(empty.tickAfter, 0);
+  equal(empty.stateHash, before);
+
+  const clamped = host.advance(5, [], 2);
+  equal(clamped.ticksRun, 2);
+  equal(clamped.tickAfter, 2);
+});
+
 test("drawList is a pure function of state and has no commands", () => {
   const host = tracerHost();
   const before = host.drawList(0);

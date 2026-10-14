@@ -233,3 +233,38 @@ The acceptance tests themselves, by name (the "exact test list"): `packages/runn
 8. **The golden job must stay green**, which means no `golden/**` edit and no emission of `requests`, `diagnostics` or `paused` from the host, and no audio cue sent to the sink — `runLog` throws on non-empty `requests`/`diagnostics`, a non-null `paused`, `loading`, and on a `ticksRun`/`tickAfter`/`consumed` mismatch.
 9. **Test-harness conventions:** `node:test` with `node --test "packages/*/test/*.test.ts"`, `.ts` import suffixes and no skipped tests (the no-skips job); `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` mean every new state/port type has explicit `| null` fields and every indexed access is checked.
 10. **Scope creep around the seam:** `runner-headless`'s `.prg` skip, the dump corpus and the golden wiring belong to entry 17/19 — leave them; the plan's only public-surface change outside `core` is the two new harness exports and the pinned-list update.
+
+## Code Review
+
+### 2026-10-14
+
+Code review complete (baseline `e6be6fd` to `5bfb3cc`, four lenses). 0 `decision-needed`, 7 `patch`, 1 `defer`, 17 rejected.
+
+- [x] [Review][Patch] A by-reference `out` entry can store `null` in a variable; `writeRef` must store `0` as `storeVar` does [packages/core/src/script/vm.ts:318] (blind-hunter + edge-case-hunter)
+- [x] [Review][Patch] `runThreadsPhase` runs ready threads in array order; THR-1 says ascending id, as `runWaitsPhase` already sorts [packages/core/src/script/vm.ts:127] (blind-hunter + edge-case-hunter)
+- [x] [Review][Patch] `restoreGameState` lets a raw `SyntaxError` escape on non-JSON text instead of a `restore.shape` `ScriptError` [packages/core/src/save/snapshot.ts:31] (blind-hunter + edge-case-hunter)
+- [x] [Review][Patch] A number literal that overflows (`1e400`) lexes to `Infinity`, which `canon` then rejects at the next snapshot; reject it in the lexer [packages/core/src/script/lex.ts:256] (edge-case-hunter)
+- [x] [Review][Patch] `checkSnapshotRestore` checks the start tick only inside the loop, so `ticks: 0` passes with a wrong split; check before the loop. Its passing path (a host from `restoreScriptHost` at a `randomSplit`, driven past one tick) is never tested [packages/runner-harness/src/restore-check.ts:39] (blind-hunter + verification-gap + intent-alignment)
+- [x] [Review][Patch] Missing tests for plan matrix rows and accepted inputs: `sleep(0)`/fraction/negative → `builtin.bad-arg`; `advance(0, [])`; the `maxTicks` clamp in `ScriptHost.advance`; `tokenize` of `//` comments, `#` lines, fractions/exponents and `null`; bare `end` lowering to `call end 0` [packages/core/test/script-vm.test.ts, script-frontend.test.ts; packages/runner-harness/test/script-host.test.ts] (blind-hunter + verification-gap)
+- [x] [Review][Patch] Stale or wrong header comments: `xoshiro.ts` still says each draw mixes the previous state; `snapshot.ts` cites Q11 for snapshots; `builtins.ts` calls `Arg.ref` optional; `time.ts` puts `secondsToTicks` with entry 13 while Q8 gives it to entry 9 [packages/core/src/rng/xoshiro.ts:13, save/snapshot.ts, script/builtins.ts, time/time.ts] (blind-hunter + verification-gap)
+- [x] [Review][Defer] AD-8's sentence still lists `ParamSpec { optional?, byRef?, variadic? }`, `out?` and `resume?` while AD-14 and the code make every field required [architecture-rpgtoolkit-reawakened.md, AD-8] — deferred: edits another spec; entry 3 rewrites AD-8 to the functional command contract and must keep the `Arg` clause
+
+#### Rejected
+
+- Programs that rebuild the memo key every VM step (blind-hunter): low; the frame cannot change inside the loop yet, and hoisting would break when entries 5 and 6 add frames.
+- Restore ignores per-section schema versions and accepts extra top-level sections (blind-hunter, two items): low; restore bounds and the mismatch policy are entry 11's by the plan's Never list.
+- `@` rejected as `syntax.unsupported` instead of a lexical error (blind-hunter): low; the plan's rejection rule names the construct and its entry, and it fails loudly either way.
+- `*` line comments rejected as the `*` operator (blind-hunter): low; fails loudly, and entry 5 extends the lexer.
+- Story file not reconciled with the shipped shapes (blind-hunter): the fix edits the plan.
+- A built-in error or arity failure leaves the thread's arguments popped (edge-case-hunter): low; the error path and its recovery are entry 7's, and the throw is loud.
+- A restored thread that is `waiting` with `wait: null` is never polled (edge-case-hunter): low; hand-built or corrupt state, restore hardening is entry 11's.
+- `advanceScriptTick` accepts a non-positive budget (edge-case-hunter): low; internal constant, no caller passes one.
+- `randomSplit` accepts negative or fractional ticks (edge-case-hunter): low; test-helper misuse, fails visibly.
+- `SnapshotHost.snapshot()` required but unused (blind-hunter): low; `ScriptHost` provides it and the harness type is harmless.
+- `goldenJob` is not run on the VM host (intent-alignment): the plan's Never list keeps the test double as the golden default and forbids golden edits.
+- No single test does `runLog` then snapshot then restore then continue; the pieces are tested separately (intent-alignment): covered by the passing-path test in the `checkSnapshotRestore` patch.
+- No `core` test resumes a restored VM (intent-alignment): the harness host tests do; the core round-trip is plain data.
+- `Frame.operands` is `Arg[]`, not `Value[]` (intent-alignment, table): already triaged low in the plan's Triage Log.
+- `end` is a no-op call (intent-alignment): ruled by Jensen in Q1.
+- `sleep` unit is ticks (intent-alignment): ruled in Q8.
+- Several shapes are provisional (intent-alignment): intended; entry 3 and later replace them.

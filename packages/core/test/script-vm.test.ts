@@ -13,6 +13,7 @@ import {
   hashState,
   pollSleep,
   restoreGameState,
+  runThreadsPhase,
   runWaitsPhase,
   snapshot,
   startProgram,
@@ -61,6 +62,28 @@ function waitingThread(id: number, until: number): Thread {
     ],
     status: "waiting",
     wait: { kind: "sleep", until },
+  };
+}
+
+function readyThread(id: number, text: string): Thread {
+  return {
+    id,
+    kind: "board",
+    owner: "script",
+    source: null,
+    target: null,
+    frames: [
+      {
+        program: { kind: "inline", text, compiler: "1" },
+        ip: 0,
+        locals: {},
+        operands: [],
+        errorHandler: null,
+        autoLocal: false,
+      },
+    ],
+    status: "ready",
+    wait: null,
   };
 }
 
@@ -134,6 +157,17 @@ test("writes a by-ref out back into the caller's variable inside the hash", () =
     errorOf(() => advanceScriptTick(broken, createScriptServices(broken, [badOut]))).code,
     "builtin.out-not-by-ref",
   );
+
+  // A null output stores as 0, exactly as `store` does.
+  const nullout: BuiltinSpec = {
+    name: "nullout",
+    aliases: [],
+    params: [{ name: "target", optional: false, byRef: true, variadic: false }],
+    call: () => ({ done: null, out: [[0, null]] }),
+  };
+  const nulled = makeState("nullout(v)\n");
+  advanceScriptTick(nulled, createScriptServices(nulled, [nullout]));
+  equal(nulled.vm.globals.v, 0);
 });
 
 test("throws unknown.command and arity.mismatch", () => {
@@ -216,6 +250,25 @@ test("the waits phase wakes exactly at until and polls in ascending id order", (
   }
 });
 
+test("the threads phase runs ready threads in ascending id order", () => {
+  const vm = createVmState();
+  const order: number[] = [];
+  const mark: BuiltinSpec = {
+    name: "mark",
+    aliases: [],
+    params: [{ name: "n", optional: false, byRef: false, variadic: false }],
+    call: (_ctx, args) => {
+      order.push(args[0]!.value as number);
+      return { done: null, out: [] };
+    },
+  };
+  // Pushed as ids 3, 1, 2 so array order (3, 1, 2) differs from id order.
+  vm.threads.push(readyThread(3, "mark(300)\n"), readyThread(1, "mark(100)\n"), readyThread(2, "mark(200)\n"));
+
+  runThreadsPhase(vm, createScriptServices(createGameState({ seed: 0 }), [mark]), STEP_BUDGET);
+  deepEqual(order, [100, 200, 300]);
+});
+
 test("treats constructor and __proto__ as ordinary variables", () => {
   const state = makeState("x = constructor\n__proto__ = 5\ny = __proto__\n");
   advanceScriptTick(state, createScriptServices(state));
@@ -245,6 +298,32 @@ test("the step budget preempts a long program with ip advanced by exactly the bu
   const thread = state.vm.threads[0]!;
   equal(thread.status, "ready");
   equal(thread.frames[0]!.ip, STEP_BUDGET);
+});
+
+test("sleep rejects zero, fractional and negative counts", () => {
+  const zero = makeState("sleep(0)\n");
+  equal(
+    errorOf(() => advanceScriptTick(zero, createScriptServices(zero))).code,
+    "builtin.bad-arg",
+  );
+
+  const fractional = makeState("sleep(1.5)\n");
+  equal(
+    errorOf(() => advanceScriptTick(fractional, createScriptServices(fractional))).code,
+    "builtin.bad-arg",
+  );
+
+  const setnegative: BuiltinSpec = {
+    name: "setnegative",
+    aliases: [],
+    params: [{ name: "target", optional: false, byRef: true, variadic: false }],
+    call: () => ({ done: null, out: [[0, -1]] }),
+  };
+  const negative = makeState("setnegative(n)\nsleep(n)\n");
+  equal(
+    errorOf(() => advanceScriptTick(negative, createScriptServices(negative, [setnegative]))).code,
+    "builtin.bad-arg",
+  );
 });
 
 test("a second blocking thread is refused", () => {

@@ -6,7 +6,7 @@
  * entry 3 rewrites this file and the dispatch half of `script/vm.ts` to that
  * shape. Until then the tracer matches AD-8's *contract shapes* now — a
  * `BuiltinSpec` with `name`, `aliases` and `ParamSpec[]`, an `Arg` carrying a
- * value plus an optional variable reference, and a result that is either
+ * value plus `ref: RefId | null`, and a result that is either
  * `{ done, out }` or `{ yield: Wait }` — so entry 3 replaces the assembly, not
  * the contract.
  *

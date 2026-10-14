@@ -11,7 +11,9 @@
  * generator (AD-12).
  *
  * SplitMix32 (public-domain algorithm, Tommy Ettinger) is used purely as a
- * seed-diffusion function: each of the four draws mixes the previous state.
+ * seed-diffusion function: a Weyl counter `c` starts at `seed + 0x9e3779b9` and
+ * is incremented by `0x9e3779b9` before each of the four words, which is the
+ * mix of that counter value — not the previous mixed output.
  */
 
 import type { RngPort } from "../ports/rng.ts";

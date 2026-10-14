@@ -80,6 +80,36 @@ test("rejects every construct the subset excludes naming its entry", () => {
   // An unknown character is a lexical error (LEX-11), not an unsupported construct.
   equal(errorOf(() => tokenize("x = 1 \\")).code, "syntax.error");
   equal(errorOf(() => tokenize('x = "unterminated')).code, "syntax.error");
+  // A non-finite number literal is rejected at lex time, not at snapshot time.
+  equal(errorOf(() => tokenize("x = 1e400")).code, "syntax.error");
+});
+
+test("accepts comments, a legacy # line and the numeric literals", () => {
+  deepEqual(tokenize("x = 1 // trailing"), [
+    { kind: "identifier", name: "x" },
+    { kind: "punct", text: "=" },
+    { kind: "number", value: 1 },
+    { kind: "eof" },
+  ]);
+  deepEqual(tokenize("// whole line\nx = 1"), [
+    { kind: "end" },
+    { kind: "identifier", name: "x" },
+    { kind: "punct", text: "=" },
+    { kind: "number", value: 1 },
+    { kind: "eof" },
+  ]);
+  deepEqual(tokenize("#legacy command"), [{ kind: "eof" }]);
+  deepEqual(tokenize("1.5"), [{ kind: "number", value: 1.5 }, { kind: "eof" }]);
+  deepEqual(tokenize("2e3"), [{ kind: "number", value: 2000 }, { kind: "eof" }]);
+  deepEqual(tokenize("null"), [{ kind: "number", value: 0 }, { kind: "eof" }]);
+});
+
+test("lowers a bare identifier to a zero-argument call", () => {
+  deepEqual(compileInline("end\n").ops, [
+    { op: "call", name: "end", argc: 0 },
+    { op: "pop" },
+    { op: "return" },
+  ]);
 });
 
 test("lowers the tracer program to the exact op array", () => {

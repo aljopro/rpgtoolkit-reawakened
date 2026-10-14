@@ -66,4 +66,6 @@ test("restore rejects a different compiler version and a missing section", () =>
   const missingSection = JSON.parse(json) as Record<string, unknown>;
   delete missingSection.vm;
   equal(errorOf(() => restoreGameState(JSON.stringify(missingSection))).code, "restore.shape");
+
+  equal(errorOf(() => restoreGameState("{ not json")).code, "restore.shape");
 });

@@ -29,22 +29,26 @@ export type SnapshotHost = {
 /**
  * Advance both hosts one tick at a time and compare their state hashes; throw
  * naming the first tick where they differ. Both hosts must already be at tick
- * `options.split` (the snapshot point), or the first advance proves otherwise
- * and the check throws.
+ * `options.split` (the snapshot point), or the start check throws.
  */
 export function checkSnapshotRestore(
   pair: { readonly fresh: SnapshotHost; readonly fromSnapshot: SnapshotHost },
   options: { readonly ticks: number; readonly split: number },
 ): void {
+  // A zero-tick advance reports each host's current tick without advancing it,
+  // so the start check runs even when `ticks` is 0.
+  const freshStart = pair.fresh.advance(0, []);
+  const restoredStart = pair.fromSnapshot.advance(0, []);
+  if (freshStart.tickAfter !== options.split || restoredStart.tickAfter !== options.split) {
+    throw new Error(
+      `checkSnapshotRestore: both hosts must start at tick ${options.split} ` +
+        `(fresh at ${freshStart.tickAfter}, restored at ${restoredStart.tickAfter})`,
+    );
+  }
+
   for (let step = 0; step < options.ticks; step++) {
     const fresh = pair.fresh.advance(1, []);
     const restored = pair.fromSnapshot.advance(1, []);
-    if (step === 0 && (fresh.tickAfter - 1 !== options.split || restored.tickAfter - 1 !== options.split)) {
-      throw new Error(
-        `checkSnapshotRestore: both hosts must start at tick ${options.split} ` +
-          `(fresh at ${fresh.tickAfter - 1}, restored at ${restored.tickAfter - 1})`,
-      );
-    }
     if (fresh.stateHash !== restored.stateHash) {
       throw new Error(
         `checkSnapshotRestore: state diverged at tick ${fresh.tickAfter} ` +

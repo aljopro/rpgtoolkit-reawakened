@@ -124,10 +124,15 @@ export function runWaitsPhase(
   }
 }
 
-/** The threads phase: run every ready thread, preempting at the budget. */
+/**
+ * The threads phase: run every ready thread, preempting at the budget. Threads
+ * run in ascending id order (§9.15 THR-1), regardless of their order in
+ * `vm.threads`.
+ */
 export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: number): void {
-  for (const thread of vm.threads) {
-    if (thread.status !== "ready") continue;
+  const ready = vm.threads.filter((thread) => thread.status === "ready");
+  ready.sort((left, right) => left.id - right.id);
+  for (const thread of ready) {
     runThread(thread, vm, services, budget);
   }
 }
@@ -314,11 +319,16 @@ function applyOut(
   }
 }
 
-/** Write `value` through a `RefId` into the scope it names (SEM-6). */
+/**
+ * Write `value` through a `RefId` into the scope it names (SEM-6). A `null`
+ * output stores as the number `0`, because no op stores `null`
+ * (ports/value.ts), matching `store`.
+ */
 function writeRef(vm: VmState, frame: Frame, ref: RefId, value: Value): void {
+  const stored = value === null ? 0 : value;
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator) as VarScope;
   const name = ref.slice(separator + 1);
-  if (scope === "local") setOwn(frame.locals, name, value);
-  else setOwn(vm.globals, name, value);
+  if (scope === "local") setOwn(frame.locals, name, stored);
+  else setOwn(vm.globals, name, stored);
 }

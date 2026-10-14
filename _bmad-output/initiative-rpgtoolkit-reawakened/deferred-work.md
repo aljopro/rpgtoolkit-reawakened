@@ -192,6 +192,10 @@
   summary: the digest gate's reproducibility is proven on Node 26.8.1 only, while CI pins `node-version: 24.21.0`; cross-engine digest stability is a reasoned expectation, not a measurement.
   evidence: Round-2 review (`review-r3-package-ci`): `pnpm dump:check` passes locally on v26.8.1 and the gate could not be run under 24.21.0. If it matters, run `pnpm dump:check` once in a 24.21.0 container.
 
+## Deferred from: code review of story-tracer-bullet-source-text-to-a-restored-snapshot-through-the-plan (2026-10-14)
+
+- AD-8 in the architecture spine still lists `ParamSpec { optional?, byRef?, variadic? }`, `out?` and `resume?` while AD-14 and the code make every field required. Entry 3 rewrites AD-8 to the functional command contract (ADR 0004 decision 2) and must keep the `Arg = { value, ref: RefId | null }` clause; its doc-first commit should also fix these keys.
+
 ## Resolved
 
 - `deferred-work` §2 (the ignored `fixtures/` folder missing from the provenance scan's `scope.skipRootPaths`) — resolved by entry 1.7; `tools/provenance/markers.json` lists `"fixtures"`.

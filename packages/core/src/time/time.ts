@@ -8,10 +8,11 @@
  * tick counter supplied through `advance`").
  *
  * `core/time` is the sole owner of seconds↔ticks conversion (AD-2):
- * `secondsToTicks`, `fpsToTicks` and `frameAt` arrive with entry 13's
- * `delay`/`getTickCount`. The provisional `sleep(ticks)` built-in takes whole
- * ticks, so the rounding formula `max(1, floor(seconds * 60 + 0.5))`
- * (§9.15 THR-1) is not needed yet.
+ * `secondsToTicks`, `fpsToTicks` and `frameAt` arrive with the entries that use
+ * them. Q8 gives the seconds-to-ticks formula `max(1, floor(seconds * 60 +
+ * 0.5))` (§9.15 THR-1) to `threadSleep` (entry 9); entry 13's `delay` only uses
+ * it, and the provisional `sleep(ticks)` built-in takes whole ticks, so no
+ * conversion is needed yet.
  */
 
 import type { ClockPort } from "../ports/time.ts";

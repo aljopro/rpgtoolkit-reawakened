@@ -266,7 +266,12 @@ export function tokenize(text: string): Token[] {
           if (digits > 0) cursor = exponent;
         }
         if (cursor >= length || !isIdentifierChar(text[cursor]!)) {
-          tokens.push({ kind: "number", value: Number(text.slice(start, cursor)) });
+          const literal = text.slice(start, cursor);
+          const value = Number(literal);
+          if (!Number.isFinite(value)) {
+            lexical(`the number literal \`${literal}\` is not finite (format-spec §9.2)`);
+          }
+          tokens.push({ kind: "number", value });
           index = cursor;
           atLineStart = false;
           continue;
