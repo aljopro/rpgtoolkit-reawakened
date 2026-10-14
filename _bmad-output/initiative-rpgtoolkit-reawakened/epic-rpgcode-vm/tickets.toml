@@ -154,6 +154,7 @@ references = [
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7 (objects), AD-8 (lookup precedence)",
 ]
 plan_checkpoint = true
+notes = ["Doc-first step done 2026-10-12: OOP-4 to OOP-9 are ruled in docs/format-spec.md section 9.17 (facts from extraction rounds 2 and 3; our rules marked there). Start at the code."]
 
 [[entry]]
 id = 7
@@ -173,6 +174,7 @@ references = [
   "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/foundations-audit.md, row 3 (Logger port unowned)",
 ]
 plan_checkpoint = true
+notes = ["Doc-first step done 2026-10-12: ERR-1 and ERR-2 are ruled in docs/format-spec.md section 9.8, including modulo by zero as a catchable error. Start at the code."]
 
 [[entry]]
 id = 8
@@ -191,7 +193,7 @@ references = [
   "provider - epic-legacy-formats entry 2.10 (asset resolver and package loader)",
 ]
 plan_checkpoint = true
-notes = ["#Include gives access to that file's functions under a namespace-like structure, a nested function name. (Jensen, 2026-10-11)", "Working rule until evidence says otherwise: #Include, an implicit file.func call and first run each add the file's functions to one flat command list at that moment, a later definition replaces an earlier one with the same name, and the file. prefix always reaches that file's own definition. (Jensen, 2026-10-11)"]
+notes = ["#Include gives access to that file's functions under a namespace-like structure, a nested function name. (Jensen, 2026-10-11)", "Working rule until evidence says otherwise: #Include, an implicit file.func call and first run each add the file's functions to one flat command list at that moment, a later definition replaces an earlier one with the same name, and the file. prefix always reaches that file's own definition. (Jensen, 2026-10-11)", "Doc-first step done 2026-10-12: MOD-2 and MOD-3 are ruled in docs/format-spec.md section 9.6. Start at the code."]
 
 [[entry]]
 id = 9
@@ -209,7 +211,7 @@ references = [
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-9, AD-26, and its Deferred list (per-tick budget owners rpgcode-vm and movement-triggers)",
 ]
 plan_checkpoint = true
-notes = ["THR-1 starting point (Jensen, 2026-10-12): legacy `threadSleep(id, seconds)` takes real seconds, `0` means sleep until woken, and a sleeping thread just skips its turn (docs/provenance/facts-round-2.md R2-Q23; the archive's research note rpgcode-threads-for-implementers.md). Our simulation is a fixed 60 Hz tick (AD-2, G3.2), so `core/time`'s `secondsToTicks` converts seconds to a whole number of ticks (a tick is one fixed simulation update) and the wait stores an absolute `until` tick, which keeps snapshots, restores and replays identical at any frame rate. The ruling still has to pick the rounding rule, what `0` maps to (an indefinite sleep), and the wake order when several threads wake on the same tick. The tracer's provisional `sleep(ticks)` (entry 2) is not `threadSleep`; this entry replaces its callers."]
+notes = ["THR-1 starting point (Jensen, 2026-10-12): legacy `threadSleep(id, seconds)` takes real seconds, `0` means sleep until woken, and a sleeping thread just skips its turn (docs/provenance/facts-round-2.md R2-Q23; the archive's research note rpgcode-threads-for-implementers.md). Our simulation is a fixed 60 Hz tick (AD-2, G3.2), so `core/time`'s `secondsToTicks` converts seconds to a whole number of ticks (a tick is one fixed simulation update) and the wait stores an absolute `until` tick, which keeps snapshots, restores and replays identical at any frame rate. The ruling still has to pick the rounding rule, what `0` maps to (an indefinite sleep), and the wake order when several threads wake on the same tick. The tracer's provisional `sleep(ticks)` (entry 2) is not `threadSleep`; this entry replaces its callers.", "Doc-first step done 2026-10-12: THR-1 to THR-3 are ruled in docs/format-spec.md section 9.15 (sleep rounding formula, same-tick wake order, per-thread source and target, VM step vs tick, per-tick budget). Start at the code."]
 
 [[entry]]
 id = 22
@@ -255,6 +257,7 @@ references = [
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-8, AD-10",
 ]
 plan_checkpoint = true
+notes = ["Doc-first step done 2026-10-12: SEM-3 to SEM-6 are ruled in docs/format-spec.md section 9.16. Start at the code."]
 
 [[entry]]
 id = 13

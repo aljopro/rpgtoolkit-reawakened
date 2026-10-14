@@ -94,7 +94,7 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 
 - **Binds:** CAP-2, CAP-3, CAP-4, CAP-9, CAP-11
 - **Prevents:** wall-clock or frame-rate leaking into state; animation phases rounded differently per epic.
-- **Rule:** the simulation tick is fixed at 60 Hz. The injected clock of G3.1 **is** the tick counter supplied through `advance`; `getTickCount` and `gameTime = ticks / 60` derive from it. `core/time` alone owns `secondsToTicks`, `fpsToTicks` and `frameAt(originTick, tick, ticksPerFrame, count, loop)`; animated tiles use origin 0. [ASSUMPTION: 60 Hz; rounding values are Deferred.]
+- **Rule:** the simulation tick is fixed at 60 Hz. The injected clock of G3.1 **is** the tick counter supplied through `advance`; `getTickCount` and `gameTime = ticks / 60` derive from it. `core/time` alone owns `secondsToTicks`, `fpsToTicks` and `frameAt(originTick, tick, ticksPerFrame, count, loop)`; animated tiles use origin 0. The 60 Hz tick is kept as an assumption; the seconds-to-ticks rounding is ruled in format-spec §9.15.
 - **Check:** lint bans `Date` and `performance` in `core` (G3); only `core/time` may convert seconds or fps to ticks.
 
 ### AD-3 — Draw list: flat, ordered, plain-data, integer pixels
@@ -487,7 +487,7 @@ Primary governing ADs per capability. Each AD's `Binds` line lists every capabil
 ## Deferred
 
 - ADR 0002, needed before the guard-rail checks are scaffolded: reference rasteriser and glyph rasterisation in `core` (AD-4, AD-15) amending `architecture-options.md` §2 seam bullets (tick, read-back, text layout), the `packages.md` seam section and G4 rule 1 wording; the `Math` allowlist and `**` ban as extra G3 enforcement (AD-13); an `ovsx` exemption note (EPL-2.0, publish-only, never shipped).
-- Per-tick thread budget and the legacy seconds-per-step → ticks conversion with rounding: tuned against the demo; owners are epics rpgcode-vm and movement-triggers. AD-2 and AD-26 keep them from diverging.
+- Per-tick thread budget (a number of VM steps; its value stays provisional until tuned against the demo; owners are epics rpgcode-vm and movement-triggers). The legacy seconds-per-step → ticks conversion with rounding is ruled in format-spec §9.15. AD-2 and AD-26 keep them from diverging.
 - TrueType rasteriser and JPEG decoder choices (AD-15, AD-28): owners are epics board-rendering and legacy-formats; both go on the `core` allowlist after a licence check.
 - Restore policy on compiler or hash mismatch: AD-7 states restart-the-thread; the epic rpgcode-vm confirms against format-spec §11.
 - Resource limits for untrusted package import (zip bombs, oversized boards): epic legacy-formats.
