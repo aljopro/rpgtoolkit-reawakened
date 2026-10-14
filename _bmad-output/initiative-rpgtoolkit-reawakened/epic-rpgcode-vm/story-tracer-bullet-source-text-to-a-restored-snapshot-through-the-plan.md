@@ -3,8 +3,8 @@ title: 'Tracer bullet: source text to a restored snapshot through the harness'
 type: 'feature'
 ticket: '2'
 created: '2026-10-11'
-status: 'draft'
-baseline_revision: ''
+status: 'built'
+baseline_revision: 'e6be6fd87c7fa8905c300b26ede58863276cda30'
 route: 'full'
 route_source: 'auto'
 risk: 'high'
@@ -47,6 +47,21 @@ context: ['docs/guardrails.md', 'docs/format-spec.md', 'packages/core/src/ports/
 | Non-inline program | `ProgramRef { kind: 'file' }` | `ScriptError` code `program.file-unsupported` | throws (entry 8 loads files) |
 | Second blocking thread | a blocking thread already exists (AD-26) | `ScriptError` code `thread.blocking-exists` | throws |
 | Inputs offered | a non-empty input log | `consumed: []` — nothing consumes inputs yet; the driver reports the mismatch itself | none (documented, not silently swallowed) |
+
+## Decisions (approved by Jensen, 2026-10-14)
+
+- **Q1 `end()`:** an ordinary registered call that returns `null`; the program finishes at its emitted `return`. Full FUN-7 unwinding is entry 13's.
+- **Q2:** the state tree lives in `core/save`; the composer is the documented exemption to AD-10's section-import rule.
+- **Q3:** one `Record<string, never>` placeholder alias per unowned AD-10 section.
+- **Q4:** snapshots are the `canon` string; bounds and the restore-versus-restart policy are entry 11's.
+- **Q5:** the shared restore/hash helper lives in `runner-harness`.
+- **Q6:** `core/script/vm.ts` exports `advanceScriptTick` (waits, threads, `time`) and `STEP_BUDGET`; epic 4 owns the phase list and the loop.
+- **Q7:** `RefId` is a branded string, `"global:name"` or `"local:name"`.
+- **Q8:** `sleep(ticks)` counts whole ticks; the seconds-to-ticks conversion is entry 9's (§9.15).
+- **Q9:** the host and `checkSnapshotRestore` are exported from `runner-harness`; `createTestEngine` stays unexported.
+- **Q10:** keep the full plan; it is one goal and the detail stops contract re-derivation.
+- **Q11:** no `yield` opcode; a blocking call is the only yield. The entry that first needs a program-level yield adds it and amends ADR 0004 / AD-8.
+- **Q12:** the shared snapshot-restore check counts ticks, not VM steps; a VM-step variant waits for the entry that adds a VM-step counter (§9.14 follow-up 7).
 
 </frozen-after-approval>
 
@@ -117,7 +132,21 @@ Empty until the first bad_plan loopback.
 
 ## Review Triage Log
 
-Empty until the first review pass.
+Quick lens, one pass. Verdicts after verifying each claim against the code and format-spec.
+
+| # | Finding | Verdict | Route | Evidence |
+|---|---------|---------|-------|----------|
+| 1 | Globals read/write hit inherited `Object.prototype` keys (`constructor`, `__proto__`) | medium | patch | `vm.ts` 218/232/290 read and write `vm.globals[name]` with no `hasOwn`; locals branch does check |
+| 2 | `name$="hi"` rejected as `!=` | medium | patch | format-spec LEX-3: only `!` directly followed by `=` is the operator; `$` is always a sigil |
+| 3 | Leading `#` drops the whole line | false | rejected | LEX-6: "other `#` lines are ignored legacy" and "ignored on that line"; the plan's frontend subset says the same |
+| 4 | `null` stored in a variable (`x = end()`, `x = sleep(1)`) | medium | patch | `end` returns `done: null` and a woken `sleep` pushes `null`; `store` writes it, breaking the documented "no op stores null" |
+| 5 | `Frame.operands` is `Arg[]`, not `Value[]` | low | rejected | The `call` op carries no ref, so by-ref write-back needs refs on the stack; AD-8's `Arg` keeps `{ value, ref }`, so entry 3's rewrite does not change the shape. Fix needs an op-shape change |
+| 6 | `ProgramCache` exported from `core/script` | medium | patch | Plan Never list reserves the name for entry 8; type only needs to be private to `vm.ts` |
+| 7 | `seedRng` is not SplitMix32 (outputs fed back as inputs) | medium | patch | AD-12 names SplitMix32; `xoshiro.ts` 23-48 chains `state = splitmix32(state)`. The pinned test words must be recomputed |
+| 8 | Literal in a `byRef` position throws instead of writing back | low | rejected | That rule is SEM-6, owned by entry 12; the provisional built-ins have no `byRef` params, so the tracer cannot reach it |
+| 9 | `checkSnapshotRestore` reports tick from the caller's `split` | low | patch | Direct fix: report from `fresh.tickAfter`. The "never snapshots" claim is rejected: the plan's signature takes both hosts |
+| 10 | Waits-phase ordering test does not observe order | medium | patch | Test only checks per-thread end state, identical in any visit order; THR-1 ascending-id rule is unproven |
+| 11 | File headers lack the §9.2/§9.3/§9.5/§9.15 and ADR 0004 citations | low | patch | Plan Always clause requires them; comment-only fix |
 
 ## Design Notes
 
@@ -178,25 +207,6 @@ The `sleep` payload is the absolute `until` tick, not a relative duration: the p
 - **§9.8 (errors)** — a catchable runtime error is reported and the program continues with the unset value; the tracer has no handler slot or report path, so it throws a `ScriptError` and entry 7 converts that to the ruled path (the matrix's two "throws for now" rows).
 - **§9.6 (modules) / §9.17 (classes)** — wholly entry 8's and entry 6's; the tracer rejects their syntax by name and leaves `redirects` and `objects` empty.
 - **§9.14 follow-ups** — (5) `ProgramRef`'s run-time include list and (6) the redirect-aware compiled-program cache key are entry 8's; (7) `GameState` carries no VM-step counter, so the shared restore check counts the host's unit (a tick) and no per-VM-step comparison is added — Q12. ADR 0004 decision 1's TK2 `<>` sentence (follow-up 1) and AD-2's now-ruled assumption (follow-up 3) are docs fixes outside this entry.
-
-## Open Questions
-
-Recommendations are what the implementer adopts if the plan is approved as written; each is a human ruling at this ticket's plan checkpoint.
-
-1. **`end()` unwinding.** **Ruled (a) by Jensen, 2026-10-12:** `end` is an ordinary registered call that returns `null` and the program finishes at its emitted `return`; the tracer's acceptance reads "ran to completion". `end()` must still unwind fully (format-spec §9.5, FUN-7, R2-Q20: immediate, abandons every pending frame, `run()` ends its caller), and entry 13's verify now requires that, including nested calls, includes and `run()`. Options were: (a) as ruled; (b) invent a termination channel now (`{ end: true }` or an effect record) so `end()` can stop mid-program. (b) was rejected because it invents contract surface that entry 3 (assembly, functional command contract, effect records) and entry 13 own, and ADR 0004 decision 2 forbids a backdoor for a specific name.
-2. **Where the state tree lives:** `core/save` (which AD-10 makes the owner of `schema` and of `SaveState`-is-`GameState`) or a neutral `core/state` composer. **Recommendation: `core/save`** — the structural seed in the spine lists `save/` and no `state/`, and `schema` plus the snapshot/save/hash/restore functions are the save module's per the table. The composer necessarily imports each owner's section type, which AD-10's future dependency-cruiser rule ("only `core/<section>/**` imports its mutable `<Section>State`") must exempt; record that exemption when the rule lands.
-3. **Placeholder for unowned sections:** one uniform `Record<string, never>` alias per section (empty until its owner lands) versus leaving the section out of `GameState` until its owner adds it. **Recommendation: the placeholder alias** — AD-10 says `GameState` has exactly those sections, entry 2's job is the shell that entries 6/7/9/10 fill and 11 reconciles, and an empty record is plain data that hashes, so the section set is visible from day one and a wrong slot cannot creep in silently.
-4. **Snapshots as text:** `canon` string versus a structured clone object. **Recommendation: the `canon` string** — AD-10/AD-11 say one canonical form for snapshot, save, hash and restore, `canon` rejects anything outside `PlainData`, and equality is then string equality. Bounds, deep validation and the mismatch-versus-restart policy stay entry 11's.
-5. **The shared restore/hash helper's home:** `runner-harness` versus a test-only module in `core`. **Recommendation: `runner-harness`** — G2 forbids `core` importing a runner, so a core test-only copy could not be shared with the corpus/golden consumer, and the helper plus its host is the harness's job (its verifies are named in entries 6/9/10/11 and 17). Later entries whose checks live in `core/test/` use `snapshot`/`restoreGameState`/`hashState` directly, which are the same primitives.
-6. **Who owns the script-phase tick and the budget constant:** `core/script` now versus waiting for epic 4's `core/engine` (AD-26's phase list). **Recommendation: `core/script/vm.ts` exports `advanceScriptTick` (waits → threads → `time`) and `STEP_BUDGET`**, epic 4 owns the phase *list* and the loop and calls the two phase handlers, and entry 9 tunes the budget — the tracer needs a runnable tick now, and this keeps the host free of sequencing so epic 4 supersedes it rather than rewriting it.
-7. **`RefId` shape:** a branded string (`"global:name"`), a `{ scope, name }` object, or a numeric index into a per-frame lvalue table. **Recommendation: the branded string** — plain data, no extra `Frame` field (so no AD-7 amendment), self-describing in a snapshot, and string ids are already house style (the `"source"`/`"target"` handles of §9.10, `AssetKey`). The lvalue table would need a new state slot and a schema bump.
-8. **The provisional `sleep` name and unit:** `sleep(ticks)` in whole ticks versus a legacy name with seconds. **Ruled by Jensen, 2026-10-12: ticks.** A tick is one fixed simulation update (AD-2, 60 Hz, an assumption kept); the unit is ticks, not seconds — and entry 3.26 (PR #45) has since renamed the whole simulation unit from step to tick, so the spine, the ports and this plan now agree (`advance(ticks, inputs, maxTicks?)`, `ticksRun`, `tickAfter`, `time.tick`, `DrawList.tick`, `InputRecord.tick`, `TickRecord`). Rationale: it matches the AD-9 kind it yields, it keeps the seconds→ticks conversion out of entry 2 (AD-2 says `core/time` alone owns `secondsToTicks`, whose rounding §9.15/THR-1 now rules, and entry 13's `delay`/entry 9's `threadSleep` are the legacy spellings, in seconds), and the ticket names `sleep` explicitly. The provisional piece is throwaway in the sense that entries 3/9/13 replace its callers, not its contract. `step` survives only where it means the VM's own instruction (§9.15/THR-3): Step IR/`StepOp`, `STEP_BUDGET`, "step budget".
-9. **Public surface:** exporting the host and the helper from `runner-harness/src/index.ts` (and updating the pinned surface test) versus keeping them internal-only. **Recommendation: export** — the ticket's verify says the program is run "through a VM-backed test host in `runner-harness`", entry 4 supersedes it from another package, and later entries and the corpus job reuse `checkSnapshotRestore`; `createTestEngine` stays unexported.
-10. **Plan size:** the workflow's target is 900–1600 tokens and this plan is larger, because the assignment for this ticket asks for the file list, the type shapes, the exact test list, the open questions and the risk list in one plan. **Recommendation: keep the full plan** — the tracer is one user-facing goal (nothing here can be merged as an independent shippable slice without ceasing to prove the seam), and the detail is what stops the implementer re-deriving contracts that entries 3–11 must keep.
-
-11. **Does the IR need an explicit `yield` opcode?** ADR 0004 decision 1 lists `OP_YIELD` in the Step IR, while AD-8 and AD-9 make yielding the result of a built-in call. Options: (a) the union stays as Design Notes writes it and a blocking call is the only yield — nothing in the language emits a bare yield, so an `OP_YIELD` instruction would be dead code; (b) add `{ op: "yield" }` now so the union matches ADR 0004's list literally, and let entry 5/9 decide what lowers to it (for example the program-level yields `run` and `multiRun` need). **Recommendation: (a) for entry 2, and record the reconciliation as a doc fix** — the entry that first needs a program-level yield (entry 9's `multiRun`/`run`, or entry 5) adds the opcode and amends ADR 0004 / AD-8 in the same change; adding a dead opcode now would be an untested instruction in a state machine whose whole point is testability. If the human prefers (b), say so and the union gains `yield` with a lower-to-nowhere test.
-
-12. **Which unit does the shared snapshot-restore check count?** §9.15 (THR-3) defines a snapshot "step" as one VM instruction and says a test comparing "the same state hash after N steps" counts VM steps; the epic and the ticket call it a "random-step snapshot", yet the plan's helper drives an `Engine` (whose only advance unit is the tick) and compares `TickReport.stateHash` after each host advance. Options: (a) the helper counts the host's advance unit, i.e. **ticks** (the tick-split reading); (b) it counts VM steps, which needs a new one-VM-step advance on the host and a VM-step counter that AD-10 does not have (§9.14 follow-up 7). **Recommendation: (a)** — the ticket and the epic were written on 2026-10-11, before entry 3.26 renamed the simulation unit (2026-10-12), so "random step" there means a random **simulation** step, i.e. a tick; the tracer's host and snapshot boundary are per tick; this plan's own three splits come from the tracer's three ticks and from `runLog`'s `{ ticks: 3 }`; and (b) would add state and an AD-10 amendment that follow-up 7 assigns to the entry that adds per-VM-step comparisons, not to this one. If the human prefers (b), the tracer grows a VM-step counter and a one-step advance, and both are recorded as part of this ticket.
 
 ## Verification
 

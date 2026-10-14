@@ -1,0 +1,255 @@
+// The tracer's step machine (G1; AD-8/AD-9/AD-26; format-spec §9.15 THR-3):
+// stores and loads, by-reference binding and write-back, error codes, the sleep
+// yield and wait order, and the per-tick step budget.
+import { deepEqual, equal } from "node:assert/strict";
+import { test } from "node:test";
+import {
+  advanceScriptTick,
+  canon,
+  createGameState,
+  createScriptServices,
+  createVmState,
+  globalRef,
+  hashState,
+  pollSleep,
+  restoreGameState,
+  runWaitsPhase,
+  snapshot,
+  startProgram,
+  STEP_BUDGET,
+  type Arg,
+  type BuiltinSpec,
+  type GameState,
+  type ScriptError,
+  type Thread,
+  type WaitPoll,
+} from "../src/index.ts";
+
+function errorOf(run: () => unknown): { code: string; message: string } {
+  try {
+    run();
+  } catch (error) {
+    const scriptError = error as ScriptError;
+    equal(typeof scriptError.code, "string");
+    return { code: scriptError.code, message: scriptError.message };
+  }
+  throw new Error("expected the call to throw");
+}
+
+function makeState(program: string, seed = 0): GameState {
+  const state = createGameState({ seed });
+  startProgram(state.vm, { kind: "inline", text: program, compiler: "1" });
+  return state;
+}
+
+function waitingThread(id: number, until: number): Thread {
+  return {
+    id,
+    kind: "board",
+    owner: "script",
+    source: null,
+    target: null,
+    frames: [
+      {
+        program: { kind: "inline", text: "", compiler: "1" },
+        ip: 0,
+        locals: {},
+        operands: [],
+        errorHandler: null,
+        autoLocal: false,
+      },
+    ],
+    status: "waiting",
+    wait: { kind: "sleep", until },
+  };
+}
+
+test("stores and loads a global and reads an unset name as 0", () => {
+  const state = makeState("x = 1\ny = x\nz = n\n");
+  advanceScriptTick(state, createScriptServices(state));
+
+  equal(state.vm.globals.x, 1);
+  equal(state.vm.globals.y, 1);
+  equal(state.vm.globals.z, 0);
+  equal(Object.hasOwn(state.vm.globals, "n"), false);
+  equal(state.vm.threads[0]!.status, "finished");
+});
+
+test("binds a variable argument with its RefId and a literal without", () => {
+  let captured: readonly Arg[] = [];
+  const probe: BuiltinSpec = {
+    name: "probe",
+    aliases: [],
+    params: [
+      { name: "a", optional: false, byRef: false, variadic: false },
+      { name: "b", optional: false, byRef: false, variadic: false },
+    ],
+    call: (_ctx, args) => {
+      captured = args;
+      return { done: null, out: [] };
+    },
+  };
+
+  const state = makeState("x = 5\nprobe(x, 7)\n");
+  advanceScriptTick(state, createScriptServices(state, [probe]));
+
+  deepEqual(captured, [
+    { value: 5, ref: globalRef("x") },
+    { value: 7, ref: null },
+  ]);
+});
+
+test("writes a by-ref out back into the caller's variable inside the hash", () => {
+  const writer: BuiltinSpec = {
+    name: "writev",
+    aliases: [],
+    params: [{ name: "target", optional: false, byRef: true, variadic: false }],
+    call: () => ({ done: null, out: [[0, 9]] }),
+  };
+  const passthrough: BuiltinSpec = {
+    name: "writev",
+    aliases: [],
+    params: [{ name: "target", optional: false, byRef: true, variadic: false }],
+    call: () => ({ done: null, out: [] }),
+  };
+
+  const written = makeState("writev(v)\n");
+  advanceScriptTick(written, createScriptServices(written, [writer]));
+  equal(written.vm.globals.v, 9);
+
+  const untouched = makeState("writev(v)\n");
+  advanceScriptTick(untouched, createScriptServices(untouched, [passthrough]));
+
+  equal(written.vm.globals.v === untouched.vm.globals.v, false);
+  equal(hashState(written) === hashState(untouched), false);
+
+  const badOut: BuiltinSpec = {
+    name: "bad",
+    aliases: [],
+    params: [{ name: "x", optional: false, byRef: false, variadic: false }],
+    call: () => ({ done: null, out: [[0, 1]] }),
+  };
+  const broken = makeState("bad(z)\n");
+  equal(
+    errorOf(() => advanceScriptTick(broken, createScriptServices(broken, [badOut]))).code,
+    "builtin.out-not-by-ref",
+  );
+});
+
+test("throws unknown.command and arity.mismatch", () => {
+  const unknown = makeState("nope()\n");
+  equal(
+    errorOf(() => advanceScriptTick(unknown, createScriptServices(unknown))).code,
+    "unknown.command",
+  );
+
+  const tooMany = makeState("sleep(1, 2)\n");
+  equal(
+    errorOf(() => advanceScriptTick(tooMany, createScriptServices(tooMany))).code,
+    "arity.mismatch",
+  );
+
+  const tooFew = makeState("sleep()\n");
+  equal(
+    errorOf(() => advanceScriptTick(tooFew, createScriptServices(tooFew))).code,
+    "arity.mismatch",
+  );
+});
+
+test("sleep leaves the thread waiting with ip past the call", () => {
+  const state = makeState('greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n');
+  advanceScriptTick(state, createScriptServices(state));
+
+  const thread = state.vm.threads[0]!;
+  equal(thread.status, "waiting");
+  deepEqual(thread.wait, { kind: "sleep", until: 2 });
+  equal(thread.frames[0]!.ip, 8);
+  equal(thread.frames[0]!.operands.length, 0);
+  equal(state.time.tick, 1);
+});
+
+test("the waits phase wakes exactly at until and polls in ascending id order", () => {
+  const vm = createVmState();
+  // Pushed as ids 3, 1, 2 so array order (3, 1, 2) differs from id order.
+  vm.threads.push(waitingThread(3, 10), waitingThread(1, 4), waitingThread(2, 7));
+
+  const polled: number[] = [];
+  const spy: WaitPoll = (view, wait) => {
+    polled.push(wait.until);
+    return pollSleep(view, wait);
+  };
+
+  runWaitsPhase(vm, { tick: 3 }, spy);
+  deepEqual(polled, [4, 7, 10]); // ascending id, never the array order
+  deepEqual(
+    vm.threads.map((thread) => thread.status),
+    ["waiting", "waiting", "waiting"],
+  );
+
+  polled.length = 0;
+  runWaitsPhase(vm, { tick: 4 }, spy);
+  deepEqual(polled, [4, 7, 10]);
+  deepEqual(
+    vm.threads.map((thread) => thread.status),
+    ["waiting", "ready", "waiting"],
+  );
+
+  polled.length = 0;
+  runWaitsPhase(vm, { tick: 7 }, spy);
+  deepEqual(polled, [7, 10]);
+  deepEqual(
+    vm.threads.map((thread) => thread.status),
+    ["waiting", "ready", "ready"],
+  );
+
+  polled.length = 0;
+  runWaitsPhase(vm, { tick: 10 }, spy);
+  deepEqual(polled, [10]);
+  deepEqual(
+    vm.threads.map((thread) => thread.status),
+    ["ready", "ready", "ready"],
+  );
+
+  for (const thread of vm.threads) {
+    equal(thread.wait, null);
+    equal(thread.frames[0]!.operands.length, 1);
+  }
+});
+
+test("treats constructor and __proto__ as ordinary variables", () => {
+  const state = makeState("x = constructor\n__proto__ = 5\ny = __proto__\n");
+  advanceScriptTick(state, createScriptServices(state));
+
+  equal(state.vm.globals.x, 0);
+  equal(state.vm.globals.__proto__, 5);
+  equal(state.vm.globals.y, 5);
+  equal(Object.hasOwn(state.vm.globals, "__proto__"), true);
+
+  const json = canon(state);
+  equal(json.includes('"__proto__":5'), true);
+  equal(typeof hashState(state), "string");
+  equal(canon(restoreGameState(snapshot(state))), json);
+});
+
+test("stores end's null result as the number 0", () => {
+  const state = makeState("x = end()\n");
+  advanceScriptTick(state, createScriptServices(state));
+  equal(state.vm.globals.x, 0);
+});
+
+test("the step budget preempts a long program with ip advanced by exactly the budget", () => {
+  const statements = Math.ceil((STEP_BUDGET + 10) / 3);
+  const state = makeState("x = 1\n".repeat(statements));
+  advanceScriptTick(state, createScriptServices(state));
+
+  const thread = state.vm.threads[0]!;
+  equal(thread.status, "ready");
+  equal(thread.frames[0]!.ip, STEP_BUDGET);
+});
+
+test("a second blocking thread is refused", () => {
+  const state = createGameState({ seed: 0 });
+  const ref = { kind: "inline", text: "end()", compiler: "1" } as const;
+  startProgram(state.vm, ref);
+  equal(errorOf(() => startProgram(state.vm, ref)).code, "thread.blocking-exists");
+});
