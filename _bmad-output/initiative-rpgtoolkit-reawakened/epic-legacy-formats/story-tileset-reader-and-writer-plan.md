@@ -8,10 +8,10 @@ baseline_revision: '68d7839ca5b6a416a5316f0bf171e99b162e1c7a'
 route: 'full'
 route_source: 'auto'
 risk: 'low'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md']
 ---
 
@@ -65,6 +65,16 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.
 - 2026-10-11 — initial plan.
 
 ## Review Triage Log
+
+### Round 2 — 2026-10-13 (`review-r1`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | intent-alignment | reader accepts version/detail pairings the spec marks `.iso`-only (`version 20 + detail 150`, `version 30 + detail 1…6`), justified in the plan by a §3.4 citation that does not cover it | real, low impact | open — needs a refusal of the pairing or a §3.1 liberal-reading note |
+| 2 | independent-oracle | VGA palette is byte-identical to the BSD-3 fzipp/vga table and every byte is the claimed bit replication — the ticket commit's *earlier* comment (`round(v*255/63)`) was wrong and is already fixed in `d7266fa` | clean | — |
+| 3 | independent-oracle | iso mask = exactly 1024 inside pixels (spec's own claim), literal four-quadrant implementation, 1024 stored pixels consumed | clean | — |
+| 4 | blind-hunter | sample corpus holds only 20/detail-1 tilesets, so no 8-bit or `.iso` path is validated by a real file | accepted (pre-existing corpus limit) | deferred — already recorded in `deferred-work.md` (2026-10-11) |
+| 5 | guardrail-sweep | G2/G3/G6 clean; 16×16 kept at stored geometry matches §3.1 ("the renderer does the doubling") | clean | — |
 
 ## Design Notes
 
@@ -120,3 +130,7 @@ Scope: f6cc637; diff excludes the ticket's own plan file. Lenses run: blind-hunt
 - intent-alignment: The writer's edit path is exercised only by refusals — low: no failure mode identified in the length check plus verbatim re-emit.
 - intent-alignment: The plan doc is not in the diff; the intent's verdict surface is split — low: bookkeeping; the only fix would be to edit the plan under review.
 - intent-alignment: Reader is version-driven with no extension input; the `.tst`/`.iso` cross-product is untested — low: the version field is the only `.tst`/`.iso` signal by design and the extension dispatch is outside this diff.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, second independent reviewer `review-r1`).** Verdict: PASS WITH FINDINGS. 1 live finding (1 MINOR). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`); the finding is LIVE there and none is stale. The version/detail pairing is open (the reader accepts `version 20 + detail 150` and `version 30 + detail 1…6`, which §3.1 says cannot exist); the corpus limitation stays deferred (already recorded in `deferred-work.md` on 2026-10-11). Round 1 above is unchanged.

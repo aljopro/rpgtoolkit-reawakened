@@ -8,10 +8,10 @@ baseline_revision: '751b19806ce15ba66f1671c0628063994de6fa11'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/discovery/package-limits.md']
 ---
 
@@ -97,6 +97,17 @@ Entries are ordered by path with an explicit code-unit comparator (never `locale
 - `pnpm licence` — exit 0; `Licence check PASSED`, 0 violations.
 - `uv run _bmad/method/scripts/tickets.py --project-root . status` — entry `2.12` reported `done` with no orphan row.
 
+## Review Triage Log
+
+### Round 2 — 2026-10-13 (`review-r3-package-ci`)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | edge-case-hunter | `write.ts:383`: `index` keeps the caller's order, so logically identical trees give different bytes (3534 vs 3536); undocumented reproducibility limit | confirmed (open at HEAD) | fixed — branch `fix/epic2-fold-and-zip-work-bound` (`6514031` fix, `c87c82e` docs, `9759eb8` test) |
+| 2 | blind-hunter | `write.ts:416`/`:192`: L1 is proved after all entries are deflated, so an over-limit tree pays compression first | confirmed (open at HEAD) | fixed — branch `fix/epic2-fold-and-zip-work-bound` (`6514031` fix, `9759eb8` test) |
+| 3 | blind-hunter | 0xFFFF entry-count and 0xFFFFFFFF size/offset overflows are unreachable (L2 < 65,535; L1/L3/L4 cap sizes); UTF-8 name flag rule sound; CRC consistent with the reader | verified-ok | rejected |
+| 4 | verification-gap | Writer output → landed reader → third-party `unzipSync` all agree; EOCD counts/offsets consistent | verified-ok | rejected |
+
 ## Code Review
 
 ### 2026-10-11
@@ -124,3 +135,7 @@ Scope: ddf854d; diff excludes the ticket's own plan file. Lenses run: blind-hunt
 - intent-alignment: "the same limits" partly by-construction — false: every reader limit is explicitly checked or guaranteed by construction, with the readZip self-check as the backstop.
 - intent-alignment: determinism asserted one level wide — low: the "same input twice" AC holds; bytes depend on the pinned fflate build and fixing that would mean dropping compression.
 - intent-alignment: the seam of the container-surface and manifest-index divergences — false: it names no bad outcome, restating those two findings and concluding both are deliberate interpretation decisions.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, independent reviewer `review-r3-package-ci`).** Verdict: PASS WITH FINDINGS. 2 live findings (2 MINOR). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`); both LIVE, none stale. Both are fixed on branch `fix/epic2-fold-and-zip-work-bound` (`6514031` fix, `c87c82e` docs, `9759eb8` test): the manifest `index` is written in code-unit order (so two writes of one tree are byte-identical), and the L1 budget is proved as each entry is compressed rather than after the whole tree. Round 1 above is unchanged.

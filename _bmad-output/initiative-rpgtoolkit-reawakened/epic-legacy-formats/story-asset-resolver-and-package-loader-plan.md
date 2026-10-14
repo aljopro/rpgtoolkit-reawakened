@@ -8,10 +8,10 @@ baseline_revision: '06b250e7c9449e7ac00c5c9b70818ad7e26b3d5b'
 route: 'full'
 route_source: 'auto'
 risk: 'high'
-review: 'quick'
+review: 'thorough'
 review_source: 'pinned'
-lenses_ran: ['quick']
-review_loop_iteration: 1
+lenses_ran: ['blind-hunter', 'edge-case-hunter', 'verification-gap', 'intent-alignment', 'security']
+review_loop_iteration: 2
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/discovery/package-limits.md']
 ---
 
@@ -93,6 +93,17 @@ Each limit exists to bound a specific attack, not to describe the corpus:
 
 ## Review Triage Log
 
+### Round 2 — 2026-10-13 (`review-r3-package-ci`, security lens)
+
+| # | Lens | Finding | Verdict | Route |
+|---|---|---|---|---|
+| 1 | security | `zip.ts:415`+`:273`: the declared-size proof's cost is proportional to the real (unverified) expansion — 200 KiB archive → 0.91 s; L5 reads the attacker's declared size, so it cannot stop it. Up to ≈20 min blocked CPU per load | confirmed (open at HEAD) | fixed — branch `fix/epic2-fold-and-zip-work-bound` (`6514031` fix, `c87c82e` docs, `9759eb8` test) |
+| 2 | security | At `acf48f8` the proof used `declared` and returned a truncated prefix with a patched CRC (`readZip ok=true … blob.bin:1000`) — the ticket's own AC falsified at its commit | confirmed (fixed in 93efb03) | rejected — STALE on re-baseline: already fixed by round 1 (`93efb03`) |
+| 3 | security | L10/resolver keys use the Unicode fold: a package holding `Tiles/k.tst` + `Tiles/<U+212A>.tst` is refused though §1.5 says they are different names; `Café.brd` wrongly resolves to `CAFÉ.BRD` | confirmed (open at HEAD) | rejected — STALE on re-baseline: fixed by epic 2.21 (`ac71468`) |
+| 4 | edge-case-hunter | `package.ts:43-73`: L1 is not applied to the whole EXE (4 MiB EXE with a 131-byte ZIP loads `ok`), against §13.2's wording; the dump host compensates | confirmed (open at HEAD) | open — needs `file.length` checked in `readAppendedZip`/`loadPackage` |
+| 5 | blind-hunter | Traversal (absolute, `..`, drive, NUL, UNC), CRC, ZIP64, EOCD/CD mismatch, stored-size mismatch — all rejected with the right rule id | verified-ok | rejected |
+| 6 | verification-gap | Numeric limits uncalibrated (no real `.tpk`) | verified-ok — §13.2 now normatively records this | rejected |
+
 ## Design Notes
 
 - **Why not `unzipSync` alone?** It is the decoder AD-6 names, but its output is sized from the header, and the report measured it returning a truncated buffer with no error. Using it as the decoder *and* proving the length independently is the only defence that holds whatever a future `fflate` does.
@@ -156,3 +167,7 @@ Scope: `acf48f8` (asset resolver and package loader, `.tpk`/appended-ZIP EXE); d
 - intent-alignment: `path` unset and `warnings[]` unused; resolver errors pinned at offset 0 — low: `warnings` is a required field of every `ok()` result and `path` is optional by contract; the resolver's `offset: 0` is its pinned contract.
 - intent-alignment: The AD-17 request-boundary surface is not on the diff — false: the plan's Boundaries state exactly the AD-17 reading implemented here; the request boundary is runner work (CAP-12).
 - intent-alignment: The loader-loaded folder and the §1.5 project-path rule are never composed in one test — low: a missing integration test, not a defect.
+
+### Round 2 — 2026-10-13
+
+**Code review (round 2, independent reviewer `review-r3-package-ci`, treated as a security review).** Verdict: PASS WITH FINDINGS. 2 live findings (1 BLOCKER, 1 MINOR). The first pass ran against a stale checkout (`3ec2ab9`) and was re-baselined against `origin/main` (`9d4d336`): F2 (the `acf48f8` proof returning a truncated prefix) was already fixed by round 1 (`93efb03`) and F3 (the Unicode-fold resolver keys) by epic 2.21 (`ac71468`), so both are rejected as stale. F1, the declared-size proof's unbounded work (a 204,788-byte `.tpk` burning 0.91 s of synchronous CPU, up to ≈20 min per load), is fixed on branch `fix/epic2-fold-and-zip-work-bound` (`6514031` fix, `c87c82e` docs, `9759eb8` test), which streams the inflate and aborts past the declaration. Open: L1 is still applied to the extracted ZIP region, not the whole EXE. Round 1 above is unchanged.

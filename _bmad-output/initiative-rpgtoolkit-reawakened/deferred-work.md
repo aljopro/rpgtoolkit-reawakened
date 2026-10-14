@@ -129,6 +129,69 @@
   summary: The feature catalogue (docs/editor-features.md T-70…T-74, docs/engine-features.md E-131) and the 2.12 commit message do not mention the distribution manifest; format-spec §13 documents it as of 2026-10-11, so only the catalogue half of G7's doc-first rule is still open.
   evidence: `grep -n manifest docs/*.md` finds it only in format-spec §13; docs/editor-features.md:182-192 (T-70…T-74) and docs/engine-features.md:356 (E-131) say nothing about the manifest-carrying package, and the commit message cites no E-xx/T-xx. The fix edits specs, so it defers.
 
+## Deferred from: code review of story-board-brd-minor-4-reader-and-writer-plan (2026-10-13)
+
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-board-brd-minor-4-reader-and-writer-plan.md`
+  summary: `writeBoard` does not check shade-layer coverage, so it returns `ok` for a model whose file its own reader refuses — the same class the 2.5 patch closed for the tile runs.
+  evidence: Round-2 review (`review-r2-formats`): `writeBoard` with an under-covering shade layer returns `ok` (139 bytes) and a re-read fails `format-spec §1.1 @137: unexpected end of data reading i32`. Fix: sum `runCount > 1 ? runCount : 1` per layer and refuse when it is below `width × height`.
+
+## Deferred from: code review of story-actor-definitions-character-item-enemy-plan (2026-10-13)
+
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-actor-definitions-character-item-enemy-plan.md`
+  summary: every version-conditional threshold in §6.1/§6.2 can be moved with the actor suite still green — 5 of 8 survive mutation on `origin/main` (epic 2.18 pinned 3) — and no minor-3 item or minor 2/5/6/7 character is built anywhere.
+  evidence: Round-2 review (`review-r2-formats`), re-baselined: `ITEM_I32_MINOR 3→4`, `ITEM_MOVEMENT_MINOR 4→3` and the reader `minor >= 6/7/8` thresholds each report `pass 20 / fail 0`. Fix: build `.tem` at 2/5/6/7 and `.itm` at 3, plus refusal tests at `.tem 9`, `.itm 8`, `.ene 2`, and negative versions.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-actor-definitions-character-item-enemy-plan.md`
+  summary: a *consistent* mis-ordering of two same-width fields is undetectable — swapping `criticalOn`/`criticalBy` in both `readEnemy` and `writeEnemy` passes — and stats/prices/rewards/crits have no value assertion.
+  evidence: Round-2 review (`review-r2-formats`), re-baselined: the paired swap reports `pass 20 / fail 0`, while the reader-only swap fails. Fix: give every builder field a distinct value and `deepEqual` the parsed model.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-actor-definitions-character-item-enemy-plan.md`
+  summary: `writeBases` writes an i16 bound that wraps for a base with more than 32768 points, producing a corrupt file instead of an error.
+  evidence: Round-2 review (`review-r2-formats`): `writeCharacter` with 40000-point bases returns `ok` (642,668 bytes) and the re-read fails `§1.2: invalid upper bound: -25537`. Fix: return a `writerError` when a base or its point list exceeds 32768.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-actor-definitions-character-item-enemy-plan.md`
+  summary: a model carrying `undefined` `idleTime`/`speed` at a minor that stores them writes a literal `0` instead of the §6.1 defaults (3.0 s / 0.05 s); every other missing fixed block fails loudly.
+  evidence: Round-2 review (`review-r2-formats`): `writeCharacter` with `idleTime/speed` undefined returns `ok` and re-reads `idleTime=0 speed=0`. Fix: refuse, or write the documented default.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-actor-definitions-character-item-enemy-plan.md`
+  summary: i16 scalars wrap silently on write — the same class the 2.5 patch closed with `writeI16s`.
+  evidence: Round-2 review (`review-r2-formats`): `writeCharacter({experienceIncrease: 40000})` re-reads `-25536`; the same unguarded `writer.i16(...)` pattern is in `item.ts`/`enemy.ts` by inspection.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-actor-definitions-character-item-enemy-plan.md`
+  summary: §6.2's 32 legacy walk-frame strings' order (interleaved top/bottom vs 16 tops then 16 bottoms) is not stated by the spec, and the code's alternating choice is unrecorded and untested (G7 doc-first).
+  evidence: Round-2 review (`review-r2-formats`): §6.2 says only "`str × 16 × 2` … each frame = top & bottom tile".
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-actor-definitions-character-item-enemy-plan.md`
+  summary: only 3 of the 5 named actor samples are required by `sample()`, so a corpus change dropping `Basic/Chrs/start.tem` or `demo/Item/oldman.itm` silently reduces coverage while the plan claims "Fails when a named sample is missing".
+  evidence: Round-2 review (`review-r2-formats`): `format-actor.test.ts:790-843` requires only `demo/Chrs/start.tem`, `demo/Item/man.itm`, `demo/Enemy/pirate.ene`.
+
+## Deferred from: code review of story-battle-definitions-bkg-spc-ste-plan (2026-10-13)
+
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-battle-definitions-bkg-spc-ste-plan.md`
+  summary: the three battle writers range-check nothing and do not check `model.magic`/`model.minor`, so a `minor: 7` model writes a file the spec-conformant reader now refuses, and an out-of-range i16 is written silently.
+  evidence: Round-2 review (`review-r2-formats`), re-baselined (sharpened): `writeStatusEffect(rounds: 40000)` returns `ok` and re-reads `-25536`; `writeSpecialMove(minor: 7)` returns `ok` and the file is refused by `readSpecialMove`. Fix: range-check the writers and check magic/minor as `board/writer.ts:102-112` does.
+
+## Deferred from: code review of story-pre-vector-board-converter-plan (2026-10-13)
+
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-pre-vector-board-converter-plan.md`
+  summary: G7 doc-first was not followed for §4.8 — the conversion rules were written into the spec hours after the code, so the epic's Done-when 4 is satisfied by a description of the code rather than a rule the code was written against.
+  evidence: Round-2 review (`review-r2-formats`): code `06b250e` 2026-10-11 14:24, patches `d821292` 17:11, spec `06da7ed` 22:45 and `2cd310b` 22:47. A §4.8 doc decision is a human one.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-pre-vector-board-converter-plan.md`
+  summary: an over-long run is clamped to the grid, where §4.2's run policy keeps the extra cells and warns — a silent, unrecorded §4.8 choice.
+  evidence: Round-2 review (`review-r2-formats`): a 10-cell run on a 2×2 grid warns "run covers 10 cells but only 4 remained" and yields exactly 4 cells; contrast `format-board.test.ts:798-809` for §4.2.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-pre-vector-board-converter-plan.md`
+  summary: the pre-vector test file still does not cover a run that overruns the grid or the negative-LUT-index refusal (the cell-cap tests have since landed).
+  evidence: Round-2 review (`review-r2-formats`); `f56e694` added the cell-cap tests, the rest remain.
+
+## Deferred from: code review of story-main-game-file-gam-reader-and-project-layout-plan (2026-10-13)
+
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-main-game-file-gam-reader-and-project-layout-plan.md`
+  summary: the §2 row-number citations in `model.ts`/`reader.ts`/`writer.ts` use a second numbering scheme that contradicts §2's unique 1–43 rows.
+  evidence: Round-2 review (`review-r3-package-ci`), re-baselined LIVE: `MainFilePlugin` is annotated "§2 row 29" while §2 numbers the plugin list differently; the files are unchanged at `origin/main`. The fix is a `docs/format-spec.md` §2 amendment (G7 doc-first).
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-main-game-file-gam-reader-and-project-layout-plan.md`
+  summary: `format-main-file.test.ts:4-5` still asserts the corpus "ships no `.gam`", and the `:415` test restates the implementation's own conditions rather than testing the reader.
+  evidence: Round-2 review (`review-r3-package-ci`), re-baselined LIVE: `tools/fixtures/sources.json` now fetches `build/main`/`demo.gam` and `dump:check` parses it; the only `origin/main` change to the file is the added fold test.
+
+## Deferred from: code review of story-headless-project-dump-tool-plan (2026-10-13)
+
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-headless-project-dump-tool-plan.md`
+  summary: the digest gate's reproducibility is proven on Node 26.8.1 only, while CI pins `node-version: 24.21.0`; cross-engine digest stability is a reasoned expectation, not a measurement.
+  evidence: Round-2 review (`review-r3-package-ci`): `pnpm dump:check` passes locally on v26.8.1 and the gate could not be run under 24.21.0. If it matters, run `pnpm dump:check` once in a 24.21.0 container.
+
 ## Resolved
 
 - `deferred-work` §2 (the ignored `fixtures/` folder missing from the provenance scan's `scope.skipRootPaths`) — resolved by entry 1.7; `tools/provenance/markers.json` lists `"fixtures"`.
@@ -138,3 +201,10 @@
 - `tickets.py` aborting on the epic's plans (the entry 1.11 finding) — resolved: the ten block-style `context:` lists in the epic's plan frontmatter are now inline lists, and the 1.10, 1.11 and 1.12 plans are typed `chore` instead of `story` (a `story` file is read as a ticket, so those three entries showed as planned or backlog while done). `tickets.py status`, `find` and `next` run again and report all twelve entries done.
 - `deferred-work` (code review of 2.4, 2.5, 2.6 and 2.9: the animation, board, actor and main-file readers accept a stored list bound below -1 as "none") — resolved by the 2.1 review patch: `readUpperBound` reports a stored bound below -1 (format-spec §1.2) at the bound's offset. Checked on the sample `start.brd` with its LUT bound patched to -5: it is now refused at offset 27 instead of misparsing the rest of the file.
 - `deferred-work` (code review of 2.4 and 2.7: the animation reader and the `.spc`, `.ste` and `.bkg` readers accept a negative `major` or `minor`) — resolved by the 2.1 review patch: `header()` reports a negative version field (format-spec §1.4) at its own offset, and the board, pre-vector board and actor readers dropped their now-unreachable copies of that guard. Checked on the sample `bkg.bkg` with its minor patched to -3: it is now refused at offset 15.
+- `deferred-work` (code review of 2.3: the JPEG IDCT wrote padding blocks past a component plane's block grid, corrupting 27 of 65 corpus JPEGs) — resolved by branch `fix/epic2-jpeg-padding-blocks` (`6e98dfe`, doc `3f9ec9f`): the dummy blocks are decoded and dropped, a non-MCU-aligned regression test with hard-coded pixels was added, and `golden/legacy-corpus.json` was re-recorded for the changed pixels.
+- `deferred-work` (code review of 2.7: the `.ste` and `.bkg` readers probe the detection byte before the header; §8.1–§8.3 state no accepted `minor`) — resolved by epic 2.18 (`e79d972`): the three battle readers read the header first and refuse a `minor` outside 2–3, so §1.4's accepted-minor requirement is now enforced.
+- `deferred-work` (code review of 2.8: empty program and sprite slots were converted as if they sat on tile (0,0), inventing off-board geometry) — resolved by epic 2.16 (`1a42973`): empty slots now emit `points: [], closed: 0` and position `(0,0)`.
+- `deferred-work` (code review of 2.8: the pre-vector reader had no cell-count cap, so a 360 KB crafted board aborted the process) — resolved by branch `fix/epic2-prevector-and-battle-validation` (`f56e694`, doc `9caaeaf`): the declared grid is bounded by `BOARD_MAX_CELLS` before any run is read.
+- `deferred-work` (code review of 2.5/2.6: the accepted `.tem`/`.itm` minor ranges were not stated in the spec) and (code review of 2.9/2.10: the Unicode `toLowerCase` case fold contradicted AD-5's ASCII-only fold) — resolved by epic 2.17's spec amendment and epic 2.21 (`ac71468`), which switches the fold to `asciiLower()` and adds AD-5's fold test.
+- `deferred-work` (code review of 2.10: the L17 proof returned a truncated prefix at `acf48f8`) and (code review of 2.11: `.bmp`/`.gif` failed the dump at `2aa135e`) — resolved by the round-1 review patches (`93efb03`).
+- `deferred-work` (code review of 2.10/2.12: the declared-size proof's work was unbounded, and the manifest `index` kept the caller's order) — resolved by branch `fix/epic2-fold-and-zip-work-bound` (`6514031`, docs `c87c82e`, test `9759eb8`): the inflate streams and aborts past the declaration, and `index` is written in code-unit order.
