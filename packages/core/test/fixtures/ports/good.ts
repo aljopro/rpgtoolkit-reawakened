@@ -25,7 +25,9 @@ import type {
   ExtensionResult,
   FillCommand,
   FocusInput,
+  Frame,
   GamepadInput,
+  GameState,
   InputEvent,
   InputRecord,
   KeyInput,
@@ -34,7 +36,6 @@ import type {
   LoadBlobRequest,
   OpenUrlRequest,
   PausedState,
-  PlainData,
   PlayVideoRequest,
   PointerInput,
   PopTargetCommand,
@@ -49,19 +50,46 @@ import type {
   SurfacePixels,
   TexRef,
   TextCommand,
+  Thread,
   VideoEnded,
+  VmState,
 } from "../../../src/index.ts";
+import { createGameState } from "../../../src/index.ts";
 
-// Thread, VmState, and GameState are stand-ins until the VM epic defines the AD-7 shapes.
-type Thread = { id: number; status: string };
-type VmState = { threads: Thread[]; globals: { [key: string]: PlainData } };
-type GameState = {
-  vm: VmState;
-  time: { tick: number };
-  surfaces: { id: number; rev: number }[];
-};
+// The real AD-7 shapes (thread, VM and game state) are plain data; importing
+// them in place of the earlier stand-ins proves the production types satisfy
+// AssertPlainData (G1 rule 2, AD-7, AD-10).
 export type VmStateIsPlainData = AssertPlainData<VmState>;
 export type GameStateIsPlainData = AssertPlainData<GameState>;
+export type FrameIsPlainData = AssertPlainData<Frame>;
+
+// A mid-yield game state: the `time` section is a plain tick counter (AD-2) and
+// `vm` holds the real thread tree (AD-7, §9.15 THR-3).
+export const midYieldState: GameState = {
+  ...createGameState({ seed: 0 }),
+  time: { tick: 3 },
+};
+
+// A pinned thread with its one frame (AD-7).
+export const pinThread: Thread = {
+  id: 1,
+  kind: "blocking",
+  owner: "script",
+  source: null,
+  target: null,
+  frames: [
+    {
+      program: { kind: "inline", text: "end()", compiler: "1" },
+      ip: 0,
+      locals: {},
+      operands: [],
+      errorHandler: null,
+      autoLocal: false,
+    },
+  ],
+  status: "ready",
+  wait: null,
+};
 
 // A draw list and an audio cue are plain data, so they hash (AD-3, AD-11, AD-16).
 export type DrawListIsPlainData = AssertPlainData<DrawList>;

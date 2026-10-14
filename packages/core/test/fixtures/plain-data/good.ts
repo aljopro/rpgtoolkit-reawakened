@@ -1,5 +1,6 @@
 // Plain-data fixtures that must satisfy the `PlainData` constraint (G1.2, AD-7).
-import type { AssertPlainData, PlainData } from "../../../src/index.ts";
+import type { AssertPlainData, GameState, PlainData, VmState } from "../../../src/index.ts";
+import { createGameState } from "../../../src/index.ts";
 
 export const value: PlainData = {
   name: "x",
@@ -8,7 +9,13 @@ export const value: PlainData = {
   nested: { deep: "y" },
 };
 
-type Thread = { id: number; status: string };
-type VmState = { threads: Thread[]; globals: { [key: string]: PlainData } };
-
+// The real AD-7/AD-10 shapes are plain data; importing them in place of the
+// earlier stand-ins proves the production types satisfy AssertPlainData.
 export type VmStateIsPlainData = AssertPlainData<VmState>;
+export type GameStateIsPlainData = AssertPlainData<GameState>;
+
+// A mid-yield game state: the `time` section is a plain tick counter (AD-2).
+export const midYieldState: GameState = {
+  ...createGameState({ seed: 1 }),
+  time: { tick: 2 },
+};
