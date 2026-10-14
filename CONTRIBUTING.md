@@ -46,7 +46,7 @@ git branch -d <type>/<short-name>
 
 Node 24.21.0 (see `.node-version`) and pnpm 12.10.1 (`corepack enable` picks it up from `packageManager`).
 
-CI runs these commands. The seven required jobs are in `.github/workflows/ci.yml` — the fixture tool's and the no-skips guard's own tests (`pnpm fixtures:test`, `pnpm no-skips:test`) run in its `unit` job, and `pnpm build` is the same `tsc -b` that `typecheck` and `test` already run, kept here for a first local build. Run them locally in this order before you open a pull request.
+CI runs these commands. The seven required jobs are in `.github/workflows/ci.yml` — the fixture tool's, the no-skips guard's and the icon builder's own tests (`pnpm fixtures:test`, `pnpm no-skips:test`, `pnpm icons:test`) run in its `unit` job, and `pnpm build` is the same `tsc -b` that `typecheck` and `test` already run, kept here for a first local build. Run them locally in this order before you open a pull request.
 
 ```sh
 pnpm install --frozen-lockfile   # install from the committed lockfile
@@ -64,6 +64,8 @@ pnpm provenance:test             # the provenance scan's own tests
 pnpm provenance                  # the clean-room provenance scan (G7)
 pnpm fixtures:test               # the fixture tool's own tests
 pnpm no-skips:test               # the no-skips guard's own tests
+pnpm icons:test                  # the icon builder's own tests
+pnpm icons                       # rebuild media/icons from media/tkr.png (the logo's icon set)
 pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
 pnpm fixtures:check              # fail if anything under fixtures/ is tracked
 pnpm golden                      # the headless golden suite (G5)

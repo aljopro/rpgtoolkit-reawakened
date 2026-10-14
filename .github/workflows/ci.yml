@@ -41,6 +41,7 @@ jobs:
       - run: pnpm test
       - run: pnpm fixtures:test
       - run: pnpm no-skips:test
+      - run: pnpm icons:test
   golden:
     runs-on: ubuntu-latest
     steps:
