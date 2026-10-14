@@ -22,6 +22,8 @@
     "fixtures:fetch": "node tools/fixtures/fetch.mjs",
     "fixtures:check": "node tools/fixtures/check.mjs",
     "fixtures:test": "node --test tools/fixtures/test/fixtures.test.mjs",
+    "icons": "node tools/icons/build.mjs",
+    "icons:test": "node --test tools/icons/test/icons.test.mjs",
     "no-skips:test": "node --test tools/no-skips/test/no-skips.test.mjs",
     "golden": "tsc -b && node packages/runner-headless/dist/cli.js golden",
     "golden:record": "tsc -b && node packages/runner-headless/dist/cli.js golden --record",
