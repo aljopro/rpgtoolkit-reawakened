@@ -17,7 +17,7 @@ RPG Toolkit Reawakened is a clean-room rebuild. The legacy RPG Toolkit engine an
 - The documents in `docs/` describe legacy behaviour and file layouts in our own words. They are the only source for implementation work.
 - Do not open, copy, paraphrase or translate the legacy source while writing code. Contributors and AI agents follow the same rule (see [CLAUDE.md](CLAUDE.md)).
 - If `docs/` is wrong or missing something, fix the doc first in its own commit, then the code.
-- Legacy sample games are test fixtures fetched at CI time. Never commit them.
+- Whole legacy sample games are test fixtures fetched at CI time. Never commit them. Small anonymised or authored fixtures may be committed (see "Committed fixtures" below).
 - The full rule and its checks are G7 in [docs/guardrails.md](docs/guardrails.md).
 
 ## Committed fixtures

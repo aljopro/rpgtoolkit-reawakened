@@ -94,7 +94,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 1. A headless runner (Node/Bun, CPU rasteriser, null audio, scripted input) **MUST** exist from milestone 1 and **MUST** run in CI on every pull request as a **required** check.
 2. The suite **MUST** cover: format round-trips; scripted play-throughs of the legacy sample games (`build/game/demo`, `build/game/Basic`) with recorded inputs; golden images at defined ticks; G1 snapshot/restore; and G3 replay hashes.
 3. Golden files change only in a pull request that says why, reviewed as a behaviour change.
-4. Legacy sample games are **test fixtures fetched at CI time** from their source. They are **not** committed to this repository (see G7).
+4. Legacy sample games are **test fixtures fetched at CI time** from their source. Whole games are **not** committed to this repository. Small anonymised or authored test fixtures **may** be committed (see G7 rule 3).
 
 **Rationale.** Engine parity checklist (engine-features §14). Without references, parity regressions are silent.
 
@@ -121,7 +121,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 **Rule.**
 1. Implementation **MUST** be derived from this repository's `docs/` only. The legacy RPG Toolkit source (GPL-2) **MUST NOT** be copied, translated, paraphrased line by line, or kept open as a reference while writing code.
 2. Knowledge flows one way: legacy behaviour is described in `docs/` (format-spec, engine-features, editor-features) as behaviour and byte layouts in our own words. Code then cites the doc sections it implements.
-3. **No legacy source files, headers or assets are committed.** Tables needed for compatibility (e.g. the VGA palette) come from public specifications or are rebuilt from sample data, not from the legacy code.
+3. **No legacy source files or headers are committed.** G7 is about the GPL-2 *source code*, not about test data: small test fixtures (a few kilobytes of file layout, anonymised or authored from `docs/`) **may** be committed under `packages/core/test/fixtures/`, but whole legacy games and their assets are still fetched at CI time (G5 rule 4). Tables needed for compatibility (e.g. the VGA palette) come from public specifications or are rebuilt from sample data, not from the legacy code.
 4. When a doc is wrong or incomplete, fix the **doc** first (in its own commit), then the code.
 5. AI agents working on implementation follow the same rules (see `CLAUDE.md`).
 
