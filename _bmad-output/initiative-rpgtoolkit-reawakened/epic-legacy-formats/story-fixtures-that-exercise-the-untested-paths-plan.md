@@ -3,7 +3,7 @@ title: 'Fixtures that exercise the untested paths'
 type: 'chore'
 ticket: '22'
 created: '2026-10-14'
-status: 'built'
+status: done
 baseline_revision: '07bcd38fe02d9726af0e7fa131c9111315f49df6'
 risk: 'medium'
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/epic-legacy-formats.md']
