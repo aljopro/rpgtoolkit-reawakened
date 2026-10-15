@@ -11,21 +11,21 @@ id = 2
 slug = "epic-legacy-formats"
 title = "Legacy projects load: formats, packages and asset resolver"
 covers = ["CAP-1"]
-after = [{ epic = 1, needs = "the monorepo, CI and fixture fetch" }]
+after = [{ epic = 1, needs = "the monorepo, CI and fixture fetch, and ADR 0007 (1.13)" }]
 
 [[epic]]
 id = 16
 slug = "epic-tk2-support"
 title = "TK2 games load: 2.x data formats"
 covers = ["CAP-1"]
-after = [{ epic = 2, needs = "the binary readers, the format registry (2.13) and the corpus gate (2.14)" }]
+after = [{ epic = 1, needs = "ADR 0007, docs/spec as the normative spec (1.13)" }, { epic = 2, needs = "the binary readers, the format registry (2.13), the corpus gate (2.14), and the format rulings and examples gate (2.23, 2.26)" }]
 
 [[epic]]
 id = 3
 slug = "epic-rpgcode-vm"
 title = "RPGCode runs on a saveable step-machine VM"
 covers = ["CAP-5"]
-after = [{ epic = 1, needs = "G1 lint and type rules" }, { epic = 2, needs = "the asset resolver (2.10) and the AssetDecoder registry (2.13)" }]
+after = [{ epic = 1, needs = "G1 lint and type rules, ADR 0007 and the engine-features migration (1.13, 1.14)" }, { epic = 2, needs = "the asset resolver (2.10), the AssetDecoder registry (2.13) and the format migration (2.23)" }, { epic = 16, needs = "the section 15 migration (16.13), before the citation sweep (3.28)" }]
 
 [[epic]]
 id = 4

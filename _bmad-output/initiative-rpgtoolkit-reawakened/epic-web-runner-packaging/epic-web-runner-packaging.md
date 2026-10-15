@@ -54,3 +54,5 @@ Anyone can play a legacy game in a browser; the CAP-12 success check, sample gam
 - Assumption: a per-board asset preload and a decoded-pixel cache live in the runner layer and can be discarded without changing behaviour (G4, guardrails.md section G4).
 - Waits on tk2-support because: BMP and GIF decoders (entries 16.11 and 16.12) to transcode from.
 - Decision: image-storage work is this epic's, 2026-10-12; it may move to another epic at inception.
+- Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4).
+- Evidence: docs/spec/examples/files/example_game.tpk and standalone_layout.exe.bin are a committed `.tpk` and `CMP1` EXE, usable for Done-when 4. docs/spec notes the original wrote saves from PAK games into a temporary folder deleted on exit.

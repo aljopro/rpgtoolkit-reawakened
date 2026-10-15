@@ -44,3 +44,6 @@ Core movement, collision, pathfinding, triggers and input mapping. Not battle ru
 - Waits on rpgcode-vm because: program execution for triggers.
 - Waits on board-rendering because: world model and loop.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4).
+- Source conflict (rule at inception): docs/spec/engine/movement-and-collision.md against engine-features: speed is 4 px per `speed` with game speed as `speed − 100 ms × gameSpeed` vs E-04's ±10% (R-50); a sprite that loses a collision freezes 2 s vs E-27's diversion (R-51); the last matching board program wins (R-52); edge arrival keeps the position along the edge vs E-28's grid alignment (R-53); sliding at ≥ 45°, ≥ 27° on iso boards (R-54). Default polygons and animation fall-backs are R-09. Source: discovery/docs-spec-reconciliation.md, section D.
+- Evidence: docs/spec gives path-finding limits (1000 node expansions, goal moved to the nearest free point) and the sprite state table, which can help with the outcome-oracle Unknown above.

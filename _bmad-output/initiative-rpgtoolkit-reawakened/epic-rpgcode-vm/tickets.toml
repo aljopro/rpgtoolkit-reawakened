@@ -21,6 +21,23 @@ references = [
 ]
 
 [[entry]]
+id = 27
+type = "story"
+title = "Migrate section 9 into docs/spec/engine and rule the RPGCode conflicts"
+description = "Under ADR 0007, moves `docs/format-spec.md` §9 (lexical rules, values, operators, statements, modules, objects, errors, dialects, engine variables, the catalogue and the rulings of §9.12 to §9.17) into `docs/spec/engine/rpgcode-language.md` and `rpgcode-functions.md` in its own doc-only commit (G7): our rulings become Reawakened rule blocks beside the legacy behaviour they keep or change. A person rules the reconciliation's section C: `^` precedence and associativity (R-30), `!=` (R-31, an owner call between legacy assignment and LEX-3), blocking commands inside threads (R-32), the thread budget formula as input to entry 9 (R-33), object members as globals and collection timing (R-34), built-in vs same-named script method (R-35), the 8 catalogue names ours lacks (R-36), virtual variables and the 24 compile-time constants (R-37), the prepended line, continue-after-error, `FileInput` and no-reload rules (R-38) and string truthiness (R-39). It also updates `discovery/command-effect-catalogue.json` to the 282 names."
+verify = "Each R-30 to R-39 item is stated in `docs/spec/engine/` as a legacy fact, a Reawakened rule or a named open question; every §9 subsection has a row in the section map for entry 28; the catalogue JSON lists all 282 names of `docs/spec/engine/rpgcode-functions.md`; the commit touches only `docs/` and the discovery catalogue; a person approved it."
+covers = ["CAP-5"]
+after = [1, "1.13"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/discovery/docs-spec-reconciliation.md, section C",
+  "reference - docs/spec/engine/rpgcode-language.md, docs/spec/engine/rpgcode-functions.md",
+]
+notes = ["R-30 and R-31 change rows EXP-2 and LEX-3 of the §9.12 rulings, which entry 5 implements; rule them before entry 5 starts."]
+
+[[entry]]
 id = 26
 type = "story"
 title = "Rename step to tick: spine, ports, engine contract and goldens"
@@ -110,10 +127,10 @@ references = [
 id = 21
 type = "story"
 title = "Effect records and generic command stubs: every catalogue name responds"
-description = "Defines the plain-data effect record (seq, tick, thread, name, kind, args, out, result, patch, wait, request) stored in the `vm` section behind an AD-23 schema entry, and registers one generic stub per catalogue name that is safe to stub (170 of the 271 names in format-spec 9.11) through `PluginDefinition.commands`: it validates args against the name's `ParamSpec`, records its side effect as an effect record naming the owning state section, writes by-reference outputs, and returns a documented default. Owner epics later replace a stub with real behaviour and apply its effects to their section. Log growth is bounded (drained per tick by the owning module, ring-capped in headless runs)."
+description = "Defines the plain-data effect record (seq, tick, thread, name, kind, args, out, result, patch, wait, request) stored in the `vm` section behind an AD-23 schema entry, and registers one generic stub per catalogue name that is safe to stub (170 of the 271 names in format-spec 9.11; entry 27 brings the catalogue to the 282 of docs/spec/engine/rpgcode-functions.md and assigns the 8 new names to the stub or wait sets) through `PluginDefinition.commands`: it validates args against the name's `ParamSpec`, records its side effect as an effect record naming the owning state section, writes by-reference outputs, and returns a documented default. Owner epics later replace a stub with real behaviour and apply its effects to their section. Log growth is bounded (drained per tick by the owning module, ring-capped in headless runs)."
 verify = "A catalogue test resolves every one of the 170 stub names with its documented arity and byRef parameters, calls each with valid args and sees one effect record of the catalogue's kind naming the catalogue's section, a snapshot taken after the calls restores with an identical state hash, and the same call twice on the same view returns equal results."
 covers = ["CAP-5"]
-after = [3]
+after = [3, 27]
 hitl = false
 risk = "medium"
 references = [
@@ -128,7 +145,7 @@ title = "Statements, control flow, functions, expressions and the operand stack"
 description = "Extends the parser and lowering to the full TK3 grammar: `if`/`elseif`/`else`, `while`, `until`, `for`, `switch`/`case`/`default`, functions and overload by arity, `local(x) = v` / `global(x) = v` declaration forms, labels, the precedence and associativity table, `return &` operands (with `^` lowered to `fmath.pow`), the operand stack and jump semantics snapshotted in `Frame.operands`, and the source-position (file, line) mapping every IR instruction carries — the single owner of that mapping, which entries 7 and 10 read."
 verify = "The synthetic expression and control-flow program (deep recursion, locals shadowing globals, a snapshot landing mid-operand-stack) parses, runs and restores identically under the rows entry 1 ruled, with the corpus-settled leniencies exercised by test cases."
 covers = ["CAP-5"]
-after = [1, 3, 4]
+after = [1, 3, 4, 27]
 hitl = false
 risk = "medium"
 references = [
@@ -163,7 +180,7 @@ title = "Error handling, located diagnostics, Logger and the harness report chan
 description = "First step, doc-first (G7): a person rules ERR-1 and ERR-2 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements `setErrorHandler`, `setResumeNextHandler`, `resumeNext` and the legacy `on error goto` / `on error resume next` forms inside functions, with handler state in `Frame.errorHandler`, `debugger(msg)` and `debug`, the `core` `Logger` port with levels and plain-data records (AD-24), every runtime error reported as a `TickReport` diagnostic `{ code, file, line, message }`, and the entry-1.9 harness driver change so a tick report may carry non-empty requests and diagnostics (format-spec section 9.8, E-98, `deferred-work.md`, audit row 3). Extends the entry 3 `Logger` port with the remaining levels and sinks."
 verify = "A synthetic bad program reports the file and line, its handler runs and `resumeNext` continues after the failing statement, a nested-call error escapes the caller's handler, a `Logger` record reaches the port with no `console` call in `core`, and the harness accepts the report."
 covers = ["CAP-5"]
-after = [5]
+after = [5, 27]
 hitl = true
 risk = "medium"
 references = [
@@ -202,7 +219,7 @@ title = "Threads and waits: kinds, sleep, wake, tellThread, multiRun, tick budge
 description = "First step, doc-first (G7): a person rules THR-1 to THR-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements the four thread kinds (`blocking`, `board`, `persistent`, `item`) with `thread(file,persist)` and the E-93 operations (`threadSleep`, `threadWake`, `threadSleepRemaining`, `killThread`, `getThreadId`, `tellThread`) registered through entry 3's registry, the AD-9 wait registry with `poll`-only resolution and duplicate rejection, the VM-owned `input.key` and `sleep` kinds plus a test-double `movement` kind that movement-triggers takes over, per-thread source and target context, `multiRun` movement coupling, and the per-tick budget tuned with movement-triggers (E-33, E-95, AD-26; spine Deferred, D10). Implements ADR 0004 decision 7 on the VM side, on AD-5's existing request and reply inputs: running a command's `then` continuation with the reply prepended; a tick-counted timeout for AD-9 waits (layered engine default, plugin `options`, the wait's own value, harness override; zero means none) that resumes the thread with an error result and a located diagnostic; a failure reply delivered as an ordinary input for a frozen request, whose wall-clock timeout the host owns; deadlock detection (every live thread parked on another parked thread, no reply outstanding) reported with the stuck threads and what they wait on, a hard failure in headless runs; and scripted replies in the harness. Exposes the VM's `waits` and `threads` phase handlers and an instruction-granular resumable step for epic 4's `createEngine` to register (AD-26); the open-tick cursor and pause state belong to `core/engine` (AD-10), so the breakpoint hook and the E-03 pause are epic 4's."
 verify = "The synthetic thread program (board, persistent and item threads, sleep and wake, `tellThread` injected inline code, a never-yielding loop preempted at the budget, `multiRun` over two sprites) runs deterministically and restores identically mid-wait, a scripted reply input is applied at its recorded tick on replay, an AD-9 wait with no wake times out in ticks with an error result, a failure reply resumes a frozen request with the missing-asset result, and two threads parked on each other fail the headless run with both named."
 covers = ["CAP-5"]
-after = [3, 5]
+after = [3, 5, 27]
 hitl = true
 risk = "high"
 references = [
@@ -248,7 +265,7 @@ title = "Pure built-ins: scope, variables, arrays, maps, strings and conversions
 description = "First step, doc-first (G7): a person rules SEM-3 to SEM-6 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Registers the language-only built-ins through entry 3's registry: scope (`local`, `global`, `autoLocal`, `kill` in its element and variadic forms), the E-92 engine-backed virtual variables through their ports, sparse arrays and maps, and the string and conversion set (`len`/`length`, `left`, `right`, `mid`, `inStr`, `replace`, `regExpReplace`, `split`, `trim`, `lcase`, `ucase`, `asc`, `chr`, `charAt`, `castLit`, `castNum`, `castInt`, `spliceVariables`) (format-spec sections 9.3 and 9.11)."
 verify = "A synthetic program exercises each family as ruled, unset reads give the documented `\"\"` and 0, the `kill` forms behave as documented, and every registered name resolves with the documented arity and `byRef` parameters."
 covers = ["CAP-5"]
-after = [3, 5]
+after = [3, 5, 27]
 hitl = true
 risk = "medium"
 references = [
@@ -329,7 +346,7 @@ title = "Sandboxed file I/O built-ins through the AD-17 requests"
 description = "Registers `openFileInput`/`Output`/`Append`/`Binary`, `closeFile`, `fileInput`, `filePrint`, `fileGet`, `filePut`, `fileEof` and `appPath` as blocking built-ins that read through `asset` requests (saves first, then shipped folders, read-only), write only to the `saves` and `files` blob areas, register the `blob` wait kind (AD-9), key the save area by the core-derived `GameId`, and reuse entry 7's harness report change (E-97, AD-17). This is the first real pack written against the request, `then` and timeout contract of ADR 0004 decision 7; if the two-step split is painful, report it before more packs are written."
 verify = "A synthetic script round-trips a text and a binary file through the harness blob port, a read of a missing shipped file yields the ruled result, a write outside the `saves`/`files` areas is refused, and `core` imports no `node:fs`."
 covers = ["CAP-5"]
-after = [7, 9, 12, "1.8", "1.9"]
+after = [7, 9, 12, 27, "1.8", "1.9"]
 hitl = false
 risk = "medium"
 references = [
@@ -343,7 +360,7 @@ references = [
 id = 17
 type = "story"
 title = "Corpus, catalogue completeness and golden-job wiring"
-description = "Collects the nine synthetic programs the discovery requires, runs `system.prg`, `start.prg` and the TK2 programs of the archived games headlessly against the stubs of entries 21 and 22 (no hand-written domain doubles), asserts that every catalogue name and every mapped TK2 command resolves, and wires the set into the golden job's hash comparison."
+description = "Collects the nine synthetic programs the discovery requires, runs `system.prg`, `start.prg` and the TK2 programs of the archived games headlessly against the stubs of entries 21 and 22 (no hand-written domain doubles), asserts that every catalogue name (all 282 of docs/spec/engine/rpgcode-functions.md) and every mapped TK2 command resolves, and wires the set into the golden job's hash comparison."
 verify = "The golden job runs every synthetic program plus `start.prg` and `system.prg` headlessly with scripted input and compares a random-step snapshot hash, and a program that cannot restore fails the job."
 covers = ["CAP-5"]
 after = [7, 8, 11, 13, 15, 16, 21, 22, "1.7", "1.9", "2.10"]
@@ -372,13 +389,25 @@ references = [
 ]
 
 [[entry]]
+id = 28
+type = "story"
+title = "Re-point citations and retire format-spec.md and engine-features.md"
+description = "Rewrites every `format-spec §x` and `engine-features` citation in `packages/`, `tools/`, CONTRIBUTING and the open epics' tickets to its `docs/spec/` anchor, using the section map entries 2.23, 27 and 16.13 leave, then deletes the two stubs. Reader error messages that cite a section change text, so the dump expectation (`golden/legacy-corpus.json`) is re-recorded deliberately (G5) with the reason in the commit. Done plans and reviews are history and keep their old citations."
+verify = "No file outside done plans and `docs/provenance/` mentions `format-spec` or `engine-features.md`, every `docs/spec/` citation resolves to an existing anchor, all required checks pass, and the re-recorded dump expectation differs only in citation text."
+covers = ["CAP-1", "CAP-5"]
+after = [27, "1.13", "1.14", "2.23", "16.13"]
+hitl = false
+risk = "medium"
+notes = ["Placed in this epic because it is the last, in build order, of the three epics whose sections it re-points (legacy-formats, tk2-support, rpgcode-vm); it is housekeeping for ADR 0007, not RPGCode work.", "Measured 2026-10-15: about 940 section citations in packages/*.ts and 65 files under _bmad-output name format-spec."]
+
+[[entry]]
 id = 18
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-5"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 26]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 26, 27, 28]
 hitl = false
 risk = "low"
 

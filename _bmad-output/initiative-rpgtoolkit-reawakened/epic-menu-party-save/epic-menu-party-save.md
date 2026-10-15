@@ -44,3 +44,5 @@ Core menu rules and default menu draw lists, inventory, equipment, shop, party, 
 - Waits on movement-triggers because: party and board state.
 - Waits on battle because: battle state to save.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4).
+- Evidence (R-13): docs/spec/formats/save-game.md now specifies legacy `.sav` minors 0–4 in full, including each thread's serialised program state, so the E-122 open question above is only a scope decision. docs/spec recommends restarting saved threads, because their positions index the original compiler's instruction list. docs/spec/examples/game/Saved/slot1.sav is a sample.
