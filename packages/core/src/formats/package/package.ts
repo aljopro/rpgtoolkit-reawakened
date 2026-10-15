@@ -5,7 +5,10 @@
  * standalone EXE with an appended ZIP behind a `CMP1` trailer — and this module
  * turns all three into one `LoadedPackage`: the files plus the `AssetIndex` the
  * resolver answers references from. Loose folders enforce the same rules as
- * archives, so a game behaves identically whichever form it arrived in.
+ * archives, so a game behaves identically whichever form it arrived in. A
+ * Toolkit 2 Professional standalone EXE has no `CMP1` trailer, so it is refused
+ * by L21 with a message telling its author to extract the assets themselves
+ * (§13.1).
  *
  * Games are untrusted input (AD-17): no file system, no recursion into nested
  * archives, no unbounded allocation, and no path that escapes the package root.
@@ -33,6 +36,17 @@ function failure(offset: number, message: string): FormatError {
 }
 
 /**
+ * Why a file with no `CMP1` trailer is refused, in the words of §13.1.
+ *
+ * The game is almost always a Toolkit 2 Professional standalone EXE (or a
+ * self-extracting installer like its `zip.exe`), which packs its data in a
+ * private format with no appended ZIP at all. The loader declines to
+ * reverse-engineer that packer and tells the reader what to do instead.
+ */
+const NO_TRAILER_HELP =
+  "a Toolkit 2 standalone EXE is not supported, and the game's author must extract the assets themselves (from the original project folder, its Setup ZIP or its .tpk)";
+
+/**
  * The ZIP appended to a standalone EXE (format-spec §13).
  *
  * The file's last 12 bytes are the trailer: `CMP1`, then `i32 offsetOfZip` and
@@ -45,7 +59,10 @@ export function readAppendedZip(file: Uint8Array, name: string): Result<Uint8Arr
   const marker = length >= PACKAGE_LIMITS.trailerBytes;
   if (!marker) {
     return err(
-      failure(0, `EXE "${name}" is ${length} bytes; it has no CMP1 trailer (missing CMP1 trailer, L21).`),
+      failure(
+        0,
+        `EXE "${name}" is ${length} bytes and has no CMP1 trailer — ${NO_TRAILER_HELP} (missing CMP1 trailer, L21).`,
+      ),
     );
   }
   for (let index = 0; index < CMP1_MARKER.length; index += 1) {
@@ -53,7 +70,7 @@ export function readAppendedZip(file: Uint8Array, name: string): Result<Uint8Arr
       return err(
         failure(
           length - PACKAGE_LIMITS.trailerBytes,
-          `EXE "${name}" has no CMP1 trailer; it is not a standalone game (missing CMP1 trailer, L21).`,
+          `EXE "${name}" has no CMP1 trailer — ${NO_TRAILER_HELP} (missing CMP1 trailer, L21).`,
         ),
       );
     }
