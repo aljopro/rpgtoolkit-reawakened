@@ -20,6 +20,32 @@ RPG Toolkit Reawakened is a clean-room rebuild. The legacy RPG Toolkit engine an
 - Legacy sample games are test fixtures fetched at CI time. Never commit them.
 - The full rule and its checks are G7 in [docs/guardrails.md](docs/guardrails.md).
 
+## Committed fixtures
+
+The fetched sample games are never committed (G5 rule 4), but a few small
+fixtures **are** committed under `packages/core/test/fixtures/`, because the
+corpus cannot supply them (ticket 2.22):
+
+- `authored/` — bytes written straight from the byte layouts in
+  [docs/format-spec.md](docs/format-spec.md) by `tools/fixtures/author/generate.mjs`:
+  detail 4/5/6 tilesets, an isometric `.iso`, a `.tpk`, a Setup ZIP, a
+  backslash-entry ZIP, a `CMP1` standalone EXE and two negative EXE stubs. The
+  tool imports no `core` reader or writer, so a fixture cannot "pass by sharing
+  the writer primitives". `pnpm fixtures:author:check` re-runs it and fails if the
+  committed bytes drift; `pnpm fixtures:author` rewrites them and is a deliberate
+  act, exactly like `pnpm golden:record` (G5).
+- `real/` — tiny files an editor produced: a detail-1, a detail-2 and a detail-3
+  tileset, plus a `.tan` and a `.gph` held for ticket 16.7.
+- `anonymised/` — derivatives of real legacy samples, produced by
+  `tools/fixtures/author/anonymise.mjs`, which keeps the binary layout but
+  replaces every name, description, program and asset filename with a neutral
+  placeholder and every content byte with a synthetic pattern. The plan of
+  ticket 2.22 records the source paths; the sources themselves are never
+  committed.
+
+`pnpm fixtures:check` fails when anything under the root `fixtures/` is tracked,
+so a fetched file can never be committed by mistake.
+
 ## Work in a worktree
 
 Do each piece of work in its own git worktree (a second folder checked out from the same repository), and leave the main checkout on `main`, unedited. Reason: several people or agents can then work at the same time without overwriting each other's files, and `main` only moves when a tested pull request lands.
@@ -68,6 +94,8 @@ pnpm icons:test                  # the icon builder's own tests
 pnpm icons                       # rebuild media/icons from media/tkr.png (the logo's icon set)
 pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
 pnpm fixtures:check              # fail if anything under fixtures/ is tracked
+pnpm fixtures:author             # rewrite packages/core/test/fixtures/authored (deliberate, see below)
+pnpm fixtures:author:check       # fail if those committed fixtures drift from the generator
 pnpm golden                      # the headless golden suite (G5)
 pnpm dump fixtures/legacy/demo   # parse a legacy project and print it (needs fixtures:fetch)
 pnpm dump:check                  # the corpus digest gate (runs in the golden job, after fixtures:fetch)
