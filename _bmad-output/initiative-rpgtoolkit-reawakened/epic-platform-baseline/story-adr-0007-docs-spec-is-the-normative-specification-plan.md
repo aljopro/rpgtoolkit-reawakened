@@ -3,7 +3,7 @@ title: 'ADR 0007: docs/spec is the normative specification'
 type: 'chore'
 ticket: '13'
 created: '2026-10-15'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: '0fd79bfc7178d9254cb42d082268abe705482af4'
 route: 'full'
 route_source: 'auto'
@@ -17,7 +17,7 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/adr/0006-cle
 
 **Problem:** On 2026-10-15 the owner ruled that `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative specification (`docs/editor-features.md` stays), and attested it clean as round 4 of the extraction log. That ruling is recorded only in a discovery note and in epic Notes. Every binding document still sends an implementer to the old files: `CLAUDE.md:23`, `docs/guardrails.md:99` and `:123`, `.github/pull_request_template.md:15`, `README.md:41-42`, `CONTRIBUTING.md:30` and `:114`, ADR 0006's context line, and 13 `format-spec` references in the architecture spine. `docs/spec/README.md` never says it is normative, and none of the seven `docs/spec/engine/` pages carries an E-xx ID, yet about 940 code and plan citations name `format-spec §…` or `E-xx`. Until an ADR fixes the precedence, the rule-block convention and the citation form, four migration entries (1.14, 2.23, 3.27, 16.13) and the sweep (3.28) have nothing to agree on, and every later reader or VM entry has two specs to cite and no rule for which wins.
 
-**Approach:** Write ADR 0007 as `Proposed`, then amend the binding documents so each names `docs/spec/`, in one doc-only commit (G7). The ADR fixes four things: (1) `docs/spec/` describes Toolkit 3.1 and every Reawakened departure or addition sits beside the legacy behaviour as a marked **Reawakened rule** block; (2) real archive files beat prose, so a page the corpus contradicts is corrected and cites the files; (3) citations take the form `docs/spec/<path>#<anchor>`, E-xx IDs ride on the engine pages as labels, and a machine-readable old-section-to-new-anchor map is where the migration entries record their moves; (4) `format-spec.md` and `engine-features.md` get a superseded banner at the top and keep their bodies until 3.28 re-points every citation and deletes them. The human accepts the ADR; its status then becomes `Accepted`.
+**Approach:** Write ADR 0007 as `Proposed`, then amend the binding documents so each names `docs/spec/`, in one doc-only commit (G7). The ADR fixes four things: (1) `docs/spec/` describes Toolkit 3.1 and every Reawakened departure or addition sits beside the legacy behaviour as a marked **Reawakened rule** block; (2) real archive files beat prose, so a page the corpus contradicts is corrected and cites the files; (3) citations take the form `docs/spec/<path>#<anchor>`, and E-xx IDs ride on the engine pages as explicit lowercase anchors (`<a id="e-33"></a>`); (4) `format-spec.md` and `engine-features.md` get a superseded banner at the top and keep their bodies until 3.28 re-points every citation and deletes them. The human accepts the ADR; its status then becomes `Accepted`.
 
 ## Boundaries & Constraints
 
@@ -47,7 +47,7 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/adr/0006-cle
 - `README.md:41-42` — the two spec links; amend.
 - `CONTRIBUTING.md:30` (authored fixtures cite format-spec) and `:114` (the dump paragraph lists readers by `format-spec` section); amend to the new form only where the ADR's rule applies, and leave section numbers that still resolve in the banner-only old file.
 - `.github/pull_request_template.md:15` — the "I cited the docs/ sections" checkbox names "format-spec sections"; amend.
-- `_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md` — 13 `format-spec` and 1 `engine-features` mention; the entry's `verify` lets this commit touch the spine, so point each at `docs/spec/` or at the ADR's map. Check first whether a single "Source documents" sentence covers most of them.
+- `_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md` — 13 `format-spec` and 1 `engine-features` mention; the entry's `verify` lets this commit touch the spine, so point each at `docs/spec/`. Check first whether a single "Source documents" sentence covers most of them.
 - `docs/format-spec.md`, `docs/engine-features.md` — a superseded banner as the first lines, nothing else.
 - `docs/spec/README.md` — states no normative status today (verified: the word does not appear). The ADR names this a 1.14 or 2.23 task; do not edit it here.
 
@@ -66,14 +66,14 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/adr/0006-cle
 - Given any file named in the Code Map, when read after the change, then every pointer to a spec names `docs/spec/` (or `docs/editor-features.md`), and none still tells an implementer to treat `format-spec.md` or `engine-features.md` as normative.
 - Given `docs/format-spec.md` and `docs/engine-features.md`, when opened, then each begins with a banner naming `docs/spec/` and ADR 0007, and `git diff --stat` shows only added lines for both.
 - Given the staged files, when listed, then they are within `docs/`, `CLAUDE.md`, `README.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` and the architecture spine only.
-- Given ADR 0007's citation rule, when a migration entry (1.14, 2.23, 3.27, 16.13) is planned, then the ADR tells it where its old-section-to-new-anchor map goes and what a row looks like.
+- Given ADR 0007's citation rule, when a migration entry (1.14, 2.23, 3.27, 16.13) moves content, then the ADR tells it the citation form (`docs/spec/<path>#<anchor>`) and the E-xx anchor form, and says no old-to-new map is kept.
 - Given every relative link in the ADR and the edited docs, when followed, then it resolves.
 
 ## Implementation Notes
 
 - **Why a banner and not a stub.** The entry's description says the old files "become redirect stubs", and its `verify` says they "open with a stub". Replacing the body now would delete content that exists nowhere else yet: §15's corpus evidence, the §4.8 and §13 rulings, L1 to L26, and the E-xx catalogue that 1.14 has not migrated. This plan reads "stub" as "a banner that opens the file" and leaves the bodies for 3.28.
-- **Citation map is a small addition beyond the entry text.** The reconciliation note says citations are "re-pointable mechanically". That needs a table from old section to new anchor, written by the four migration entries as they move content, or 3.28 cannot be mechanical. The ADR fixes only the form (a markdown table under `docs/spec/`, one row per old section or E-xx id, columns old, new, status); it builds no tool. <!-- OWNER: citation-map — added because the sweep is unscriptable without it. Alternative: let 3.28 reconstruct the map by hand at the end of three epics. Change here if you prefer that. -->
-- **Anchor form.** Existing `docs/spec/` pages use ordinary Markdown headings, which GitHub slugs automatically (for example `tiles.md#tile-bitmap-tbm`, already used by entry 2.25). E-xx labels need an explicit anchor because they sit on paragraphs, not headings: the ADR fixes `<a id="e-33"></a>` (lowercase) on the line before the paragraph. <!-- OWNER: e-xx-anchor — alternatives are a heading per E-xx (noisy) or a bracketed `[E-33]` prefix with no anchor (not linkable). Chosen: explicit lowercase anchor. -->
+- **Decision (Jensen, 2026-10-15): no citation map.** The ADR fixes the citation form only. 3.28 works out old-section-to-new-anchor by hand at the end of the three migrating epics, which the ADR should say plainly (with the census numbers below, so the cost is visible).
+- **Decision (Jensen, 2026-10-15): E-xx labels are explicit lowercase anchors**, `<a id="e-33"></a>` on the line before the paragraph. Existing `docs/spec/` headings keep their automatic Markdown slugs (for example `tiles.md#tile-bitmap-tbm`, used by entry 2.25).
 - **Census, for the Context section.** `packages/`: 382 `format-spec` occurrences in 86 files; `_bmad-output/`: 194 in 37 files; `docs/`: 75 in 15 files; `tools/`: 3; `docs/spec/` and `golden/`: 0. No tool validates a citation, so the ADR should say that re-pointing in 3.28 is verified by grep, not by a gate.
 - **Provenance wording.** Round 4 states "owner-attested clean", with no question list, no extractor and no reviewer (log line 12). The ADR records that as an accepted second path for a whole-spec authoring pass, and the ADR 0006 amendment keeps steps 1 to 4 as the path for any later extraction round.
 
@@ -95,4 +95,4 @@ Order of work: draft the ADR as `Proposed`; present it at the plan-checkpoint re
 
 ## Plan Change Log
 
-- 2026-10-15 — initial plan, drafted from the entry, the reconciliation note and a census of the citations. Two OWNER markers (citation map, E-xx anchor form) and one reading of "stub" (banner, not replacement) are marked for the plan-checkpoint review.
+- 2026-10-15 — initial plan, drafted from the entry, the reconciliation note and a census of the citations. Owner ruled all three open points: banner not stub (option A), no citation map (option B), explicit lowercase E-xx anchors (option A). The intent, spine row and one acceptance criterion were updated to match.
