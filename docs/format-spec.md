@@ -1,3 +1,5 @@
+> **Superseded.** [`docs/spec/`](spec/README.md) is the normative specification of what Toolkit 3.1 does, and this file no longer is ([ADR 0007](adr/0007-docs-spec-is-the-normative-specification.md)). It is frozen: nothing is added here. Its body stays until entry 3.28 re-points every citation and deletes it, because some content (the Toolkit 2 section and its corpus evidence, the pre-vector and package rulings) has not yet moved to `docs/spec/`. Its section numbers stay valid for the citations that still use them.
+
 # RPG Toolkit 3 — Legacy File Format Specification
 
 > **Purpose.** This is the reference a clean reimplementation needs in order to **read** (and, optionally, write) game projects made with RPG Toolkit 3.x (final legacy release 3.1.0, 2007). It describes formats and behaviour, not code. The legacy implementation is GPL‑2; nothing here is copied from it. Byte layouts are stated as facts about the data. The new project can be MIT/Apache licensed.

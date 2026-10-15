@@ -13,6 +13,7 @@ sources:
   - ../../../docs/adr/0001-typescript-core.md
   - ../../../docs/guardrails.md
   - ../../../docs/architecture-options.md
+  - ../../../docs/spec/README.md
   - ../../../docs/engine-features.md
   - ../../../docs/editor-features.md
   - ../../../docs/format-spec.md
