@@ -279,6 +279,14 @@ test("a parsed anonymised special move writes back byte-for-byte", () => {
   deepEqual(unwrap(writeSpecialMove(move)), bytes);
 });
 
+test("a field-varying synthetic special move writes back byte-for-byte", () => {
+  // Kept alongside the fixture round-trip: a negative i32 damage, a -1 i8 flag
+  // and an empty trailing string are field variations no committed fixture has.
+  const bytes = buildSpc({ name: "Ice", damage: -3, usableFromMenu: -1, description: "" });
+  const move = unwrap(readSpecialMove(new BinaryReader(bytes)));
+  deepEqual(unwrap(writeSpecialMove(move)), bytes);
+});
+
 test("a special move keeps trailing bytes as residue with one warning", () => {
   const bytes = buildSpc({ tail: [0xde, 0xad, 0xbe, 0xef] });
   const reader = new BinaryReader(bytes);
@@ -390,6 +398,24 @@ test("a text-form status effect is refused at the detection byte", () => {
 
 test("a parsed anonymised status effect writes back byte-for-byte", () => {
   const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "anonymised", "ste-1.ste")));
+  const effect = unwrap(readStatusEffect(new BinaryReader(bytes)));
+  deepEqual(unwrap(writeStatusEffect(effect)), bytes);
+});
+
+test("a field-varying synthetic status effect writes back byte-for-byte", () => {
+  // Kept alongside the fixture round-trip: `ste-1` decodes to zero for
+  // `smpEnabled`, `runProgram` and `program`, so only this test pins them.
+  const bytes = buildSte({
+    name: "",
+    rounds: 1,
+    speedUp: 4,
+    disable: 7,
+    smpEnabled: 2,
+    smpPerRound: -6,
+    runProgram: 9,
+    hpPerRound: -1,
+    program: "poison.prg",
+  });
   const effect = unwrap(readStatusEffect(new BinaryReader(bytes)));
   deepEqual(unwrap(writeStatusEffect(effect)), bytes);
 });
