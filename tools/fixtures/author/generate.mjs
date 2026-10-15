@@ -13,14 +13,22 @@
 //
 // What is authored, and why:
 //   * detail 4, 5 and 6 tilesets (§3.1) — the whole-archive crawl found tilesets
-//     only at detail 1, 2 and 3, so detail 4/5/6 have no real sample anywhere.
+//     only at detail 1, 2 and 3, so detail 4, 5 and 6 have **no real sample
+//     anywhere**: they are **authored from spec, unverified against a real
+//     file**. The detail-4 set holds two tiles, so the per-tile offset stays
+//     covered without the sample games.
 //   * an isometric `.iso` (§3.1, §3.3) — no real `.iso` (version 30, detail 150)
 //     exists in the archive.
-//   * a `.tpk`, a Setup ZIP (§13.1 `Main/` + `Game/`), a backslash-separated
-//     project ZIP, a `CMP1` standalone EXE (§13.1) and two negative EXE stubs
-//     (a Toolkit 2 launcher with no trailer, and a self-extracting `zip.exe`
-//     shape: a PE-ish prefix followed by a ZIP with no trailer). No sample
-//     package was ever shipped, so none of these has real evidence either.
+//   * a `.tpk` and a `CMP1` standalone EXE (§13.1) — no real `.tpk` or
+//     standalone EXE sample has these forms (`Setup` ZIP installers did ship,
+//     and `Game/<project>/` archives do, but no `.tpk` and no `CMP1` trailer was
+//     found in the archive).
+//   * a Setup ZIP (§13.1 `Main/` + `Game/`), a backslash-separated project ZIP,
+//     and two negative EXE stubs (a Toolkit 2 launcher with a private payload
+//     and no trailer, and the shape of a self-extracting `zip.exe`: a launcher
+//     prefix, then a ZIP, with no trailer locating it).
+//   * a deflated (method 8) copy of the `.tpk`, because real packages are
+//     deflated and every other fixture here is STORE.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -33,36 +41,45 @@ const defaultOut = join(repoRoot, "packages", "core", "test", "fixtures", "autho
 
 /**
  * One tileset of §3.1: the 6-byte header (`i16 version`, `i16 tileCount`,
- * `i16 detail`) then tightly packed column-major pixels. `pixel(k)` returns the
- * stored bytes of the k-th stored pixel, so a fixture's content is a closed-form
- * function the tests can reproduce.
+ * `i16 detail`) then tightly packed column-major pixels. `pixel(k, tile)` returns
+ * the stored bytes of the k-th stored pixel of tile `tile`, so a fixture's
+ * content is a closed-form function the tests can reproduce.
  */
-function tileset(version, detail, size, bytesPerPixel, pixel) {
-  const count = 1;
-  const pixels = new Uint8Array(size * size * bytesPerPixel);
-  for (let k = 0; k < size * size; k += 1) {
-    const at = k * bytesPerPixel;
-    if (bytesPerPixel === 3) {
-      const [r, g, b] = pixel(k);
-      pixels[at] = r;
-      pixels[at + 1] = g;
-      pixels[at + 2] = b;
-    } else {
-      pixels[at] = pixel(k);
+function tileset(version, detail, size, bytesPerPixel, pixel, count = 1) {
+  const pixels = new Uint8Array(count * size * size * bytesPerPixel);
+  for (let tile = 0; tile < count; tile += 1) {
+    for (let k = 0; k < size * size; k += 1) {
+      const at = (tile * size * size + k) * bytesPerPixel;
+      if (bytesPerPixel === 3) {
+        const [r, g, b] = pixel(k, tile);
+        pixels[at] = r;
+        pixels[at + 1] = g;
+        pixels[at + 2] = b;
+      } else {
+        pixels[at] = pixel(k, tile);
+      }
     }
   }
   return concat([le16(version), le16(count), le16(detail), pixels]);
 }
 
-/** An 8-bit palette pixel: the stored index is `k mod 256`, so index 255 (the transparent key) appears once. */
-const palettePixel = (k) => k & 0xff;
+/**
+ * An 8-bit palette pixel: the stored index is `k mod 256`, so the transparent
+ * key (index 255) appears once per 256-pixel block. `tile` shifts the pattern,
+ * so two tiles of one set never look alike.
+ */
+const palettePixel = (k, tile) => (k + tile * 64) & 0xff;
 
 /** A 24-bit pixel that never hits the transparent key R=0, G=1, B=2 (§3.1). */
 const rgbPixel = (k) => [k & 0xff, (k >> 8) & 0xff, 7];
 
 const AUTHORED = {
-  "detail4.tst": tileset(20, 4, 16, 1, palettePixel),
+  // Authored from spec, unverified against a real file (no detail-4 sample
+  // exists in the archive). Two tiles pin the per-tile offset (§3.1).
+  "detail4.tst": tileset(20, 4, 16, 1, palettePixel, 2),
+  // Authored from spec, unverified against a real file (no detail-5 sample).
   "detail5.tst": tileset(20, 5, 32, 1, palettePixel),
+  // Authored from spec, unverified against a real file (no detail-6 sample).
   "detail6.tst": tileset(20, 6, 16, 1, palettePixel),
   "iso.iso": tileset(30, 150, 32, 3, rgbPixel),
 };
@@ -103,6 +120,15 @@ function backslashZip(files) {
   return buildZip(files.map((file) => ({ name: file.name.replaceAll("/", "\\"), bytes: file.bytes })));
 }
 
+/**
+ * The same project ZIP again, but every entry deflated (method 8) over a
+ * stored-block DEFLATE stream. Real `.tpk` and Setup files are deflated, so this
+ * pins the reader's method-8 path without any compressor.
+ */
+function deflatedTpk(files) {
+  return buildZip(files.map((file) => ({ name: file.name, bytes: file.bytes, deflate: true })));
+}
+
 /** A `CMP1` standalone EXE (§13.1): an engine image, the ZIP, then the 12-byte trailer. */
 function cmp1Exe(zip) {
   const prefix = new Uint8Array(64).fill(0x90);
@@ -132,6 +158,7 @@ export function authoredFixtures() {
   return [
     ...Object.entries(AUTHORED),
     ["package.tpk", zip],
+    ["package-deflated.tpk", deflatedTpk(files)],
     ["setup.zip", setupZip(files)],
     ["backslash.zip", backslashZip(files)],
     ["package-cmp1.exe", cmp1Exe(zip)],

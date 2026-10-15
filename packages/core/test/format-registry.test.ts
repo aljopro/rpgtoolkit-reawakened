@@ -220,9 +220,8 @@ const READERS: ReadonlyArray<readonly [CoreFormatId, (bytes: Uint8Array) => Resu
 ];
 
 /**
- * Bytes that reach each decoder's first fields and then stop, plus one
- * committed authored tileset fixture. None is a valid pre-vector board, so the
- * board row's
+ * Bytes that reach each decoder's first fields and then stop, plus one committed
+ * authored tileset fixture. None is a valid pre-vector board, so the board row's
  * direct reader (`readBoard`, the §4.2 layout) is the same branch the decoder
  * takes; the §4.8 branch is covered by the dump's own pre-vector case.
  */
@@ -250,11 +249,11 @@ test("every core decoder returns exactly what its own reader returns", () => {
 
 test("the tileset decoder returns the authored fixture's documented model", () => {
   const model = unwrap(CORE_DECODERS.tileset.decode(TILESET_BYTES, EMPTY_RESOLVER)) as Tileset;
-  // The fixture's header alone says detail 4 with one tile (§3.1) — a value no
+  // The fixture's header alone says detail 4 with two tiles (§3.1) — values no
   // writer of ours produced.
   equal(model.version, 20);
   equal(model.detail.code, 4);
-  equal(model.tiles.length, 1);
+  equal(model.tiles.length, 2);
   deepEqual(model, unwrap(readTileset(TILESET_BYTES)));
 });
 

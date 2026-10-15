@@ -11,9 +11,9 @@
 // a local header + data per entry, then a central directory, then the
 // end-of-central-directory record. Entry names are written verbatim, so a
 // caller can build a backslash-separated archive (`Tiles\set.tst`) as well as a
-// forward-slash one.
-
-import { deflateRawSync } from "node:zlib";
+// forward-slash one. Method 8 is emulated with DEFLATE *stored* blocks, so a
+// fixture can exercise the reader's inflate path without depending on the
+// runtime zlib build.
 
 /** The DOS date for 1980-01-01 (year 0, month 1, day 1) — the ZIP epoch. */
 const DOS_DATE = 0x0021;
@@ -68,9 +68,30 @@ export function concat(parts) {
 }
 
 /**
+ * A valid DEFLATE stream (RFC 1951) of `data` built from *stored* blocks, so no
+ * compressor is involved and the bytes are identical on every runtime. Each
+ * block carries up to 65,535 bytes: the 1-byte header, then `LEN`, its one's
+ * complement `NLEN`, then the raw data.
+ */
+export function deflateStored(data) {
+  const blocks = [];
+  let offset = 0;
+  do {
+    const length = Math.min(0xffff, data.length - offset);
+    const final = offset + length >= data.length;
+    blocks.push(new Uint8Array([final ? 1 : 0]));
+    blocks.push(le16(length));
+    blocks.push(le16(~length & 0xffff));
+    blocks.push(data.subarray(offset, offset + length));
+    offset += length;
+  } while (offset < data.length);
+  return concat(blocks);
+}
+
+/**
  * Build a ZIP archive from `entries`, each `{ name, bytes, deflate? }`. With
- * `deflate` true the entry is compressed with `deflateRawSync` (method 8),
- * otherwise it is stored (method 0).
+ * `deflate` true the entry is written with method 8 over a stored-block DEFLATE
+ * stream, otherwise it is stored (method 0).
  */
 export function buildZip(entries) {
   const localParts = [];
@@ -80,7 +101,7 @@ export function buildZip(entries) {
   for (const entry of entries) {
     const name = ascii(entry.name);
     const crc = crc32(entry.bytes);
-    const body = entry.deflate === true ? new Uint8Array(deflateRawSync(entry.bytes)) : entry.bytes;
+    const body = entry.deflate === true ? deflateStored(entry.bytes) : entry.bytes;
     const method = entry.deflate === true ? 8 : 0;
 
     const local = concat([

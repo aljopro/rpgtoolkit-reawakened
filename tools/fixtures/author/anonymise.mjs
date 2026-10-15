@@ -221,11 +221,14 @@ function readZip(bytes) {
 
 /** The §1.5 type folders a game project uses; anything else is replaced. */
 const TYPE_FOLDERS = new Set([
-  "tiles", "boards", "chrs", "chrs", "item", "enemy", "spcmove", "statuse", "bkrounds",
+  "tiles", "boards", "chrs", "item", "enemy", "spcmove", "statuse", "bkrounds",
   "misc", "bitmap", "media", "prg", "font", "plugin",
 ]);
 
-/** A neutral path for `name`, keeping the type folders, separators and extension. */
+/**
+ * A neutral path for `name`, keeping the Setup layout's `Main` and `Game`
+ * folders, the type folders, the separators and the extension.
+ */
 function anonymiseName(name, index) {
   const separator = name.includes("\\") ? "\\" : "/";
   const parts = name.split(/[\\/]/);
@@ -237,7 +240,11 @@ function anonymiseName(name, index) {
       return parts.length === 1 ? `engine${index}${extension}` : `asset${index}${extension}`;
     }
     const lower = part.toLowerCase();
-    if (lower === "game" || lower === "main") return part[0].toUpperCase() + part.slice(1).toLowerCase();
+    if (lower === "main") return "Main";
+    if (lower === "game") return "Game";
+    // Under `Game`, the second segment is the project folder: give it a neutral
+    // name rather than a placeholder index.
+    if (position === 1 && parts[0].toLowerCase() === "game") return "Demo";
     if (TYPE_FOLDERS.has(lower)) return part;
     return `Sample${position}`;
   });
@@ -252,11 +259,24 @@ function syntheticBytes(index, size) {
   return out;
 }
 
-/** An anonymised excerpt of a real Setup bundle's layout. */
+/**
+ * An anonymised excerpt of a real Setup bundle's layout: the `Main/` file and
+ * the first `Game/<project>/…` entries, so the fixture keeps §13.1's Setup shape
+ * (and its backslash separators) with neutral names and synthetic content.
+ */
 function anonymiseBundle(bytes, limit) {
-  const entries = readZip(bytes).slice(0, limit);
+  const entries = readZip(bytes);
+  const top = (name) => name.split(/[\\/]/)[0].toLowerCase();
+  const files = entries.filter((entry) => !/[\\/]$/.test(entry.name));
+  const picked = [
+    ...files.filter((entry) => top(entry.name) === "main"),
+    ...files.filter((entry) => top(entry.name) === "game"),
+  ].slice(0, limit);
+  if (!picked.some((entry) => top(entry.name) === "main") || !picked.some((entry) => top(entry.name) === "game")) {
+    throw new Error("the bundle has no Main/ or Game/ entry to excerpt");
+  }
   return buildZip(
-    entries.map((entry, index) => ({
+    picked.map((entry, index) => ({
       name: anonymiseName(entry.name, index),
       bytes: syntheticBytes(index, entry.uncompressed),
     })),

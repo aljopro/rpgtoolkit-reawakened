@@ -28,12 +28,12 @@ corpus cannot supply them (ticket 2.22):
 
 - `authored/` — bytes written straight from the byte layouts in
   [docs/format-spec.md](docs/format-spec.md) by `tools/fixtures/author/generate.mjs`:
-  detail 4/5/6 tilesets, an isometric `.iso`, a `.tpk`, a Setup ZIP, a
-  backslash-entry ZIP, a `CMP1` standalone EXE and two negative EXE stubs. The
-  tool imports no `core` reader or writer, so a fixture cannot "pass by sharing
-  the writer primitives". `pnpm fixtures:author:check` re-runs it and fails if the
-  committed bytes drift; `pnpm fixtures:author` rewrites them and is a deliberate
-  act, exactly like `pnpm golden:record` (G5).
+  detail 4/5/6 tilesets, an isometric `.iso`, a `.tpk` and a deflated copy of it,
+  a Setup ZIP, a backslash-entry ZIP, a `CMP1` standalone EXE and two negative
+  EXE stubs. The tool imports no `core` reader or writer, so a fixture cannot
+  "pass by sharing the writer primitives". `pnpm fixtures:author:check` re-runs it
+  and fails if the committed bytes drift; `pnpm fixtures:author` rewrites them and
+  is a deliberate act, exactly like `pnpm golden:record` (G5).
 - `real/` — tiny files an editor produced: a detail-1, a detail-2 and a detail-3
   tileset, plus a `.tan` and a `.gph` held for ticket 16.7.
 - `anonymised/` — derivatives of real legacy samples, produced by

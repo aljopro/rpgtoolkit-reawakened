@@ -31,7 +31,6 @@ import {
   readStatusEffect,
   readTileset,
   resolveAsset,
-  vgaPaletteEntry,
   writeTileset,
 } from "../src/index.ts";
 import type { Result, Tileset } from "../src/index.ts";
@@ -70,22 +69,32 @@ test("the authored detail-4 tileset parses and its palette pixels expand", () =>
   equal(model.detail.code, 4);
   equal(model.detail.size, 16);
   equal(model.detail.bytesPerPixel, 1);
-  equal(model.tiles.length, 1);
+  // Two tiles, so the per-tile stride is exercised without the sample games.
+  equal(model.tiles.length, 2);
+  equal(model.tiles[0]?.pixels.length, 16 * 16);
+  equal(model.tiles[1]?.pixels.length, 16 * 16);
 
   const rgba = unwrap(expandTileToRgba(model, 0));
   equal(rgba.length, 16 * 16 * 4);
   // The stored index at column-major k is `k mod 256`; pixel (x, y) reads k = x*16+y.
-  const pixel = (x: number, y: number): readonly number[] => {
+  const pixel = (memory: Uint8Array, x: number, y: number): readonly number[] => {
     const o = (x * 16 + y) * 4;
-    return [rgba[o] ?? 0, rgba[o + 1] ?? 0, rgba[o + 2] ?? 0, rgba[o + 3] ?? 0];
+    return [memory[o] ?? 0, memory[o + 1] ?? 0, memory[o + 2] ?? 0, memory[o + 3] ?? 0];
   };
   // index 0 at (0, 0) → black; index 1 at (0, 1) → the palette's blue; index 15
   // (white) at (0, 15).
-  deepEqual(pixel(0, 0), [0, 0, 0, 255]);
-  deepEqual(pixel(0, 1), [0x00, 0x00, 0xaa, 255]); // VGA palette index 1 is blue
-  deepEqual(pixel(0, 15), [255, 255, 255, 255]);
+  deepEqual(pixel(rgba, 0, 0), [0, 0, 0, 255]);
+  deepEqual(pixel(rgba, 0, 1), [0x00, 0x00, 0xaa, 255]); // VGA palette index 1 is blue
+  deepEqual(pixel(rgba, 0, 15), [255, 255, 255, 255]);
   // stored index 255 is the transparent key; k = 255 is (15, 15).
-  deepEqual(pixel(15, 15), [0, 0, 0, 0]);
+  deepEqual(pixel(rgba, 15, 15), [0, 0, 0, 0]);
+
+  // Tile 1's pattern is shifted by 64 stored pixels, so the transparent key
+  // falls 64 pixels earlier: k = 191 is (11, 15), and (15, 15) is now opaque.
+  const second = unwrap(expandTileToRgba(model, 1));
+  deepEqual(pixel(second, 11, 15), [0, 0, 0, 0]);
+  equal(pixel(second, 15, 15)[3], 255);
+  equal(pixel(second, 0, 0)[3], 255);
 });
 
 test("the authored detail-5 tileset parses (32x32 palette)", () => {
@@ -244,6 +253,22 @@ test("the authored Setup ZIP loads with its Main/ and Game/ layout", () => {
   ]);
 });
 
+test("the authored deflated .tpk (method 8) loads to the same tree as the stored one", () => {
+  const bytes = fixture("authored/package-deflated.tpk");
+  // The first local file header's method field (bytes 8..9) is 8, so this ZIP
+  // really does take the reader's inflate path.
+  equal(bytes[8] !== undefined && (bytes[8]! | ((bytes[9] ?? 0) << 8)) === 8, true);
+
+  const deflated = unwrap(loadPackage({ kind: "tpk", name: "package-deflated.tpk", bytes }));
+  const stored = unwrap(loadPackage({ kind: "tpk", name: "package.tpk", bytes: fixture("authored/package.tpk") }));
+  deepEqual(deflated.files.map((file) => file.path), AUTHORED_TREE);
+  for (const file of deflated.files) {
+    const reference = stored.files.find((other) => other.path === file.path);
+    deepEqual([...file.bytes], [...(reference?.bytes ?? new Uint8Array())], file.path);
+  }
+  deepEqual(unwrap(readTileset(deflated.files.find((file) => file.path === "Tiles/set.tst")?.bytes ?? new Uint8Array())).tiles.length, 2);
+});
+
 test("the authored backslash-entry ZIP loads to the same tree as the .tpk", () => {
   const zip = unwrap(loadPackage({ kind: "tpk", name: "backslash.zip", bytes: fixture("authored/backslash.zip") }));
   const tpk = unwrap(loadPackage({ kind: "tpk", name: "package.tpk", bytes: fixture("authored/package.tpk") }));
@@ -279,18 +304,23 @@ test("both negative EXE stubs are refused by L21 with the extract-your-assets me
   }
 });
 
-test("the anonymised Setup-bundle excerpt loads with only neutral entry names", () => {
-  const loaded = unwrap(
-    loadPackage({ kind: "tpk", name: "setup-excerpt.zip", bytes: fixture("anonymised/setup-excerpt.zip") }),
-  );
+test("the anonymised Setup-bundle excerpt keeps the Setup layout with neutral names", () => {
+  const bytes = fixture("anonymised/setup-excerpt.zip");
+  // The source bundle's own separators were backslashes; the fixture keeps them.
+  equal(new TextDecoder("windows-1252").decode(bytes).includes("Game\\Demo\\"), true);
+
+  const loaded = unwrap(loadPackage({ kind: "tpk", name: "setup-excerpt.zip", bytes }));
   deepEqual(loaded.files.map((file) => file.path), [
-    "engine0.exe",
-    "engine1.dll",
-    "engine2.dll",
-    "engine3.dll",
-    "engine4.txt",
-    "engine5.fnt",
+    "Main/asset0.gam",
+    "Game/Demo/Tiles/asset1.tst",
+    "Game/Demo/Tiles/asset2",
+    "Game/Demo/Tiles/asset3.tan",
+    "Game/Demo/Tiles/asset4.tst",
+    "Game/Demo/Tiles/asset5.tst",
   ]);
+  // §13.1's Setup shape: the main file under `Main/` and the project under `Game/`.
+  equal(loaded.files.filter((file) => file.path.startsWith("Main/")).length, 1);
+  equal(loaded.files.filter((file) => file.path.startsWith("Game/Demo/")).length, 5);
   for (const file of loaded.files) {
     equal(file.bytes.length <= 48, true, `${file.path} is small`);
   }

@@ -80,6 +80,17 @@ test("a committed tileset round-trips and the writer reproduces the bytes", () =
   deepEqual([...written], [...bytes]);
 });
 
+test("the committed two-tile tileset reads and writes both tiles at their offsets", () => {
+  const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "detail4.tst")));
+  const model = unwrap(readTileset(bytes));
+  equal(model.tiles.length, 2);
+  // Tile 0's stored index at k is `k mod 256`; tile 1's is `(k + 64) mod 256`, so
+  // a reader that ignored the per-tile stride would return tile 0 twice.
+  deepEqual([...(model.tiles[0]?.pixels.subarray(0, 3) ?? [])], [0, 1, 2]);
+  deepEqual([...(model.tiles[1]?.pixels.subarray(0, 3) ?? [])], [64, 65, 66]);
+  deepEqual([...unwrap(writeTileset(model))], [...bytes]);
+});
+
 test("the committed isometric .iso round-trips", () => {
   const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "iso.iso")));
   const model = unwrap(readTileset(bytes));
