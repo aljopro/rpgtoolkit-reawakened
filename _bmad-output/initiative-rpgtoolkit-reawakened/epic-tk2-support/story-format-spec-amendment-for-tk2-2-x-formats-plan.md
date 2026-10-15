@@ -1,6 +1,6 @@
 ---
 title: 'Format-spec amendment for TK2 (2.x) formats'
-type: 'story'
+type: 'chore'
 ticket: '3'
 created: '2026-10-14'
 status: 'ready-for-dev'

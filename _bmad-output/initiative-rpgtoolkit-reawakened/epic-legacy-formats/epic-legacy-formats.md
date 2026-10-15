@@ -55,3 +55,4 @@ Byte readers and writers, the asset resolver, package import and pre-vector upgr
 - Evidence: 2026-10-15: on the 3.1 sample corpus our dump and docs/spec/tools/rpgtk_formats.py agree on every file (40 binary files parse exactly), so no current binary layout conflicts on real data; the conflicts are in meanings, rules and the 8-bit palette (236 of 256 entries differ, R-01).
 - Evidence: docs/spec/examples/files holds the repo's first real `.tpk` and `CMP1` standalone EXE; both load to the same tree as the folder (R-08). §13.2's "no sample ships a package" is out of date.
 - Open question: R-06, the index scripts see for board items after an empty slot (legacy compacts, our reader keeps slots), is ruled by board-rendering or movement-triggers at inception; the reader keeps raw slots either way.
+- Decision: Jensen, 2026-10-15: R-01 — 8-bit tiles use the `docs/spec/formats/dos-palette.json` table, replacing the standard VGA table in `vga-palette.ts` (entry 24).

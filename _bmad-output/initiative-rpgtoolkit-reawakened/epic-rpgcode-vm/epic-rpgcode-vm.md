@@ -70,3 +70,4 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 - Evidence: docs/spec/engine/rpgcode-functions.md lists 282 names (14 aliases); our catalogue has 271 plus language-level forms and lacks `empty`, `fbranch`, `mbox`, `newplyr`, `restorearrayscreen`, `underarrow`, `itemwalkspeed` and `shopcolors` (R-36).
 - Evidence: docs/spec/engine/plugins-and-battle.md and plugin-constants.md specify the 140-method plugin callback interface, the native and COM export shapes and the battle protocol: inputs for entries 23 and 24 and for epic battle (R-61).
 - Decision: compiled `.prg` stays out: docs/spec documents it but says no shipped tool writes one (R-12).
+- Decision: Jensen, 2026-10-15: R-31 — keep LEX-3: adjacent `!=` stays "not equal", recorded in entry 27 as a Reawakened rule beside the legacy `a! = b` reading; an edge case.
