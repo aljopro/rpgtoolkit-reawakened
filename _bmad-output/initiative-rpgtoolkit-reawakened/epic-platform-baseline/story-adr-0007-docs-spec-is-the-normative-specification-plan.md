@@ -3,7 +3,7 @@ title: 'ADR 0007: docs/spec is the normative specification'
 type: 'chore'
 ticket: '13'
 created: '2026-10-15'
-status: ready-for-dev
+status: done
 baseline_revision: '0fd79bfc7178d9254cb42d082268abe705482af4'
 route: 'full'
 route_source: 'auto'

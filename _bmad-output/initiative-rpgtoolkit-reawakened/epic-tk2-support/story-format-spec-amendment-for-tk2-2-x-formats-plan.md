@@ -3,7 +3,7 @@ title: 'Format-spec amendment for TK2 (2.x) formats'
 type: 'chore'
 ticket: '3'
 created: '2026-10-14'
-status: 'ready-for-dev'
+status: done
 baseline_revision: '4347c433e7a17bf2d2c943655eef851d428a8ddb'
 risk: 'medium'
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/adr/0006-clean-room-spec-extraction.md', '{project-root}/docs/format-spec.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-tk2-support/discovery/tk2-formats-research.md', '{project-root}/docs/provenance/facts-round-1.md']
