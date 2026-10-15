@@ -3,7 +3,7 @@ title: 'Rename step to tick: spine, ports, engine contract and goldens'
 type: 'refactor'
 ticket: '26'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: 'a0b41ba'
 route: 'full'
 route_source: 'auto'

@@ -3,7 +3,7 @@ title: 'core/fmath: deterministic maths with cross-engine vectors'
 type: 'feature'
 ticket: '4'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '7ff33f40a790f689d3fc2e9fd8a267b4957b0fce'
 route: 'full'
 route_source: 'auto'

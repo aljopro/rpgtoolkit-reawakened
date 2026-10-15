@@ -3,7 +3,7 @@ title: 'Rule the path case-fold: AD-5 against the foldPath helper'
 type: 'bugfix'
 ticket: '21'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: '2f94faf'
 route: 'oneshot'
 route_source: 'auto'
