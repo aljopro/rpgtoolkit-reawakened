@@ -1,0 +1,15 @@
+# special-move Toolkit 2 text: special_text.spc (13 lines), parse ends at the last line: True 
+    1  header = 'RPGTLKIT SPLMOVE'
+    2  major = '2'
+    3  minor = '0'
+    4  name = 'Fireball'
+    5  fp = '12'
+    6  smp = '5'
+    7  prg = 'fireball.prg'
+    8  targetSmp = '0'
+    9  battle = '1'
+   10  menu = '0'
+   11  statusEffect = 'burn.ste'
+   12  animation = ''
+   13  description = ''
+       <end of parse at line 13; file has 13 lines>

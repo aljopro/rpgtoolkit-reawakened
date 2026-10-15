@@ -1,0 +1,352 @@
+# RPGCode built-in commands
+
+All 282 command names the 3.1 engine registers, grouped by area. Names are case-insensitive. 14 names are aliases of another command. Signatures use the engine's own notation: `[x]` = optional parameter, `&` = the argument must be a variable (it receives a result), `ret` = the value the command returns. Types are `int`/`double` (numbers), `string`, `bool` (number or "on"/"off"), `canvas`/`thread`/`animation` (numeric handles).
+
+**Compatibility notes.** Calls to built-ins are bound when a program is compiled, so a script method with the same name as a built-in is never called at those call sites. If a name were registered twice the first registration would win. The control-flow words `if`, `elseif`, `else`, `while`, `until` and `for` are also built-ins internally but are documented in [rpgcode-language.md](rpgcode-language.md).
+
+
+## Message window, text & fonts (30)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `mwin` | `void mwin(string str)` | Show the message window. |  |
+| `wait` | `string wait([string &ret])` | Wait for a key to be pressed, and return the key that was. |  |
+| `mwincls` | `void mwincls()` | Clear and hide the message window. |  |
+| `text` | `void text(double x, double y, string str, [canvas cnv])` | Displays text on the screen. |  |
+| `pixeltext` | `void pixeltext(int x, int y, string str, [canvas cnv])` | Displays text on the screen using pixel coordinates. |  |
+| `mbox` | `void mbox(string str)` | Show the message window. | alias of `mwin` |
+| `font` | `void font(string font)` | Load a true type font. TK2 fonts are not supported. |  |
+| `fontsize` | `void fontsize(int size)` | Set the font size. |  |
+| `get` | `string get([string &ret])` | Get a key from the queue. |  |
+| `bold` | `void bold(bool enable)` | Toggle emboldening of text. |  |
+| `italics` | `void italics(bool enable)` | Toggle italicizing of text. |  |
+| `underline` | `void underline(bool enable)` | Toggle underlining of text. |  |
+| `wingraphic` | `void wingraphic(string file)` | Set the message window background image. |  |
+| `wincolor` | `void wincolor(int dos)` | Set the message window's colour using a DOS code. |  |
+| `wincolorrgb` | `void wincolorrgb(int r, int g, int b)` | Set the message window's colour. |  |
+| `color` | `void color(int dos)` | Change to a DOS colour. |  |
+| `colorrgb` | `void colorrgb(int r, int g, int b)` | Change the active colour to an RGB value. |  |
+| `prompt` | `string prompt(string question, [string &ret])` | Ask the player a question and return the result. |  |
+| `show` | `void show(string str)` | Show the message window. | alias of `mwin` |
+| `print` | `void print(string text)` | Write the specified string one line down from the last call to text(). |  |
+| `clearbuffer` | `void clearbuffer()` | Clear the keyboard buffer. |  |
+| `textspeed` | `void textspeed(int speed)` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `mwinsize` | `mwinsize(int percent)` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `getcolor` | `void getcolor(int &r, int &g, int &b)` | Get the current colour. |  |
+| `getfontsize` | `int getfontsize([int &ret])` | Get the current font size. |  |
+| `statictext` | `void statictext()` | obsolete. | obsolete: raises an error and the statement is skipped |
+| `msgbox` | `int msgbox(string text [,string title [, int style [, int textColor [, int backColor [, string bitmap]]]]])` | Display a message box containing one or two buttons, handled using a cursor map (keyboard input only). |  |
+| `gettextwidth` | `int gettextwidth(string text)` | Get the width of a string of text in pixels, relative to the current font and size. |  |
+| `gettextheight` | `int gettextheight(string text)` | Get the height of a string of text in pixels, relative to the current font and size. |  |
+| `setmwintranslucency` | `void setmwintranslucency(int percent)` | Set the translucency of the message window. 0% is invisible; 100% is opaque. |  |
+
+## Program flow, errors & debugging (25)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `branch` | `void branch(label lbl)` | Jump to a label. |  |
+| `change` | `void change(string program)` | Change this program so that next time it is triggered, a different program runs instead. Change() is active only while the player remains on the board (i.e., leaving... |  |
+| `done` | `void done()` | End the program. |  |
+| `dos` | `void dos()` | Exit to windows. |  |
+| `windows` | `void windows()` | Exit to windows. | alias of `dos` |
+| `end` | `void end()` | End the program. |  |
+| `fbranch` | `void fbranch(label lbl)` | Jump to a label. | alias of `branch` |
+| `gone` | `void gone()` | Remove the currently running program from the board until the board has been left. |  |
+| `over` | `void over()` | Displays a game over message and resets the game. Because you can (and should) set a game over program, this function is pointless. |  |
+| `reset` | `void reset()` | Reset the game. |  |
+| `run` | `void run(string program)` | Transfer control to a different program. |  |
+| `delay` | `void delay(double time)` | Delay for a certain number of seconds. |  |
+| `godos` | `void godos(string command)` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `debug` | `void debug(bool enable)` | Toggle whether to show debug messages. |  |
+| `rpgcode` | `void rpgcode(string line)` | Independently run a line of RPGCode. |  |
+| `autocommand` | `void autocommand()` | Obsolete. | obsolete: shows a warning (when warnings are on) and still runs |
+| `stop` | `void stop()` | End the program. | alias of `end` |
+| `debugger` | `void debugger(string message)` | Show a debug message. |  |
+| `setconstants` | `setconstants(...)` | Description. | obsolete: raises an error and the statement is skipped |
+| `multirun` | `multirun()` | Multirun()'s behaviour depends on the program's context. |  |
+| `iif` | `iif(condition, true, false)` | Obsolete. Use the tertiary operator result = (expression ? true part : false part) | obsolete: warning; use the `?:` operator |
+| `gettickcount` | `int gettickcount()` | Get the number of milliseconds since Windows started. |  |
+| `resumeNext` | `void resumeNext()` | Return to the statement after the statement where an error occurred. |  |
+| `setErrorHandler` | `void setErrorHandler(label lbl)` | Set an error handler for the current function. This does not propagate up the call stack! Refer to the language features section of the manual for more information. |  |
+| `setResumeNextHandler` | `void setResumeNextHandler()` | Cause errors in the current function to be silently ignored. |  |
+
+## Variables, strings & math (30)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `empty` | `void empty()` | Clear all globals. |  |
+| `random` | `int random(int max, [int &ret])` | Generate a random number from one to the supplied maximum, inclusive. |  |
+| `castnum` | `double castnum(variant x, [double &ret])` | Cast the specified value to a number (double). There is really no need to do this ever. RPGCode by itself will cast values passed to functions to the correct types as... |  |
+| `castlit` | `string castlit(variant x, [string &ret])` | Cast the specified value to a string. There is really no need to do this ever. RPGCode by itself will cast values passed to functions to the correct types as required. |  |
+| `castint` | `int castint(variant x, [int &ret])` | Cast the specified value to an integer (i.e., a number in the sequence ...-2, -1, 0, 1, 2...). This is useful for removing fractional parts of numbers. Note that this... |  |
+| `charat` | `string charat(string str, int pos, [string &ret])` | Get a character from a string. The first character is one. |  |
+| `kill` | `void kill(variant &var, ...)` | Delete variables. |  |
+| `sin` | `double sin(double x, [double &ret])` | Calculate sine x. |  |
+| `cos` | `double cos(double x, [double &ret])` | Calculate cosine x. |  |
+| `tan` | `double tan(double x, [double &ret])` | Calculate tangent x. |  |
+| `sqrt` | `double sqrt(double x, [double &ret])` | Calculate the square root of x. |  |
+| `local` | `variant &local(variant &var, [variant &ret])` | Allocates a variable off the stack and returns a reference to it. |  |
+| `global` | `variant &global(variant &var, [variant &ret])` | Allocates a variable on the heap and returns a reference to it. |  |
+| `length` | `int length(string str[, int &ret])` | Get the length of a string. |  |
+| `len` | `int len(string str[, int &ret])` | Get the length of a string. | alias of `length` |
+| `instr` | `int instr(string haystack, string needle[, int offset])` | Returns the first occurence of needle within haystack, optionally starting from an offset. Both the return value and the offset are one-based. |  |
+| `splicevariables` | `string splicevariables(string str)` | Replaces substrings within angle brackets by the value of variables with respective names. |  |
+| `split` | `int split(string str, string delimiter, array arr)` | Splits a string at a delimiter. Returns the number of upper bound of the array (i.e. the index of the last set element). |  |
+| `asc` | `int asc(string chr[, int &ret])` | Get the ASCII value of a character. |  |
+| `chr` | `string chr(int asc, [string &ret])` | Get the character represented by the ASCII code passed in. |  |
+| `trim` | `string trim(string str, [string &ret])` | Trim whitespace from a string. |  |
+| `right` | `string right(string str, int amount, [string &ret])` | Get characters from the right of a string. |  |
+| `left` | `string left(string str, int amount[, string &ret])` | Get characters from the left of a string. |  |
+| `log` | `double log(double x, [double &ret])` | Returns n such that en = x. |  |
+| `autolocal` | `void autolocal(bool bEnabled)` | Set the default scope for variable resolution. When autolocal() is not enabled, variables are assumed to be global unless a local variable has been defined. When... |  |
+| `lcase` | `string lcase(string str, [string &ret])` | Convert a string to lowercase. |  |
+| `ucase` | `string ucase(string str, [string &ret])` | Convert a string to uppercase. |  |
+| `mid` | `string mid(string str, int start, int length[, string &dest])` | Obtain a substring. The offset is one-based. |  |
+| `replace` | `string replace(string str, string find, string replace[, string &dest])` | Replace within a string. |  |
+| `regexpreplace` | `string regexpreplace(string subject, string pattern, string replace)` | Replace using a regular expression. |  |
+
+## Threads (7)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `thread` | `thread thread(string file, bool persist, [thread &ret])` | Start a thread. |  |
+| `killthread` | `void killthread(thread id)` | Kill a thread. |  |
+| `getthreadid` | `thread getthreadid([thread &ret])` | Get the ID of this thread. |  |
+| `threadsleep` | `void threadsleep(thread id, double seconds)` | Put a thread to sleep. |  |
+| `tellthread` | `variant tellthread(thread id, string code)` | Execute code in the context of a thread (e.g., to run a method located in another thread). TellThread() returns the value returned by the function called in the thread. |  |
+| `threadwake` | `void threadwake(thread id)` | Wake up a thread. |  |
+| `threadsleepremaining` | `double threadsleepremaining(thread id, [double &ret])` | Check how much sleep remains for a thread. |  |
+
+## Board, tiles, vectors & screen effects (33)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `send` | `void send(string file, int x, int y, [int z = 1])` | Send the player to a new board. |  |
+| `fade` | `void fade(int type)` | Perform a fade using the current colour. There are several different types of fades. |  |
+| `viewbrd` | `void viewbrd(string filename [, int x, int y [, canvas cnv]])` | Draw a board to the screen or to a canvas, starting at co-ordinates topX, topY. |  |
+| `move` | `void move(int x, int y, [int z = 1])` | Move this board program to a new location on the board. The effect lasts until the board has been left. |  |
+| `prg` | `void prg(string program. int x, int y, [int z = 1])` | Move a program on the current board to a new location. This stays in effect until the board is left. |  |
+| `put` | `void put(int x, int y, string tile)` | Puts a tile at the specified location on the board. The tile persists only until the program ends. Use LayerPut() to place a tile for the duration the user is on the... |  |
+| `tiletype` | `void tiletype(int x, int y, string type, [int z = 1])` | Change a tile's type. Valid types for the string parameter are "NORMAL", "SOLID", "UNDER", "NS", "EW", "STAIRS#". |  |
+| `mainfile` | `void mainfile(string gam)` | Load a new main file. |  |
+| `scan` | `void scan(int x, int y, int pos)` | Save the tile specified to a buffer identified by pos. There is no particular number to pick for pos; any will do. | deprecated, still works |
+| `mem` | `void mem(int x, int y, int pos)` | Lay a scanned tile on the screen at the specified position. | deprecated, still works |
+| `zoom` | `zoom(int percent)` | Zoom into the centre of the board by the specified percent. |  |
+| `earthquake` | `earthquake(int intensity)` | Shake the screen. |  |
+| `getcorner` | `void getcorner(int &topX, int &topY)` | Get the corner of the currently shown portion of the board. |  |
+| `underarrow` | `void underarrow()` | Toggle the under arrow. | obsolete: raises an error and the statement is skipped |
+| `layerput` | `void layerput(int x, int y, int layer, string tile)` | Place a tile on the board for the duration the player is on the board. |  |
+| `getboardtile` | `string getboardtile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. |  |
+| `boardgettile` | `string boardgettile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. | alias of `getboardtile` |
+| `getboardtiletype` | `string getboardtiletype(int x, int y, int z[, string &ret])` | Get the type of a tile. |  |
+| `forceredraw` | `void forceredraw()` | Force a redrawing of the screen. |  |
+| `wipe` | `wipe(string file, int effect [, int speed])` | 'Wipe' a graphic to the screen. file: filename of the image to wipe to. effect: numeric value between 1 and 12. The valid types are: |  |
+| `parallax` | `parallax(int setting)` | obsolete. | obsolete: raises an error and the statement is skipped |
+| `animatedtiles` | `void animatedtiles()` | Toggle animated tiles. | obsolete: raises an error and the statement is skipped |
+| `smartstep` | `void smartstep()` | Toggle "smart" stepping. | obsolete: raises an error and the statement is skipped |
+| `getboardname` | `string getboardname([string ret])` | Get the current board's file name. |  |
+| `setambientlevel` | `void setambientlevel(int red, int green, int blue)` | Set the global ambient level. Valid values range from -255 to + 255. |  |
+| `boardgetvector` | `int boardgetvector()` | void boardGetVector(variant vector, int &type, int &pointCount, int &layer, bool &isClosed, int &attributes) |  |
+| `boardsetvector` | `void boardsetvector(variant vector, int type, int pointCount, int layer, bool isClosed, int attributes)` | Sets the properties of a given vector. |  |
+| `boardgetvectorpoint` | `void boardgetvectorpoint(variant vector, int pointIndex, int &x, int &y)` | Get a single point on a board vector. x, y are always pixel values. |  |
+| `boardsetvectorpoint` | `void boardsetvectorpoint(variant vector, int pointIndex, int x, int y, bool apply)` | Set/move a single point on a board vector. x, y are always pixel values. |  |
+| `boardgetprogram` | `void boardgetprogram(int programIndex, string &program, int &pointCount, int &layer, bool &isClosed, int &attributes, int &distanceRepeat)` | int boardGetProgram() |  |
+| `boardsetprogram` | `void boardsetprogram(int programIndex, string program, int pointCount, int layer, bool isClosed, int attributes, int distanceRepeat)` | Sets the properties of a given program; creates a new program if one-past-the-end index is given. |  |
+| `boardgetprogrampoint` | `void boardgetprogrampoint(int programIndex, int pointIndex, int &x, int &y)` | Get a single point on a board program. x, y are always pixel values. |  |
+| `boardsetprogrampoint` | `void boardsetprogrampoint(int programIndex, int pointIndex, int x, int y)` | Set/move a single point on a board program. x, y are always pixel values. |  |
+
+## Players, party & sprite movement (31)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `newplyr` | `void newplyr(string file)` | Change the graphics of the main player to that of the file passed in. The file must be a character file (*.tem) |  |
+| `newplayer` | `void newplayer(string file)` | Change the graphics of the main player to that of the file passed in. The file must be a character file (*.tem) | alias of `newplyr` |
+| `push` | `void push(string direction [, variant handle [, int flags]])` | Push the player with the specified handle, or the default player if no handle is specified, along the given directions. The direction should be a comma delimited, but... |  |
+| `addplayer` | `void addplayer(string file)` | Add a player to the party. |  |
+| `removeplayer` | `void removeplayer(string handle)` | Remove a player from the party [to an old player list]. |  |
+| `putplayer` | `void putplayer(string handle, int x, int y, int layer)` | Place the player on the board at the given location. |  |
+| `eraseplayer` | `void eraseplayer(string handle)` | Erase a party player from the screen. |  |
+| `restoreplayer` | `void restoreplayer(string filename)` | Restore a player who was previously on the team. |  |
+| `targetlocation` | `void targetlocation(int &x, &int y)` | Get the location of the target object. |  |
+| `walkspeed` | `void walkspeed()` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `posture` | `posture(int id [, handle player])` | Show a custom player animation named "Custom" + str(id) (e.g. "Custom1") This command is obsolete - use playerStance() instead. | deprecated, still works |
+| `destroyplayer` | `void destroyplayer(string handle)` | Permanently remove a player from the party. |  |
+| `callplayerswap` | `callplayerswap(...)` | Unimplemented in 3.1.0. | not implemented (does nothing) |
+| `stance` | `stance(int id [, handle player])` | Show a player stance. | obsolete: shows a warning (when warnings are on) and still runs |
+| `characterspeed` | `void characterspeed()` | Obsolete. | obsolete: shows a message, then acts as `gamespeed` |
+| `sourcelocation` | `void sourcelocation(int &x, &int y)` | Get the location of the source object. |  |
+| `targethandle` | `string targethandle([string &ret])` | Get the handle of the target object. |  |
+| `sourcehandle` | `string sourcehandle([string &ret])` | Get the handle of the source object. |  |
+| `pathfind` | `string pathfind(int x1, int y1, int x2, int y2, string &ret [, int layer])` | Construct a directional string of the shortest tiled path from one location to the other. |  |
+| `playerstep` | `void playerstep(variant handle, int x, int y [, int flags])` | Causes the player to take one step in the direction of x, y following a route determined by pathFind. |  |
+| `gamespeed` | `void gamespeed(int speed)` | Set the overall walking speed. Changes the walking speed proportionally. |  |
+| `onboard` | `int onboard(variant handle)` | Return whether a player is being shown on the board. |  |
+| `pixelmovement` | `bool pixelmovement([bool pixelMovement [, bool pixelPush]])` | Toggles pixel movement and push() et al. in pixels. |  |
+| `playerspeed` | `void playerspeed(string handle, int speed)` | Set the delay in seconds between a player's steps. |  |
+| `playerstance` | `playerstance(handle player, string stance [, int flags])` | Animate a player's custom stance. |  |
+| `playerlocation` | `void playerlocation(variant handle, int &x, int &y, int &layer)` | Get the location of a player. |  |
+| `spritetranslucency` | `void spritetranslucency(int percent)` | int spriteTranslucency(void) Set the degree to which sprites drawn underneath other objects are visible. |  |
+| `activeplayer` | `void activeplayer(variant handle)` | handle activePlayer(void) Set or get the active player, by handle. |  |
+| `playerpath` | `void playerpath(variant handle, int flags, int x1, int y1, ... , int xn, int yn)` | void playerPath(variant handle, int flags tkMV_PATHFIND, int x1, int y1) void playerPath(variant handle, int flags tkMV_WAYPOINT_PATH, variant boardpath, int cycles)... |  |
+| `playergetpath` | `int playergetpath(variant handle)` | void playerGetPath(variant handle, int index, int &x, int &y) |  |
+| `playerdirection` | `int playerdirection(variant handle)` | void playerDirection(variant handle, int dir) |  |
+
+## Items, inventory, shop & gold (28)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `giveitem` | `void giveitem(string itm)` | Add an item to the inventory. |  |
+| `takeitem` | `void takeitem(string itm)` | Remove an item from the inventory. |  |
+| `pushitem` | `void pushitem(variant item, string direction [, int flags])` | The first parameter accepts either a string that can be either "target" or "source" direction or the number of an item. The syntax of the directional string is the... |  |
+| `wander` | `void wander(variant target, [int restrict = 0])` | The first parameter accepts either a string that can be either "target" or "source" or the number of an item. The selected item will take a step in a random... |  |
+| `equip` | `void equip(variant handle, int location, string item)` | Equip an item from the inventory (by handle or filename) to a location on the player's body. |  |
+| `remove` | `void remove(variant handle, int location)` | Remove an equipped item and return it to the inventory. |  |
+| `givegp` | `void givegp(int gp)` | Give gold pieces. |  |
+| `takegp` | `void takegp(int gp)` | Take gold pieces. |  |
+| `getgp` | `int getgp([int &ret])` | Return the amount of gold pieces held. |  |
+| `callshop` | `void callshop(string item1, string item2, string item3, ...)` | Displays a basic shop interface that allows the buying of the items given as parameters and the selling of items in the player's inventory. |  |
+| `eraseitem` | `void eraseitem(variant handle)` | Erase an item from the screen, but keep it in memory. |  |
+| `putitem` | `void putitem(variant handle, int x, int y, int layer)` | Place the item on the board at the given location. |  |
+| `createitem` | `int createitem(string filename[, int &pos])` | Load an item and return the slot into which it was loaded. |  |
+| `destroyitem` | `void destroyitem(variant handle)` | Remove an item from memory. |  |
+| `itemwalkspeed` | `void itemwalkspeed()` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `itemcount` | `int itemcount(string fileName[, int &ret])` | Count the number of a certain item in the inventory. |  |
+| `itemlocation` | `void itemlocation(variant handle, int &x, int &y, int &layer)` | Get the location of an item. |  |
+| `itemstep` | `void itemstep(variant handle, int x, int y [, int flags])` | Causes the item to take one step in the direction of x, y following a route determined by pathFind. |  |
+| `getitemname` | `string getitemname(string fileName[, string &ret])` | Get an item's handle. |  |
+| `getitemdesc` | `string getitemdesc(string fileName[, string &ret])` | Get an item's description. |  |
+| `getitemcost` | `int getitemcost(string fileName[, int &ret])` | Get an item's cost. |  |
+| `getitemsellprice` | `int getitemsellprice(string fileName[, int &ret])` | Get the price for which an item sells. |  |
+| `shopcolors` | `shopcolors(int index, int r, int g, int b)` | Set the colors used in CallShop(). This function is obsolete from 3.1.0. | obsolete: shows a warning (when warnings are on) and still runs |
+| `itemspeed` | `void itemspeed(variant handle, int speed)` | Set the delay in seconds between an item's steps. |  |
+| `itemstance` | `itemstance(handle item, string stance [, int flags])` | Animate an item's custom stance. |  |
+| `itempath` | `void itempath(variant handle, int flags, int x1, int y1, ... , int xn, int yn)` | void itemPath(variant handle, int flags tkMV_PATHFIND, int x1, int y1) void itemPath(variant handle, int flags tkMV_WAYPOINT_PATH, variant boardpath, int cycles) void... |  |
+| `itemgetpath` | `int itemgetpath(variant handle)` | void itemGetPath(variant handle, int index, int &x, int &y) |  |
+| `itemdirection` | `int itemdirection(variant handle)` | void itemDirection(variant handle, int dir) |  |
+
+## Battle, stats & menus (29)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `fight` | `void fight(int skill, string background)` | Start a skill level fight. |  |
+| `win` | `void win()` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `hp` | `void hp(string handle, int value)` | Set a fighter's hp. |  |
+| `givehp` | `void givehp(string handle, int add)` | Increase a fighter's current hp. |  |
+| `gethp` | `int gethp(string handle, [int &ret])` | Get a fighter's hp. |  |
+| `maxhp` | `void maxhp(string handle, int value)` | Set a fighter's max hp. |  |
+| `getmaxhp` | `int getmaxhp(string handle, [int &ret])` | Get a fighter's max hp. |  |
+| `smp` | `void smp(string handle, int value)` | Set a fighter's smp. |  |
+| `givesmp` | `void givesmp(string handle, int value)` | Increase a fighter's smp. |  |
+| `getsmp` | `int getsmp(string handle, [int &ret])` | Get a fighter's smp. |  |
+| `maxsmp` | `void maxsmp(string handle, int value)` | Set a fighter's max smp. |  |
+| `getmaxsmp` | `int getmaxsmp(string handle, [int &ret])` | Get a fighter's max smp. |  |
+| `fightenemy` | `void fightenemy(string enemy, string enemy, ... string background)` | Start a fight. |  |
+| `attackall` | `void attackall(int fp)` | Deal the specified amount in HP to all the members of the target's party. |  |
+| `drainall` | `void drainall(int fp)` | Deal the specified amount in SMP to all the members of the target's party. |  |
+| `inn` | `inn()` | Fully heal the player party. |  |
+| `getlevel` | `int getlevel(string handle[, int &ret])` | Get the level of a player. |  |
+| `ai` | `void ai(int level)` | Have the source enemy use the internal AI. |  |
+| `menugraphic` | `void menugraphic(string image)` | Choose an image for the menu. |  |
+| `fightmenugraphic` | `void fightmenugraphic(string image)` | Choose an image for the fight menu graphic. |  |
+| `fightstyle` | `void fightstyle()` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `battlespeed` | `void battlespeed(int speed)` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `getdp` | `int getdp(string handle, [int &ret])` | Get a fighter's dp. |  |
+| `getfp` | `int getfp(string handle, [int &ret])` | Get a fighter's fp. |  |
+| `internalmenu` | `void internalmenu(int menu)` | Show a menu using the menu plugin. |  |
+| `applystatus` | `void applystatus(string target, string file)` | Apply a status effect to a fighter. |  |
+| `removestatus` | `void removestatus(string target, string file)` | Remove a status effect from a fighter. |  |
+| `drawenemy` | `void drawenemy(string file, int x, int y, [canvas cnv])` | Draw an enemy. |  |
+| `giveexp` | `void giveexp(string handle, int amount)` | Give experience to a player. |  |
+
+## Graphics, canvases, animation & video (31)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `clear` | `void clear([canvas cnv])` | Clear a surface. clear() blanks the screen. |  |
+| `setpixel` | `void setpixel(int x, int y, [canvas cnv])` | Set a pixel in the current colour. |  |
+| `drawline` | `void drawline(int x1, int y1, int x2, int y2, [canvas cnv])` | Draw a line. |  |
+| `drawrect` | `void drawrect(int x1, int y1, int x2, int y2, [canvas cnv])` | Draw a rectangle. |  |
+| `fillrect` | `void fillrect(int x1, int y1, int x2, int y2, [canvas cnv])` | Draw a filled rectangle. |  |
+| `bitmap` | `void bitmap(string file, [canvas cnv])` | Fill a surface with an image. |  |
+| `bordercolor` | `void bordercolor(int r, int g, int b)` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `playavi` | `void playavi(string movie)` | Play a movie full screen. Supported types are *.avi, *.mpg, and *.mov. |  |
+| `playavismall` | `playavismall(string movie)` | Play a movie at actual size, centred. |  |
+| `setimage` | `void setimage(string str, int x, int y, int width, int height, [canvas cnv])` | Set an image. |  |
+| `drawcircle` | `void drawcircle(int x, int y, int radius [, int canvas])` | Draw a circle at x,y, optionally to a canvas. Previously an arc could be defined but this never worked, so the two parameters have been cut and the optional canvas is... |  |
+| `fillcircle` | `void fillcircle(int x, int y, int radius [, int canvas])` | Draw a filled circle at x, y, to screen or canvas. |  |
+| `savescreen` | `void savescreen([int position = 0])` | Save the current screen onto a canvas that can be restored at a later time. |  |
+| `restorescreen` | `void restorescreen([int x1, int y1, int x2, int y2, int xdest, int ydest])` | Draw a buffered screen capture to the screen. The canvas drawn is the first in the screen array. x1, x2 specify the bottom- right corner of the screen, so that width... |  |
+| `getpixel` | `void getpixel(int x, int y, int &r, int &g, int &b, [canvas cnv])` | Get the colour of the pixel at (x, y). |  |
+| `setimagetransparent` | `void setimagetransparent(string file, int x, int y, int width, int height, int r, int g, int b, [canvas cnv])` | Set an image with a transparent colour. |  |
+| `setimagetranslucent` | `void setimagetranslucent(string file, int x, int y, int width, int height, [canvas cnv])` | Set an image translucently. |  |
+| `setimageadditive` | `void setimageadditive(string file, int x, int y, int width, int height, double percent[, canvas cnv])` | Set an image with a tint of the specified percent. |  |
+| `animation` | `int id = animation(string file, int x, int y [, bool loop])` | Play an animation at pixel x,y. If animation() is called in a thread, it may be looped using the last parameter and returns an id that can be used to end the animation. |  |
+| `sizedanimation` | `int id = sizedAnimation(string file, int x, int y, int height, int width [, bool loop])` | Play a resized animation at pixel x,y. If sizedAnimation() is called  in a thread, it may be looped using the last parameter and returns an id that can be used to end... |  |
+| `getres` | `void getres(int &x, int &y)` | Get the screen's resolution. |  |
+| `createcanvas` | `canvas createcanvas(int width, int height, [canvas &cnv])` | Create a canvas. |  |
+| `killcanvas` | `void killcanvas(canvas cnv)` | Kill a canvas. |  |
+| `drawcanvas` | `void drawcanvas(canvas cnv, int x, int y, [int width, int height, [canvas dest]])` | Blit a canvas forward. |  |
+| `restorescreenarray` | `void restorescreenarray(int pos [,int x1, int y1, int x2, int y2, int xdest, int ydest])` | Draw a buffered screen capture to the screen. |  |
+| `restorearrayscreen` | `void restorearrayscreen(int pos [,int x1, int y1, int x2, int y2, int xdest, int ydest])` | Draw a buffered screen capture to the screen. | alias of `restorescreenarray` |
+| `endanimation` | `endanimation(int animationID)` | End a multitasking animation. |  |
+| `rendernow` | `void rendernow(bool draw)` | Controls rendering of the cnvRenderNow reserved canvas. The canvas is drawn every frame above all board elements (e.g. tiles, sprites, animations). |  |
+| `drawcanvastransparent` | `void drawcanvastransparent(canvas cnv, int x, int y, int r, int g, int b[, int width, int height[, canvas dest]])` | Blit a canvas forward, but don't blit one colour (the transparent colour). |  |
+| `canvasdrawpart` | `void canvasdrawpart(int cnv, int x, int y, int xSrc, int ySrc, int width, int height[, canvas cnvDest])` | Draw part of a canvas. |  |
+| `canvasgetscreen` | `void canvasgetscreen(canvas cnvDest)` | Copy the screen onto a canvas. |  |
+
+## Mouse, buttons & cursor maps (11)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `setbutton` | `setbutton(string file, int slot, int x, int y, int width, int height)` | Create and draw a clickable button at screen pixel co-ords x, y that persists until clearButtons() is called. |  |
+| `checkbutton` | `int = checkbutton(int x, int y)` | Check if any SetButton()s were clicked at screen pixel co-ords x, y. |  |
+| `clearbuttons` | `clearbuttons([int slot1, int slot2...])` | Clear buttons set by SetButton(). Clear specific slot(s) if supplied, else clear all slots. |  |
+| `mouseclick` | `mouseclick(int &x, int &y [, bool noWait])` | Wait for a mouseclick or immediately retrieve the last and return the x, y location (pixel values relative to the window). |  |
+| `mousemove` | `mousemove(int &x, int &y)` | Wait for the mouse to move and return the x,y location in pixels from the window corner. |  |
+| `createcursormap` | `cursor_map createcursormap([cursor_map &ret])` | Create a cursor map. |  |
+| `killcursormap` | `void killcursormap(cursor_map map)` | Kill a cursor map. |  |
+| `cursormapadd` | `void cursormapadd(int x, int y, cursor_map map)` | Add a point to a cursor map. |  |
+| `cursormaprun` | `int cursormaprun(cursor_map map, [int &ret])` | Run a cursor map. |  |
+| `cursormaphand` | `void cursormaphand(string cursor[, bool stretch = true])` | Change the cursor used everywhere cursors are used (e.g. cursor maps, the menu, the battle system), optionally not stretching it to 32 by 32 pixels. |  |
+| `mousecursor` | `void mousecursor(string file, int x, int y, int red, int green. int blue)` | Change the mouse cursor. "TK DEFAULT" or "" restores the default cursor. |  |
+
+## Audio (12)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `sound` | `void sound()` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `wav` | `void wav(string file)` | Play a wave file (e.g. a sound effect). |  |
+| `midiplay` | `void midiplay(string file)` | Play the specified file as the background music. |  |
+| `playmidi` | `void playmidi(string file)` | Play the specified file as the background music. | alias of `midiplay` |
+| `mediaplay` | `void mediaplay(string file)` | Play the specified file as the background music. | alias of `midiplay` |
+| `mediastop` | `void mediastop()` | Stop the background music. |  |
+| `mediarest` | `void mediarest()` | Stop the background music. | alias of `mediastop` |
+| `midirest` | `void midirest()` | Stop the background music. | alias of `mediastop` |
+| `wavstop` | `void wavstop()` | Stop the current sound effect. |  |
+| `mp3` | `void mp3(string file)` | Play a wave file (e.g. a sound effect). | alias of `wav` |
+| `mp3pause` | `void mp3pause()` | Play a sound effect and pause the engine until it finishes. |  |
+| `setvolume` | `void setvolume(int percent)` | Set the volume of all music and sound using a value between 0 and 100. |  |
+
+## Files, saves & OS (15)
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `start` | `void start(string file)` | Open a file with the shell. |  |
+| `dirsav` | `string dirsav(string title, bool allowNewFile, int textColor, int backColor, string image)` | Allow the user to choose a *.sav file from the "Saved" directory. For historical reasons, returns "CANCEL" if no file is chosen, not "". |  |
+| `save` | `void save(string file)` | Save the current game state to a file. |  |
+| `load` | `void load(string file)` | Load the game state from a file. |  |
+| `openfileinput` | `void openfileinput(string file, string folder)` | Open a file in input mode. |  |
+| `openfileoutput` | `void openfileoutput(string file, string folder)` | Open a file in output mode. |  |
+| `openfileappend` | `void openfileappend(string file, string folder)` | Open a file for appending. |  |
+| `openfilebinary` | `void openfilebinary(string file, string folder)` | Obsolete. | obsolete: shows a message, then acts as `openfileinput` |
+| `closefile` | `void closefile(string file)` | Close a file. |  |
+| `fileinput` | `string fileinput(string file, [string &ret])` | Read a line from a line. |  |
+| `fileprint` | `void fileprint(string file, string line)` | Write a line to a file. |  |
+| `fileget` | `string fileget(string file, [string &ret])` | Get a byte from a file. |  |
+| `fileput` | `void fileput(string file, string byte)` | Write a byte to a file. |  |
+| `fileeof` | `bool fileeof(string file, [bool &ret])` | Check whether the end of a file has been reached. |  |
+| `apppath` | `string apppath([string &dest])` | Retrieve the path of trans3.exe, without the final backslash. |  |
+
+## Not callable by name
+
+The interpreter also has internal entries for operators, `if`/`else`/`elseif`/`while`/`until`/`for`, method and class definitions, and plugin calls. Scripts reach them only through the language syntax.

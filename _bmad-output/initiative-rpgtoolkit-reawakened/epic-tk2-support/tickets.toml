@@ -37,6 +37,23 @@ hitl = true
 risk = "medium"
 plan_checkpoint = true
 done_checkpoint = true
+notes = ["2026-10-15: the §15 amendment is already committed to docs/format-spec.md (988a87f) and the plan awaits its checkpoint. It stays as written; ADR 0007 makes docs/spec normative, and entry 13 merges §15 into docs/spec/formats/legacy."]
+[[entry]]
+id = 13
+type = "story"
+title = "Migrate section 15 into docs/spec/formats/legacy and rule its conflicts"
+description = "Under ADR 0007, merges `docs/format-spec.md` §15 into `docs/spec/formats/legacy/` (text-formats, older-binary-versions, conversion) in its own doc-only commit (G7), keeping §15's corpus evidence, file counts and worked examples (R-26), and moving the text `.brd` layout in whole (R-23). A person rules the conflicts of the reconciliation's section B: the text `.anm` frame-count line (R-17, the corpus wins), the binary `.gam` minor < 3 field widths (R-18, `i16` from 15 real files, and the generated `main_minor1/2.gam` examples regenerated to match), the text `.gam` header (R-19), the text `.ene` 19 × 7 block (R-20), the text `.ste` layout (R-21), the text `.tem` minor-1 rows and the `-2` marker (R-22). §15.15's open questions 1, 4 and 7 close where `docs/spec/` answers them."
+verify = "Every R-17 to R-24 item is stated in `docs/spec/formats/legacy/` as a fact with its evidence, a Reawakened rule or a named open question; no §15 evidence is lost; `docs/spec/tools/build_version_examples.py` regenerates the corrected examples and `rpgtk_formats.py verify` passes on them; the commit touches only `docs/`; a person approved it."
+covers = ["CAP-1"]
+after = [3, "1.13"]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/discovery/docs-spec-reconciliation.md, section B",
+  "reference - docs/spec/formats/legacy/README.md",
+]
+
 [[entry]]
 id = 4
 type = "story"
@@ -44,7 +61,7 @@ title = "TK2 text readers: .brd, .tem, .itm, .gam"
 description = "Adds text-form branches to the board, character, item and main-file readers for the layouts entry 3 documents, selected by the spec detection byte; text boards convert to the vector model through the pre-vector path, and zero-byte placeholder files are tolerated or skipped as decided here."
 verify = "All 17 text .brd, 2 text .tem, 16 text .itm and 2 text .gam files in the six games parse with 0 trailing bytes."
 covers = ["CAP-1"]
-after = [3, "2.5", "2.6", "2.8", "2.9"]
+after = [3, 13, "2.5", "2.6", "2.8", "2.9"]
 hitl = false
 risk = "high"
 
@@ -52,10 +69,10 @@ risk = "high"
 id = 5
 type = "story"
 title = "TK2 text readers: .ene, .anm, .spc, .ste, .bkg"
-description = "Adds text-form branches for the minor-0 text enemies, the .anm text form (currently a generic read error), the .spc and .ste text forms and the 19 by 19 .bkg grid, with a clear message for forms the spec leaves optional."
-verify = "All 52 text .ene, 16 text .anm, 8 text .spc and 23 text .bkg files in the six games parse with 0 trailing bytes."
+description = "Adds text-form branches for the minor-0 text enemies (the fixed 19 by 7 rest-image block, R-20), the .anm text form (currently a generic read error), the .spc and .ste text forms (the .ste layout as entry 13 rules it, R-21) and the 19 by 11 .bkg grid, with a clear message for forms the spec leaves optional."
+verify = "All 52 text .ene, 16 text .anm, 8 text .spc and 23 text .bkg files in the six games parse with 0 trailing bytes, and the text examples in docs/spec/examples/versions (enemy, animation, special-move, status-effect, fight-background) parse to their last line."
 covers = ["CAP-1"]
-after = [3, "2.4", "2.6", "2.7"]
+after = [3, 13, "2.4", "2.6", "2.7"]
 hitl = false
 risk = "medium"
 
@@ -66,7 +83,7 @@ title = "Correct the TK2-era binary .gam 2.2 and .tem 3 to 4 layouts"
 description = "Fixes the .gam minor-2 record list (1506 residue bytes on BusDriver, an EOF failure on FinalDestiny) and the .tem minor 3 to 4 field set (407 to 797 residue bytes) to the layouts entry 3 records."
 verify = "The 15 binary .gam files (including FinalDestiny) and 16 .tem minor 3 to 4 files read with 0 trailing bytes and the TK3 samples still round-trip."
 covers = ["CAP-1"]
-after = [3, "2.6", "2.9"]
+after = [3, 13, "2.6", "2.9"]
 hitl = false
 risk = "high"
 
@@ -77,7 +94,7 @@ title = "Readers for .tan, .gph v2 and .fnt"
 description = "Adds readers for animated tiles .tan (binary 2.0), single tiles .gph v2 and the .fnt font file (RPGTLKIT FONT), using the sections entry 3 adds, so boards and animations that reference them resolve."
 verify = "The 33 .tan, 6 .gph and 5 .fnt files parse with 0 trailing bytes and the referencing boards resolve them."
 covers = ["CAP-1"]
-after = [3]
+after = [3, 13]
 hitl = false
 risk = "medium"
 
@@ -100,7 +117,7 @@ title = "GIF decoder, still and animated"
 description = "Adds a GIF87a and GIF89a reader to core/formats/image: LZW, global and local colour tables, interlace, and the graphic-control extension (transparent index, delay, disposal). A still GIF decodes to one RGBA frame through decodeTexture; an animated GIF yields frames and delays for the animation path (section 7.2, E-54)."
 verify = "The 58 GIF files of the six TK2 games decode to their stated dimensions and a golden RGBA digest, an animated sample yields its frame count and delays, malformed files are refused with a located error, and the decodeTexture contract is unchanged."
 covers = ["CAP-1"]
-after = [3, "2.3", "2.19"]
+after = [3, "2.3", "2.19", "2.23"]
 hitl = false
 risk = "medium"
 references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; image-kind counts in the format-spec section 10 amendment PR (2.19): six TK2 games use bmp 18, gif 58, jpg 58, png 0"]
@@ -120,10 +137,10 @@ risk = "low"
 id = 9
 type = "story"
 title = "Corpus gate over the six TK2 games"
-description = "Fetches the six TK2 games as CI fixtures at test time (never committed), extends the dump corpus expectation so FinalDestiny, LittleMan, BusDriver, Caoquest, School2Demo and ChimeranEmpire must reach 0 failures and 0 residue, and records pinned hashes."
+description = "Fetches the six TK2 games as CI fixtures at test time (never committed), extends the dump corpus expectation so FinalDestiny, LittleMan, BusDriver, Caoquest, School2Demo and ChimeranEmpire must reach 0 failures and 0 residue, records pinned hashes, and flips the TK2 expected-failure rows of the committed docs/spec examples gate (entry 2.26) to passing."
 verify = "The corpus job fails when any listed file fails or leaves residue, passes on the fixtures, and nothing under fixtures/ is tracked."
 covers = ["CAP-1"]
-after = [8, "2.14"]
+after = [8, "2.14", "2.26"]
 hitl = false
 risk = "medium"
 unknown = "Where the six TK2 games are fetched from and their pinned hashes."
@@ -134,7 +151,7 @@ title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-1"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13]
 hitl = false
 risk = "low"
 

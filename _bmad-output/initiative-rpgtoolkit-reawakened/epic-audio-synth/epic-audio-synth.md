@@ -46,3 +46,5 @@ Audio cues in core (full verb set, `cueId`, `audio.ended`), the `synth` package,
 - Waits on platform-baseline because: the synth package scaffold and licence gate.
 - Waits on rpgcode-vm because: audio built-in registration.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4).
+- Evidence (R-59): docs/spec/engine/display-input-audio.md says the original routed every music file through its MIDI path (a bug) and that animation-frame sounds bypassed PAK extraction, so they probably did not play in PAK games; parity need not reproduce either.

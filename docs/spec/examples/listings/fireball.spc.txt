@@ -1,0 +1,16 @@
+# fireball.spc: game/Game/Example/SpcMove/fireball.spc (89 bytes), parse ends at EOF: True
+# offset  bytes (first 12)                         field = value
+000000  52 50 47 54 4c 4b 49 54 20 53 50 4c .. header = 'RPGTLKIT SPLMOVE'
+000011  02 00                                  majorVer = 2
+000013  02 00                                  minorVer = 2
+000015  46 69 72 65 62 61 6c 6c 00             name = 'Fireball'
+00001e  0c 00 00 00                            fp = 12
+000022  05 00 00 00                            smp = 5
+000026  66 69 72 65 62 61 6c 6c 2e 70 72 67 .. prg = 'fireball.prg'
+000033  00 00 00 00                            targetSmp = 0
+000037  01                                     battle = 1
+000038  00                                     menu = 0
+000039  62 75 72 6e 2e 73 74 65 00             statusEffect = 'burn.ste'
+000042  00                                     animation = ''
+000043  48 75 72 6c 73 20 61 20 62 61 6c 6c .. description = 'Hurls a ball of fire.'
+000059  <end of parse; file length 0x59>

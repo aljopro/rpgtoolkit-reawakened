@@ -44,3 +44,5 @@ Battle rules, levelling, default battle UI and battle built-ins. Battle state ho
 - Waits on rpgcode-vm because: battle built-ins and custom programs.
 - Waits on movement-triggers because: random battle start and fighter state.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4).
+- Evidence (rule at inception, R-57): docs/spec/engine/plugins-and-battle.md gives the charge model (+3 per tick, ±2 per speed/slow effect, act at 75 for players and 123 for enemies), `skill` always −1, outcome codes 0–4, `fightInform` codes 6 and 7 never sent, the AI table and the "No enemies of skill level N found." message. R-11: the 3.1 editor writes the `.spc` battle/menu flags inverted. R-16: the original uses `experienceIncrease` three different ways; choose one rule for E-78. Source: discovery/docs-spec-reconciliation.md.

@@ -1,0 +1,18 @@
+# single-tile version 1 (Toolkit 1): tile_v1.gph (16 lines), parse ends at the last line: True 
+    1  row 0 (16 characters, code - 33 = palette index) = '!"#$%&\'()*+,-./0'
+    2  row 1 (16 characters, code - 33 = palette index) = '"#$%&\'()*+,-./0!'
+    3  row 2 (16 characters, code - 33 = palette index) = '#$%&\'()*+,-./0!"'
+    4  row 3 (16 characters, code - 33 = palette index) = '$%&\'()*+,-./0!"#'
+    5  row 4 (16 characters, code - 33 = palette index) = '%&\'()*+,-./0!"#$'
+    6  row 5 (16 characters, code - 33 = palette index) = '&\'()*+,-./0!"#$%'
+    7  row 6 (16 characters, code - 33 = palette index) = '\'()*+,-./0!"#$%&'
+    8  row 7 (16 characters, code - 33 = palette index) = '()*+,-./0!"#$%&\''
+    9  row 8 (16 characters, code - 33 = palette index) = ')*+,-./0!"#$%&\'('
+   10  row 9 (16 characters, code - 33 = palette index) = '*+,-./0!"#$%&\'()'
+   11  row 10 (16 characters, code - 33 = palette index) = '+,-./0!"#$%&\'()*'
+   12  row 11 (16 characters, code - 33 = palette index) = ',-./0!"#$%&\'()*+'
+   13  row 12 (16 characters, code - 33 = palette index) = '-./0!"#$%&\'()*+,'
+   14  row 13 (16 characters, code - 33 = palette index) = './0!"#$%&\'()*+,-'
+   15  row 14 (16 characters, code - 33 = palette index) = '/0!"#$%&\'()*+,-.'
+   16  row 15 (16 characters, code - 33 = palette index) = '0!"#$%&\'()*+,-./'
+       <end of parse at line 16; file has 16 lines>

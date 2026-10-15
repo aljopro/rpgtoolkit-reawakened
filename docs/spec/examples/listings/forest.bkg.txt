@@ -1,0 +1,12 @@
+# forest.bkg: game/Game/Example/Bkrounds/forest.bkg (43 bytes), parse ends at EOF: True
+# offset  bytes (first 12)                         field = value
+000000  52 50 47 54 4c 4b 49 54 20 42 4b 47 .. header = 'RPGTLKIT BKG'
+00000d  02 00                                  majorVer = 2
+00000f  03 00                                  minorVer = 3
+000011  66 6f 72 65 73 74 2e 74 62 6d 00       image = 'forest.tbm'
+00001c  62 61 74 74 6c 65 2e 6d 69 64 00       music = 'battle.mid'
+000027  00                                     selectSound = ''
+000028  00                                     chooseSound = ''
+000029  00                                     readySound = ''
+00002a  00                                     cantDoSound = ''
+00002b  <end of parse; file length 0x2b>

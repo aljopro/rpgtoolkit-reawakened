@@ -1,0 +1,43 @@
+# item minor 2: item_minor2.itm (403 bytes), parse ends at EOF: True 
+000000  52 50 47 54 4c 4b 49 54 20 49 54 45 .. header = 'RPGTLKIT ITEM'
+00000e  02 00                                  majorVer = 2
+000010  02 00                                  minorVer = 2
+000012  43 68 65 73 74 00                      itemName = 'Chest'
+000018  41 20 77 6f 6f 64 65 6e 20 63 68 65 .. description = 'A wooden chest.'
+000028  00                                     equipYN = 0
+000029  00                                     menuYN = 0
+00002a  01                                     boardYN = 1
+00002b  00                                     fightYN = 0
+00002c  00                                     usedBy = 0
+00002d  00                                     allowedCharacter[0] = ''
+                                               ... block above repeated x51 in total (through allowedCharacter[50], ending at 0x60)
+000060  0a 00                                  buyPrice = 10
+000062  05 00                                  sellPrice = 5
+000064  00                                     keyItem = 0
+000065  00                                     equipSlot[0] = 0
+                                               ... block above repeated x8 in total (through equipSlot[7], ending at 0x6d)
+00006d  00                                     accessory = ''
+00006e  00 00                                  equipHP = 0
+000070  00 00                                  equipDP = 0
+000072  00 00                                  equipFP = 0
+000074  00 00                                  equipSM = 0
+000076  00                                     prgEquip = ''
+000077  00                                     prgRemove = ''
+000078  00 00                                  menuHP = 0
+00007a  00 00                                  menuSM = 0
+00007c  00                                     prgMenuUse = ''
+00007d  00 00                                  fightHP = 0
+00007f  00 00                                  fightSM = 0
+000081  00                                     prgFightUse = ''
+000082  00                                     animation = ''
+000083  00                                     prgOnBoard = ''
+000084  6f 70 65 6e 5f 63 68 65 73 74 2e 70 .. prgPickUp = 'open_chest.prg'
+000093  01                                     sizeType = 1
+000094  00                                     itmWalkGfx[0][0] = ''
+000095  76 69 6c 6c 61 67 65 2e 74 73 74 31 .. itmWalkGfx[0][1] = 'village.tst13'
+0000a3  00                                     itmWalkGfx[1][0] = ''
+0000a4  76 69 6c 6c 61 67 65 2e 74 73 74 31 .. itmWalkGfx[1][1] = 'village.tst14'
+                                               ... block above repeated x8 in total (through itmWalkGfx[15][1], ending at 0x184)
+000184  00                                     itmRestGfx[0] = ''
+000185  76 69 6c 6c 61 67 65 2e 74 73 74 31 .. itmRestGfx[1] = 'village.tst13'
+000193  <end of parse; file length 0x193>

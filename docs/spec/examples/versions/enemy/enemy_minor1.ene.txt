@@ -1,0 +1,36 @@
+# enemy minor 1: enemy_minor1.ene (145 bytes), parse ends at EOF: True 
+000000  52 50 47 54 4c 4b 49 54 20 45 4e 45 .. header = 'RPGTLKIT ENEMY'
+00000f  02 00                                  majorVer = 2
+000011  01 00                                  minorVer = 1
+000013  53 6c 69 6d 65 00                      name = 'Slime'
+000019  0c 00 00 00                            hp = 12
+00001d  04 00 00 00                            smp = 4
+000021  03 00 00 00                            fp = 3
+000025  01 00 00 00                            dp = 1
+000029  01                                     canRun = 1
+00002a  14 00                                  takeCrit = 20
+00002c  1e 00                                  giveCrit = 30
+00002e  00 00                                  specialMove upper bound = 0
+000030  66 69 72 65 62 61 6c 6c 2e 73 70 63 .. specialMove[0] = 'fireball.spc'
+00003d  00 00                                  weakness upper bound = 0
+00003f  00                                     weakness[0] = ''
+000040  00 00                                  strength upper bound = 0
+000042  00                                     strength[0] = ''
+000043  00                                     ai = 0
+000044  00                                     useCode = 0
+000045  00                                     prg = ''
+000046  05 00 00 00                            exp = 5
+00004a  03 00 00 00                            gp = 3
+00004e  00                                     winPrg = ''
+00004f  00                                     runPrg = ''
+000050  05 00                                  animations UB = 5
+000052  73 6c 69 6d 65 5c 73 6c 69 6d 65 2e .. animation[0] REST = 'slime\\slime.anm'
+000062  73 6c 69 6d 65 5c 73 6c 69 6d 65 2e .. animation[1] FIGHT = 'slime\\slime.anm'
+000072  00                                     animation[2] DEFEND = ''
+000073  00                                     animation[3] SPECIAL = ''
+000074  00                                     animation[4] DIE = ''
+000075  00                                     animation[5] spare = ''
+000076  00 00 00 00                            custom stance UB (int, as written) = 0
+00007a  73 6c 69 6d 65 5c 73 6c 69 6d 65 2e .. custom[0].animation = 'slime\\slime.anm'
+00008a  4a 49 47 47 4c 45 00                   custom[0].name = 'JIGGLE'
+000091  <end of parse; file length 0x91>

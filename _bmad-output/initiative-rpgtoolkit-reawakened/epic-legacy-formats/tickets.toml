@@ -232,13 +232,64 @@ hitl = true
 risk = "medium"
 
 [[entry]]
+id = 23
+type = "story"
+title = "Migrate format-spec sections 1 to 14 into docs/spec/formats and rule the conflicts"
+description = "Under ADR 0007, moves into `docs/spec/formats/`, in its own doc-only commit (G7), everything §1–§14 hold that `docs/spec/` lacks (R-25: the code-page round trip, bounds checks, the ASCII fold, residue, size limits, the §4.8 rulings, the §10 PNG and JPEG decoding rules and image-kind rulings, the §13 loose folder, L1–L26, the distribution manifest and the L21 TK2 Pro refusal), each as a Reawakened rule block. It records the owner's R-01 ruling (2026-10-15: adopt `dos-palette.json`). A person rules each other format conflict of the reconciliation, R-02 to R-16: pre-vector shading, background image, minor-2 `coordType` (checked against the 144 TK2 minor-2 boards), empty program and item slots, per-axis start fallback, `.tpk` separators, the standalone-EXE trailer tolerance and what T-70 appends (R-27), default polygons, the animated-GIF rule, the `.spc` flag note, compiled `.prg`, `.sav`, the white/black pre-tint and levelling. It leaves a map from each old § to its new anchor for entry 3.28."
+verify = "Each R-01 to R-16 and R-25 item is stated in `docs/spec/formats/` as a legacy fact, a Reawakened rule or a named open question; every §1–§14 subsection has a row in the section map; the commit touches only `docs/`; and a person approved it."
+covers = ["CAP-1"]
+after = ["1.13"]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/discovery/docs-spec-reconciliation.md, section A",
+  "reference - docs/spec/formats/README.md and the format pages",
+]
+
+[[entry]]
+id = 24
+type = "story"
+title = "Align the readers and the dump with docs/spec"
+description = "Changes the code to entry 23's rulings: replaces the VGA table with `docs/spec/formats/dos-palette.json` for 8-bit tiles (R-01), applies the ruled pre-vector shading, background image, minor-2 `coordType`, empty-slot and per-axis start rules (R-02 to R-05, R-07), uses the exact default polygons wherever a reader supplies them (R-09), and makes the dump report a `.prg` whose first byte is `00` as compiled, not as text (R-12). A test loads a legacy `\\`-separated `.tpk` (R-08)."
+verify = "An 8-bit tile decodes to the `dos-palette.json` colours; the `docs/spec/examples/versions/board/board_minor2.brd` and `board_minor3.brd` files convert as entry 23 rules; the dump labels `start_compiled.prg` compiled; `docs/spec/examples/files/example_game.tpk` loads to the same tree as `docs/spec/examples/game`; and the 3.1 sample corpus still matches its expectation."
+covers = ["CAP-1"]
+after = [23]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 25
+type = "story"
+title = "Tile bitmap (.tbm) reader and writer"
+description = "Adds a reader and writer for `TK3 TILEBITMAP` per `docs/spec/formats/tiles.md#tile-bitmap-tbm`: width and height, then (width + 1) × (height + 1) cells, x outer, each a tile reference and an RGB tint, with the extra row and column read, kept and written back. Registers it in the format registry (AD-31) and moves the dump's `.tbm` row from skipped to parsed. Tile bitmaps are what converted TK2 sprites, battle backgrounds and many frames point to, and no entry owned them."
+verify = "Both example `.tbm` files in `docs/spec/examples/game/Game/Example/Bitmap/` and `docs/spec/examples/versions/tile-bitmap/tilebitmap.tbm` parse with 0 residue and round-trip byte for byte, and every sample-corpus `.tbm` the dump finds parses."
+covers = ["CAP-1"]
+after = [1, 13]
+hitl = false
+risk = "low"
+references = ["discovery - _bmad-output/initiative-rpgtoolkit-reawakened/discovery/docs-spec-reconciliation.md, R-14"]
+
+[[entry]]
+id = 26
+type = "story"
+title = "The docs/spec example corpus in the dump gate"
+description = "Adds a committed dump expectation over `docs/spec/examples/game`, `docs/spec/examples/files` and `docs/spec/examples/versions`: authored files (G7), already committed, one for every version of every format. Current formats must parse with 0 failures and 0 residue. The Toolkit 1/2 text forms and the TK2 binary minors are recorded as expected failures, each naming the tk2-support entry that clears it, so those entries flip a row instead of adding a gate."
+verify = "`pnpm dump:check` (or a sibling script) fails when any current-format example regresses or any expected-failure row starts passing without its expectation changing, and passes on the committed examples."
+covers = ["CAP-1"]
+after = [24, 25]
+hitl = false
+risk = "low"
+notes = ["Measured 2026-10-15: versions/ gives 43 parsed, 12 failed (every text form and main_tk1.gam), and character minors 3 and 4 leave 326 residue bytes."]
+
+[[entry]]
 id = 14
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts, from their plans and the deferred review findings. It takes cleanup only."
 verify = "All required checks stay green and each cleanup traces to a deferred review finding."
 covers = ["CAP-1"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
 hitl = false
 risk = "low"
 notes = ["Sweep candidates from the reviews: resolveReference is unused while the resolver recomposes the same path logic, the dead L16 branch in readZip, and the other cleanup items of deferred-work.md."]

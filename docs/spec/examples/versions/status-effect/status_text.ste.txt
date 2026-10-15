@@ -1,0 +1,16 @@
+# status-effect Toolkit 2 text: status_text.ste (14 lines), parse ends at the last line: True 
+    1  header = 'RPGTLKIT STATUSE'
+    2  major = '2'
+    3  minor = '0'
+    4  name = 'Burn'
+    5  rounds = '3'
+    6  speed = '0'
+    7  slow = '0'
+    8  disable = '0'
+    9  hp = '1'
+   10  hpAmount = '2'
+   11  smp = '0'
+   12  smpAmount = '0'
+   13  code = '0'
+   14  prg = ''
+       <end of parse at line 14; file has 14 lines>

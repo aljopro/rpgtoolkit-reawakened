@@ -1,0 +1,7 @@
+# grass.iso: game/Game/Example/Tiles/grass.iso (3078 bytes), parse ends at EOF: True
+# offset  bytes (first 12)                         field = value
+000000  1e 00                                  version (20 .tst, 30 .iso) = 30
+000002  01 00                                  tileCount = 1
+000004  96 00                                  detail = 150
+000006  3f 8f 35 4a 9a 40 49 99 3f 3c 8c 32 .. tile 1 (3072 bytes, column-major) = '<3072 bytes>'
+000c06  <end of parse; file length 0xc06>

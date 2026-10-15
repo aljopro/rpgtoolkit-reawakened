@@ -1,0 +1,8 @@
+# village.tst: game/Game/Example/Tiles/village.tst (67590 bytes), parse ends at EOF: True
+# offset  bytes (first 12)                         field = value
+000000  14 00                                  version (20 .tst, 30 .iso) = 20
+000002  16 00                                  tileCount = 22
+000004  01 00                                  detail = 1
+000006  3f 8f 35 4a 9a 40 49 99 3f 3c 8c 32 .. tile 1 (3072 bytes, column-major) = '<3072 bytes>'
+                                               ... block above repeated x22 in total (through tile 22 (3072 bytes, column-major), ending at 0x10806)
+010806  <end of parse; file length 0x10806>

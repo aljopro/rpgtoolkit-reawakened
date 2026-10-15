@@ -48,3 +48,5 @@ Authors can open a legacy project in VS Code or in the browser and edit its sett
 - Waits on web-runner-packaging because: runner-web for preview and test-run.
 - Waits on rpgcode-tooling because: the program editor's language tooling.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4). `docs/editor-features.md` (T-xx) is not replaced.
+- Evidence (R-60): docs/spec/formats/rpgcode-program.md describes the editor's test run (`Prg\sys_test.prg` with its settings prefix, the engine run as `<main file> sys_test.prg`), and packaging-and-paths.md the new-project defaults; inputs for the test-run and new-project features.

@@ -48,3 +48,6 @@ The boundary is capability and ownership: the pure core and engine rules, the ru
 - Assumption: CAP-12, CAP-15 and CAP-18 are shared across epics: CAP-12's headless runner skeleton is in platform-baseline and the rest in web-runner-packaging; CAP-15 splits between editor-foundation and editor-assets-p0; CAP-18 between editor-foundation and desktop-shell. Confirm.
 - Open question: the spec's open questions (desktop shell, legacy `.sav`, text-era formats and compiled `.prg`, AVI video, plugin replacement API, auto-tiler sample sets) gate the entries named in each epic's Notes.
 - Waits on nothing: platform-baseline opens the order.
+- Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4).
+- Decision: 2026-10-15: the reconciliation of docs/spec with the specs, epics and code is discovery/docs-spec-reconciliation.md; its changes went to the owning epics (entries 1.13, 1.14, 2.23–2.26, 16.13, 3.27, 3.28, and Notes on epics 4–9, 11 and 12).
+- Evidence: docs/spec answers several of the spec's open questions in facts (legacy `.sav`, text-era formats, compiled `.prg`); what remains for those is scope, not layout.

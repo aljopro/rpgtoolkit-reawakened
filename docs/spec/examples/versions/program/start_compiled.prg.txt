@@ -1,0 +1,17 @@
+# program compiled: start_compiled.prg (55 bytes), parse ends at EOF: True 
+000000  00                                     marker (00 = compiled) = '00'
+000001  6d 77 69 6e 00                         function[0] name (empty ends the table) = 'mwin'
+000006  77 61 69 74 00                         function[1] name (empty ends the table) = 'wait'
+00000b  00                                     function[2] name (empty ends the table) = ''
+00000c  00                                     class[0] name (empty ends the section) = ''
+00000d  04 00 00 00                            instruction[0] type flags = 4
+000011  48 65 6c 6c 6f 00                      instruction[0] text = 'Hello'
+000017  10 00 00 00                            instruction[1] type flags = 16
+00001b  00 00 00 00                            instruction[1] function id = 0
+00001f  01 00 00 00                            instruction[1] parameter count = 1
+000023  80 00 00 00                            instruction[2] type flags = 128
+000027  10 00 00 00                            instruction[3] type flags = 16
+00002b  01 00 00 00                            instruction[3] function id = 1
+00002f  00 00 00 00                            instruction[3] parameter count = 0
+000033  80 00 00 00                            instruction[4] type flags = 128
+000037  <end of parse; file length 0x37>

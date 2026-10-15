@@ -1,0 +1,10 @@
+# tile-animation minor 0: water.tan (69 bytes), parse ends at EOF: True 
+000000  52 50 47 54 4c 4b 49 54 20 54 49 4c .. header = 'RPGTLKIT TILEANIM'
+000012  02 00                                  majorVer = 2
+000014  00 00                                  minorVer = 0
+000016  05 00 00 00                            speed (1..200; delay = 1000/speed ms) = 5
+00001a  03 00 00 00                            frameCount (exact) = 3
+00001e  76 69 6c 6c 61 67 65 2e 74 73 74 32 .. frame[0] = 'village.tst2'
+00002b  76 69 6c 6c 61 67 65 2e 74 73 74 33 .. frame[1] = 'village.tst3'
+000038  76 69 6c 6c 61 67 65 2e 74 73 74 34 .. frame[2] = 'village.tst4'
+000045  <end of parse; file length 0x45>

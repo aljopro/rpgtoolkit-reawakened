@@ -144,3 +144,31 @@ covers = ["CAP-13"]
 after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
 hitl = false
 risk = "low"
+
+[[entry]]
+id = 13
+type = "story"
+title = "ADR 0007: docs/spec is the normative specification"
+description = "Writes ADR 0007 in its own doc-only commit, recording the owner's decision of 2026-10-15 that `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` (`docs/editor-features.md` stays). The ADR fixes: (1) `docs/spec/` describes Toolkit 3.1, and every Reawakened departure or addition sits beside the legacy behaviour as a marked Reawakened rule block; (2) real archive files beat prose, so a page the corpus contradicts is corrected and cites the files; (3) the citation form `docs/spec/<path>#<anchor>`, with E-xx IDs carried as labels on the `docs/spec/engine/` pages; (4) the two old files become redirect stubs until entry 3.28 re-points every citation and deletes them. It amends CLAUDE.md (Working notes), guardrails G5 and G7, ADR 0006's context, README, CONTRIBUTING, the PR template and the spine's format-spec references to name `docs/spec/`."
+verify = "A person accepts ADR 0007; the commit touches only `docs/`, CLAUDE.md, README, CONTRIBUTING, the PR template and the spine; every file it names points to `docs/spec/`; and both old files open with a stub that names their replacement."
+covers = ["CAP-1", "CAP-13"]
+after = []
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/discovery/docs-spec-reconciliation.md, Owner decisions",
+  "provenance - docs/provenance/extraction-log.md, round 4 (owner-attested)",
+]
+
+[[entry]]
+id = 14
+type = "story"
+title = "Migrate engine-features.md into docs/spec/engine with its E-xx IDs"
+description = "Moves every E-xx capability of `docs/engine-features.md` onto the `docs/spec/engine/` page that covers it, keeping each ID as a label so the epics' citations survive. The rebuild guidance (\"a rebuild should…\") becomes Reawakened rule blocks. Where an E-xx statement contradicts `docs/spec/` (R-50 to R-61 of the reconciliation), the page records both sides as an open conflict naming its owner epic, which rules it at inception; this entry rules none of them. Doc-only, in its own commit (G7)."
+verify = "Every E-01 to E-132 ID appears exactly once in `docs/spec/engine/`, each R-50 to R-61 conflict is recorded with its owner epic, and the commit touches only `docs/`."
+covers = ["CAP-13"]
+after = [13]
+hitl = true
+risk = "medium"
+references = ["discovery - _bmad-output/initiative-rpgtoolkit-reawakened/discovery/docs-spec-reconciliation.md, section D"]

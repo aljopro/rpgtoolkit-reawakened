@@ -41,3 +41,5 @@ P0 tools of editor-features section 11 only. P1 tools (epic editor-p1) and P2 to
 - Decision: epic set approved by the user, 2026-10-10.
 - Waits on editor-foundation because: editor-ui and both hosts.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4).
+- Evidence (R-60): docs/spec/formats/legacy/conversion.md specifies what the original editor generated when it converted legacy sprites (the `.tbm`/`.anm` names, sizes, delays and transparent white) and the Toolkit 2 folder-upgrade wizard: inputs for T-31 and the packaging tool. The editor writes `.gph` numbers the VB6 way (" 2 ").
