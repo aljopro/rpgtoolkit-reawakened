@@ -3,7 +3,7 @@ title: 'Enforce the amended boards, actors and battle rules in the readers'
 type: 'feature'
 ticket: '18'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: '71a0c1fb1f31626906987ec0c0c4ccb33b6624d8'
 route: 'full'
 route_source: 'auto'

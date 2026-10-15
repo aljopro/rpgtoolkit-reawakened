@@ -3,7 +3,7 @@ title: 'Tracer bullet: source text to a restored snapshot through the harness'
 type: 'feature'
 ticket: '2'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: 'e6be6fd87c7fa8905c300b26ede58863276cda30'
 route: 'full'
 route_source: 'auto'

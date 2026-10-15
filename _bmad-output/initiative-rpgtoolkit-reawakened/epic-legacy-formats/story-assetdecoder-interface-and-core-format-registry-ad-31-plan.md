@@ -3,7 +3,7 @@ title: 'AssetDecoder interface and core format registry (AD-31)'
 type: 'feature'
 ticket: '13'
 created: '2026-10-11'
-status: 'built'
+status: done
 baseline_revision: '7ff33f40a790f689d3fc2e9fd8a267b4957b0fce'
 route: 'oneshot'
 route_source: 'auto'

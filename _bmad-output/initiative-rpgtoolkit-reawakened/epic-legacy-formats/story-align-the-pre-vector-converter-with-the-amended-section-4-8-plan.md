@@ -3,7 +3,7 @@ title: 'Align the pre-vector converter with the amended section 4.8'
 type: 'feature'
 ticket: '16'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: 'ac714685be47b029aa7de07daeca228db0aa0597'
 route: 'full'
 route_source: 'auto'
