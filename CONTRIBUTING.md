@@ -4,7 +4,7 @@ Thanks for helping reawaken RPG Toolkit.
 
 1. **Read [docs/guardrails.md](docs/guardrails.md).** Rules G1–G7 are binding and CI-enforced. Pull requests that break one are not merged unless an ADR approves an exception.
 2. **Clean-room (G7).** Work only from `docs/`. Do not consult, copy or translate the legacy GPL-2 RPG Toolkit source. If a spec is unclear or wrong, open a docs PR first.
-3. **Cite the spec.** Each behaviour PR names the `docs/` sections or capability IDs (E-xx, T-xx) it implements.
+3. **Cite the spec.** Each behaviour PR names the `docs/spec/<path>#<anchor>` sections or capability IDs (T-xx) it implements. `docs/spec/` is the normative specification ([ADR 0007](docs/adr/0007-docs-spec-is-the-normative-specification.md)); citations to `docs/format-spec.md` and `docs/engine-features.md` stay valid only until entry 3.28 deletes those files.
 4. **Dependencies (G6).** New runtime dependencies must use an allowlisted licence. Say in the PR why the dependency is needed.
 5. **Architecture changes** go through an ADR in `docs/adr/`.
 
@@ -27,7 +27,7 @@ fixtures **are** committed under `packages/core/test/fixtures/`, because the
 corpus cannot supply them (ticket 2.22):
 
 - `authored/` — bytes written straight from the byte layouts in
-  [docs/format-spec.md](docs/format-spec.md) by `tools/fixtures/author/generate.mjs`:
+  [docs/spec/formats/](docs/spec/formats/README.md) by `tools/fixtures/author/generate.mjs`:
   detail 4/5/6 tilesets, an isometric `.iso`, a `.tpk` and a deflated copy of it,
   a Setup ZIP, a backslash-entry ZIP, a `CMP1` standalone EXE and two negative
   EXE stubs. The tool imports no `core` reader or writer, so a fixture cannot

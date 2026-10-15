@@ -38,8 +38,8 @@ One known limit: the old Toolkit allowed Windows-only add-ons called plugins, an
 
 ## Read more
 
-- [Format specification](docs/format-spec.md): the legacy file formats the player has to read
-- [Engine features](docs/engine-features.md) and [editor features](docs/editor-features.md): what the engine and the editor do
+- [Specification](docs/spec/README.md): what Toolkit 3.1 does, byte by byte and behaviour by behaviour (the legacy file formats the player has to read, and the engine's behaviour)
+- [Editor features](docs/editor-features.md): what the editor does
 - [Architecture options](docs/architecture-options.md) and [decision records](docs/adr/0001-typescript-core.md): how it's built, and why
 - [Engineering rules](docs/guardrails.md): the rules every change follows
 

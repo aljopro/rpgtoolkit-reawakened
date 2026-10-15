@@ -96,7 +96,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 3. Golden files change only in a pull request that says why, reviewed as a behaviour change.
 4. Legacy sample games are **test fixtures fetched at CI time** from their source. Whole games are **not** committed to this repository. Small anonymised or authored test fixtures **may** be committed (see G7 rule 3).
 
-**Rationale.** Engine parity checklist (engine-features §14). Without references, parity regressions are silent.
+**Rationale.** Engine parity checklist (engine-features §14, migrating to `docs/spec/engine/` under [ADR 0007](adr/0007-docs-spec-is-the-normative-specification.md)). Without references, parity regressions are silent.
 
 **Enforcement.** A required CI job. Merges are blocked if it fails or is skipped.
 
@@ -120,10 +120,11 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 
 **Rule.**
 1. Implementation **MUST** be derived from this repository's `docs/` only. The legacy RPG Toolkit source (GPL-2) **MUST NOT** be copied, translated, paraphrased line by line, or kept open as a reference while writing code.
-2. Knowledge flows one way: legacy behaviour is described in `docs/` (format-spec, engine-features, editor-features) as behaviour and byte layouts in our own words. Code then cites the doc sections it implements.
+2. Knowledge flows one way: legacy behaviour is described in `docs/spec/` (the normative specification, [ADR 0007](adr/0007-docs-spec-is-the-normative-specification.md)) and `docs/editor-features.md` as behaviour and byte layouts in our own words. Code then cites the doc sections it implements. `docs/format-spec.md` and `docs/engine-features.md` are superseded and frozen until they are deleted.
 3. **No legacy source files or headers are committed.** G7 is about the GPL-2 *source code*, not about test data: small test fixtures (a few kilobytes of file layout, anonymised or authored from `docs/`) **may** be committed under `packages/core/test/fixtures/`, but whole legacy games and their assets are still fetched at CI time (G5 rule 4). Tables needed for compatibility (e.g. the VGA palette) come from public specifications or are rebuilt from sample data, not from the legacy code.
 4. When a doc is wrong or incomplete, fix the **doc** first (in its own commit), then the code.
 5. AI agents working on implementation follow the same rules (see `CLAUDE.md`).
+6. `docs/spec/` is accepted on the owner's attestation (extraction log round 4, ADR 0007). Any later extraction from the legacy source follows [ADR 0006](adr/0006-clean-room-spec-extraction.md).
 
 **Rationale.** The legacy engine is GPL-2. The new project must be freely licensed.
 
@@ -135,7 +136,7 @@ The key words **MUST**, **MUST NOT** and **MAY** are used as in RFC 2119.
 
 ## Exceptions
 
-An exception is allowed only when an ADR approves it. The code **MUST** carry an inline marker naming the rule and the ADR, e.g. `guardrail-exception: G3 ADR-0007`. Lint rejects unreferenced suppressions of guard-rail rules.
+An exception is allowed only when an ADR approves it. The code **MUST** carry an inline marker naming the rule and the ADR, e.g. `guardrail-exception: G3 ADR-NNNN`. Lint rejects unreferenced suppressions of guard-rail rules.
 
 ## Rollout
 

@@ -1,3 +1,5 @@
+> **Superseded.** [`docs/spec/`](spec/README.md) is the normative specification of what Toolkit 3.1 does, and this file no longer is ([ADR 0007](adr/0007-docs-spec-is-the-normative-specification.md)). It is frozen: nothing is added here. Its body stays until entry 3.28 deletes it; the E-xx catalogue moves onto the `docs/spec/engine/` pages under entry 1.14. Its E-xx IDs stay valid for the citations that still use them.
+
 # RPG Toolkit 3 — Runtime Engine: Feature Inventory & Architecture
 
 > **Purpose.** This lists everything the legacy game engine (RPG Toolkit 3.1.0's player, called "trans3") does, organised by **capability**, so a clean rebuild can reach feature parity without porting code. It describes behaviour and architecture. It is implementation-neutral and says nothing about language or platform. File layouts are in [format-spec.md](format-spec.md). Authoring tools are in [editor-features.md](editor-features.md).
