@@ -270,8 +270,11 @@ test("a special move too short to probe reports a located error", () => {
   equal(result.error.section, "format-spec §1.1");
 });
 
-test("a parsed special move writes back byte-for-byte", () => {
-  const bytes = buildSpc({ name: "Ice", damage: -3, usableFromMenu: -1, description: "" });
+test("a parsed anonymised special move writes back byte-for-byte", () => {
+  // The committed fixture is a real legacy special move with every string field
+  // anonymised, so this round-trip does not share the writer's primitives with
+  // its input (ticket 2.22).
+  const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "anonymised", "spc-1.spc")));
   const move = unwrap(readSpecialMove(new BinaryReader(bytes)));
   deepEqual(unwrap(writeSpecialMove(move)), bytes);
 });
@@ -385,18 +388,8 @@ test("a text-form status effect is refused at the detection byte", () => {
   equal(result.error.message.includes("text form"), true);
 });
 
-test("a parsed status effect writes back byte-for-byte", () => {
-  const bytes = buildSte({
-    name: "",
-    rounds: 1,
-    speedUp: 4,
-    disable: 7,
-    smpEnabled: 2,
-    smpPerRound: -6,
-    runProgram: 9,
-    hpPerRound: -1,
-    program: "poison.prg",
-  });
+test("a parsed anonymised status effect writes back byte-for-byte", () => {
+  const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "anonymised", "ste-1.ste")));
   const effect = unwrap(readStatusEffect(new BinaryReader(bytes)));
   deepEqual(unwrap(writeStatusEffect(effect)), bytes);
 });
