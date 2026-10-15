@@ -1,0 +1,20 @@
+# hero_walk_s.anm: game/Game/Example/Misc/hero/hero_walk_s.anm (370 bytes), parse ends at EOF: True
+# offset  bytes (first 12)                         field = value
+000000  52 50 47 54 4c 4b 49 54 20 41 4e 49 .. header = 'RPGTLKIT ANIM'
+00000e  02 00                                  majorVer = 2
+000010  03 00                                  minorVer = 3
+000012  20 00 00 00                            width = 32
+000016  20 00 00 00                            height = 32
+00001a  32 00 00 00                            frame UB = 50
+00001e  76 69 6c 6c 61 67 65 2e 74 73 74 31 .. frame[0].image = 'village.tst14'
+00002c  ff ff ff 00                            frame[0].transpColor = 16777215
+000030  00                                     frame[0].sound = ''
+000031  76 69 6c 6c 61 67 65 2e 74 73 74 31 .. frame[1].image = 'village.tst15'
+00003f  ff ff ff 00                            frame[1].transpColor = 16777215
+000043  00                                     frame[1].sound = ''
+000044  00                                     frame[2].image = ''
+                                               ... block above repeated x49 in total (through frame[50].image, ending at 0x165)
+000165  ff ff ff 00                            frame[50].transpColor = 16777215
+000169  00                                     frame[50].sound = ''
+00016a  33 33 33 33 33 33 c3 3f                delay (s) = 0.15
+000172  <end of parse; file length 0x172>

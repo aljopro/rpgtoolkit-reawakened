@@ -1,0 +1,24 @@
+# tile-bitmap major 3: tilebitmap.tbm (89 bytes), parse ends at EOF: True 
+000000  54 4b 33 20 54 49 4c 45 42 49 54 4d .. header = 'TK3 TILEBITMAP'
+00000f  03 00                                  majorVer = 3
+000011  00 00                                  minorVer = 0
+000013  02 00                                  width = 2
+000015  01 00                                  height = 1
+000017  76 69 6c 6c 61 67 65 2e 74 73 74 38 .. cell[0][0].tile = 'village.tst8'
+000024  00 00                                    r = 0
+000026  00 00                                    g = 0
+000028  00 00                                    b = 0
+00002a  00                                     cell[0][1].tile = ''
+00002b  00 00                                    r = 0
+00002d  00 00                                    g = 0
+00002f  00 00                                    b = 0
+000031  76 69 6c 6c 61 67 65 2e 74 73 74 39 .. cell[1][0].tile = 'village.tst9'
+00003e  00 00                                    r = 0
+000040  00 00                                    g = 0
+000042  00 00                                    b = 0
+000044  00                                     cell[1][1].tile = ''
+                                               ... block above repeated x3 in total (through cell[2][1].tile, ending at 0x53)
+000053  00 00                                    r = 0
+000055  00 00                                    g = 0
+000057  00 00                                    b = 0
+000059  <end of parse; file length 0x59>

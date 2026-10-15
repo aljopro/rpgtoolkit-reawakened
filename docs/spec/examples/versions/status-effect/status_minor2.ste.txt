@@ -1,0 +1,16 @@
+# status-effect minor 2: status_minor2.ste (45 bytes), parse ends at EOF: True 
+000000  52 50 47 54 4c 4b 49 54 20 53 54 41 .. header = 'RPGTLKIT STATUSE'
+000011  02 00                                  majorVer = 2
+000013  02 00                                  minorVer = 2
+000015  42 75 72 6e 00                         name = 'Burn'
+00001a  03 00                                  rounds = 3
+00001c  00 00                                  speed = 0
+00001e  00 00                                  slow = 0
+000020  00 00                                  disable = 0
+000022  01 00                                  hp = 1
+000024  02 00                                  hpAmount = 2
+000026  00 00                                  smp = 0
+000028  00 00                                  smpAmount = 0
+00002a  00 00                                  code = 0
+00002c  00                                     prg = ''
+00002d  <end of parse; file length 0x2d>

@@ -1,0 +1,12 @@
+# main Toolkit 1: main_tk1.gam (10 lines), parse ends at the last line: True 
+    1  (ignored) = 'x'
+    2  startupPrg = 'start.prg'
+    3  runTime = ''
+    4  runKey (a character) = 'R'
+    5  initBoard = 'village.brd'
+    6  (ignored) = 'x'
+    7  (ignored) = 'x'
+    8  fightType = '0'
+    9  chances = '20'
+   10  fight file name = 'fight.dat'
+       <end of parse at line 10; file has 10 lines>

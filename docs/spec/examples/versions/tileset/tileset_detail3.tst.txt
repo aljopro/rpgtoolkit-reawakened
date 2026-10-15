@@ -1,0 +1,7 @@
+# tileset detail 3: tileset_detail3.tst (2054 bytes), parse ends at EOF: True 
+000000  14 00                                  version (20 .tst, 30 .iso) = 20
+000002  02 00                                  tileCount = 2
+000004  03 00                                  detail = 3
+000006  20 21 22 23 24 25 26 27 28 29 2a 2b .. tile 1 (1024 bytes, column-major) = '<1024 bytes>'
+000406  ff ff ff ff ff ff ff ff ff ff ff ff .. tile 2 (1024 bytes, column-major) = '<1024 bytes>'
+000806  <end of parse; file length 0x806>
