@@ -56,6 +56,7 @@ The new spec's Python tools need only the standard library, plus Pillow for rend
 | R-14 | Formats with no reader | `.tbm` (no owner), `.tan` and `.gph` v2 (tk2-support 16.7) | All current 3.1 formats | `.tbm` gets entry 2.25. `.tan`/`.gph` stay with 16.7, which now cites `docs/spec/formats/tiles.md` (speed 0 invalid; detail 4/6 COLORREF quirk) |
 | R-15 | Tile shading arithmetic | `clamp(src + shade + ambient, 0, 255)` (§4.5) | Same clamp, but the original first replaces pure white with (245, 245, 245) and pure black with (10, 10, 10) so shading can tint them | Rule for board-rendering (render-time) |
 | R-16 | Level-up arithmetic | E-78 one rule | The original uses `experienceIncrease` three different ways; "pick one and document it" | Battle (epic 7) rules it |
+| R-27 | Standalone EXE (`CMP1`) | §13.1, unchanged in every version since fa24678 (2026-10-10): last 12 bytes are `CMP1`, `i32` ZIP offset, `i32` ZIP length, little-endian. The loader (`package.ts`) accepts `offset + length ≤ trailerStart`. L21 refuses trailer-less EXEs (TK2 Pro exports, `zip.exe`, 07bcd38) | Same trailer, field for field: `CMP1`, engine length *E* (= ZIP offset), ZIP length *Z*. Adds that the file is always exactly `E + Z + 12` bytes, the inner ZIP is a legacy PAK (`main.gam` at the root, `\` names), the engine extracts it to `%TEMP%\temp.tpk` and says "This application is corrupt." on failure. It says nothing about TK2 Pro EXEs | No layout conflict; the example EXE loads. Keep our tolerance of bytes between ZIP and trailer (lenient reader) or tighten to `E + Z + 12`: a 2.23 call. L21 migrates as a Reawakened rule. Writing side: T-70 appends **our** distribution package (`/` names, `Main/<game>.gam`, `manifest.json`), not a legacy PAK, so an EXE we write would not run on the 3.1 engine. That is a deliberate Reawakened rule to state in 2.23, not a defect |
 | R-25 | Content only we have | §1.1 code-page round trip, §1.2 bounds checks, §1.5 ASCII fold (2.21), §1.7 residue, §4.2/§4.8 size limits, §4.8 OWNER rulings, §10 PNG/JPEG decoding and the image-kind rulings, §13 loose folder, L1–L26 and the distribution manifest, the TK2 Pro EXE refusal (L21), §14 checklist | Absent | Migrates into `docs/spec/` as Reawakened rule blocks (2.23). Nothing is dropped |
 
 ## B. Toolkit 1/2 formats (owner: tk2-support, entry 16.13)
@@ -113,7 +114,7 @@ The new spec's Python tools need only the standard library, plus Pillow for rend
 | platform-baseline | 1.13 | ADR 0007: `docs/spec/` is normative; the precedence, rule-block and citation scheme; amend CLAUDE.md, guardrails, ADR 0006, README, CONTRIBUTING and the PR template |
 | platform-baseline | 1.14 | Migrate `engine-features.md` into `docs/spec/engine/`, keeping every E-xx ID; record R-50 to R-61 as open conflicts for their owners |
 | rpgcode-vm | 3.28 | Re-point every citation and delete `format-spec.md` and `engine-features.md` (placed here as the last of the three migrating epics in build order) |
-| legacy-formats | 2.23 | Migrate §1-§14 into `docs/spec/formats/`; rule R-01 to R-16 and R-25 |
+| legacy-formats | 2.23 | Migrate §1-§14 into `docs/spec/formats/`; rule R-01 to R-16, R-25 and R-27 |
 | legacy-formats | 2.24 | Align readers and the dump with 2.23 |
 | legacy-formats | 2.25 | Tile bitmap (`.tbm`) reader and writer |
 | legacy-formats | 2.26 | `docs/spec/examples/` in the dump gate |
