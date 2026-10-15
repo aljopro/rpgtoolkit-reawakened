@@ -6,9 +6,10 @@
  * turns all three into one `LoadedPackage`: the files plus the `AssetIndex` the
  * resolver answers references from. Loose folders enforce the same rules as
  * archives, so a game behaves identically whichever form it arrived in. A
- * Toolkit 2 Professional standalone EXE has no `CMP1` trailer, so it is refused
- * by L21 with a message telling its author to extract the assets themselves
- * (§13.1).
+ * Toolkit 2 Professional standalone EXE carries a private payload and no `CMP1`
+ * trailer, and a self-extracting `zip.exe` embeds its ZIP behind a launcher with
+ * no trailer either; both are refused by L21 with a message telling the reader to
+ * extract the assets themselves (§13.1).
  *
  * Games are untrusted input (AD-17): no file system, no recursion into nested
  * archives, no unbounded allocation, and no path that escapes the package root.
@@ -38,13 +39,14 @@ function failure(offset: number, message: string): FormatError {
 /**
  * Why a file with no `CMP1` trailer is refused, in the words of §13.1.
  *
- * The game is almost always a Toolkit 2 Professional standalone EXE (or a
- * self-extracting installer like its `zip.exe`), which packs its data in a
- * private format with no appended ZIP at all. The loader declines to
- * reverse-engineer that packer and tells the reader what to do instead.
+ * Two shapes reach here. A Toolkit 2 Professional standalone EXE carries a
+ * private compressed payload and no appended ZIP at all. A self-extracting
+ * installer such as `zip.exe` is a launcher with a ZIP embedded behind it at a
+ * fixed offset, not located by a trailer. The loader declines to
+ * reverse-engineer either packer and says what the reader should do instead.
  */
 const NO_TRAILER_HELP =
-  "a Toolkit 2 standalone EXE is not supported, and the game's author must extract the assets themselves (from the original project folder, its Setup ZIP or its .tpk)";
+  "it is not a standalone game this loader reads (Toolkit 2 standalone EXEs are not supported); extract the assets yourself from the project folder, Setup ZIP or .tpk";
 
 /**
  * The ZIP appended to a standalone EXE (format-spec §13).
