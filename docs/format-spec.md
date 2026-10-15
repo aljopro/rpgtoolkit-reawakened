@@ -111,7 +111,7 @@ Bytes after the last documented field of a binary file are not an error. A reade
 
 ## 2. Main file — `.gam` (`RPGTLKIT MAIN`)
 
-One per game. It holds global settings and the startup sequence. Binary only.
+One per game. It holds global settings and the startup sequence. The rows below are the binary (3.x) layout; the 2.x era also wrote a **text** form, documented in §15.2. Two of the rows below carried a four-byte reserved field in the 3.x layout where the 2.x minor-2 files carry a two-byte one; both rows are marked, and §15.14 has the evidence.
 
 The table below details all **43 logical rows** across the file's lifetime, including the **12 version-dependent fields** controlled by `minor`. Every row carries a unique number 1–43 in storage order, so a citation like "row 29" names exactly one row (the version-dependent summary below uses the same numbering):
 | # | Type | Field | Notes |
@@ -125,7 +125,7 @@ The table below details all **43 logical rows** across the file's lifetime, incl
 | 7 | i16 | screenType | 0/1 = full-screen accelerated, 2 = windowed |
 | 8 | i16 | extendToFullScreen | 0/1 |
 | 9 | i16 | resolution | 0 = 640×480, 1 = 800×600, 2 = 1024×768, other = custom (see resX/resY) |
-| 10 | i32 | *(minor < 3 only)* reserved | old parallax value; ignore |
+| 10 | i16 | *(minor < 3 only)* reserved | old parallax value; ignore. **`i16`, not `i32`** — the 2.x minor-2 files only close with a two-byte field (§15.14, `GAMB`). |
 | 11 | i16 | disableProtectReg | obsolete |
 | 12 | str | languageFile | obsolete |
 | 13 | str | **startupPrg** | program run at boot (required in practice) |
@@ -136,7 +136,7 @@ The table below details all **43 logical rows** across the file's lifetime, incl
 | 18 | i16 | menuKey | ASCII code of the key that opens the menu |
 | 19 | i16 | activationKey | ASCII code of the general "interact" key |
 | 20 | i16 | extKeys upper bound | then per entry: `i16 asciiKey`, `str program`. Extra run-time keys (up to 50). Skip entries with an empty program. |
-| 21 | | *(minor ≥ 3)* `str menuPlugin`, `str fightPlugin` | *(minor < 3)* `i32` reserved; defaults are the stock menu and battle plugins |
+| 21 | | *(minor ≥ 3)* `str menuPlugin`, `str fightPlugin` | *(minor < 3)* `i16` reserved; defaults are the stock menu and battle plugins. **`i16`, not `i32`** (§15.14, `GAMB`). |
 | 22 | | *(minor ≤ 2)* `i32`, `i16` reserved | multitask speed and memory protection; ignore |
 | 23 | i16 | fightingDisabled | **inverted flag: 0 = fighting enabled**, non-zero = disabled |
 | 24 | i16 | enemy list upper bound | then per entry: `str enemyFile`, `i16 skillLevel` (random-encounter pool) |
@@ -161,8 +161,8 @@ The table below details all **43 logical rows** across the file's lifetime, incl
 | 43 | | *(minor ≥ 9)* `i16 pathfindHeuristic`, `i32 drawVectorsFlags`, `color pathColor`, `i32 movementControls`, then 8 × `i16 movementScanCode` | heuristic: axial / diagonal / vector (default diagonal before minor 9). drawVectors: debug-overlay bit flags (board vectors, sprite vectors, player path, destination). movementControls bits: 1 = keyboard, 2 = mouse, 4 = allow diagonals (default 1 + 4). The scan codes are **hardware keyboard scan codes**, ordered E, SE, S, SW, W, NW, N, NE. 0 = unbound. Defaults: arrow keys for E/S/W/N, diagonals unbound. |
 
 **Version-dependent fields summary (12 conditional rows):**
-1. `minor < 3`: Row 10 (reserved `i32` old parallax value).
-2. `minor ≥ 3`: Row 21 (`str menuPlugin, str fightPlugin`) vs `minor < 3`: reserved `i32`.
+1. `minor < 3`: Row 10 (reserved **`i16`** old parallax value).
+2. `minor ≥ 3`: Row 21 (`str menuPlugin, str fightPlugin`) vs `minor < 3`: reserved **`i16`**.
 3. `minor ≤ 2`: Row 22 (reserved `i32, i16` multitask speed and memory protection).
 4. `minor < 3`: Row 29 (reserved `i16` old fight style).
 5. `minor ≤ 2`: Row 33 (plugin list entries stored as `i16 enabled` rather than `str pluginFile`).
@@ -212,7 +212,7 @@ Tile *n* (1-based) starts at byte offset `6 + (n−1) × size × size × bytesPe
 * 24-bit: the exact triple **R=0, G=1, B=2** means transparent.
 * 8-bit: index **255** means transparent.
 
-**Palette (8-bit detail).** Indices refer to the standard **VGA/DOS 256-colour default palette** (16 EGA colours, 16 greys, then hue ramps). A reimplementation must ship this table. Build it from the public VGA default palette, not from the legacy source.
+**Palette (8-bit detail).** Indices refer to the standard **VGA/DOS 256-colour default palette** (16 EGA colours, 16 greys, then hue ramps). A reimplementation must ship this table. Build it from the public VGA default palette, not from the legacy source. Details **5 and 6** use only the **first sixteen** entries (the EGA set, the first 16 colours of the 13h VGA palette), not the full 256; details 3 and 4 use all 256. The official 2.0 Tileset specification fixes both rules and the transparency keys — see §15.13.
 
 **16×16 tiles** are upscaled to 32×32 by pixel doubling before use. A reader keeps the stored 16×16 pixels; the renderer does the doubling once per tileset and caches the result.
 
@@ -532,9 +532,9 @@ Directional graphics are stored in the order **S, N, E, W, NW, NE, SW, SE**. Thi
 
 ### 6.1 Character — `.tem` (`RPGTLKIT CHAR`)
 
-Detection: byte at offset 13. Only the binary form is supported (text versions must be re-saved).
+Detection: byte at offset 13. Only the binary form is supported (text versions must be re-saved); the text form is documented in §15.5.
 
-**Versions:** accepted `minor` **0–8** (the range the rows below describe: `minor = 3`, `minor < 5`, `minor ≥ 5`, `≥ 6`, `≥ 7`, `≥ 8`). A reader refuses `minor` 9 or higher, a negative version field and the text form, rather than guessing a neighbouring layout (§1.4). The newest samples (`demo/Chrs/start.tem`, `Basic/Chrs/start.tem`) are `minor` 8. *Caveat:* the 2.x era also wrote `.tem` at `minor` 3 and 4 with a different field set, which this layout does not describe (a straight read leaves residue); those files belong to the TK2 support work, not to this layout.
+**Versions:** accepted `minor` **0–8** (the range the rows below describe: `minor = 3`, `minor < 5`, `minor ≥ 5`, `≥ 6`, `≥ 7`, `≥ 8`). A reader refuses `minor` 9 or higher, a negative version field and the text form, rather than guessing a neighbouring layout (§1.4). The newest samples (`demo/Chrs/start.tem`, `Basic/Chrs/start.tem`) are `minor` 8. *Caveat:* the 2.x era also wrote `.tem` at `minor` 3 and 4, and wrote a **text** form (§15.5). The minor-3/4 binary field set is described in §15.14 (`TEMB`), not in the rows above; a reader that applies the rows above to a minor-3/4 file leaves 407–797 residue bytes.
 
 <!-- OWNER: chose 0–8 for §6.1 (the range the conditional rows span and the reader hard-codes) over a narrower 3–8, because §6.1's minor<5 rows exist and a TK2-era minor 3/4 file must at least be recognised; the mismatch is named rather than silently accepted. -->
 
@@ -570,7 +570,7 @@ Detection: byte at offset 13. Only the binary form is supported (text versions m
 
 Items are inventory objects, equipment and **NPCs** (anything placed on a board).
 
-**Versions:** accepted `minor` **0–7** (the range the rows below describe: `i32` prices at `minor ≥ 3`, movement at `≥ 4`, idle and speed/idleTime at `≥ 5`, bases at `≥ 7`, legacy walk frames at `minor < 4`). A reader refuses `minor` 8 or higher, a negative version field and the text form (§1.4). The samples (`demo/Item/man.itm`, `demo/Item/oldman.itm`) are `minor` 7, and the 2.x era wrote `minor` 3, which this layout covers.
+**Versions:** accepted `minor` **0–7** (the range the rows below describe: `i32` prices at `minor ≥ 3`, movement at `≥ 4`, idle and speed/idleTime at `≥ 5`, bases at `≥ 7`, legacy walk frames at `minor < 4`). A reader refuses `minor` 8 or higher, a negative version field and the text form (§1.4). The samples (`demo/Item/man.itm`, `demo/Item/oldman.itm`) are `minor` 7, and the 2.x era wrote `minor` 3, which this layout covers. The 2.x **text** form is a separate layout, documented in §15.4.
 
 <!-- OWNER: chose 0–7 for §6.2 (the range the conditional rows span and the reader hard-codes) over 3–7, because the minor<4 legacy walk-frame row is part of the layout and must be addressable. -->
 
@@ -627,7 +627,8 @@ Detection: byte at offset 14 (`0x00` = binary 2.1; non-zero = legacy text 2.0).
 | i16 + str… | stance animations upper bound (stored as **5**, yielding 6 slots 0..5): **0 REST, 1 FIGHT / ATTACK, 2 DEFEND, 3 SPECIAL MOVE, 4 DIE, 5 unused / padding**. Slot 5 was an off-by-one threshold where editor UI checks `idx < UBound` routed indices ≥ 5 to custom stances. |
 | i32 + pairs | custom stances upper bound (**`i32`**, 4 bytes), then pairs `str animation, str handle` (same serialization order as players and items; legacy C++ had an inverted key/value map read). *Quirk:* Legacy VB and C++ readers read `i16` here, consuming the upper 2 bytes of the count as two empty strings when count is small. |
 
-The **text form** (minor 0) lists name, HP, SMP, FP, DP, run, crits, then a W×H tile grid for the rest image, then 101 special/weakness pairs, AI, program, rewards, programs, 4 blank lines, and 4 stance animations. A reader synthesises a rest `.tbm` and `.anm` from the grid.
+The **text form** (minor 0) lists name, HP, SMP, FP, DP, run, crits, then a W×H tile grid for the rest image, then 101 special/weakness pairs, AI, program, rewards, programs, 4 blank lines, and 4 stance animations. A reader synthesises a rest `.tbm` and `.anm` from the grid. **All 52 corpus text `.ene` files are exactly 363 lines** and the rest-image block is padded to a fixed length; §15.6 has the layout, the counts and the open question about the block's empty cells.
+
 ---
 
 ## 7. Animation
@@ -646,7 +647,7 @@ The **text form** (minor 0) lists name, HP, SMP, FP, DP, run, crits, then a W×H
 
 A frame image may be an ordinary picture (from `Bitmap/`), a tile reference, or a `.tbm`. Each frame has its **own** transparent colour.
 
-**Text form:** lines `RPGTLKIT ANIM`, major, minor, width, height, frames upper bound, then per frame three lines (image, transparent colour as decimal, sound), then delay.
+**Text form:** lines `RPGTLKIT ANIM`, major, minor, width, height, a frame-count line, then per frame three lines (image, transparent colour as decimal, sound), then the delay. In all 17 corpus text `.anm` files the frame-count line is written `0` while 51 frames follow, each file exactly 160 lines; a reader must take the frames from the block before the final delay line, not from the count. See §15.7.
 
 ### 7.2 Animated GIF
 
@@ -668,7 +669,7 @@ Detection: byte at offset 16 (`0x00` = binary, non-zero = text).
 * Header: `str magic ("RPGTLKIT SPLMOVE")`, `i16 major`, `i16 minor`.
 * Fields: `str name`, `i32 damage (FP)`, `i32 smpCost (to user)`, `str program`, `i32 targetSmpDrain`, `i8 usableInBattle`, `i8 usableFromMenu`, `str statusEffect`, `str animation`, `str description`.
 
-The **text form** lists the header `RPGTLKIT SPLMOVE`, major, minor, then the same fields, one per line.
+The **text form** lists the header `RPGTLKIT SPLMOVE`, major, minor, then the same fields, one per line. Verified against the 8 corpus text special moves, all 13 lines — see §15.8.
 
 ### 8.2 Status effect — `.ste` (`RPGTLKIT STATUSE`)
 
@@ -682,7 +683,7 @@ Detection: byte at offset 16 (`0x00` = binary, non-zero = text).
 * Header: `str magic ("RPGTLKIT STATUSE")`, `i16 major`, `i16 minor`.
 * Fields: `str name`, `i16 rounds`, `i16 speedUp`, `i16 slowDown`, `i16 disable`, `i16 hpEnabled`, `i16 hpPerRound`, `i16 smpEnabled`, `i16 smpPerRound`, `i16 runProgram`, `str program`. Negative per-round amounts heal.
 
-The **text form** lists the header `RPGTLKIT STATUSE`, major, minor, then the same fields, one per line.
+The **text form** lists the header `RPGTLKIT STATUSE`, major, minor, then the same fields, one per line. **Unverified:** the corpus holds no text `.ste` sample (5 binary only); the form is not ratified — see §15.8 and §15.15.
 
 ### 8.3 Battle background — `.bkg` (`RPGTLKIT BKG`)
 
@@ -696,7 +697,7 @@ Detection: byte at offset 12 (`0x00` = binary, non-zero = text).
 * Header: `str magic ("RPGTLKIT BKG")`, `i16 major`, `i16 minor`.
 * Fields: `str image`, `str music`, `str menuMoveSound`, `str menuChooseSound`, `str readySound`, `str cantDoSound`.
 
-The **text form** lists the header `RPGTLKIT BKG`, major, minor, then a 19×19 tile grid, then the four sounds and the music, then the 19×19 shade grid. Convert the grid to a `.tbm`.
+The **text form** lists the header `RPGTLKIT BKG`, major, minor, then a **19 × 11** grid of tile references (209 cells), then the music followed by the four menu sounds, then one further name line (empty in every sample), then the shade grid of 209 cells × three colour values. See §15.9 for the worked evidence; read as 19 × 11 the 209 cells and the 627 shade values line up exactly (23 files, all 845 lines). Convert the grid to a `.tbm`.
 
 ---
 
@@ -1507,3 +1508,376 @@ Games are untrusted input, so a loader bounds what a package can make it spend �
 * Tile LUT index 0 is reserved for "no tile" when the table exists; `lutUpperBound` `-1` means the board has no table at all, and then there is no index 0 (§4.2).
 * Inline-RPGCode fallback for program/sprite program fields applies when the file is missing.
 * Validate against `build/main/demo.gam` and project assets in `build/game/demo` and `build/game/Basic` from the legacy repo.
+
+---
+
+## 15. Toolkit 2 (2.x) formats
+
+Toolkit 2 — the **2.x era** (2.0 to 2.2), the generation before the 3.x engine §1–§13 describe — is what most surviving RPG Toolkit games were made with, and the archive's 2.x games are why this section exists. Most of their data files are the same file kinds as §1–§13, but several are written as **line-oriented text** instead of the binary layouts: a header (magic, then major and minor) on its own lines, then one field per line, lines separated by a carriage-return/line-feed pair, no quoting and no length prefixes. Numbers are plain decimal; an empty line stands for an empty string or a zero; most groups have fixed repetition counts written out in full, empty slots included. A few extensions have no binary twin at all (`.fnt`), and two binary layouts in §2 and §6.1 were described with the wrong field widths for their 2.x versions. This section records all of it: the detection rule for the two forms (§15.1), each text layout with a short worked example (§15.2–§15.13), the corrections to §2 and §6.1 (§15.14), and the questions the evidence could not settle (§15.15).
+
+**Evidence and process.** Every layout below cites either (a) the archive's own **data files** — reading legacy *data* is allowed, reading legacy *source* is not (G7) — with the number of files observed on disk, or (b) the reviewed clean-room extraction facts in `docs/provenance/facts-round-1.md` (the "entry 2" answers, ADR 0006). Each cited text file was read with the detection rule §1.3 states for its format and, where a worked example is given, parsed to end-of-file. File counts are for the six-game 2.x corpus the epic's gate uses — **FinalDestiny, LittleMan, BusDriver, Caoquest, School2Demo, ChimeranEmpire** — plus the official 2.20b demo where it adds a sample. No legacy source was opened for this section.
+
+**Ruling summary.** Fourteen format questions are settled below and one is deferred. Eight are ratified by the data corpus alone; six are ruled here from a reviewed entry-2 answer with a data check on top; the `.ste` text form is deferred because the corpus has no text `.ste` sample at all. Six `<!-- OWNER: … -->` notes flag the judgement calls and name the alternative that was not taken.
+
+| # | Section | Verdict | Because |
+|---|---|---|---|
+| GAM2 | 15.2 | ruled | entry-2 answer Q2, checked line-for-line against two games |
+| BRD2 | 15.3 | ruled | entry-2 answer Q1, checked against 17 files in four games |
+| ITM2 | 15.4 | ruled | entry-2 answer Q3, checked against all 16 text items |
+| TEM2 | 15.5 | ruled | entry-2 answer Q4, checked against both text characters |
+| FNT2 | 15.12 | ruled | entry-2 answer Q7, checked against all 5 font files |
+| TST2 | 15.13 | ratified | the official 2.0 Tileset spec (`tst.html`) |
+| ENE2 | 15.6 | ratified | 52 text enemies, all exactly 363 lines |
+| ANM2 | 15.7 | ratified | 17 text animations, all exactly 160 lines |
+| SPC2 | 15.8 | ratified | 8 text special moves, all exactly 13 lines |
+| BKG2 | 15.9 | ratified | 23 text backgrounds, all exactly 845 lines |
+| TAN2 | 15.10 | ratified | 33 animated tiles, all parse to the last byte |
+| GPH2 | 15.11 | ratified | 6 v2 single tiles, runs sum to 32 × 32 |
+| GAMB | 15.14 | ruled | entry-2 answer Q5, checked against all 15 binary `.gam` |
+| TEMB | 15.14 | ruled | entry-2 answer Q6, checked against 14 of the 16 binary `.tem` |
+| STE2 | 15.8 | **deferred** | no text `.ste` exists in the corpus (5 binary only) |
+
+### 15.1 Telling the text form from the binary form
+
+The rule is the one §1.3 already states: look at the byte at the format's own detection offset (the length of its magic, or a stated offset). If it is `0x00` the file is binary; if it is non-zero (a carriage return) the file is text. The table below collects the offsets for the formats this section covers, and what the corpus holds at each.
+
+| Extension | Magic | Detection | Six-game corpus |
+|---|---|---|---|
+| `.gam` | `RPGTLKIT MAIN` | byte 13 non-NUL = text | 15 binary minor 2, 2 text |
+| `.brd` | `RPGTLKIT BOARD` | byte 14 non-NUL = text (minor 0–1) | 144 binary minor 2, 17 text minor 1 |
+| `.tem` | `RPGTLKIT CHAR` | byte 13 non-NUL = text | 16 binary minor 3–4, 2 text minor 2 |
+| `.itm` | `RPGTLKIT ITEM` | byte 13 non-NUL = text | 87 binary minor 3, 16 text minor 1 |
+| `.ene` | `RPGTLKIT ENEMY` | byte 14 non-NUL = text (minor 0) | 52 text minor 0, no binary |
+| `.spc` | `RPGTLKIT SPLMOVE` | byte 16 non-NUL = text | 22 binary minor 2, 8 text minor 0 |
+| `.ste` | `RPGTLKIT STATUSE` | byte 16 non-NUL = text | 5 binary minor 2, **no text sample** |
+| `.bkg` | `RPGTLKIT BKG` | byte 12 non-NUL = text | 23 text minor 0, no binary |
+| `.anm` | `RPGTLKIT ANIM` | byte 13 non-NUL = text | 16 text minor 0, no binary |
+| `.fnt` | `RPGTLKIT FONT` | byte 13 non-NUL = text | 5 text, no binary seen |
+
+Nothing in §15 changes the binary detection rules of §1.3 or the version rules of §1.4. A text file still carries `major` and `minor` on their own lines; for every text form seen the major is `2`, and the minor is `0`, `1` or `2` as the table in each subsection says. A text file has no NUL bytes.
+
+### 15.2 Main file — text `.gam` (`RPGTLKIT MAIN`)
+
+**2 files in the corpus**, BusDriver's `DEMO.GAM` and Caoquest's `caoquest.gam`, plus `main.gam` inside `devilsnight.tpk`; all three use the layout below and none uses the 17-character header `RPGTLKIT mainForm` the extraction found in one reader. Layout (entry-2 answer Q2, checked line for line):
+
+| # | Lines | Field |
+|---|---|---|
+| 1 | 1 | magic `RPGTLKIT MAIN` |
+| 2 | 1 | major (2) |
+| 3 | 1 | minor (0) |
+| 4 | 1 | registered flag (ignored) |
+| 5 | 1 | **startupPrg** |
+| 6 | 1 | runTimePrg |
+| 7 | 1 | "use built-in menu" flag (ignored) |
+| 8–10 | 3 | run key, menu key, interact key (ASCII codes) |
+| 11 | 1 | **initBoard** |
+| 12 | 1 | **initChar** |
+| 13 | 1 | fightingDisabled (0 = fighting on) |
+| 14–15 | 2 | multitask speed, memory protection (ignored) |
+| 16 | 1002 | enemy list: **501 fixed records** of `enemy file`, `skill level`; an empty file name is an unused slot |
+| 17–20 | 4 | fight type, chances, alternate-fight flag, fight program |
+| 21–24 | 4 | an ignored field; game title; screen mode; an ignored field |
+| 25–29 | 5 | gameOverPrg, **projectPath**, skin button image, skin window image, an ignored old target-platform field |
+| 30 | 102 | extended run-time keys: **51 fixed records** of `key code`, `program` |
+| 31 | 1 | an ignored field (old registration code) |
+| 32–34 | 3 | extend-to-full-screen, resolution code, **plugin count n** |
+| 35 | n | one enabled flag per plugin slot (slot `i` = `tkplug<i>.dll`) |
+| 36–41 | 6 | day/night use, day/night type, day length, disable-protect-registered, an ignored old parallax field, language file |
+
+**The whole tail from row 32 on is optional.** `DEMO.GAM` stops after row 31 (1133 lines: `3 + 12 + 1002 + 4 + 4 + 5 + 102 + 1`), and `caoquest.gam` and `devilsnight.tpk`'s `main.gam` both stop after row 40 (1146 lines: rows 1–31 + 3 + 5 + 6, less the missing language-file line), one line short of the full six-line closing group. A reader reads rows 1–31, then reads the remaining rows only while lines remain. Role answers match §1.5: projectPath is row 25, startupPrg row 5, initBoard row 11, initChar row 12. (Entry-2 answer Q2 numbers the same rows 1–38; the row numbers here differ only in how the fixed groups are bracketed.)
+
+*Worked example — `DEMO.GAM` (BusDriver) and `caoquest.gam` (Caoquest), first 15 lines each, thin spaces shown as `·`:*
+
+```
+BusDriver/DEMO.GAM            Caoquest/caoquest.gam
+RPGTLKIT MAIN                 RPGTLKIT MAIN
+·2·                           ·2·
+·0·                           ·0·
+·1·                           ·0·
+START.PRG                     start.prg
+START.PRG                     (empty)
+(empty)                       ·0·
+(empty)                       ·0·
+·13·                          ·13·
+·32·                          ·32·
+DEMO1.BRD                     Cao's house.brd
+FRAP.TEM                      cao.tem
+(empty)                       ·0·
+·250·                         ·2000·
+(empty)                       ·0·
+```
+
+`DEMO.GAM` is 1133 lines, `caoquest.gam` 1146. The two agree on every field they share, which is the cross-game check for this layout. <!-- OWNER: GAM2 — chose to document this layout behind the 13-character magic the corpus actually carries, over withholding it because one legacy reader tests for a 17-character `RPGTLKIT mainForm`; the corpus field sequence fits line for line, so the layout is usable, and which reader path the legacy engine took is recorded as an open question (§15.15). -->
+
+### 15.3 Board — text `.brd` (`RPGTLKIT BOARD`)
+
+**17 files in four games** (FinalDestiny 1, Caoquest 14, School2Demo 1, ChimeranEmpire 1), all `major 2 / minor 1`. Layout (entry-2 answer Q1; minor-0 differences noted). One field per line; the tile cube is stored with x outermost, then y, then layer innermost (the reverse nesting of §4.8).
+
+| # | Lines | Field |
+|---|---|---|
+| 1–5 | 5 | magic, major (2), minor (0 or 1), registered flag, registration code (both ignored) |
+| 6 | 2 | width and height in tiles — **minor 1 only**; minor 0 has none and means 19 × 11 |
+| 7 | width × height × 8 × 5 | tiles, in cell order x, then y, then layer 1…8 innermost, each cell `tile name`, `ambient red`, `green`, `blue` (signed), `tile type`. The layer count is always 8 and is not stored. |
+| 8–12 | 5 | background image, border image (unused), board background colour, border colour (unused), ambient effect preset (0 none, 1 mist, 2 darkness, 3 water) |
+| 13 | 4 | direction links in order N, S, E, W |
+| 14–16 | 3 | battle skill level, battle background, fighting-allowed flag |
+| 17–19 | 11 | ten board constants (numbers) and the background music |
+| 20 | 8 | layer titles 1…8 |
+| 21 | 561 | program records: **51 fixed records of 11 lines** (file, x, y, layer, graphic, activation mode, activation variable, end variable, initial value, end value, activation type); an empty file name is an unused slot |
+| 22 | 110 | item records: **11 fixed records of 10 lines** |
+| 23–26 | 3 + 11 + 1 + 11 | player start x, y, layer; 11 per-item activation programs; the "can save here" flag; 11 per-item multitask programs |
+| 27 | 4 | day/night flag, night battle override, night skill level, night battle background (all unused) — **absent in the 19 × 11 default boards** |
+
+Total lines are `739 + 40 × width × height`, and the reader needs no trailing field: `739 + 40 × 19 × 20 = 15939` and `739 + 40 × 50 × 50 = 100739` hold exactly. **Fourteen of the 17 files parse to the last line; the three 19 × 11 `.brd` templates hold exactly 4 lines fewer than the formula** — they omit the closing day/night group (field 27), so a reader must accept the file ending after field 26.
+
+*Worked example — the first seven lines of FinalDestiny's `start.brd` and of Caoquest's `town.brd`:*
+
+```
+FinalDestiny/start.brd        Caoquest/town.brd
+RPGTLKIT BOARD                RPGTLKIT BOARD
+·2·                           ·2·
+·1·                           ·1·
+·0·                           ·0·
+NOCODE                        NOCODE
+·19·                          ·19·
+·11·                          ·20·
+```
+
+`start.brd` is 9095 lines (the four-line day/night tail absent); `town.brd` is 15939. Both headers, and the Caoquest boards' 15939/11379/100739 line counts, fit the formula exactly — the cross-game check for this layout. <!-- OWNER: BRD2 — chose to record the trailing day/night group as optional over requiring it, because the three default 19 × 11 boards in FinalDestiny, School2Demo and ChimeranEmpire stop four lines early and a reader that demanded the group would refuse them. -->
+
+### 15.4 Item — text `.itm` (`RPGTLKIT ITEM`)
+
+**16 files, all Caoquest**, `major 2 / minor 1`. Layout (entry-2 answer Q3, checked against all 16):
+
+| # | Lines | Field |
+|---|---|---|
+| 1–3 | 3 | magic, major (2), minor (1) |
+| 4–8 | 5 | item name; equipable, menu-usable, board-usable, battle-usable flags |
+| 9 | 7 | equip-slot flags in order head, neck, left hand, right hand, body, legs, accessory (the binary form has 8) |
+| 10–13 | 1 + 4 | accessory name; equip bonus HP, DP, FP, SMP |
+| 14–15 | 2 + 3 + 3 | on-equip program, on-remove program; menu use `+HP`, `+SMP`, program; battle use `+HP`, `+SMP`, program |
+| 16–17 | 2 | the board multitask program; the activation program |
+| 18 | 1 | size type (0 = embedded 32 × 32 pictures, 1 = 64 × 32 file pairs) — **minor 1 only** |
+| 19 | see below | graphics |
+| 20–22 | 1 + 50 + 3 | used-by flag; 50 allowed-character names (the binary form reserves 51, indices 0…50); buy price, sell price, key-item flag |
+| 23–24 | 2 | one-line description; battle animation file |
+
+*Graphics block (field 19).* **Size type 0:** seventeen embedded 32 × 32 pictures follow — 16 walking frames, then one rest picture. Each picture is one value; if that value is `-2` the picture is empty and holds no more lines, otherwise exactly 1024 pixel values follow (x outermost, y inner), the first of which is the value just read. **Size type 1:** 16 frame pairs of file names (top, bottom) for walking (frames 0–3 south, 4–7 east, 8–11 north, 12–15 west), then two lines for the rest pair.
+
+The text form has no counterpart for the binary idle animations, speed, idle time, custom stances, vector bases or reserved strings; it has the embedded pixel pictures, the size-type line and the 50-entry character list as text-only features.
+
+*Worked example — Caoquest's `dagger.itm` (size type 0, every picture empty) and `10smp.itm` (size type 0, one full picture), first 16 lines abbreviated:*
+
+```
+dagger.itm (104 lines)       10smp.itm (1127 lines)
+RPGTLKIT ITEM                 RPGTLKIT ITEM
+·2·                           ·2·
+1                             1
+Dagger                        Potion
+·1·                           ·0·
+(empty)                       ·1·
+(empty)                       ·0·
+(empty)                       ·1·
+(empty)                       ·0·
+(empty)                       ·0·
+·0·                           ·0·
+·1·                           ·0·
+(empty)                       ·0·
+(empty)                       ·0·
+(empty)                       ·0·
+(empty)                       ·0·
+```
+
+`dagger.itm` is 104 lines (`3 + 28 + 17 + 56`, each of its 17 pictures a single empty marker line); `10smp.itm` is 1127 (`3 + 28 + 1 × 1024 + 16 + 56`). All 16 files end exactly at the animation line — the cross-file check for this layout. <!-- OWNER: ITM2 — the text item form appears in only one corpus game (Caoquest's 16 files); the worked example is checked across the two files shown and the other 14, not across two games, because no other corpus game writes a text `.itm`. Named in §15.15. -->
+
+### 15.5 Character — text `.tem` (`RPGTLKIT CHAR`)
+
+**2 files, both Caoquest** (`start.tem`, `swim.tem`), `major 2 / minor 2`, size type 0. Layout (entry-2 answer Q4, arithmetic-checked):
+
+| # | Lines | Field |
+|---|---|---|
+| 1–3 | 3 | magic, major (2), minor (2) |
+| 4 | 1 | character name |
+| 5–13 | 9 | script variable names, in order experience, DP, FP, HP, max HP, name, SMP, max SMP, level |
+| 14–21 | 8 | initial stats: experience, HP, max HP, DP, FP, SMP, max SMP, level |
+| 22 | 1 | profile picture |
+| 23–1027 | 1005 | special moves: **201 fixed records of 5 lines** (file, minimum experience, minimum level, condition variable, condition value). The length is not stored. |
+| 1028–1029 | 2 | special-move category name; "does special moves" flag (0 = yes) |
+| 1030 | 1 | size type (0 = embedded pictures, 1 = 64 × 32 file pairs) — present when minor > 0 |
+| size type 1: 1031–1150 | 120 | 32 walking names (16 frames × top, bottom), 64 fight-family names, 4 fight-rest names (2 × 2), 20 custom names (10 × top, bottom) |
+| size type 0: 1031–44062 | 44032 | sixteen embedded 32 × 32 pictures (1024 pixel lines each, first value `-2` = an empty picture of one line), then for four directions the fight, special, defence and death pictures interleaved four per pixel (4096 lines per direction), then a rest picture, then ten custom pictures (1024 lines each) |
+| last 29 | 10 + 6 + 13 | accessory slot names 1…10; body-slot-in-use flags 1…6; then level progression, experience factor, maximum level, four level-up increases, four obsolete sounds, the level-up program and the level-up type |
+
+For a size-type-0 minor-2 file the total is `3 + 1027 + 44032 + 29 = 45091` lines; both corpus files are exactly that, which is the check for this layout.
+
+*Worked example — the first 14 lines of Caoquest's `start.tem`:*
+
+```
+RPGTLKIT CHAR
+·2·
+2
+(empty)
+Undefined$
+(empty)
+(empty)
+(empty)
+(empty)
+Undefined!
+(empty)
+(empty)
+(empty)
+·0·
+```
+
+`start.tem` and `swim.tem` are both 45091 lines. <!-- OWNER: TEM2 — the text character form appears in only one corpus game (Caoquest's 2 files); the layout is checked against both files, not two games, and against the arithmetic of the fixed blocks. Named in §15.15. -->
+
+### 15.6 Enemy — text `.ene` (`RPGTLKIT ENEMY`)
+
+**52 files in four games** (FinalDestiny 7, Caoquest 5, School2Demo 7, ChimeranEmpire 33), all `major 2 / minor 0`, and the only `.ene` form the 2.x corpus contains. **Every one is exactly 363 lines**, and this is the strongest text-form evidence in the corpus. The opening fields are `name`, HP, SMP, FP, DP, the run flag and the two critical-hit chances; the body holds the rest-image tile block, the special-move and weakness lists, the AI level and program, the experience and gold rewards, the defeat and run-away programs, and the closing sound names. Two of the early lines label the rest image's width and height (1 × 1 to 6 × 7 across the corpus) and the rest image is stored as a fixed block of tile names padded with empty lines, so the file length does not vary with the image size.
+
+*Worked example — the first fourteen lines of FinalDestiny's `Rat Man.ene` (grid `1 × 1`) and ChimeranEmpire's `Drackt.ene` (grid `5 × 4`):*
+
+```
+FinalDestiny/Rat Man.ene      ChimeranEmpire/Drackt.ene
+RPGTLKIT ENEMY                RPGTLKIT ENEMY
+·2·                           ·2·
+·0·                           ·0·
+Rat Man                       Drackt
+·30·                          ·300·
+·4·                           ·0·
+·6·                           ·95·
+·4·                           ·35·
+·0·                           ·0·
+·0·                           ·40·
+·0·                           ·30·
+·1·                           ·5·
+·1·                           ·4·
+char.tst64                    new_rm2k.tst569
+```
+
+Both files are 363 lines, as are all 52. The exact cell encoding of the rest-image block, and the two lines that label it, are recorded as an open question in §15.15: the block length is fixed and every file's total confirms it, but the corpus does not pin how many lines belong to an empty cell.
+
+### 15.7 Animation — text `.anm` (`RPGTLKIT ANIM`)
+
+**17 files** (Caoquest 7, ChimeranEmpire 9, plus the official 2.20b demo's `explode.anm`), all `major 2 / minor 0`. **Every one is exactly 160 lines**: three header lines, then width, height, a frame-count line, then **51 frames of three lines each** (image, transparent colour as a decimal, sound) and a final delay line. The frame images may be ordinary picture files or tile references; an empty image line is an empty frame. In all 17 files the frame-count line is written `0` even though 51 frames follow, so a reader must read the frames as the block between that line and the final delay, never from the count.
+
+*Worked example — the first eight lines and the last line of Caoquest's `combo.anm`:*
+
+```
+RPGTLKIT ANIM
+·2·
+·0·
+·64·
+·64·
+·0·
+swing2.bmp
+·16711680·
+…
+·6.66666666666667E-02·    (line 160, the delay)
+```
+
+<!-- OWNER: ANM2 — chose "read frames to the second-to-last line" over "trust the frame-count line", because all 17 samples write `0` while storing 51 frames; the count's meaning is recorded as an open question (§15.15). -->
+
+### 15.8 Special move and status effect — text `.spc` / `.ste`
+
+**8 text `.spc` files (all Caoquest), all exactly 13 lines**, `major 2 / minor 0`. Layout: magic `RPGTLKIT SPLMOVE`, major, minor, then the ten fields of §8.1 one per line — name, damage (FP), SMP cost, program, target SMP drain, usable in battle, usable from menu, status effect, animation, description. The eight files end exactly at the description, which is the check.
+
+**The text `.ste` form is deferred.** `docs/format-spec.md` §8.2 sketches it (magic, major, minor, then the §8.2 fields one per line), but the corpus holds no text `.ste` at all — its five `.ste` files are binary minor 2 — so nothing here ratifies that sketch. A reader must still recognise a text `.ste` at the §15.1 detection byte and report it as an unsupported text form rather than misreading it as binary. The layout is otherwise as §8.2 already describes it. **`STE2` is the one deferred question in this section.**
+
+### 15.9 Battle background — text `.bkg` (`RPGTLKIT BKG`)
+
+**23 files in four games** (FinalDestiny 3, Caoquest 5, School2Demo 6, ChimeranEmpire 9), all `major 2 / minor 0`, and the only `.bkg` form the 2.x corpus contains. **Every one is exactly 845 lines.** Layout:
+
+| # | Lines | Field |
+|---|---|---|
+| 1–3 | 3 | magic, major (2), minor (0) |
+| 4–212 | 209 | tile references, **19 wide × 11 high** |
+| 213–217 | 5 | music, then four menu sounds (move, choose, ready, cannot-do) |
+| 218 | 1 | a further name field, empty in all 23 files |
+| 219–845 | 627 | the shade grid: **209 cells of three values each** (red, green, blue), in the corpus all three equal |
+
+`3 + 209 + 5 + 1 + 627 = 845`, which holds for every file. The 209 tile references and the 209 shade cells are a **19 × 11** grid, so §8.3's "19 × 19" is corrected below (§15.14): read as 19 × 11, the shade grid's triples line up in rows of 19 across 11 rows, and read as 19 × 19 they do not.
+
+*Worked example — ChimeranEmpire's `Cave Boss.bkg` (845 lines), with line numbers in brackets:*
+
+```
+[1]   RPGTLKIT BKG
+[2]   ·2·
+[3]   ·0·
+[4-5] CaveSet.tst11, CaveSet.tst40   ⇒ the first two of 209 tile references (lines 4-212)
+[213] vip - boss1.mid                 (the music)
+[214] aa1.wav  [215] aa1.wav  [216] ready.wav  [217] illegal.wav   (the four sounds)
+[218] (empty)
+[219] -50  [220] -50  [221] -50       (first shade cell: red = green = blue)
+```
+
+Every one of the 23 files is 845 lines with 209 tile lines at 4…212 and 627 shade values at 219…845.
+
+### 15.10 Animated tile — `.tan` (`RPGTLKIT TILEANIM`)
+
+**33 files, all ChimeranEmpire**, all `major 2 / minor 0`. The §3.5 binary layout is verified: magic as a NUL-terminated string, then `i16` major, `i16` minor, `i32` framesPerSecond and `i32` frameCount, then `frameCount` NUL-terminated tile references. **All 33 files parse to the last byte** with no residue; frame counts across the corpus are 2, 4 and 7, and framesPerSecond ranges 15…77. The `.tan` text form does not occur in the corpus; whether 2.x ever wrote one is unverified, and the format's minimum accepted minor is stated in §3.5.
+
+### 15.11 Single tile — `.gph` (`RPGTLKIT TILE`)
+
+**6 v2 files** (FinalDestiny 1, School2Demo 5), all `major 2 / minor 0`, `detail 1`. The §3.2 v2 text layout is verified for compressed tiles: magic line, then major, minor, detail and the compressed flag (all `1`), then `runLength`/`colour` pairs. In all six files the run lengths sum to exactly **1024** (32 × 32), with an empty run length of `-1` as the transparent key.
+
+**The v1 form is recorded but out of scope.** The owner's own editor output `v1tile.gph` is 288 bytes: a 16 × 16 character grid, 16 rows of 16 characters plus a CR/LF pair, each character a palette index stored as `character code − 33`. That matches the v1 sentence in §3.2. Toolkit 1.x is out of scope for the first release (as §9.9 already says of Toolkit 1.x RPGCode), so this section **records** the v1 form as evidence-backed but promises no reader for it.
+
+<!-- OWNER: GPH2 — chose "record v1, promise no reader" over "add a v1 reader", because v1 is Toolkit 1.x and §9.9 already puts Toolkit 1.x out of scope for the first release; a later entry can add it from §3.2's v1 sentence plus the 288-byte sample. -->
+
+### 15.12 Text font — `.fnt` (`RPGTLKIT FONT`)
+
+**5 files in four games** (FinalDestiny 1, Caoquest 1, School2Demo 1, ChimeranEmpire 2), and **not described anywhere in §1–§14 before this section**. The file is **text**, not binary:
+
+| # | Lines | Content |
+|---|---|---|
+| 1 | 1 | magic `RPGTLKIT FONT` |
+| 2 | 1 | version (`2`) |
+| 3 | 1 | subversion (`0`) |
+| 4…2051 | 2048 | for glyph code 0…255 in order, eight decimal values 0…255, one per line: the bit pattern of one 8 × 8 cell, top row first |
+
+Each value is one pixel row; the most significant bit is the leftmost pixel, `1` is ink and `0` the transparent background. Only the low eight bits matter. Every glyph is a fixed 8 × 8 cell indexed directly by character code; there is no palette, no per-glyph width and no trailing atlas. The lines are separated by CR/LF and the values are written with a space on each side, so the byte length is `21 + Σ(digits(v) + 4)` over the 2048 values. **All 5 files are exactly 2051 lines** with magic `RPGTLKIT FONT`, version `2`, subversion `0` and 2048 values, which is the check. A reader reaches the byte after the last value with nothing left. (Entry-2 answer Q7.)
+
+### 15.13 Tileset 8-bit detail palette — `.tst`
+
+The official 2.0 specification, "Tileset (TST) File Format Specification, Copyright 2000 by Christopher B. Matthews", in the archive at `wayback/rpgtoolkit.com/dev_repo/docs/tst.html`, supplies the facts §3.1 leaves implicit. Its 6-byte header is `WORD version`, `WORD NumberOfTiles`, `WORD detail`; version `20` means 2.0 and `21` means 2.1, and only version 20 was ever produced. Detail is uniform for the whole set and is one of six levels:
+
+| detail | Cell | Bytes/pixel | Transparency | Colours |
+|---|---|---|---|---|
+| 1 | 32 × 32 | 3 | R=0, G=1, B=2 | 16.7 million |
+| 2 | 16 × 16 | 3 | R=0, G=1, B=2 | 16.7 million |
+| 3 | 32 × 32 | 1 | index 255 | 256 (the default DOS 13h VGA palette) |
+| 4 | 16 × 16 | 1 | index 255 | 256 (the default DOS 13h VGA palette) |
+| 5 | 32 × 32 | 1 | index 255 | 16 (the default DOS EGA palette, i.e. the first 16 entries of the 13h VGA palette) |
+| 6 | 16 × 16 | 1 | index 255 | 16 (the same 16-colour EGA subset) |
+
+The pixels are read column-major (x outermost, y inner), which matches §3.1. For details 3 and 4 the index is a **default DOS 13h VGA palette** entry; for details 5 and 6 it selects one of the **first sixteen** 13h entries (the EGA set). A reimplementation ships that table, built from the public VGA default palette, not from the legacy source (G7). The corpus holds detail 1 and detail 2 `.tst` files only (77 files, version 20), so the 8-bit path is documented but unexercised; §3.1's own text is extended to match below (§15.14).
+
+### 15.14 Corrections to §2, §3.1, §6.1 and §8.3
+
+Four existing statements are wrong against the corpus and are corrected here.
+
+**§2, `.gam` binary minor 2 (`GAMB`).** §2 gives rows 10 and 21 as `i32` for `minor < 3`. They are **`i16`**: with `i16` the layout reads all **15** binary minor-2 `.gam` files to the last byte (FinalDestiny 2, LittleMan 1, BusDriver 10, School2Demo 1, ChimeranEmpire 1), and with `i32` it leaves 1506 unread bytes on each BusDriver file and runs off the end of FinalDestiny's two. Table row 10 becomes `i16` (old parallax) and row 21's `minor < 3` branch becomes `i16` (reserved); the "version-dependent fields summary" items 1 and 2 follow. §2's row-3 quirk is right and stays: the `i16` registration flag is followed by the code string, and a file that wrote the code without the flag still aligns because the `i16` swallows the first two characters of the code (`"NO"`) and the string read takes the rest (`"CODE"`). Entry-2 answer Q5 and the measured residue agree with this reading; the rows the extraction could not confirm (the true field set of the tail) are not needed, because the corrected rows consume the whole file.
+
+**§6.1, `.tem` binary minor 3–4 (`TEMB`).** §6.1 says the 2.x minor-3/4 field set "this layout does not describe". It is described here from entry-2 answer Q6, and its two version differences are: at **minor 3** the level-up experience field is one byte and at **minor 4** it is four; and after the level-up type the file stores a `size type` byte followed by **120 NUL-terminated graphic names** (32 walking, 64 fight-family, 4 rest, 20 custom). Applying that layout, **14 of the 16 binary minor-3/4 files parse exactly** (all 15 minor-4 files except FinalDestiny's `Bill.tem`, which leaves 13 bytes). §6.1's caveat sentence is corrected to point here, and §6.1's version range stays 0–8. The two files that do not close (and the `size type` byte's value varying across writers) are open questions in §15.15; entry-2 answer Q6 itself could not confirm against samples.
+
+**§3.1, `.tst` palette.** §3.1's "Palette (8-bit detail)" paragraph is extended with the official spec's rule that details **5 and 6** use only the first sixteen entries (the EGA set), not the full 256; the official spec citation sits in §15.13.
+
+**§8.3, `.bkg` text grid.** §8.3 says the text form holds a 19 × 19 tile grid, then the sounds and music, then a 19 × 19 shade grid. The 23 corpus files fix a **19 × 11** grid of 209 tiles and 209 shade triples, with the **music first** and the four sounds after it, then one further name line, then the shades. §8.3's sentence is corrected to match §15.9.
+
+### 15.15 Open questions
+
+These remain unsettled. Each names the evidence that could not settle it, and none is a silent guess.
+
+1. **`.gam` text header path.** The three text `.gam` files carry the 13-character magic `RPGTLKIT MAIN` and their fields fit entry-2 answer Q2 line for line, but Q2 also found one reader that tests for a 17-character `RPGTLKIT mainForm` and would route a 13-character file elsewhere. Which reader path the engine actually took, and whether the older path's field order differs, is unverified (`DEMO.GAM`, `caoquest.gam`, `devilsnight.tpk main.gam`).
+2. **`.gam` text plugin count.** The corpus writes a plugin count of `5` but only four enabled-flag lines before the closing group; whether the count is a true count written one too high, or a fifth flag line belongs to the count and the language file is omitted, is not settled by two files (`caoquest.gam` 1146 lines, `devilsnight.tpk main.gam` 1146 lines). The tail-is-optional reading used here fits both.
+3. **`.tem` binary minor 3–4 tail.** 14 of 16 files close exactly. FinalDestiny's `Bill.tem` (minor 4) leaves 13 bytes and FinalDestiny's `start.tem` (minor 3) leaves 96; the `size type` byte reads `99` on Caoquest's `red.tem` where its neighbour reads `1`, so some writers omit or shift that byte. Whether the graphic-name block has a different length for some writers, and whether minor 3 differs from minor 4 there, is unverified.
+4. **`.ene` text rest-image block.** All 52 files are exactly 363 lines and their opening fields and tails are readable, but how many lines an empty cell in the rest-image block occupies (the block pads to a fixed length), and what the grid's two size lines exactly mean, are not pinned by the corpus.
+5. **`.anm` text frame-count line.** It is written `0` in all 17 samples while 51 frames follow; its meaning is unknown. A reader that counts frames from it would read nothing.
+6. **`.bkg` text line 218.** One name field sits between the four sounds and the shade grid and is empty in all 23 files; its role is unknown.
+7. **`.ste` text form.** No text `.ste` exists in the corpus.
+8. **Zero-byte placeholders.** The corpus holds seven zero-byte data files — two `.brd` (one with an empty base name, `Boards/.brd`, in School2Demo; one in ChimeranEmpire), two `.itm` (FinalDestiny, ChimeranEmpire) and three `.spc` (FinalDestiny and two in ChimeranEmpire). Whether a reader should **skip** them or **tolerate** them as empty documents is a decision for the reader entries, not a fact the bytes can settle.
+
+<!-- OWNER: placeholder files (open question 8) — alternatives: (a) tolerate a zero-byte file as an empty placeholder and let the referencing entry see "no asset"; (b) skip it silently; (c) report it as a located error. The corpus shows they were left by their authors and are referenced in some cases, so a hard error would break a real game; the recommendation for the reader entries is (a) tolerate with a warning, and (b) only if a caller asks to skip. Decided: tolerate with a warning. Change here if the owner prefers skip. -->
+
+**References for this section.** The layouts come from the archive's 2.x data files, read under the clean-room process of `docs/guardrails.md` G7 (data may be read; legacy source may not), and from the reviewed extraction facts in `docs/provenance/facts-round-1.md` (entry-2 answers Q1–Q7; the round is recorded in `docs/provenance/extraction-log.md`). The archive paths used are, under `/Users/jensen/projects/rpgtoolkit-archive/`: `wayback/mysticsoftware.net/games.mysticsoftware.net/` (`chimeran_empire.zip`, `School2Demo.zip`, `caoquest.zip`, `devilsnight.tpk`), `wayback/aljo.afraid.org/games/` (`littleman/…/zip.zip`, `busd/busd.zip`), `archive-org/FinalDestiny_201810/Final_Destiny.zip`, `archive-org/rpg-toolkit-220b/toolkit220b/zip/` (the official 2.20b demo), and `wayback/rpgtoolkit.com/dev_repo/docs/tst.html` (the official 2.0 Tileset specification). The coverage table and gap list that opened this work are in `_bmad-output/initiative-rpgtoolkit-reawakened/epic-tk2-support/discovery/tk2-formats-research.md`.
