@@ -22,4 +22,4 @@ If a task seems to need breaking a rule, stop and ask. Exceptions require an ADR
 
 - Specs: `docs/format-spec.md`, `docs/engine-features.md` (E-xx IDs), `docs/editor-features.md` (T-xx IDs). Cite IDs and sections in commits and PRs.
 - Editor features land in `editor-ui` first. Host packages (`host-vscode`, `host-web`, `host-desktop`) contain only platform services and chrome. The VS Code extension is a primary host, not the only one.
-- Legacy sample games are CI fixtures fetched at test time. Never commit them.
+- Legacy sample games are CI fixtures fetched at test time. Never commit whole games. G7 is about the GPL source, so small anonymised or authored fixtures under `packages/core/test/fixtures/` are fine.

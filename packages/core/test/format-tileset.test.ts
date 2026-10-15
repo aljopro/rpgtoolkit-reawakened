@@ -1,8 +1,11 @@
 // The tileset reader and writer of format-spec §3 (AD-18): synthetic buffers
 // pin the header, the column-major pixel order, both transparent keys, the
 // palette path and the §3.3 isometric diamond mask; located errors cover EOF
-// and bounds. When the legacy sample games are fetched, both `char.tst` and
-// `default.tst` parse with zero trailing bytes and round-trip byte-identically.
+// and bounds. Two committed, independently authored/editor-produced fixtures
+// (ticket 2.22) are read and round-tripped too, so the happy path does not rest
+// on the writer's own primitives. When the legacy sample games are fetched, both
+// `char.tst` and `default.tst` parse with zero trailing bytes and round-trip
+// byte-identically.
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -63,22 +66,33 @@ function indexedPixels(size: number, bytesPerPixel: 1 | 3): Uint8Array {
   return out;
 }
 
-test("the header round-trips and the writer reproduces the bytes", () => {
-  const pixels = [indexedPixels(32, 3), indexedPixels(32, 3)];
-  const bytes = tilesetBytes(20, 2, 1, pixels);
-
+test("a committed tileset round-trips and the writer reproduces the bytes", () => {
+  // A real, editor-produced detail-2 file (ticket 2.22), not a buffer built
+  // with the writer's own primitives.
+  const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "real", "16x16.tst")));
   const model = unwrap(readTileset(bytes));
   equal(model.version, 20);
-  equal(model.detail.code, 1);
-  equal(model.tiles.length, 2);
+  equal(model.detail.code, 2);
+  equal(model.tiles.length, 1);
   equal(model.residue.length, 0);
 
   const written = unwrap(writeTileset(model));
   deepEqual([...written], [...bytes]);
 });
 
-test("a version 30 (.iso) header also round-trips", () => {
-  const bytes = tilesetBytes(30, 1, 150, indexedPixels(32, 3));
+test("the committed two-tile tileset reads and writes both tiles at their offsets", () => {
+  const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "detail4.tst")));
+  const model = unwrap(readTileset(bytes));
+  equal(model.tiles.length, 2);
+  // Tile 0's stored index at k is `k mod 256`; tile 1's is `(k + 64) mod 256`, so
+  // a reader that ignored the per-tile stride would return tile 0 twice.
+  deepEqual([...(model.tiles[0]?.pixels.subarray(0, 3) ?? [])], [0, 1, 2]);
+  deepEqual([...(model.tiles[1]?.pixels.subarray(0, 3) ?? [])], [64, 65, 66]);
+  deepEqual([...unwrap(writeTileset(model))], [...bytes]);
+});
+
+test("the committed isometric .iso round-trips", () => {
+  const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "iso.iso")));
   const model = unwrap(readTileset(bytes));
   equal(model.version, 30);
   equal(model.detail.isometric, true);

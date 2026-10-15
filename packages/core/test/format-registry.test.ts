@@ -9,6 +9,9 @@
 // on the same bytes, so the wrapping cannot drift.
 import { test } from "node:test";
 import { deepEqual, equal, throws } from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   ANIMATION_MAGIC,
   BATTLE_BACKGROUND_MAGIC,
@@ -38,7 +41,6 @@ import {
   readTileset,
   SPECIAL_MOVE_MAGIC,
   STATUS_EFFECT_MAGIC,
-  writeTileset,
   type AssetDecoder,
   type AssetResolver,
   type CoreFormatId,
@@ -193,15 +195,14 @@ test("the board decoder's §4.1 dispatch picks the branch a stored minor takes",
   equal(boardLayout(9), "vector");
 });
 
-/** The tileset both the writer and the equivalence test use. */
-const TILESET: Tileset = {
-  version: 20,
-  detail: { code: 1, size: 32, bytesPerPixel: 3, isometric: false },
-  tiles: [{ pixels: new Uint8Array(32 * 32 * 3).fill(7) }],
-  residue: new Uint8Array(0),
-};
-
-const TILESET_BYTES = unwrap(writeTileset(TILESET));
+/**
+ * A committed, independently authored tileset (ticket 2.22): a detail-4 `.tst`
+ * written from the §3.1 layout by `tools/fixtures/author/generate.mjs`, which
+ * imports no core code. Feeding the decoder a fixture rather than `writeTileset`
+ * output keeps this test from passing by sharing the writer's primitives.
+ */
+const testDir = dirname(fileURLToPath(import.meta.url));
+const TILESET_BYTES = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "detail4.tst")));
 
 /** Each core decoder's own reader, called directly on the same bytes. */
 const READERS: ReadonlyArray<readonly [CoreFormatId, (bytes: Uint8Array) => Result<unknown>]> = [
@@ -219,8 +220,8 @@ const READERS: ReadonlyArray<readonly [CoreFormatId, (bytes: Uint8Array) => Resu
 ];
 
 /**
- * Bytes that reach each decoder's first fields and then stop, plus one file the
- * tileset writer produced. None is a valid pre-vector board, so the board row's
+ * Bytes that reach each decoder's first fields and then stop, plus one committed
+ * authored tileset fixture. None is a valid pre-vector board, so the board row's
  * direct reader (`readBoard`, the §4.2 layout) is the same branch the decoder
  * takes; the §4.8 branch is covered by the dump's own pre-vector case.
  */
@@ -246,8 +247,14 @@ test("every core decoder returns exactly what its own reader returns", () => {
   }
 });
 
-test("the tileset decoder returns the model the writer wrote", () => {
-  deepEqual(unwrap(CORE_DECODERS.tileset.decode(TILESET_BYTES, EMPTY_RESOLVER)), TILESET);
+test("the tileset decoder returns the authored fixture's documented model", () => {
+  const model = unwrap(CORE_DECODERS.tileset.decode(TILESET_BYTES, EMPTY_RESOLVER)) as Tileset;
+  // The fixture's header alone says detail 4 with two tiles (§3.1) — values no
+  // writer of ours produced.
+  equal(model.version, 20);
+  equal(model.detail.code, 4);
+  equal(model.tiles.length, 2);
+  deepEqual(model, unwrap(readTileset(TILESET_BYTES)));
 });
 
 test("a custom decoder decodes its own bytes through the registry", () => {

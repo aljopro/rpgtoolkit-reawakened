@@ -21,6 +21,8 @@
     "provenance:test": "node --test tools/provenance/test/provenance.test.mjs",
     "fixtures:fetch": "node tools/fixtures/fetch.mjs",
     "fixtures:check": "node tools/fixtures/check.mjs",
+    "fixtures:author": "node tools/fixtures/author/generate.mjs",
+    "fixtures:author:check": "node tools/fixtures/author/generate.mjs --check",
     "fixtures:test": "node --test tools/fixtures/test/fixtures.test.mjs",
     "icons": "node tools/icons/build.mjs",
     "icons:test": "node --test tools/icons/test/icons.test.mjs",

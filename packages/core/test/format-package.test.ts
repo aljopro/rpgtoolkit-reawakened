@@ -8,6 +8,9 @@
 // Malformed fixtures patch single header fields, so each test pins one rule.
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { TextEncoder } from "node:util";
 import { deflateSync, inflateSync } from "fflate/browser";
@@ -20,6 +23,7 @@ import {
 } from "../src/index.ts";
 import type { FolderEntry, FormatError, LoadedPackage, Result } from "../src/index.ts";
 
+const testDir = dirname(fileURLToPath(import.meta.url));
 const encoder = new TextEncoder();
 
 /** The bytes of an ASCII string. */
@@ -705,24 +709,30 @@ test("path length, depth and basename limits are enforced (L6, L7, L8)", () => {
 });
 
 test("the CMP1 trailer decides where the appended ZIP is (L20, L21)", () => {
-  const zip = tpkBytes();
-  // A valid appended ZIP: the extracted range is the ZIP itself.
-  const prefix = new Uint8Array(32).fill(0x90);
-  const good = concat([prefix, zip, CMP1, le32(prefix.length), le32(zip.length)]);
-  deepEqual(Array.from(unwrap(readAppendedZip(good, "good.exe"))), Array.from(zip));
+  // A committed, independently authored standalone EXE (ticket 2.22): a stub,
+  // the authored ZIP, then the 12-byte §13 trailer (§13.1).
+  const exe = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "package-cmp1.exe")));
+  const zip = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "package.tpk")));
+  deepEqual(Array.from(unwrap(readAppendedZip(exe, "package-cmp1.exe"))), Array.from(zip));
 
-  // No trailer at all.
-  const missing = loadPackage({ kind: "exe", name: "bad.exe", bytes: zip });
-  equal(missing.ok, false);
-  if (!missing.ok) {
-    equal(missing.error.message.includes("missing CMP1 trailer"), true, missing.error.message);
-    equal(missing.error.message.includes("L21"), true, missing.error.message);
+  // A Toolkit 2 launcher stub and a PE-shaped self-extracting `zip.exe` both
+  // have no trailer; §13.1 refuses both by L21.
+  for (const name of ["exe-tk2-stub.exe", "exe-pe-zip.exe"]) {
+    const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", name)));
+    const missing = loadPackage({ kind: "exe", name, bytes });
+    equal(missing.ok, false, name);
+    if (!missing.ok) {
+      equal(missing.error.message.includes("missing CMP1 trailer"), true, missing.error.message);
+      equal(missing.error.message.includes("L21"), true, missing.error.message);
+      equal(missing.error.message.includes("not supported"), true, missing.error.message);
+    }
   }
   const short = loadPackage({ kind: "exe", name: "bad.exe", bytes: new Uint8Array(4) });
   equal(short.ok, false);
 
   // An offset past the end, a length that runs into the trailer, and a
   // negative offset are all the same rule (L20).
+  const prefix = new Uint8Array(32).fill(0x90);
   const outOfRange = concat([prefix, zip, CMP1, le32(prefix.length + zip.length + 1), le32(zip.length)]);
   const overlapping = concat([prefix, zip, CMP1, le32(0), le32(prefix.length + zip.length + 1)]);
   const negative = concat([prefix, zip, CMP1, le32(0xfffffff0), le32(zip.length)]);
