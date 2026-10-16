@@ -164,7 +164,7 @@ description = "First step, doc-first (G7): a person rules OOP-4 to OOP-9 from th
 verify = "A synthetic program instantiates a class, copies it with `operator=`, writes through `operator[]` as an lvalue, calls `release()`, and a snapshot taken mid-call restores to the identical object table and state hash."
 covers = ["CAP-5"]
 after = [3, 5]
-hitl = true
+hitl = false
 risk = "high"
 refine = true
 references = [
