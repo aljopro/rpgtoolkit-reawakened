@@ -22,8 +22,15 @@ declare const refIdBrand: unique symbol;
  */
 export type RefId = string & { readonly [refIdBrand]: "RefId" };
 
-/** A script value: a double or a string (docs/spec/formats/rpgcode-program.md#text-form). */
-export type Value = number | string | null;
+/** A live object handle (OOP-3; docs/spec/engine/rpgcode-modules-and-objects.md#objects). */
+export type ObjectValue = {
+  readonly kind: "object";
+  readonly handle: number;
+  readonly className: string;
+};
+
+/** A script value: a double, string, or a tagged live object handle. */
+export type Value = number | string | ObjectValue | null;
 
 /** Which variable table a `RefId` names (docs/spec/formats/rpgcode-program.md#text-form SEM-4). */
 export type VarScope = "global" | "local";

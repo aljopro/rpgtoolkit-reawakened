@@ -57,6 +57,20 @@ export type StepOp =
     }
   | { readonly op: "storeRef"; readonly pos: SourcePos }
   | { readonly op: "index"; readonly pos: SourcePos }
+  | { readonly op: "member"; readonly name: string; readonly pos: SourcePos }
+  | {
+      readonly op: "methodCall";
+      readonly name: string;
+      readonly argc: number;
+      readonly pos: SourcePos;
+    }
+  | {
+      readonly op: "construct";
+      readonly className: string;
+      readonly argc: number;
+      readonly pos: SourcePos;
+    }
+  | { readonly op: "compound"; readonly operator: string; readonly pos: SourcePos }
   | { readonly op: "dup"; readonly pos: SourcePos }
   | { readonly op: "pop"; readonly pos: SourcePos }
   | { readonly op: "unop"; readonly operator: UnaryOp; readonly pos: SourcePos }

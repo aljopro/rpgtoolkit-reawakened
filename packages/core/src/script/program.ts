@@ -9,12 +9,13 @@
  */
 
 import { ScriptError } from "./errors.ts";
-import { tokenize } from "./lex.ts";
-import { lower, type FunctionInfo } from "./lower.ts";
+import { tokenizeObjects } from "./lex.ts";
+import { lower, type CompiledClass, type FunctionInfo } from "./lower.ts";
 import type { StepOp } from "./ops.ts";
 import { parse } from "./parse.ts";
 
-export type { FunctionInfo } from "./lower.ts";
+export type { CompiledClass, FunctionInfo } from "./lower.ts";
+
 
 /**
  * The compiler version, part of `GameState.schema` (AD-7, AD-23). A change
@@ -32,22 +33,24 @@ export type ProgramRef =
     }
   | { readonly kind: "inline"; readonly text: string; readonly compiler: string };
 
-/** A compiled program: its reference, its Step IR, functions and labels. */
+/** A compiled program: its reference, Step IR, functions, classes and labels. */
 export type Program = {
   readonly ref: ProgramRef;
   readonly ops: StepOp[];
   readonly functions: { readonly [name: string]: readonly FunctionInfo[] };
+  readonly classes: { readonly [name: string]: CompiledClass };
   readonly labels: { readonly [name: string]: number };
 };
 
 /** Compile inline source text (docs/spec/engine/rpgcode-language.md#threads, a thread given text instead of a file). */
 export function compileInline(text: string, file = "<inline>"): Program {
-  const ast = parse(tokenize(text));
+  const ast = parse(tokenizeObjects(text));
   const result = lower(ast, file);
   return {
     ref: { kind: "inline", text, compiler: COMPILER_VERSION },
     ops: result.ops,
     functions: result.functions,
+    classes: result.classes,
     labels: result.labels,
   };
 }
