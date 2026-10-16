@@ -1,6 +1,6 @@
 /**
- * The decoded-image model shared by the PNG and JPEG decoders (format-spec §10,
- * AD-28).
+ * The decoded-image model shared by the PNG, JPEG and BMP decoders
+ * (format-spec §10, AD-28).
  *
  * `decodeTexture` is the single place a game image becomes pixels: `core/raster`,
  * every runner and the editor ask for this type and cannot disagree about what

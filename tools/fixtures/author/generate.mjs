@@ -29,6 +29,9 @@
 //     prefix, then a ZIP, with no trailer locating it).
 //   * a deflated (method 8) copy of the `.tpk`, because real packages are
 //     deflated and every other fixture here is STORE.
+//   * three Windows bitmaps (docs/spec/formats/images.md) — 24-bit with padded
+//     rows, 1-bit with a two-entry palette, and an 8-bit RLE8 stream — so the
+//     BMP decoder is pinned without a real game file in the repository.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -38,6 +41,60 @@ import { appendCmp1, ascii, buildZip, concat, le16, le32 } from "./zip.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..", "..");
 const defaultOut = join(repoRoot, "packages", "core", "test", "fixtures", "authored");
+
+/**
+ * A Windows bitmap (docs/spec/formats/images.md): the 14-byte file header, the
+ * 40-byte DIB header, the palette and the pixel array. `pixelBytes` is the
+ * array exactly as stored (rows in file order, bottom row first for a positive
+ * height, each already padded to its stride, or the RLE8 stream), so the row
+ * padding is part of the fixture on purpose. `palette` is a list of
+ * `[r, g, b]` triples.
+ */
+function bmp({ width, height, bits, palette = [], pixelBytes, compression = 0, clrUsed = palette.length }) {
+  const paletteBytes = concat(palette.map(([r, g, b]) => new Uint8Array([b, g, r, 0])));
+  const offBits = 14 + 40 + paletteBytes.length;
+  return concat([
+    ascii("BM"),
+    le32(offBits + pixelBytes.length), // bfSize
+    le32(0), // bfReserved1..2
+    le32(offBits),
+    le32(40), // biSize
+    le32(width),
+    le32(height), // positive: stored bottom-up
+    le16(1), // biPlanes
+    le16(bits),
+    le32(compression),
+    le32(pixelBytes.length), // biSizeImage
+    le32(0), // biXPelsPerMeter
+    le32(0), // biYPelsPerMeter
+    le32(clrUsed), // biClrUsed (0 means the full set of 2^bits entries)
+    le32(0), // biClrImportant
+    paletteBytes,
+    pixelBytes,
+  ]);
+}
+
+/** One stored 24-bit row of `width` pixels: B, G, R per pixel, padded to 4 bytes. */
+function rgb24Row(pixels) {
+  const stride = Math.floor((24 * pixels.length + 31) / 32) * 4;
+  const row = new Uint8Array(stride);
+  pixels.forEach(([r, g, b], x) => {
+    row[x * 3] = b;
+    row[x * 3 + 1] = g;
+    row[x * 3 + 2] = r;
+  });
+  return row;
+}
+
+/** One 1-bit stored row: `pixels[0]` the leftmost pixel, high bit first, padded to 4. */
+function monoRow(pixels) {
+  const stride = Math.floor((pixels.length + 31) / 32) * 4;
+  const row = new Uint8Array(stride);
+  pixels.forEach((value, x) => {
+    if (value !== 0) row[x >> 3] |= 0x80 >> (x & 7);
+  });
+  return row;
+}
 
 /**
  * One tileset of §3.1: the 6-byte header (`i16 version`, `i16 tileCount`,
@@ -82,6 +139,50 @@ const AUTHORED = {
   // Authored from spec, unverified against a real file (no detail-6 sample).
   "detail6.tst": tileset(20, 6, 16, 1, palettePixel),
   "iso.iso": tileset(30, 150, 32, 3, rgbPixel),
+
+  // The image decoders' fixtures (docs/spec/formats/images.md). A 24-bit
+  // bitmap whose 3-pixel rows pad to 12 bytes, stored bottom-up; a 1-bit
+  // bitmap with two palette entries (biClrUsed 0) and 10-pixel rows; and an
+  // 8-bit RLE8 stream that exercises a run, an odd-length absolute run with
+  // its padding byte, end-of-line, a delta and end-of-bitmap.
+  "bmp-rgb24.bmp": bmp({
+    width: 3,
+    height: 2,
+    bits: 24,
+    pixelBytes: concat([
+      rgb24Row([[10, 20, 30], [40, 50, 60], [70, 80, 90]]), // bottom row
+      rgb24Row([[100, 110, 120], [130, 140, 150], [160, 170, 180]]), // top row
+    ]),
+  }),
+  "bmp-mono1.bmp": bmp({
+    width: 10,
+    height: 2,
+    bits: 1,
+    clrUsed: 0,
+    palette: [[255, 255, 255], [0, 0, 0]],
+    pixelBytes: concat([
+      monoRow([1, 0, 1, 0, 1, 0, 1, 0, 1, 0]), // bottom row
+      monoRow([0, 1, 0, 1, 0, 1, 0, 1, 0, 1]), // top row
+    ]),
+  }),
+  "bmp-rle8.bmp": bmp({
+    width: 4,
+    height: 3,
+    bits: 8,
+    compression: 1,
+    palette: [[10, 20, 30], [200, 0, 0], [0, 200, 0], [0, 0, 200]],
+    pixelBytes: new Uint8Array([
+      0x03, 0x01, // run: three pixels of index 1
+      0x01, 0x02, // run: one pixel of index 2
+      0x00, 0x00, // end of line
+      0x00, 0x03, 0x03, 0x00, 0x03, 0x00, // absolute run of 3 bytes, then padding
+      0x01, 0x00, // run: one pixel of index 0
+      0x00, 0x00, // end of line
+      0x00, 0x02, 0x01, 0x00, // delta: right 1
+      0x02, 0x02, // run: two pixels of index 2
+      0x00, 0x01, // end of bitmap
+    ]),
+  }),
 };
 
 /**

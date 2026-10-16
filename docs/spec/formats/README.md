@@ -21,7 +21,8 @@ Every RPG Toolkit 3 game is a folder of small binary files plus RPGCode text, al
 | RPGCode program | `.prg` | `Prg\` | [rpgcode-program.md](rpgcode-program.md) |
 | Project layout, PAK archive, standalone EXE | folder, `.tpk`, `.exe` | — | [packaging-and-paths.md](packaging-and-paths.md) |
 | **Legacy files** (Toolkit 1-2 text, older 3.0 binary versions, conversion) | various | — | [legacy/](legacy/README.md) |
-| Images, audio, fonts, plugins | `.bmp/.png/.jpg/.gif…`, `.wav/.mid/.mp3/.ogg`, `.ttf`, `.dll` | `Bitmap\`, `Media\`, `Font\`, `Plugin\` | third-party formats, used as-is |
+| Images | `.bmp`, `.png`, `.jpg`, `.gif` | `Bitmap\`, `Misc\` | [images.md](images.md) (PNG and JPEG layouts: [format-spec.md](../../format-spec.md) §10.2–10.3) |
+| Audio, fonts, plugins | `.wav/.mid/.mp3/.ogg`, `.ttf`, `.dll` | `Media\`, `Font\`, `Plugin\` | third-party formats, used as-is |
 
 ## Primitive encoding
 
@@ -101,10 +102,11 @@ File names stored inside files are relative to the folder for that type (a board
 
 An image is resolved as an ordinary asset and decoded in one place, so the rasteriser, every runner and the editor cannot disagree about what the file contains.
 
-**Decoding — Reawakened rule.** The reader's result is **straight** (non-premultiplied) 8-bit RGBA of exactly `width × height × 4` bytes, row-major, top row first: the file's own colours and its own alpha, nothing added. The colour key is **not** in the file (it is stored with whatever references the image), so the reader never applies one; the key is tested against the decoded pixels by whatever blits the image. The kind is chosen by signature: PNG `89 50 4E 47 0D 0A 1A 0A`, JPEG `FF D8 FF`; any other signature is an error at offset 0. Every defect is a located error carrying the path, the offending byte offset and `format-spec §10` — never a throw and never a plausible wrong picture. Both readers refuse a zero dimension and an image of more than **100,000,000 pixels**, so the allocation is never attempted past that limit (the largest image in the legacy sample games is 640×480). The decoders are `packages/core/src/formats/image/png.ts`, `image/jpeg.ts` and `image/crc32.ts`.
+**Decoding — Reawakened rule.** The reader's result is **straight** (non-premultiplied) 8-bit RGBA of exactly `width × height × 4` bytes, row-major, top row first: the file's own colours and its own alpha, nothing added. The colour key is **not** in the file (it is stored with whatever references the image), so the reader never applies one; the key is tested against the decoded pixels by whatever blits the image. The kind is chosen by signature: PNG `89 50 4E 47 0D 0A 1A 0A`, JPEG `FF D8 FF`, Windows bitmap `BM`; any other signature is an error at offset 0. Every defect is a located error carrying the path, the offending byte offset and `format-spec §10` — never a throw and never a plausible wrong picture. Every reader refuses a zero dimension and an image of more than **100,000,000 pixels**, so the allocation is never attempted past that limit (the largest image in the legacy sample games is 640×480). The decoders are `packages/core/src/formats/image/png.ts`, `image/jpeg.ts`, `image/bmp.ts` and `image/crc32.ts`.
 
 * **PNG** (`image/png.ts`): the chunk walk checks a CRC-32 per chunk (`0xEDB88320`, over the type and data), keeps `IHDR` first and read alone, and stops at `IEND`. The concatenated `IDAT` data is one zlib stream inflated into the exact size `IHDR` fixes, so it cannot allocate past the declared layout. Every scanline filter (0–4, including Paeth) is undone in place, and the seven Adam7 passes are reassembled. `PLTE`/`tRNS` give palette alpha or a 2/6-byte colour key; sub-byte depths (1, 2, 4) are widened by ×255/×85/×17 and depth 16 is reduced by `floor(v / 257)`. Errors found in the inflated bytes are reported at the first `IDAT` payload.
 * **JPEG** (`image/jpeg.ts`): the baseline sequential (`SOF0`) and 8-bit extended sequential (`SOF1`) processes only, sample precision 8, greyscale or three-component YCbCr, per-component sampling 1×1 to 4×4, Huffman entropy data with optional restart intervals, a separable inverse DCT, chroma upsampled to full resolution by nearest neighbour, then YCbCr→RGB. Partial MCUs carry **dummy blocks** past a component's own grid; each is decoded to keep the reader in step and then dropped. Progressive and every other frame type, other precisions, other component counts (CMYK/YCCK) and a non-baseline scan are refused. The inverse-DCT basis is stored as literal double constants, never `Math.cos`/`Math.PI`, so the same bytes give the same pixels on every JavaScript engine.
+* **Windows bitmap** (`image/bmp.ts`): a 40-byte `BITMAPINFOHEADER`, one plane, uncompressed `BI_RGB` at 1, 4, 8, 24 and 32 bits plus the 8-bit `RLE8` stream; rows are stored bottom-up and padded to a 4-byte stride, and 32-bit `BI_RGB` is opaque. Every other header size, bit count, compression, a short palette and an RLE escape that leaves the image are refused. The full layout is in [images.md#windows-bitmap-bmp](images.md#windows-bitmap-bmp).
 
 **The image kinds — Reawakened rule.** Archive use was counted inside the game and tool archives and across the archived `.prg` scripts:
 
@@ -112,7 +114,7 @@ An image is resolved as an ordinary asset and decoded in one place, so the raste
 |---|---|
 | PNG | **Decoded** |
 | JPEG | **Decoded** |
-| BMP | owed a reader — the dominant TK2-era picture format — chosen by the `BM` signature |
+| BMP | **Decoded** ([images.md#windows-bitmap-bmp](images.md#windows-bitmap-bmp)) — the dominant TK2-era picture format, chosen by the `BM` signature |
 | GIF | owed a reader, and it must yield every frame and its delay, because an animated GIF stands in for an `.anm` ([animation.md](animation.md#animated-gif)) |
 | ICO | **dropped** as a game format; it belongs to the editor's import path, not to a game-image reader |
 | WMF | **dropped**; no game file is a Windows metafile |

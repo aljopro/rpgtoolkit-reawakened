@@ -65,6 +65,9 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 /** The JPEG SOI marker plus the start of any following segment: `FF D8 FF` (§10). */
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff] as const;
 
+/** The Windows bitmap file-header signature: `BM` (docs/spec/formats/images.md). */
+const BMP_SIGNATURE = [0x42, 0x4d] as const;
+
 /** The `i16` version bytes a `.tst` (20) or `.iso` (30) starts with, little-endian (§3.1). */
 const TILESET_VERSION_BYTES = [0x14, 0x1e] as const;
 
@@ -239,8 +242,11 @@ export const CORE_DECODERS: CoreDecoders = {
   image: {
     id: "image",
     section: "format-spec §10",
-    extensions: ["png", "jpg", "jpeg"],
-    detect: (header) => startsWithBytes(header, PNG_SIGNATURE) || startsWithBytes(header, JPEG_SIGNATURE),
+    extensions: ["png", "jpg", "jpeg", "bmp"],
+    detect: (header) =>
+      startsWithBytes(header, PNG_SIGNATURE) ||
+      startsWithBytes(header, JPEG_SIGNATURE) ||
+      startsWithBytes(header, BMP_SIGNATURE),
     decode: (bytes) => decodeTexture(bytes),
   },
 };

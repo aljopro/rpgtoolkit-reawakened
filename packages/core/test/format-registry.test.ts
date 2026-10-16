@@ -164,6 +164,7 @@ const CORE_HEADERS: ReadonlyArray<readonly [CoreFormatId, Uint8Array]> = [
   ["status-effect", asciiBytes(STATUS_EFFECT_MAGIC)],
   ["battle-background", asciiBytes(BATTLE_BACKGROUND_MAGIC)],
   ["image", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+  ["image", new Uint8Array([0x42, 0x4d, 0x36, 0x00])],
 ];
 
 test("the core registry claims each core decoder's extensions and magic header", () => {
@@ -236,6 +237,7 @@ const SAMPLES: readonly Uint8Array[] = [
   asciiBytes("TK3 TILEBITMAP"),
   new Uint8Array([0x14, 0x00, 0x00, 0x00, 0x00, 0x00]),
   new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]),
+  new Uint8Array([0x42, 0x4d, 0x36, 0x00, 0x00, 0x00]),
   asciiBytes("not a game file at all; just some bytes to fail on"),
   TILESET_BYTES,
 ];
