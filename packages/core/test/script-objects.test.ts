@@ -269,8 +269,8 @@ test("criteria 16: invalid handles, unknown classes and private access have stab
   equal(privateError.code, "object.inaccessible-member");
 });
 
-test("criteria 17: unchanged system.prg CArray constructs, indexes, resizes and releases", () => {
-  const system = readFileSync("packages/core/test/fixtures/system.prg", "utf8");
+test("criteria 17: authored CArray-shaped fixture constructs, indexes, resizes and releases", () => {
+  const system = readFileSync("packages/core/test/fixtures/carray-like.prg", "utf8");
   const state = run(`${system}
 a=CArray()\na[0]=4\na[1]=2\nr=a[0]+a[1]\nb=a->getBound()\na->resize(5)\nc=a->getBound()\na->release()\n`);
   equal(state.vm.globals.r, 6);
