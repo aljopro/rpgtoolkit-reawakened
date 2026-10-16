@@ -30,16 +30,21 @@ export type ThreadOwner = "script" | "world";
 /** A thread's scheduling state (AD-7). */
 export type ThreadStatus = "ready" | "waiting" | "finished";
 
+/** One local variable storage slot in a call frame (AD-7). */
+export type LocalSlot = {
+  value: Value;
+  ref: RefId;
+};
+
 /** One active call frame (AD-7). */
 export type Frame = {
   program: ProgramRef;
   ip: number;
-  locals: { [name: string]: Value };
+  locals: { [name: string]: LocalSlot };
   operands: Arg[];
   errorHandler: null;
   autoLocal: boolean;
 };
-
 /** One RPGCode thread (AD-7, AD-26). */
 export type Thread = {
   id: number;

@@ -1,7 +1,10 @@
 // The save tree, canonical form and restore checks (AD-7, AD-10, AD-11, AD-23):
 // the 18-section shape, a mid-yield round-trip and the two pinned restore errors.
 import { deepEqual, equal } from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   canon,
   createGameState,
@@ -31,7 +34,7 @@ function midYieldState(): GameState {
   startProgram(state.vm, {
     kind: "inline",
     text: 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n',
-    compiler: "1",
+    compiler: "2",
   });
   advanceScriptTick(state, createScriptServices(state));
   return state;
@@ -42,7 +45,7 @@ test("GameState is PlainData and has exactly the AD-10 sections", () => {
   deepEqual(Object.keys(state).sort(), Object.keys(SCHEMA_VERSIONS).sort());
   equal(Object.keys(state).length, 18);
   equal(typeof canon(state), "string");
-  deepEqual(state.schema.compiler, "1");
+  deepEqual(state.schema.compiler, "2");
 });
 
 test("canon round-trips through restore for a mid-yield state", () => {
@@ -68,4 +71,15 @@ test("restore rejects a different compiler version and a missing section", () =>
   equal(errorOf(() => restoreGameState(JSON.stringify(missingSection))).code, "restore.shape");
 
   equal(errorOf(() => restoreGameState("{ not json")).code, "restore.shape");
+});
+
+test("restore rejects a compiler: 1 snapshot fixture before reading payload", () => {
+  const fixturePath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "fixtures",
+    "save",
+    "compiler-1-snapshot.json",
+  );
+  const fixture = readFileSync(fixturePath, "utf8");
+  equal(errorOf(() => restoreGameState(fixture)).code, "restore.compiler-mismatch");
 });

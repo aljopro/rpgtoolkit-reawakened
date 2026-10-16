@@ -141,3 +141,31 @@ test("a fixture built-in drawing through view.rng leaves the draw in state and r
   restored.advance(1, []);
   equal(restored.stateHash(), host.stateHash());
 });
+
+test("mid-expression yield restores into a fresh host with identical per-tick stateHash", () => {
+  const program = "result = 1 + sleep(2) + 3\nend()\n";
+  const host = createScriptHost({ program, seed: 0 });
+
+  // Tick 1: runs 1 + sleep(2) -> thread enters waiting with operands [result-ref, 1]
+  host.advance(1, []);
+  equal(host.state().vm.threads[0]!.status, "waiting");
+  equal(host.state().vm.threads[0]!.frames[0]!.operands.length > 0, true);
+
+  // Restore during the wait
+  const restored = restoreScriptHost(host.snapshot(), {});
+  equal(restored.stateHash(), host.stateHash());
+
+  // Advance tick 2: wait not yet expired (sleep until tick 2)
+  host.advance(1, []);
+  restored.advance(1, []);
+  equal(restored.stateHash(), host.stateHash());
+
+  // Advance tick 3: wakes, evaluates 1 + 0 + 3 -> result is 4
+  host.advance(1, []);
+  restored.advance(1, []);
+  equal(restored.stateHash(), host.stateHash());
+  equal(host.state().vm.globals.result, 4);
+  equal(restored.state().vm.globals.result, 4);
+  equal(host.state().vm.threads[0]!.status, "finished");
+  equal(restored.state().vm.threads[0]!.status, "finished");
+});
