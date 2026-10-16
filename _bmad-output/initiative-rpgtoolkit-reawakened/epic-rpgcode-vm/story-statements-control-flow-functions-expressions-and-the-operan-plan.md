@@ -3,7 +3,7 @@ title: 'Statements, control flow, functions, expressions and the operand stack'
 type: 'feature'
 ticket: 5
 created: '2026-10-15'
-status: in-progress
+status: built
 baseline_revision: '43189ac35038e110f4265fd4e8e93342b575dedf'
 route: 'full'
 route_source: 'auto'
