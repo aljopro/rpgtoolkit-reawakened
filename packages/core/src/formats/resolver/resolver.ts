@@ -19,7 +19,7 @@ import { err, ok, type Result } from "../result.ts";
 import {
   asciiLower,
   foldPath,
-  projectFolder,
+  resolveReference,
   stripTypeFolder,
   typeFolder,
   type AssetKind,
@@ -66,10 +66,10 @@ export function assetKey(path: string): AssetKey {
  * (AD-5, §13), so its reference resolves at the package root.
  */
 function referencePath(root: AssetRoot, kind: AssetKind, reference: string): string {
-  const relative = stripTypeFolder(kind, reference);
-  const folder = typeFolder(kind);
-  const prefix = root.kind === "package" ? "" : projectFolder("", root);
-  return `${prefix}${folder}/${relative}`;
+  if (root.kind === "package") {
+    return `${typeFolder(kind)}/${stripTypeFolder(kind, reference)}`;
+  }
+  return resolveReference("", root, kind, reference);
 }
 
 /**

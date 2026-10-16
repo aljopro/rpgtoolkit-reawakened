@@ -14,8 +14,8 @@
  *
  * 1. every structural limit and path rule of `PACKAGE_LIMITS` is checked while
  *    the headers are parsed, before anything is allocated;
- * 2. the declared uncompressed size is checked *before* inflating, through
- *    `unzipSync`'s `filter` hook;
+ * 2. each declared uncompressed size is checked while the central directory is
+ *    parsed, before anything is inflated;
  * 3. each deflate entry's own stream is inflated independently and must yield
  *    exactly the declared number of bytes, so a silently truncated decode
  *    cannot pass — and the decode is abandoned the moment it passes the
@@ -511,15 +511,10 @@ export function readZip(bytes: Uint8Array, name: string): Result<readonly Packag
 
   const byStoredName = new Map<string, CentralEntry>();
   for (const entry of entries) byStoredName.set(entry.storedName, entry);
-  const skipped: { name: string; declared: number }[] = [];
   let unzipped: Unzipped;
   try {
     unzipped = unzipSync(bytes, {
       filter: (file: UnzipFileInfo) => {
-        if (file.originalSize > PACKAGE_LIMITS.maxEntryUncompressedBytes) {
-          skipped.push({ name: file.name, declared: file.originalSize });
-          return false;
-        }
         const entry = byStoredName.get(file.name);
         return entry !== undefined && !entry.directory;
       },
@@ -535,15 +530,6 @@ export function readZip(bytes: Uint8Array, name: string): Result<readonly Packag
     if (entry.directory) continue;
     const decoded = unzipped[entry.storedName];
     if (decoded === undefined) {
-      const limit = skipped.find((entrySkipped) => entrySkipped.name === entry.storedName);
-      if (limit !== undefined) {
-        return err(
-          failure(
-            entry.localOffset,
-            `Entry "${entry.path}" declares ${limit.declared} bytes uncompressed; the limit is ${PACKAGE_LIMITS.maxEntryUncompressedBytes} (max entry size, L16).`,
-          ),
-        );
-      }
       return err(
         failure(
           entry.localOffset,
