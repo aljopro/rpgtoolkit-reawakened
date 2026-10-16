@@ -12,7 +12,7 @@
 import { pow } from "../fmath/index.ts";
 import type { Logger } from "../ports/logger.ts";
 import type { PlainData } from "../ports/plain-data.ts";
-import type { RefId, Value, VarScope } from "../ports/value.ts";
+import type { ObjectValue, RefId, Value, VarScope } from "../ports/value.ts";
 import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState } from "../save/state.ts";
@@ -217,6 +217,31 @@ export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: n
   refreshBlock(vm, services.view.clock.tick());
 }
 
+function collectObjects(vm: VmState): void {
+  const roots: number[] = [];
+  const visit = (value: Value): void => {
+    if (isObjectValue(value)) roots.push(value.handle);
+  };
+  for (const value of Object.values(vm.globals)) visit(value);
+  for (const thread of vm.threads) {
+    for (const frame of thread.frames) {
+      for (const slot of Object.values(frame.locals)) visit(slot.value);
+      for (const arg of frame.operands) visit(arg.value);
+    }
+  }
+  const incoming: { [handle: string]: number } = {};
+  for (const record of vm.objects) {
+    for (const value of Object.values(record.members)) {
+      if (isObjectValue(value)) incoming[String(value.handle)] = (incoming[String(value.handle)] ?? 0) + 1;
+    }
+  }
+  const rootSet: { [handle: string]: true } = {};
+  for (const handle of roots) rootSet[String(handle)] = true;
+  vm.objects = vm.objects.filter(
+    (record) => rootSet[String(record.handle)] === true || (incoming[String(record.handle)] ?? 0) > 0,
+  );
+}
+
 export function advanceScriptTick(
   state: GameState,
   services: ScriptServices,
@@ -226,6 +251,7 @@ export function advanceScriptTick(
   runThreadsPhase(state.vm, services, budget);
   assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
+  collectObjects(state.vm);
   return scriptStatus(state.vm);
 }
 
@@ -282,6 +308,22 @@ function refName(ref: RefId): string {
   const sep = ref.indexOf(":");
   return sep >= 0 ? ref.slice(sep + 1) : ref;
 }
+function isObjectValue(value: Value | undefined): value is ObjectValue {
+  return typeof value === "object" && value !== null && value.kind === "object";
+}
+
+function objectRef(handle: number, name: string): RefId {
+  return `object:${handle}:${name}` as RefId;
+}
+
+function parseObjectRef(ref: RefId): { handle: number; name: string } | null {
+  if (!ref.startsWith("object:")) return null;
+  const separator = ref.indexOf(":", 7);
+  if (separator < 0) return null;
+  const handle = Number(ref.slice(7, separator));
+  if (!Number.isInteger(handle)) return null;
+  return { handle, name: ref.slice(separator + 1) };
+}
 
 function setOwnValue(record: { [name: string]: Value }, name: string, value: Value): void {
   Object.defineProperty(record, name, {
@@ -316,6 +358,11 @@ function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId): V
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
+  if (scope === "object") {
+    const object = parseObjectRef(ref);
+    const record = object === null ? undefined : vm.objects.find((item) => item.handle === object.handle);
+    return record?.members[object?.name ?? name] ?? 0;
+  }
   if (scope === "global") {
     return vm.globals[name] ?? 0;
   }
@@ -341,6 +388,12 @@ function writeRef(
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
+  if (scope === "object") {
+    const object = parseObjectRef(ref);
+    const record = object === null ? undefined : vm.objects.find((item) => item.handle === object.handle);
+    if (record !== undefined && object !== null) record.members[object.name] = stored;
+    return;
+  }
   if (scope === "global") {
     setOwnValue(vm.globals, name, stored);
     return;
@@ -508,6 +561,53 @@ function applyOut(
   }
 }
 
+function classInfo(program: Program, name: string) {
+  return program.classes[name];
+}
+
+function classWalk(program: Program, name: string, seen: string[] = []): string[] {
+  if (seen.includes(name)) return seen;
+  seen.push(name);
+  const info = classInfo(program, name);
+  if (info !== undefined) {
+    for (const base of info.bases) classWalk(program, base, seen);
+  }
+  return seen;
+}
+
+function findMethod(program: Program, className: string, name: string, argc: number) {
+  for (const current of classWalk(program, className)) {
+    const list = classInfo(program, current)?.methods[name];
+    const method = list?.find((candidate) => candidate.params.length === argc);
+    if (method !== undefined) return method;
+  }
+  return undefined;
+}
+
+function findMember(program: Program, className: string, name: string) {
+  for (const current of classWalk(program, className)) {
+    const member = classInfo(program, current)?.members.find((candidate) => candidate.name === name);
+    if (member !== undefined) return member;
+  }
+  return undefined;
+}
+
+function bindMethodLocals(
+  method: { readonly params: readonly { readonly name: string; readonly byRef: boolean }[] },
+  args: readonly Arg[],
+): { [name: string]: LocalSlot } {
+  const locals: { [name: string]: LocalSlot } = {};
+  for (let index = 0; index < method.params.length; index += 1) {
+    const parameter = method.params[index]!;
+    const arg = args[index];
+    if (parameter.byRef && arg?.ref !== null && arg !== undefined) {
+      setOwnSlot(locals, parameter.name, { value: arg.value, ref: arg.ref });
+    } else {
+      setOwnSlot(locals, parameter.name, { value: arg?.value ?? 0, ref: localRef(parameter.name) });
+    }
+  }
+  return locals;
+}
 /** Whether the thread keeps running after a call or must stop its turn here. */
 type CallOutcome = "continue" | "yield";
 
@@ -941,9 +1041,43 @@ export function stepThread(
         break;
 
       case "load":
-        frame.operands.push(loadArg(vm, thread, frameIndex, op.name, op.scope, services.virtuals));
+        if (
+          op.scope === undefined &&
+          frame.objectHandle !== undefined &&
+          frame.objectClass !== undefined &&
+          findMember(program, frame.objectClass, op.name) !== undefined
+        ) {
+          const ref = objectRef(frame.objectHandle, op.name);
+          frame.operands.push({ value: readRef(vm, thread, frameIndex, ref), ref });
+        } else if (op.name === "this" && frame.objectHandle !== undefined && frame.objectClass !== undefined) {
+          frame.operands.push({
+            value: { kind: "object", handle: frame.objectHandle, className: frame.objectClass },
+            ref: null,
+          });
+        } else {
+          frame.operands.push(loadArg(vm, thread, frameIndex, op.name, op.scope, services.virtuals));
+        }
         frame.ip += 1;
         break;
+
+      case "member": {
+        const receiver = frame.operands.pop();
+        const receiverValue = receiver?.value;
+        if (!isObjectValue(receiverValue)) {
+          throw new ScriptError("object.invalid", "member access requires a live object", op.pos);
+        }
+        const record = vm.objects.find((item) => item.handle === receiverValue.handle);
+        if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${receiverValue.handle}`, op.pos);
+        const member = findMember(program, record.className, op.name);
+        if (member === undefined) throw new ScriptError("object.invalid", `unknown member ${op.name}`, op.pos);
+        if (member.access === "private" && frame.objectClass !== record.className) {
+          throw new ScriptError("object.inaccessible-member", `member ${op.name} is private`, op.pos);
+        }
+        const ref = objectRef(record.handle, op.name);
+        frame.operands.push({ value: record.members[op.name] ?? 0, ref });
+        frame.ip += 1;
+        break;
+      }
 
       case "declRef":
         if (op.scope === "local") {
@@ -971,8 +1105,56 @@ export function stepThread(
           throw new ScriptError("vm.bad-lvalue", "cannot assign to a non-reference value", op.pos);
         }
         const stored = valueArg.value === null ? 0 : valueArg.value;
+        const refValue = refArg.value;
+        if (isObjectValue(refValue)) {
+          const record = vm.objects.find((item) => item.handle === refValue.handle);
+          const method = record === undefined ? undefined : findMethod(program, record.className, "operator=", 1);
+          if (record !== undefined && method !== undefined && method.entry >= 0) {
+            frame.ip += 1;
+            thread.frames.push({
+              program: frame.program, ip: method.entry, locals: bindMethodLocals(method, [valueArg]), operands: [],
+              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
+              objectClass: method.className ?? record.className,
+            });
+            break;
+          }
+        }
         writeRef(vm, thread, frameIndex, refArg.ref, stored);
         frame.operands.push({ value: stored, ref: null });
+        frame.ip += 1;
+        break;
+      }
+
+      case "compound": {
+        const valueArg = frame.operands.pop();
+        const refArg = frame.operands.pop();
+        if (!valueArg || !refArg || refArg.ref === null) {
+          throw new ScriptError("vm.stack-underflow", "compound assignment stack underflow", op.pos);
+        }
+        const current = readRef(vm, thread, frameIndex, refArg.ref);
+        if (isObjectValue(current)) {
+          const record = vm.objects.find((item) => item.handle === current.handle);
+          const method = record === undefined ? undefined : findMethod(program, record.className, `operator${op.operator}`, 1);
+          if (record !== undefined && method !== undefined && method.entry >= 0) {
+            frame.ip += 1;
+            thread.frames.push({
+              program: frame.program, ip: method.entry, locals: bindMethodLocals(method, [valueArg]), operands: [],
+              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
+              objectClass: method.className ?? record.className,
+            });
+            break;
+          }
+          throw new ScriptError("object.invalid", `${op.operator} not found`, op.pos);
+        }
+        const rhs = valueArg.value;
+        const result = op.operator === "+=" ? Number(current) + Number(rhs)
+          : op.operator === "-=" ? Number(current) - Number(rhs)
+          : op.operator === "*=" ? Number(current) * Number(rhs)
+          : op.operator === "/=" ? Number(current) / Number(rhs)
+          : op.operator === "%=" ? Number(current) % Number(rhs)
+          : Number(rhs);
+        writeRef(vm, thread, frameIndex, refArg.ref, result);
+        frame.operands.push({ value: result, ref: null });
         frame.ip += 1;
         break;
       }
@@ -988,19 +1170,127 @@ export function stepThread(
             ? (keyArg.value | 0)
             : keyArg.value;
         const keyText = indexKey(keyValue);
-        const baseName = baseArg.ref !== null ? refName(baseArg.ref) : toStringValue(baseArg.value);
-        const fullName = `${baseName}[${keyText}]`;
-
-        let scope: VarScope | null = null;
         if (baseArg.ref !== null) {
-          scope = baseArg.ref.startsWith("global:") ? "global" : "local";
+          const object = parseObjectRef(baseArg.ref);
+          if (object !== null) {
+            const ref = objectRef(object.handle, `${object.name}[${keyText}]`);
+            frame.operands.push({ value: readRef(vm, thread, frameIndex, ref), ref });
+            frame.ip += 1;
+            break;
+          }
         }
+        const baseObject = isObjectValue(baseArg.value) ? baseArg.value : null;
+        if (baseObject !== null) {
+          const record = vm.objects.find((item) => item.handle === baseObject.handle);
+          if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${baseObject.handle}`, op.pos);
+          const method = findMethod(program, record.className, "operator[]", 1);
+          if (method !== undefined && method.entry >= 0) {
+            frame.ip += 1;
+            thread.frames.push({
+              program: frame.program, ip: method.entry, locals: bindMethodLocals(method, [keyArg]), operands: [],
+              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
+              objectClass: method.className ?? record.className,
+            });
+            break;
+          }
+          const ref = objectRef(baseObject.handle, `[${keyText}]`);
+          frame.operands.push({ value: record.members[`[${keyText}]`] ?? 0, ref });
+          frame.ip += 1;
+          break;
+        }
+        const baseName = baseArg.ref !== null ? refName(baseArg.ref) : toStringValue(baseArg.value);
+        if (frame.objectHandle !== undefined && frame.objectClass !== undefined && findMember(program, frame.objectClass, baseName) !== undefined) {
+          const memberRef = objectRef(frame.objectHandle, `${baseName}[${keyText}]`);
+          frame.operands.push({ value: readRef(vm, thread, frameIndex, memberRef), ref: memberRef });
+          frame.ip += 1;
+          break;
+        }
+        const namedObject = typeof baseArg.value === "string" ? vm.globals[baseArg.value] : undefined;
+        if (isObjectValue(namedObject)) {
+          const record = vm.objects.find((item) => item.handle === namedObject.handle);
+          const method = record === undefined ? undefined : findMethod(program, record.className, "operator[]", 1);
+          if (record !== undefined && method !== undefined && method.entry >= 0) {
+            frame.ip += 1;
+            thread.frames.push({
+              program: frame.program, ip: method.entry, locals: bindMethodLocals(method, [keyArg]), operands: [],
+              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
+              objectClass: method.className ?? record.className,
+            });
+            break;
+          }
+        }
+        let scope: VarScope | null = null;
+        if (baseArg.ref !== null) scope = baseArg.ref.startsWith("global:") ? "global" : "local";
+        const fullName = `${baseName}[${keyText}]`;
         const elementArg = loadArg(vm, thread, frameIndex, fullName, scope ?? undefined, services.virtuals);
         frame.operands.push(elementArg);
         frame.ip += 1;
         break;
+
+      }
+      case "construct": {
+        const args = takeArgs(frame, op.argc, op.pos);
+        const info = classInfo(program, op.className);
+        if (info === undefined) throw new ScriptError("object.invalid", `unknown class ${op.className}`, op.pos);
+        if (info.abstract) throw new ScriptError("object.abstract-class", `class ${op.className} is abstract`, op.pos);
+        let handle = vm.objects.length + 1;
+        for (const item of vm.objects) if (item.handle >= handle) handle = item.handle + 1;
+        const members: { [name: string]: Value } = {};
+        for (const member of info.members) {
+          if (member.arraySize !== null) {
+            for (let index = 0; index < member.arraySize; index += 1) members[`${member.name}[${index}]`] = 0;
+          } else members[member.name] = 0;
+        }
+        const value: ObjectValue = { kind: "object", handle, className: op.className };
+        vm.objects.push({ handle, className: op.className, program: frame.program, members });
+        const constructor = findMethod(program, op.className, op.className, op.argc);
+        frame.ip += 1;
+        if (constructor !== undefined && constructor.entry >= 0) {
+          thread.frames.push({
+            program: frame.program, ip: constructor.entry, locals: bindMethodLocals(constructor, args), operands: [],
+            errorHandler: null, autoLocal: frame.autoLocal, objectHandle: handle,
+            objectClass: op.className, returnValue: value,
+          });
+        } else frame.operands.push({ value, ref: null });
+        break;
       }
 
+      case "methodCall": {
+        const args = takeArgs(frame, op.argc, op.pos);
+        const receiver = frame.operands.pop();
+        const receiverValue = receiver?.value;
+        if (!isObjectValue(receiverValue)) throw new ScriptError("object.invalid", "method receiver is not an object", op.pos);
+        const record = vm.objects.find((item) => item.handle === receiverValue.handle);
+        if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${receiverValue.handle}`, op.pos);
+        if (op.name === "release") {
+          const info = classInfo(program, record.className);
+          if (info?.destructor !== null && info?.destructor !== undefined) {
+            frame.ip += 1;
+            thread.frames.push({
+              program: frame.program, ip: info.destructor.entry, locals: bindMethodLocals(info.destructor, args), operands: [],
+              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
+              objectClass: record.className, releaseHandle: record.handle,
+            });
+          } else {
+            vm.objects = vm.objects.filter((item) => item.handle !== record.handle);
+            frame.ip += 1;
+            frame.operands.push({ value: 0, ref: null });
+          }
+          break;
+        }
+        const method = findMethod(program, record.className, op.name, op.argc);
+        if (method === undefined || method.entry < 0) throw new ScriptError("object.invalid", `method ${op.name} not found`, op.pos);
+        if (method.access === "private" && frame.objectClass !== method.className) {
+          throw new ScriptError("object.inaccessible-member", `method ${op.name} is private`, op.pos);
+        }
+        frame.ip += 1;
+        thread.frames.push({
+          program: frame.program, ip: method.entry, locals: bindMethodLocals(method, args), operands: [],
+          errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
+          objectClass: method.className ?? record.className,
+        });
+        break;
+      }
       case "dup": {
         const top = frame.operands[frame.operands.length - 1];
         if (!top) {
@@ -1020,6 +1310,17 @@ export function stepThread(
         const operand = frame.operands.pop();
         if (!operand) {
           throw new ScriptError("vm.stack-underflow", "unop: operand stack underflow", op.pos);
+        }
+        if (isObjectValue(operand.value)) {
+          const method = findMethod(program, operand.value.className, `operator${op.operator}`, 0);
+          if (method === undefined) throw new ScriptError("object.invalid", `operator${op.operator} not found`, op.pos);
+          frame.ip += 1;
+          thread.frames.push({
+            program: frame.program, ip: method.entry, locals: bindMethodLocals(method, []), operands: [],
+            errorHandler: null, autoLocal: frame.autoLocal, objectHandle: operand.value.handle,
+            objectClass: method.className ?? operand.value.className,
+          });
+          break;
         }
         const v =
           operand.ref !== null && typeof operand.value === "number"
@@ -1052,6 +1353,25 @@ export function stepThread(
         const leftArg = frame.operands.pop();
         if (!leftArg || !rightArg) {
           throw new ScriptError("vm.stack-underflow", "binop: operand stack underflow", op.pos);
+        }
+        if (isObjectValue(leftArg.value)) {
+          const method = findMethod(program, leftArg.value.className, `operator${op.operator}`, 1);
+          if (method !== undefined) {
+            frame.ip += 1;
+            thread.frames.push({
+              program: frame.program, ip: method.entry, locals: bindMethodLocals(method, [rightArg]), operands: [],
+              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: leftArg.value.handle,
+              objectClass: method.className ?? leftArg.value.className,
+            });
+            break;
+          }
+          if (op.operator === "==" || op.operator === "~=" || op.operator === "!=") {
+            const same = leftArg.value.handle === (isObjectValue(rightArg.value) ? rightArg.value.handle : -1);
+            frame.operands.push({ value: op.operator === "==" ? (same ? 1 : 0) : (same ? 0 : 1), ref: null });
+            frame.ip += 1;
+            break;
+          }
+          throw new ScriptError("object.invalid", `operator${op.operator} not found`, op.pos);
         }
         const lVal =
           leftArg.ref !== null && typeof leftArg.value === "number"
@@ -1164,19 +1484,39 @@ export function stepThread(
 
       case "call": {
         const args = takeArgs(frame, op.argc, op.pos);
+        const resolved = resolveCall(op.name, op.argc, program, services.commands);
+        if (resolved === undefined && frame.objectHandle !== undefined && frame.objectClass !== undefined) {
+          const ownMethod = findMethod(program, frame.objectClass, op.name, op.argc);
+          if (ownMethod !== undefined && ownMethod.entry >= 0) {
+            frame.ip += 1;
+            thread.frames.push({
+              program: frame.program, ip: ownMethod.entry, locals: bindMethodLocals(ownMethod, args), operands: [],
+              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: frame.objectHandle,
+              objectClass: ownMethod.className ?? frame.objectClass,
+            });
+            break;
+          }
+        }
         if (
           performCall(thread, vm, services, program, frame, frameIndex, op.name, args, op.pos, true) ===
           "yield"
         ) {
           return finish();
         }
-        break;
       }
 
+        break;
       case "return": {
-        const returnArg = frame.operands.pop() ?? { value: 0, ref: null };
+        const returnArg =
+          frame.returnValue !== undefined
+            ? { value: frame.returnValue, ref: null }
+            : frame.operands.pop() ?? { value: 0, ref: null };
+        const releaseHandle = frame.releaseHandle;
         const poppedIndex = thread.frames.length - 1;
         thread.frames.pop();
+        if (releaseHandle !== undefined) {
+          vm.objects = vm.objects.filter((item) => item.handle !== releaseHandle);
+        }
         if (thread.frames.length === 0) {
           thread.status = "finished";
           return finish();
