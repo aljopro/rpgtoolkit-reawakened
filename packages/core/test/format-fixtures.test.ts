@@ -29,8 +29,10 @@ import {
   readAppendedZip,
   readSpecialMove,
   readStatusEffect,
+  readTileAnimation,
   readTileset,
   resolveAsset,
+  writeTileAnimation,
   writeTileset,
 } from "../src/index.ts";
 import type { Result, Tileset } from "../src/index.ts";
@@ -165,11 +167,14 @@ test("the real 16-colour-mode tilesets still save as detail 1", () => {
   }
 });
 
-test("the real .tan and .gph are held for ticket 16.7 and carry no reader here", () => {
-  // Ticket 16.7 adds the readers; this ticket only commits the samples, so the
-  // files are checked for the shape the spec describes and nothing more.
+test("the real .tan parses with readTileAnimation with zero residue (ticket 16.7)", () => {
   const tan = fixture("real/animatedTile.tan");
-  equal(new TextDecoder().decode(tan.subarray(0, 17)), "RPGTLKIT TILEANIM");
+  const model = unwrap(readTileAnimation(new BinaryReader(tan, "animatedTile.tan")));
+  equal(model.magic, "RPGTLKIT TILEANIM");
+  equal(model.residue?.length ?? 0, 0);
+  const reEncoded = unwrap(writeTileAnimation(model));
+  deepEqual(reEncoded, tan);
+
   const gph = fixture("real/v1tile.gph");
   const lines = new TextDecoder().decode(gph).split("\r\n").filter((line) => line !== "");
   equal(lines.length, 16, "§3.2 v1: a 16x16 grid, one text row per y");

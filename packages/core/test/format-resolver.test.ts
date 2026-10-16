@@ -13,6 +13,7 @@ import {
   foldPath,
   PACKAGE_ROOT,
   resolveAsset,
+  resolveTileReference,
 } from "../src/index.ts";
 import type { AssetKey, AssetRoot, Result } from "../src/index.ts";
 
@@ -200,4 +201,103 @@ test("a game folder accepts both stored forms of the project path", () => {
   // package root (§13).
   const asPackage = createAssetIndex(["Boards/start.brd"]);
   equal(unwrap(resolveAsset(asPackage, PACKAGE_ROOT, "boards", "start.brd")), "boards/start.brd");
+});
+
+test("resolveTileReference resolves .tan, .gph, .tst, and .iso references", () => {
+  const index = createAssetIndex([
+    "Game/demo/Tiles/water.tan",
+    "Game/demo/Tiles/flower.gph",
+    "Game/demo/Tiles/default.tst",
+    "Game/demo/Tiles/diamond.iso",
+  ]);
+  const root: AssetRoot = { kind: "game", projectPath: "demo" };
+
+  // Empty string
+  equal(unwrap(resolveTileReference(index, root, "")).kind, "empty");
+
+  // Animated tile (.tan)
+  const tanRef = unwrap(resolveTileReference(index, root, "water.tan"));
+  deepEqual(tanRef, {
+    kind: "animatedTile",
+    path: "water.tan",
+    asset: "game/demo/tiles/water.tan" as AssetKey,
+  });
+
+  // Single tile (.gph)
+  const gphRef = unwrap(resolveTileReference(index, root, "flower.gph"));
+  deepEqual(gphRef, {
+    kind: "singleTile",
+    path: "flower.gph",
+    asset: "game/demo/tiles/flower.gph" as AssetKey,
+  });
+
+  // Tileset (.tst)
+  const tstRef = unwrap(resolveTileReference(index, root, "default.tst12"));
+  deepEqual(tstRef, {
+    kind: "tileset",
+    tileset: "default.tst",
+    tile: 12,
+    asset: "game/demo/tiles/default.tst" as AssetKey,
+  });
+
+  // Isometric tileset (.iso)
+  const isoRef = unwrap(resolveTileReference(index, root, "diamond.iso3"));
+  deepEqual(isoRef, {
+    kind: "isometric",
+    tileset: "diamond.iso",
+    tile: 3,
+    asset: "game/demo/tiles/diamond.iso" as AssetKey,
+  });
+
+  // Missing tile asset fails with located error
+  const missing = resolveTileReference(index, root, "missing.tan");
+  equal(missing.ok, false);
+  if (!missing.ok) {
+    equal(missing.error.section, "format-spec §1.5");
+  }
+});
+test("resolveTileReference resolves board references with spaces and mixed case", () => {
+  const index = createAssetIndex([
+    "Game/ChimeranEmpire/Tiles/beach east.tan",
+    "Game/Schoolsout2/Tiles/bed.gph",
+  ]);
+
+  const chimeranRoot: AssetRoot = { kind: "game", projectPath: "ChimeranEmpire" };
+  const tanRef = unwrap(resolveTileReference(index, chimeranRoot, "beach east.tan"));
+  deepEqual(tanRef, {
+    kind: "animatedTile",
+    path: "beach east.tan",
+    asset: "game/chimeranempire/tiles/beach east.tan" as AssetKey,
+  });
+
+  // Case-insensitive reference lookup
+  const tanUpper = unwrap(resolveTileReference(index, chimeranRoot, "BEACH EAST.TAN"));
+  deepEqual(tanUpper, {
+    kind: "animatedTile",
+    path: "BEACH EAST.TAN",
+    asset: "game/chimeranempire/tiles/beach east.tan" as AssetKey,
+  });
+
+  const school2Root: AssetRoot = { kind: "game", projectPath: "Schoolsout2" };
+  const gphRef = unwrap(resolveTileReference(index, school2Root, "bed.gph"));
+  deepEqual(gphRef, {
+    kind: "singleTile",
+    path: "bed.gph",
+    asset: "game/schoolsout2/tiles/bed.gph" as AssetKey,
+  });
+
+  const gphUpper = unwrap(resolveTileReference(index, school2Root, "BED.GPH"));
+  deepEqual(gphUpper, {
+    kind: "singleTile",
+    path: "BED.GPH",
+    asset: "game/schoolsout2/tiles/bed.gph" as AssetKey,
+  });
+});
+
+
+test("resolves fonts under Font/ directory", () => {
+  const index = createAssetIndex(["Game/demo/Font/base.fnt"]);
+  const root: AssetRoot = { kind: "game", projectPath: "demo" };
+  const key = unwrap(resolveAsset(index, root, "fonts", "base.fnt"));
+  equal(key, "game/demo/font/base.fnt");
 });

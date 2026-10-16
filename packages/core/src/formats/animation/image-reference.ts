@@ -17,6 +17,7 @@ import { asciiLower } from "../main-file/layout.ts";
 export type ImageReference =
   | { readonly kind: "empty" }
   | { readonly kind: "tile"; readonly tileset: string; readonly index: number }
+  | { readonly kind: "singleTile"; readonly path: string }
   | { readonly kind: "tileBitmap"; readonly path: string }
   | { readonly kind: "picture"; readonly path: string };
 
@@ -54,6 +55,9 @@ export function classifyImageReference(image: string): ImageReference {
   const rest = image.slice(dot + 4);
   if ((ext === "tst" || ext === "iso") && isDigitRun(rest)) {
     return { kind: "tile", tileset: image.slice(0, dot + 4), index: Number(rest) };
+  }
+  if (ext === "gph" && rest === "") {
+    return { kind: "singleTile", path: image };
   }
   if (ext === "tbm" && rest === "") {
     return { kind: "tileBitmap", path: image };
