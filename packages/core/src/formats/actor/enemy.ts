@@ -11,6 +11,7 @@
 import { ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import { BinaryWriter } from "../binary/writer.ts";
+import { TextLineReader } from "../text/line-reader.ts";
 import {
   ENEMY_BINARY_MINOR,
   ENEMY_DETECT_OFFSET,
@@ -34,13 +35,7 @@ export function readEnemy(reader: BinaryReader): Result<Enemy> {
   // checked before any header error.
   const detection = reader.isBinaryAt(start + ENEMY_DETECT_OFFSET);
   if (detection.ok && !detection.value) {
-    const offset = start + ENEMY_DETECT_OFFSET;
-    return actorError(
-      reader,
-      offset,
-      ENEMY_SECTION,
-      `${ENEMY_MAGIC}: unsupported 2.0 line-oriented text enemy (byte at offset ${offset} is non-NUL); only the binary 2.1 form is implemented`,
-    );
+    return readTextEnemy(reader);
   }
   if (!header.ok) {
     return header;
@@ -256,4 +251,138 @@ export function writeEnemy(model: Enemy): Result<Uint8Array> {
 
   writer.writeBytes(model.residue);
   return ok(writer.toBytes());
+}
+
+/** Read a Toolkit 2 minor 0 text enemy (docs/spec/formats/legacy/text-formats.md#enemy). */
+function readTextEnemy(reader: BinaryReader): Result<Enemy> {
+  const lineReader = new TextLineReader(reader.bytes, reader.path, reader.offset);
+  const header = lineReader.nextLine("header", ENEMY_SECTION);
+  if (!header.ok) return header;
+  if (header.value.trim().toUpperCase() !== ENEMY_MAGIC.toUpperCase()) {
+    return actorError(
+      reader,
+      0,
+      ENEMY_SECTION,
+      `not an enemy: header is "${header.value}", expected "${ENEMY_MAGIC}"`,
+    );
+  }
+  const major = lineReader.nextInt("major", ENEMY_SECTION);
+  if (!major.ok) return major;
+  const minor = lineReader.nextInt("minor", ENEMY_SECTION);
+  if (!minor.ok) return minor;
+  if (minor.value !== 0) {
+    return actorError(
+      reader,
+      lineReader.offset,
+      ENEMY_SECTION,
+      `unsupported text enemy minor version ${minor.value}: expected 0`,
+    );
+  }
+  const name = lineReader.nextLine("name", ENEMY_SECTION);
+  if (!name.ok) return name;
+  const hp = lineReader.nextInt("hp", ENEMY_SECTION);
+  if (!hp.ok) return hp;
+  const smp = lineReader.nextInt("smp", ENEMY_SECTION);
+  if (!smp.ok) return smp;
+  const fp = lineReader.nextInt("fp", ENEMY_SECTION);
+  if (!fp.ok) return fp;
+  const dp = lineReader.nextInt("dp", ENEMY_SECTION);
+  if (!dp.ok) return dp;
+  const canRun = lineReader.nextInt("canRun", ENEMY_SECTION);
+  if (!canRun.ok) return canRun;
+  const takeCrit = lineReader.nextInt("takeCrit", ENEMY_SECTION);
+  if (!takeCrit.ok) return takeCrit;
+  const giveCrit = lineReader.nextInt("giveCrit", ENEMY_SECTION);
+  if (!giveCrit.ok) return giveCrit;
+
+  const width = lineReader.nextInt("width", ENEMY_SECTION);
+  if (!width.ok) return width;
+  const height = lineReader.nextInt("height", ENEMY_SECTION);
+  if (!height.ok) return height;
+
+  // Fixed 19 x 7 tile grid = 133 lines (R-20)
+  const tileGrid: string[] = [];
+  for (let i = 0; i < 133; i++) {
+    const tile = lineReader.nextLine(`tile[${i}]`, ENEMY_SECTION);
+    if (!tile.ok) return tile;
+    tileGrid.push(tile.value);
+  }
+
+  // 101 pairs of (specialMove, weakness) = 202 lines
+  const specialMoves: string[] = [];
+  const weaknesses: string[] = [];
+  for (let i = 0; i < 101; i++) {
+    const move = lineReader.nextLine(`specialMove[${i}]`, ENEMY_SECTION);
+    if (!move.ok) return move;
+    specialMoves.push(move.value);
+    const weak = lineReader.nextLine(`weakness[${i}]`, ENEMY_SECTION);
+    if (!weak.ok) return weak;
+    weaknesses.push(weak.value);
+  }
+
+  const ai = lineReader.nextInt("ai", ENEMY_SECTION);
+  if (!ai.ok) return ai;
+  const useCode = lineReader.nextInt("useCode", ENEMY_SECTION);
+  if (!useCode.ok) return useCode;
+  const prg = lineReader.nextLine("prg", ENEMY_SECTION);
+  if (!prg.ok) return prg;
+  const exp = lineReader.nextInt("exp", ENEMY_SECTION);
+  if (!exp.ok) return exp;
+  const gp = lineReader.nextInt("gp", ENEMY_SECTION);
+  if (!gp.ok) return gp;
+  const winPrg = lineReader.nextLine("winPrg", ENEMY_SECTION);
+  if (!winPrg.ok) return winPrg;
+  const runPrg = lineReader.nextLine("runPrg", ENEMY_SECTION);
+  if (!runPrg.ok) return runPrg;
+
+  // 4 ignored lines (sound cues)
+  for (let i = 0; i < 4; i++) {
+    const ignored = lineReader.nextLine(`ignored[${i}]`, ENEMY_SECTION);
+    if (!ignored.ok) return ignored;
+  }
+
+  // 4 combat animations: FIGHT, DEFEND, SPECIAL, DIE
+  const fight = lineReader.nextLine("FIGHT animation", ENEMY_SECTION);
+  if (!fight.ok) return fight;
+  const defend = lineReader.nextLine("DEFEND animation", ENEMY_SECTION);
+  if (!defend.ok) return defend;
+  const special = lineReader.nextLine("SPECIAL animation", ENEMY_SECTION);
+  if (!special.ok) return special;
+  const die = lineReader.nextLine("DIE animation", ENEMY_SECTION);
+  if (!die.ok) return die;
+
+  const finished = lineReader.finish(ENEMY_SECTION);
+  if (!finished.ok) return finished;
+
+  reader.seek(lineReader.offset);
+
+  return ok({
+    magic: ENEMY_MAGIC,
+    major: major.value,
+    minor: minor.value,
+    name: name.value,
+    hp: hp.value,
+    smp: smp.value,
+    fp: fp.value,
+    dp: dp.value,
+    canRun: canRun.value,
+    criticalOn: takeCrit.value,
+    criticalBy: giveCrit.value,
+    specialMoves,
+    weaknesses,
+    strengths: [],
+    aiLevel: ai.value,
+    customAi: useCode.value,
+    aiProgram: prg.value,
+    experienceReward: exp.value,
+    goldReward: gp.value,
+    defeatProgram: winPrg.value,
+    runAwayProgram: runPrg.value,
+    stances: ["", fight.value, defend.value, special.value, die.value, ""],
+    customStances: [],
+    residue: new Uint8Array(0),
+    width: width.value,
+    height: height.value,
+    tileGrid,
+  });
 }

@@ -366,3 +366,43 @@ export interface Board {
    */
   readonly residue: Uint8Array;
 }
+
+/** An empty placeholder vector board for zero-byte files (Z-1). */
+export function createEmptyBoard(): Board {
+  return {
+    magic: BOARD_MAGIC,
+    major: 2,
+    minor: BOARD_VECTOR_MINOR,
+    sizeX: 0,
+    sizeY: 0,
+    sizeL: 0,
+    coordType: 0,
+    lut: [""],
+    tileMatrix: [],
+    tileRuns: [],
+    shadeLayers: [],
+    lights: [],
+    vectors: [],
+    programs: [],
+    sprites: [],
+    images: [],
+    threads: [],
+    constants: [],
+    layerTitles: [""],
+    links: { north: "", south: "", east: "", west: "" },
+    properties: {
+      backgroundImage: "",
+      backgroundDrawType: 0,
+      backgroundColour: { r: 0, g: 0, b: 0 },
+      backgroundMusic: "",
+      enterPrg: "",
+      battleBackground: "",
+      battleSkill: 0,
+      allowBattles: 0,
+      disableSaving: 0,
+      ambient: { r: 0, g: 0, b: 0 },
+      start: { x: 64, y: 64, layer: 1 },
+    },
+    residue: new Uint8Array(0),
+  };
+}

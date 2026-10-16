@@ -234,16 +234,16 @@ test("a wrong special-move magic is an error at offset 0", () => {
   equal(result.error.section, SPECIAL_MOVE_SECTION);
 });
 
-test("a text-form special move is refused at the detection byte", () => {
+test("a truncated text-form special move fails at unexpected EOF", () => {
   const bytes = ascii("RPGTLKIT SPLMOVE\r\n2\r\n0\r\nFireball\r\n");
   const result = readSpecialMove(new BinaryReader(bytes));
   equal(result.ok, false);
   if (result.ok) {
     return;
   }
-  equal(result.error.offset, 16);
+  equal(result.error.offset, 34);
   equal(result.error.section, SPECIAL_MOVE_SECTION);
-  equal(result.error.message.includes("text form"), true);
+  equal(result.error.message.includes("unexpected end of file"), true);
 });
 
 test("a short special move reports the field offset", () => {
@@ -384,16 +384,16 @@ test("a wrong status-effect magic is an error at offset 0", () => {
   equal(result.error.section, STATUS_EFFECT_SECTION);
 });
 
-test("a text-form status effect is refused at the detection byte", () => {
+test("a truncated text-form status effect fails at unexpected EOF", () => {
   const bytes = ascii("RPGTLKIT STATUSE\r\n2\r\n0\r\nPoison\r\n");
   const result = readStatusEffect(new BinaryReader(bytes));
   equal(result.ok, false);
   if (result.ok) {
     return;
   }
-  equal(result.error.offset, 16);
+  equal(result.error.offset, 32);
   equal(result.error.section, STATUS_EFFECT_SECTION);
-  equal(result.error.message.includes("text form"), true);
+  equal(result.error.message.includes("unexpected end of file"), true);
 });
 
 test("a parsed anonymised status effect writes back byte-for-byte", () => {
@@ -484,16 +484,16 @@ test("a wrong battle-background magic is an error at offset 0", () => {
   equal(result.error.section, BATTLE_BACKGROUND_SECTION);
 });
 
-test("a text-form battle background is refused at the detection byte", () => {
+test("a truncated text-form battle background fails at unexpected EOF", () => {
   const bytes = ascii("RPGTLKIT BKG\r\n2\r\n0\r\nfield.bmp\r\n");
   const result = readBattleBackground(new BinaryReader(bytes));
   equal(result.ok, false);
   if (result.ok) {
     return;
   }
-  equal(result.error.offset, 12);
+  equal(result.error.offset, 31);
   equal(result.error.section, BATTLE_BACKGROUND_SECTION);
-  equal(result.error.message.includes("text form"), true);
+  equal(result.error.message.includes("unexpected end of file"), true);
 });
 
 test("a short battle background reports the field offset", () => {

@@ -18,3 +18,4 @@ export * from "./actor/index.ts";
 export * from "./resolver/index.ts";
 export * from "./package/index.ts";
 export * from "./registry/index.ts";
+export * from "./text/index.ts";

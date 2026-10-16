@@ -15,6 +15,12 @@ export const ANIMATION_MAGIC = "RPGTLKIT ANIM";
 /** The only minor version the binary animation layout accepts (format-spec §7.1). */
 export const ANIMATION_MINOR = 3;
 
+/**
+ * The offset of the binary/text detection byte for `.anm` (docs/spec/formats/legacy/README.md):
+ * `0x00` means binary, non-zero means the 2.x text form.
+ */
+export const ANIMATION_DETECT_OFFSET = 13;
+
 /** The format-spec section the animation reader and writer implement (G7). */
 export const ANIMATION_SECTION = "format-spec §7.1";
 

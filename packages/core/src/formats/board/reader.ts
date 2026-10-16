@@ -23,6 +23,7 @@ import {
   BOARD_SECTION,
   BOARD_VECTOR_MINOR,
   boardGrid,
+  createEmptyBoard,
   type Board,
   type BoardImage,
   type BoardLight,
@@ -36,7 +37,7 @@ import {
   type BoardTileRun,
   type BoardVector,
 } from "./model.ts";
-
+import { readTextBoard } from "./text-reader.ts";
 /** A located error for a board field (AD-18). */
 function fail(offset: number, section: string, message: string, path?: string): Result<never> {
   return err({ ...(path === undefined ? {} : { path }), offset, section, message });
@@ -158,6 +159,11 @@ function readTileMatrix(
 /** Read a board from `reader` (format-spec §4.1 dispatch, §4.2 layout). */
 export function readBoard(reader: BinaryReader): Result<Board> {
   const start = reader.offset;
+
+  if (reader.remaining === 0) {
+    return fail(start, BOARD_SECTION, "unexpected end of data reading magic: need 1 byte(s), 0 remain", reader.path);
+  }
+
   // §4.1 lists the detection byte first and the header second; the probe does
   // not move the cursor, so the header is read first and the detection checked
   // before any header error — a text board has no NUL-terminated magic to read.
@@ -166,13 +172,11 @@ export function readBoard(reader: BinaryReader): Result<Board> {
   const warnings: string[] = [];
 
   if (detection.ok && !detection.value) {
-    const offset = start + BOARD_DETECT_OFFSET;
-    return fail(
-      offset,
-      BOARD_SECTION,
-      `${BOARD_MAGIC}: unsupported 2.x line-oriented text board (byte at offset ${offset} is non-NUL); only the binary 3.x layout is implemented`,
-      reader.path,
-    );
+    const bytes = reader.readBytes(reader.remaining);
+    if (!bytes.ok) {
+      return bytes;
+    }
+    return readTextBoard(bytes.value, reader.path);
   }
   if (!header.ok) {
     return header;

@@ -783,17 +783,17 @@ test("a negative minor is refused at its own byte in each actor format (§1.4)",
   }
 });
 
-test("a 2.x text file is a located error at the detection byte", () => {
+test("a 2.x text file is parsed or reports located error at invalid line", () => {
   const tem = readError(ascii("RPGTLKIT CHAR\r\nname=Frap\r\n"), readCharacter);
-  equal(tem.offset, 13);
+  equal(tem.offset, 15);
   equal(tem.section, CHARACTER_SECTION);
 
   const itm = readError(ascii("RPGTLKIT ITEM\r\nname=man\r\n"), readItem);
-  equal(itm.offset, 13);
+  equal(itm.offset, 15);
   equal(itm.section, ITEM_SECTION);
 
   const ene = readError(ascii("RPGTLKIT ENEMY\r\nname=Pirate\r\n"), readEnemy);
-  equal(ene.offset, 14);
+  equal(ene.offset, 16);
   equal(ene.section, ENEMY_SECTION);
 });
 
