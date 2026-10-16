@@ -3,7 +3,7 @@ title: 'Tile bitmap (.tbm) reader and writer'
 type: 'feature'
 ticket: '25'
 created: '2026-10-15'
-status: 'ready-for-dev'
+status: in-progress
 baseline_revision: '0fd79bfc7178d9254cb42d082268abe705482af4'
 route: 'full'
 route_source: 'auto'
