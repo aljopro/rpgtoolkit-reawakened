@@ -13,6 +13,7 @@ import {
   type GameState,
   type ScriptError,
 } from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
 
 function run(source: string, state = createGameState({ seed: 3 })): GameState {
   startProgram(state.vm, { kind: "inline", text: source, compiler: "2" });
@@ -23,7 +24,7 @@ function errorOf(source: string): ScriptError {
   const state = createGameState({ seed: 3 });
   startProgram(state.vm, { kind: "inline", text: source, compiler: "2" });
   try {
-    advanceScriptTick(state, createScriptServices(state));
+    advanceOrFail(state, createScriptServices(state));
   } catch (error) {
     return error as ScriptError;
   }

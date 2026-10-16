@@ -48,13 +48,29 @@ export type LocalSlot = {
   ref: RefId;
 };
 
-/** One active call frame (AD-7). */
+/**
+ * One frame's error-handler slot (AD-7; ERR-1). Plain data: the handler belongs
+ * to the frame that set it, lasts until the frame returns, and stays after it
+ * fires. `active` is true while the handler is handling an error (between the
+ * failure and `resumeNext()`); `resume` is then the op index just after the
+ * failing statement, consumed once by `resumeNext()`.
+ */
+export type ErrorHandler = {
+  /** `label` jumps to `label`; `resumeNext` swallows the error and continues. */
+  mode: "label" | "resumeNext";
+  /** The handler label (function-local), or `null` in `resumeNext` mode. */
+  label: string | null;
+  active: boolean;
+  resume: number | null;
+};
+
+/** One active call frame (AD-7). `errorHandler` is `null` when no handler is set. */
 export type Frame = {
   program: ProgramRef;
   ip: number;
   locals: { [name: string]: LocalSlot };
   operands: Arg[];
-  errorHandler: null;
+  errorHandler: ErrorHandler | null;
   autoLocal: boolean;
   /** Receiver context for a class method; absent on legacy frames. */
   objectHandle?: number;
@@ -84,6 +100,11 @@ export type VmState = {
   redirects: Array<[string, string]>;
   effects: EffectRecord[];
   effectSeq: number;
+  /**
+   * Present and `true` only while `debug(false)` has switched interpreter
+   * messages off (ERR-2). Absent means on, so a fresh state is unchanged.
+   */
+  messagesOff?: true;
 };
 
 /** Build-time proof that the `vm` section stays plain data (G1 rule 2, AD-7). */

@@ -3,12 +3,16 @@ title: 'Error handling, located diagnostics, Logger and the harness report chang
 type: 'feature'
 ticket: 7
 created: '2026-10-16'
-status: ready-for-dev
+status: built
 baseline_revision: '5a7ad22679581abdda690a0232f1f1e2208af3dc'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/spec/engine/rpgcode-errors-and-threads.md', '{project-root}/docs/spec/engine/rpgcode-language.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/epic-rpgcode-vm.md']
+assignee: "Build37Errors"
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 ---
 
 ## Questions for the owner
@@ -89,6 +93,12 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/spec/engine/
 - **Diagnostic ownership:** the VM collects plain diagnostics on the injected script service/report channel; the engine drains that channel into `TickReport.diagnostics`. Logger records are a separate human/debug channel. A runtime error is therefore both RPGCode-visible and host-visible as AD-24 requires.
 - **Harness compatibility:** `runLog` keeps its existing `{ step, state, draw }` golden records and uses an optional observer/collector for report fields, avoiding a golden schema change while making requests and diagnostics available to callers.
 - **Checkpoint:** `plan_checkpoint = true`; implementation, verification and status transition wait for owner approval and the stable-code ruling.
+- **Failure-class table (implemented in `errors.ts`, asserted in `script-errors.test.ts`):** `unknown.command` (call), `arity.mismatch` (arity), `builtin.bad-arg` (argument), `builtin.obsolete` (builtin), `object.invalid` / `object.abstract-class` / `object.inaccessible-member` (object), `vm.modulo-by-zero` (arithmetic), `vm.bad-lvalue`, `vm.unknown-label`, `handler.top-level` / `handler.unknown-label` / `handler.not-handling`. `vm.stack-underflow`, `vm.bad-operand`, `builtin.out-not-by-ref` and `command.request-unsupported` are `internal` faults: catchable and diagnosed, but never silenced by `debug(false)`. Load-time prefixes (`syntax.`, `compile.`, `program.`, `restore.`, `thread.`) are not catchable. An unlisted plugin code is a catchable `builtin` failure.
+- **Handler state:** `Frame.errorHandler` is `null` (no handler) or `{ mode: "label" | "resumeNext", label, active, resume }`, plain data in the frame so a snapshot taken mid-handler restores it. `resume` is the op index just after the failing statement (from the per-program `statements` range table that lowering now records; the table is derived and never saved, so `COMPILER_VERSION` is unchanged). A failure inside a handler re-enters the still-active handler; nothing here disables it.
+- **Operand repair:** a label handler drops the frame's operands; a resume-next or unhandled failure continues at the next VM step with the failed op's stack effect repaired (it pops what it would have popped and leaves the unset value), so a failed call contributes unset.
+- **Legacy syntax:** `on error goto :label` and `on error resume next` parse into calls of `setErrorHandler` / `setResumeNextHandler`, so there is one runtime path. Top level is frame 0; a handler there is `handler.top-level`.
+- **Debug flag:** `debug(false)` sets the optional `vm.messagesOff: true` (absent means on), so fresh states and the golden hash are unchanged. `debug` and `debugger` were removed from the generated catalogue stubs (`tools/catalogue/generate.mjs` `IMPLEMENTED_COMMANDS`) and implemented in the core pack.
+- **Logger:** the port gained `debug` and `info` (and the `LogSink` type); `createLogger(sinks, minLevel)`, `NULL_LOGGER` and `createCollectingSink` live in `script/logging.ts`. Runtime failures log at `error`, `debugger(msg)` logs at `info` with code `script.debugger`.
 
 ## Plan Change Log
 
@@ -96,7 +106,12 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/spec/engine/
 
 ## Review Triage Log
 
-No review has run; this is the plan-checkpoint draft.
+- **false — resume-next routing:** `docs/spec/engine/rpgcode-errors-and-threads.md#error-handling` explicitly says `setResumeNextHandler()` continues at the next VM step; `handleFailure` advances `opIp + 1` and repairs the failed op's stack effect, matching that rule.
+- **false — nested statement ranges:** the smallest containing range is intentional: a failure in a nested statement resumes after that nested statement, while a condition/control op is contained only by the outer range. The existing handler and snapshot tests exercise both paths.
+- **false — trailing pop range:** `pop` has no failure-producing branch in the VM, so no runtime failure can originate at the trailing-pop boundary; executable failures use the recorded statement range.
+- **false — logger sink exceptions:** the plan requires injected plain-data sinks and non-fatal script failures, but does not require swallowing exceptions raised by a host-provided sink; preserving host sink failures is outside this change's contract.
+- **patch — request/diagnostic validation:** the initial checks accepted any request kind and omitted required kind-specific fields and non-negative diagnostic lines. `driver.ts` now validates the published request union's required shape and rejects negative lines before observer delivery.
+- **false — debug argument coercion:** the lexer lowers the documented `true`/`false` literals to numeric `1`/`0`, and `debug` uses the existing language truthiness contract; string coercion is not part of the documented toggle form.
 
 ## Design Notes
 
