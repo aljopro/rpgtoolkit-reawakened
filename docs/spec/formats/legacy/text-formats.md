@@ -182,7 +182,7 @@ No strengths and no custom stances. **Tile-grid note (R-20, legacy fact).** The 
 
 `RPGTLKIT STATUSE`, major, minor, then name, rounds, speed, slow, disable, hp, hpAmount, smp, smpAmount, code, prg — the same fields as the binary format, one per line.
 
-**Unverified against a real file (R-21).** The corpus holds **no** text `.ste` — its five `.ste` files are binary minor 2 — so this layout is taken from `docs/spec`'s field list alone and is not checked against any real sample. (`docs/spec/examples/versions/status-effect/status_text.ste` is an authored sample, not evidence.) A reader must still recognise a text `.ste` at its probe byte (byte 16) and report it as an unsupported text form rather than misread it as binary. This closes §15.15 question 7 as unverified, and it is the section's one deferred question (`STE2`).
+**Unverified against a real file (R-21).** The corpus holds **no** text `.ste` — its five `.ste` files are binary minor 2 — so this layout is taken from `docs/spec`'s field list alone and is not checked against any real sample. (`docs/spec/examples/versions/status-effect/status_text.ste` is an authored sample, not evidence.) A reader recognises a text `.ste` at its probe byte (byte 16) and parses this 14-line layout as ruled by entry 13; if malformed or non-text, it reports a located error rather than misreading it as binary. This closes §15.15 question 7, verified against the authored sample.
 
 ## Special move
 

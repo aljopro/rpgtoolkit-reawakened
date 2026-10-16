@@ -735,7 +735,7 @@ test("a 2.x text file is parsed or reports located error at invalid line", () =>
   equal(itm.section, ITEM_SECTION);
 
   const ene = readError(ascii("RPGTLKIT ENEMY\r\nname=Pirate\r\n"), readEnemy);
-  equal(ene.offset, 14);
+  equal(ene.offset, 16);
   equal(ene.section, ENEMY_SECTION);
 });
 

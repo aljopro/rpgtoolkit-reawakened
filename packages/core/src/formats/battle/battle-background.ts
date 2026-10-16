@@ -11,6 +11,7 @@
 import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import { BinaryWriter } from "../binary/writer.ts";
+import { TextLineReader } from "../text/line-reader.ts";
 import {
   BATTLE_BACKGROUND_DETECT_OFFSET,
   BATTLE_BACKGROUND_MAGIC,
@@ -18,6 +19,7 @@ import {
   BATTLE_MAX_MINOR,
   BATTLE_MIN_MINOR,
   type BattleBackground,
+  type BattleBackgroundTint,
   unsupportedBattleMinor,
   unsupportedTextForm,
 } from "./model.ts";
@@ -41,9 +43,7 @@ export function readBattleBackground(reader: BinaryReader): Result<BattleBackgro
   const detectAt = start + BATTLE_BACKGROUND_DETECT_OFFSET;
   const probe = reader.isBinaryAt(detectAt);
   if (probe.ok && !probe.value) {
-    return err(
-      unsupportedTextForm(reader, detectAt, BATTLE_BACKGROUND_SECTION, BATTLE_BACKGROUND_MAGIC),
-    );
+    return readTextBattleBackground(reader);
   }
   if (!header.ok) {
     return header;
@@ -151,4 +151,86 @@ export function writeBattleBackground(model: BattleBackground): Result<Uint8Arra
 
   writer.writeBytes(model.residue);
   return ok(writer.toBytes());
+}
+
+/** Read a Toolkit 2 minor 0 text battle background (docs/spec/formats/legacy/text-formats.md#fight-background). */
+function readTextBattleBackground(reader: BinaryReader): Result<BattleBackground> {
+  const lineReader = new TextLineReader(reader.bytes, reader.path, reader.offset);
+  const header = lineReader.nextLine("header", BATTLE_BACKGROUND_SECTION);
+  if (!header.ok) return header;
+  if (header.value.trim().toUpperCase() !== BATTLE_BACKGROUND_MAGIC.toUpperCase()) {
+    return err({
+      ...(reader.path === undefined ? {} : { path: reader.path }),
+      offset: 0,
+      section: BATTLE_BACKGROUND_SECTION,
+      message: `not a battle background: magic is "${header.value}", expected "${BATTLE_BACKGROUND_MAGIC}"`,
+    });
+  }
+  const major = lineReader.nextInt("major", BATTLE_BACKGROUND_SECTION);
+  if (!major.ok) return major;
+  const minor = lineReader.nextInt("minor", BATTLE_BACKGROUND_SECTION);
+  if (!minor.ok) return minor;
+  if (minor.value !== 0) {
+    return err({
+      ...(reader.path === undefined ? {} : { path: reader.path }),
+      offset: lineReader.offset,
+      section: BATTLE_BACKGROUND_SECTION,
+      message: `unsupported text battle background minor version ${minor.value}: expected 0`,
+    });
+  }
+
+  // 19 x 11 tile grid = 209 lines
+  const tiles: string[] = [];
+  for (let i = 0; i < 209; i++) {
+    const tile = lineReader.nextLine(`tile[${i}]`, BATTLE_BACKGROUND_SECTION);
+    if (!tile.ok) return tile;
+    tiles.push(tile.value);
+  }
+
+  const music = lineReader.nextLine("music", BATTLE_BACKGROUND_SECTION);
+  if (!music.ok) return music;
+  const selectSound = lineReader.nextLine("selectSound", BATTLE_BACKGROUND_SECTION);
+  if (!selectSound.ok) return selectSound;
+  const chooseSound = lineReader.nextLine("chooseSound", BATTLE_BACKGROUND_SECTION);
+  if (!chooseSound.ok) return chooseSound;
+  const readySound = lineReader.nextLine("readySound", BATTLE_BACKGROUND_SECTION);
+  if (!readySound.ok) return readySound;
+  const cantDoSound = lineReader.nextLine("cantDoSound", BATTLE_BACKGROUND_SECTION);
+  if (!cantDoSound.ok) return cantDoSound;
+
+  // Line 218 is reserved (Q9, legacy fact)
+  const reserved = lineReader.nextLine("reserved", BATTLE_BACKGROUND_SECTION);
+  if (!reserved.ok) return reserved;
+
+  // 19 x 11 x 3 RGB tint lines = 627 lines
+  const tints: BattleBackgroundTint[] = [];
+  for (let i = 0; i < 209; i++) {
+    const r = lineReader.nextInt(`tint[${i}].r`, BATTLE_BACKGROUND_SECTION, 0);
+    if (!r.ok) return r;
+    const g = lineReader.nextInt(`tint[${i}].g`, BATTLE_BACKGROUND_SECTION, 0);
+    if (!g.ok) return g;
+    const b = lineReader.nextInt(`tint[${i}].b`, BATTLE_BACKGROUND_SECTION, 0);
+    if (!b.ok) return b;
+    tints.push({ r: r.value, g: g.value, b: b.value });
+  }
+
+  const finished = lineReader.finish(BATTLE_BACKGROUND_SECTION);
+  if (!finished.ok) return finished;
+
+  reader.seek(lineReader.offset);
+
+  return ok({
+    magic: BATTLE_BACKGROUND_MAGIC,
+    major: major.value,
+    minor: minor.value,
+    image: "",
+    music: music.value,
+    menuMoveSound: selectSound.value,
+    menuChooseSound: chooseSound.value,
+    readySound: readySound.value,
+    cantDoSound: cantDoSound.value,
+    residue: new Uint8Array(0),
+    tiles,
+    tints,
+  });
 }

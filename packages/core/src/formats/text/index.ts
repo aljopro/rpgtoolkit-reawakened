@@ -1,1 +1,1 @@
-export * from "./line-reader.ts";
+export { TextLineReader } from "./line-reader.ts";

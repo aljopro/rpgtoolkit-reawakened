@@ -1,177 +1,179 @@
 /**
- * Line-oriented text reader for legacy Toolkit 1/2 text formats
- * (docs/spec/formats/legacy/text-formats.md).
+ * Line-based text reader for Toolkit 1 and 2 text files (format-spec §15,
+ * docs/spec/formats/legacy/text-formats.md).
  *
- * Pure (G2): consumes a Uint8Array using Windows-1252 decoding (via decodeCp1252)
- * and never touches a host. Every read returns a non-throwing Result with exact
- * byte offsets on errors (AD-18).
+ * Scans Windows-1252 ANSI bytes line by line, handling CRLF (\r\n), LF (\n),
+ * and CR (\r). Tracks exact 0-based byte offsets and 1-based line numbers so
+ * errors are accurately located without throwing (AD-18, G1).
  */
 
 import { err, ok, type Result } from "../result.ts";
 import { decodeCp1252 } from "../binary/cp1252.ts";
 
 export class TextLineReader {
+  private readonly data: Uint8Array;
   readonly path: string | undefined;
-  private readonly lines: string[] = [];
-  private readonly offsets: number[] = [];
-  private pos = 0;
+  private pos: number;
+  private currentLineNumber: number;
 
   constructor(bytes: Uint8Array, path?: string, startOffset = 0) {
+    this.data = bytes;
     this.path = path;
-    const len = bytes.length;
-    let lineStart = 0;
-    let i = 0;
-    while (i < len) {
-      if (bytes[i] === 0x0d && i + 1 < len && bytes[i + 1] === 0x0a) {
-        this.offsets.push(startOffset + lineStart);
-        this.lines.push(decodeCp1252(bytes, lineStart, i));
-        i += 2;
-        lineStart = i;
-      } else if (bytes[i] === 0x0a) {
-        this.offsets.push(startOffset + lineStart);
-        this.lines.push(decodeCp1252(bytes, lineStart, i));
-        i += 1;
-        lineStart = i;
-      } else {
-        i += 1;
-      }
-    }
-    if (lineStart < len) {
-      this.offsets.push(startOffset + lineStart);
-      this.lines.push(decodeCp1252(bytes, lineStart, len));
-    }
+    this.pos = startOffset;
+    this.currentLineNumber = 1;
   }
 
-  /** Current byte offset in the input bytes where the current line starts. */
+  /** Current byte offset in the buffer. */
   get offset(): number {
-    return this.offsets[this.pos] ?? (this.offsets[this.offsets.length - 1] ?? 0);
+    return this.pos;
   }
 
   /** Current 1-based line number. */
   get lineNumber(): number {
-    return this.pos + 1;
+    return this.currentLineNumber;
   }
 
-  /** Total number of lines in the file. */
-  get totalLines(): number {
-    return this.lines.length;
+  /** Remaining bytes in the buffer. */
+  get remaining(): number {
+    return this.data.length - this.pos;
   }
 
-  /** Remaining unconsumed lines. */
-  get remainingLines(): number {
-    return this.lines.length - this.pos;
-  }
-
-  /** Whether unconsumed lines remain. */
+  /** True while bytes remain unconsumed. */
   hasMore(): boolean {
-    return this.pos < this.lines.length;
+    return this.pos < this.data.length;
   }
 
-  /** Peek at the current line without advancing. */
-  peekLine(): string | undefined {
-    return this.lines[this.pos];
+  private fail(offset: number, section: string, message: string): Result<never> {
+    return err({
+      ...(this.path === undefined ? {} : { path: this.path }),
+      offset,
+      section,
+      message,
+    });
   }
 
-  /** Read the next raw line. */
+  /**
+   * Read the next line as a string.
+   */
   nextLine(fieldName: string, section: string): Result<string> {
-    if (this.pos >= this.lines.length) {
-      return err({
-        ...(this.path === undefined ? {} : { path: this.path }),
-        offset: this.offset,
+    if (this.pos >= this.data.length) {
+      return this.fail(
+        this.pos,
         section,
-        message: `unexpected end of file reading ${fieldName}`,
-      });
+        `unexpected end of file reading ${fieldName} at line ${this.currentLineNumber}`,
+      );
     }
-    const line = this.lines[this.pos]!;
-    this.pos += 1;
-    return ok(line);
+    const lineStart = this.pos;
+    let lineEnd = lineStart;
+    while (lineEnd < this.data.length) {
+      const b = this.data[lineEnd];
+      if (b === 0x0a || b === 0x0d) {
+        break;
+      }
+      lineEnd++;
+    }
+    const text = decodeCp1252(this.data, lineStart, lineEnd);
+    let nextPos = lineEnd;
+    if (nextPos < this.data.length) {
+      if (this.data[nextPos] === 0x0d) {
+        nextPos++;
+        if (nextPos < this.data.length && this.data[nextPos] === 0x0a) {
+          nextPos++;
+        }
+      } else if (this.data[nextPos] === 0x0a) {
+        nextPos++;
+      }
+    }
+    this.pos = nextPos;
+    this.currentLineNumber++;
+    return ok(text);
   }
 
   /**
    * Read the next line as an integer.
-   * If the line trims to empty and defaultForEmpty is provided, returns defaultForEmpty.
+   * If the line is empty/whitespace and `defaultForEmpty` is defined, returns that default.
    */
   nextInt(fieldName: string, section: string, defaultForEmpty?: number): Result<number> {
-    const at = this.offset;
-    const lineRes = this.nextLine(fieldName, section);
-    if (!lineRes.ok) {
-      return lineRes;
+    const at = this.pos;
+    const lineNum = this.currentLineNumber;
+    const lineResult = this.nextLine(fieldName, section);
+    if (!lineResult.ok) {
+      return lineResult;
     }
-    const trimmed = lineRes.value.trim();
-    if (trimmed === "") {
+    const raw = lineResult.value.trim();
+    if (raw === "") {
       if (defaultForEmpty !== undefined) {
         return ok(defaultForEmpty);
       }
-      return err({
-        ...(this.path === undefined ? {} : { path: this.path }),
-        offset: at,
+      return this.fail(
+        at,
         section,
-        message: `expected integer for ${fieldName}, found empty line`,
-      });
+        `empty line reading integer ${fieldName} at line ${lineNum}`,
+      );
     }
-    const n = Number(trimmed);
-    if (Number.isNaN(n) || !Number.isInteger(n)) {
-      return err({
-        ...(this.path === undefined ? {} : { path: this.path }),
-        offset: at,
+    const val = parseInt(raw, 10);
+    if (Number.isNaN(val)) {
+      return this.fail(
+        at,
         section,
-        message: `invalid integer "${lineRes.value}" for ${fieldName}`,
-      });
+        `invalid integer for ${fieldName} ("${lineResult.value}") at line ${lineNum}`,
+      );
     }
-    return ok(n);
+    return ok(val);
   }
 
   /**
    * Read the next line as a floating-point number.
-   * If the line trims to empty and defaultForEmpty is provided, returns defaultForEmpty.
+   * Handles decimals and exponential notation (e.g. 6.66666666666667E-02).
    */
   nextFloat(fieldName: string, section: string, defaultForEmpty?: number): Result<number> {
-    const at = this.offset;
-    const lineRes = this.nextLine(fieldName, section);
-    if (!lineRes.ok) {
-      return lineRes;
+    const at = this.pos;
+    const lineNum = this.currentLineNumber;
+    const lineResult = this.nextLine(fieldName, section);
+    if (!lineResult.ok) {
+      return lineResult;
     }
-    const trimmed = lineRes.value.trim();
-    if (trimmed === "") {
+    const raw = lineResult.value.trim();
+    if (raw === "") {
       if (defaultForEmpty !== undefined) {
         return ok(defaultForEmpty);
       }
-      return err({
-        ...(this.path === undefined ? {} : { path: this.path }),
-        offset: at,
+      return this.fail(
+        at,
         section,
-        message: `expected number for ${fieldName}, found empty line`,
-      });
+        `empty line reading float ${fieldName} at line ${lineNum}`,
+      );
     }
-    const n = Number(trimmed);
-    if (Number.isNaN(n)) {
-      return err({
-        ...(this.path === undefined ? {} : { path: this.path }),
-        offset: at,
+    const val = Number(raw);
+    if (Number.isNaN(val)) {
+      return this.fail(
+        at,
         section,
-        message: `invalid number "${lineRes.value}" for ${fieldName}`,
-      });
+        `invalid float for ${fieldName} ("${lineResult.value}") at line ${lineNum}`,
+      );
     }
-    return ok(n);
+    return ok(val);
   }
 
   /**
-   * Verifies no extra non-empty lines remain after reading all expected fields.
+   * Finish reading. Consumes any trailing whitespace / empty lines up to EOF,
+   * and reports an error if non-empty content remains unconsumed.
    */
   finish(section: string): Result<void> {
-    // Check if any non-empty lines remain
-    while (this.pos < this.lines.length) {
-      const line = this.lines[this.pos]!;
-      if (line.trim() !== "") {
-        return err({
-          ...(this.path === undefined ? {} : { path: this.path }),
-          offset: this.offset,
+    let scan = this.pos;
+    while (scan < this.data.length) {
+      const b = this.data[scan];
+      if (b === 0x0a || b === 0x0d || b === 0x20 || b === 0x09) {
+        scan++;
+      } else {
+        return this.fail(
+          this.pos,
           section,
-          message: `${this.lines.length - this.pos} unexpected trailing line(s)`,
-        });
+          `unexpected trailing data at line ${this.currentLineNumber} (byte offset ${this.pos})`,
+        );
       }
-      this.pos += 1;
     }
+    this.pos = this.data.length;
     return ok(undefined);
   }
 }

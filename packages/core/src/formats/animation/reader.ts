@@ -9,7 +9,10 @@
 
 import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
+import { unpackColorref } from "../binary/color.ts";
+import { TextLineReader } from "../text/line-reader.ts";
 import {
+  ANIMATION_DETECT_OFFSET,
   ANIMATION_MAGIC,
   ANIMATION_MINOR,
   ANIMATION_SECTION,
@@ -26,6 +29,11 @@ import {
  */
 export function readAnimation(reader: BinaryReader): Result<Animation> {
   const start = reader.offset;
+  const detectAt = start + ANIMATION_DETECT_OFFSET;
+  const probe = reader.isBinaryAt(detectAt);
+  if (probe.ok && !probe.value) {
+    return readTextAnimation(reader);
+  }
   const header = reader.header();
   if (!header.ok) {
     return header;
@@ -106,4 +114,64 @@ export function readAnimation(reader: BinaryReader): Result<Animation> {
     },
     warnings,
   );
+}
+
+/** Read a Toolkit 2 minor 0 text animation (docs/spec/formats/legacy/text-formats.md#animation). */
+function readTextAnimation(reader: BinaryReader): Result<Animation> {
+  const lineReader = new TextLineReader(reader.bytes, reader.path, reader.offset);
+  const header = lineReader.nextLine("header", ANIMATION_SECTION);
+  if (!header.ok) return header;
+  if (header.value.trim().toUpperCase() !== ANIMATION_MAGIC.toUpperCase()) {
+    return err({
+      ...(reader.path === undefined ? {} : { path: reader.path }),
+      offset: 0,
+      section: ANIMATION_SECTION,
+      message: `not an animation: magic is "${header.value}", expected "${ANIMATION_MAGIC}"`,
+    });
+  }
+  const major = lineReader.nextInt("major", ANIMATION_SECTION);
+  if (!major.ok) return major;
+  const minor = lineReader.nextInt("minor", ANIMATION_SECTION);
+  if (!minor.ok) return minor;
+  const width = lineReader.nextInt("width", ANIMATION_SECTION);
+  if (!width.ok) return width;
+  const height = lineReader.nextInt("height", ANIMATION_SECTION);
+  if (!height.ok) return height;
+  // Frame count line is ignored per R-17 (read 51 frames by position)
+  const frameCount = lineReader.nextLine("frame UB", ANIMATION_SECTION);
+  if (!frameCount.ok) return frameCount;
+
+  const frames: AnimationFrame[] = [];
+  for (let i = 0; i < 51; i++) {
+    const image = lineReader.nextLine(`frame[${i}].image`, ANIMATION_SECTION);
+    if (!image.ok) return image;
+    const transpColor = lineReader.nextInt(`frame[${i}].transpColor`, ANIMATION_SECTION, 0);
+    if (!transpColor.ok) return transpColor;
+    const sound = lineReader.nextLine(`frame[${i}].sound`, ANIMATION_SECTION);
+    if (!sound.ok) return sound;
+    frames.push({
+      image: image.value,
+      transparent: unpackColorref(transpColor.value),
+      sound: sound.value,
+    });
+  }
+
+  const delay = lineReader.nextFloat("delay", ANIMATION_SECTION, 0);
+  if (!delay.ok) return delay;
+
+  const finished = lineReader.finish(ANIMATION_SECTION);
+  if (!finished.ok) return finished;
+
+  reader.seek(lineReader.offset);
+
+  return ok({
+    magic: ANIMATION_MAGIC,
+    major: major.value,
+    minor: minor.value,
+    width: width.value,
+    height: height.value,
+    frames,
+    delay: delay.value,
+    residue: new Uint8Array(0),
+  });
 }
