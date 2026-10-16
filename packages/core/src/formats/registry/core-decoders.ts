@@ -18,6 +18,12 @@
 import { BinaryReader } from "../binary/reader.ts";
 import { decodeTexture } from "../image/index.ts";
 import { readTileset } from "../tileset/tileset.ts";
+import {
+  readTileBitmap,
+  TILE_BITMAP_MAGIC,
+  TILE_BITMAP_SECTION,
+  type TileBitmap,
+} from "../tile-bitmap/index.ts";
 import { readMainFile, MAIN_MAGIC, type MainFile } from "../main-file/index.ts";
 import { readAnimation, ANIMATION_MAGIC, type Animation } from "../animation/index.ts";
 import {
@@ -128,6 +134,8 @@ export interface CoreDecoders {
   board: AssetDecoder<DecodedBoard>;
   /** §3.1 — tilesets (`.tst` version 20, `.iso` version 30). */
   tileset: AssetDecoder<Tileset>;
+  /** §3.6 — tile bitmaps (`.tbm`). */
+  "tile-bitmap": AssetDecoder<TileBitmap>;
   /** §7.1 — animations. */
   animation: AssetDecoder<Animation>;
   /** §6.1 — characters. */
@@ -171,6 +179,13 @@ export const CORE_DECODERS: CoreDecoders = {
     detect: (header) =>
       header.length >= 2 && header[1] === 0 && TILESET_VERSION_BYTES.some((value) => header[0] === value),
     decode: (bytes) => readTileset(bytes),
+  },
+  "tile-bitmap": {
+    id: "tile-bitmap",
+    section: TILE_BITMAP_SECTION,
+    extensions: ["tbm"],
+    detect: magicIs(TILE_BITMAP_MAGIC),
+    decode: (bytes) => readTileBitmap(new BinaryReader(bytes)),
   },
   animation: {
     id: "animation",

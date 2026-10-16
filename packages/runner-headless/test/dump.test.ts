@@ -22,6 +22,7 @@ import {
   writeMainFile,
   writeSpecialMove,
   writeStatusEffect,
+  writeTileBitmap,
   writeTileset,
   type Animation,
   type MainFile,
@@ -30,6 +31,7 @@ import {
   type SpecialMove,
   type StatusEffect,
   type Tileset,
+  type TileBitmap,
 } from "@tk-reawakened/core";
 import { main } from "../src/index.ts";
 import { digestModel, digestRgba } from "../src/dump/digest.ts";
@@ -87,6 +89,24 @@ const TILESET: Tileset = {
 };
 
 const TILESET_BYTES = unwrap(writeTileset(TILESET));
+
+/** A §3.6 tile bitmap: a 1×1 drawn grid, so four cells are stored and one is drawn. */
+const TILE_BITMAP: TileBitmap = {
+  magic: "TK3 TILEBITMAP",
+  major: 3,
+  minor: 0,
+  width: 1,
+  height: 1,
+  cells: [
+    { tile: "village.tst9", r: 0, g: 0, b: 0 },
+    { tile: "village.tst8", r: 0, g: 0, b: 0 },
+    { tile: "", r: 0, g: 0, b: 0 },
+    { tile: "village.tst10", r: 0, g: 0, b: 0 },
+  ],
+  residue: new Uint8Array(0),
+};
+
+const TILE_BITMAP_BYTES = unwrap(writeTileBitmap(TILE_BITMAP));
 
 /** A minimal §2 main file at minor 0, the layout §2 documents for the earliest games. */
 const MAIN_FILE: MainFile = {
@@ -386,6 +406,7 @@ const DISPATCH: ReadonlyArray<readonly [string, DataFormatId, string]> = [
   ["Boards/start.brd", "board", "format-spec §4"],
   ["Tiles/base.tst", "tileset", "format-spec §3.1"],
   ["Tiles/iso.iso", "tileset", "format-spec §3.1"],
+  ["Bitmap/house.tbm", "tile-bitmap", "format-spec §3.6"],
   ["Misc/man/man_s.anm", "animation", "format-spec §7.1"],
   ["Chrs/start.tem", "character", "format-spec §6.1"],
   ["Item/man.itm", "item", "format-spec §6.2"],
@@ -504,6 +525,19 @@ test("a §4.8 pre-vector board is read, converted and parsed", () => {
     equal(entry.format, "board");
     // The summary names the conversion: the §4.8 minor-3 board became a §4.2 minor-4 model.
     ok(entry.summary.includes("2.4 (pre-vector, converted to vectors)"), entry.summary);
+  }
+});
+
+test("a tile bitmap is parsed, not skipped, and its summary counts drawn and stored cells", () => {
+  const report = buildReport([{ path: "Bitmap/house.tbm", bytes: TILE_BITMAP_BYTES }]);
+  deepEqual(report.counts, { parsed: 1, skipped: 0, failed: 0 });
+  const entry = report.files[0];
+  equal(entry?.status, "parsed");
+  if (entry?.status === "parsed") {
+    equal(entry.format, "tile-bitmap");
+    equal(entry.section, "format-spec §3.6");
+    ok(entry.summary.includes("1×1 tiles drawn"), entry.summary);
+    ok(entry.summary.includes("4 cells stored (1 drawn)"), entry.summary);
   }
 });
 
