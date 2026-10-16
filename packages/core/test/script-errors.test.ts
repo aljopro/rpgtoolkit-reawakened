@@ -11,7 +11,6 @@ import {
   createCollectingSink,
   createGameState,
   createLogger,
-  createScriptServices,
   drainDiagnostics,
   failureClass,
   hashState,
@@ -28,6 +27,7 @@ import {
   type PluginDefinition,
   type ScriptServices,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 type Outcome = {
   readonly state: GameState;

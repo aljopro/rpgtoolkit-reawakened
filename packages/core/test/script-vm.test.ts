@@ -7,7 +7,6 @@ import {
   advanceScriptTick,
   canon,
   createGameState,
-  createScriptServices,
   createVmState,
   globalRef,
   hashState,
@@ -27,6 +26,7 @@ import {
   type WaitPoll,
 } from "../src/index.ts";
 import { advanceOrFail } from "./script-failures.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 function errorOf(run: () => unknown): { code: string; message: string } {
   try {

@@ -4,7 +4,6 @@ import { test } from "node:test";
 import {
   advanceScriptTick,
   createGameState,
-  createScriptServices,
   hashState,
   restoreGameState,
   snapshot,
@@ -13,6 +12,7 @@ import {
   type ScriptError,
 } from "../src/index.ts";
 import { advanceOrFail } from "./script-failures.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 function run(program: string, seed = 0): GameState {
   const state = createGameState({ seed });

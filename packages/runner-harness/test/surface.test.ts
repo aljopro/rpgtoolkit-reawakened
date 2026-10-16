@@ -15,6 +15,7 @@ test("runner-harness public surface matches the pinned export list with no doubl
     "parseGolden",
     "parseRun",
     "randomSplit",
+    "resolvePluginManifest",
     "restoreScriptHost",
     "runLog",
   ].sort();

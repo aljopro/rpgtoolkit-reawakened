@@ -56,6 +56,8 @@ export type CommandView = {
   readonly rng: RngPort;
   readonly clock: ClockPort;
   readonly state?: GameState;
+  /** Manifest options for the layer currently handling this command. */
+  readonly options?: PlainData;
   /** The id of the thread whose call is running; the VM sets it before every call. */
   thread?: number;
 };
@@ -132,4 +134,10 @@ export type PluginDefinition = {
   readonly commands: readonly BuiltinSpec[];
   /** Optional format contributions layered after the core decoder set (AD-31). */
   readonly decoders?: readonly AssetDecoder[];
+};
+
+/** A host-resolved definition plus its manifest configuration. */
+export type ResolvedPlugin = {
+  readonly definition: PluginDefinition;
+  readonly options?: PlainData;
 };

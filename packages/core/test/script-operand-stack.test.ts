@@ -5,7 +5,6 @@ import {
   advanceScriptTick,
   canon,
   createGameState,
-  createScriptServices,
   hashState,
   restoreGameState,
   runThreadsPhase,
@@ -15,6 +14,7 @@ import {
   startProgram,
   type GameState,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 const SYNTHETIC = `global(hits) = 0
 count = 4
