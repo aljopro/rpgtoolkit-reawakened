@@ -103,6 +103,7 @@ Build after 3.9 and 3.6 merge: the `vm.ts` cutover and the registry change touch
 ## Plan Change Log
 
 - 2026-10-16 — initial checkpoint draft from ticket 3.25, ADR 0004 decision 6, AD-8/AD-17/AD-24, `docs/spec/engine/plugins-and-battle.md`, `docs/spec/engine/main-loop-and-startup.md`, `docs/spec/formats/main-file.md`, `docs/architecture-options.md`, and the current 3.3 registry/VM seam.
+- 2026-10-16 — owner ruled all seven open questions as recommended and approved the plan edit recording them (ruling 6 refined: resolved `{ definition, options }` entries, per-layer `CommandView.options`, VM reads options by plugin id). Status set to ready-for-dev. Build waits on 3.9 and 3.6.
 
 ## Review Triage Log
 
