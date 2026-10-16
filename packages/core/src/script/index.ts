@@ -33,6 +33,8 @@ export type {
 export { foldAscii, tokenize } from "./lex.ts";
 export type { Token } from "./lex.ts";
 export { parse } from "./parse.ts";
+export { compileTk2, normaliseTk2, parseTk2 } from "./tk2.ts";
+export type { Tk2CommandLookup } from "./tk2.ts";
 export { lower } from "./lower.ts";
 export type {
   CompiledClass,
@@ -42,7 +44,7 @@ export type {
   StatementRange,
 } from "./lower.ts";
 export { COMPILER_VERSION, compileInline, compileProgram } from "./program.ts";
-export type { Program, ProgramRef } from "./program.ts";
+export type { Program, ProgramRef, ScriptDialect } from "./program.ts";
 export {
   createVmState,
   endBoardThreads,

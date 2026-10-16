@@ -8,6 +8,18 @@ import { createNullAudio, createScriptHost, restoreScriptHost, runLog, type Run 
 
 const TRACER = 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n';
 
+test("selects the TK2 dialect and compatibility manifest entry", () => {
+  const host = createScriptHost({
+    program: "#score! = 2\n#Mwin(Hello)\n#end\n",
+    seed: 0,
+    dialect: "tk2",
+    manifest: [{ id: "tk2" }],
+  });
+  host.advance(1, []);
+  equal(host.state().vm.globals.score, 2);
+  equal(host.state().vm.threads[0]!.status, "finished");
+});
+
 function tracerHost(seed = 0) {
   return createScriptHost({ program: TRACER, seed });
 }

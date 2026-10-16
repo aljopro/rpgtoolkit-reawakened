@@ -45,8 +45,8 @@ import {
   type TickReport,
 } from "@tk-reawakened/core";
 import { CATALOGUE_STUBS_PLUGIN, CORE_PLUGIN } from "@tk-reawakened/core";
+import { TK2_COMPAT_PLUGIN } from "@tk-reawakened/plugin-tk2-compat";
 import { resolvePluginManifest } from "./script-plugin-resolver.ts";
-
 type HostResolution = {
   readonly plugins: readonly ResolvedPlugin[];
   readonly diagnostics: readonly Diagnostic[];
@@ -71,6 +71,7 @@ function resolveHostPlugins(
   const table: Record<string, PluginDefinition> = {
     core: CORE_PLUGIN,
     catalogue: CATALOGUE_STUBS_PLUGIN,
+    tk2: TK2_COMPAT_PLUGIN,
   };
   if (definitions !== undefined) {
     for (const definition of definitions) {
@@ -98,10 +99,11 @@ function resolveHostPlugins(
 export type ScriptHostInit = {
   readonly program: string;
   readonly seed: number;
+  /** Selects the pure TK2 frontend; default is the TK3 frontend. */
+  readonly dialect?: "tk2" | "tk3";
   /** Optional game manifest; omitted means the engine default manifest. */
   readonly manifest?: PluginManifest;
   readonly patch?: PluginManifestPatch;
-  /** Host-side definitions available to the manifest resolver. */
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
   readonly sinks?: readonly LogSink[];
@@ -182,7 +184,10 @@ function createHost(
 /** Start `program` (inline source) in a manifest-resolved VM. */
 export function createScriptHost(init: ScriptHostInit): ScriptHost {
   const gameState = createGameState({ seed: init.seed });
-  const resolution = resolveHostPlugins(init.manifest, init.patch, init.plugins);
+  const manifest =
+    init.manifest ??
+    (init.dialect === "tk2" ? [...ENGINE_DEFAULT_MANIFEST, { id: "tk2" }] : undefined);
+  const resolution = resolveHostPlugins(manifest, init.patch, init.plugins);
   const services = createScriptServices(
     gameState,
     resolution.plugins,
@@ -192,6 +197,7 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
     kind: "inline",
     text: init.program,
     compiler: COMPILER_VERSION,
+    dialect: init.dialect ?? "tk3",
   });
   return createHost(gameState, services, resolution.diagnostics);
 }
