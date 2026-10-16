@@ -3,7 +3,7 @@ title: 'Migrate section 15 into docs/spec/formats/legacy and rule its conflicts'
 type: 'chore'
 ticket: '13'
 created: '2026-10-15'
-status: ready-for-dev
+status: in-progress
 baseline_revision: '3509ec22bc67524ceaf142724245cf7e254f14db'
 route: 'full'
 route_source: 'auto'
