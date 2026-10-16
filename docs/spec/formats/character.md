@@ -4,6 +4,8 @@ A player character: the RPGCode variables that hold its stats, starting stats, l
 
 Header text: `RPGTLKIT CHAR`. Newest minor: **8**. The original engine refuses minor < 5 ("Please save … in the editor"); the editor converts older files.
 
+**Accepted `minor`: 0-8 — Reawakened rule.** The conditional rows above span that range (`minor = 3`, `< 5`, `≥ 5`, `≥ 6`, `≥ 7`, `≥ 8`), so a reader accepts 0-8 and refuses `minor` 9 or higher and a negative version field rather than guessing a neighbouring layout ([README.md](README.md#header-and-version)). *Caveat:* the 2.x era also wrote `.tem` at minor 3 and 4, which is why the range starts at 0 rather than at the base-bearing minor; a reader that applies the rows above to such a file leaves residue bytes rather than failing. <!-- OWNER: chose 0–8 for §6.1 (the range the conditional rows span and the reader hard-codes) over a narrower 3–8, because §6.1's minor<5 rows exist and a TK2-era minor 3/4 file must at least be recognised; the mismatch is named rather than silently accepted. -->
+
 **Stats live in script variables.** The character file names the RPGCode global variables that hold each stat (for example `Frap[hp]!`). The engine stores the starting values into those variables when the character joins the party, and every later change goes through them. Renaming a variable in the file renames the stat.
 
 ## Layout
@@ -60,9 +62,9 @@ The file ends here.
 
 ## Defaults and fall-backs
 
-- **Default polygons** (minor < 8): collision = rectangle from (−15, −15) to (15, 0); activation = rectangle from (−24, −24) to (24, 8). The sample characters store exactly these.
+- **Default polygons** (minor < 8) — the ruled values: collision = rectangle from (−15, −15) to (15, 0); activation = rectangle from (−24, −24) to (24, 8). On isometric boards the bases are diamonds instead. The sample characters store exactly these, and a file that predates stored bases (a `.tem` below minor 8) takes them when it is read; the pre-vector board conversion generates no base.
 - **Missing animations:** a missing diagonal falls back to the nearest horizontal direction; a missing idle animation falls back to the walk animation.
-- **Levelling.** The original engine uses `experienceIncrease` inconsistently in three places (an integer percentage that rounds to 0 below 100, a multiplier `1 + value`, and `1 + value/100`). A compatible engine should pick one and document it; the editor's UI presents it as a percentage.
+- **Levelling.** The original engine uses `experienceIncrease` inconsistently in three places (an integer percentage that rounds to 0 below 100, a multiplier `1 + value`, and `1 + value/100`). A compatible engine should pick one and document it; the editor's UI presents it as a percentage. **Reawakened rule (R-16):** the levelling *arithmetic* stays as written above — the battle work (epic 7) rules it — and this page fixes only the field list. The first-level requirement is `levelType`, at minor 3 a single byte and otherwise an `int`.
 
 ## Older versions
 

@@ -14,12 +14,24 @@ Header text: `RPGTLKIT BOARD`. Newest minor: **4** (the "vector" layout introduc
    - **any other value, including 5+ and negative** → [vector layout](#vector-layout-minor-4-and-later). A future minor is read as minor 4 without warning.
    - The original editor also refuses `major ≠ 2`; the engine ignores `major`.
 
+**A future minor — Reawakened rule (ADD-1).** A `minor` above the newest (5 and up) is read as the vector layout without a warning, so a file written by a later editor still loads rather than being refused as an unlisted value. The landed reader does this (`packages/core/src/formats/board/reader.ts:188-207`).
+
 ## Coordinates
 
 - **Tile coordinates** are 1-based: x = 1..width, y = 1..height, layer = 1..sizeL.
 - **Pixel coordinates** are board pixels from the top-left of the board, (0,0). One tile is 32×32 pixels on normal boards.
 - **`coordType`**: `0` normal grid, `1` isometric "stacked" (older staggered-column method), `2` isometric "rotated" (axes rotated 60°/30°), optionally combined with the flag `4`. Flag 4 is the editor's **"Use pixel coordinates"** option (a checkbox in the New Board dialog, and a one-way menu command on an existing board). It marks the board as using absolute pixel coordinates rather than tile coordinates for the positions that scripts and the editor display. The sample boards use `0` and `4`; both are normal grids. > **Inferred:** exactly which script-visible coordinates flag 4 changes is not fully established.
 - **Effective grid.** For isometric-rotated boards the tile and shade streams cover a square `(sizeX + sizeY) × (sizeX + sizeY)` grid; otherwise `sizeX × sizeY`. The stored `sizeX`/`sizeY` remain the logical size.
+
+**Tile-to-pixel conversion (legacy fact).** Tile indices are 1-based. The tile's bounding-cell top-left, then a base point, gives the stored pixel position:
+
+| System | x | y | base point |
+|---|---|---|---|
+| 2D | `(x−1)·32` | `(y−1)·32` | `+16, +31` (bottom-centre of the tile) |
+| iso stacked | `64x − (y odd ? 32 : 64)` | `16y − 16` | `+0, +0` (tile centre) |
+| iso rotated | `(x − y + sizeX)·32` | `(x + y − sizeX)·16 − 16` | `+0, +0` |
+
+The inverse snaps to the nearest 32×16 diamond centre; for 2D, `tx = floor(px/32) + 1` and `ty = floor(py/32) + 1` after subtracting the base point, and for iso-rotated `ty = floor((py+16)/32) − floor(px/64) + sizeX` and `tx = floor(px/32) + ty − sizeX`. The **stacked → rotated** upgrade (a one-way editor command) maps `xr = xs + floor((ys − 1)/2)` and `yr = floor(ys/2) + 1 − xs + sizeX`. Movement directions are an 8-way enum: E = 1, SE = 2, S = 3, SW = 4, W = 5, NW = 6, N = 7, NE = 8 (0 = idle).
 
 ## Vector layout (minor 4 and later)
 
@@ -35,6 +47,14 @@ Header text: `RPGTLKIT BOARD`. Newest minor: **4** (the "vector" layout introduc
 | 6 | LUT × (UB+1) | string | [tile reference](README.md#tile-references) for each LUT index. **Index 0 is always empty (= no tile).** The editor writes unused entries as empty strings and only trims unused entries from the end, so indices are stable. Entries ending in `.tan` are animated tiles. |
 | 7 | tile stream | shorts | One LUT index per cell, run-length encoded. Cell order: **layer outermost (1..sizeL), then y (1..h), then x fastest (1..w)**. A value ≥ 0 is one cell with that LUT index. A negative value `−c` is followed by one short `idx` and means *c* consecutive cells of `idx`. Runs may cross rows and layers. The stream has no terminator: it ends when `w × h × sizeL` cells have been produced (the original engine also stops if a run overshoots the end). |
 
+### Size limits
+
+**Reawakened rule (R-25).** A negative `sizeX`, `sizeY` or `sizeL` is invalid and a reader reports it. A reader also refuses a board whose tile matrix would hold more than **4,194,304 cells** (the effective grid times `sizeL`) — a located error before it allocates anything. *Reason:* the limit is not part of the format but an implementation guard, because a run marker fills up to 32,768 cells with four bytes, so without it a file of a few kilobytes could make a reader reserve gigabytes. Real boards are about a hundred times smaller. A writer refuses a board the reader would refuse. The guard is in `packages/core/src/formats/board/reader.ts:188-207` and `:219-243`.
+
+**LUT absence and empty slots.** When `lutUpperBound ≥ 0` the table has that many + 1 entries and **index 0 is always the empty "no tile" entry**; `-1` means the board has **no table at all**, and then there is no index 0. Inside an existing table, unused slots may be empty, and an empty slot is not the same as the table being absent, because it keeps later indices stable. A cell whose LUT entry is a `.tan` file is an animated tile, expanded at load time into one LUT slot per frame.
+
+**Run markers.** The index after a run marker **must be `≥ 0`**: a run marker whose cell index is itself a marker is invalid (runs do not nest) and a reader reports it rather than reading a second run. A run that carries the traversal past the layer or the last layer is read in full, its extra cells kept and a **warning** reported, so an over-long run still round-trips; the same holds for a shade layer whose records cover more cells than the grid.
+
 ### Tile shading
 
 Per-tile RGB tint, used for shadows and colour effects.
@@ -45,6 +65,8 @@ Per-tile RGB tint, used for shadows and colour effects.
 | 9 | × (UB+1) shading layer | | |
 | 9a | layer | **int** | the top board layer the shading is cast onto |
 | 9b | cells | groups of 4 shorts | `count, r, g, b`, covering the effective grid with y outermost and x fastest (no layers). `count` ≤ 1 is one cell; `count` > 1 is a run of that many cells (runs wrap rows). r, g, b are added to the tile colour, range −255..255. The group always starts with `count`, because r, g, b can be negative. |
+
+**Shading arithmetic — legacy fact.** Shades and ambient values are signed additive RGB offsets in the range −255..+255. A drawn tile pixel's colour is `clamp(src + shadeLayer + boardAmbient + globalAmbient, 0, 255)` per channel; transparent pixels are left alone. Shading applies to board tiles and tile-built sprites, and the ambient level also applies to images and sprite frames. The pure-white/pure-black pre-tint that makes them shadable is stated in [tiles.md](tiles.md#shading). Shading is a render-time concern; the pre-vector conversion leaves sums unclamped (see [legacy/older-binary-versions.md](legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)).
 
 ### Lights
 
@@ -59,6 +81,21 @@ Light sources are editable objects. The engine bakes them into the shading at lo
 | 14 | × (UB+1) node | int x, int y | board pixels |
 | 15 | colours UB | short | the editor always writes 1 (two colours) |
 | 16 | × (UB+1) colour | short r, g, b | −255..255; colour 0 = edge / gradient start, colour 1 = centre / gradient end |
+
+### Board pixel dimensions
+
+| coordType | width | height |
+|---|---|---|
+| 2D | `32·sizeX` | `32·sizeY` |
+| iso stacked | `64·sizeX − 32` | `16·sizeY − 16` |
+| iso rotated | `64·sizeX − 32` | `32·sizeY` |
+
+### Drawing order and effects
+
+* **Layer order:** background colour, then background image, then layer 1 tiles, then layer 1 images, then layer 2, and so on. Within a layer, images draw over tiles; sprites draw on their own layer, z-ordered by y.
+* **Animated tiles** cycle at their own frame rate; the first frame stands in for the tile when static.
+* **Parallax image** (type 1) scrolls so the image's extent matches the board's extent relative to the screen, `scroll = (imageSize − screenSize) / (boardPixelSize − screenSize)` per axis; an image exactly the board's pixel size is drawn as normal. **Stretch image** (type 2) is scaled to the board's pixel size.
+* **"Run once" programs** are not a separate flag: the editor writes a unique GUID name into both `initialVar` and `finalVar`, sets `initialValue = ""` and `finalValue = "_guid"`, and the behaviour falls out of the conditional-activation rule.
 
 ### Vectors
 
@@ -113,6 +150,8 @@ Polygons or polylines that give a layer its collision and special areas.
 | 49 | (reserved) | short | the editor writes −1; ignored |
 
 **Compatibility note:** the original engine skips entries whose file name is empty *without keeping their slot*, so later items shift down one index (unlike programs). Scripts that address board items by index see the shifted numbering.
+
+**Empty slots — Reawakened rule (R-05, R-06).** Our **reader keeps every stored slot**, in both the program list and the item list, empty ones included, so a board round-trips byte for byte (see [README.md](README.md#bytes-after-the-last-documented-field)). The **pre-vector converter** compacts both lists (drops empty slots), matching the 3.1.0 editor's conversion. At run time, program indices are kept on minor 4 and compacted on minors 2-3, and item indices are always compacted — so a reader of a pre-vector board must not assume the stored item indices survive the upgrade.
 
 ### Layer images
 
