@@ -12,7 +12,6 @@ import {
   CORE_PLUGIN,
   COMPILER_VERSION,
   createGameState,
-  createScriptServices,
   createVmState,
   createWaitPoll,
   endBoardThreads,
@@ -38,6 +37,7 @@ import {
   type ScriptError,
   type Wait,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 function ref(text: string): ProgramRef {
   return { kind: "inline", text, compiler: COMPILER_VERSION };

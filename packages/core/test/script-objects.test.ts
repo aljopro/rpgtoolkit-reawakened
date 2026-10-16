@@ -5,7 +5,6 @@ import {
   advanceScriptTick,
   compileInline,
   createGameState,
-  createScriptServices,
   hashState,
   restoreGameState,
   snapshot,
@@ -14,6 +13,7 @@ import {
   type ScriptError,
 } from "../src/index.ts";
 import { advanceOrFail } from "./script-failures.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 function run(source: string, state = createGameState({ seed: 3 })): GameState {
   startProgram(state.vm, { kind: "inline", text: source, compiler: "2" });

@@ -18,8 +18,7 @@ import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState } from "../save/state.ts";
 import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
-import { CORE_PLUGIN, type Arg, type BuiltinSpec } from "./builtins.ts";
-import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
+import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
 import { recordDiagnostic, recordEffect } from "./effects.ts";
 import {
@@ -33,7 +32,7 @@ import {
 } from "./errors.ts";
 import { NULL_LOGGER } from "./logging.ts";
 import type { SourcePos, StepOp } from "./ops.ts";
-import type { CommandResult, CommandView, PluginDefinition } from "./plugin.ts";
+import type { CommandResult, CommandView, ResolvedPlugin } from "./plugin.ts";
 import {
   COMPILER_VERSION,
   compileProgram,
@@ -97,6 +96,8 @@ export type ScriptServices = {
   readonly virtuals: VirtualVariablePort;
   readonly logger: Logger;
   readonly diagnostics: Diagnostic[];
+  /** Manifest options remain host/service data and never enter VM state. */
+  readonly pluginOptions: ReadonlyMap<string, PlainData>;
 };
 
 /** Take every diagnostic collected since the last drain, oldest first. */
@@ -112,7 +113,7 @@ function programMemoKey(ref: ProgramRef): string {
 
 export function createScriptServices(
   state: GameState,
-  plugins: readonly PluginDefinition[] = [],
+  plugins: readonly ResolvedPlugin[] = [],
   logger: Logger = NULL_LOGGER,
   virtuals?: VirtualVariablePort,
 ): ScriptServices {
@@ -122,7 +123,11 @@ export function createScriptServices(
     state,
   };
   const virt = virtuals ?? createDefaultVirtuals(state);
-  const registry = assembleCommands([CORE_PLUGIN, CATALOGUE_STUBS_PLUGIN, ...plugins], logger);
+  const registry = assembleCommands(plugins, logger);
+  const pluginOptions = new Map<string, PlainData>();
+  for (const plugin of plugins) {
+    if (plugin.options !== undefined) pluginOptions.set(plugin.definition.id, plugin.options);
+  }
   const commands = createCommandLookup({ builtin: (name) => registry.get(name) });
   const cache = new Map<string, Program>();
   const programs: ProgramMemo = {
@@ -135,7 +140,7 @@ export function createScriptServices(
       return compiled;
     },
   };
-  return { view, commands, programs, virtuals: virt, logger, diagnostics: [] };
+  return { view, commands, programs, virtuals: virt, logger, diagnostics: [], pluginOptions };
 }
 
 /**
