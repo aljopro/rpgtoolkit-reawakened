@@ -124,9 +124,38 @@ export function stubParams(row) {
   return params;
 }
 
+/** Names implemented in CORE_PLUGIN (ticket 3.12 pure built-ins); excluded from stubs. */
+const IMPLEMENTED_COMMANDS = new Set([
+  "len",
+  "length",
+  "left",
+  "right",
+  "mid",
+  "instr",
+  "replace",
+  "regexpreplace",
+  "split",
+  "trim",
+  "lcase",
+  "ucase",
+  "asc",
+  "chr",
+  "charat",
+  "splicevariables",
+  "castlit",
+  "castnum",
+  "castint",
+  "autolocal",
+  "kill",
+  "local",
+  "global",
+]);
+
 /** The stub-safe rows of the catalogue, in catalogue order. */
 export function stubRows(catalogue) {
-  return catalogue.names.filter((row) => STUB_KINDS.has(row.effectKind));
+  return catalogue.names.filter(
+    (row) => STUB_KINDS.has(row.effectKind) && !IMPLEMENTED_COMMANDS.has(row.name.toLowerCase()),
+  );
 }
 
 const IDENT = /^[a-z][a-z0-9]*$/;

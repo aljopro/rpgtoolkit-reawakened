@@ -25,7 +25,9 @@ import type { Value } from "../ports/value.ts";
 import type { RefId } from "../ports/value.ts";
 import { ScriptError } from "./errors.ts";
 import type { CommandHandler, PluginDefinition } from "./plugin.ts";
-
+import { CONVERSION_SPECS } from "./builtins/conversions.ts";
+import { SCOPE_SPECS } from "./builtins/scope.ts";
+import { STRING_SPECS } from "./builtins/strings.ts";
 /** One declared parameter of a built-in (AD-8). */
 export type ParamSpec = {
   readonly name: string;
@@ -80,5 +82,8 @@ export const CORE_PLUGIN: PluginDefinition = {
         return { value: null, wait: { kind: "sleep", until: view.clock.tick() + ticks } };
       },
     },
+    ...STRING_SPECS,
+    ...CONVERSION_SPECS,
+    ...SCOPE_SPECS,
   ],
 };

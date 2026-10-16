@@ -89,3 +89,8 @@ export {
   STEP_BUDGET,
 } from "./vm.ts";
 export type { ScriptServices, ScriptStatus } from "./vm.ts";
+export { createDefaultVirtuals } from "./virtuals.ts";
+export type { VirtualVariablePort } from "./virtuals.ts";
+export { STRING_SPECS } from "./builtins/strings.ts";
+export { CONVERSION_SPECS } from "./builtins/conversions.ts";
+export { SCOPE_SPECS } from "./builtins/scope.ts";

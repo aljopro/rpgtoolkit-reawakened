@@ -38,7 +38,7 @@ import type { RngPort } from "../ports/rng.ts";
 import type { ClockPort } from "../ports/time.ts";
 import type { Value } from "../ports/value.ts";
 import type { Wait } from "../ports/wait.ts";
-import type { SectionKey } from "../save/state.ts";
+import type { GameState, SectionKey } from "../save/state.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import type { EffectKind } from "./effects.ts";
 
@@ -51,6 +51,7 @@ import type { EffectKind } from "./effects.ts";
 export type CommandView = {
   readonly rng: RngPort;
   readonly clock: ClockPort;
+  readonly state?: GameState;
 };
 
 /**
