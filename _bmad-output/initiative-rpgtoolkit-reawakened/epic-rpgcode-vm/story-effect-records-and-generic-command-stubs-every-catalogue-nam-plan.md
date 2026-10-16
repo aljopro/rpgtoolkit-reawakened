@@ -3,7 +3,7 @@ title: 'Effect records and generic command stubs: every catalogue name responds'
 type: 'feature'
 ticket: 21
 created: '2026-10-15'
-status: 'ready-for-dev'
+status: in-progress
 baseline_revision: '43189ac35038e110f4265fd4e8e93342b575dedf'
 route: 'full'
 route_source: 'auto'
