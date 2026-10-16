@@ -141,6 +141,13 @@ export interface StatusEffect {
   readonly residue: Uint8Array;
 }
 
+/** RGB tint for one cell of a legacy text battle background. */
+export interface BattleBackgroundTint {
+  readonly r: number;
+  readonly g: number;
+  readonly b: number;
+}
+
 /** A parsed battle background (format-spec §8.3). */
 export interface BattleBackground {
   /** The magic string, `"RPGTLKIT BKG"` in a binary file (§1.3, §8.3). */
@@ -167,6 +174,10 @@ export interface BattleBackground {
    * reported as a warning rather than dropped.
    */
   readonly residue: Uint8Array;
+  /** Fixed 19×11 tile grid (Toolkit 2 text background, minor 0). */
+  readonly tiles?: readonly string[] | undefined;
+  /** Fixed 19×11 tint values (Toolkit 2 text background, minor 0). */
+  readonly tints?: readonly BattleBackgroundTint[] | undefined;
 }
 
 /**

@@ -31,7 +31,7 @@ This matches what the original programs did in practice: the 3.1 engine could no
 | Fight background | `RPGTLKIT BKG` | 12 | binary | text |
 | Status effect | `RPGTLKIT STATUSE` | 16 | binary | text |
 | Special move | `RPGTLKIT SPLMOVE` | 16 | binary | text |
-| Animation | `RPGTLKIT ANIM` | — | the first NUL-terminated string equals the header → binary | text |
+| Animation | `RPGTLKIT ANIM` | 13 | binary | text |
 | Font | `RPGTLKIT FONT` | 13 | — (no binary form) | text |
 | Single tile | `RPGTLKIT TILE` (text in both) | — | first line is the header → version 2 tile | version 1 tile |
 
