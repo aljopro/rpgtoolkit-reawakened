@@ -14,7 +14,7 @@
  * `CommandEffect` per section it writes (none for a `pure` getter). The VM
  * stamps each reported effect into the `vm` section's effect log. The two
  * obsolete names raise `builtin.obsolete` and report nothing. Names are the
- * ASCII case-folded catalogue names (docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands LEX-10), which is how the
+ * ASCII case-folded catalogue names (docs/spec/engine/rpgcode-language.md#lexical-rules LEX-10), which is how the
  * lexer and the registry key them.
  *
  * Names whose kind is `wait`, `request`, `spawn-thread`, `flow-control`
