@@ -4,7 +4,7 @@ type: 'chore'
 ticket: '27'
 created: '2026-10-15'
 status: 'draft'
-baseline_revision: '4843c4352c7b3a6b2e3ad6c3e4cbe23d46c5bb54'
+baseline_revision: '4843c435566ed7110cdd0cd8e019b95865455a2a'
 route: 'full'
 route_source: 'auto'
 risk: 'high'
@@ -40,7 +40,7 @@ Rulings the plan carries. "Owner" means Jensen's 2026-10-15 ruling that `docs/sp
 | R-36 | Catalogue | 282 names; add `empty`, `fbranch`, `mbox`, `newplyr` (alias `newplayer`), `restorearrayscreen`, `underarrow`, `itemwalkspeed`, `shopcolors`; obsolete commands raise an error and the statement is skipped | Owner, specs win | `command-effect-catalogue.json`; 3.21 |
 | R-37 | Virtual variables | `docs/spec`: 44 read-only variables, `playerx`/`playery` are tile positions. `threads[i]` and `ambientRed/Green/Blue` are not in `docs/spec`: kept as Reawakened additions (see U2) | Owner, specs win; extras per U2 | 3.12 |
 | R-38a | Error line numbers | Report the exact line (a Reawakened rule). Record the legacy fact precisely: syntax errors are exact; two declaration errors are one too high | Round 5 Q5 (scripts cannot observe the offset) | 3.7 |
-| R-38b | `FileInput` | **Provisional.** `docs/spec`: reads drop the last character of a line that ends in LF only or has no line ending; CRLF lines are exact, and `FilePrint` writes CRLF so its files round-trip. Reproduced, on the same reasoning as R-32 | Round 5 Q6; U3 | 3.16 |
+| R-38b | `FileInput` | **Ruled (Jensen, 2026-10-15): read lines correctly.** Strip CRLF or LF and drop nothing else. A Reawakened rule, written up as a deliberate departure from 3.1, where a line ending in LF only, or a final line with no line ending, lost its last character (CRLF lines were exact, and `FilePrint` writes CRLF so its files round-trip). The rule names the final-line case: a 3.1 author may have padded the last line of a hand-made data file, and would now get one extra character | Round 5 Q6; owner | 3.16 |
 | R-38c | Other execution details | `docs/spec`: an error without a handler continues with the next statement; edits to a program during play are not picked up | Owner, specs win | 3.7, 3.8 |
 | R-39 | String truthiness | `docs/spec`: strings are true unless they equal `"off"` (case-insensitive), so `""` is true | Owner, specs win | 3.5, 3.12 |
 | R-40 | Short-circuit | `docs/spec`: `&&`, `\|\|` and `?:` evaluate all operands. Our §9 does not say otherwise; the old side is unverified | Owner, specs win | 3.5 |
@@ -81,16 +81,18 @@ Rulings the plan carries. "Owner" means Jensen's 2026-10-15 ruling that `docs/sp
 
 - **U1 — the per-project thread-wait setting (not ruled).** The owner's R-32 argument ends with a suggested rule: a per-project setting that enables per-thread waits for new games, with imported games defaulting to off. The owner ruled the default (freeze); whether to add the setting was suggested, not decided. This plan records it as a named open question in `docs/spec/engine/rpgcode-language.md` and builds nothing. <!-- OWNER: U1 — decide here or defer to entry 9. A setting would mean two wait models in one engine, which doubles the thread tests. -->
 - **U2 — R-37 extras.** `threads[i]` and `ambientRed/Green/Blue` are in our §9.10 and not in `docs/spec`. Kept as Reawakened additions unless the owner says otherwise. <!-- OWNER: U2 — alternative is to drop them under "specs win". -->
-- **U3 — R-38b is provisional.** Reproducing the `FileInput` drop follows the same reasoning the owner gave for R-32 (a 3.1 game was written and tested under it, so fixing it can only change behaviour). It was not asked directly. <!-- OWNER: U3 — alternative is to read lines correctly; FilePrint round-trips either way. -->
+- **Ruled — R-38b (Jensen, 2026-10-15): read lines correctly**, as a deliberate departure from 3.1, with the final-line caveat named in the rule block (see the matrix). Optional, not ruled: the importer could warn when a game ships data files with LF-only lines or no final newline, the only files whose behaviour changes. That warning is recorded as an open question and nothing is built.
+- **U5 — reading past the end of a file.** The owner's note says 3.1 does not handle reading past the end of a file cleanly, but the detail did not come through. The rule block for the file built-ins records it as a named open question until the behaviour is stated. <!-- OWNER: U5 — what does 3.1 do (error, stale last value, garbage) and what should the rebuild do? Needs a follow-up question to the spec authors (a round-5 style Q11). -->
 - **U4 — R-35's shadowing is silent.** A script method named like a built-in is never called at compile-bound sites. The owner's 2026-10-11 rule is that every override warns, so the rule block recommends a warning at the definition. <!-- OWNER: U4 — confirm a warning, or leave it silent as in 3.1. -->
 - **Conflict with the entry's `verify`.** The entry says every §9 subsection has "a row in the section map for entry 28". ADR 0007 decision 5 (accepted after the entry was written) keeps no citation map and has 3.28 re-point by hand. This plan follows the ADR: the section map in the Code Map is working evidence, not a maintained document. <!-- OWNER: map — the entry's wording is superseded by ADR 0007; confirm. -->
 - **Size.** The migration adds roughly 500 lines to a 90-line page. The builder may split it into more pages under `docs/spec/engine/` if one page becomes unreadable; the entry names two pages, so splitting is a plan change, not a free choice.
-- **Why risk is high.** Landed code cites these rule ids (`lex.ts`, `errors.ts`, `vm.ts`, nine test files), and R-32 reverses a landed design (AD-9's per-thread waits). The doc commit changes no code, but 3.9 and 3.22 must build to it.
+- **Why risk is high.** Nine source and test files under `packages/core` cite these rule ids (`lex.ts`, `errors.ts`, `vm.ts` and the script tests among them), and R-32 reverses a landed design (AD-9's per-thread waits). The doc commit changes no code, but 3.9 and 3.22 must build to it.
 - **What this does not settle.** R-50 to R-61 (movement, battle, audio, editor, plugin contract) belong to their epics; R-33's number is 3.9's.
 
 ## Plan Change Log
 
 - 2026-10-15 — initial plan, from the entry, the reconciliation note, a scout's section map and conflict table, and the owner's rulings of the same day: specs win with the ADR 0007 carve-outs, R-31 kept, R-32 ruled (freeze). Round 5 answered Q3 to Q6 and supplied the legacy facts for R-31, R-32 and R-38. Four open points (U1 to U4) and the entry's map clause are marked for the plan-checkpoint review.
+- 2026-10-15 — owner ruled R-38b: read lines correctly, as a named departure from 3.1 (the plan had provisionally reproduced the drop; U3 is closed). A new open point U5 (reading past the end of a file) was added because the detail was cut off. Corrected a wrong baseline hash and a miscount of test files in the first draft. Open points now: U1, U2, U4, U5 and the entry's map clause.
 
 ## Design Notes
 
@@ -100,7 +102,7 @@ Order of work: pages first (R-30, R-35, R-36, R-39, R-40 are mechanical), then t
 
 **Commands:**
 - `git diff --name-only` — expected: only the paths in the acceptance criterion above.
-- `node -e "const c=require('./_bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/command-effect-catalogue.json'); console.log(Array.isArray(c)?c.length:Object.keys(c).length)"` — expected: the 282 names the entry requires (adjust to the file's actual shape).
+- `node -e "console.log(require('./_bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/command-effect-catalogue.json').names.length)"` — expected: 282 (it is 271 today).
 - `grep -c "OWNER:" docs/spec/engine/rpgcode-language.md` — expected: at least the 26 §9 comments migrated.
 - `pnpm provenance && pnpm licence` — expected: pass.
 
