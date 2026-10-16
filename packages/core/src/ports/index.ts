@@ -13,5 +13,6 @@ export type * from "./keys.ts";
 export type * from "./draw.ts";
 export type * from "./audio.ts";
 export type * from "./requests.ts";
+export type * from "./logger.ts";
 export type * from "./input.ts";
 export type * from "./engine.ts";

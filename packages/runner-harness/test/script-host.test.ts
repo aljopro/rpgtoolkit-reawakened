@@ -3,7 +3,7 @@
 // the empty Engine contract that keeps the golden job green.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import type { BuiltinSpec, SurfaceId } from "@tk-reawakened/core";
+import type { BuiltinSpec, PluginDefinition, SurfaceId } from "@tk-reawakened/core";
 import { createNullAudio, createScriptHost, restoreScriptHost, runLog, type Run } from "../src/index.ts";
 
 const TRACER = 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n';
@@ -116,21 +116,24 @@ test("surfacePixels is null and setBreakpoints changes no state", () => {
   equal(host.stateHash(), before);
 });
 
-test("a fixture built-in drawing through ctx.rng leaves the draw in state and restores identically", () => {
+test("a fixture built-in drawing through view.rng leaves the draw in state and restores identically", () => {
   const roll: BuiltinSpec = {
     name: "roll",
     aliases: [],
     params: [{ name: "target", optional: false, byRef: true, variadic: false }],
-    call: (ctx) => ({ done: null, out: [[0, ctx.rng.nextUint32()]] }),
+    call: (view) => ({ value: null, out: [[0, view.rng.nextUint32()]] }),
   };
+  const plugins: readonly PluginDefinition[] = [
+    { id: "test.roll", version: "1.0.0", commands: [roll] },
+  ];
   const program = "roll(r)\nend()\n";
 
-  const host = createScriptHost({ program, seed: 5, builtins: [roll] });
+  const host = createScriptHost({ program, seed: 5, plugins });
   host.advance(1, []);
   const drawn = host.state().vm.globals.r;
   equal(typeof drawn, "number");
 
-  const restored = restoreScriptHost(host.snapshot(), { builtins: [roll] });
+  const restored = restoreScriptHost(host.snapshot(), { plugins });
   equal(restored.state().vm.globals.r, drawn);
   equal(restored.stateHash(), host.stateHash());
 
