@@ -223,7 +223,7 @@ test("services sandboxed file blobs and preserves R-38b line endings", () => {
 });
 
 test("writes only through the sandbox blob port", () => {
-  const blobs = { blobs: {}, assets: {} };
+  const blobs: { blobs: Record<string, Uint8Array>; assets: Record<string, Uint8Array> } = { blobs: {}, assets: {} };
   const host = createScriptHost({
     program: 'openFileOutput("output.txt", "Saved")\nfilePrint("output.txt", "ok")\nend()\n',
     seed: 0,

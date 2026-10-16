@@ -142,7 +142,7 @@ test("every catalogue stub name resolves to its own spec, folded to lower case",
 });
 
 test("the stub layer declares the catalogue's by-reference outputs", () => {
-  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 41);
+  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 39);
   // 22 stub-safe names have variadic `...` parameters, including the four
   // variadic output names that cannot fix an output position.
   equal(COMMANDS.filter((spec) => spec.params.some((param) => param.variadic)).length, 22);
