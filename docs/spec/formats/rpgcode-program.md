@@ -50,5 +50,5 @@ Each line appears only if that test setting is filled in. It then starts the eng
 Scripts can read and write their own files:
 
 - **`OpenFileInput/Output/Append(file, folder)`** with folder `Saved` (relative to the Toolkit folder) or any project sub-folder. Output files are written one string per line with CRLF.
-- **`FileInput`** reads a line and **drops its last character**. That removes the stray end-of-line byte on CRLF lines, but chops a real character from LF-only lines and from an unterminated last line. A compatible engine must reproduce this or scripts that rely on it break.
+- **`FileInput`** reads a line and removes only its CRLF or LF line ending; it does not strip any other character. A read at or past end of file returns an empty string and leaves the position at the end; use `FileEOF` to distinguish end of file from a blank line (R-38b, U5; see [the runtime rules](../engine/rpgcode-runtime.md#files)).
 - **`FileGet`/`FilePut`** read or write one byte.

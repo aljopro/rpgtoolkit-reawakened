@@ -42,9 +42,9 @@ export function pollMovement(view: WaitView, wait: Wait): WaitResult | null {
   return DONE;
 }
 
-/** `request`: resolved by the stored reply, else by the tick deadline (an error result). */
+/** `request` and `blob`: resolved by the stored reply, else by the tick deadline. */
 export function pollRequest(view: WaitView, wait: Wait): WaitResult | null {
-  if (wait.kind !== "request") return null;
+  if (wait.kind !== "request" && wait.kind !== "blob") return null;
   if (wait.reply !== null) return { value: wait.reply.value, ok: wait.reply.ok };
   if (wait.deadline !== null && view.tick >= wait.deadline) {
     return { value: REQUEST_TIMEOUT_TEXT, ok: false };
@@ -52,12 +52,13 @@ export function pollRequest(view: WaitView, wait: Wait): WaitResult | null {
   return null;
 }
 
-/** The kinds the VM itself owns: `sleep`, `input.key`, `movement` and `request`. */
+/** The kinds the VM itself owns: sleeps, input, movement and host requests. */
 export const WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "sleep", poll: pollSleep },
   { kind: "input.key", poll: pollInputKey },
   { kind: "movement", poll: pollMovement },
   { kind: "request", poll: pollRequest },
+  { kind: "blob", poll: pollRequest },
 ];
 
 /**
@@ -97,7 +98,8 @@ export function describeWait(wait: Wait): string {
     case "movement":
       return `movement(${wait.moves.length} move(s))`;
     case "request":
-      return `request(reqId ${wait.reqId})`;
+    case "blob":
+      return `${wait.kind}(reqId ${wait.reqId})`;
     default:
       return `${wait.kind}(${wait.id})`;
   }

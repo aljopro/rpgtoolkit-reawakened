@@ -24,7 +24,9 @@ import {
   createGameState,
   drainDiagnostics,
   ENGINE_DEFAULT_MANIFEST,
+  fnv1a64,
   hashState,
+  replyToRequest,
   restoreGameState,
   snapshot,
   COMPILER_VERSION,
@@ -41,17 +43,50 @@ import {
   type PluginManifestDiagnostic,
   type PluginManifestPatch,
   type ResolvedPlugin,
+  type RunnerRequest,
   type ScriptServices,
   type SurfaceId,
   type SurfacePixels,
   type TickReport,
 } from "@tk-reawakened/core";
+import type { AssetKey } from "@tk-reawakened/core";
 import { resolvePluginManifest } from "./script-plugin-resolver.ts";
 
 type HostResolution = {
   readonly plugins: readonly ResolvedPlugin[];
   readonly diagnostics: readonly Diagnostic[];
 };
+export type ScriptHostBlobs = {
+  readonly blobs?: Record<string, Uint8Array>;
+  readonly assets?: Readonly<Record<string, Uint8Array>>;
+};
+
+type RequestEffect = {
+  readonly request?: {
+    readonly kind?: unknown;
+    readonly reqId?: unknown;
+    readonly blob?: { readonly area?: unknown; readonly path?: unknown };
+    readonly key?: unknown;
+    readonly hex?: unknown;
+  };
+};
+
+function hexBytes(value: unknown): Uint8Array {
+  if (typeof value !== "string" || value.length % 2 !== 0 || !/^[0-9a-f]*$/.test(value)) return new Uint8Array(0);
+  const bytes = new Uint8Array(value.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+  return bytes;
+}
+
+function bytesHex(bytes: Uint8Array): string {
+  let result = "";
+  for (const byte of bytes) result += byte.toString(16).padStart(2, "0");
+  return result;
+}
+
+function blobKey(area: unknown, path: unknown): string {
+  return `${String(area ?? "")}:${String(path ?? "")}`;
+}
 
 function toRuntimeDiagnostics(
   diagnostics: readonly PluginManifestDiagnostic[],
@@ -102,6 +137,8 @@ export type ScriptHostInit = {
   /** Optional game manifest; omitted means the engine default manifest. */
   readonly manifest?: PluginManifest;
   readonly patch?: PluginManifestPatch;
+  readonly gameId?: string;
+  readonly blobs?: ScriptHostBlobs;
   /** Host-side definitions available to the manifest resolver. */
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
@@ -111,6 +148,8 @@ export type ScriptHostInit = {
 /** How to rebuild a host from a snapshot: the registry is code, not state. */
 export type ScriptHostRestore = {
   readonly manifest?: PluginManifest;
+  readonly gameId?: string;
+  readonly blobs?: ScriptHostBlobs;
   readonly patch?: PluginManifestPatch;
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
@@ -124,28 +163,71 @@ export type ScriptHost = Engine & {
   state(): GameState;
 };
 
+function serviceBlobRequests(
+  gameState: GameState,
+  blobs: ScriptHostBlobs,
+  effectIndex: number,
+  requests: RunnerRequest[],
+): number {
+  const effects = gameState.vm.effects as readonly RequestEffect[];
+  let next = effectIndex;
+  while (next < effects.length) {
+    const request = effects[next]?.request;
+    next += 1;
+    if (request === undefined || request === null || typeof request.reqId !== "number" || typeof request.kind !== "string") continue;
+    const reqId = request.reqId;
+    if (request.kind === "loadBlob") {
+      const blob = { area: String(request.blob?.area ?? "files") as "saves" | "files", path: String(request.blob?.path ?? "") };
+      const value = blobs.blobs?.[blobKey(blob.area, blob.path)];
+      requests.push({ kind: "loadBlob", reqId, blob });
+      replyToRequest(gameState.vm, reqId, { ok: value !== undefined, value: value === undefined ? null : bytesHex(new Uint8Array(value)) });
+      continue;
+    }
+    if (request.kind === "saveBlob") {
+      const blob = { area: String(request.blob?.area ?? "files") as "saves" | "files", path: String(request.blob?.path ?? "") };
+      const value = hexBytes(request.hex);
+      if (blobs.blobs !== undefined) blobs.blobs[blobKey(blob.area, blob.path)] = new Uint8Array(value);
+      requests.push({ kind: "saveBlob", reqId, blob, bytes: new Uint8Array(value) });
+      replyToRequest(gameState.vm, reqId, { ok: true, value: 1 });
+      continue;
+    }
+    if (request.kind === "asset") {
+      const key = String(request.key ?? "");
+      const value = blobs.assets?.[key];
+      requests.push({ kind: "asset", reqId, key: key as AssetKey });
+      replyToRequest(gameState.vm, reqId, { ok: value !== undefined, value: value === undefined ? null : bytesHex(new Uint8Array(value)) });
+    }
+  }
+  return next;
+}
+
 function createHost(
   gameState: GameState,
   services: ScriptServices,
   initialDiagnostics: readonly Diagnostic[] = [],
+  blobs: ScriptHostBlobs = {},
 ): ScriptHost {
   let breakpoints: readonly Breakpoint[] = [];
   let pendingDiagnostics = [...initialDiagnostics];
+  let effectIndex = 0;
+  const requests: RunnerRequest[] = [];
 
   return {
     advance(ticks: number, _inputs, maxTicks?: number): TickReport {
       const actualTicks = maxTicks !== undefined && maxTicks < ticks ? maxTicks : ticks;
       for (let index = 0; index < actualTicks; index++) {
         advanceScriptTick(gameState, services, STEP_BUDGET);
+        effectIndex = serviceBlobRequests(gameState, blobs, effectIndex, requests);
       }
       const diagnostics = [...pendingDiagnostics, ...drainDiagnostics(services)];
       pendingDiagnostics = [];
+      const emittedRequests = requests.splice(0, requests.length);
       return {
         ticksRun: actualTicks,
         tickAfter: gameState.time.tick,
         consumed: [],
         audioCues: [],
-        requests: [],
+        requests: emittedRequests,
         diagnostics,
         loading: false,
         paused: null,
@@ -188,13 +270,15 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
     gameState,
     resolution.plugins,
     createLogger(init.sinks ?? []),
+    undefined,
+    init.gameId ?? fnv1a64(init.program),
   );
   startProgram(gameState.vm, {
     kind: "inline",
     text: init.program,
     compiler: COMPILER_VERSION,
   });
-  return createHost(gameState, services, resolution.diagnostics);
+  return createHost(gameState, services, resolution.diagnostics, init.blobs);
 }
 
 /** Restore a host from a snapshot, rebinding the same effective manifest. */
@@ -205,6 +289,8 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     gameState,
     resolution.plugins,
     createLogger(init.sinks ?? []),
+    undefined,
+    init.gameId ?? "default",
   );
-  return createHost(gameState, services, resolution.diagnostics);
+  return createHost(gameState, services, resolution.diagnostics, init.blobs);
 }

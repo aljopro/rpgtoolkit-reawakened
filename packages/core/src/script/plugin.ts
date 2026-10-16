@@ -56,6 +56,8 @@ export type CommandView = {
   readonly rng: RngPort;
   readonly clock: ClockPort;
   readonly state?: GameState;
+  /** Stable core-derived identity used to scope host storage. */
+  readonly gameId?: string;
   /** Manifest options for the layer currently handling this command. */
   readonly options?: PlainData;
   /** The id of the thread whose call is running; the VM sets it before every call. */

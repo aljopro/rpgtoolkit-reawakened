@@ -11,8 +11,13 @@ import {
   type VirtualVariablePort,
 } from "../src/index.ts";
 
+const FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
+const TEST_CORE_PLUGIN: PluginDefinition = {
+  ...CORE_PLUGIN,
+  commands: CORE_PLUGIN.commands.filter((command) => !FILE_COMMANDS.has(command.name)),
+};
 const DEFAULT_RESOLVED: readonly ResolvedPlugin[] = [
-  { definition: CORE_PLUGIN },
+  { definition: TEST_CORE_PLUGIN },
   { definition: CATALOGUE_STUBS_PLUGIN },
   { definition: CATALOGUE_RESPONDERS_PLUGIN },
 ];
