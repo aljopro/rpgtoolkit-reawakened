@@ -709,6 +709,20 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
       return coord;
     }
     coordType = coord.value;
+  } else if (reader.remaining === 1) {
+    // Minor-2 `coordType` — Reawakened rule (R-04)
+    // (docs/spec/formats/legacy/older-binary-versions.md#minor-2-coordtype--reawakened-rule-r-04):
+    // the field is absent from the minor-2 layout and the two original programs
+    // disagree (the engine never reads it, the editor reads a byte). We follow
+    // the editor, but only when **exactly one byte remains** after the sprite
+    // list — most corpus boards end exactly there, and those that carry a byte
+    // carry a `0x00` (2D). A board with two or more trailing bytes reads none
+    // and reports them as residue, unchanged.
+    const coord = reader.i8();
+    if (!coord.ok) {
+      return coord;
+    }
+    coordType = coord.value;
   }
 
   const residue = reader.readBytes(reader.remaining);

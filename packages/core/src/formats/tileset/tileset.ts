@@ -12,14 +12,14 @@
  * The model keeps the stored pixel bytes exactly as read (AD-18), so
  * `writeTileset` re-emits the input byte-for-byte; `expandTileToRgba` is the
  * separate accessor the renderer uses to get the resolved pixels, applying the
- * transparent key as alpha 0 and the VGA palette for the 8-bit details.
+ * transparent key as alpha 0 and the DOS palette for the 8-bit details.
  */
 
 import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import { ISO_IMAGE_HEIGHT, ISO_IMAGE_WIDTH, isInsideIsoDiamond } from "./iso-diamond.ts";
-import { VGA_DEFAULT_PALETTE } from "./vga-palette.ts";
+import { DOS_PALETTE } from "./dos-palette.ts";
 
 const HEADER_SECTION = "format-spec §3.1";
 
@@ -193,8 +193,9 @@ export function writeTileset(model: Tileset): Result<Uint8Array> {
 
 /**
  * Expand one tile to RGBA (format-spec §3.1, §3.3): the stored colour with the
- * transparent key turned into alpha 0, and the VGA palette applied for the
- * 8-bit details. The result is column-major, `width × height × 4` bytes, with
+ * transparent key turned into alpha 0, and the DOS palette applied for the
+ * 8-bit details (docs/spec/formats/tiles.md#dos-palette). The result is
+ * column-major, `width × height × 4` bytes, with
  * `tileDimensions` giving the width and height at the stored size (a 16×16
  * detail gives 16×16 pixels; doubling them to 32×32 is the renderer's job, §3.1).
  * The stored encoding is left untouched, so the writer still re-emits the
@@ -256,9 +257,9 @@ function writePalette(out: Uint8Array, at: number, index: number): void {
     return;
   }
   const from = index * 3;
-  out[at] = VGA_DEFAULT_PALETTE[from] ?? 0;
-  out[at + 1] = VGA_DEFAULT_PALETTE[from + 1] ?? 0;
-  out[at + 2] = VGA_DEFAULT_PALETTE[from + 2] ?? 0;
+  out[at] = DOS_PALETTE[from] ?? 0;
+  out[at + 1] = DOS_PALETTE[from + 1] ?? 0;
+  out[at + 2] = DOS_PALETTE[from + 2] ?? 0;
   out[at + 3] = 255;
 }
 

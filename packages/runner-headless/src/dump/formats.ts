@@ -64,7 +64,8 @@ const UNRECOGNISED = skip(
  *
  * A file with no extension, or one not listed, is skipped as unrecognised. The
  * `.prg`, `.gph`, `.tan`, `.sav` and `.gif` rows are skipped
- * *by design*: §9 programs are text for a later epic, and §3.2/§3.5/§11
+ * *by design*: a later epic parses §9 programs (the `.prg` row still reports
+ * whether the file is source text or §9's compiled form), and §3.2/§3.5/§11
  * plus §10's GIF have no core decoder yet, so reporting them as
  * failures would fail every game that ships one.
  */
@@ -73,11 +74,16 @@ const SKIP_TABLE: Readonly<Record<string, SkipFormatClass>> = {
   // like the other formats with no reader — never a failure.
   gif: skip("GIF image (format-spec §10): no decoder in core yet"),
 
-  // §9 — RPGCode programs are text; a later epic parses them. Size and line count
-  // are reported so a dump still shows what is there.
+  // §9 — RPGCode programs are source text, or a compiled binary whose **first
+  // byte is `00`** (docs/spec/formats/rpgcode-program.md#compiled-form, R-12).
+  // A later epic parses either form; here the size and line count — or the fact
+  // that it is compiled — are reported so a dump still shows what is there.
   prg: skip(
-    "RPGCode text program (format-spec §9): parsed by a later epic, reported here as text",
-    (bytes) => `${bytes.length} bytes, ${countLines(bytes)} lines`,
+    "RPGCode program (format-spec §9): parsed by a later epic, reported here as text or compiled",
+    (bytes) =>
+      bytes[0] === 0x00
+        ? `compiled (format-spec §9 "Compiled form"), ${bytes.length} bytes`
+        : `${bytes.length} bytes, ${countLines(bytes)} lines`,
   ),
   // Formats the spec describes but no `core` reader implements yet — skipped, not failed.
   gph: skip("single-column tile text file (format-spec §3.2): no reader in core yet"),
