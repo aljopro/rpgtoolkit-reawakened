@@ -239,7 +239,7 @@ Not readable by Toolkit 3.1. The 3.1 editor rejects it with "Please save this bo
 | 17-19 | 11 | ten board constants (numbers) and the background music |
 | 20 | 8 | layer titles 1…8 |
 | 21 | 561 | program records: **51 fixed records of 11 lines** (file, x, y, layer, graphic, activation mode, activation variable, end variable, initial value, end value, activation type); an empty file name is an unused slot |
-| 22 | 110 | item records: **11 fixed records of 10 lines** |
+| 22 | 110 | item records: **11 fixed records of 10 lines** (file, x, y, layer, activate, initialVar, finalVar, initialValue, finalValue, activationType); activation and multitask programs follow in rows 24 and 26 |
 | 23-26 | 3 + 11 + 1 + 11 | player start x, y, layer; 11 per-item activation programs; the "can save here" flag; 11 per-item multitask programs |
 | 27 | 4 | day/night flag, night battle override, night skill level, night battle background (all unused) — **absent in the 19 × 11 default boards** |
 
