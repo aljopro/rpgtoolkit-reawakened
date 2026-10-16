@@ -48,6 +48,14 @@ export {
 } from "./values.ts";
 export { CORE_PLUGIN } from "./builtins.ts";
 export type { Arg, BuiltinSpec, ParamSpec } from "./builtins.ts";
+export { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
+export { drainEffects, EFFECT_LOG_CAP, recordEffect } from "./effects.ts";
+export type {
+  EffectKind,
+  EffectPatch,
+  EffectPatchOp,
+  EffectRecord,
+} from "./effects.ts";
 export type {
   CommandContinuation,
   CommandEffect,

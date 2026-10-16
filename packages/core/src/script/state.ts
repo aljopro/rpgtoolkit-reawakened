@@ -1,8 +1,9 @@
 /**
  * The VM state tree (AD-7, AD-26; format-spec §9.15 THR-2).
  *
- * `VmState` is AD-10's `vm` section: `threads`, `globals`, `objects` and
- * `redirects`. `objects` is entry 6's and `redirects` entry 8's, so both are
+ * `VmState` is AD-10's `vm` section: `threads`, `globals`, `objects`,
+ * `redirects` and the effect log (`effects` and `effectSeq`, ticket 3.21).
+ * `objects` is entry 6's and `redirects` entry 8's, so both are
  * empty now. `Thread` and `Frame` carry AD-7's minimum fields with the values
  * this entry fixes: `ThreadKind`/`ThreadOwner` are AD-26's, `source`/`target`
  * are THR-2's per-thread pair and `null` for a plain thread, and `errorHandler`
@@ -15,9 +16,11 @@
  * docs/adr/0004; format-spec §9.15 (THR-2) and §9.16 (SEM-4/SEM-6).
  */
 
+import type { AssertPlainData } from "../ports/plain-data.ts";
 import type { RefId, Value } from "../ports/value.ts";
 import type { Wait } from "../ports/wait.ts";
 import type { Arg } from "./builtins.ts";
+import type { EffectRecord } from "./effects.ts";
 import { ScriptError } from "./errors.ts";
 import type { ProgramRef } from "./program.ts";
 
@@ -57,17 +60,22 @@ export type Thread = {
   wait: Wait | null;
 };
 
-/** The `vm` section: AD-10's threads, globals, objects and redirects. */
+/** The `vm` section: AD-10's threads, globals, objects and redirects, plus the effect log. */
 export type VmState = {
   threads: Thread[];
   globals: { [name: string]: Value };
   objects: never[];
   redirects: Array<[string, string]>;
+  effects: EffectRecord[];
+  effectSeq: number;
 };
 
-/** A fresh `vm` section: no threads, no globals, no objects, no redirects. */
+/** Build-time proof that the `vm` section stays plain data (G1 rule 2, AD-7). */
+export type VmStateIsPlainData = AssertPlainData<VmState>;
+
+/** A fresh `vm` section: no threads, no globals, no objects, no redirects, no effects. */
 export function createVmState(): VmState {
-  return { threads: [], globals: {}, objects: [], redirects: [] };
+  return { threads: [], globals: {}, objects: [], redirects: [], effects: [], effectSeq: 0 };
 }
 
 /** Build a global-scope variable reference (AD-8's `Arg.ref`). */

@@ -11,15 +11,18 @@
 
 import { pow } from "../fmath/index.ts";
 import type { Logger } from "../ports/logger.ts";
+import type { PlainData } from "../ports/plain-data.ts";
 import type { RefId, Value, VarScope } from "../ports/value.ts";
 import type { Wait, WaitPoll, WaitResult, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState } from "../save/state.ts";
 import { createClockPort, runTimePhase } from "../time/time.ts";
 import { CORE_PLUGIN, type Arg, type BuiltinSpec } from "./builtins.ts";
+import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
+import { recordEffect } from "./effects.ts";
 import { ScriptError } from "./errors.ts";
 import type { SourcePos } from "./ops.ts";
-import type { CommandEffect, CommandView, PluginDefinition } from "./plugin.ts";
+import type { CommandView, PluginDefinition } from "./plugin.ts";
 import { compileProgram, type Program, type ProgramRef } from "./program.ts";
 import {
   assembleCommands,
@@ -58,7 +61,6 @@ type ProgramMemo = { get(ref: ProgramRef): Program };
 export type ScriptServices = {
   readonly view: CommandView;
   readonly commands: CommandLookup;
-  readonly effects: (effect: CommandEffect) => void;
   readonly programs: ProgramMemo;
 };
 
@@ -74,13 +76,12 @@ export function createScriptServices(
   state: GameState,
   plugins: readonly PluginDefinition[] = [],
   logger: Logger = DISCARD_LOGGER,
-  effects: (effect: CommandEffect) => void = () => {},
 ): ScriptServices {
   const view: CommandView = {
     rng: createRngPort(state.rng),
     clock: createClockPort(state.time),
   };
-  const registry = assembleCommands([CORE_PLUGIN, ...plugins], logger);
+  const registry = assembleCommands([CORE_PLUGIN, CATALOGUE_STUBS_PLUGIN, ...plugins], logger);
   const commands = createCommandLookup({ builtin: (name) => registry.get(name) });
   const cache = new Map<string, Program>();
   const programs: ProgramMemo = {
@@ -93,7 +94,7 @@ export function createScriptServices(
       return compiled;
     },
   };
-  return { view, commands, effects, programs };
+  return { view, commands, programs };
 }
 
 export function pollSleep(view: WaitView, wait: Wait): WaitResult | null {
@@ -629,7 +630,7 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         let controlApplied = false;
         for (const effect of result.effects ?? []) {
           if (effect.kind === "vm.control") {
-            const action = effect.args[0];
+            const action = effect.args?.[0];
             if (action === "end") {
               thread.frames = [];
               thread.status = "finished";
@@ -637,7 +638,7 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
               return;
             }
             if (action === "run") {
-              const newRef = effect.args[1] as ProgramRef;
+              const newRef = effect.args?.[1] as ProgramRef;
               thread.frames = [
                 {
                   program: newRef,
@@ -653,7 +654,7 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
               return;
             }
             if (action === "jump") {
-              const labelName = effect.args[1] as string;
+              const labelName = effect.args?.[1] as string;
               const targetIp = lookupLabel(program, frame.ip, labelName);
               if (targetIp === undefined) {
                 throw new ScriptError(
@@ -666,7 +667,28 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
               controlApplied = true;
             }
           } else {
-            services.effects(effect);
+            const section = effect.section;
+            const out: { [index: string]: PlainData } = {};
+            for (const [index, value] of result.out ?? []) {
+              out[String(index)] = typeof value === "number" && value === 0 ? 0 : value;
+            }
+            recordEffect(vm, {
+              tick: services.view.clock.tick(),
+              thread: thread.id,
+              name: op.name,
+              kind: effect.kind,
+              args:
+                effect.args !== undefined
+                  ? [...effect.args]
+                  : args.map((arg) =>
+                      typeof arg.value === "number" && arg.value === 0 ? 0 : arg.value,
+                    ),
+              out,
+              result: result.value,
+              patch: section === undefined ? null : { section, path: [], op: "merge", value: null },
+              wait: null,
+              request: null,
+            });
           }
         }
 
