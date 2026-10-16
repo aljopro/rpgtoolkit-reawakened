@@ -12,7 +12,10 @@
 // every truncation or one-byte mutation of a valid GIF returns a Result rather
 // than throwing.
 import { test } from "node:test";
-import { deepEqual, equal, ok } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
+function ok(value: unknown): void {
+  equal(Boolean(value), true);
+}
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -476,7 +479,8 @@ test("LZW clear code mid-stream resets table and width", () => {
 
   const payload = new Uint8Array(bits.length / 8);
   for (let b = 0; b < bits.length; b += 1) {
-    payload[b >> 3] |= bits[b]! << (b & 7);
+    const byteIndex = b >> 3;
+    payload[byteIndex] = (payload[byteIndex] ?? 0) | (bits[b]! << (b & 7));
   }
 
   const colors: ReadonlyArray<readonly [number, number, number]> = [
@@ -753,7 +757,8 @@ test("code at or past next free code is a located error", () => {
 
   const payload = new Uint8Array(bits.length / 8);
   for (let b = 0; b < bits.length; b += 1) {
-    payload[b >> 3] |= bits[b]! << (b & 7);
+    const byteIndex = b >> 3;
+    payload[byteIndex] = (payload[byteIndex] ?? 0) | (bits[b]! << (b & 7));
   }
 
   const bytes = concat([
@@ -798,7 +803,8 @@ test("image data ending before EOI code is a located error", () => {
 
   const payload = new Uint8Array(bits.length / 8);
   for (let b = 0; b < bits.length; b += 1) {
-    payload[b >> 3] |= bits[b]! << (b & 7);
+    const byteIndex = b >> 3;
+    payload[byteIndex] = (payload[byteIndex] ?? 0) | (bits[b]! << (b & 7));
   }
 
   const bytes = concat([
@@ -880,7 +886,8 @@ test("palette index outside table is refused", () => {
 
   const payload = new Uint8Array(bits.length / 8);
   for (let b = 0; b < bits.length; b += 1) {
-    payload[b >> 3] |= bits[b]! << (b & 7);
+    const byteIndex = b >> 3;
+    payload[byteIndex] = (payload[byteIndex] ?? 0) | (bits[b]! << (b & 7));
   }
 
   const bytes = concat([
