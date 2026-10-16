@@ -4,6 +4,9 @@
 
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   readLegacyFont,
   writeLegacyFont,
@@ -21,6 +24,9 @@ function unwrap<T>(result: Result<T>): T {
   }
   return result.value;
 }
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(here, "..", "..", "..");
+
 
 test("reads a valid 2051-line font file and round-trips exactly", () => {
   const values = new Uint8Array(FONT_TOTAL_VALUES);
@@ -47,6 +53,35 @@ test("reads a valid 2051-line font file and round-trips exactly", () => {
     deepEqual(res.value.values, values);
   }
 });
+test("reads committed base.fnt version example and round-trips exactly", () => {
+  const path = join(repoRoot, "docs", "spec", "examples", "versions", "font", "base.fnt");
+  const text = readFileSync(path, "utf8");
+  const res = readLegacyFont(text, path);
+  equal(res.ok, true);
+  if (res.ok) {
+    equal(res.value.magic, FONT_MAGIC);
+    equal(res.value.version, 2);
+    equal(res.value.subversion, 0);
+    equal(res.value.values.length, FONT_TOTAL_VALUES);
+
+    const written = writeLegacyFont(res.value);
+    equal(written, text);
+  }
+});
+
+test("reads committed base.fnt as Uint8Array bytes and round-trips", () => {
+  const path = join(repoRoot, "docs", "spec", "examples", "versions", "font", "base.fnt");
+  const bytes = new Uint8Array(readFileSync(path));
+  const res = readLegacyFont(bytes, path);
+  equal(res.ok, true);
+  if (res.ok) {
+    equal(res.value.magic, FONT_MAGIC);
+    equal(res.value.version, 2);
+    equal(res.value.subversion, 0);
+    equal(res.value.values.length, FONT_TOTAL_VALUES);
+  }
+});
+
 
 test("renders glyphToRgba with correct bitplane ordering", () => {
   const values = new Uint8Array(FONT_TOTAL_VALUES);

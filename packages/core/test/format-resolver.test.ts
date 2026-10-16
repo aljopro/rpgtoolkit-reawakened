@@ -256,6 +256,44 @@ test("resolveTileReference resolves .tan, .gph, .tst, and .iso references", () =
     equal(missing.error.section, "format-spec §1.5");
   }
 });
+test("resolveTileReference resolves board references with spaces and mixed case", () => {
+  const index = createAssetIndex([
+    "Game/ChimeranEmpire/Tiles/beach east.tan",
+    "Game/Schoolsout2/Tiles/bed.gph",
+  ]);
+
+  const chimeranRoot: AssetRoot = { kind: "game", projectPath: "ChimeranEmpire" };
+  const tanRef = unwrap(resolveTileReference(index, chimeranRoot, "beach east.tan"));
+  deepEqual(tanRef, {
+    kind: "animatedTile",
+    path: "beach east.tan",
+    asset: "game/chimeranempire/tiles/beach east.tan" as AssetKey,
+  });
+
+  // Case-insensitive reference lookup
+  const tanUpper = unwrap(resolveTileReference(index, chimeranRoot, "BEACH EAST.TAN"));
+  deepEqual(tanUpper, {
+    kind: "animatedTile",
+    path: "BEACH EAST.TAN",
+    asset: "game/chimeranempire/tiles/beach east.tan" as AssetKey,
+  });
+
+  const school2Root: AssetRoot = { kind: "game", projectPath: "Schoolsout2" };
+  const gphRef = unwrap(resolveTileReference(index, school2Root, "bed.gph"));
+  deepEqual(gphRef, {
+    kind: "singleTile",
+    path: "bed.gph",
+    asset: "game/schoolsout2/tiles/bed.gph" as AssetKey,
+  });
+
+  const gphUpper = unwrap(resolveTileReference(index, school2Root, "BED.GPH"));
+  deepEqual(gphUpper, {
+    kind: "singleTile",
+    path: "BED.GPH",
+    asset: "game/schoolsout2/tiles/bed.gph" as AssetKey,
+  });
+});
+
 
 test("resolves fonts under Font/ directory", () => {
   const index = createAssetIndex(["Game/demo/Font/base.fnt"]);
