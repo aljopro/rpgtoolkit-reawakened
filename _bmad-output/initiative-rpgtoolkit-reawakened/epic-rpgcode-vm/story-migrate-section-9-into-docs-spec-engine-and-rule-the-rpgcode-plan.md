@@ -3,7 +3,7 @@ title: 'Migrate section 9 into docs/spec/engine and rule the RPGCode conflicts'
 type: 'chore'
 ticket: '27'
 created: '2026-10-15'
-status: ready-for-dev
+status: in-progress
 baseline_revision: '4843c435566ed7110cdd0cd8e019b95865455a2a'
 route: 'full'
 route_source: 'auto'
