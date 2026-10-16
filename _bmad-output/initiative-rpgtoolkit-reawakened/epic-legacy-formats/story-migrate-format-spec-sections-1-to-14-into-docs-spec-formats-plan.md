@@ -3,7 +3,7 @@ title: 'Migrate format-spec sections 1 to 14 into docs/spec/formats and rule the
 type: 'chore'
 ticket: '23'
 created: '2026-10-15'
-status: in-progress
+status: built
 baseline_revision: '3509ec22bc67524ceaf142724245cf7e254f14db'
 route: 'full'
 route_source: 'auto'
