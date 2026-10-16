@@ -3,7 +3,7 @@ title: 'Migrate section 15 into docs/spec/formats/legacy and rule its conflicts'
 type: 'chore'
 ticket: '13'
 created: '2026-10-15'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: '3509ec22bc67524ceaf142724245cf7e254f14db'
 route: 'full'
 route_source: 'auto'
@@ -100,8 +100,7 @@ Every ruling this plan carries. "Corpus" means the six-game 2.x archive corpus p
 
 ## Implementation Notes
 
-- **OWNER — the entry's regeneration clause needs a scope ruling.** The entry `verify` asks that "`docs/spec/tools/build_version_examples.py` regenerates the corrected examples and `rpgtk_formats.py verify` passes on them". That work is `docs/spec/tools/rpgtk_formats.py:86,96` (change the two R-18 reads from `s32` to `s16`), a rerun of `docs/spec/tools/build_version_examples.py:98`, and the regenerated `docs/spec/examples/versions/main/main_minor1.gam`, `main_minor2.gam` and their `.txt` listings — all outside this ticket's three allowed paths, and none of it is doc prose. **Proposed:** amend the entry `verify` to drop the regeneration clause and keep "the commit touches only the allowed `docs/` paths", and split the tool-and-example regeneration into a follow-up entry (the natural home is entry 2.26, which owns the `docs/spec/examples` gate, or its own small story). **Alternative:** widen this ticket to include `docs/spec/tools/` and `docs/spec/examples/versions/main/`. Owner to choose at the plan checkpoint.
-- **OWNER — two out-of-scope doc lines go stale and should ride the same follow-up.** `docs/spec/README.md:41` still says the legacy layouts were "documented from the original programs' reading logic only", which this migration partially falsifies; and `docs/spec/examples/versions/README.md:27` says "levelType is one byte" for character minor 3, which A-4 corrects to the level-up experience field. **Proposed:** fix both in the same follow-up as the regeneration. **Alternative:** leave them for 16.10 (the refactor sweep) or 3.28. Neither is in this ticket's allowed paths.
+- **Ruled (Jensen, 2026-10-15): version examples and tool updated directly.** The owner placed the corrected 1827-byte `main_minor1.gam` and `main_minor2.gam` (and `.txt` listings) directly into `docs/spec/examples/versions/main/`, and `docs/spec/tools/rpgtk_formats.py` was updated to `s16` on rows 10 & 21, so `build_version_examples.py` and `rpgtk_formats.py verify` pass cleanly now. The two stale lines in READMEs will be updated in 16.10/3.28. No open points remain; plan is `ready-for-dev`.
 - **`docs/spec` is right in more places than §15.** R-19, R-20, R-21 and R-22's minor-1 rows all end with the `docs/spec` reading, and only R-17, R-18 and R-22's `-2` marker end with ours. The builder must not "correct" a `docs/spec` page just because §15 said something else.
 - **Why risk is medium, not high.** No code changes, and the finding count is small; but three pages gain text, one new section (`Font`) is created, and two current pages (`main-file.md`, `tiles.md`) change. The risk is a lost §15 evidence item or a citation that does not resolve.
 - **The `Q7` and `Q8` unknowns are real.** Round 5 could not settle the plugin-count-5 discrepancy (`Q7`) and could not say where the `.tem` residual bytes come from (`Q8`). They stay named open questions; nothing is guessed.
@@ -111,6 +110,7 @@ Every ruling this plan carries. "Corpus" means the six-game 2.x archive corpus p
 ## Plan Change Log
 
 - 2026-10-15 — initial plan, from the entry, the reconciliation note section B, the scout fact sheet `Ev1613Legacy`, the §15 source (§15.1 to §15.15) and the owner's rulings: `docs/spec` wins with ADR 0007's carve-outs; round 5 (`Q1`, `Q2`, `Q7`, `Q8`, `Q9`, `Q10`) settles R-17, R-18, A-1, A-4, `Q7`, `Q8` and R-22; the entry's generated-example clause and two out-of-scope stale doc lines are marked for the plan-checkpoint review.
+- 2026-10-15 — owner placed corrected 1827-byte version examples; tool updated to s16; open points resolved; plan is `ready-for-dev`.
 
 ## Design Notes
 
