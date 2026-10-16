@@ -29,7 +29,7 @@ Text animations (Toolkit 2) are still read by both original programs; see [legac
 
 ## Animated GIF
 
-When an animation name ends in `.gif`, the frames are the GIF's pages; the size comes from the first page, the delay from the first page's frame time, and the transparent colour from the first page's background colour (magenta `(255, 0, 255)` if absent).
+When an animation name ends in `.gif`, the frames are the GIF's pages; the size comes from the first page, the delay from the first page's frame time, and the transparent colour from the first page's background colour (magenta `(255, 0, 255)` if absent). **Reawakened rule (R-10):** this is the ruled reading — one delay from the first page, size from the first page, colour from the background colour with the magenta fallback; the GIF decoder's owner is entry 16.12.
 
 ## Written by the engine
 

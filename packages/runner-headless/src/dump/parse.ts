@@ -144,6 +144,20 @@ function parseData(cls: DataFormatClass, file: PackageFile, context: AssetResolv
           `${model.frames.length} frame slots (${filled} with an image), delay ${model.delay}s`,
       );
     }
+    case "tile-bitmap": {
+      const read = CORE_DECODERS["tile-bitmap"].decode(bytes, context);
+      if (!read.ok) return read;
+      const model = read.value;
+      // §3.6: the bounds count the drawn columns and rows; the stored grid holds
+      // one more of each, and only x < width and y < height are drawn.
+      const drawn = Math.max(model.width, 0) * Math.max(model.height, 0);
+      return modelOutcome(
+        model,
+        read.warnings,
+        `tile bitmap ${model.major}.${model.minor}, ${model.width}×${model.height} tiles drawn, ` +
+          `${model.cells.length} cells stored (${drawn} drawn), residue ${model.residue.length} bytes`,
+      );
+    }
     case "character": {
       const read = CORE_DECODERS.character.decode(bytes, context);
       if (!read.ok) return read;

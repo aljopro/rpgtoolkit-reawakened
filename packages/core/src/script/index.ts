@@ -24,15 +24,29 @@ export type {
   ThreadStatus,
   VmState,
 } from "./state.ts";
-export { createBuiltinLookup, PROVISIONAL_BUILTINS } from "./builtins.ts";
+export { CORE_PLUGIN } from "./builtins.ts";
+export type { Arg, BuiltinSpec, ParamSpec } from "./builtins.ts";
 export type {
-  Arg,
-  BuiltinCtx,
-  BuiltinLookup,
-  BuiltinResult,
-  BuiltinSpec,
-  ParamSpec,
-} from "./builtins.ts";
+  CommandContinuation,
+  CommandEffect,
+  CommandHandler,
+  CommandRequest,
+  CommandResult,
+  CommandView,
+  PluginDefinition,
+} from "./plugin.ts";
+export {
+  assembleCommands,
+  createCommandLookup,
+  TIER_ORDER,
+} from "./registry.ts";
+export type {
+  CommandLookup,
+  CommandRegistry,
+  CommandTiers,
+  ResolvedCommand,
+  TierLookup,
+} from "./registry.ts";
 export {
   advanceScriptTick,
   createScriptServices,

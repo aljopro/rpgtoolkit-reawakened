@@ -11,6 +11,7 @@ export * from "./animation/index.ts";
 export * from "./board/index.ts";
 export * from "./battle/index.ts";
 export * from "./tileset/index.ts";
+export * from "./tile-bitmap/index.ts";
 export * from "./image/index.ts";
 export * from "./main-file/index.ts";
 export * from "./actor/index.ts";
