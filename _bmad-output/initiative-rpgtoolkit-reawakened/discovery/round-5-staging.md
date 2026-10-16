@@ -45,3 +45,12 @@ Neither program uses it: both read the line and discard it. The 845 lines match 
 
 **Q10. `-2` marker in text characters.** *Read from the program's logic.*
 No, the marker is for items only. The character text reader always reads every picture at full size, with no empty-picture check. A `-2` line in a character file would shift everything after it.
+
+**Q11. `FileInput` past the end of a file.** *Read from the program's logic; the Windows end-of-file detail is stated from memory of its documented behaviour and was not checked.* (Received later the same day, pasted by the owner.)
+`FileInput` past the end returns an empty string. There is no error and no message, and the script carries on. The read position does not move, so every further read also returns an empty string. This depends on how Windows reports end of file (from memory, not checked); see the uncertainty below.
+At end of file the result is an empty string. A rebuild should simply return empty.
+Uncertainty: if Windows reported end of file as a successful zero-byte read instead of a failed read, the reader could loop and hang. This is believed unlikely (*not sure*), and is why this answer is "read from logic" rather than certain.
+A blank line in the file looks the same as end of file. A script cannot tell them apart from the value alone.
+`FileEOF` is how scripts are meant to detect the end. It is true once the read position reaches the file's size. After the last line has been read, including its line ending, `FileEOF` is already true, so a `while (!FileEOF(...))` loop stops cleanly without ever reading past the end.
+On a file that is not open, `FileInput` silently does nothing: no error, and it sets no return value.
+**Recommendation:** define reading past the end as returning an empty string with no error, and leave the position at the end. That matches 3.1 in every case that matters. If a diagnostic is wanted, put it in a debug log rather than raising a script error, since 3.1 games may read past the end routinely.
