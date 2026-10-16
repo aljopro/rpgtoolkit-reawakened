@@ -3,7 +3,7 @@ title: 'Plugin manifest and the engine''s default manifest'
 type: 'feature'
 ticket: 25
 created: '2026-10-16'
-status: built
+status: done
 baseline_revision: 'c90dc52b'
 route: 'full'
 route_source: 'auto'
