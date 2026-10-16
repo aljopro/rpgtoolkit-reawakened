@@ -132,6 +132,7 @@ covers = ["CAP-1"]
 after = [4, 5, 6, 7, 11, 12, "2.13"]
 hitl = false
 risk = "low"
+notes = ["2026-10-16: completed in feat/register-tk2-decoders. Registry and dump now dispatch `.gph`, `.tan`, and `.fnt`; registry reader-equality/header tests and dump example tests cover them. Updated `golden/spec-examples.json` digests and counts for newly parsed v2 tile/font examples while retaining `single-tile/tile_v1.gph` as an expected 16.7 failure. `fixtures:fetch` provides only demo and Basic, which contain no TK2 `.gph`/`.tan`/`.fnt`; TK2 legacy-corpus digest updates therefore belong to entry 9 and were not fabricated here."]
 
 [[entry]]
 id = 9

@@ -251,6 +251,37 @@ function parseData(cls: DataFormatClass, file: PackageFile, context: AssetResolv
           )
         : read;
     }
+    case "single-tile": {
+      const read = CORE_DECODERS["single-tile"].decode(bytes, context);
+      if (!read.ok) return read;
+      const model = read.value;
+      return modelOutcome(
+        model,
+        read.warnings,
+        `single tile ${model.major}.${model.minor}, detail ${model.detail}, ` +
+          `${model.width}×${model.height}, ${model.pixels.length} pixels`,
+      );
+    }
+    case "tile-animation": {
+      const read = CORE_DECODERS["tile-animation"].decode(bytes, context);
+      if (!read.ok) return read;
+      const model = read.value;
+      return modelOutcome(
+        model,
+        read.warnings,
+        `tile animation ${model.major}.${model.minor}, speed ${model.speed}, ` +
+          `${model.frameCount} frames, residue ${model.residue?.length ?? 0} bytes`,
+      );
+    }
+    case "font": {
+      const read = CORE_DECODERS.font.decode(bytes, context);
+      if (!read.ok) return read;
+      return modelOutcome(
+        read.value,
+        read.warnings,
+        `bitmap font ${read.value.version}.${read.value.subversion}, ${read.value.values.length} values`,
+      );
+    }
     case "image": {
       // §10: the decoder matches the PNG/JPEG signature and returns straight RGBA.
       const read = CORE_DECODERS.image.decode(bytes, context);
