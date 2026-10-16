@@ -3,14 +3,14 @@ title: 'AssetDecoder wiring: add decoders to PluginDefinition'
 type: 'feature'
 ticket: '14'
 created: '2026-10-16'
-status: ready-for-dev
+status: built
 baseline_revision: '5a7ad22679581abdda690a0232f1f1e2208af3dc'
 route: 'full'
 route_source: 'pinned'
 risk: 'medium'
-review: ''
-review_source: ''
-lenses_ran: []
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 review_loop_iteration: 0
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/adr/0004-script-ast-step-ir-and-plugins.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/epic-rpgcode-vm.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/plugin-definition-spike.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/story-assetdecoder-interface-and-core-format-registry-ad-31-plan.md']
 ---
@@ -70,10 +70,16 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/adr/0004-scr
 - Given ADR 0004 and AD-31, when read together, then the interface and registration ownership are consistent without adding trust or subsystem scope.
 
 ## Implementation Notes
+Implemented the approved later-plugin-wins ruling. `createAssetRegistry` remains strict for direct registration, while `createLayeredAssetRegistry` supplies deterministic later-layer header precedence. `assembleDecoders` validates each plugin's own claims and emits one `decoder.overridden` warning for each replaced id or extension claim. No goldens changed.
+
 
 ## Plan Change Log
 
 ## Review Triage Log
+- `patch` — The review found id overrides left the old decoder's other extensions and header claim active. The registry now removes the replaced decoder and its still-owned claims; the override test asserts the old extension is absent.
+- `patch` — The review found layered header dispatch reversed order within a plugin layer. The registry now scans layers from latest to earliest while preserving each layer's listed order, with a dedicated test.
+- `patch` — The review found ADR 0004 did not document header precedence or id-replacement scope. The amendment now records extension-first dispatch, layer order, and full id replacement.
+- `patch` — The review found CORE_ONLY coverage checked only `gam`. The assembled-registry test now checks every core extension and header against the existing registry.
 
 ## Design Notes
 
