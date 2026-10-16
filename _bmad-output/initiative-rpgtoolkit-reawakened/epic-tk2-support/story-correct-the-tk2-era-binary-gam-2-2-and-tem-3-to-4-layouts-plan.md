@@ -3,7 +3,7 @@ title: 'Correct the TK2-era binary .gam 2.2 and .tem 3 to 4 layouts'
 type: 'chore'
 ticket: 6
 created: '2026-10-16'
-status: built
+status: done
 baseline_revision: '8f2e5b62'
 route: 'full'
 route_source: 'auto'

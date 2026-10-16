@@ -3,7 +3,7 @@ title: 'The docs/spec example corpus in the dump gate'
 type: 'feature'
 ticket: '26'
 created: '2026-10-16'
-status: built
+status: done
 baseline_revision: '8f2e5b623a43f36c60991c2ca498c9bc9fae6ce7'
 route: 'full'
 route_source: 'auto'
