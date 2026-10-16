@@ -419,10 +419,10 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     return resolution;
   }
 
-  // Row 10, minor < 3: reserved i32 (old parallax value).
+  // Row 10, minor < 3: reserved i16 (old parallax value, R-18).
   let parallax = NO_BYTES;
   if (minor < 3) {
-    const r = reader.readBytes(4);
+    const r = reader.readBytes(2);
     if (!r.ok) {
       return r;
     }
@@ -486,8 +486,8 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     extKeys.push({ asciiKey: asciiKey.value, program: program.value });
   }
 
-  // Row 21 (conditional): menuPlugin/fightPlugin at minor ≥ 3, a reserved i32
-  // below it.
+  // Row 21 (conditional): menuPlugin/fightPlugin at minor ≥ 3, a reserved i16
+  // below it (R-18).
   let menuPlugin = "";
   let fightPlugin = "";
   let menuPluginFallback = NO_BYTES;
@@ -503,7 +503,7 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     }
     fightPlugin = fp.value;
   } else {
-    const r = reader.readBytes(4);
+    const r = reader.readBytes(2);
     if (!r.ok) {
       return r;
     }

@@ -2,6 +2,8 @@
 import { test } from "node:test";
 import { equal } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   BinaryReader,
   readMainFile,
@@ -17,6 +19,8 @@ function ascii(text: string): Uint8Array {
   return bytes;
 }
 
+const testDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(testDir, "..", "..", "..");
 test("empty placeholder main file has valid shape", () => {
   const gam = createEmptyMainFile();
   equal(gam.magic, "RPGTLKIT MAIN");
@@ -31,6 +35,22 @@ test("refuses text main file with wrong magic", () => {
   if (!res.ok) {
     equal(res.error.offset, 0);
   }
+});
+
+test("committed main_tk2_text.gam example parses cleanly to end of file", () => {
+  const file = join(repoRoot, "docs", "spec", "examples", "versions", "main", "main_tk2_text.gam");
+  const bytes = new Uint8Array(readFileSync(file));
+  const reader = new BinaryReader(bytes, file);
+  const res = readMainFile(reader);
+  equal(res.ok, true, `failed to parse ${file}: ${!res.ok ? res.error.message : ""}`);
+  if (!res.ok) return;
+  const gam = res.value;
+  equal(gam.magic, "RPGTLKIT MAIN");
+  equal(gam.major, 2);
+  equal(gam.enemies.length, 501);
+  equal(gam.extKeys.length, 51);
+  equal(gam.residue.length, 0);
+  equal(reader.remaining, 0);
 });
 
 test("all corpus text .gam files parse cleanly to end of file when scratch corpus is present", () => {

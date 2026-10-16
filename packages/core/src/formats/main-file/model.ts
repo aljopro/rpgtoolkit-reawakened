@@ -91,9 +91,9 @@ export interface MainFilePlugin {
  * reproduce them (AD-18). Each is empty when the minor does not carry it.
  */
 export interface MainFileReservedRuns {
-  /** Row 10, minor < 3: an `i32` between `resolution` and `disableProtectReg`. */
+  /** Row 10, minor < 3: an `i16` between `resolution` and `disableProtectReg` (R-18). */
   readonly parallax: Uint8Array;
-  /** Row 21, minor < 3: the `i32` in place of `menuPlugin`/`fightPlugin`. */
+  /** Row 21, minor < 3: the `i16` in place of `menuPlugin`/`fightPlugin` (R-18). */
   readonly menuPluginFallback: Uint8Array;
   /** Row 22, minor ≤ 2: the `i32` + `i16` multitask-speed / memory-protection run. */
   readonly multitask: Uint8Array;

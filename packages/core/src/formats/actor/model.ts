@@ -124,6 +124,18 @@ export const LEGACY_WALK_FRAME_COUNT = 16;
 /** The two legacy rest tiles of a minor < 4 item (format-spec §6.2). */
 export const LEGACY_REST_TILE_COUNT = 2;
 
+/** The sixteen legacy two-tile-tall walk frames of a minor < 5 character (§6.1). */
+export const LEGACY_CHARACTER_WALK_FRAME_COUNT = 16;
+
+/** The 64 legacy battle tiles of a minor < 5 character (§6.1): 4 frames × 2 rows × 2 cols × 4 stances. */
+export const LEGACY_CHARACTER_BATTLE_TILE_COUNT = 64;
+
+/** The four legacy 2×2 battle rest tiles of a minor < 5 character (§6.1). */
+export const LEGACY_CHARACTER_REST_TILE_COUNT = 4;
+
+/** The ten legacy two-tile-tall custom graphics of a minor < 5 character (§6.1). */
+export const LEGACY_CHARACTER_CUSTOM_FRAME_COUNT = 10;
+
 /**
  * The seven body-slot names of a character (format-spec §6.1). Index 0 is the
  * unused padding byte the VB6 1-based `armorType(6)` array left behind; bytes
@@ -256,6 +268,11 @@ export interface Character {
    */
   readonly vectorBases: readonly ActorBase[] | undefined;
   /**
+   * The legacy tile references of a minor < 5 character (§6.1); undefined at
+   * minor >= 5. Exactly 120 strings across walk, battle, rest and custom.
+   */
+  readonly legacyGraphics: LegacyCharacterGraphics | undefined;
+  /**
    * Trailing bytes the §6.1 layout did not cover, kept verbatim so a writer
    * reproduces the input exactly (AD-18). A non-empty residue is a warning.
    */
@@ -266,6 +283,19 @@ export interface Character {
 export interface LegacyWalkFrame {
   readonly top: string;
   readonly bottom: string;
+}
+
+/**
+ * The legacy tile names of a minor < 5 character (§6.1): sixteen walk frames
+ * (each top and bottom tile), 64 battle tiles (for frame 0..3, row 0..1, col 0..1:
+ * fight, defend, special, death), 4 battle rest tiles (2×2), and 10 custom frames
+ * (top and bottom). Exactly 120 strings in total.
+ */
+export interface LegacyCharacterGraphics {
+  readonly walkFrames: readonly LegacyWalkFrame[];
+  readonly battleTiles: readonly string[];
+  readonly restTiles: readonly string[];
+  readonly customFrames: readonly LegacyWalkFrame[];
 }
 
 /**

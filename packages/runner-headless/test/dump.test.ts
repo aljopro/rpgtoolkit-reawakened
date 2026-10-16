@@ -165,10 +165,10 @@ const MAIN_FILE: MainFile = {
   pathColor: { r: 0, g: 0, b: 0 },
   movementControls: 0,
   movementScanCodes: [],
-  // Minor 0 carries the four pre-3 reserved runs at the widths §2 gives them.
+  // Minor 0 carries the four pre-3 reserved runs at the widths §2 gives them (R-18).
   reservedRuns: {
-    parallax: new Uint8Array(4),
-    menuPluginFallback: new Uint8Array(4),
+    parallax: new Uint8Array(2),
+    menuPluginFallback: new Uint8Array(2),
     multitask: new Uint8Array(6),
     fightStyle: new Uint8Array(2),
   },
