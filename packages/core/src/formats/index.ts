@@ -21,3 +21,4 @@ export * from "./registry/index.ts";
 export * from "./tile-animation/index.ts";
 export * from "./single-tile/index.ts";
 export * from "./font/index.ts";
+export * from "./text/index.ts";

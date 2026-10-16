@@ -51,7 +51,7 @@ import {
 import { convertPreVectorBoard } from "../board/pre-vector-convert.ts";
 import { readPreVectorBoard } from "../board/pre-vector-reader.ts";
 import { readBoard } from "../board/reader.ts";
-import { BOARD_MAGIC } from "../board/model.ts";
+import { BOARD_DETECT_OFFSET, BOARD_MAGIC } from "../board/model.ts";
 import { boardLayout, type DecodedBoard } from "../board/layout.ts";
 import type { DecodedTexture } from "../image/model.ts";
 import type { Tileset } from "../tileset/tileset.ts";
@@ -107,6 +107,15 @@ function magicIs(magic: string): (header: Uint8Array) => boolean {
 
 /** Read a board of either §4.1 branch, converting a §4.8 pre-vector board (§4.2 model). */
 function decodeBoard(bytes: Uint8Array): Result<DecodedBoard> {
+  if (bytes.length === 0) {
+    const read = readBoard(new BinaryReader(bytes));
+    return read.ok ? { ok: true, value: { board: read.value, layout: "vector" }, warnings: read.warnings } : read;
+  }
+  const isBinary = new BinaryReader(bytes).isBinaryAt(BOARD_DETECT_OFFSET);
+  if (isBinary.ok && !isBinary.value) {
+    const read = readBoard(new BinaryReader(bytes));
+    return read.ok ? { ok: true, value: { board: read.value, layout: "pre-vector" }, warnings: read.warnings } : read;
+  }
   const header = new BinaryReader(bytes).header();
   if (header.ok && boardLayout(header.value.minor) === "pre-vector") {
     const pre = readPreVectorBoard(new BinaryReader(bytes));
@@ -168,7 +177,7 @@ export const CORE_DECODERS: CoreDecoders = {
     id: "gam",
     section: "format-spec §2",
     extensions: ["gam"],
-    detect: magicIs(MAIN_MAGIC),
+    detect: (header) => startsWithAscii(header, MAIN_MAGIC) || startsWithAscii(header, "RPGTLKIT mainForm"),
     decode: (bytes) => readMainFile(new BinaryReader(bytes)),
   },
   board: {

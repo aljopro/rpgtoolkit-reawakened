@@ -75,6 +75,11 @@ export class BinaryReader {
     return this.pos;
   }
 
+  /** The underlying byte array. */
+  get bytes(): Uint8Array {
+    return this.data;
+  }
+
   /** How many bytes are left to read. */
   get remaining(): number {
     return this.data.length - this.pos;

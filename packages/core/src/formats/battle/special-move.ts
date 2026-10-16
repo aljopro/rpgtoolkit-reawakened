@@ -13,6 +13,7 @@
 import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import { BinaryWriter } from "../binary/writer.ts";
+import { TextLineReader } from "../text/line-reader.ts";
 import {
   BATTLE_MAX_MINOR,
   BATTLE_MIN_MINOR,
@@ -45,7 +46,7 @@ export function readSpecialMove(reader: BinaryReader): Result<SpecialMove> {
   const detection = reader.isBinaryAt(detectAt);
 
   if (detection.ok && !detection.value) {
-    return err(unsupportedTextForm(reader, detectAt, SPECIAL_MOVE_SECTION, SPECIAL_MOVE_MAGIC));
+    return readTextSpecialMove(reader);
   }
   if (!header.ok) {
     return header;
@@ -179,4 +180,73 @@ export function writeSpecialMove(model: SpecialMove): Result<Uint8Array> {
 
   writer.writeBytes(model.residue);
   return ok(writer.toBytes());
+}
+
+/** Read a Toolkit 2 minor 0 text special move (docs/spec/formats/legacy/text-formats.md#special-move). */
+function readTextSpecialMove(reader: BinaryReader): Result<SpecialMove> {
+  const lineReader = new TextLineReader(reader.bytes, reader.path, reader.offset);
+  const header = lineReader.nextLine("header", SPECIAL_MOVE_SECTION);
+  if (!header.ok) return header;
+  if (header.value.trim().toUpperCase() !== SPECIAL_MOVE_MAGIC.toUpperCase()) {
+    return err({
+      ...(reader.path === undefined ? {} : { path: reader.path }),
+      offset: 0,
+      section: SPECIAL_MOVE_SECTION,
+      message: `not a special move: magic is "${header.value}", expected "${SPECIAL_MOVE_MAGIC}"`,
+    });
+  }
+  const major = lineReader.nextInt("major", SPECIAL_MOVE_SECTION);
+  if (!major.ok) return major;
+  const minor = lineReader.nextInt("minor", SPECIAL_MOVE_SECTION);
+  if (!minor.ok) return minor;
+  if (minor.value !== 0) {
+    return err({
+      ...(reader.path === undefined ? {} : { path: reader.path }),
+      offset: lineReader.offset,
+      section: SPECIAL_MOVE_SECTION,
+      message: `unsupported text special move minor version ${minor.value}: expected 0`,
+    });
+  }
+  const name = lineReader.nextLine("name", SPECIAL_MOVE_SECTION);
+  if (!name.ok) return name;
+  const fp = lineReader.nextInt("fp", SPECIAL_MOVE_SECTION);
+  if (!fp.ok) return fp;
+  const smp = lineReader.nextInt("smp", SPECIAL_MOVE_SECTION);
+  if (!smp.ok) return smp;
+  const prg = lineReader.nextLine("prg", SPECIAL_MOVE_SECTION);
+  if (!prg.ok) return prg;
+  const targetSmp = lineReader.nextInt("targetSmp", SPECIAL_MOVE_SECTION);
+  if (!targetSmp.ok) return targetSmp;
+  const battle = lineReader.nextInt("battle", SPECIAL_MOVE_SECTION);
+  if (!battle.ok) return battle;
+  const menu = lineReader.nextInt("menu", SPECIAL_MOVE_SECTION);
+  if (!menu.ok) return menu;
+  const statusEffect = lineReader.nextLine("statusEffect", SPECIAL_MOVE_SECTION);
+  if (!statusEffect.ok) return statusEffect;
+  const animation = lineReader.nextLine("animation", SPECIAL_MOVE_SECTION);
+  if (!animation.ok) return animation;
+  const description = lineReader.nextLine("description", SPECIAL_MOVE_SECTION);
+  if (!description.ok) return description;
+
+  const finished = lineReader.finish(SPECIAL_MOVE_SECTION);
+  if (!finished.ok) return finished;
+
+  reader.seek(lineReader.offset);
+
+  return ok({
+    magic: SPECIAL_MOVE_MAGIC,
+    major: major.value,
+    minor: minor.value,
+    name: name.value,
+    damage: fp.value,
+    smpCost: smp.value,
+    program: prg.value,
+    targetSmpDrain: targetSmp.value,
+    usableInBattle: battle.value,
+    usableFromMenu: menu.value,
+    statusEffect: statusEffect.value,
+    animation: animation.value,
+    description: description.value,
+    residue: new Uint8Array(0),
+  });
 }

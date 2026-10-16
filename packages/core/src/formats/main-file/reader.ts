@@ -31,6 +31,7 @@ import {
   type MainFilePlugin,
   type MainFileReservedRuns,
 } from "./model.ts";
+import { TextLineReader } from "../text/line-reader.ts";
 
 const NO_BYTES: Uint8Array = new Uint8Array(0);
 const NO_COLOR: Colorref = { r: 0, g: 0, b: 0 };
@@ -44,6 +45,304 @@ function fail(reader: BinaryReader, offset: number, message: string): Result<nev
     message,
   });
 }
+/** An empty placeholder main file for zero-byte files (Z-1). */
+export function createEmptyMainFile(): MainFile {
+  return {
+    magic: MAIN_MAGIC,
+    major: 2,
+    minor: 0,
+    registrationFlag: 0,
+    registrationCode: "NOCODE",
+    projectPath: "",
+    gameTitle: "",
+    screenType: 2,
+    extendToFullScreen: 0,
+    resolution: 0,
+    disableProtectReg: 0,
+    languageFile: "",
+    startupPrg: "",
+    initBoard: "",
+    initChar: "",
+    runTimePrg: "",
+    runTimeKey: 0,
+    menuKey: 0,
+    activationKey: 0,
+    extKeys: [],
+    menuPlugin: "",
+    fightPlugin: "",
+    fightingDisabled: 0,
+    enemies: [],
+    fightType: 0,
+    chances: 0,
+    useCustomFightPrg: 0,
+    customFightPrg: "",
+    gameOverPrg: "",
+    skinButton: "",
+    skinWindow: "",
+    plugins: [],
+    useDayNight: 0,
+    dayNightType: 0,
+    dayLengthMinutes: 0,
+    cursorMoveSound: "",
+    cursorSelectSound: "",
+    cursorCancelSound: "",
+    useJoystick: 0,
+    colorDepth: 0,
+    gameSpeed: 0,
+    pixelMovement: 0,
+    cursorEnabled: 0,
+    mouseCursor: "",
+    hotSpotX: 0,
+    hotSpotY: 0,
+    transparent: NO_COLOR,
+    resX: 0,
+    resY: 0,
+    showFpsInTitle: 0,
+    pathfindHeuristic: 0,
+    drawVectorsFlags: 0,
+    pathColor: NO_COLOR,
+    movementControls: 0,
+    movementScanCodes: [0, 0, 0, 0, 0, 0, 0, 0],
+    reservedRuns: {
+      parallax: NO_BYTES,
+      menuPluginFallback: NO_BYTES,
+      multitask: NO_BYTES,
+      fightStyle: NO_BYTES,
+    },
+    residue: NO_BYTES,
+  };
+}
+
+/** Parse a Toolkit 2 line-oriented text main file (docs/spec/formats/legacy/text-formats.md#main-file-toolkit-2-text). */
+export function readTextMainFile(bytes: Uint8Array, path?: string): Result<MainFile> {
+  const reader = new TextLineReader(bytes, path);
+
+  const magic = reader.nextLine("magic", MAIN_SECTION);
+  if (!magic.ok) return magic;
+  const magicTrim = magic.value.trim();
+  if (magicTrim !== MAIN_MAGIC && magicTrim !== "RPGTLKIT mainForm") {
+    return err({
+      ...(path === undefined ? {} : { path }),
+      offset: 0,
+      section: MAIN_SECTION,
+      message: `not a main file: magic is "${magic.value}", expected "${MAIN_MAGIC}"`,
+    });
+  }
+
+  const major = reader.nextInt("major", MAIN_SECTION, 2);
+  if (!major.ok) return major;
+  const minor = reader.nextInt("minor", MAIN_SECTION, 0);
+  if (!minor.ok) return minor;
+
+  const regFlag = reader.nextInt("registered", MAIN_SECTION, 0);
+  if (!regFlag.ok) return regFlag;
+  const startupPrg = reader.nextLine("startupPrg", MAIN_SECTION);
+  if (!startupPrg.ok) return startupPrg;
+  const runTimePrg = reader.nextLine("runTimePrg", MAIN_SECTION);
+  if (!runTimePrg.ok) return runTimePrg;
+  const useBuiltinMenu = reader.nextLine("useBuiltinMenu", MAIN_SECTION);
+  if (!useBuiltinMenu.ok) return useBuiltinMenu;
+
+  const runKey = reader.nextInt("runKey", MAIN_SECTION, 0);
+  if (!runKey.ok) return runKey;
+  const menuKey = reader.nextInt("menuKey", MAIN_SECTION, 0);
+  if (!menuKey.ok) return menuKey;
+  const activationKey = reader.nextInt("activationKey", MAIN_SECTION, 0);
+  if (!activationKey.ok) return activationKey;
+
+  const initBoard = reader.nextLine("initBoard", MAIN_SECTION);
+  if (!initBoard.ok) return initBoard;
+  const initChar = reader.nextLine("initChar", MAIN_SECTION);
+  if (!initChar.ok) return initChar;
+
+  const fightingDisabled = reader.nextInt("fightGameYn", MAIN_SECTION, 0);
+  if (!fightingDisabled.ok) return fightingDisabled;
+
+  const multitaskSpeed = reader.nextLine("multitaskSpeed", MAIN_SECTION);
+  if (!multitaskSpeed.ok) return multitaskSpeed;
+  const memProtect = reader.nextLine("memoryProtection", MAIN_SECTION);
+  if (!memProtect.ok) return memProtect;
+
+  const enemies: MainFileEnemy[] = [];
+  for (let k = 0; k < 501; k++) {
+    const enemy = reader.nextLine(`enemy[${k}]`, MAIN_SECTION);
+    if (!enemy.ok) return enemy;
+    const skill = reader.nextInt(`skill[${k}]`, MAIN_SECTION, 0);
+    if (!skill.ok) return skill;
+    enemies.push({ enemyFile: enemy.value, skillLevel: skill.value });
+  }
+
+  const fightType = reader.nextInt("fightType", MAIN_SECTION, 0);
+  if (!fightType.ok) return fightType;
+  const chances = reader.nextInt("chances", MAIN_SECTION, 0);
+  if (!chances.ok) return chances;
+  const useCustomFightPrg = reader.nextInt("useCustomFightPrg", MAIN_SECTION, 0);
+  if (!useCustomFightPrg.ok) return useCustomFightPrg;
+  const customFightPrg = reader.nextLine("customFightPrg", MAIN_SECTION);
+  if (!customFightPrg.ok) return customFightPrg;
+
+  const ignored18 = reader.nextLine("ignored18", MAIN_SECTION);
+  if (!ignored18.ok) return ignored18;
+
+  const gameTitle = reader.nextLine("gameTitle", MAIN_SECTION);
+  if (!gameTitle.ok) return gameTitle;
+  const screenType = reader.nextInt("screenType", MAIN_SECTION, 2);
+  if (!screenType.ok) return screenType;
+
+  const ignored21 = reader.nextLine("ignoredFightingStyle", MAIN_SECTION);
+  if (!ignored21.ok) return ignored21;
+
+  const gameOverPrg = reader.nextLine("gameOverPrg", MAIN_SECTION);
+  if (!gameOverPrg.ok) return gameOverPrg;
+  const projectPath = reader.nextLine("projectPath", MAIN_SECTION);
+  if (!projectPath.ok) return projectPath;
+  const skinButton = reader.nextLine("skinButton", MAIN_SECTION);
+  if (!skinButton.ok) return skinButton;
+  const skinWindow = reader.nextLine("skinWindow", MAIN_SECTION);
+  if (!skinWindow.ok) return skinWindow;
+
+  const ignored26 = reader.nextLine("ignoredTargetPlatform", MAIN_SECTION);
+  if (!ignored26.ok) return ignored26;
+
+  const extKeys: MainFileExtKey[] = [];
+  for (let k = 0; k < 51; k++) {
+    const key = reader.nextInt(`extKey[${k}]`, MAIN_SECTION, 0);
+    if (!key.ok) return key;
+    const prg = reader.nextLine(`extPrg[${k}]`, MAIN_SECTION);
+    if (!prg.ok) return prg;
+    extKeys.push({ asciiKey: key.value, program: prg.value });
+  }
+
+  const registrationCode = reader.nextLine("registrationCode", MAIN_SECTION);
+  if (!registrationCode.ok) return registrationCode;
+
+  let extendToFullScreen = 0;
+  let resolution = 0;
+  const plugins: MainFilePlugin[] = [];
+  let useDayNight = 0;
+  let dayNightType = 0;
+  let dayLengthMinutes = 0;
+  let disableProtectReg = 0;
+  let languageFile = "";
+
+  if (reader.hasMore()) {
+    const ext = reader.nextInt("extendToFullScreen", MAIN_SECTION, 0);
+    if (!ext.ok) return ext;
+    extendToFullScreen = ext.value;
+  }
+  if (reader.hasMore()) {
+    const res = reader.nextInt("resolution", MAIN_SECTION, 0);
+    if (!res.ok) return res;
+    resolution = res.value;
+  }
+  if (reader.hasMore()) {
+    const pCount = reader.nextInt("pluginCount", MAIN_SECTION, 0);
+    if (!pCount.ok) return pCount;
+    for (let k = 0; k < pCount.value && reader.hasMore(); k++) {
+      const flag = reader.nextInt(`pluginFlag[${k}]`, MAIN_SECTION, 0);
+      if (!flag.ok) return flag;
+      plugins.push({ enabled: flag.value, pluginFile: "" });
+    }
+  }
+  if (reader.hasMore()) {
+    const dnUse = reader.nextInt("useDayNight", MAIN_SECTION, 0);
+    if (!dnUse.ok) return dnUse;
+    useDayNight = dnUse.value;
+  }
+  if (reader.hasMore()) {
+    const dnType = reader.nextInt("dayNightType", MAIN_SECTION, 0);
+    if (!dnType.ok) return dnType;
+    dayNightType = dnType.value;
+  }
+  if (reader.hasMore()) {
+    const dnLen = reader.nextInt("dayLengthMinutes", MAIN_SECTION, 0);
+    if (!dnLen.ok) return dnLen;
+    dayLengthMinutes = dnLen.value;
+  }
+  if (reader.hasMore()) {
+    const prot = reader.nextInt("disableProtectReg", MAIN_SECTION, 0);
+    if (!prot.ok) return prot;
+    disableProtectReg = prot.value;
+  }
+  if (reader.hasMore()) {
+    const px = reader.nextLine("parallax", MAIN_SECTION);
+    if (!px.ok) return px;
+  }
+  if (reader.hasMore()) {
+    const lang = reader.nextLine("languageFile", MAIN_SECTION);
+    if (!lang.ok) return lang;
+    languageFile = lang.value;
+  }
+
+  const finished = reader.finish(MAIN_SECTION);
+  if (!finished.ok) return finished;
+
+  return ok({
+    magic: MAIN_MAGIC,
+    major: major.value,
+    minor: minor.value,
+    registrationFlag: regFlag.value,
+    registrationCode: registrationCode.value,
+    projectPath: projectPath.value,
+    gameTitle: gameTitle.value,
+    screenType: screenType.value,
+    extendToFullScreen,
+    resolution,
+    disableProtectReg,
+    languageFile,
+    startupPrg: startupPrg.value,
+    initBoard: initBoard.value,
+    initChar: initChar.value,
+    runTimePrg: runTimePrg.value,
+    runTimeKey: runKey.value,
+    menuKey: menuKey.value,
+    activationKey: activationKey.value,
+    extKeys,
+    menuPlugin: "",
+    fightPlugin: "",
+    fightingDisabled: fightingDisabled.value,
+    enemies,
+    fightType: fightType.value,
+    chances: chances.value,
+    useCustomFightPrg: useCustomFightPrg.value,
+    customFightPrg: customFightPrg.value,
+    gameOverPrg: gameOverPrg.value,
+    skinButton: skinButton.value,
+    skinWindow: skinWindow.value,
+    plugins,
+    useDayNight,
+    dayNightType,
+    dayLengthMinutes,
+    cursorMoveSound: "",
+    cursorSelectSound: "",
+    cursorCancelSound: "",
+    useJoystick: 0,
+    colorDepth: 0,
+    gameSpeed: 0,
+    pixelMovement: 0,
+    cursorEnabled: 0,
+    mouseCursor: "",
+    hotSpotX: 0,
+    hotSpotY: 0,
+    transparent: NO_COLOR,
+    resX: 0,
+    resY: 0,
+    showFpsInTitle: 0,
+    pathfindHeuristic: 0,
+    drawVectorsFlags: 0,
+    pathColor: NO_COLOR,
+    movementControls: 0,
+    movementScanCodes: [0, 0, 0, 0, 0, 0, 0, 0],
+    reservedRuns: {
+      parallax: NO_BYTES,
+      menuPluginFallback: NO_BYTES,
+      multitask: NO_BYTES,
+      fightStyle: NO_BYTES,
+    },
+    residue: NO_BYTES,
+  });
+}
+
 
 /**
  * Read a main game file from `reader` (format-spec §2). The header's minor must
@@ -52,6 +351,20 @@ function fail(reader: BinaryReader, offset: number, message: string): Result<nev
  */
 export function readMainFile(reader: BinaryReader): Result<MainFile> {
   const start = reader.offset;
+
+  if (reader.remaining === 0) {
+    return fail(reader, start, "unexpected end of data reading magic: need 1 byte(s), 0 remain");
+  }
+
+  const detection = reader.isBinaryAt(start + MAIN_MAGIC.length);
+  if (detection.ok && !detection.value) {
+    const bytes = reader.readBytes(reader.remaining);
+    if (!bytes.ok) {
+      return bytes;
+    }
+    return readTextMainFile(bytes.value, reader.path);
+  }
+
   const header = reader.header();
   if (!header.ok) {
     return header;
@@ -106,10 +419,10 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     return resolution;
   }
 
-  // Row 10, minor < 3: reserved i32 (old parallax value).
+  // Row 10, minor < 3: reserved i16 (old parallax value, R-18).
   let parallax = NO_BYTES;
   if (minor < 3) {
-    const r = reader.readBytes(4);
+    const r = reader.readBytes(2);
     if (!r.ok) {
       return r;
     }
@@ -173,8 +486,8 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     extKeys.push({ asciiKey: asciiKey.value, program: program.value });
   }
 
-  // Row 21 (conditional): menuPlugin/fightPlugin at minor ≥ 3, a reserved i32
-  // below it.
+  // Row 21 (conditional): menuPlugin/fightPlugin at minor ≥ 3, a reserved i16
+  // below it (R-18).
   let menuPlugin = "";
   let fightPlugin = "";
   let menuPluginFallback = NO_BYTES;
@@ -190,7 +503,7 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     }
     fightPlugin = fp.value;
   } else {
-    const r = reader.readBytes(4);
+    const r = reader.readBytes(2);
     if (!r.ok) {
       return r;
     }

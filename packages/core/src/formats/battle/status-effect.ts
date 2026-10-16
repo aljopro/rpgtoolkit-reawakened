@@ -12,6 +12,7 @@
 import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import { BinaryWriter } from "../binary/writer.ts";
+import { TextLineReader } from "../text/line-reader.ts";
 import {
   BATTLE_MAX_MINOR,
   BATTLE_MIN_MINOR,
@@ -42,7 +43,7 @@ export function readStatusEffect(reader: BinaryReader): Result<StatusEffect> {
   const detectAt = start + STATUS_EFFECT_DETECT_OFFSET;
   const probe = reader.isBinaryAt(detectAt);
   if (probe.ok && !probe.value) {
-    return err(unsupportedTextForm(reader, detectAt, STATUS_EFFECT_SECTION, STATUS_EFFECT_MAGIC));
+    return readTextStatusEffect(reader);
   }
   if (!header.ok) {
     return header;
@@ -179,4 +180,76 @@ export function writeStatusEffect(model: StatusEffect): Result<Uint8Array> {
 
   writer.writeBytes(model.residue);
   return ok(writer.toBytes());
+}
+
+/** Read a Toolkit 2 minor 0 text status effect (docs/spec/formats/legacy/text-formats.md#status-effect). */
+function readTextStatusEffect(reader: BinaryReader): Result<StatusEffect> {
+  const lineReader = new TextLineReader(reader.bytes, reader.path, reader.offset);
+  const header = lineReader.nextLine("header", STATUS_EFFECT_SECTION);
+  if (!header.ok) return header;
+  if (header.value.trim().toUpperCase() !== STATUS_EFFECT_MAGIC.toUpperCase()) {
+    return err({
+      ...(reader.path === undefined ? {} : { path: reader.path }),
+      offset: 0,
+      section: STATUS_EFFECT_SECTION,
+      message: `not a status effect: magic is "${header.value}", expected "${STATUS_EFFECT_MAGIC}"`,
+    });
+  }
+  const major = lineReader.nextInt("major", STATUS_EFFECT_SECTION);
+  if (!major.ok) return major;
+  const minor = lineReader.nextInt("minor", STATUS_EFFECT_SECTION);
+  if (!minor.ok) return minor;
+  if (minor.value !== 0) {
+    return err({
+      ...(reader.path === undefined ? {} : { path: reader.path }),
+      offset: lineReader.offset,
+      section: STATUS_EFFECT_SECTION,
+      message: `unsupported text status effect minor version ${minor.value}: expected 0`,
+    });
+  }
+  const name = lineReader.nextLine("name", STATUS_EFFECT_SECTION);
+  if (!name.ok) return name;
+  const rounds = lineReader.nextInt("rounds", STATUS_EFFECT_SECTION);
+  if (!rounds.ok) return rounds;
+  const speed = lineReader.nextInt("speed", STATUS_EFFECT_SECTION);
+  if (!speed.ok) return speed;
+  const slow = lineReader.nextInt("slow", STATUS_EFFECT_SECTION);
+  if (!slow.ok) return slow;
+  const disable = lineReader.nextInt("disable", STATUS_EFFECT_SECTION);
+  if (!disable.ok) return disable;
+  const hp = lineReader.nextInt("hp", STATUS_EFFECT_SECTION);
+  if (!hp.ok) return hp;
+  const hpAmount = lineReader.nextInt("hpAmount", STATUS_EFFECT_SECTION);
+  if (!hpAmount.ok) return hpAmount;
+  const smp = lineReader.nextInt("smp", STATUS_EFFECT_SECTION);
+  if (!smp.ok) return smp;
+  const smpAmount = lineReader.nextInt("smpAmount", STATUS_EFFECT_SECTION);
+  if (!smpAmount.ok) return smpAmount;
+  const code = lineReader.nextInt("code", STATUS_EFFECT_SECTION);
+  if (!code.ok) return code;
+  const prg = lineReader.nextLine("prg", STATUS_EFFECT_SECTION);
+  if (!prg.ok) return prg;
+
+  const finished = lineReader.finish(STATUS_EFFECT_SECTION);
+  if (!finished.ok) return finished;
+
+  reader.seek(lineReader.offset);
+
+  return ok({
+    magic: STATUS_EFFECT_MAGIC,
+    major: major.value,
+    minor: minor.value,
+    name: name.value,
+    rounds: rounds.value,
+    speedUp: speed.value,
+    slowDown: slow.value,
+    disable: disable.value,
+    hpEnabled: hp.value,
+    hpPerRound: hpAmount.value,
+    smpEnabled: smp.value,
+    smpPerRound: smpAmount.value,
+    runProgram: code.value,
+    program: prg.value,
+    residue: new Uint8Array(0),
+  });
 }

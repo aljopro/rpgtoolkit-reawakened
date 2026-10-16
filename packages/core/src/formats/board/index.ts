@@ -9,3 +9,4 @@ export * from "./reader.ts";
 export * from "./writer.ts";
 export * from "./pre-vector-reader.ts";
 export * from "./pre-vector-convert.ts";
+export * from "./text-reader.ts";

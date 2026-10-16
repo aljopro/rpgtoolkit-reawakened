@@ -2,7 +2,7 @@
 
 A battle opponent: stats, special moves, weaknesses and strengths, AI level or AI program, rewards, and battle animations. Enemies live in `Enemy\` and are referenced by the main file's random-encounter table and by scripts.
 
-Header text: `RPGTLKIT ENEMY`. The 3.x editor writes major 2, minor **1**. There are no version branches in the binary layout. The only other version is **minor 0**, the Toolkit 2 line-based text form ([legacy/text-formats.md](legacy/text-formats.md#enemy)); a reader accepts minor 1 (binary) and refuses an unlisted value rather than guessing ([README.md](README.md#header-and-version)). Detection is the byte at offset 14: `00` = 2.1 binary, non-zero = 2.0 text.
+Header text: `RPGTLKIT ENEMY`. The 3.x editor writes major 2, minor **1**. There are no version branches in the binary layout. The only other version is **minor 0**, the Toolkit 2 line-based text form ([legacy/text-formats.md](legacy/text-formats.md#enemy)); a reader accepts minor 1 (binary) and minor 0 (text) and refuses an unlisted value rather than guessing ([README.md](README.md#header-and-version)). Detection is the byte at offset 14: `00` = 2.1 binary, non-zero = 2.0 text.
 
 ## Layout
 
