@@ -20,3 +20,4 @@
 | Q8 | Binary `.tem` at minors 3 and 4: which field is one byte, and what are the leftover bytes and the size-type value 99? |
 | Q9 | Text `.bkg`: what is the empty name line between the sounds and the shade grid for? |
 | Q10 | Text `.tem`: does the `-2` empty-picture marker apply to characters? |
+| Q11 | What does `FileInput` do when a script reads past the end of a file, and how should a script detect the end? (Asked by the owner after the packet was sent, for ticket 3.27.) |

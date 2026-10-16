@@ -5,8 +5,8 @@
 * **Source consulted (as stated by the answerer):** the original programs' logic. Revision not recorded. Nothing was run, so no answer below is *observed*; every one is *read from the program's logic* unless marked *not sure*.
 * **Answerer:** the spec authors' AI-assisted session, relayed by the owner. Its transcript is not given to implementers (ADR 0006 decision 1).
 * **Date:** 2026-10-15
-* **Questions answered:** Q1 to Q10, from `questions-round-5.md`.
-* **Review:** a separate reviewer found no copied expression and checked every number that can be checked in this repository (Q1, Q2, Q7, Q8, Q9) against `docs/format-spec.md` section 15; all agree. Three answers were edited (Q1, Q5, Q7).
+* **Questions answered:** Q1 to Q11, from `questions-round-5.md`. Q11 was asked by the owner after the packet was sent and answered the same day.
+* **Review:** a separate reviewer found no copied expression and checked every number that can be checked in this repository (Q1, Q2, Q7, Q8, Q9) against `docs/format-spec.md` section 15; all agree. Three answers were edited (Q1, Q5, Q7). Q11 was reviewed separately by a second reviewer, which found one internal-structure description (a line-reader routine and its buffer), now removed, and one wording that pointed at how the original opens files, now reworded; a third finding (that `FileEOF` was unanswered) was a misreading of the section and was not applied.
 * Everything below is prose; no source expression is reproduced. Where a fact is inferred rather than read, it is marked.
 
 ---
@@ -42,3 +42,12 @@ Neither program uses it: both read the line and discard it. The 845 lines match 
 
 **Q10. `-2` marker in text characters.** *Read from the program's logic.*
 No, the marker is for items only. The character text reader always reads every picture at full size, with no empty-picture check. A `-2` line in a character file would shift everything after it.
+
+**Q11. `FileInput` past the end of a file.** *Read from the program's logic; the Windows end-of-file detail is stated from memory of its documented behaviour and was not checked.*
+`FileInput` past the end returns an empty string. There is no error and no message, and the script carries on. The read position does not move, so every further read also returns an empty string. This depends on how Windows reports end of file (from memory, not checked); see the uncertainty below.
+At end of file the result is an empty string. A rebuild should simply return empty.
+Uncertainty: if Windows reported end of file as a successful zero-byte read instead of a failed read, the reader could loop and hang. This is believed unlikely (*not sure*), and is why this answer is "read from logic" rather than certain.
+A blank line in the file looks the same as end of file. A script cannot tell them apart from the value alone.
+`FileEOF` is how scripts are meant to detect the end. It is true once the read position reaches the file's size. After the last line has been read, including its line ending, `FileEOF` is already true, so a `while (!FileEOF(...))` loop stops cleanly without ever reading past the end.
+On a file that is not open, `FileInput` silently does nothing: no error, and it sets no return value.
+**Recommendation:** define reading past the end as returning an empty string with no error, and leave the position at the end. That matches 3.1 in every case that matters. If a diagnostic is wanted, put it in a debug log rather than raising a script error, since 3.1 games may read past the end routinely.
