@@ -46,7 +46,7 @@ function ref(text: string): ProgramRef {
 /** What the test plugin's commands saw: `mark` calls, request continuations. */
 type Log = {
   marks: Array<[number, number]>;
-  continuations: Array<Array<number | string | null>>;
+  continuations: Array<Array<unknown>>;
 };
 
 function param(name: string, variadic = false) {
