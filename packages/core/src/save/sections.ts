@@ -9,7 +9,7 @@
  * every section type here and in `state.ts`.
  *
  * AD-10 (one state tree, one owner per section); AD-11 (one canonical form);
- * format-spec §11 (the saved game).
+ * docs/spec/formats/save-game.md#layout-minor-4 (the saved game).
  */
 
 /** Owner: `core/world` (board, layers, vectors, lighting, ambient). Filled by epic movement-triggers. */

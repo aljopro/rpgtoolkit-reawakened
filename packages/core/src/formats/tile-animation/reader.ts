@@ -1,6 +1,5 @@
 /**
- * The animated-tile reader (`docs/spec/formats/tiles.md#animated-tile-tan`,
- * format-spec §3.5, §15.10).
+ * The animated-tile reader (`docs/spec/formats/tiles.md#animated-tile-tan`).
  *
  * Pure (G2): consumes a BinaryReader, never touches a host or timer. Returns a
  * Result with a located FormatError on failure (AD-18).
@@ -98,7 +97,7 @@ export function readTileAnimation(reader: BinaryReader): Result<TileAnimation> {
   }
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the animated tile were kept as residue (format-spec §3.5, §1.7)`,
+      `${residue.value.length} trailing byte(s) after the animated tile were kept as residue (docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
     );
   }
 

@@ -1,5 +1,5 @@
 /**
- * Serialising a single tile (`docs/spec/formats/tiles.md#single-tile-gph`, format-spec §3.2).
+ * Serialising a single tile (`docs/spec/formats/tiles.md#single-tile-gph`, docs/spec/formats/tiles.md#single-tile-gph).
  *
  * Writes text lines formatted the VB6 way: non-negative numbers with leading space
  * and trailing space (` 2 `), negative numbers with trailing space (`-1 `), CRLF separated.

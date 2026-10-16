@@ -42,7 +42,7 @@ Movement is queued: the keyboard, the mouse, scripts (`Push`, `PlayerPath`, `Ite
 - The original engine implements this by counting frames at the measured frame rate ([main-loop-and-startup.md](main-loop-and-startup.md#timing)); the formula above is the time-based equivalent.
 - Idle and custom stance animations play at their own `delay`.
 
-> **Open conflict R-50 — sprite speed and the game speed offset.** `docs/engine-features.md:83` (E-04) says the game speed offset is "−4…+4, ±10 % per step"; this page, `docs/spec/engine/movement-and-collision.md:41`, says the time per 4-pixel advance "becomes `speed − 100 ms × gameSpeed`, never less than one frame". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-50 — sprite speed and the game speed offset.** the legacy feature inventory (E-04) says the game speed offset is "−4…+4, ±10 % per step"; this page, `docs/spec/engine/movement-and-collision.md:41`, says the time per 4-pixel advance "becomes `speed − 100 ms × gameSpeed`, never less than one frame". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ## Sprite states
 
@@ -77,7 +77,7 @@ Moving off a board edge is blocked unless that edge has a link.
 <a id="e-30"></a>
 **E-30 Occlusion ("under").** For a sprite on layer L, board content on higher layers that overlaps the sprite's frame is drawn **over** it. **Under vectors** promote the board graphics they enclose — on layer L, optionally all layers below, optionally the background image — so those draw over the sprite. The trigger is the sprite's collision base intersecting the vector, or, with the frame-intersect option, its image frame doing so. Overlapping under vectors do not stack translucency.
 
-> **Open conflict R-54 — wall-sliding threshold.** `docs/engine-features.md:138` (E-26) says the engine slides when a solid edge is hit at "less than about 45° to the movement direction"; this page, `docs/spec/engine/movement-and-collision.md:67`, slides on an "angle ≥ 45°, or ≥ 27° on isometric boards". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-54 — wall-sliding threshold.** the legacy feature inventory (E-26) says the engine slides when a solid edge is hit at "less than about 45° to the movement direction"; this page, `docs/spec/engine/movement-and-collision.md:67`, slides on an "angle ≥ 45°, or ≥ 27° on isometric boards". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ## Collision between sprites
 
@@ -91,9 +91,9 @@ Sprites' collision polygons are compared. When two collide, one freezes for 2 se
 <a id="e-29"></a>
 **E-29 Z-ordering.** The sprites on a board are kept sorted by vertical position, and only the moving sprite is re-inserted each step; rendering uses this order.
 
-> **Open conflict R-51 — sprite-sprite collision outcome.** `docs/engine-features.md:142` (E-27) says a sprite blocked while following a path tries a "diversion … wait … stops"; this page, `docs/spec/engine/movement-and-collision.md:84`, says that of two colliding sprites one freezes for 2 seconds and names which one loses. Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-51 — sprite-sprite collision outcome.** the legacy feature inventory (E-27) says a sprite blocked while following a path tries a "diversion … wait … stops"; this page, `docs/spec/engine/movement-and-collision.md:84`, says that of two colliding sprites one freezes for 2 seconds and names which one loses. Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
-> **Open conflict R-55 — z-ordering update.** `docs/engine-features.md:151` (E-29) says "Only the moving sprite is re-inserted each step"; this page, `docs/spec/engine/movement-and-collision.md:86`, says the original engine re-inserts the moving sprite at the end of the drawing list "(a bug)", so the most recently moved sprite tends to be drawn on top. Owner epic: **board-rendering**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-55 — z-ordering update.** the legacy feature inventory (E-29) says "Only the moving sprite is re-inserted each step"; this page, `docs/spec/engine/movement-and-collision.md:86`, says the original engine re-inserts the moving sprite at the end of the drawing list "(a bug)", so the most recently moved sprite tends to be drawn on top. Owner epic: **board-rendering**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ## Activation: programs and items
 
@@ -137,7 +137,7 @@ The other fixed hooks are the random battle, the custom battle program, the game
 
 **Reawakened rule.** The trigger points above may be implemented on an internal event bus, but the observable firing rules must hold exactly: once-per-entry, distance re-arm, precedence, layer matching, and the condition-before / set-after pair of conditional activation.
 
-> **Open conflict R-52 — activation precedence.** `docs/engine-features.md:179` (E-43) says that among qualifying items the "one most directly in front and then nearest" wins, and that "Items take precedence over regions"; this page, `docs/spec/engine/movement-and-collision.md:103`, checks the items first and then the board programs, and says that if several programs match "the last one in board order wins". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-52 — activation precedence.** the legacy feature inventory (E-43) says that among qualifying items the "one most directly in front and then nearest" wins, and that "Items take precedence over regions"; this page, `docs/spec/engine/movement-and-collision.md:103`, checks the items first and then the board programs, and says that if several programs match "the last one in board order wins". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ## Moving between boards
 
@@ -161,7 +161,7 @@ Scripts can also move the player with `Send(board, x, y, layer)`.
 <a id="e-48"></a>
 **E-48 Edge link to a program.** The player walks off an edge whose link is a `.prg`.
 
-> **Open conflict R-53 — board-edge arrival alignment.** `docs/engine-features.md:146` (E-28) says the arrival point is "aligned to an 8 px or 32 px grid"; this page, `docs/spec/engine/movement-and-collision.md:147`, says the player is placed against the opposite edge "keeping its position along the edge, inferred". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-53 — board-edge arrival alignment.** the legacy feature inventory (E-28) says the arrival point is "aligned to an 8 px or 32 px grid"; this page, `docs/spec/engine/movement-and-collision.md:147`, says the player is placed against the opposite edge "keeping its position along the edge, inferred". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ## Path-finding
 

@@ -1,4 +1,4 @@
-// The package loader of format-spec §13 (AD-6): a loose folder, a `.tpk` ZIP
+// The package loader of docs/spec/formats/packaging-and-paths.md (AD-6): a loose folder, a `.tpk` ZIP
 // archive and a standalone EXE whose `CMP1` trailer points at an appended ZIP
 // all load to the same asset tree, under one exported set of untrusted-input
 // limits (AD-17).
@@ -125,7 +125,7 @@ interface ZipOptions {
   readonly cdSize?: number;
 }
 
-/** Build a ZIP archive from `specs` (format-spec §13; PKZIP APPNOTE 4.3). */
+/** Build a ZIP archive from `specs` (docs/spec/formats/packaging-and-paths.md; PKZIP APPNOTE 4.3). */
 function buildZip(specs: readonly ZipSpec[], options: ZipOptions = {}): Uint8Array {
   const locals: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
@@ -193,7 +193,7 @@ function buildZip(specs: readonly ZipSpec[], options: ZipOptions = {}): Uint8Arr
   return concat([...locals, centralDirectory, eocd]);
 }
 
-/** The `CMP1` marker of §13's trailer. */
+/** The `CMP1` marker of docs/spec/formats/packaging-and-paths.md's trailer. */
 const CMP1 = new Uint8Array([0x43, 0x4d, 0x50, 0x31]);
 
 /** A game as a ZIP: both methods, a subfolder and a nested archive (L14). */
@@ -245,7 +245,7 @@ function tpkFailure(bytes: Uint8Array, rule: string, offset?: number): FormatErr
   if (result.ok) {
     throw new Error(`expected a failure naming ${rule}`);
   }
-  equal(result.error.section, "format-spec §13");
+  equal(result.error.section, "docs/spec/formats/packaging-and-paths.md");
   equal(
     result.error.offset >= 0 && result.error.offset <= bytes.length,
     true,
@@ -267,7 +267,7 @@ function folderFailure(entries: readonly FolderEntry[], rule: string): FormatErr
   if (result.ok) {
     throw new Error(`expected a failure naming ${rule}`);
   }
-  equal(result.error.section, "format-spec §13");
+  equal(result.error.section, "docs/spec/formats/packaging-and-paths.md");
   equal(result.error.offset, 0, `"${result.error.message}" offset`);
   equal(result.error.message.includes(rule), true, `"${result.error.message}" should name ${rule}`);
   return result.error;
@@ -581,7 +581,7 @@ test("an entry duplicated by case is rejected (L10)", () => {
   equal(error.message.includes("L10"), true, error.message);
 });
 
-test("the L10 fold is ASCII only: U+212A is not ASCII k (§1.5, AD-5)", () => {
+test("the L10 fold is ASCII only: U+212A is not ASCII k", () => {
   // U+212A (KELVIN SIGN) is a different name from ASCII `k` and does not fold,
   // so these two entries are two files, not one ambiguity; a K/k pair still is.
   const kelvin = loadPackage({
@@ -712,13 +712,13 @@ test("path length, depth and basename limits are enforced (L6, L7, L8)", () => {
 
 test("the CMP1 trailer decides where the appended ZIP is (L20, L21)", () => {
   // A committed, independently authored standalone EXE (ticket 2.22): a stub,
-  // the authored ZIP, then the 12-byte §13 trailer (§13.1).
+  // the authored ZIP, then the 12-byte docs/spec/formats/packaging-and-paths.md trailer(docs/spec/formats/packaging-and-paths.md#loose-folder).
   const exe = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "package-cmp1.exe")));
   const zip = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "package.tpk")));
   deepEqual(Array.from(unwrap(readAppendedZip(exe, "package-cmp1.exe"))), Array.from(zip));
 
   // A Toolkit 2 launcher stub and a PE-shaped self-extracting `zip.exe` both
-  // have no trailer; §13.1 refuses both by L21.
+  // have no trailer; docs/spec/formats/packaging-and-paths.md#loose-folder refuses both by L21.
   for (const name of ["exe-tk2-stub.exe", "exe-pe-zip.exe"]) {
     const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", name)));
     const missing = loadPackage({ kind: "exe", name, bytes });

@@ -1,5 +1,5 @@
 // Toolkit 2 bitmap font (.fnt) format of
-// `docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text` (format-spec §15.12):
+// `docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text` (docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text):
 // 2051 lines, 2048 values for 256 8x8 glyphs.
 
 import { test } from "node:test";

@@ -1,4 +1,4 @@
-// The distribution package writer of format-spec §13 (AD-6): a `.tpk`-compatible
+// The distribution package writer of docs/spec/formats/packaging-and-paths.md (AD-6): a `.tpk`-compatible
 // ZIP carrying the game files plus `manifest.json { schema, main, index }`.
 //
 // The fixtures here are the *writer's* input, and every read-back runs through
@@ -86,7 +86,7 @@ function writeAndRead(
   };
 }
 
-/** Assert a write failed, citing §13 and naming `rule`, and return the failure. */
+/** Assert a write failed, citing docs/spec/formats/packaging-and-paths.md and naming `rule`, and return the failure. */
 function writeFailure(
   files: readonly PackageFile[],
   manifest: unknown,
@@ -96,7 +96,7 @@ function writeFailure(
   if (result.ok) {
     throw new Error(`expected a failure naming ${rule}`);
   }
-  equal(result.error.section, "format-spec §13");
+  equal(result.error.section, "docs/spec/formats/packaging-and-paths.md");
   equal(result.error.message.includes(rule), true, `"${result.error.message}" should name ${rule}`);
   return result.error;
 }
@@ -312,7 +312,7 @@ test("a tree over the L1 budget is refused at the entry that crosses it", () => 
 
   const result = writeDistributionPackage({ files, manifest });
   if (result.ok) throw new Error("expected a failure naming L1");
-  equal(result.error.section, "format-spec §13");
+  equal(result.error.section, "docs/spec/formats/packaging-and-paths.md");
   equal(result.error.message.includes("max compressed input, L1"), true, result.error.message);
 
   // The refusal is at the crossing, not after the last entry: the reported bound
@@ -388,7 +388,7 @@ test("a non-object input is refused, naming the distribution input", () => {
   for (const bad of [null, undefined, 42, "input"] as readonly unknown[]) {
     const result = writeDistributionPackage(bad as DistributionInput);
     if (result.ok) throw new Error("expected a failure");
-    equal(result.error.section, "format-spec §13");
+    equal(result.error.section, "docs/spec/formats/packaging-and-paths.md");
     equal(result.error.message.includes("distribution input"), true, result.error.message);
   }
 });

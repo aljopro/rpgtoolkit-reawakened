@@ -1,4 +1,4 @@
-// The JPEG decoder of format-spec §10 (AD-28), exercised through
+// The JPEG decoder of docs/spec/formats/images.md#the-shared-decode-contract (AD-28), exercised through
 // `decodeTexture`: a small synthetic matrix built by a minimal baseline
 // encoder pins the baseline picture, the 8-bit extended sequential frame
 // (SOF1), the progressive refusal (SOF2), restart intervals with and without
@@ -340,7 +340,7 @@ test("SOF1 with a precision other than 8 and SOF2 are both refused", () => {
   const notEight = decodeTexture(twelveBit);
   equal(notEight.ok, false);
   if (!notEight.ok) {
-    equal(notEight.error.section, "format-spec §10");
+    equal(notEight.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     equal(notEight.error.offset, segmentPayload(twelveBit, 0xc1));
   }
 
@@ -348,7 +348,7 @@ test("SOF1 with a precision other than 8 and SOF2 are both refused", () => {
   const sof2 = decodeTexture(progressive);
   equal(sof2.ok, false);
   if (!sof2.ok) {
-    equal(sof2.error.section, "format-spec §10");
+    equal(sof2.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
   }
 });
 
@@ -400,7 +400,7 @@ test("a partial MCU's dummy blocks are decoded but never written into the pictur
   // past the right edge of the component (T.81 §A.2.2): it is decoded to keep the
   // entropy stream in step and then dropped, never stored. Stored at the plane's
   // flat offset it would land in the *next* plane row and overwrite samples that
-  // were already decoded (format-spec §10.3).
+  // were already decoded (docs/spec/formats/images.md#gif).
   const jpeg = buildJpeg({
     width: 24,
     height: 16,
@@ -467,7 +467,7 @@ test("a DC difference category above 11 is refused, not decoded", () => {
   const result = decodeTexture(jpeg);
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     // The failure is in the scan data — after the SOS header, at its first byte.
     equal(result.error.offset, segmentPayload(jpeg, 0xda) + 7);
   }
@@ -488,7 +488,7 @@ test("a duplicated frame component id is a located error", () => {
   const result = decodeTexture(jpeg);
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     // The second component's id byte: the frame payload, its 6-byte header and
     // the 3-byte first component description.
     equal(result.error.offset, segmentPayload(jpeg, 0xc0) + 9);
@@ -511,7 +511,7 @@ test("a repeated SOS component entry is a located error", () => {
   const result = decodeTexture(jpeg);
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     // The second entry's id byte, after the SOS count and the first entry.
     equal(result.error.offset, segmentPayload(jpeg, 0xda) + 3);
   }
@@ -533,7 +533,7 @@ test("a frame component no scan decoded is refused before composing", () => {
   const result = decodeTexture(jpeg);
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     // Located at the frame the incomplete scan belongs to.
     equal(result.error.offset, segmentPayload(jpeg, 0xc0));
   }
@@ -543,7 +543,7 @@ test("a three-byte FF D8 FF file is reported as too short", () => {
   const result = decodeTexture(new Uint8Array([0xff, 0xd8, 0xff]));
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     // Offset 3 is the end of the signature, not the "not a JPEG" offset 0.
     equal(result.error.offset, 3);
   }

@@ -1,12 +1,12 @@
 /**
- * The script step machine (G1; AD-8/AD-9/AD-26; format-spec §9.15 THR-3).
+ * The script step machine (G1; AD-8/AD-9/AD-26; docs/spec/engine/rpgcode-errors-and-threads.md#threads THR-3).
  *
  * Dispatches the full StepOp instruction set, function call frames with
  * overloading by arity, by-reference parameter aliasing, `return &lvalue`,
  * truthiness and operator semantics per SEM-3, control effects for FUN-7
  * unwinding, and source positions on every error.
  *
- * docs/adr/0004; format-spec §9.15 (THR-3) and §9.16 (SEM-3/SEM-4/SEM-5/SEM-6).
+ * docs/adr/0004; docs/spec/engine/rpgcode-errors-and-threads.md#threads (THR-3) (SEM-3/SEM-4/SEM-5/SEM-6).
  */
 
 import { pow } from "../fmath/index.ts";
@@ -48,7 +48,7 @@ import {
   truthy,
 } from "./values.ts";
 
-/** The provisional per-thread, per-tick VM-step budget (§9.15 THR-3). */
+/** The provisional per-thread, per-tick VM-step budget(docs/spec/engine/rpgcode-runtime.md THR-3). */
 export const STEP_BUDGET = 1000;
 
 /** What one tick left the script threads doing. */

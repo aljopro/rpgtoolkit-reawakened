@@ -1,13 +1,13 @@
 /**
  * GIF (`.gif`) decoding for `decodeTexture` (its first page) and for the
- * animation path's `decodeGif` (every page with its delay) — format-spec §10,
+ * animation path's `decodeGif` (every page with its delay) — docs/spec/formats/images.md#the-shared-decode-contract,
  * AD-28, docs/spec/formats/images.md#gif.
  *
  * The reader is hand-written pure TypeScript: an LZW decompressor, a four-pass
  * de-interlacer, global and local colour tables, and the graphic control
  * extension (transparency, delay, disposal 0 to 3), with no dependency (G2, G6).
  * Every defect is a located `FormatError` and never a throw (AD-18), and the
- * geometric limits come from the shared §10.1 rule: a zero dimension, a logical
+ * geometric limits come from the shared docs/spec/formats/images.md#the-shared-decode-contract rule: a zero dimension, a logical
  * screen above 100,000,000 pixels, or a `pages × screen` product above it are
  * refused before anything is allocated.
  *
@@ -19,9 +19,9 @@
 import { err, ok, type Result } from "../result.ts";
 import type { DecodedGif, DecodedGifFrame } from "./model.ts";
 
-const SECTION = "format-spec §10";
+const SECTION = "docs/spec/formats/images.md#the-shared-decode-contract";
 
-/** The largest decoded picture this reader will allocate for, in pixels (§10.1). */
+/** The largest decoded picture this reader will allocate for, in pixels(docs/spec/formats/images.md#the-shared-decode-contract). */
 const MAX_PIXELS = 100_000_000;
 
 /** The GIF header length: `GIF87a` or `GIF89a`. */

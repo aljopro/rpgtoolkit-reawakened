@@ -1,6 +1,5 @@
 /**
- * The animated-tile model of `docs/spec/formats/tiles.md#animated-tile-tan`
- * (format-spec §3.5, §15.10).
+ * The animated-tile model of `docs/spec/formats/tiles.md#animated-tile-tan`.
  *
  * An animated tile is a cycle of tile references playing continuously on a board.
  * Stored as a binary file starting with `RPGTLKIT TILEANIM`.
@@ -9,7 +8,7 @@
 export const TILE_ANIMATION_MAGIC = "RPGTLKIT TILEANIM";
 export const TILE_ANIMATION_MAJOR = 2;
 export const TILE_ANIMATION_MINOR = 0;
-export const TILE_ANIMATION_SECTION = "format-spec §3.5";
+export const TILE_ANIMATION_SECTION = "docs/spec/formats/tiles.md#animated-tile-tan";
 
 /** The valid speed range (docs/spec/formats/tiles.md#animated-tile-tan). */
 export const TILE_ANIMATION_MIN_SPEED = 1;
@@ -35,6 +34,6 @@ export interface TileAnimation {
    * Empty string denotes an empty frame slot.
    */
   readonly frames: readonly string[];
-  /** Trailing bytes beyond the last frame string, if any (format-spec §1.7). */
+  /** Trailing bytes beyond the last frame string, if any (docs/spec/formats/README.md#bytes-after-the-last-documented-field). */
   readonly residue?: Uint8Array;
 }

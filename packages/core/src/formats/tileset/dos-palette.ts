@@ -2,7 +2,7 @@
  * The DOS 256-colour palette the 8-bit tile details index (docs/spec/formats/
  * tiles.md#dos-palette).
  *
- * Details 3 and 4 of format-spec §3.1 store one palette index per pixel, and
+ * Details 3 and 4 of docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso store one palette index per pixel, and
  * `.gph` details 3 and 5 use the same indices; details 5 and 6 use only the
  * first sixteen entries (a file constraint, stated in the legacy 2.0
  * specification — a reader still ships all 256). The index refers to this

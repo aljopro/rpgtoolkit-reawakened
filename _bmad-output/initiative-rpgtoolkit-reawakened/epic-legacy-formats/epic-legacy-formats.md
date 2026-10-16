@@ -20,10 +20,10 @@ Legacy authors and the engine can open any file of a legacy project; the CAP-1 s
 ## Done when
 
 1. The dump tool parses every file in `demo` and `Basic` without error and prints it as readable data.
-2. Formats the project writes round-trip as format-spec states, byte-for-byte or semantically.
+2. Formats the project writes round-trip as `docs/spec/formats/` states, byte-for-byte or semantically.
 3. A `.tpk` and an appended-ZIP EXE load to the same project as the extracted folder, and path lookup is case-insensitive.
-4. A pre-vector board converts to vectors, programs, shading and pixel positions as format-spec section 4.8 states.
-5. The distribution package round-trips with its manifest, and `decodeTexture` returns identical RGBA for every sample-game image. The core package still builds with no DOM or Node types (G2), imports only `fflate/browser` with sync APIs, and cites the format-spec section each reader implements.
+4. A pre-vector board converts to vectors, programs, shading and pixel positions as `docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector` states.
+5. The distribution package round-trips with its manifest, and `decodeTexture` returns identical RGBA for every sample-game image. The core package still builds with no DOM or Node types (G2), imports only `fflate/browser` with sync APIs, and cites the `docs/spec/` page and anchor each reader implements.
 
 ## Boundaries
 
@@ -33,8 +33,8 @@ Byte readers and writers, the asset resolver, package import and pre-vector upgr
 
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
 - spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-5, AD-6, AD-18, AD-28, AD-31
-- constraint - docs/format-spec.md, sections 1-13
-- reference - docs/engine-features.md, E-01, E-10, E-130, E-131
+- constraint - `docs/spec/formats/README.md#header-and-version`-13
+- reference - docs/spec/engine/main-loop-and-startup.md#e-01, E-10, E-130, E-131
 
 ## Notes
 

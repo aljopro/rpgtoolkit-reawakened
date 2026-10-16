@@ -1,6 +1,6 @@
 /**
  * Toolkit 2 bitmap font model (`docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text`,
- * format-spec §15.12).
+ * docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text).
  *
  * A text file containing 256 8×8 monochrome glyphs directly indexed by character code 0..255.
  * There is no binary form.
@@ -9,7 +9,7 @@
 export const FONT_MAGIC = "RPGTLKIT FONT";
 export const FONT_VERSION = 2;
 export const FONT_SUBVERSION = 0;
-export const FONT_SECTION = "format-spec §15.12";
+export const FONT_SECTION = "docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text";
 
 export const FONT_GLYPH_COUNT = 256;
 export const FONT_GLYPH_WIDTH = 8;

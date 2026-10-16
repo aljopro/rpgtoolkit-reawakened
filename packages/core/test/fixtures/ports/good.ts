@@ -66,7 +66,7 @@ export type FrameIsPlainData = AssertPlainData<Frame>;
 export type LocalSlotIsPlainData = AssertPlainData<LocalSlot>;
 
 // A mid-yield game state: the `time` section is a plain tick counter (AD-2) and
-// `vm` holds the real thread tree (AD-7, §9.15 THR-3).
+// `vm` holds the real thread tree (AD-7, docs/spec/engine/rpgcode-runtime.md THR-3).
 export const midYieldState: GameState = {
   ...createGameState({ seed: 0 }),
   time: { tick: 3 },

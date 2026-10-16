@@ -1,5 +1,5 @@
 /**
- * Reading a single tile (`docs/spec/formats/tiles.md#single-tile-gph`, format-spec §3.2, §15.11).
+ * Reading a single tile (`docs/spec/formats/tiles.md#single-tile-gph`).
  *
  * Pure (G2): parses text or bytes without I/O or timers. Returns a located
  * FormatError on failure (AD-18).

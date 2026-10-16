@@ -1,7 +1,6 @@
-// The main game file (.gam) reader, writer and project layout of format-spec
-// §2 and §1.5 (AD-18).
+// The main game file (.gam) reader, writer and project layout of docs/spec/formats/main-file.md#layout and docs/spec/formats/README.md#paths-inside-files (AD-18).
 //
-// Synthetic buffers, one per minor, pin the layout and all twelve of §2's
+// Synthetic buffers, one per minor, pin the layout and all twelve of docs/spec/formats/main-file.md#layout's
 // version-dependent rows. The fetched corpus `demo.gam` is exercised by
 // `pnpm dump:check`.
 import { test } from "node:test";
@@ -68,7 +67,7 @@ const FIGHT_STYLE = new Uint8Array([0x71, 0x72]);
 const SCAN_CODES = [30, 31, 32, 33, 34, 35, 36, 37];
 
 /**
- * Serialise a synthetic `.gam` for `minor`, writing the rows §2 lists for that
+ * Serialise a synthetic `.gam` for `minor`, writing the rows docs/spec/formats/main-file.md#layout lists for that
  * minor with distinctive sentinels and recording where each conditional group
  * begins. Built independently of `writeMainFile` so a reader/writer agreement
  * bug cannot hide behind a shared serialiser.
@@ -485,7 +484,7 @@ test("every minor 0–9 reads with zero trailing bytes and writes back byte-for-
 // the list bounds, so without a check a model the reader could never produce
 // would be written as a different, valid file. Each of these mutates one field
 // of a model that came from `readMainFile` and asserts the write is refused at
-// §2.
+// docs/spec/formats/main-file.md#layout.
 
 test("the writer refuses a model whose magic is not the main-file magic", () => {
   const model = readBuilt(buildGam(9));
@@ -622,7 +621,7 @@ test("trailing bytes become the residue, warn once and round-trip", () => {
     deepEqual(result.value.residue, trailing);
     equal(reader.remaining, 0);
     deepEqual(result.warnings, [
-      "4 trailing byte(s) after the main file were kept as residue (format-spec §2, §1.7)",
+      "4 trailing byte(s) after the main file were kept as residue (docs/spec/formats/README.md#bytes-after-the-last-documented-field)",
     ]);
     deepEqual(unwrap(writeMainFile(result.value)), bytes);
   }
@@ -675,7 +674,7 @@ test("a truncated file reports a located error", () => {
   const result = readMainFile(new BinaryReader(full.slice(0, 40)));
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section.startsWith("format-spec §"), true);
+    equal(result.error.section.startsWith("docs/spec/"), true);
     equal(result.error.offset < full.length, true);
   }
 });
@@ -685,7 +684,7 @@ test("an empty buffer and a garbage buffer both report clean errors", () => {
   equal(empty.ok, false);
   if (!empty.ok) {
     equal(empty.error.offset, 0);
-    equal(empty.error.section.startsWith("format-spec §"), true);
+    equal(empty.error.section.startsWith("docs/spec/"), true);
   }
   const garbage = readMainFile(
     new BinaryReader(new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x00, 0x02, 0x00, 0x09, 0x00])),
@@ -697,9 +696,9 @@ test("an empty buffer and a garbage buffer both report clean errors", () => {
   }
 });
 
-// --- Project layout (format-spec §1.5) --------------------------------------
+// --- Project layout (docs/spec/formats/README.md#paths-inside-files) --------------------------------------
 
-test("the type folder is the §1.5 subfolder for the kind", () => {
+test("the type folder is the path subfolder for the kind", () => {
   equal(typeFolder("tiles"), "Tiles");
   equal(typeFolder("boards"), "Boards");
   equal(typeFolder("characters"), "Chrs");
@@ -725,7 +724,7 @@ test("the project folder is <root>/Game/<projectPath>/", () => {
 
 test("a stored project path that already starts with Game is not double-prefixed", () => {
   // The shipped demo stores the full `Game\demo\` form; every spelling maps to
-  // the same folder (format-spec §1.5). Only the leading `Game` segment is
+  // the same folder (docs/spec/formats/README.md#paths-inside-files). Only the leading `Game` segment is
   // canonicalised; the remaining segments keep their stored casing.
   for (const stored of ["Game\\demo\\", "game/demo", "/Game/demo/", "\\Game\\demo"]) {
     equal(projectFolder("/games/root", { projectPath: stored }), "/games/root/Game/demo/", stored);
@@ -779,7 +778,7 @@ test("matching is case-insensitive", () => {
   );
 });
 
-test("the fold is ASCII only: U+212A and U+0130 keep their own identity (§1.5)", () => {
+test("the fold is ASCII only: U+212A and U+0130 keep their own identity", () => {
   equal(foldPath("K.BRD"), "k.brd");
   // KELVIN SIGN is a different name from ASCII k, and is not lower-cased.
   equal(foldPath("\u212A.brd"), "\u212A.brd");

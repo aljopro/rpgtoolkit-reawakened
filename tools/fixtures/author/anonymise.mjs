@@ -13,7 +13,7 @@
 // committed fixture is a neutral derivative of an uncommitted legacy file.
 //
 // The `.spc`/`.ste` rewrite drops any bytes after the last documented field
-// (§1.7 residue), because residue is exactly where unidentified game text would
+//(docs/spec/formats/README.md#bytes-after-the-last-documented-field residue), because residue is exactly where unidentified game text would
 // hide. The output is deterministic: the same input and placeholders always give
 // the same bytes.
 
@@ -95,7 +95,7 @@ function builder() {
 
 // ------------------------------------------------------------ .spc / .ste
 
-/** Read the documented binary fields of a `.spc` (§8.1), refusing the text form. */
+/** Read the documented binary fields of a `.spc`(docs/spec/formats/battle-data.md#special-move-spc), refusing the text form. */
 function readSpc(bytes) {
   if (bytes.length > 16 && bytes[16] !== 0) throw new Error("this is the text form; only the binary form is anonymised");
   const reader = cursor(bytes);
@@ -116,7 +116,7 @@ function readSpc(bytes) {
   return { major, minor, damage, smpCost, targetSmpDrain, usableInBattle, usableFromMenu };
 }
 
-/** Re-emit a `.spc` (§8.1) with every string field replaced. */
+/** Re-emit a `.spc`(docs/spec/formats/battle-data.md#special-move-spc) with every string field replaced. */
 function writeSpc(source, placeholders) {
   const writer = builder();
   writer.str("RPGTLKIT SPLMOVE");
@@ -135,7 +135,7 @@ function writeSpc(source, placeholders) {
   return writer.bytes();
 }
 
-/** Read the documented binary fields of a `.ste` (§8.2), refusing the text form. */
+/** Read the documented binary fields of a `.ste`(docs/spec/formats/battle-data.md#status-effect-ste), refusing the text form. */
 function readSte(bytes) {
   if (bytes.length > 16 && bytes[16] !== 0) throw new Error("this is the text form; only the binary form is anonymised");
   const reader = cursor(bytes);
@@ -159,7 +159,7 @@ function readSte(bytes) {
   return { major, minor, ...fields };
 }
 
-/** Re-emit a `.ste` (§8.2) with the name and program replaced. */
+/** Re-emit a `.ste`(docs/spec/formats/battle-data.md#status-effect-ste) with the name and program replaced. */
 function writeSte(source, placeholders) {
   const writer = builder();
   writer.str("RPGTLKIT STATUSE");
@@ -219,7 +219,7 @@ function readZip(bytes) {
   return entries;
 }
 
-/** The §1.5 type folders a game project uses; anything else is replaced. */
+/** The docs/spec/formats/README.md#paths-inside-files type folders a game project uses; anything else is replaced. */
 const TYPE_FOLDERS = new Set([
   "tiles", "boards", "chrs", "item", "enemy", "spcmove", "statuse", "bkrounds",
   "misc", "bitmap", "media", "prg", "font", "plugin",
@@ -261,7 +261,7 @@ function syntheticBytes(index, size) {
 
 /**
  * An anonymised excerpt of a real Setup bundle's layout: the `Main/` file and
- * the first `Game/<project>/…` entries, so the fixture keeps §13.1's Setup shape
+ * the first `Game/<project>/…` entries, so the fixture keeps docs/spec/formats/packaging-and-paths.md#loose-folder's Setup shape
  * (and its backslash separators) with neutral names and synthetic content.
  */
 function anonymiseBundle(bytes, limit) {

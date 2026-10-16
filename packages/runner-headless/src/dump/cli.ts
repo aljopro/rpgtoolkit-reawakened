@@ -8,8 +8,9 @@
  * ```
  *
  * `<path>` is an extracted project folder, a game folder, or a `.tpk`/standalone
- * EXE (format-spec §13). The exit code is 0 if and only if every data-format
- * file parsed; a non-format file is skipped, never a failure.
+ * EXE (see `docs/spec/formats/packaging-and-paths.md#distribution-package-this-projects-own`).
+ * The exit code is 0 if and only if every data-format file parsed; a non-format
+ * file is skipped, never a failure.
  *
  * `--check` is the epic's Done-when 1 as a CI gate: it re-runs the `--json`
  * report for every game named in the expectation and fails, naming the file,

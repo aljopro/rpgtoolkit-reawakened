@@ -19,7 +19,7 @@
  * then the section version is set to the current one. The chain is keyed by the
  * per-section numbers (AD-23).
  *
- * AD-10 (the state tree) and AD-11 (the canonical form); format-spec §11 (the
+ * AD-10 (the state tree) and AD-11 (the canonical form); docs/spec/formats/save-game.md#layout-minor-4 (the
  * saved game).
  */
 

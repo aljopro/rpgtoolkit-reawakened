@@ -102,13 +102,13 @@ risk = "medium"
 id = 11
 type = "story"
 title = "BMP decoder"
-description = "Adds a BMP reader to core/formats/image behind decodeTexture (AD-28), dispatched by the BM signature as format-spec section 10 will rule in entry 2.19: straight RGBA out, the located-error and 100 megapixel refusal contract shared with PNG and JPEG, no Node or DOM."
+description = "Adds a BMP reader to core/formats/image behind decodeTexture (AD-28), dispatched by the BM signature as `docs/spec/formats/images.md` will rule in entry 2.19: straight RGBA out, the located-error and 100 megapixel refusal contract shared with PNG and JPEG, no Node or DOM."
 verify = "The 18 BMP files of the six TK2 games decode to their stated dimensions and a golden RGBA digest, malformed and oversized files are refused with a located error, and the other decoders still pass."
 covers = ["CAP-1"]
 after = [3, "2.3", "2.19"]
 hitl = false
 risk = "medium"
-references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; image-kind counts in the format-spec section 10 amendment PR (2.19): six TK2 games use bmp 18, gif 58, jpg 58, png 0"]
+references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; image-kind counts in the `docs/spec/formats/images.md` amendment PR (2.19): six TK2 games use bmp 18, gif 58, jpg 58, png 0"]
 
 [[entry]]
 id = 12
@@ -120,7 +120,7 @@ covers = ["CAP-1"]
 after = [3, "2.3", "2.19", "2.23"]
 hitl = false
 risk = "medium"
-references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; image-kind counts in the format-spec section 10 amendment PR (2.19): six TK2 games use bmp 18, gif 58, jpg 58, png 0"]
+references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; image-kind counts in the `docs/spec/formats/images.md` amendment PR (2.19): six TK2 games use bmp 18, gif 58, jpg 58, png 0"]
 
 [[entry]]
 id = 8

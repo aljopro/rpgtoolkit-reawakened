@@ -1,6 +1,6 @@
 /**
  * Expanding single-tile pixels to straight RGBA
- * (`docs/spec/formats/tiles.md#single-tile-gph`, format-spec §3.2).
+ * (`docs/spec/formats/tiles.md#single-tile-gph`, docs/spec/formats/tiles.md#single-tile-gph).
  */
 
 import { ok, type Result } from "../result.ts";

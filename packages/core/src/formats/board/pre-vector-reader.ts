@@ -1,22 +1,25 @@
 /**
- * Reading a pre-vector board (format-spec §4.1 version dispatch, §4.8 layout).
+ * Reading a pre-vector board (docs/spec/formats/board.md#version-dispatch,
+ * docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector).
  *
  * Pure (G2): it consumes a `BinaryReader` the caller positioned and never
  * touches a host. A wrong magic, an unsupported minor, a 2.x text board or a
  * short file is a `Result` carrying a located `FormatError`, never a throw
  * (AD-18).
  *
- * Pre-vector boards are the 3.0.x binary boards of minors 2 and 3 (§4.8):
+ * Pre-vector boards are the 3.0.x binary boards of minors 2 and 3
+ * (docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector):
  * object positions are tile coordinates and collision is a per-tile type, so
  * the tile matrix carries a shade and a tile type alongside each lookup-table
  * index. `convertPreVectorBoard` (in `pre-vector-convert.ts`) turns the model
- * this reader returns into the vector board model of §4.2. Every slot is kept,
+ * this reader returns into the vector board model of docs/spec/formats/board.md#vector-layout-minor-4-and-later. Every slot is kept,
  * empty ones included, so program and sprite indices stay stable.
  *
- * The declared grid is bounded by `BOARD_MAX_CELLS` (§4.2 "Size limits"), the
- * same limit the §4.2 reader applies: a run marker expands up to 32,768 cells
- * from four bytes, so without the bound a crafted file of a few kilobytes could
- * make the reader reserve gigabytes (AD-17, untrusted input).
+ * The declared grid is bounded by `BOARD_MAX_CELLS` (the vector layout's size
+ * limit also applies to the pre-vector grid), the same limit the vector reader
+ * applies: a run marker expands up to 32,768 cells from four bytes, so without
+ * the bound a crafted file of a few kilobytes could make the reader reserve
+ * gigabytes (AD-17, untrusted input).
  */
 
 import { err, ok, type Result } from "../result.ts";
@@ -31,31 +34,31 @@ import {
   type BoardLinks,
 } from "./model.ts";
 
-/** The section this reader implements (G7, format-spec §4.8). */
-export const PRE_VECTOR_SECTION = "format-spec §4.8";
+/** The section this reader implements (G7, docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector). */
+export const PRE_VECTOR_SECTION = "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector";
 
-/** The lowest minor the pre-vector layout covers (format-spec §4.1, §4.8). */
+/** The lowest minor the pre-vector layout covers. */
 export const PRE_VECTOR_MINOR_MIN = 2;
 
-/** The highest minor the pre-vector layout covers (format-spec §4.1, §4.8). */
+/** The highest minor the pre-vector layout covers. */
 export const PRE_VECTOR_MINOR_MAX = 3;
 
-/** One expanded tile-matrix cell: its lookup-table index, shade and type (§4.8). */
+/** One expanded tile-matrix cell: its lookup-table index, shade and type(docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector). */
 export interface PreVectorCell {
   /** The lookup-table index the cell shows (0 is the reserved "no tile" entry). */
   readonly lutIndex: number;
-  /** Red tile shade, −255…+255 (format-spec §4.5). */
+  /** Red tile shade, −255…+255 ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly r: number;
   /** Green tile shade. */
   readonly g: number;
   /** Blue tile shade. */
   readonly b: number;
-  /** The legacy per-tile type (format-spec §4.7): 0 normal, 1 solid, … */
+  /** The legacy per-tile type ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector): 0 normal, 1 solid, … */
   readonly tileType: number;
 }
 
 /**
- * One stored tile-matrix record (format-spec §4.8): a bare cell
+ * One stored tile-matrix record ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)): a bare cell
  * (`marker` false) or a run marker whose `count` cells share one index, shade
  * and type (`marker` true). Runs may wrap rows and layers.
  */
@@ -72,11 +75,11 @@ export interface PreVectorRun {
   readonly g: number;
   /** Blue tile shade. */
   readonly b: number;
-  /** The legacy per-tile type (format-spec §4.7). */
+  /** The legacy per-tile type ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly tileType: number;
 }
 
-/** One pre-vector program slot (format-spec §4.8); positions are tiles. */
+/** One pre-vector program slot ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)); positions are tiles. */
 export interface PreVectorProgram {
   /** The `.prg` file name, or inline RPGCode; empty for an empty slot. */
   readonly file: string;
@@ -98,11 +101,11 @@ export interface PreVectorProgram {
   readonly initialValue: string;
   /** The value the final variable must have. */
   readonly finalValue: string;
-  /** Activation flags; §4.8 adds the stops-movement flag on conversion. */
+  /** Activation flags; docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector adds the stops-movement flag on conversion. */
   readonly activationType: number;
 }
 
-/** One pre-vector sprite slot (format-spec §4.8); positions are tiles. */
+/** One pre-vector sprite slot ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)); positions are tiles. */
 export interface PreVectorSprite {
   /** The `.itm`/`.tem` file; empty for an empty slot. */
   readonly file: string;
@@ -130,7 +133,7 @@ export interface PreVectorSprite {
   readonly multitaskPrg: string;
 }
 
-/** The unused day/night fields (format-spec §4.8). */
+/** The unused day/night fields ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 export interface PreVectorDayNight {
   /** The first unused `i16`. */
   readonly a: number;
@@ -142,17 +145,17 @@ export interface PreVectorDayNight {
   readonly text: string;
 }
 
-/** A whole pre-vector board (format-spec §4.8). */
+/** A whole pre-vector board ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 export interface PreVectorBoard {
-  /** The stored magic, `"RPGTLKIT BOARD"` (format-spec §1.3, §4). */
+  /** The stored magic, `"RPGTLKIT BOARD"` ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly magic: string;
-  /** The major version; informational only (format-spec §1.4). */
+  /** The major version; informational only ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly major: number;
-  /** The minor version: 2 or 3 (format-spec §1.4, §4.1, §4.8). */
+  /** The minor version: 2 or 3 ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly minor: number;
-  /** The reserved registration `i16` (format-spec §4.8). */
+  /** The reserved registration `i16` ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly registrationFlag: number;
-  /** The reserved registration string (format-spec §4.8). */
+  /** The reserved registration string ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly registrationKey: string;
   /** Board width in tiles. */
   readonly sizeX: number;
@@ -160,7 +163,7 @@ export interface PreVectorBoard {
   readonly sizeY: number;
   /** Layer count, 1-based. */
   readonly sizeL: number;
-  /** Start X in **tiles** (format-spec §4.8). */
+  /** Start X in **tiles** ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly startX: number;
   /** Start Y in **tiles**. */
   readonly startY: number;
@@ -168,23 +171,23 @@ export interface PreVectorBoard {
   readonly startLayer: number;
   /** Whether the player may save on the board. */
   readonly disableSaving: number;
-  /** The tile lookup table: `lutUpperBound + 1` entries, index 0 reserved (§1.2, §4.8). */
+  /** The tile lookup table: `lutUpperBound + 1` entries, index 0 reserved(docs/spec/formats/README.md#counts-are-usually-upper-bounds, docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector. */
   readonly lut: readonly string[];
   /** The expanded tile matrix, layer-major then row-major (y outer, x inner). */
   readonly tileMatrix: readonly PreVectorCell[];
   /** The stored run-length encoding of the tile matrix. */
   readonly tileRuns: readonly PreVectorRun[];
-  /** The background image (drawn as parallax on conversion, format-spec §4.8). */
+  /** The background image (drawn as parallax on conversion, [pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly backgroundImage: string;
   /** The unused foreground image. */
   readonly foregroundImage: string;
   /** The unused border image. */
   readonly borderImage: string;
-  /** The background colour (a COLORREF, format-spec §1.1). */
+  /** The background colour (a COLORREF, [pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly backgroundColour: Colorref;
   /** The unused border colour. */
   readonly borderColour: Colorref;
-  /** The ambient preset: 0 none, 1 mist, 2 dark, 3 water (format-spec §4.8). */
+  /** The ambient preset: 0 none, 1 mist, 2 dark, 3 water ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly ambientPreset: number;
   /** The four edge links in file order North, South, East, West. */
   readonly links: BoardLinks;
@@ -196,25 +199,25 @@ export interface PreVectorBoard {
   readonly allowBattles: number;
   /** The unused day/night fields. */
   readonly dayNight: PreVectorDayNight;
-  /** The eleven numeric constants 0…10 exposed to scripts (format-spec §4.8). */
+  /** The eleven numeric constants 0…10 exposed to scripts ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly constants: readonly number[];
   /** Loops while the player is on the board. */
   readonly backgroundMusic: string;
   /** The nine layer titles for indices 0…8. */
   readonly layerTitles: readonly string[];
-  /** The program slots; positions are tiles (format-spec §4.8). */
+  /** The program slots; positions are tiles ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly programs: readonly PreVectorProgram[];
   /** Runs after the threads start, each time the board is entered. */
   readonly enterPrg: string;
   /** The reserved trailing string. */
   readonly reserved: string;
-  /** The sprite slots; positions are tiles (format-spec §4.8). */
+  /** The sprite slots; positions are tiles ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly sprites: readonly PreVectorSprite[];
-  /** Background thread programs; always empty for minor 2 (format-spec §4.8). */
+  /** Background thread programs; always empty for minor 2 ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly threads: readonly string[];
-  /** 0 = 2D, 1 = iso stacked, 2 = iso rotated; 0 for minor 2 (format-spec §4.8). */
+  /** Coordinate system ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)); 0 for minor 2. */
   readonly coordType: number;
-  /** Bytes after the last field, kept for the caller (format-spec §4.8). */
+  /** Bytes after the last field, kept for the caller ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
   readonly residue: Uint8Array;
 }
 
@@ -223,7 +226,7 @@ function fail(offset: number, section: string, message: string, path?: string): 
   return err({ ...(path === undefined ? {} : { path }), offset, section, message });
 }
 
-/** Read exactly `count` NUL-terminated strings (format-spec §1.1). */
+/** Read exactly `count` NUL-terminated strings ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 function readStrings(reader: BinaryReader, count: number): Result<string[]> {
   const strings: string[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -236,7 +239,7 @@ function readStrings(reader: BinaryReader, count: number): Result<string[]> {
   return ok(strings);
 }
 
-/** Read the `r, g, b, tileType` tail that follows a cell's lookup index (§4.8). */
+/** Read the `r, g, b, tileType` tail that follows a cell's lookup index ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 function readCellTail(reader: BinaryReader): Result<{ r: number; g: number; b: number; tileType: number }> {
   const r = reader.i16();
   if (!r.ok) {
@@ -257,7 +260,7 @@ function readCellTail(reader: BinaryReader): Result<{ r: number; g: number; b: n
   return ok({ r: r.value, g: g.value, b: b.value, tileType: tileType.value });
 }
 
-/** Read one program slot of §4.8 (file, x, y, layer, graphic, activate, …). */
+/** Read one program slot of the pre-vector layout (file, x, y, layer, graphic, activate, …). */
 function readProgram(reader: BinaryReader): Result<PreVectorProgram> {
   const file = reader.str();
   if (!file.ok) {
@@ -318,7 +321,7 @@ function readProgram(reader: BinaryReader): Result<PreVectorProgram> {
   });
 }
 
-/** Read one sprite slot of §4.8 (file, x, y, layer, activate, …). */
+/** Read one sprite slot of the pre-vector layout (file, x, y, layer, activate, …). */
 function readSprite(reader: BinaryReader): Result<PreVectorSprite> {
   const file = reader.str();
   if (!file.ok) {
@@ -385,7 +388,7 @@ function readSprite(reader: BinaryReader): Result<PreVectorSprite> {
 }
 
 /**
- * Read the tile matrix of §4.8: `sizeL` layers, each `sizeY` rows of `sizeX`
+ * Read the tile matrix ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)): `sizeL` layers, each `sizeY` rows of `sizeX`
  * cells (z, y, x). A non-negative `i16` is one cell's lookup index; a negative
  * value is a run marker — `count = -value` cells share the following index,
  * shade and type — and runs may wrap rows and layers. A run that would overrun
@@ -440,7 +443,7 @@ function readTileMatrix(
     const covered = Math.min(count, totalCells - cells.length);
     if (covered < count) {
       warnings.push(
-        `tile matrix run covers ${count} cells but only ${covered} remained in the ${totalCells}-cell grid (format-spec §4.8)`,
+        `tile matrix run covers ${count} cells but only ${covered} remained in the ${totalCells}-cell grid ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector))`,
       );
     }
     const cell: PreVectorCell = {
@@ -458,7 +461,7 @@ function readTileMatrix(
   return ok({ cells, runs });
 }
 
-/** Read a pre-vector board from `reader` (format-spec §4.1 dispatch, §4.8). */
+/** Read a pre-vector board from [version dispatch](../../../../../../docs/spec/formats/board.md#version-dispatch) and the [pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector). */
 export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard> {
   const start = reader.offset;
   const warnings: string[] = [];
@@ -491,7 +494,7 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
     return fail(
       versionAt,
       BOARD_SECTION,
-      `obsolete board minor version ${header.value.minor}: the pre-vector layout needs minor ${PRE_VECTOR_MINOR_MIN}…${PRE_VECTOR_MINOR_MAX} (format-spec §4.8)`,
+      `obsolete board minor version ${header.value.minor}: the pre-vector layout needs minor ${PRE_VECTOR_MINOR_MIN}…${PRE_VECTOR_MINOR_MAX} ([version dispatch](../../../../../../docs/spec/formats/board.md#version-dispatch))`,
       reader.path,
     );
   }
@@ -499,7 +502,7 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
     return fail(
       versionAt,
       BOARD_SECTION,
-      `board minor version ${header.value.minor} is not a pre-vector board: minor >= ${BOARD_VECTOR_MINOR} uses the vector layout of format-spec §4.2`,
+      `board minor version ${header.value.minor} is not a pre-vector board: minor >= ${BOARD_VECTOR_MINOR} uses the [vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)`,
       reader.path,
     );
   }
@@ -534,7 +537,7 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
       reader.path,
     );
   }
-  // §4.2 "Size limits", applied to the §4.8 grid: the dimensions bound the tile
+  // The [vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later) "Size limits", applied to the [pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector) grid: the dimensions bound the tile
   // matrix, so an over-large declared cell count is refused here — before the
   // LUT or a single run is read or expanded — so a crafted file cannot make the
   // reader reserve gigabytes (AD-17).
@@ -711,7 +714,7 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
     coordType = coord.value;
   } else if (reader.remaining === 1) {
     // Minor-2 `coordType` — Reawakened rule (R-04)
-    // (docs/spec/formats/legacy/older-binary-versions.md#minor-2-coordtype--reawakened-rule-r-04):
+    // (docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector):
     // the field is absent from the minor-2 layout and the two original programs
     // disagree (the engine never reads it, the editor reads a byte). We follow
     // the editor, but only when **exactly one byte remains** after the sprite
@@ -731,7 +734,7 @@ export function readPreVectorBoard(reader: BinaryReader): Result<PreVectorBoard>
   }
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the pre-vector board were kept as residue (format-spec §4.8)`,
+      `${residue.value.length} trailing byte(s) after the pre-vector board were kept as residue ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector))`,
     );
   }
 

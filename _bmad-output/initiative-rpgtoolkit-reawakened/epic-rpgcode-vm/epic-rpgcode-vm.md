@@ -22,7 +22,7 @@ Script authors can run any legacy RPGCode program on a runtime with no OS thread
 1. `system.prg` and `start.prg` of the sample games run to completion headlessly with scripted input.
 2. For every program in the corpus, a snapshot taken at a random step and restored into a fresh VM finishes with identical results and state hash (G1).
 3. Threads (board, persistent, item), sleep, wake, `tellThread`, blocking and `multiRun`-style coupling behave as E-33 and E-93 state.
-4. Runtime errors report file and line, and error handlers and `resume` forms work as format-spec section 9.8 states.
+4. Runtime errors report file and line, and error handlers and `resume` forms work as `docs/spec/engine/rpgcode-errors-and-threads.md#error-handling` states.
 5. The language-only and pure built-ins (variables, math through `fmath`, string, flow, threads, file I/O through the AD-17 requests) work; domain built-ins register through the API and are owned by their epics.
 6. The state shape, built-in contract and wake contract are exactly those of AD-7 to AD-9: inline programs, operand stack and handler state in a snapshot, by-reference outputs, duplicate-name rejection, and restart-on-compiler-mismatch.
 
@@ -37,8 +37,8 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
 - spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7, AD-8, AD-9, AD-12, AD-13, AD-17, AD-24, AD-26, ADR 0004, AD-32
 - constraint - docs/guardrails.md, section G1
-- reference - docs/format-spec.md, section 9
-- reference - docs/engine-features.md, E-33, E-90 to E-99
+- reference - `docs/spec/engine/rpgcode-language.md`
+- reference - docs/spec/engine/main-loop-and-startup.md#e-33, E-90 to E-99
 
 ## Notes
 
@@ -51,7 +51,7 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 - Decision: Jensen, 2026-10-11: TK2 and TK3 games both play at launch, so this epic covers the TK2 RPGCode dialect; RPGCode v1 (TK 1.x) is a nice to have and not part of the MVP.
 - Decision: Jensen, 2026-10-11: `PluginDefinition` starts with `commands` only and grows as entries need it; every one of the catalogue's commands must respond and record its side effects in state, through the same contract third-party plugins will use, functional and immutable where viable. The sandboxed third-party mechanism (E-99) stays a separate question.
 - Decision: Jensen, 2026-10-11: the semantic open rows (OOP, ERR, THR, SEM, MOD) are ruled by a doc-first step inside the entry that implements them; the breakpoint hook, pause state and `createEngine` belong to epic board-rendering.
-- Source conflict: ADR 0004 and format-spec 9.9 attribute the `< >` inline-block form to TK2; it occurs only in TK 1.x (discovery/tk2-rpgcode-coverage.md). Entry 1 corrects the spec.
+- Source conflict: ADR 0004 and `docs/spec/engine/rpgcode-dialects.md` attribute the `< >` inline-block form to TK2; it occurs only in TK 1.x (discovery/tk2-rpgcode-coverage.md). Entry 1 corrects the spec.
 - Decision: Jensen, 2026-10-12: one ungated plugin contract; plugins compose as a middleware chain over a pinned built-in `core` pack, selected by an editable manifest with an engine default; AD-17's "games are untrusted" now covers game data, not plugins. Resolves the ADR 0004 vs AD-17/E-99 conflict (spike 3.23).
 - Open question: how a game package ships third-party plugin code (host and distribution question; not blocking).
 - Decision: Jensen, 2026-10-11: #httpRead, #ftpConnect, #ftpWrite and similar came from plugin DLLs shipped in the games (for example ftpPlugin.dll); they are not built-ins. They answer through recorded-effect stubs until E-99 is decided.
@@ -61,7 +61,7 @@ The language, the VM, threads, and the built-in registration API plus the pure b
 - Evidence: the 39 unmapped TK2 commands split 24 plugin, 11 implicit-include library, 1 engine namespace, 3 undocumented (discovery/zip-survey.md).
 - Decision: Jensen, 2026-10-11: working rule for script functions until evidence says otherwise: `#Include`, an implicit `file.func` call and first run each add the file's functions to one flat command list at that moment, and the last definition wins; the `file.` prefix always reaches that file's own definition. Unverified: the corpus never relies on a clash without the prefix.
 - Decision: Jensen, 2026-10-11: AD-8's duplicate rejection is for plugin registration only, not script functions, and when two plugins define the same command the last one registered wins (with a warning diagnostic). This replaces rejection in AD-8 and ADR 0004; entry 3 amends both doc-first. Note: the legacy engine offered an unknown command to each loaded plugin in order, so the first plugin to claim it won (discovery/zip-survey.md); that is not verified to stop at the first claim.
-- Evidence: legacy plugins were chosen by the main file: format-spec section 2 row 29 stores a plugin list (an enabled flag with the name implied as tkplug0 to tkplug4 for minor 2 and below, a file name per entry for minor 3 and above) plus menuPlugin and fightPlugin names; Multi-Plug read a plugins.ini. Entry 15's compat plugins activate from that list, as ADR 0004 decision 3 says.
+- Evidence: legacy plugins were chosen by the main file: `docs/spec/formats/main-file.md#layout` row 29 stores a plugin list (an enabled flag with the name implied as tkplug0 to tkplug4 for minor 2 and below, a file name per entry for minor 3 and above) plus menuPlugin and fightPlugin names; Multi-Plug read a plugins.ini. Entry 15's compat plugins activate from that list, as ADR 0004 decision 3 says.
 - Decision: Jensen, 2026-10-11: every override must warn. Plugin-over-plugin overrides are raised at registration through the AD-24 `Logger` port (entry 3); script-function overrides are raised when the include or definition runs, as a `Logger` record and a located `TickReport` diagnostic (entry 8). Open: whether the LSP (epic rpgcode-tooling) also warns statically; a note for that epic.
 - Decision: Jensen, 2026-10-11: only the commands part of the plugin mechanism is built now (entry 3, with entry 14 adding decoders); the rest of PluginDefinition, including the E-99 trust model, is research entry 23.
 - Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4).

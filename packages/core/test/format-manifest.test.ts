@@ -1,4 +1,4 @@
-// The distribution manifest reader of format-spec §13 (AD-6): `manifest.json`
+// The distribution manifest reader of docs/spec/formats/packaging-and-paths.md (AD-6): `manifest.json`
 // `{ schema, main, index }` at the archive root of a distribution package.
 //
 // The malformed fixtures are ZIPs built byte by byte here — a minimal store
@@ -100,7 +100,7 @@ interface ZipSpec {
   readonly flags?: number;
 }
 
-/** Build a ZIP archive from `specs` (format-spec §13; PKZIP APPNOTE 4.3). */
+/** Build a ZIP archive from `specs` (docs/spec/formats/packaging-and-paths.md; PKZIP APPNOTE 4.3). */
 function buildZip(specs: readonly ZipSpec[]): Uint8Array {
   const locals: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
@@ -196,13 +196,13 @@ function read(bytes: Uint8Array): Result<DistributionManifest> {
   return readDistributionManifest(load(bytes));
 }
 
-/** Assert a read failed, citing §13 and naming `rule`, and return the failure. */
+/** Assert a read failed, citing docs/spec/formats/packaging-and-paths.md and naming `rule`, and return the failure. */
 function readFailure(bytes: Uint8Array, rule: string): FormatError {
   const result = read(bytes);
   if (result.ok) {
     throw new Error(`expected a failure naming ${rule}`);
   }
-  equal(result.error.section, "format-spec §13");
+  equal(result.error.section, "docs/spec/formats/packaging-and-paths.md");
   equal(result.error.message.includes(rule), true, `"${result.error.message}" should name ${rule}`);
   return result.error;
 }
@@ -232,7 +232,7 @@ test("a written package's manifest reads back deep-equal to the input", () => {
 test("a package with no manifest.json fails naming the missing manifest", () => {
   const result = read(buildZip(GAME));
   if (result.ok) throw new Error("expected a failure");
-  equal(result.error.section, "format-spec §13");
+  equal(result.error.section, "docs/spec/formats/packaging-and-paths.md");
   equal(result.error.message.includes(`no ${MANIFEST_FILE_NAME}`), true, result.error.message);
 });
 

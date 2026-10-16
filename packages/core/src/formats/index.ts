@@ -1,8 +1,8 @@
-// Legacy-format reading and writing (format-spec §1): the shared result
-// contract (AD-18) and the primitives and readers built on it — the binary
-// primitives, animations, tilesets, battle data and game images (§10, AD-28),
-// plus the resolution of a reference to an asset key (§1.5, AD-5) and the
-// package loader for loose folders, `.tpk` and appended-ZIP EXEs (§13, AD-6).
+// Legacy-format reading and writing (docs/spec/formats/README.md#primitive-encoding):
+// the shared result contract (AD-18) and the primitives and readers built on it —
+// binary primitives, animations, tilesets, battle data and images
+// (`docs/spec/formats/images.md`), asset references (`docs/spec/formats/README.md#tile-references`)
+// and package loading (`docs/spec/formats/packaging-and-paths.md`).
 // The core format registry (AD-31) dispatches a file to the decoder for its
 // extension or magic header.
 export * from "./result.ts";

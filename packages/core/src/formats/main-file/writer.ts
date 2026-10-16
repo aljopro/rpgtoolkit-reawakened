@@ -1,11 +1,11 @@
 /**
- * Writing a main game file (format-spec §2): the binary layout of
+ * Writing a main game file (docs/spec/formats/main-file.md#layout): the binary layout of
  * `RPGTLKIT MAIN` across minors 0–9.
  *
  * It emits the minor it was given and reproduces the bytes of a model that came
  * from `readMainFile` exactly (AD-18): the version-dependent rows are written
  * under the same conditions the reader read them, the reserved runs are
- * re-emitted verbatim, and the file's `residue` follows the last row (§1.7).
+ * re-emitted verbatim, and the file's `residue` follows the last row (`docs/spec/formats/README.md#bytes-after-the-last-documented-field`).
  * Pure (G2): it writes into a `BinaryWriter` and never touches a host. Only an
  * unencodable string or a model the writer cannot represent — a magic that is
  * not the main-file magic, a minor outside 0–9, an integer too wide for the
@@ -25,18 +25,18 @@ import {
   type MainFile,
 } from "./model.ts";
 
-/** The signed 16-bit range every `i16` field must fit (format-spec §1.1). */
+/** The signed 16-bit range every `i16` field must fit (docs/spec/formats/README.md#primitive-encoding). */
 const I16_MIN = -32_768;
 const I16_MAX = 32_767;
 
-/** The signed 32-bit range every `i32` field must fit (format-spec §1.1). */
+/** The signed 32-bit range every `i32` field must fit (docs/spec/formats/README.md#primitive-encoding). */
 const I32_MIN = -2_147_483_648;
 const I32_MAX = 2_147_483_647;
 
-/** The unsigned 8-bit range every `u8` field must fit (format-spec §1.1). */
+/** The unsigned 8-bit range every `u8` field must fit (docs/spec/formats/README.md#primitive-encoding). */
 const U8_MAX = 255;
 
-/** The most entries an `i16` upper bound can index (format-spec §1.2). */
+/** The most entries an `i16` upper bound can index (docs/spec/formats/README.md#counts-are-usually-upper-bounds). */
 const MAX_LIST_ENTRIES = 32_768;
 
 /** A located error for a value the writer cannot encode (AD-18). */
@@ -44,42 +44,42 @@ function fail(writer: BinaryWriter, message: string): Result<never> {
   return err({ offset: writer.toBytes().length, section: MAIN_SECTION, message });
 }
 
-/** `undefined` when `value` fits an `i16`; otherwise a located error (§1.1). */
+/** `undefined` when `value` fits an `i16`; otherwise a located error (`docs/spec/formats/README.md#primitive-encoding`). */
 function checkI16(writer: BinaryWriter, field: string, value: number): Result<never> | undefined {
   if (Number.isInteger(value) && value >= I16_MIN && value <= I16_MAX) {
     return undefined;
   }
-  return fail(writer, `${field} is ${value}; an i16 field holds ${I16_MIN}–${I16_MAX} (format-spec §1.1)`);
+  return fail(writer, `${field} is ${value}; an i16 field holds ${I16_MIN}–${I16_MAX} (docs/spec/formats/README.md#primitive-encoding)`);
 }
 
-/** `undefined` when `value` fits an `i32`; otherwise a located error (§1.1). */
+/** `undefined` when `value` fits an `i32`; otherwise a located error (`docs/spec/formats/README.md#primitive-encoding`). */
 function checkI32(writer: BinaryWriter, field: string, value: number): Result<never> | undefined {
   if (Number.isInteger(value) && value >= I32_MIN && value <= I32_MAX) {
     return undefined;
   }
-  return fail(writer, `${field} is ${value}; an i32 field holds ${I32_MIN}–${I32_MAX} (format-spec §1.1)`);
+  return fail(writer, `${field} is ${value}; an i32 field holds ${I32_MIN}–${I32_MAX} (docs/spec/formats/README.md#primitive-encoding)`);
 }
 
-/** `undefined` when `value` fits a `u8`; otherwise a located error (§1.1). */
+/** `undefined` when `value` fits a `u8`; otherwise a located error (`docs/spec/formats/README.md#primitive-encoding`). */
 function checkU8(writer: BinaryWriter, field: string, value: number): Result<never> | undefined {
   if (Number.isInteger(value) && value >= 0 && value <= U8_MAX) {
     return undefined;
   }
-  return fail(writer, `${field} is ${value}; a u8 field holds 0–${U8_MAX} (format-spec §1.1)`);
+  return fail(writer, `${field} is ${value}; a u8 field holds 0–${U8_MAX} (docs/spec/formats/README.md#primitive-encoding)`);
 }
 
-/** `undefined` when `count` fits the derived `i16` upper bound; otherwise a located error (§1.2). */
+/** `undefined` when `count` fits the derived `i16` upper bound; otherwise a located error (`docs/spec/formats/README.md#counts-are-usually-upper-bounds`). */
 function checkCount(writer: BinaryWriter, field: string, count: number): Result<never> | undefined {
   if (count <= MAX_LIST_ENTRIES) {
     return undefined;
   }
   return fail(
     writer,
-    `the ${field} has ${count} entries; an i16 upper bound holds at most ${MAX_LIST_ENTRIES} (format-spec §1.2)`,
+    `the ${field} has ${count} entries; an i16 upper bound holds at most ${MAX_LIST_ENTRIES} (docs/spec/formats/README.md#counts-are-usually-upper-bounds)`,
   );
 }
 
-/** `undefined` when `run` has the width the minor stores; otherwise a located error (§2). */
+/** `undefined` when `run` has the width the minor stores; otherwise a located error (`docs/spec/formats/main-file.md#layout`). */
 function checkRun(
   writer: BinaryWriter,
   field: string,
@@ -92,30 +92,30 @@ function checkRun(
   }
   return fail(
     writer,
-    `the ${field} reserved run is ${run.length} byte(s); the ${row} row stores ${width} (format-spec §2)`,
+    `the ${field} reserved run is ${run.length} byte(s); the ${row} row stores ${width} (docs/spec/formats/main-file.md#layout)`,
   );
 }
 
 /**
- * Check that `model` is a main file this writer can represent (format-spec §2)
+ * Check that `model` is a main file this writer can represent (docs/spec/formats/main-file.md#layout)
  * before it writes a byte of it. `BinaryWriter` truncates an out-of-range
  * integer, and the serialiser derives the list bounds, pads the scan-code row
  * and drops the reserved runs a minor does not carry, so without this check a
  * model no reader could produce would quietly be written as a different, valid
  * file (AD-18). Runs before serialising, so a failing `fail` locates its field
- * by name and cites §2; the offset is the start of the output.
+ * by name and cites `docs/spec/formats/main-file.md#layout`; the offset is the start of the output.
  */
 function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | undefined {
   if (model.magic !== MAIN_MAGIC) {
     return fail(
       writer,
-      `the magic is "${model.magic}" but a main file starts with "${MAIN_MAGIC}" (format-spec §2 row 1)`,
+      `the magic is "${model.magic}" but a main file starts with "${MAIN_MAGIC}" (docs/spec/formats/main-file.md#layout row 1)`,
     );
   }
   if (!Number.isInteger(model.minor) || model.minor < MAIN_MIN_MINOR || model.minor > MAIN_MAX_MINOR) {
     return fail(
       writer,
-      `minor ${model.minor} is outside ${MAIN_MIN_MINOR}–${MAIN_MAX_MINOR}, the layouts §2 documents (format-spec §2)`,
+      `minor ${model.minor} is outside ${MAIN_MIN_MINOR}–${MAIN_MAX_MINOR}, the layouts documented by docs/spec/formats/main-file.md#layout`,
     );
   }
   const minor = model.minor;
@@ -268,7 +268,7 @@ function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | unde
     if (model.movementScanCodes.length !== 8) {
       return fail(
         writer,
-        `minor 9 stores exactly eight movement scan codes but the model has ${model.movementScanCodes.length} (format-spec §2 row 43)`,
+        `minor 9 stores exactly eight movement scan codes but the model has ${model.movementScanCodes.length} (docs/spec/formats/main-file.md#layout row 43)`,
       );
     }
     for (const scan of model.movementScanCodes) {
@@ -281,7 +281,7 @@ function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | unde
 
   // The reserved runs are re-emitted under the conditions the reader read them,
   // so a run the minor carries must be exactly the row's width and one the
-  // minor does not carry must be empty (format-spec §2, §1.7).
+  // minor does not carry must be empty (`docs/spec/formats/main-file.md#layout`).
   const runs =
     checkRun(writer, "parallax", model.reservedRuns.parallax, minor < 3 ? 2 : 0, "row 10") ??
     checkRun(writer, "menuPluginFallback", model.reservedRuns.menuPluginFallback, minor < 3 ? 2 : 0, "row 21") ??
@@ -295,10 +295,10 @@ function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | unde
 }
 
 /**
- * Serialise `model` to the main-file layout (format-spec §2). Which rows are
+ * Serialise `model` to the main-file layout (docs/spec/formats/main-file.md#layout). Which rows are
  * written is decided by `model.minor`, exactly as the reader decided which to
  * read, and `model.residue` is appended after the last row, so a file the
- * reader accepted writes back byte for byte (§1.7). A model the writer cannot
+ * reader accepted writes back byte for byte (`docs/spec/formats/README.md#bytes-after-the-last-documented-field`). A model the writer cannot
  * represent is refused by `checkModel` before a byte is written (AD-18).
  */
 export function writeMainFile(model: MainFile): Result<Uint8Array> {
@@ -365,7 +365,7 @@ export function writeMainFile(model: MainFile): Result<Uint8Array> {
   writer.i16(model.activationKey);
 
   // Row 19: the extra run-time keys. The upper bound is derived from the list
-  // length (`-1` for none, §1.2).
+  // length (`-1` for none, `docs/spec/formats/README.md#counts-are-usually-upper-bounds`).
   writer.i16(model.extKeys.length === 0 ? -1 : model.extKeys.length - 1);
   for (const key of model.extKeys) {
     writer.i16(key.asciiKey);

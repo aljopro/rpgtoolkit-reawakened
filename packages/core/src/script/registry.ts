@@ -12,7 +12,7 @@
  * error naming the plugin (AD-8's only surviving duplicate rule).
  *
  * **Name folding.** A name and an alias arrive already ASCII case-folded by the
- * frontend (format-spec §9.2 LEX-10), so this module keys on the string as
+ * frontend (docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands LEX-10), so this module keys on the string as
  * given and does no folding of its own.
  *
  * **Tiers.** AD-8's lookup precedence is redirect, script function, built-in,
@@ -22,12 +22,11 @@
  * them (a stub resolves nothing, so an unknown name still reaches
  * `unknown.command`). The extension tier is the seam the legacy engine had —
  * an unknown call is offered to each plugin by name, first claim wins
- * (`docs/spec/engine/plugins-and-battle.md`, "RPGCode command plugins";
- * `docs/spec/engine/rpgcode-language.md`, "Plugin commands") — kept here so
+ * (`docs/spec/engine/plugins-and-battle.md#plugin-roles`, "RPGCode command plugins";
+ * `docs/spec/engine/rpgcode-language.md#plugin-commands`, "Plugin commands") — kept here so
  * entries 21/22 register the catalogue and the stub set through it.
  *
- * docs/adr/0004 (decisions 2 and 6); AD-8, AD-24; docs/spec/engine/
- * rpgcode-language.md ("Plugin commands").
+ * docs/spec/engine/rpgcode-language.md#plugin-commands.
  */
 
 import type { Logger } from "../ports/logger.ts";

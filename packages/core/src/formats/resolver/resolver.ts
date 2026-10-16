@@ -1,11 +1,11 @@
 /**
- * The pure asset resolver (format-spec §1.5, AD-5).
+ * The pure asset resolver (docs/spec/formats/README.md#paths-inside-files, AD-5).
  *
  * A reference stored in a game file is a path relative to the folder of that
  * file's type (`village\inn.brd` under `Boards/`), and it may repeat the type
  * folder (`Item\npc.itm`). This module turns such a reference into the
  * canonical `AssetKey` of the matching entry in a host-supplied `AssetIndex`,
- * applying §1.5's rules: `\` and `/` are equivalent, matching is
+ * applying docs/spec/formats/README.md#paths-inside-files's rules: `\` and `/` are equivalent, matching is
  * case-insensitive, a leading type folder is stripped, subfolders are allowed,
  * and inside a package the main file's `projectPath` is ignored (AD-5).
  *
@@ -26,13 +26,13 @@ import {
 } from "../main-file/layout.ts";
 import type { AssetIndex, AssetRoot } from "./model.ts";
 
-/** The format-spec section these rules implement. */
-const SECTION = "format-spec §1.5";
+/** The format specification section these rules implement. */
+const SECTION = "docs/spec/formats/README.md#paths-inside-files";
 
 /**
  * Build the resolver's lookup over the paths a host can serve (AD-5).
  *
- * Fold each path once with `foldPath` (§1.5: separators normalised, case
+ * Fold each path once with `foldPath`(docs/spec/formats/README.md#paths-inside-files: separators normalised, case
  * folded) and keep the folded form as the canonical key, so a lookup is
  * insensitive to the case the caller and the host each happen to use. The
  * first path wins when two paths fold to the same key.
@@ -52,7 +52,7 @@ export function createAssetIndex(paths: readonly string[]): AssetIndex {
 
 /**
  * The canonical key of a path: always `/` separators and a case fold
- * (format-spec §1.5). Two references that differ only by case or separator
+ * (docs/spec/formats/README.md#paths-inside-files). Two references that differ only by case or separator
  * share one key, which is what makes the lookup case-insensitive (AD-5).
  */
 export function assetKey(path: string): AssetKey {
@@ -60,10 +60,10 @@ export function assetKey(path: string): AssetKey {
 }
 
 /**
- * The root-relative path a reference of `kind` names (§1.5, AD-5):
+ * The root-relative path a reference of `kind` names(docs/spec/formats/README.md#paths-inside-files, AD-5):
  * `<TypeFolder>/<reference with the type prefix stripped>`, prefixed with
  * `Game/<projectPath>/` for a game folder. A package ignores `projectPath`
- * (AD-5, §13), so its reference resolves at the package root.
+ * (AD-5, docs/spec/formats/packaging-and-paths.md, so its reference resolves at the package root.
  */
 function referencePath(root: AssetRoot, kind: AssetKind, reference: string): string {
   if (root.kind === "package") {
@@ -73,12 +73,12 @@ function referencePath(root: AssetRoot, kind: AssetKind, reference: string): str
 }
 
 /**
- * Resolve `kind`'s `reference` against the index (format-spec §1.5, AD-5).
+ * Resolve `kind`'s `reference` against the index (docs/spec/formats/README.md#paths-inside-files, AD-5).
  *
  * The reference is normalised (`\` to `/`, case folded, leading type folder
  * stripped) and looked up; the canonical key of the matching entry is returned,
  * so two spellings of the same file give one key. A reference with no matching
- * entry is a located failure citing §1.5 — the resolver never invents a path and
+ * entry is a located failure citing docs/spec/formats/README.md#paths-inside-files — the resolver never invents a path and
  * never throws.
  */
 export function resolveAsset(
@@ -109,7 +109,7 @@ export type ResolvedTileReference =
   | { readonly kind: "animatedTile"; readonly path: string; readonly asset: AssetKey };
 
 /**
- * Resolve a tile reference against the index (docs/spec/formats/README.md#tile-references, format-spec §1.6).
+ * Resolve a tile reference against the index (docs/spec/formats/README.md#tile-references, docs/spec/formats/README.md#tile-references).
  *
  * Tile references take four forms:
  * - `name.tstN` -> tile N of `Tiles\name.tst`
@@ -118,7 +118,7 @@ export type ResolvedTileReference =
  * - `name.tan` -> animated tile `Tiles\name.tan`
  *
  * Empty strings return `{ kind: "empty" }`. References with no matching entry in
- * `index` fail with a located FormatError citing §1.5.
+ * `index` fail with a located FormatError citing docs/spec/formats/README.md#paths-inside-files.
  */
 export function resolveTileReference(
   index: AssetIndex,

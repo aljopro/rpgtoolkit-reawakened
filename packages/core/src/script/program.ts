@@ -1,12 +1,11 @@
 /**
- * Program references and compilation (AD-7; format-spec §9.14 follow-ups 5/6).
+ * Program references and compilation (AD-7; docs/spec/engine/rpgcode-language.md#open-questions follow-ups 5/6).
  *
  * `ProgramRef` is exactly AD-7's shape. Compiled code is held outside state and
  * rebuilt from the file or inline text on restore, so `Program` is the
  * compiled artefact and never enters `GameState`.
  *
- * docs/adr/0004 (decision 1's compiled-program cache); format-spec
- * §9.1/§9.2/§9.14.
+ * docs/adr/0004 (decision 1's compiled-program cache); docs/spec/formats/rpgcode-program.md#compiled-form and docs/spec/engine/rpgcode-language.md#lexical-rules / docs/spec/engine/rpgcode-functions.md.
  */
 
 import { ScriptError } from "./errors.ts";
@@ -41,7 +40,7 @@ export type Program = {
   readonly labels: { readonly [name: string]: number };
 };
 
-/** Compile inline source text (format-spec §9.1 source programs). */
+/** Compile inline source text (docs/spec/engine/rpgcode-language.md#threads, a thread given text instead of a file). */
 export function compileInline(text: string, file = "<inline>"): Program {
   const ast = parse(tokenize(text));
   const result = lower(ast, file);

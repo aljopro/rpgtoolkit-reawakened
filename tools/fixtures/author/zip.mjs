@@ -7,8 +7,8 @@
 // emitted, with a fixed timestamp, so the same input always yields the same
 // bytes on every machine and Node version (guard-rail G3's spirit).
 //
-// The layout is the PKZIP APPNOTE 4.3.16 one `docs/format-spec.md` §13 assumes:
-// a local header + data per entry, then a central directory, then the
+// The layout is the PKZIP APPNOTE 4.3.16 one assumed by
+// `docs/spec/formats/packaging-and-paths.md#pak-archive-tpk`: a local header + data per entry, then a central directory, then the
 // end-of-central-directory record. Entry names are written verbatim, so a
 // caller can build a backslash-separated archive (`Tiles\set.tst`) as well as a
 // forward-slash one. Method 8 is emulated with DEFLATE *stored* blocks, so a
@@ -162,8 +162,8 @@ export function buildZip(entries) {
 }
 
 /**
- * A standalone EXE of `docs/format-spec.md` §13: `prefix`, then `zip`, then the
- * 12-byte trailer `CMP1`, `i32 offsetOfZip`, `i32 zipLength` (little-endian).
+ * A standalone EXE of `docs/spec/formats/packaging-and-paths.md#standalone-exe`:
+ * `prefix`, then `zip`, then the 12-byte trailer `CMP1`, `i32 offsetOfZip`, `i32 zipLength` (little-endian).
  */
 export function appendCmp1(prefix, zip) {
   return concat([prefix, zip, ascii("CMP1"), le32(prefix.length), le32(zip.length)]);

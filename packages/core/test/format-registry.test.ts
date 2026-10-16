@@ -82,7 +82,7 @@ const EMPTY_RESOLVER: AssetResolver = { index: createAssetIndex([]), root: PACKA
 /** A decoder a host might register, over bytes no core reader knows. */
 const CUSTOM: AssetDecoder<string> = {
   id: "custom",
-  section: "format-spec §99",
+  section: "docs/spec/formats/README.md#primitive-encoding",
   extensions: ["zzz"],
   detect: (header) => header.length > 0 && header[0] === 0x7f,
   decode: (bytes) => okResult(`custom ${bytes.length}`),
@@ -109,7 +109,7 @@ test("a registered decoder is dispatched by extension and by magic header", () =
 test("an extension match wins over the magic header", () => {
   const extensionDecoder: AssetDecoder = {
     id: "by-extension",
-    section: "format-spec §99",
+    section: "docs/spec/formats/README.md#primitive-encoding",
     extensions: ["aaa"],
     detect: () => false,
     decode: () => okResult(null),
@@ -127,7 +127,7 @@ test("registering a decoder twice, or an extension twice, throws", () => {
   );
   const competing: AssetDecoder = {
     id: "competing",
-    section: "format-spec §99",
+    section: "docs/spec/formats/README.md#primitive-encoding",
     extensions: ["aaa"],
     detect: () => false,
     decode: () => okResult(null),
@@ -149,7 +149,7 @@ test("register normalises case and refuses a dotted or empty extension", () => {
   // the decoder that already owns the lowercased key.
   const pngUpper: AssetDecoder = {
     id: "png-upper",
-    section: "format-spec §99",
+    section: "docs/spec/formats/README.md#primitive-encoding",
     extensions: ["PNG"],
     detect: () => false,
     decode: () => okResult(null),
@@ -185,7 +185,7 @@ test("the core registry claims each core decoder's extensions and magic header",
     readonly [CoreFormatId, AssetDecoder]
   >) {
     equal(decoder.id, id, "the key and the decoder id agree");
-    equal(decoder.section.startsWith("format-spec §"), true, `${id} cites its format-spec section`);
+    equal(decoder.section.startsWith("docs/spec/"), true, `${id} cites its format specification page`);
     for (const extension of decoder.extensions) {
       equal(CORE_REGISTRY.byExtension(extension), decoder, extension);
       equal(CORE_REGISTRY.byExtension(extension.toUpperCase()), decoder, extension);
@@ -203,7 +203,7 @@ test("the core registry holds exactly the core decoders", () => {
   deepEqual([...CORE_REGISTRY.decoders].sort(byId), Object.values(CORE_DECODERS).sort(byId));
 });
 
-test("the board decoder's §4.1 dispatch picks the branch a stored minor takes", () => {
+test("the board decoder's version dispatch picks the branch a stored minor takes", () => {
   equal(boardLayout(0), "obsolete");
   equal(boardLayout(1), "obsolete");
   equal(boardLayout(2), "pre-vector");
@@ -214,7 +214,7 @@ test("the board decoder's §4.1 dispatch picks the branch a stored minor takes",
 
 /**
  * A committed, independently authored tileset (ticket 2.22): a detail-4 `.tst`
- * written from the §3.1 layout by `tools/fixtures/author/generate.mjs`, which
+ * written from the docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso layout by `tools/fixtures/author/generate.mjs`, which
  * imports no core code. Feeding the decoder a fixture rather than `writeTileset`
  * output keeps this test from passing by sharing the writer's primitives.
  */
@@ -243,8 +243,8 @@ const READERS: ReadonlyArray<readonly [CoreFormatId, (bytes: Uint8Array) => Resu
 /**
  * Bytes that reach each decoder's first fields and then stop, plus one committed
  * authored tileset fixture. None is a valid pre-vector board, so the board row's
- * direct reader (`readBoard`, the §4.2 layout) is the same branch the decoder
- * takes; the §4.8 branch is covered by the dump's own pre-vector case.
+ * direct reader (`readBoard`, the docs/spec/formats/board.md#vector-layout-minor-4-and-later layout) is the same branch the decoder
+ * takes; the docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector branch is covered by the dump's own pre-vector case.
  */
 const SAMPLES: readonly Uint8Array[] = [
   new Uint8Array(0),
@@ -276,7 +276,7 @@ test("every core decoder returns exactly what its own reader returns", () => {
 
 test("the tileset decoder returns the authored fixture's documented model", () => {
   const model = unwrap(CORE_DECODERS.tileset.decode(TILESET_BYTES, EMPTY_RESOLVER)) as Tileset;
-  // The fixture's header alone says detail 4 with two tiles (§3.1) — values no
+  // The fixture's header alone says detail 4 with two tiles(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso) — values no
   // writer of ours produced.
   equal(model.version, 20);
   equal(model.detail.code, 4);

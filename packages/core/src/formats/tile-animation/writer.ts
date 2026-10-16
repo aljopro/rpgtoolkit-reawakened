@@ -1,6 +1,5 @@
 /**
- * Writing an animated tile (`docs/spec/formats/tiles.md#animated-tile-tan`,
- * format-spec §3.5, §15.10).
+ * Writing an animated tile (`docs/spec/formats/tiles.md#animated-tile-tan`).
  *
  * Pure (G2): fills a BinaryWriter, never touches a host.
  */
@@ -25,7 +24,7 @@ export function writeTileAnimation(model: TileAnimation): Result<Uint8Array> {
     return err({
       offset: writer.toBytes().length,
       section: TILE_ANIMATION_SECTION,
-      message: `version ${model.major}.${model.minor} is not writable: must be 0..${I16_MAX} (format-spec §1.4)`,
+      message: `version ${model.major}.${model.minor} is not writable: must be 0..${I16_MAX} (docs/spec/formats/README.md#header-and-version)`,
     });
   }
 

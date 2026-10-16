@@ -1,13 +1,13 @@
 /**
  * Pure RPGCode value conversions, comparisons and truthiness
- * (format-spec §9.16 SEM-3, SEM-5; R-39, R2-Q12).
+ * (docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-3, SEM-5; R-39, R2-Q12).
  *
  * This module is the single owner of the value layer: truthiness, comparison,
  * string/number conversion, the six-significant-digit number-to-string format
  * and array index keys. Entry 12's castLit/castNum/castInt builtins consume it.
  *
- * docs/spec/engine/rpgcode-runtime.md#sem-3-comparison-and-conversion
- * docs/spec/engine/rpgcode-runtime.md#sem-5-unset-variables-and-array-elements
+ * docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion
+ * docs/spec/engine/rpgcode-runtime.md#sem-5--unset-variables-and-array-elements
  */
 
 import type { Value } from "../ports/value.ts";
@@ -26,7 +26,7 @@ export function foldAscii(text: string): string {
 }
 
 /**
- * RPGCode truthiness (R-39, format-spec §9.16 SEM-3:14):
+ * RPGCode truthiness (R-39, docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-3:14):
  * A string is true unless it folds to "off" (case-insensitive); "" is true.
  * A number is true when it is not zero. `null` counts as unset (0) -> false.
  */
@@ -41,7 +41,7 @@ export function truthy(v: Value): boolean {
 }
 
 /**
- * Number to string with six significant digits (format-spec §9.16 SEM-3:16-23).
+ * Number to string with six significant digits (docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-3:16-23).
  *
  * Uses exponent form when the decimal exponent X < -4 or X >= 6; otherwise
  * plain decimal form.
@@ -87,7 +87,7 @@ export function numberToString(v: number): string {
 }
 
 /**
- * Longest-prefix string-to-number parse (format-spec §9.16 SEM-3:15).
+ * Longest-prefix string-to-number parse (docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-3:15).
  * Skips leading spaces and tabs; matches optional sign, digits, optional dot
  * with digits, and optional e/E with optional sign and digits.
  */

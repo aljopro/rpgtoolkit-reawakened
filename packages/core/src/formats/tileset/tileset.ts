@@ -1,6 +1,6 @@
 /**
  * The tileset reader and writer: `.tst` (version 20) and `.iso` (version 30)
- * of format-spec §3.1, plus the isometric packing of §3.3.
+ * of `docs/spec/formats/tiles.md`, plus the isometric packing described there.
  *
  * The file is a 6-byte header — `i16 version`, `i16 tileCount` (a true count,
  * not an upper bound), `i16 detail` — followed by tightly packed tiles. Tile
@@ -21,12 +21,12 @@ import { BinaryWriter } from "../binary/writer.ts";
 import { ISO_IMAGE_HEIGHT, ISO_IMAGE_WIDTH, isInsideIsoDiamond } from "./iso-diamond.ts";
 import { DOS_PALETTE } from "./dos-palette.ts";
 
-const HEADER_SECTION = "format-spec §3.1";
+const HEADER_SECTION = "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso";
 
-/** The stored `version` field: 20 is `.tst`, 30 is `.iso` (format-spec §3.1). */
+/** The stored `version` field: 20 is `.tst`, 30 is `.iso` (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 export type TilesetVersion = 20 | 30;
 
-/** How one `detail` level lays a tile out (format-spec §3.1). */
+/** How one `detail` level lays a tile out (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 export interface TilesetDetail {
   /** The stored `detail` value. */
   readonly code: number;
@@ -34,11 +34,11 @@ export interface TilesetDetail {
   readonly size: number;
   /** Bytes per pixel: 3 for 24-bit RGB, 1 for a palette index. */
   readonly bytesPerPixel: 1 | 3;
-  /** Whether the stored block is the §3.3 isometric packing (detail 150). */
+  /** Whether the stored block is the documented isometric packing (detail 150; `docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`). */
   readonly isometric: boolean;
 }
 
-/** The `detail` table of format-spec §3.1, keyed by the stored value. */
+/** The `detail` table of docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso, keyed by the stored value. */
 const DETAILS: readonly TilesetDetail[] = [
   { code: 1, size: 32, bytesPerPixel: 3, isometric: false },
   { code: 2, size: 16, bytesPerPixel: 3, isometric: false },
@@ -54,13 +54,13 @@ export function tilesetDetail(code: number): TilesetDetail | undefined {
   return DETAILS.find((detail) => detail.code === code);
 }
 
-/** The 24-bit transparent key: the exact triple R=0, G=1, B=2 (§3.1). */
+/** The 24-bit transparent key: the exact triple R=0, G=1, B=2 (`docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`). */
 export const TRANSPARENT_RGB = { r: 0, g: 1, b: 2 } as const;
 
-/** The 8-bit transparent key: the palette index 255 (§3.1). */
+/** The 8-bit transparent key: the palette index 255 (`docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`). */
 export const TRANSPARENT_INDEX = 255;
 
-/** One tile, holding its stored pixels verbatim (column-major, §3.1). */
+/** One tile, holding its stored pixels verbatim (column-major; `docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`). */
 export interface TilesetTile {
   /** `size × size × bytesPerPixel` stored bytes, column-major. */
   readonly pixels: Uint8Array;
@@ -68,9 +68,9 @@ export interface TilesetTile {
 
 /** A whole tileset: the header plus every tile and any trailing bytes. */
 export interface Tileset {
-  /** The stored version (format-spec §3.1). */
+  /** The stored version (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
   readonly version: TilesetVersion;
-  /** The uniform `detail` layout (format-spec §3.1). */
+  /** The uniform `detail` layout (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
   readonly detail: TilesetDetail;
   /** The tiles, in file order. */
   readonly tiles: readonly TilesetTile[];
@@ -82,16 +82,15 @@ export interface Tileset {
   readonly residue: Uint8Array;
 }
 
-/** How many stored bytes one tile occupies for a detail (format-spec §3.1). */
+/** How many stored bytes one tile occupies for a detail (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 function storedTileSize(detail: TilesetDetail): number {
   return detail.size * detail.size * detail.bytesPerPixel;
 }
 
 /**
- * The width/height of one tile as stored, once expanded to RGBA (format-spec
- * §3.1, §3.3): 32×32 for a 2D tileset, 64×32 for an isometric one, and 16×16
+ * The width/height of one tile as stored, once expanded to RGBA (`docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`): 32×32 for a 2D tileset, 64×32 for an isometric one, and 16×16
  * for the 16×16 details (2, 4 and 6). Those 16×16 tiles are not doubled here:
- * §3.1 puts the pixel doubling in the renderer, which does it once per tileset
+ * the spec puts the pixel doubling in the renderer, which does it once per tileset
  * and caches the result, so this layer reports what the file stores.
  */
 export function tileDimensions(detail: TilesetDetail): { width: number; height: number } {
@@ -106,7 +105,7 @@ function fail(offset: number, section: string, message: string, path?: string): 
 }
 
 /**
- * Read a `.tst`/`.iso` file (format-spec §3.1). Never throws: a truncated
+ * Read a `.tst`/`.iso` file (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). Never throws: a truncated
  * header, an unlisted version or detail, a negative count or a short tile run
  * all come back as `ok: false` with the failing field's byte offset.
  */
@@ -154,13 +153,13 @@ export function readTileset(bytes: Uint8Array, path?: string): Result<Tileset> {
   const warnings =
     residue.value.length === 0
       ? []
-      : [`${residue.value.length} trailing byte(s) after the tiles were kept as residue (format-spec §3.1)`];
+      : [`${residue.value.length} trailing byte(s) after the tiles were kept as residue (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso)`];
 
   return ok({ version: version.value, detail, tiles, residue: residue.value }, warnings);
 }
 
 /**
- * Write a tileset back out (format-spec §3.1). Byte-identical to what
+ * Write a tileset back out (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). Byte-identical to what
  * `readTileset` consumed for an unmodified model, because the stored pixel
  * bytes and any residue are re-emitted verbatim (AD-18).
  */
@@ -192,12 +191,12 @@ export function writeTileset(model: Tileset): Result<Uint8Array> {
 }
 
 /**
- * Expand one tile to RGBA (format-spec §3.1, §3.3): the stored colour with the
+ * Expand one tile to RGBA (`docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`): the stored colour with the
  * transparent key turned into alpha 0, and the DOS palette applied for the
- * 8-bit details (docs/spec/formats/tiles.md#dos-palette). The result is
+ * 8-bit details (`docs/spec/formats/tiles.md#dos-palette`). The result is
  * column-major, `width × height × 4` bytes, with
  * `tileDimensions` giving the width and height at the stored size (a 16×16
- * detail gives 16×16 pixels; doubling them to 32×32 is the renderer's job, §3.1).
+ * detail gives 16×16 pixels; doubling them to 32×32 is the renderer's job).
  * The stored encoding is left untouched, so the writer still re-emits the
  * original bytes (AD-18).
  */
@@ -241,7 +240,7 @@ export function expandTileToRgba(model: Tileset, tileIndex: number): Result<Uint
   return ok(out);
 }
 
-/** Write one 24-bit stored pixel into an RGBA slot (format-spec §3.1). */
+/** Write one 24-bit stored pixel into an RGBA slot (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 function write24Bit(out: Uint8Array, at: number, r: number, g: number, b: number): void {
   const transparent = r === TRANSPARENT_RGB.r && g === TRANSPARENT_RGB.g && b === TRANSPARENT_RGB.b;
   out[at] = r;
@@ -250,7 +249,7 @@ function write24Bit(out: Uint8Array, at: number, r: number, g: number, b: number
   out[at + 3] = transparent ? 0 : 255;
 }
 
-/** Write one 8-bit palette pixel into an RGBA slot (format-spec §3.1). */
+/** Write one 8-bit palette pixel into an RGBA slot (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 function writePalette(out: Uint8Array, at: number, index: number): void {
   if (index === TRANSPARENT_INDEX) {
     out[at + 3] = 0;
@@ -264,7 +263,7 @@ function writePalette(out: Uint8Array, at: number, index: number): void {
 }
 
 /**
- * Unpack a detail 150 tile (format-spec §3.3 step 2): walk the 64×32 image
+ * Unpack a detail 150 tile (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso step 2): walk the 64×32 image
  * column-major (x outer, y inner); at each pixel inside the diamond take the
  * next stored pixel, and leave the outside pixels transparent.
  */

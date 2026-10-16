@@ -1,16 +1,16 @@
 /**
- * The Unified AST for RPGCode (ADR 0004 decision 1; format-spec §9.3/§9.5).
+ * The Unified AST for RPGCode (ADR 0004 decision 1; docs/spec/formats/rpgcode-program.md#text-form.
  *
  * Covers expressions, statements, control flow, functions and parameter lists,
  * with source line numbers on every node.
  *
- * docs/adr/0004 decision 1; format-spec §9.2/§9.3/§9.5/§9.15.
+ * docs/adr/0004 decision 1; docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands.
  */
 
 import type { Value, VarScope } from "../ports/value.ts";
 import type { BinaryOp, UnaryOp } from "./ops.ts";
 
-/** One function parameter (format-spec §9.5 FUN-1). */
+/** One function parameter (docs/spec/engine/rpgcode-modules-and-objects.md#modules FUN-1). */
 export type Param = {
   readonly name: string;
   readonly byRef: boolean;
@@ -30,7 +30,7 @@ export type FunctionDef = {
   readonly line: number;
 };
 
-/** A value-producing or variable-reading expression (format-spec §9.3, §9.4). */
+/** A value-producing or variable-reading expression (docs/spec/formats/rpgcode-program.md#text-form. */
 export type Expr =
   | { readonly kind: "literal"; readonly value: Value; readonly line: number }
   | {
@@ -106,7 +106,7 @@ export type SwitchCase = {
   readonly line: number;
 };
 
-/** A statement (format-spec §9.5). */
+/** A statement (docs/spec/engine/rpgcode-modules-and-objects.md#modules). */
 export type Statement =
   | {
       readonly kind: "expr";

@@ -227,7 +227,7 @@ test("a by-reference argument is written back and recorded by index", () => {
 });
 
 test("a literal in a by-reference position is refused", () => {
-  // `getColor` writes back parameters 1..3 (format-spec §9.16 SEM-6).
+  // `getColor` writes back parameters 1..3 (docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-6).
   equal(errorOf(() => run("getColor(1, 2, 3)\n")).code, "builtin.out-not-by-ref");
 });
 

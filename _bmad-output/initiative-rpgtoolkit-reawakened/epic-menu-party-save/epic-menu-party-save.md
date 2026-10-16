@@ -34,7 +34,7 @@ Core menu rules and default menu draw lists, inventory, equipment, shop, party, 
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
 - spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7, AD-10, AD-11, AD-17, AD-23
 - constraint - docs/guardrails.md, sections G1 and G3
-- reference - docs/engine-features.md, E-80 to E-87, E-120 to E-123
+- reference - docs/spec/engine/plugins-and-battle.md#e-80 to E-87, E-120 to E-123
 
 ## Notes
 

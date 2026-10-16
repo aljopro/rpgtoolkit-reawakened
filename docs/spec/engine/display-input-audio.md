@@ -95,7 +95,7 @@ Formats: anything the platform can play (the samples use MIDI and WAV; MP3 and O
 <a id="e-103"></a>
 **E-103 MIDI playback.** Needs a General MIDI synthesiser with a SoundFont in any runner that lacks OS MIDI — browsers, mobile — and is a real parity requirement, because legacy games depend on it heavily.
 
-> **Open conflict R-59 — audio routing and frame audio.** `docs/engine-features.md:319,321` (E-100, E-101) describes looping music plus one-shot effects; this page, `docs/spec/engine/display-input-audio.md:84`, says the original engine's music code "routed every file through its MIDI path because of a string-comparison bug", and that "animation frame sounds bypassed PAK extraction, so they probably did not play from PAK games (inferred)". Owner epic: **audio-synth**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-59 — audio routing and frame audio.** the legacy feature inventory (E-100, E-101) describes looping music plus one-shot effects; this page, `docs/spec/engine/display-input-audio.md:84`, says the original engine's music code "routed every file through its MIDI path because of a string-comparison bug", and that "animation frame sounds bypassed PAK extraction, so they probably did not play from PAK games (inferred)". Owner epic: **audio-synth**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ## Video
 

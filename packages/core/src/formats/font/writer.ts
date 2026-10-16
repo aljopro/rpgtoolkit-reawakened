@@ -1,6 +1,6 @@
 /**
  * Serialising a Toolkit 2 bitmap font (`docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text`,
- * format-spec §15.12).
+ * docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text).
  *
  * Emits exactly 2051 lines separated by CRLF.
  */

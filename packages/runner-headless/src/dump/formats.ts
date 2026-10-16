@@ -4,7 +4,7 @@
  * The **data** side is not a table here any more: it is `core`'s format
  * registry (AD-31). Every extension a core decoder claims is a file this tool
  * parses, and the decoder itself names the reader family (`CoreFormatId`) and
- * the `docs/format-spec.md` section it implements, so the dispatch lives in one
+ * the relevant `docs/spec/` page anchor it implements, so the dispatch lives in one
  * place. What stays here is the **skip** side: a file the spec describes but
  * this tool deliberately does not read here (text, media, plugins, and the
  * formats no core reader has been written for yet). A skip is never a failure.
@@ -19,14 +19,14 @@ export type DataFormatId = CoreFormatId;
 export interface DataFormatClass {
   readonly kind: "data";
   readonly format: DataFormatId;
-  /** The format-spec section the reader implements (G7). */
+  /** The `docs/spec/` page anchor the reader implements (G7). */
   readonly section: string;
 }
 
 /** A file `dump` reports as skipped, with the reason why. */
 export interface SkipFormatClass {
   readonly kind: "skip";
-  /** Why this tool does not parse it, naming the format-spec section. */
+  /** Why this tool does not parse it, naming the `docs/spec/` page anchor. */
   readonly reason: string;
   /** Extra one-line detail computed from the bytes, e.g. a `.prg` line count. */
   readonly describe?: (bytes: Uint8Array) => string;
@@ -63,39 +63,39 @@ const UNRECOGNISED = skip(
  * Extension (lowercase, no dot) → why `dump` skips it.
  *
  * A file with no extension, or one not listed, is skipped as unrecognised. The
- * `.prg` and `.sav` rows are skipped *by design*: a later epic parses §9
+ * `.prg` and `.sav` rows are skipped *by design*: a later epic parses docs/spec/engine/rpgcode-language.md
  * programs (the `.prg` row still reports whether the file is source text or
- * §9's compiled form), and §11 saves are outside this tool's scope. Reporting
+ * docs/spec/engine/rpgcode-language.md's compiled form), and docs/spec/formats/save-game.md#layout-minor-4 saves are outside this tool's scope. Reporting
  * files of either extension as failures would fail games that ship them.
  */
 const SKIP_TABLE: Readonly<Record<string, SkipFormatClass>> = {
-  // §9 — RPGCode programs are source text, or a compiled binary whose **first
+  // docs/spec/engine/rpgcode-language.md — RPGCode programs are source text, or a compiled binary whose **first
   // byte is `00`** (docs/spec/formats/rpgcode-program.md#compiled-form, R-12).
   // A later epic parses either form; here the size and line count — or the fact
   // that it is compiled — are reported so a dump still shows what is there.
   prg: skip(
-    "RPGCode program (format-spec §9): parsed by a later epic, reported here as text or compiled",
+    "RPGCode program (docs/spec/engine/rpgcode-language.md#programs-and-encodings): parsed by a later epic, reported here as text or compiled",
     (bytes) =>
       bytes[0] === 0x00
-        ? `compiled (format-spec §9 "Compiled form"), ${bytes.length} bytes`
+        ? `compiled (docs/spec/formats/rpgcode-program.md#compiled-form), ${bytes.length} bytes`
         : `${bytes.length} bytes, ${countLines(bytes)} lines`,
   ),
   // A format the spec describes but no `core` reader implements yet — skipped, not failed.
-  sav: skip("saved game (format-spec §11): out of scope for this epic"),
-  // §10 — media this tool does not decode.
-  mid: skip("MIDI music (format-spec §10): audio, not a data format"),
-  midi: skip("MIDI music (format-spec §10): audio, not a data format"),
-  wav: skip("waveform audio (format-spec §10): audio, not a data format"),
-  mp3: skip("MP3 audio (format-spec §10): audio, not a data format"),
-  ogg: skip("Ogg audio (format-spec §10): audio, not a data format"),
-  avi: skip("AVI video (format-spec §10): video, not a data format"),
-  ttf: skip("TrueType font (format-spec §10): a font, not a data format"),
-  otf: skip("OpenType font (format-spec §10): a font, not a data format"),
+  sav: skip("saved game (docs/spec/formats/save-game.md#layout-minor-4): out of scope for this epic"),
+  // docs/spec/formats/images.md — media this tool does not decode.
+  mid: skip("MIDI music (docs/spec/engine/display-input-audio.md#audio): audio, not a data format"),
+  midi: skip("MIDI music (docs/spec/engine/display-input-audio.md#audio): audio, not a data format"),
+  wav: skip("waveform audio (docs/spec/engine/display-input-audio.md#audio): audio, not a data format"),
+  mp3: skip("MP3 audio (docs/spec/engine/display-input-audio.md#audio): audio, not a data format"),
+  ogg: skip("Ogg audio (docs/spec/engine/display-input-audio.md#audio): audio, not a data format"),
+  avi: skip("AVI video (docs/spec/engine/display-input-audio.md#video): video, not a data format"),
+  ttf: skip("TrueType font (docs/spec/engine/display-input-audio.md#fonts): a font, not a data format"),
+  otf: skip("OpenType font (docs/spec/engine/display-input-audio.md#fonts): a font, not a data format"),
   txt: skip("plain text (not a game data format)"),
-  // §12 — plugin libraries.
-  dll: skip("plugin library (format-spec §12): opaque binary, never read"),
-  so: skip("plugin library (format-spec §12): opaque binary, never read"),
-  dylib: skip("plugin library (format-spec §12): opaque binary, never read"),
+  // docs/spec/engine/plugins-and-battle.md#plugin-roles — plugin libraries.
+  dll: skip("plugin library (docs/spec/engine/plugins-and-battle.md#plugin-roles): opaque binary, never read"),
+  so: skip("plugin library (docs/spec/engine/plugins-and-battle.md#plugin-roles): opaque binary, never read"),
+  dylib: skip("plugin library (docs/spec/engine/plugins-and-battle.md#plugin-roles): opaque binary, never read"),
 };
 
 /**

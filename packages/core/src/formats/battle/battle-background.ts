@@ -1,5 +1,5 @@
 /**
- * Reading and writing a battle background (format-spec §8.3): the binary layout
+ * Reading and writing a battle background (`docs/spec/formats/battle-data.md#fight-background-bkg`): the binary layout
  * of `RPGTLKIT BKG`.
  *
  * Pure (G2): the reader consumes a `BinaryReader` the caller positioned and
@@ -25,17 +25,17 @@ import {
 } from "./model.ts";
 
 /**
- * Read a battle background from `reader` (format-spec §8.3).
+ * Read a battle background from `reader` (`docs/spec/formats/battle-data.md#fight-background-bkg`).
  *
- * §8.3 lists the detection byte at offset 12 before the header; the probe does
+ * `docs/spec/formats/battle-data.md#fight-background-bkg` lists the detection byte at offset 12 before the header; the probe does
  * not move the cursor, so the header is read first and the detection checked
  * before any header error — a text file has no NUL-terminated magic to read,
  * and a file too short to carry the detection byte reports the header's own
  * short read rather than the probe's out-of-range error. A non-NUL detection
  * byte means the 2.x text form, which is refused with a located `FormatError`
  * rather than parsed as binary. Otherwise the magic, the `minor`-range check
- * and the six `str` fields of §8.3 are read in order; bytes after the last sound
- * are kept as `residue` (§1.7).
+ * and the six `str` fields are read in order; bytes after the last sound
+ * are kept as `residue` (`docs/spec/formats/README.md#bytes-after-the-last-documented-field`).
  */
 export function readBattleBackground(reader: BinaryReader): Result<BattleBackground> {
   const start = reader.offset;
@@ -100,7 +100,7 @@ export function readBattleBackground(reader: BinaryReader): Result<BattleBackgro
   const warnings: string[] = [];
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the battle background were kept as residue (format-spec §8.3, §1.7)`,
+      `${residue.value.length} trailing byte(s) after the battle background were kept as residue (docs/spec/formats/battle-data.md#fight-background-bkg, docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
     );
   }
 
@@ -122,7 +122,7 @@ export function readBattleBackground(reader: BinaryReader): Result<BattleBackgro
 }
 
 /**
- * Serialise `model` to the battle-background layout (format-spec §8.3),
+ * Serialise `model` to the battle-background layout (`docs/spec/formats/battle-data.md#fight-background-bkg`),
  * reproducing the bytes a `readBattleBackground` of the same model consumed.
  * Only an unencodable string can fail.
  */

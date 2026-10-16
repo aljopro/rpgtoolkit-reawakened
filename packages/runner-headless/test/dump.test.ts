@@ -90,7 +90,7 @@ const TILESET: Tileset = {
 
 const TILESET_BYTES = unwrap(writeTileset(TILESET));
 
-/** A §3.6 tile bitmap: a 1×1 drawn grid, so four cells are stored and one is drawn. */
+/** A docs/spec/formats/tiles.md#tile-bitmap-tbm tile bitmap: a 1×1 drawn grid, so four cells are stored and one is drawn. */
 const TILE_BITMAP: TileBitmap = {
   magic: "TK3 TILEBITMAP",
   major: 3,
@@ -108,7 +108,7 @@ const TILE_BITMAP: TileBitmap = {
 
 const TILE_BITMAP_BYTES = unwrap(writeTileBitmap(TILE_BITMAP));
 
-/** A minimal §2 main file at minor 0, the layout §2 documents for the earliest games. */
+/** A minimal docs/spec/formats/main-file.md#layout main file at minor 0, the layout docs/spec/formats/main-file.md#layout documents for the earliest games. */
 const MAIN_FILE: MainFile = {
   magic: "RPGTLKIT MAIN",
   major: 2,
@@ -165,7 +165,7 @@ const MAIN_FILE: MainFile = {
   pathColor: { r: 0, g: 0, b: 0 },
   movementControls: 0,
   movementScanCodes: [],
-  // Minor 0 carries the four pre-3 reserved runs at the widths §2 gives them (R-18).
+  // Minor 0 carries the four pre-3 reserved runs at the widths docs/spec/formats/main-file.md#layout gives them (R-18).
   reservedRuns: {
     parallax: new Uint8Array(2),
     menuPluginFallback: new Uint8Array(2),
@@ -217,7 +217,7 @@ const STATUS_EFFECT: StatusEffect = {
 const STATUS_EFFECT_BYTES = unwrap(writeStatusEffect(STATUS_EFFECT));
 
 /**
- * A `.anm` whose delay is NaN (format-spec §7.1): the reader accepts the `f64`
+ * A `.anm` whose delay is NaN (docs/spec/formats/animation.md#layout): the reader accepts the `f64`
  * — it does not check finiteness — and only `canon` rejects the value, so this
  * is the one file whose model cannot be digested.
  */
@@ -342,15 +342,15 @@ const TRUNCATED_BOARD = asciiBytes("RPGTLKIT BOARD\0");
 /** An animation truncated just after its magic, so `readAnimation` fails at its header. */
 const TRUNCATED_ANIMATION = asciiBytes("RPGTLKIT ANIM\0");
 
-/** The stored upper bound for `count` entries (format-spec §1.2). */
+/** The stored upper bound for `count` entries (docs/spec/formats/README.md#counts-are-usually-upper-bounds). */
 function bound(count: number): number {
   return count === 0 ? -1 : count - 1;
 }
 
 /**
- * A minimal minor-3 pre-vector board (format-spec §4.8), serialised in the
- * §4.8 field order; the same shape the core pre-vector test builds, trimmed to
- * the one board this case needs. Minor 4 and above take the §4.2 vector path
+ * A minimal minor-3 pre-vector board (docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector), serialised in the
+ * docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector field order; the same shape the core pre-vector test builds, trimmed to
+ * the one board this case needs. Minor 4 and above take the docs/spec/formats/board.md#vector-layout-minor-4-and-later vector path
  * instead, so this is the only form that reaches `readPreVectorBoard`.
  */
 function buildPreVectorBoard(): Uint8Array {
@@ -440,25 +440,25 @@ function createProject(options?: { brokenBoard?: boolean; extra?: ReadonlyArray<
 
 /** Every data extension and the reader it must reach. */
 const DISPATCH: ReadonlyArray<readonly [string, DataFormatId, string]> = [
-  ["Main/demo.gam", "gam", "format-spec §2"],
-  ["Boards/start.brd", "board", "format-spec §4"],
-  ["Tiles/base.tst", "tileset", "format-spec §3.1"],
-  ["Tiles/iso.iso", "tileset", "format-spec §3.1"],
-  ["Bitmap/house.tbm", "tile-bitmap", "format-spec §3.6"],
-  ["Misc/man/man_s.anm", "animation", "format-spec §7.1"],
-  ["Chrs/start.tem", "character", "format-spec §6.1"],
-  ["Item/man.itm", "item", "format-spec §6.2"],
-  ["Enemy/pirate.ene", "enemy", "format-spec §6.3"],
-  ["Bkrounds/bkg.bkg", "battle-background", "format-spec §8.3"],
-  ["SpcMove/fire.spc", "special-move", "format-spec §8.1"],
-  ["StatusE/poison.ste", "status-effect", "format-spec §8.2"],
-  ["Tiles/single.gph", "single-tile", "format-spec §3.2"],
-  ["Tiles/animated.tan", "tile-animation", "format-spec §3.5"],
-  ["Font/legacy.fnt", "font", "format-spec §15.12"],
-  ["Bitmap/bkg.jpg", "image", "format-spec §10"],
-  ["Bitmap/bkg.jpeg", "image", "format-spec §10"],
-  ["Bitmap/mwin.bmp", "image", "format-spec §10"],
-  ["Bitmap/layout.png", "image", "format-spec §10"],
+  ["Main/demo.gam", "gam", "docs/spec/formats/main-file.md#layout"],
+  ["Boards/start.brd", "board", "docs/spec/formats/board.md#vector-layout-minor-4-and-later"],
+  ["Tiles/base.tst", "tileset", "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso"],
+  ["Tiles/iso.iso", "tileset", "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso"],
+  ["Bitmap/house.tbm", "tile-bitmap", "docs/spec/formats/tiles.md#tile-bitmap-tbm"],
+  ["Misc/man/man_s.anm", "animation", "docs/spec/formats/animation.md#layout"],
+  ["Chrs/start.tem", "character", "docs/spec/formats/character.md#layout"],
+  ["Item/man.itm", "item", "docs/spec/formats/item.md#layout"],
+  ["Enemy/pirate.ene", "enemy", "docs/spec/formats/enemy.md#layout"],
+  ["Bkrounds/bkg.bkg", "battle-background", "docs/spec/formats/battle-data.md#fight-background-bkg"],
+  ["SpcMove/fire.spc", "special-move", "docs/spec/formats/battle-data.md#special-move-spc"],
+  ["StatusE/poison.ste", "status-effect", "docs/spec/formats/battle-data.md#status-effect-ste"],
+  ["Tiles/single.gph", "single-tile", "docs/spec/formats/tiles.md#single-tile-gph"],
+  ["Tiles/animated.tan", "tile-animation", "docs/spec/formats/tiles.md#animated-tile-tan"],
+  ["Font/legacy.fnt", "font", "docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text"],
+  ["Bitmap/bkg.jpg", "image", "docs/spec/formats/images.md#the-shared-decode-contract"],
+  ["Bitmap/bkg.jpeg", "image", "docs/spec/formats/images.md#the-shared-decode-contract"],
+  ["Bitmap/mwin.bmp", "image", "docs/spec/formats/images.md#the-shared-decode-contract"],
+  ["Bitmap/layout.png", "image", "docs/spec/formats/images.md#the-shared-decode-contract"],
 ];
 
 test("classify sends every data extension to the reader its section names", () => {
@@ -512,11 +512,11 @@ test("classify parses .bmp and .gif", () => {
     equal(cls.kind, "data", path);
     if (cls.kind === "data") {
       equal(cls.format, "image", path);
-      equal(cls.section, "format-spec §10", path);
+      equal(cls.section, "docs/spec/formats/images.md#the-shared-decode-contract", path);
     }
   }
   // A bitmap or GIF in a project is parsed and digested, and a truncated one is a
-  // failure, not a skip (§10.4 refuses rather than approximating).
+  // failure, not a skip(docs/spec/formats/images.md#windows-bitmap-bmp refuses rather than approximating).
   const parsed = buildReport([
     { path: "Bitmap/mwin.bmp", bytes: PIXEL_BMP },
     { path: "Bitmap/mwin.gif", bytes: PIXEL_GIF },
@@ -551,7 +551,7 @@ test("classify skips the non-format, media and plugin files with a reason", () =
     }
   }
   const prg = classify("Prg/start.prg");
-  ok(prg.kind === "skip" && prg.reason.includes("format-spec §9"), "the .prg reason cites §9");
+  ok(prg.kind === "skip" && prg.reason.includes("docs/spec/engine/rpgcode-language.md#programs-and-encodings"), "the .prg reason cites the programs page");
   const unknown = classify("readme.zzz");
   ok(unknown.kind === "skip" && unknown.reason.includes("unrecognised"), "an unknown extension says so");
 });
@@ -563,7 +563,7 @@ test("the .prg skip reports size and line count, not just a reason", () => {
   equal(cls.describe?.(PRG_TEXT), "15 bytes, 2 lines");
   equal(cls.describe?.(new Uint8Array(0)), "0 bytes, 0 lines");
   equal(cls.describe?.(new Uint8Array([0x61])), "1 bytes, 1 lines");
-  // §9's compiled form: a first byte of `00` is a compiled program, not source
+  // docs/spec/engine/rpgcode-language.md's compiled form: a first byte of `00` is a compiled program, not source
   // text (docs/spec/formats/rpgcode-program.md#compiled-form, R-12).
   const compiled = new Uint8Array(
     readFileSync(
@@ -573,7 +573,7 @@ test("the .prg skip reports size and line count, not just a reason", () => {
   equal(compiled[0], 0x00, "the committed example starts with the compiled marker");
   ok(cls.describe?.(compiled)?.includes("compiled"), `the compiled example is reported as compiled`);
   // The 0x00-first rule wins over any line count, and an empty file is not compiled.
-  equal(cls.describe?.(new Uint8Array([0x00, 0x0a])), `compiled (format-spec §9 "Compiled form"), 2 bytes`);
+  equal(cls.describe?.(new Uint8Array([0x00, 0x0a])), `compiled (docs/spec/formats/rpgcode-program.md#compiled-form), 2 bytes`);
   ok(cls.describe?.(new Uint8Array([0x0a]))?.includes("lines"), "a text file still reports lines");
 });
 
@@ -611,14 +611,14 @@ test("the .gam, .spc and .ste rows parse the models their writers produced", () 
   }
 });
 
-test("a §4.8 pre-vector board is read, converted and parsed", () => {
+test("a pre-vector board is read, converted and parsed", () => {
   const report = buildReport([{ path: "Boards/old.brd", bytes: PRE_VECTOR_BOARD }]);
   deepEqual(report.counts, { parsed: 1, skipped: 0, failed: 0 });
   const entry = report.files[0];
   ok(entry !== undefined && entry.status === "parsed");
   if (entry?.status === "parsed") {
     equal(entry.format, "board");
-    // The summary names the conversion: the §4.8 minor-3 board became a §4.2 minor-4 model.
+    // The summary names the conversion: the docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector minor-3 board became a docs/spec/formats/board.md#vector-layout-minor-4-and-later minor-4 model.
     ok(entry.summary.includes("2.4 (pre-vector, converted to vectors)"), entry.summary);
   }
 });
@@ -630,7 +630,7 @@ test("a tile bitmap is parsed, not skipped, and its summary counts drawn and sto
   equal(entry?.status, "parsed");
   if (entry?.status === "parsed") {
     equal(entry.format, "tile-bitmap");
-    equal(entry.section, "format-spec §3.6");
+    equal(entry.section, "docs/spec/formats/tiles.md#tile-bitmap-tbm");
     ok(entry.summary.includes("1×1 tiles drawn"), entry.summary);
     ok(entry.summary.includes("4 cells stored (1 drawn)"), entry.summary);
   }
@@ -652,7 +652,7 @@ test("a model the digest cannot canonicalise fails only its own file", () => {
   ok(bad !== undefined && bad.status === "failed");
   if (bad?.status === "failed") {
     equal(bad.format, "animation");
-    equal(bad.section, "format-spec §7.1");
+    equal(bad.section, "docs/spec/formats/animation.md#layout");
     ok(bad.error.message.includes("digest"), bad.error.message);
   }
 });
@@ -699,7 +699,7 @@ test("buildReport classifies each file, digests the parsed ones and counts the r
   const broken = byPath["Boards/broken.brd"];
   ok(broken !== undefined && broken.status === "failed");
   if (broken?.status === "failed") {
-    ok(broken.error.section.includes("format-spec §"), broken.error.section);
+    ok(broken.error.section.includes("docs/spec/"), broken.error.section);
     equal(broken.format, "board");
     ok(broken.error.offset >= 0);
   }
@@ -850,17 +850,17 @@ test("compareGame passes on expected failures and expected residue", () => {
     path: "legacy.tem",
     status: "parsed" as const,
     format: "character" as const,
-    section: "format-spec §6.1",
+    section: "docs/spec/formats/character.md#layout",
     digest: "1234567890abcdef",
     summary: "character with residue",
-    warnings: ["326 trailing byte(s) after the character were kept as residue (format-spec §6.1)"],
+    warnings: ["326 trailing byte(s) after the character were kept as residue (docs/spec/formats/character.md#layout)"],
   };
   const failedEntry = {
     path: "text.anm",
     status: "failed" as const,
     format: "animation" as const,
-    section: "format-spec §7.1",
-    error: { offset: 0, section: "format-spec §7.1", message: "unterminated string" },
+    section: "docs/spec/formats/animation.md#layout",
+    error: { offset: 0, section: "docs/spec/formats/animation.md#layout", message: "unterminated string" },
   };
   const report: DumpReport = {
     schema: 1,
@@ -882,7 +882,7 @@ test("compareGame fails when an expected failure starts passing", () => {
     path: "text.anm",
     status: "parsed" as const,
     format: "animation" as const,
-    section: "format-spec §7.1",
+    section: "docs/spec/formats/animation.md#layout",
     digest: "fedcba0987654321",
     summary: "animation parsed",
     warnings: [],
@@ -909,7 +909,7 @@ test("compareGame fails when expected residue clears without expectation update"
     path: "legacy.tem",
     status: "parsed" as const,
     format: "character" as const,
-    section: "format-spec §6.1",
+    section: "docs/spec/formats/character.md#layout",
     digest: "1234567890abcdef",
     summary: "character with 0 residue",
     warnings: [],
@@ -936,10 +936,10 @@ test("compareGame fails when a current-format file leaves unexpected residue", (
     path: "modern.brd",
     status: "parsed" as const,
     format: "board" as const,
-    section: "format-spec §4.2",
+    section: "docs/spec/formats/board.md#vector-layout-minor-4-and-later",
     digest: "abcdef1234567890",
     summary: "board with residue",
-    warnings: ["4 trailing byte(s) after the board were kept as residue (format-spec §4.2)"],
+    warnings: ["4 trailing byte(s) after the board were kept as residue (docs/spec/formats/board.md#vector-layout-minor-4-and-later)"],
   };
   const report: DumpReport = {
     schema: 1,
@@ -1011,7 +1011,7 @@ test("a data file that fails to parse exits non-zero and names the file and the 
     const result = runCli(["dump", project.root]);
     equal(result.status, 1);
     ok(result.stdout.includes("Boards/broken.brd  FAILED"), result.stdout);
-    ok(result.stdout.includes("format-spec §"), result.stdout);
+    ok(result.stdout.includes("docs/spec/"), result.stdout);
     ok(result.stdout.includes("offset"), result.stdout);
     ok(result.stdout.includes("3 parsed, 4 skipped, 1 failed"));
   } finally {
@@ -1083,7 +1083,7 @@ test("dump reads a .tpk and an appended-ZIP .exe, both with a known digest", () 
     equal(tpkReport.counts.failed, 0);
     equal(tpkReport.files.find((file) => file.path === "walk.anm")?.digest, digestModel(ANIMATION));
 
-    // §13's standalone EXE: any stub, then the ZIP, then the 12-byte CMP1 trailer.
+    // docs/spec/formats/packaging-and-paths.md's standalone EXE: any stub, then the ZIP, then the 12-byte CMP1 trailer.
     const stub = asciiBytes("MZ this is a stub executable");
     const trailer = new Uint8Array(12);
     trailer.set(asciiBytes("CMP1"), 0);

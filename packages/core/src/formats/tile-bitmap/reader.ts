@@ -1,12 +1,12 @@
 /**
  * Reading a tile bitmap: the binary layout of `TK3 TILEBITMAP`
- * (`docs/spec/formats/tiles.md#tile-bitmap-tbm`, format-spec §3.6).
+ * (`docs/spec/formats/tiles.md#tile-bitmap-tbm`, docs/spec/formats/tiles.md#tile-bitmap-tbm).
  *
  * Pure (G2): it consumes a `BinaryReader` the caller positioned and never touches
  * a host. Bad data or a short file is a `Result` carrying a located `FormatError`,
  * never a throw (AD-18).
  *
- * The reader follows format-spec §1.2 for `width` and `height`: the stored value
+ * The reader follows docs/spec/formats/README.md#counts-are-usually-upper-bounds for `width` and `height`: the stored value
  * is an inclusive upper bound, `n` means `n + 1` stored cells and `-1` means none,
  * and any other negative is refused. The cell count is checked against the bytes
  * that remain before the loop runs, so a damaged file cannot make the reader walk
@@ -25,20 +25,20 @@ import {
   type TileBitmapCell,
 } from "./model.ts";
 
-/** The fewest bytes one cell can occupy: an empty `str` (one NUL) and three `i16` (§1.1). */
+/** The fewest bytes one cell can occupy: an empty `str` (one NUL) and three `i16` (`docs/spec/formats/README.md#primitive-encoding`). */
 const MIN_CELL_BYTES = 7;
 
-/** The documented tint range, −255…+255 (format-spec §3.6). */
+/** The documented tint range, −255…+255 (docs/spec/formats/tiles.md#tile-bitmap-tbm). */
 const TINT_MIN = -255;
 const TINT_MAX = 255;
 
 /**
  * Read a tile bitmap from `reader` (`docs/spec/formats/tiles.md#tile-bitmap-tbm`,
- * format-spec §3.6). The magic must match; the major and minor versions are read
+ * docs/spec/formats/tiles.md#tile-bitmap-tbm). The magic must match; the major and minor versions are read
  * as stored and only warned about when they are not 3.0, because the engine
  * ignores both. Every stored cell — the padding row and column included — is
  * returned, x outer and y inner, and the reader consumes the whole file: bytes
- * after the last cell are kept as `residue` (format-spec §1.7), so a caller sees
+ * after the last cell are kept as `residue` (docs/spec/formats/README.md#bytes-after-the-last-documented-field), so a caller sees
  * `remaining === 0`.
  */
 export function readTileBitmap(reader: BinaryReader): Result<TileBitmap> {
@@ -60,7 +60,7 @@ export function readTileBitmap(reader: BinaryReader): Result<TileBitmap> {
   if (header.value.major !== TILE_BITMAP_MAJOR || header.value.minor !== TILE_BITMAP_MINOR) {
     warnings.push(
       `tile bitmap version ${header.value.major}.${header.value.minor} is not ${TILE_BITMAP_MAJOR}.${TILE_BITMAP_MINOR}; ` +
-        `it was read as the same layout, since the version is ignored (format-spec §3.6, §1.4)`,
+        `it was read as the same layout, since the version is ignored (docs/spec/formats/tiles.md#tile-bitmap-tbm, docs/spec/formats/README.md#header-and-version)`,
     );
   }
 
@@ -74,7 +74,7 @@ export function readTileBitmap(reader: BinaryReader): Result<TileBitmap> {
       ...(reader.path === undefined ? {} : { path: reader.path }),
       offset: widthAt,
       section: TILE_BITMAP_SECTION,
-      message: `invalid width bound: ${width.value} is below -1 (only -1 means none, format-spec §1.2)`,
+      message: `invalid width bound: ${width.value} is below -1 (only -1 means none, docs/spec/formats/README.md#counts-are-usually-upper-bounds)`,
     });
   }
   const heightAt = reader.offset;
@@ -87,11 +87,11 @@ export function readTileBitmap(reader: BinaryReader): Result<TileBitmap> {
       ...(reader.path === undefined ? {} : { path: reader.path }),
       offset: heightAt,
       section: TILE_BITMAP_SECTION,
-      message: `invalid height bound: ${height.value} is below -1 (only -1 means none, format-spec §1.2)`,
+      message: `invalid height bound: ${height.value} is below -1 (only -1 means none, docs/spec/formats/README.md#counts-are-usually-upper-bounds)`,
     });
   }
 
-  // §1.2: check the bounds against the bytes that remain before anything is
+  // `docs/spec/formats/README.md#counts-are-usually-upper-bounds`: check the bounds against the bytes that remain before anything is
   // allocated or looped over, so a corrupt 32767 x 32767 header cannot reserve a
   // billion cells (each cell is at least a NUL and three i16).
   const columns = width.value < 0 ? 0 : width.value + 1;
@@ -139,7 +139,7 @@ export function readTileBitmap(reader: BinaryReader): Result<TileBitmap> {
         outOfRange = true;
         warnings.push(
           `tint (${r.value}, ${g.value}, ${b.value}) at cell (${x}, ${y}) is outside the documented ` +
-            `-255..255 range and was kept verbatim (format-spec §3.6)`,
+            `-255..255 range and was kept verbatim (docs/spec/formats/tiles.md#tile-bitmap-tbm)`,
         );
       }
     }
@@ -151,7 +151,7 @@ export function readTileBitmap(reader: BinaryReader): Result<TileBitmap> {
   }
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the tile bitmap were kept as residue (format-spec §3.6, §1.7)`,
+      `${residue.value.length} trailing byte(s) after the tile bitmap were kept as residue (docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
     );
   }
 

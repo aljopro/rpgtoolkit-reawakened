@@ -1,5 +1,5 @@
 /**
- * Writing an animation (format-spec §7.1): the binary layout of `RPGTLKIT
+ * Writing an animation (docs/spec/formats/animation.md#layout): the binary layout of `RPGTLKIT
  * ANIM`, minor 3.
  *
  * It emits the version it was given and reproduces the bytes of a model that
@@ -12,9 +12,9 @@ import { BinaryWriter } from "../binary/writer.ts";
 import type { Animation } from "./model.ts";
 
 /**
- * Serialise `model` to the animation layout (format-spec §7.1). The frame
+ * Serialise `model` to the animation layout (docs/spec/formats/animation.md#layout). The frame
  * count is written back as the upper bound the reader derived it from: `-1`
- * for no slots, otherwise `frames.length - 1` (§1.2).
+ * for no slots, otherwise `frames.length - 1` (`docs/spec/formats/README.md#counts-are-usually-upper-bounds`).
  */
 export function writeAnimation(model: Animation): Result<Uint8Array> {
   const writer = new BinaryWriter();

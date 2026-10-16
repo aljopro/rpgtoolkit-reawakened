@@ -1,6 +1,6 @@
 # Game images (`.bmp`, `.gif`)
 
-Games ship pictures in `Bitmap/` (and a few elsewhere) in one of four kinds: PNG, JPEG, Windows bitmap or GIF. PNG and JPEG are third-party formats read as-is; a Windows bitmap and a GIF are the same. The engine reads every one of them in one place and turns it into pixels ([format-spec.md](../../format-spec.md) §10.1); this page records the Windows bitmap and GIF layouts so the readers have a specification to work from, since [README.md](README.md) previously called these third-party formats with no page of their own.
+Games ship pictures in `Bitmap/` (and a few elsewhere) in one of four kinds: PNG, JPEG, Windows bitmap or GIF. PNG and JPEG are third-party formats read as-is; a Windows bitmap and a GIF are the same. The engine reads every one of them in one place and turns it into pixels; this page records the Windows bitmap and GIF layouts so the readers have a specification to work from, since [README.md](README.md) previously called these third-party formats with no page of their own.
 
 The layouts below are public formats — the Microsoft bitmap layout and the CompuServe GIF layout — written here in the byte order of this spec ([README.md](README.md#primitive-encoding): `short` is signed 16-bit little-endian, `int` is signed 32-bit little-endian). No RPG Toolkit file format is involved.
 
@@ -10,7 +10,7 @@ Every image the engine loads, whatever its kind, becomes the same pixels, so tha
 
 - The result is **straight** (non-premultiplied) 8-bit RGBA of exactly `width × height × 4` bytes in row-major order, **top row first**: the file's own colours and its own alpha, nothing added. Because colour-key transparency is stored with whatever references the image and never in the file, the reader never applies a key; the key is tested against these pixels by whatever blits the image.
 - The kind is chosen by **signature**. A Windows bitmap starts with the two bytes `BM` (`42 4D`); a GIF starts with `GIF87a` (`47 49 46 38 37 61`) or `GIF89a` (`47 49 46 38 39 61`). PNG (`89 50 4E 47 0D 0A 1A 0A`) and JPEG (`FF D8 FF`) complete the set. Any other signature is refused at offset 0.
-- Every defect is a **located error** carrying the file's path, the offending byte offset and the section `format-spec §10` — never a throw and never a plausible wrong picture.
+- Every defect is a **located error** carrying the file's path, the offending byte offset and the section `docs/spec/formats/images.md#the-shared-decode-contract` — never a throw and never a plausible wrong picture.
 - A **zero dimension** is refused, and so is an image of more than **100,000,000 pixels**: `width × height` is untrusted input, so past that limit the allocation is not attempted and the file is refused instead. The limit is far above any game asset. A GIF is a stack of **pages** held at once, so for it the limit applies both to its logical screen and to `pages × screen` together ([GIF](#gif)).
 
 ## Windows bitmap (`.bmp`)
@@ -86,7 +86,7 @@ Pixels within a row are packed left to right, most significant bits first:
 
 **Reawakened rule (row order).** A positive `biHeight` means the first stored row is the **bottom** row of the picture and the last stored row is the **top** row; the reader reverses the rows when it writes the top-row-first RGBA. A negative `biHeight` means the rows are already stored top-first and are copied in file order. The magnitude of `biHeight` is the height in both cases.
 
-**Reawakened rule (32-bit alpha).** For 32-bit `BI_RGB` every pixel's alpha is **255**. The header defines no alpha channel, and the fourth byte's meaning differs between Windows producers, so the reader neither reads it as alpha nor drops the variant; it returns the file's own colours with opaque alpha, and any transparency stays the per-image colour key of [format-spec.md](../../format-spec.md) §10.
+**Reawakened rule (32-bit alpha).** For 32-bit `BI_RGB` every pixel's alpha is **255**. The header defines no alpha channel, and the fourth byte's meaning differs between Windows producers, so the reader neither reads it as alpha nor drops the variant; it returns the file's own colours with opaque alpha, and any transparency stays the per-image colour key of the [shared decode contract](#the-shared-decode-contract).
 
 #### RLE8 (8-bit, `biCompression` 1)
 

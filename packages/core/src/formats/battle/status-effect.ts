@@ -1,12 +1,12 @@
 /**
- * Reading and writing a status effect (format-spec §8.2): the binary layout of
+ * Reading and writing a status effect (`docs/spec/formats/battle-data.md#status-effect-ste`): the binary layout of
  * `RPGTLKIT STATUSE`.
  *
  * Pure (G2): the reader consumes a `BinaryReader` the caller positioned and
  * the writer fills a `BinaryWriter`; neither touches a host. A wrong magic, a
  * text-form file or a short read is a `Result` carrying a located `FormatError`
  * and is never thrown (AD-18). The per-round amounts stay signed — a negative
- * `hpPerRound` or `smpPerRound` heals (§8.2).
+ * `hpPerRound` or `smpPerRound` heals (`docs/spec/formats/battle-data.md#status-effect-ste`).
  */
 
 import { err, ok, type Result } from "../result.ts";
@@ -25,17 +25,17 @@ import {
 } from "./model.ts";
 
 /**
- * Read a status effect from `reader` (format-spec §8.2).
+ * Read a status effect from `reader` (`docs/spec/formats/battle-data.md#status-effect-ste`).
  *
- * §8.2 lists the detection byte at offset 16 before the header; the probe does
+ * `docs/spec/formats/battle-data.md#status-effect-ste` lists the detection byte at offset 16 before the header; the probe does
  * not move the cursor, so the header is read first and the detection checked
  * before any header error — a text file has no NUL-terminated magic to read,
  * and a file too short to carry the detection byte reports the header's own
  * short read rather than the probe's out-of-range error. A non-NUL detection
  * byte means the 2.x text form, which is refused with a located `FormatError`
  * rather than parsed as binary. Otherwise the magic, the `minor`-range check
- * and the §8.2 field list are read in order; bytes after the program are kept
- * as `residue` (§1.7).
+ * and the field list are read in order; bytes after the program are kept
+ * as `residue` (`docs/spec/formats/README.md#bytes-after-the-last-documented-field`).
  */
 export function readStatusEffect(reader: BinaryReader): Result<StatusEffect> {
   const start = reader.offset;
@@ -120,7 +120,7 @@ export function readStatusEffect(reader: BinaryReader): Result<StatusEffect> {
   const warnings: string[] = [];
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the status effect were kept as residue (format-spec §8.2, §1.7)`,
+      `${residue.value.length} trailing byte(s) after the status effect were kept as residue (docs/spec/formats/battle-data.md#status-effect-ste, docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
     );
   }
 
@@ -147,7 +147,7 @@ export function readStatusEffect(reader: BinaryReader): Result<StatusEffect> {
 }
 
 /**
- * Serialise `model` to the status-effect layout (format-spec §8.2), reproducing
+ * Serialise `model` to the status-effect layout (`docs/spec/formats/battle-data.md#status-effect-ste`), reproducing
  * the bytes a `readStatusEffect` of the same model consumed. Only an
  * unencodable string can fail.
  */

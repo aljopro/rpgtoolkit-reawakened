@@ -14,7 +14,7 @@ declare const scratchIdBrand: unique symbol;
 /**
  * A canonical asset key: the shared resolver's output for a logical path
  * (ASCII-only case fold, `/` separators, type-folder prefix rules —
- * format-spec §1.5). Never a logical path (AD-5).
+ * docs/spec/formats/README.md#paths-inside-files). Never a logical path (AD-5).
  */
 export type AssetKey = string & { readonly [assetKeyBrand]: "AssetKey" };
 

@@ -1,5 +1,5 @@
 /**
- * The limits every loaded package must satisfy (format-spec §13, AD-6, AD-17).
+ * The limits every loaded package must satisfy (docs/spec/formats/packaging-and-paths.md, AD-6, AD-17).
  *
  * Games are untrusted input (AD-17), so the loader bounds everything a hostile
  * package could make it spend — bytes in, entry count, declared and actual

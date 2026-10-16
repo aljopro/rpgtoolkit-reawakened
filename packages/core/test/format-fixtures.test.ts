@@ -5,7 +5,7 @@
 // sharing code with the readers (so a fixture cannot "pass by sharing the writer
 // primitives"):
 //
-//   * `authored/`  — bytes written straight from the format-spec layouts by
+//   * `authored/`  — bytes written straight from the format specification layouts by
 //     `tools/fixtures/author/generate.mjs` (detail 4/5/6 tilesets, an isometric
 //     `.iso`, a `.tpk`, a Setup ZIP, a backslash-entry ZIP, a `CMP1` EXE and two
 //     negative EXE stubs). No real sample of any of these exists.
@@ -120,7 +120,7 @@ test("the authored detail-6 tileset parses (16x16 palette)", () => {
   equal(rgba[(15 * 16 + 15) * 4 + 3], 0);
 });
 
-test("the authored isometric .iso parses and unpacks the §3.3 diamond", () => {
+test("the authored isometric .iso parses and unpacks the documented diamond", () => {
   const model = tileset("authored/iso.iso");
   equal(model.version, 30);
   equal(model.detail.code, 150);
@@ -158,8 +158,8 @@ test("the real 256-colour tileset parses as detail 3 and round-trips", () => {
 });
 
 test("the real 16-colour-mode tilesets still save as detail 1", () => {
-  // Both files came from the "16 colours" mode but store detail 1 (§3.1: the
-  // detail is the pixel format, not the palette size the UI offered).
+  // Both files came from the "16 colours" mode but store detail 1 (the detail
+  // is the pixel format, not the palette size the UI offered; `docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`).
   for (const name of ["real/16m.tst", "real/16c.tst"]) {
     const model = tileset(name);
     equal(model.detail.code, 1, name);
@@ -177,7 +177,7 @@ test("the real .tan parses with readTileAnimation with zero residue (ticket 16.7
 
   const gph = fixture("real/v1tile.gph");
   const lines = new TextDecoder().decode(gph).split("\r\n").filter((line) => line !== "");
-  equal(lines.length, 16, "§3.2 v1: a 16x16 grid, one text row per y");
+  equal(lines.length, 16, "`docs/spec/formats/tiles.md#single-tile-gph`: a 16x16 grid, one text row per y");
   equal(lines[0]?.length, 16);
 });
 
@@ -297,7 +297,7 @@ test("both negative EXE stubs are refused by L21 with the extract-your-assets me
     const result = loadPackage({ kind: "exe", name, bytes: fixture(name) });
     equal(result.ok, false, `${name} should be refused`);
     if (result.ok) continue;
-    equal(result.error.section, "format-spec §13", name);
+    equal(result.error.section, "docs/spec/formats/packaging-and-paths.md", name);
     const message = result.error.message;
     equal(message.includes("missing CMP1 trailer"), true, name);
     equal(message.includes("L21"), true, name);
@@ -323,7 +323,7 @@ test("the anonymised Setup-bundle excerpt keeps the Setup layout with neutral na
     "Game/Demo/Tiles/asset4.tst",
     "Game/Demo/Tiles/asset5.tst",
   ]);
-  // §13.1's Setup shape: the main file under `Main/` and the project under `Game/`.
+  // docs/spec/formats/packaging-and-paths.md#loose-folder's Setup shape: the main file under `Main/` and the project under `Game/`.
   equal(loaded.files.filter((file) => file.path.startsWith("Main/")).length, 1);
   equal(loaded.files.filter((file) => file.path.startsWith("Game/Demo/")).length, 5);
   for (const file of loaded.files) {

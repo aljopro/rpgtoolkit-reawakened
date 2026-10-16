@@ -1,5 +1,5 @@
 /**
- * Reading and writing an enemy (format-spec §6.3, magic `RPGTLKIT ENEMY`).
+ * Reading and writing an enemy (docs/spec/formats/enemy.md#layout, magic `RPGTLKIT ENEMY`).
  *
  * Pure (G2). Only the binary 2.1 form, minor 1, is represented; minor 0 is the
  * 2.0 line-oriented text form, which the reader reports rather than converts.
@@ -26,11 +26,11 @@ import {
   type Enemy,
 } from "./model.ts";
 
-/** Read an enemy from `reader` (format-spec §6.3). */
+/** Read an enemy from `reader` (docs/spec/formats/enemy.md#layout). */
 export function readEnemy(reader: BinaryReader): Result<Enemy> {
   const start = reader.offset;
   const header = reader.header();
-  // §6.3 places the detection byte at offset 14, just past the magic; the probe
+  // docs/spec/formats/enemy.md#layout places the detection byte at offset 14, just past the magic; the probe
   // does not move the cursor, so the header is read first and the detection
   // checked before any header error.
   const detection = reader.isBinaryAt(start + ENEMY_DETECT_OFFSET);
@@ -133,14 +133,14 @@ export function readEnemy(reader: BinaryReader): Result<Enemy> {
   }
 
   // The stance upper bound is stored as 5, yielding six slots 0..5; slot 5 is
-  // unused, kept so the indices stay stable (format-spec §6.3).
+  // unused, kept so the indices stay stable (docs/spec/formats/enemy.md#layout).
   const stances = readBoundedStrings(reader);
   if (!stances.ok) {
     return stances;
   }
 
   // The custom-stance bound is an `i32`, not the `i16` legacy readers used
-  // (format-spec §6.3).
+  // (docs/spec/formats/enemy.md#layout).
   const customStances = readStances(reader, ENEMY_SECTION);
   if (!customStances.ok) {
     return customStances;
@@ -153,7 +153,7 @@ export function readEnemy(reader: BinaryReader): Result<Enemy> {
   const warnings: string[] = [];
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the enemy were kept as residue (format-spec §6.3)`,
+      `${residue.value.length} trailing byte(s) after the enemy were kept as residue (docs/spec/formats/enemy.md#layout)`,
     );
   }
 
@@ -188,7 +188,7 @@ export function readEnemy(reader: BinaryReader): Result<Enemy> {
   );
 }
 
-/** Serialise `model` to the enemy layout (format-spec §6.3). */
+/** Serialise `model` to the enemy layout (docs/spec/formats/enemy.md#layout). */
 export function writeEnemy(model: Enemy): Result<Uint8Array> {
   const writer = new BinaryWriter();
   const magic = writer.str(model.magic);

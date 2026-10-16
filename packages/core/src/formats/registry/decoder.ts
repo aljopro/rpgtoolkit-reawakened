@@ -18,21 +18,21 @@ import type { AssetIndex, AssetRoot } from "../resolver/model.ts";
  * What a decoder is given besides the bytes (AD-31).
  *
  * AD-31 calls this the decode context. It is the landed `AssetIndex` and
- * `AssetRoot` (format-spec §1.5, AD-5) together, so a decoder that has to follow
+ * `AssetRoot` (docs/spec/formats/README.md#paths-inside-files, AD-5) together, so a decoder that has to follow
  * a reference inside the file it is reading resolves it exactly as the runtime
  * would. A decoder that reads bytes alone ignores it.
  */
 export interface AssetResolver {
   /** The paths the host can serve, as the resolver's lookup (AD-5). */
   readonly index: AssetIndex;
-  /** Where the index's paths are rooted: a package, or a game folder (§13, §1.5). */
+  /** Where the index's paths are rooted: a package, or a game folder(docs/spec/formats/packaging-and-paths.md, docs/spec/formats/README.md#paths-inside-files. */
   readonly root: AssetRoot;
 }
 
 /**
  * One format's ingestion, dispatched by the core registry (AD-31).
  *
- * `id` names the decoder once and `section` cites the `docs/format-spec.md`
+ * `id` names the decoder once and `section` cites the `docs/spec/formats/README.md#primitive-encoding`
  * section it implements (G7); `extensions` are lowercase, without the dot.
  * `detect` is the magic-header test the registry's header dispatch uses, and
  * `decode` produces the model.
@@ -40,7 +40,7 @@ export interface AssetResolver {
 export interface AssetDecoder<T = unknown> {
   /** The decoder's stable id, e.g. `"board"`. */
   readonly id: string;
-  /** The format-spec section the decoder implements (G7), e.g. `"format-spec §4"`. */
+  /** The format specification section the decoder implements (G7), e.g. `"docs/spec/formats/board.md#vector-layout-minor-4-and-later"`. */
   readonly section: string;
   /** The file extensions this decoder answers for, lowercase and without the dot. */
   readonly extensions: readonly string[];

@@ -1,6 +1,6 @@
 /**
  * Windows bitmap (`.bmp`) decoding for `decodeTexture`
- * (docs/spec/formats/images.md#windows-bitmap-bmp, format-spec §10, AD-28).
+ * (docs/spec/formats/images.md#windows-bitmap-bmp, docs/spec/formats/images.md#the-shared-decode-contract, AD-28).
  *
  * A Toolkit-era game ships most of its pictures as 24-bit BMPs, so the reader
  * sits beside the PNG and JPEG ones and returns the same straight RGBA: the
@@ -8,13 +8,13 @@
  * applied. It decodes uncompressed `BI_RGB` at 1, 4, 8, 24 and 32 bits and the
  * 8-bit `RLE8` stream, each with a 40-byte DIB header and one plane, and refuses
  * everything else with a located error rather than approximating a picture
- * (format-spec §10.4). Never throws: a damaged file is an `ok: false` result.
+ * (docs/spec/formats/images.md#the-shared-decode-contract). Never throws: a damaged file is an `ok: false` result.
  */
 
 import { err, ok, type Result } from "../result.ts";
 import type { DecodedTexture } from "./model.ts";
 
-const SECTION = "format-spec §10";
+const SECTION = "docs/spec/formats/images.md#the-shared-decode-contract";
 
 /**
  * The largest bitmap this decoder will allocate for, in pixels. `biWidth` and
@@ -433,8 +433,7 @@ function decodeRle8(
 }
 
 /**
- * Decode a Windows bitmap to the file's own straight RGBA (AD-28, format-spec
- * §10, docs/spec/formats/images.md#windows-bitmap-bmp).
+ * Decode a Windows bitmap to the file's own straight RGBA (AD-28, docs/spec/formats/images.md#windows-bitmap-bmp).
  *
  * The signature `BM` and the 40-byte DIB header are checked first, then the
  * geometry: for an uncompressed bitmap the pixel-array span is measured against

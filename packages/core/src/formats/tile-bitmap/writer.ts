@@ -1,6 +1,5 @@
 /**
- * Writing a tile bitmap (`docs/spec/formats/tiles.md#tile-bitmap-tbm`, format-spec
- * §3.6).
+ * Writing a tile bitmap (`docs/spec/formats/tiles.md#tile-bitmap-tbm`).
  *
  * It emits the magic and the version it was given and reproduces the bytes of a
  * model that came from `readTileBitmap` exactly (AD-18), padding row and column
@@ -16,7 +15,7 @@ import { err, ok, type Result } from "../result.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import { TILE_BITMAP_SECTION, type TileBitmap } from "./model.ts";
 
-/** The stored `i16` range a §3.6 field must fit (format-spec §1.1). */
+/** The stored `i16` range a field must fit (`docs/spec/formats/README.md#primitive-encoding`). */
 const I16_MIN = -32_768;
 const I16_MAX = 32_767;
 
@@ -27,7 +26,7 @@ function fail(writer: BinaryWriter, message: string): Result<never> {
 
 /**
  * Serialise `model` to the tile-bitmap layout
- * (`docs/spec/formats/tiles.md#tile-bitmap-tbm`, format-spec §3.6). The bounds are
+ * (`docs/spec/formats/tiles.md#tile-bitmap-tbm`, docs/spec/formats/tiles.md#tile-bitmap-tbm). The bounds are
  * written exactly as the model stores them — a stored `-1` stays `-1` — and the
  * cells follow in the model's order, which is the file's x-outer, y-inner order.
  */
@@ -37,13 +36,13 @@ export function writeTileBitmap(model: TileBitmap): Result<Uint8Array> {
   if (!Number.isInteger(model.width) || model.width < -1 || model.width > I16_MAX) {
     return fail(
       writer,
-      `width ${model.width} is not a stored bound: it must be -1 (none) or 0..${I16_MAX} (format-spec §3.6)`,
+      `width ${model.width} is not a stored bound: it must be -1 (none) or 0..${I16_MAX} (docs/spec/formats/tiles.md#tile-bitmap-tbm)`,
     );
   }
   if (!Number.isInteger(model.height) || model.height < -1 || model.height > I16_MAX) {
     return fail(
       writer,
-      `height ${model.height} is not a stored bound: it must be -1 (none) or 0..${I16_MAX} (format-spec §3.6)`,
+      `height ${model.height} is not a stored bound: it must be -1 (none) or 0..${I16_MAX} (docs/spec/formats/tiles.md#tile-bitmap-tbm)`,
     );
   }
   const storedCells = (model.width < 0 ? 0 : model.width + 1) * (model.height < 0 ? 0 : model.height + 1);
@@ -51,7 +50,7 @@ export function writeTileBitmap(model: TileBitmap): Result<Uint8Array> {
     return fail(
       writer,
       `the model has ${model.cells.length} cell(s) but width ${model.width} and height ${model.height} ` +
-        `mean ${storedCells} stored cell(s) (format-spec §3.6)`,
+        `mean ${storedCells} stored cell(s) (docs/spec/formats/tiles.md#tile-bitmap-tbm)`,
     );
   }
   if (
@@ -60,7 +59,7 @@ export function writeTileBitmap(model: TileBitmap): Result<Uint8Array> {
   ) {
     return fail(
       writer,
-      `version ${model.major}.${model.minor} is not writable: a version field must be 0..${I16_MAX} (format-spec §1.4)`,
+      `version ${model.major}.${model.minor} is not writable: a version field must be 0..${I16_MAX} (docs/spec/formats/README.md#header-and-version)`,
     );
   }
 
@@ -78,7 +77,7 @@ export function writeTileBitmap(model: TileBitmap): Result<Uint8Array> {
     if (!tile.ok) {
       return tile;
     }
-    // §1.1: each tint is an `i16` field, so a value the field cannot hold is
+    // `docs/spec/formats/README.md#primitive-encoding`: each tint is an `i16` field, so a value the field cannot hold is
     // refused rather than silently wrapped into a different colour.
     if (
       !Number.isInteger(cell.r) || cell.r < I16_MIN || cell.r > I16_MAX ||
@@ -87,7 +86,7 @@ export function writeTileBitmap(model: TileBitmap): Result<Uint8Array> {
     ) {
       return fail(
         writer,
-        `tint (${cell.r}, ${cell.g}, ${cell.b}) of tile "${cell.tile}" does not fit the stored i16 fields (format-spec §1.1, §3.6)`,
+        `tint (${cell.r}, ${cell.g}, ${cell.b}) of tile "${cell.tile}" does not fit the stored i16 fields (docs/spec/formats/README.md#primitive-encoding, docs/spec/formats/tiles.md#tile-bitmap-tbm)`,
       );
     }
     writer.i16(cell.r);

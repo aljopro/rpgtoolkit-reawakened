@@ -1,5 +1,5 @@
 /**
- * Windows-1252 string encoding for legacy `str` fields (format-spec §1.1).
+ * Windows-1252 string encoding for legacy `str` fields ([formats/README.md#primitive-encoding]).
  *
  * The spec says a `str` is a NUL-terminated single-byte string in the Windows
  * ANSI code page, "assume Windows-1252". `core` may not import `TextDecoder`,
@@ -15,7 +15,7 @@
 
 import { err, ok, type Result } from "../result.ts";
 
-const SECTION = "format-spec §1.1";
+const SECTION = "docs/spec/formats/README.md#primitive-encoding";
 
 // Code points for bytes 0x80..0x9F. The five undefined bytes hold their own
 // C1 code point (0x80 + i), which is both the Windows mapping and the mark of

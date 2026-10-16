@@ -2,7 +2,7 @@
 
 * **Status:** Accepted
 * **Date:** 2026-10-11
-* **Context documents:** [architecture-options.md](../architecture-options.md), [engine-features.md](../engine-features.md), [format-spec.md](../format-spec.md), [guardrails.md](../guardrails.md), [0001-typescript-core.md](0001-typescript-core.md)
+* **Context documents:** [architecture-options.md](../architecture-options.md), [spec/README.md](../spec/README.md), [guardrails.md](../guardrails.md), [0001-typescript-core.md](0001-typescript-core.md)
 
 ## Context
 

@@ -2,7 +2,7 @@
 
 * **Status:** Accepted. Amended by [ADR 0007](0007-docs-spec-is-the-normative-specification.md): `docs/spec/` is accepted on owner attestation (extraction log round 4); steps 1 to 4 below remain the only path for any later extraction from the legacy source.
 * **Date:** 2026-10-11
-* **Context documents:** [guardrails.md](../guardrails.md) G7, [format-spec.md](../format-spec.md) (superseded by [../spec/README.md](../spec/README.md)), [0003-permissive-licences-acceptable.md](0003-permissive-licences-acceptable.md), [0005-independent-product-v1-and-native-format.md](0005-independent-product-v1-and-native-format.md)
+* **Context documents:** [guardrails.md](../guardrails.md) G7, [spec/README.md](../spec/README.md), [0003-permissive-licences-acceptable.md](0003-permissive-licences-acceptable.md), [0005-independent-product-v1-and-native-format.md](0005-independent-product-v1-and-native-format.md)
 
 ## Context
 

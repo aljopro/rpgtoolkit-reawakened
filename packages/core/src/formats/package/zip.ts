@@ -1,9 +1,9 @@
 /**
  * The ZIP reader behind `.tpk` packages and appended-ZIP EXEs
- * (format-spec §13, AD-6).
+ * (docs/spec/formats/packaging-and-paths.md, AD-6).
  *
  * A `.tpk` is a standard ZIP archive; a standalone EXE is one appended to a
- * program, located by the `CMP1` trailer of §13. Both end up here as bytes,
+ * program, located by the `CMP1` trailer of docs/spec/formats/packaging-and-paths.md. Both end up here as bytes,
  * which are parsed as a ZIP: the end-of-central-directory record, the central
  * directory, and each entry's local header.
  *
@@ -37,10 +37,10 @@ import { PACKAGE_LIMITS } from "./limits.ts";
 import { canonicalEntryPath, checkEntryPath } from "./path-rules.ts";
 import type { PackageFile } from "./model.ts";
 
-/** The format-spec section every failure here cites. */
-const SECTION = "format-spec §13";
+/** The format specification section every failure here cites. */
+const SECTION = "docs/spec/formats/packaging-and-paths.md";
 
-// ZIP structure constants (PKZIP APPNOTE 4.3, §13). Signatures are the four
+// ZIP structure constants (PKZIP APPNOTE 4.3, docs/spec/formats/packaging-and-paths.md. Signatures are the four
 // bytes `PK\x03\x04` and friends, read little-endian.
 const LOCAL_SIGNATURE = 0x04034b50;
 const CENTRAL_SIGNATURE = 0x02014b50;
@@ -70,11 +70,11 @@ const MIN_INFLATE_CHUNK_BYTES = 1024;
 /** Thrown to stop `fflate` mid-stream the instant a decode passes its declaration. */
 const DECLARED_SIZE_PASSED = Symbol("declared size passed");
 
-/** One entry of the central directory, as parsed (§13). */
+/** One entry of the central directory, as parsed(docs/spec/formats/packaging-and-paths.md). */
 interface CentralEntry {
   /** The name decoded exactly as `fflate` decodes it, so keys match. */
   readonly storedName: string;
-  /** The name with `\` normalised to `/` (§1.5). */
+  /** The name with `\` normalised to `/`(docs/spec/formats/README.md#paths-inside-files). */
   readonly path: string;
   /** A directory: counted, path-checked, never served. */
   readonly directory: boolean;
@@ -86,13 +86,13 @@ interface CentralEntry {
   readonly localOffset: number;
 }
 
-/** A located failure citing §13 (AD-18). */
+/** A located failure citing docs/spec/formats/packaging-and-paths.md (AD-18). */
 function failure(offset: number, message: string): FormatError {
   return { offset, section: SECTION, message };
 }
 
 /**
- * Find the end-of-central-directory record (L15, §13). It sits in the last
+ * Find the end-of-central-directory record (L15, docs/spec/formats/packaging-and-paths.md. It sits in the last
  * 65,557 bytes — 22 bytes plus a possible 65,535-byte comment — and the record
  * whose comment length reaches the end of the file is the one that counts.
  */
@@ -441,11 +441,11 @@ function proveDeclaredSize(span: Uint8Array, declared: number): DeclaredSizeProo
 
 /**
  * Read a ZIP archive — a `.tpk`, or the ZIP appended to a standalone EXE
- * (format-spec §13) — and return its files in archive order.
+ * (docs/spec/formats/packaging-and-paths.md) — and return its files in archive order.
  *
  * `bytes` is the whole ZIP region, `name` the package name used in messages.
  * Every file's declared size, actual size and CRC-32 are checked, so what comes
- * back is either every entry intact or a located error naming the §13 rule that
+ * back is either every entry intact or a located error naming the docs/spec/formats/packaging-and-paths.md rule that
  * stopped it. Never throws (AD-18).
  */
 export function readZip(bytes: Uint8Array, name: string): Result<readonly PackageFile[]> {

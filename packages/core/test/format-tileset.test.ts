@@ -1,6 +1,6 @@
-// The tileset reader and writer of format-spec §3 (AD-18): synthetic buffers
+// The tileset reader and writer of docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso (AD-18): synthetic buffers
 // pin the header, the column-major pixel order, both transparent keys, the
-// palette path and the §3.3 isometric diamond mask; located errors cover EOF
+// palette path and the isometric diamond mask; located errors cover EOF
 // and bounds. Two committed, independently authored/editor-produced fixtures
 // (ticket 2.22) are read and round-tripped too, so the happy path does not rest
 // on the writer's own primitives. When the legacy sample games are fetched, both
@@ -99,7 +99,7 @@ test("the committed isometric .iso round-trips", () => {
   deepEqual([...unwrap(writeTileset(model))], [...bytes]);
 });
 
-test("the detail table matches format-spec §3.1", () => {
+test("the detail table matches the tileset spec", () => {
   deepEqual(tilesetDetail(1), { code: 1, size: 32, bytesPerPixel: 3, isometric: false });
   deepEqual(tilesetDetail(2), { code: 2, size: 16, bytesPerPixel: 3, isometric: false });
   deepEqual(tilesetDetail(3), { code: 3, size: 32, bytesPerPixel: 1, isometric: false });
@@ -214,35 +214,35 @@ test("EOF and bounds errors carry the field offset and a section", () => {
   equal(shortHeader.ok, false);
   if (!shortHeader.ok) {
     equal(shortHeader.error.offset, 4);
-    equal(shortHeader.error.section, "format-spec §1.1");
+    equal(shortHeader.error.section, "docs/spec/formats/README.md#primitive-encoding");
   }
 
   const unknownVersion = readTileset(tilesetBytes(25, 0, 1, new Uint8Array(0)));
   equal(unknownVersion.ok, false);
   if (!unknownVersion.ok) {
     equal(unknownVersion.error.offset, 0);
-    equal(unknownVersion.error.section, "format-spec §3.1");
+    equal(unknownVersion.error.section, "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso");
   }
 
   const negativeCount = readTileset(tilesetBytes(20, -5, 1, new Uint8Array(0)));
   equal(negativeCount.ok, false);
   if (!negativeCount.ok) {
     equal(negativeCount.error.offset, 2);
-    equal(negativeCount.error.section, "format-spec §3.1");
+    equal(negativeCount.error.section, "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso");
   }
 
   const unknownDetail = readTileset(tilesetBytes(20, 0, 7, new Uint8Array(0)));
   equal(unknownDetail.ok, false);
   if (!unknownDetail.ok) {
     equal(unknownDetail.error.offset, 4);
-    equal(unknownDetail.error.section, "format-spec §3.1");
+    equal(unknownDetail.error.section, "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso");
   }
 
   const shortTiles = readTileset(tilesetBytes(20, 2, 1, indexedPixels(32, 3)));
   equal(shortTiles.ok, false);
   if (!shortTiles.ok) {
     equal(shortTiles.error.offset, 6 + 32 * 32 * 3);
-    equal(shortTiles.error.section, "format-spec §1.1");
+    equal(shortTiles.error.section, "docs/spec/formats/README.md#primitive-encoding");
   }
 });
 
@@ -251,7 +251,7 @@ test("expandTileToRgba reports an out-of-range tile", () => {
   const out = expandTileToRgba(model, 1);
   equal(out.ok, false);
   if (!out.ok) {
-    equal(out.error.section, "format-spec §3.1");
+    equal(out.error.section, "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso");
   }
 });
 
@@ -261,7 +261,7 @@ test("expandTileToRgba reports a tileset that has no tiles", () => {
   const out = expandTileToRgba(model, 0);
   equal(out.ok, false);
   if (!out.ok) {
-    equal(out.error.section, "format-spec §3.1");
+    equal(out.error.section, "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso");
   }
 });
 
@@ -289,7 +289,7 @@ test("the writer rejects a tile whose stored size does not match the detail", ()
   equal(written.ok, false);
   if (!written.ok) {
     equal(written.error.offset, 6);
-    equal(written.error.section, "format-spec §3.1");
+    equal(written.error.section, "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso");
   }
 });
 

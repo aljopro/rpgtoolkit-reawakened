@@ -1,17 +1,17 @@
 /**
- * Image decoding for game assets (format-spec §10, AD-28).
+ * Image decoding for game assets (docs/spec/formats/images.md#the-shared-decode-contract, AD-28).
  *
  * `decodeTexture` is the one place a game image becomes pixels: it reads the
  * signature, dispatches to the PNG, the JPEG, the BMP or the GIF decoder, and
  * returns the file's own straight RGBA and its own alpha, nothing added. A
- * colour key is not part of the file (format-spec §10), so no key is applied
+ * colour key is not part of the file (docs/spec/formats/images.md#the-shared-decode-contract), so no key is applied
  * here: the key is the `key` of a `blit` (AD-3) and `core/raster` tests it on
  * these pixels. Scripts, `core/raster`, every runner and the editor use this and
  * only this, so they cannot disagree about what an image contains.
  *
  * A GIF is the one kind that is a **sequence of pages** with delays, which a
  * single texture cannot express (docs/spec/formats/images.md#gif, R-10), so the
- * entry exports a second decoder, `decodeGif`, for the animation path (§7.2).
+ * entry exports a second decoder, `decodeGif`, for the animation path(docs/spec/formats/images.md#gif).
  * This entry exports `decodeTexture`, `decodeGif` and their model types only
  * (AD-22, AD-28), so no other package can reach the PNG, JPEG, BMP or GIF
  * decoder.
@@ -26,9 +26,9 @@ import { decodeGif as readGif } from "./gif.ts";
 
 export type { DecodedGif, DecodedGifFrame, DecodedTexture } from "./model.ts";
 
-const SECTION = "format-spec §10";
+const SECTION = "docs/spec/formats/images.md#the-shared-decode-contract";
 
-/** The PNG signature `89 50 4E 47 0D 0A 1A 0A` (format-spec §10). */
+/** The PNG signature `89 50 4E 47 0D 0A 1A 0A` (docs/spec/formats/images.md#the-shared-decode-contract). */
 const PNG_SIGNATURE: readonly number[] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /** The JPEG SOI marker plus the start of any following segment: `FF D8 FF`. */
@@ -58,7 +58,7 @@ function hasSignature(bytes: Uint8Array, signature: readonly number[]): boolean 
 }
 
 /**
- * Decode a game image to straight RGBA (AD-28, format-spec §10).
+ * Decode a game image to straight RGBA (AD-28, docs/spec/formats/images.md#the-shared-decode-contract).
  *
  * The format is detected by signature — PNG `89 50 4E 47 0D 0A 1A 0A`, JPEG
  * `FF D8 FF`, Windows bitmap `BM`, GIF `GIF8` — and anything else is a located
@@ -100,7 +100,7 @@ export function decodeTexture(bytes: Uint8Array, ref?: string): Result<DecodedTe
 
 /**
  * Decode a GIF's pages, with their delays, for the animation path
- * (docs/spec/formats/images.md#gif, §7.2, R-10).
+ * (docs/spec/formats/images.md#gif, R-10).
  *
  * `ref` is the file's path, when the caller has one. `pageLimit` stops the walk
  * after that many pages. Every frame is the logical screen size, in file order;

@@ -1,4 +1,4 @@
-// The image decoders of format-spec §10 (AD-28): synthetic PNGs built byte by
+// The image decoders of docs/spec/formats/images.md#the-shared-decode-contract (AD-28): synthetic PNGs built byte by
 // byte pin each scanline filter, sub-byte samples, the palette and tRNS path,
 // the alpha channels of colour types 4 and 6, grey and truecolour colour keys,
 // Adam7 de-interlacing and the known-answer Adam7 stream. Located errors cover
@@ -397,12 +397,12 @@ test("the RGBA buffer is fresh and non-aliasing", () => {
 });
 
 test("an unknown signature is a located error, not a throw", () => {
-  // `D7 CD C6 9A` is a Windows metafile (WMF), a kind §10.4 drops by name.
+  // `D7 CD C6 9A` is a Windows metafile (WMF), a kind docs/spec/formats/images.md#windows-bitmap-bmp drops by name.
   const result = decodeTexture(new Uint8Array([0xd7, 0xcd, 0xc6, 0x9a]), "x.wmf");
   equal(result.ok, false);
   if (!result.ok) {
     equal(result.error.offset, 0);
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     equal(result.error.path, "x.wmf");
   }
 });
@@ -414,7 +414,7 @@ test("a truncated IHDR is located at the chunk", () => {
     equal(result.ok, false, `cut at ${cut}`);
     if (!result.ok) {
       equal(result.error.offset, offset, `cut at ${cut}`);
-      equal(result.error.section, "format-spec §10");
+      equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
       equal(result.error.message.includes("IHDR") || result.error.message.includes("chunk header"), true);
     }
   }
@@ -428,7 +428,7 @@ test("a truncated IDAT is located at the IDAT chunk", () => {
   if (!result.ok) {
     equal(result.error.offset, idatAt - 8);
     equal(result.error.message.includes("IDAT"), true);
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
   }
 });
 
@@ -448,7 +448,7 @@ test("an IDAT that is not a zlib stream is a located error", () => {
   if (!thrown.ok) {
     equal(thrown.error.offset, idatDataOffset(badHeader));
     equal(thrown.error.message.includes("zlib"), true);
-    equal(thrown.error.section, "format-spec §10");
+    equal(thrown.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
   }
 
   // A good header with a truncated body is not an error inside fflate — it
@@ -467,7 +467,7 @@ test("an IDAT that is not a zlib stream is a located error", () => {
   if (!truncated.ok) {
     equal(truncated.error.offset, idatDataOffset(short));
     equal(truncated.error.message.includes("inflates to"), true);
-    equal(truncated.error.section, "format-spec §10");
+    equal(truncated.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
   }
 });
 
@@ -484,7 +484,7 @@ test("a stale chunk CRC is a located error at the CRC field", () => {
   equal(result.ok, false);
   if (!result.ok) {
     equal(result.error.offset, crcAt);
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     equal(result.error.message.includes("CRC"), true);
   }
 });
@@ -509,7 +509,7 @@ test("an IDAT that inflates past the declared layout is refused", () => {
   if (!result.ok) {
     equal(result.error.offset, idatDataOffset(png));
     equal(result.error.message.includes("inflates to"), true);
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
   }
 });
 
@@ -531,7 +531,7 @@ test("a header that declares more than any deflate stream of that length can fil
   if (!result.ok) {
     equal(result.error.offset, idatDataOffset(png));
     equal(result.error.message.includes("cannot inflate"), true);
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
   }
 });
 
@@ -570,7 +570,7 @@ test("an IDAT that inflates to fewer bytes than the declared layout is refused",
   if (!result.ok) {
     equal(result.error.offset, idatDataOffset(png));
     equal(result.error.message.includes("inflates to"), true);
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
   }
 });
 
@@ -676,7 +676,7 @@ test("a malformed chunk list is a located error, not a decoded image", () => {
   if (!missing.ok) {
     equal(missing.error.offset, noEnd.length);
     equal(missing.error.message.includes("IEND"), true);
-    equal(missing.error.section, "format-spec §10");
+    equal(missing.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
   }
 
   // A second IHDR: the header appears once and first.
@@ -746,7 +746,7 @@ test("every truncation and one-byte change of a PNG returns a Result, never a th
     const result = decodeTexture(png.subarray(0, cut));
     equal(result.ok, cut === png.length, `truncated to ${cut} bytes`);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §10", `truncated to ${cut} bytes`);
+      equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract", `truncated to ${cut} bytes`);
       equal(result.error.offset >= 0, true, `truncated to ${cut} bytes`);
     }
   }
@@ -755,7 +755,7 @@ test("every truncation and one-byte change of a PNG returns a Result, never a th
     mutated[at] = mutated[at]! ^ 0xff;
     const result = decodeTexture(mutated);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §10", `byte ${at} changed`);
+      equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract", `byte ${at} changed`);
       equal(result.error.offset >= 0, true, `byte ${at} changed`);
     }
   }

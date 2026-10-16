@@ -1,5 +1,5 @@
 /**
- * The manifest of the project's own distribution package (format-spec §13,
+ * The manifest of the project's own distribution package (docs/spec/formats/packaging-and-paths.md,
  * AD-6, AD-23, AD-5).
  *
  * A distribution package is a `.tpk`-compatible ZIP holding the game files plus
@@ -14,7 +14,7 @@
  * The reader decodes the manifest's bytes as UTF-8 the way `zip.ts` decodes an
  * entry name, through `fflate/browser`'s `strFromU8`, and never throws: a
  * missing file, malformed JSON, a wrong shape or a path rule that does not hold
- * is a located `FormatError` naming the §13 rule it hit (AD-18).
+ * is a located `FormatError` naming the docs/spec/formats/packaging-and-paths.md rule it hit (AD-18).
  */
 
 import { strFromU8 } from "fflate/browser";
@@ -23,20 +23,20 @@ import { err, ok, type FormatError, type Result } from "../result.ts";
 import { checkEntryPath } from "./path-rules.ts";
 import type { LoadedPackage } from "./model.ts";
 
-/** The format-spec section every failure here cites. */
-const SECTION = "format-spec §13";
+/** The format specification section every failure here cites. */
+const SECTION = "docs/spec/formats/packaging-and-paths.md";
 
 /** The manifest's name at the archive root (AD-6). */
 export const MANIFEST_FILE_NAME = "manifest.json";
 
 /**
- * The manifest's own keys, in §13's order (a `Record`'s string keys keep their
+ * The manifest's own keys, in docs/spec/formats/packaging-and-paths.md's order (a `Record`'s string keys keep their
  * insertion order). A distribution manifest holds exactly these: no key may be
  * missing and none may be extra.
  */
 const MANIFEST_KEYS: Readonly<Record<string, true>> = { schema: true, main: true, index: true };
 
-/** The manifest's own key names, in §13's order. */
+/** The manifest's own key names, in docs/spec/formats/packaging-and-paths.md's order. */
 const MANIFEST_KEY_ORDER: readonly string[] = Object.keys(MANIFEST_KEYS);
 
 /**
@@ -49,13 +49,13 @@ const MANIFEST_KEY_ORDER: readonly string[] = Object.keys(MANIFEST_KEYS);
 export interface DistributionManifest {
   /** The project-level integer schema version (AD-23). */
   readonly schema: number;
-  /** The in-package path of the main file, e.g. `Main/demo.gam` (§1.5, §13). */
+  /** The in-package path of the main file, e.g. `Main/demo.gam`(docs/spec/formats/README.md#paths-inside-files, docs/spec/formats/packaging-and-paths.md. */
   readonly main: string;
   /** The game files' relative paths, each once; the resolver's index (AD-5). */
   readonly index: readonly string[];
 }
 
-/** A located failure citing §13 (AD-18). */
+/** A located failure citing docs/spec/formats/packaging-and-paths.md (AD-18). */
 function failure(offset: number, message: string): FormatError {
   return { offset, section: SECTION, message };
 }
@@ -63,7 +63,7 @@ function failure(offset: number, message: string): FormatError {
 /**
  * Check a path that names a *file*: it must be a plain relative path, not empty,
  * not ending with a separator, and holding no empty or `.` segment. The shared
- * `checkEntryPath` then applies the §1.5 escape, length, depth and basename
+ * `checkEntryPath` then applies the docs/spec/formats/README.md#paths-inside-files escape, length, depth and basename
  * rules; this refuses the shapes that would make the reader treat the entry as a
  * directory or an odd path.
  */
@@ -166,10 +166,10 @@ function describeValue(value: unknown): string {
 }
 
 /**
- * Read the manifest of a loaded distribution package (format-spec §13, AD-6).
+ * Read the manifest of a loaded distribution package (docs/spec/formats/packaging-and-paths.md, AD-6).
  *
  * `manifest.json` is looked up at the archive root among `pkg.files`, matched
- * case- and separator-insensitively (`foldPath`, §1.5); its bytes are decoded as
+ * case- and separator-insensitively (`foldPath`, docs/spec/formats/README.md#paths-inside-files; its bytes are decoded as
  * UTF-8 and parsed inside a try/catch, so malformed JSON is a failure rather
  * than a throw (AD-18). The decoded value must be a plain object holding
  * exactly `schema`, `main` and `index`, and those fields are checked with the

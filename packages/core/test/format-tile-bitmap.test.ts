@@ -1,7 +1,7 @@
-// The tile bitmap of `docs/spec/formats/tiles.md#tile-bitmap-tbm` (format-spec
-// §3.6, AD-18): the header, the inclusive bounds, the x-outer/y-inner cell grid
-// with its padding row and column, the three tints, the cell helper, and the
-// writer's refusals — plus the three committed examples under `docs/spec/examples/`.
+// The tile bitmap of `docs/spec/formats/tiles.md#tile-bitmap-tbm` (AD-18):
+// the header, the inclusive bounds, the x-outer/y-inner cell grid with its
+// padding row and column, the three tints, the cell helper, and the writer's
+// refusals — plus the three committed examples under `docs/spec/examples/`.
 //
 // The reader never throws, so the tests assert on values and on the error's
 // offset and section rather than on exceptions. The synthetic input is built here
@@ -50,7 +50,7 @@ interface BuildOptions {
 }
 
 /**
- * Serialise a synthetic tile bitmap straight from the §3.6 layout, byte by byte.
+ * Serialise a synthetic tile bitmap straight from `docs/spec/formats/tiles.md#tile-bitmap-tbm`, byte by byte.
  * No core writer is involved, so a test cannot pass by sharing the writer code.
  */
 function buildBytes(options: BuildOptions = {}): Uint8Array {
@@ -238,8 +238,8 @@ test("a file that ends inside a cell is refused at the cell's first byte", () =>
   const result = readTileBitmap(new BinaryReader(bytes));
   equal(result.ok, false);
   if (!result.ok) {
-    // The `str` primitive reports the unterminated string under its own §1.1.
-    equal(result.error.section, "format-spec §1.1");
+    // The `str` primitive reports the unterminated string under its own `docs/spec/formats/README.md#primitive-encoding`.
+    equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
     equal(result.error.offset, 23, "the cell's first byte");
     equal(result.error.message.includes("unterminated"), true, result.error.message);
   }
@@ -251,7 +251,7 @@ test("a file cut inside a cell's tints is refused at the missing field", () => {
   const result = readTileBitmap(new BinaryReader(full.slice(0, 41)));
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section.startsWith("format-spec §"), true);
+    equal(result.error.section.startsWith("docs/spec/"), true);
     // The blue tint is the field that runs off the end, at offset 40.
     equal(result.error.offset, 40);
   }

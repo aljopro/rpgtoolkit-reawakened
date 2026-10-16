@@ -2,7 +2,7 @@
 //
 //   node tools/fixtures/author/generate.mjs [--out <dir>] [--check]
 //
-// Every byte here is written straight from `docs/format-spec.md`'s byte layouts
+// Every byte here is written straight from `docs/spec/`'s normative format layouts
 // and nothing else: this tool imports no code from `packages/core` and uses no
 // `BinaryWriter`/`writeTileset`, so the committed fixtures under
 // `packages/core/test/fixtures/authored/` cannot "pass by sharing the writer
@@ -12,18 +12,18 @@
 // doc-first rule).
 //
 // What is authored, and why:
-//   * detail 4, 5 and 6 tilesets (§3.1) — the whole-archive crawl found tilesets
+//   * detail 4, 5 and 6 tilesets(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso) — the whole-archive crawl found tilesets
 //     only at detail 1, 2 and 3, so detail 4, 5 and 6 have **no real sample
 //     anywhere**: they are **authored from spec, unverified against a real
 //     file**. The detail-4 set holds two tiles, so the per-tile offset stays
 //     covered without the sample games.
-//   * an isometric `.iso` (§3.1, §3.3) — no real `.iso` (version 30, detail 150)
+//   * an isometric `.iso`(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso, docs/spec/formats/tiles.md#shading — no real `.iso` (version 30, detail 150)
 //     exists in the archive.
-//   * a `.tpk` and a `CMP1` standalone EXE (§13.1) — no real `.tpk` or
+//   * a `.tpk` and a `CMP1` standalone EXE(docs/spec/formats/packaging-and-paths.md#loose-folder) — no real `.tpk` or
 //     standalone EXE sample has these forms (`Setup` ZIP installers did ship,
 //     and `Game/<project>/` archives do, but no `.tpk` and no `CMP1` trailer was
 //     found in the archive).
-//   * a Setup ZIP (§13.1 `Main/` + `Game/`), a backslash-separated project ZIP,
+//   * a Setup ZIP(docs/spec/formats/packaging-and-paths.md#loose-folder `Main/` + `Game/`), a backslash-separated project ZIP,
 //     and two negative EXE stubs (a Toolkit 2 launcher with a private payload
 //     and no trailer, and the shape of a self-extracting `zip.exe`: a launcher
 //     prefix, then a ZIP, with no trailer locating it).
@@ -405,7 +405,7 @@ function gifTableFull() {
 }
 
 /**
- * One tileset of §3.1: the 6-byte header (`i16 version`, `i16 tileCount`,
+ * One tileset of docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso: the 6-byte header (`i16 version`, `i16 tileCount`,
  * `i16 detail`) then tightly packed column-major pixels. `pixel(k, tile)` returns
  * the stored bytes of the k-th stored pixel of tile `tile`, so a fixture's
  * content is a closed-form function the tests can reproduce.
@@ -435,12 +435,12 @@ function tileset(version, detail, size, bytesPerPixel, pixel, count = 1) {
  */
 const palettePixel = (k, tile) => (k + tile * 64) & 0xff;
 
-/** A 24-bit pixel that never hits the transparent key R=0, G=1, B=2 (§3.1). */
+/** A 24-bit pixel that never hits the transparent key R=0, G=1, B=2(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 const rgbPixel = (k) => [k & 0xff, (k >> 8) & 0xff, 7];
 
 const AUTHORED = {
   // Authored from spec, unverified against a real file (no detail-4 sample
-  // exists in the archive). Two tiles pin the per-tile offset (§3.1).
+  // exists in the archive). Two tiles pin the per-tile offset(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso).
   "detail4.tst": tileset(20, 4, 16, 1, palettePixel, 2),
   // Authored from spec, unverified against a real file (no detail-5 sample).
   "detail5.tst": tileset(20, 5, 32, 1, palettePixel),
@@ -506,7 +506,7 @@ const AUTHORED = {
 
 /**
  * The project tree the authored packages carry: a project folder's contents at
- * the archive root, plus the legacy pak's root `main.gam` (§13.1). The tileset
+ * the archive root, plus the legacy pak's root `main.gam`(docs/spec/formats/packaging-and-paths.md#loose-folder). The tileset
  * is the authored detail-4 one, so a package fixture carries a real authored
  * tileset rather than arbitrary bytes.
  */
@@ -520,12 +520,12 @@ function projectFiles() {
   ];
 }
 
-/** A `.tpk` (§13.1): the project folder at the archive root, `main.gam` at the root. */
+/** A `.tpk`(docs/spec/formats/packaging-and-paths.md#loose-folder): the project folder at the archive root, `main.gam` at the root. */
 function tpk() {
   return buildZip(projectFiles());
 }
 
-/** A Setup ZIP (§13.1): a plain ZIP of the `Main/` and `Game/` folders. */
+/** A Setup ZIP(docs/spec/formats/packaging-and-paths.md#loose-folder): a plain ZIP of the `Main/` and `Game/` folders. */
 function setupZip(files) {
   const main = files.find((file) => file.name === "main.gam");
   const project = files.filter((file) => file.name !== "main.gam");
@@ -549,13 +549,13 @@ function deflatedTpk(files) {
   return buildZip(files.map((file) => ({ name: file.name, bytes: file.bytes, deflate: true })));
 }
 
-/** A `CMP1` standalone EXE (§13.1): an engine image, the ZIP, then the 12-byte trailer. */
+/** A `CMP1` standalone EXE(docs/spec/formats/packaging-and-paths.md#loose-folder): an engine image, the ZIP, then the 12-byte trailer. */
 function cmp1Exe(zip) {
   const prefix = new Uint8Array(64).fill(0x90);
   return appendCmp1(prefix, zip);
 }
 
-/** A Toolkit 2 launcher stub: an `MZ` image with no `CMP1` trailer (§13.1, L21). */
+/** A Toolkit 2 launcher stub: an `MZ` image with no `CMP1` trailer(docs/spec/formats/packaging-and-paths.md#loose-folder, L21). */
 function tk2Stub() {
   const stub = new Uint8Array(100).fill(0x90);
   stub.set([0x4d, 0x5a], 0); // "MZ"
@@ -564,7 +564,7 @@ function tk2Stub() {
   return stub;
 }
 
-/** A self-extracting `zip.exe` shape: a PE-ish prefix followed by a ZIP, no trailer (§13.1, L21). */
+/** A self-extracting `zip.exe` shape: a PE-ish prefix followed by a ZIP, no trailer(docs/spec/formats/packaging-and-paths.md#loose-folder, L21). */
 function pePrefixedZip(zip) {
   const prefix = new Uint8Array(64).fill(0x90);
   prefix.set([0x4d, 0x5a], 0); // "MZ"

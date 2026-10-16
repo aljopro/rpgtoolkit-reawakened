@@ -1,5 +1,5 @@
-// The actor formats of format-spec §6: player characters (`.tem`, §6.1), items
-// and board NPCs (`.itm`, §6.2) and enemies (`.ene`, §6.3), plus the sample
+// The actor formats of docs/spec/formats/character.md#layout: player characters (`.tem`, items
+// and board NPCs (`.itm`, docs/spec/formats/item.md#layout and enemies (`.ene`, docs/spec/formats/enemy.md#layout, plus the sample
 // fixtures when they have been fetched (G5 rule 4: fetched, never committed).
 //
 // The readers never throw, so the tests assert on values and on the error's
@@ -38,7 +38,7 @@ function unwrap<T>(result: Result<T>): T {
   return result.value;
 }
 
-/** The stored upper bound for `count` entries (format-spec §1.2). */
+/** The stored upper bound for `count` entries (docs/spec/formats/README.md#counts-are-usually-upper-bounds). */
 function bound(count: number): number {
   return count === 0 ? -1 : count - 1;
 }
@@ -64,13 +64,13 @@ function putStrings(writer: BinaryWriter, values: readonly string[]): void {
   }
 }
 
-/** Write a bounded string list as the formats store it (an upper bound, §1.2). */
+/** Write a bounded string list as the formats store it (an upper bound, docs/spec/formats/README.md#counts-are-usually-upper-bounds. */
 function putBoundedStrings(writer: BinaryWriter, values: readonly string[]): void {
   writer.i16(bound(values.length));
   putStrings(writer, values);
 }
 
-/** Write a custom-stance block: an `i32` bound, then the pairs (§6.1–§6.3). */
+/** Write a custom-stance block: an `i32` bound, then the pairs(docs/spec/formats/character.md#layout). */
 function putStances(writer: BinaryWriter, stances: readonly ActorStance[]): void {
   writer.i32(bound(stances.length));
   for (const stance of stances) {
@@ -79,7 +79,7 @@ function putStances(writer: BinaryWriter, stances: readonly ActorStance[]): void
   }
 }
 
-/** Write the two vector bases (§6.1, §6.2): an `i16` bound, then the polygons. */
+/** Write the two vector bases(docs/spec/formats/character.md#layout, docs/spec/formats/item.md#layout: an `i16` bound, then the polygons. */
 function putBases(writer: BinaryWriter, bases: readonly ActorBase[]): void {
   writer.i16(bound(bases.length));
   for (const base of bases) {
@@ -91,7 +91,7 @@ function putBases(writer: BinaryWriter, bases: readonly ActorBase[]): void {
   }
 }
 
-/** One special-move slot as §6.1 stores it (file, minExp, minLevel, conds). */
+/** One special-move slot as docs/spec/formats/character.md#layout stores it (file, minExp, minLevel, conds). */
 interface SpecialMoveSpec {
   readonly file: string;
   readonly minExp: number;
@@ -118,7 +118,7 @@ interface CharacterSpec {
   readonly legacyGraphics?: LegacyCharacterGraphics;
 }
 
-/** Build a character buffer in the exact §6.1 field order. */
+/** Build a character buffer in the exact docs/spec/formats/character.md#layout field order. */
 function buildCharacter(spec: CharacterSpec = {}): Uint8Array {
   const minor = spec.minor ?? 8;
   const w = new BinaryWriter();
@@ -222,7 +222,7 @@ interface ItemSpec {
   readonly flags?: readonly number[];
 }
 
-/** Build an item buffer in the exact §6.2 field order. */
+/** Build an item buffer in the exact docs/spec/formats/item.md#layout field order. */
 function buildItem(spec: ItemSpec = {}): Uint8Array {
   const minor = spec.minor ?? 7;
   const wide = minor >= 3;
@@ -284,7 +284,7 @@ function buildItem(spec: ItemSpec = {}): Uint8Array {
   }
   if (minor >= 5) {
     putStrings(w, spec.idle ?? BLANK8);
-    // Items store speed before idleTime — the opposite of characters (§6.2).
+    // Items store speed before idleTime — the opposite of characters(docs/spec/formats/item.md#layout).
     w.f64(spec.speed ?? 0.1);
     w.f64(spec.idleTime ?? 3);
   }
@@ -314,7 +314,7 @@ interface EnemySpec {
   readonly customAi?: number;
 }
 
-/** Build an enemy buffer in the exact §6.3 field order. */
+/** Build an enemy buffer in the exact docs/spec/formats/enemy.md#layout field order. */
 function buildEnemy(spec: EnemySpec = {}): Uint8Array {
   const w = new BinaryWriter();
   w.str(spec.magic ?? "RPGTLKIT ENEMY");
@@ -393,7 +393,7 @@ function withTrailing(bytes: Uint8Array, extra: readonly number[]): Uint8Array {
   return out;
 }
 
-// --- §6.1 character, the vector-bases upper bound ---------------------------
+// --- docs/spec/formats/character.md#layout character, the vector-bases upper bound ---------------------------
 
 test("character: the vector-bases field is an upper bound (stored 1 means 2 bases)", () => {
   const collision = rect(-15, -15, 15, 0);
@@ -417,7 +417,7 @@ test("character: the vector-bases field is an upper bound (stored 1 means 2 base
   equal(none.vectorBases?.length, 0, "a stored -1 means no bases");
 });
 
-// --- §6.1 character, the seven body slots -----------------------------------
+// --- docs/spec/formats/character.md#layout character, the seven body slots -----------------------------------
 
 test("character: seven body slots, byte 0 is padding", () => {
   const bytes = buildCharacter({ bodySlots: [0, 1, 1, 0, 1, 0, 1] });
@@ -431,11 +431,11 @@ test("character: seven body slots, byte 0 is padding", () => {
   equal(BODY_SLOT_NAMES[0], "padding");
 });
 
-// --- §6.1 vs §6.2, the speed/idleTime order ---------------------------------
+// --- docs/spec/formats/character.md#layout vs docs/spec/formats/item.md#layout, the speed/idleTime order ---------------------------------
 
 test("character stores idleTime then speed; item stores speed then idleTime", () => {
   // The two values are deliberately distinguishable, and the opposite order in
-  // items (§6.2) means a reader that used one order for both would swap them.
+  // items(docs/spec/formats/item.md#layout) means a reader that used one order for both would swap them.
   const character = unwrap(readCharacter(new BinaryReader(buildCharacter({ idleTime: 3, speed: 0.05 }))));
   equal(character.idleTime, 3);
   equal(character.speed, 0.05);
@@ -445,7 +445,7 @@ test("character stores idleTime then speed; item stores speed then idleTime", ()
   equal(item.idleTime, 3);
 });
 
-// --- §6.2 item, custom-stance placement -------------------------------------
+// --- docs/spec/formats/item.md#layout item, custom-stance placement -------------------------------------
 
 test("item: custom stances follow the movement strings at minor 4 and idle+speed at minor 5", () => {
   const movement = ["m_s", "m_n", "m_e", "m_w", "", "", "", ""];
@@ -475,7 +475,7 @@ test("item: custom stances follow the movement strings at minor 4 and idle+speed
   deepEqual(unwrap(writeItem(item5)), bytes5, "byte-identical round-trip");
 });
 
-// --- §6.3 enemy, six stance slots and the i32 custom-stance bound -----------
+// --- docs/spec/formats/enemy.md#layout enemy, six stance slots and the i32 custom-stance bound -----------
 
 test("enemy: the stance bound 5 yields six slots and the custom-stance bound is i32", () => {
   const stances = ["rest", "fight", "defend", "special", "die", ""];
@@ -554,14 +554,14 @@ test("every synthetic actor buffer round-trips byte for byte", () => {
   }
 });
 
-// --- §6.1 the 201 special-move slots ----------------------------------------
+// --- docs/spec/formats/character.md#layout the 201 special-move slots ----------------------------------------
 
 test("character: the 201 special-move slots keep their five-field order", () => {
   // A slot is one record — `str file, i32 minExp, i32 minLevel, str condVar,
   // str condValue` — not a files-only block followed by a conditions-only
   // block. An all-empty slot has the same byte length either way, so the value
   // below is what distinguishes the orders: a writer that split the two blocks
-  // re-emits a different byte sequence (§6.1, readSpecialMove).
+  // re-emits a different byte sequence(docs/spec/formats/character.md#layout, readSpecialMove).
   const slot = { file: "sm/fire.spc", minExp: 120, minLevel: 7, condVar: "hasFire$", condValue: "yes" };
   const bytes = buildCharacter({ specialMoves: [slot] });
   const reader = new BinaryReader(bytes);
@@ -742,8 +742,8 @@ test("each actor format accepts the ends of its minor range", () => {
 });
 
 test("an unsupported minor is a located error on the minor field", () => {
-  // One above each accepted range's top: 9 > 8 (§6.1), 8 > 7 (§6.2) and the
-  // only binary enemy minor is 1 (§6.3). An enemy at minor 0 is a binary
+  // One above each accepted range's top: 9 > 8(docs/spec/formats/character.md#layout), 8 > 7(docs/spec/formats/item.md#layout) and the
+  // only binary enemy minor is 1(docs/spec/formats/enemy.md#layout). An enemy at minor 0 is a binary
   // 2.0-form file (byte 14 is 0), so it too is refused on the version.
   const above: readonly [string, number, Uint8Array, string][] = [
     ["character", 16, buildCharacter({ minor: 9 }), CHARACTER_SECTION],
@@ -765,7 +765,7 @@ test("an unsupported minor is a located error on the minor field", () => {
   }
 });
 
-test("a negative minor is refused at its own byte in each actor format (§1.4)", () => {
+test("a negative minor is refused at its own byte in each actor format", () => {
   const cases: readonly [string, number, Uint8Array][] = [
     ["character", 16, buildCharacter({ minor: -1 })],
     ["item", 16, buildItem({ minor: -1 })],
@@ -779,7 +779,7 @@ test("a negative minor is refused at its own byte in each actor format (§1.4)",
   for (const [name, offset, bytes] of cases) {
     const error = readError(bytes, readers[name]!);
     equal(error.offset, offset, `${name} minor field`);
-    equal(error.section, "format-spec §1.4", `${name} negative minor section`);
+    equal(error.section, "docs/spec/formats/README.md#header-and-version", `${name} negative minor section`);
   }
 });
 
@@ -801,12 +801,12 @@ test("a truncated file is a located error, never a throw", () => {
   const full = buildCharacter();
   const stub = readError(full.slice(0, 6), readCharacter);
   equal(stub.offset, 0, "the magic string is unterminated");
-  equal(stub.section, "format-spec §1.1");
+  equal(stub.section, "docs/spec/formats/README.md#primitive-encoding");
 
   // Truncated in the middle of the fixed 9-name block: the reader stops on the
   // first missing NUL rather than running past the end.
   const short = readError(full.slice(0, 20), readCharacter);
-  equal(short.section, "format-spec §1.1");
+  equal(short.section, "docs/spec/formats/README.md#primitive-encoding");
 });
 
 test("the writers report an unencodable string and a wrong fixed-block length", () => {

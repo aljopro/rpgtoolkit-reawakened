@@ -2,8 +2,8 @@
  * The script VM's public surface (AD-22: the harness reaches it through
  * `@tk-reawakened/core` only).
  *
- * docs/adr/0004 (the AST, Step IR and plugin chain); format-spec §9.2/§9.5/
- * §9.15.
+ * docs/adr/0004 (the AST, Step IR and plugin chain); docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands/
+ * docs/spec/engine/rpgcode-runtime.md.
  */
 
 export { ScriptError } from "./errors.ts";

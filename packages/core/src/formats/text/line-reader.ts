@@ -1,5 +1,5 @@
 /**
- * Line-based text reader for Toolkit 1 and 2 text files (format-spec §15,
+ * Line-based text reader for Toolkit 1 and 2 text files (docs/spec/formats/legacy/text-formats.md,
  * docs/spec/formats/legacy/text-formats.md).
  *
  * Scans Windows-1252 ANSI bytes line by line, handling CRLF (\r\n), LF (\n),

@@ -1,17 +1,17 @@
 /**
- * Converting a pre-vector board to the vector board model (format-spec §4.8
- * conversion rules, over the layout of §4.8 and the coordinates of §5).
+ * Converting a pre-vector board to the vector board model ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)
+ * conversion rules, over the layout and coordinates described by [coordinates](../../../../../../docs/spec/formats/board.md#coordinates)).
  *
  * Pure and deterministic (G2, G3): it is a function of the `PreVectorBoard`
  * the reader returned, with no clock, randomness or host access, so the same
  * bytes always convert to the identical `Board`.
  *
- * §4.8's "Conversion rules" pin the geometry per tile type; the shapes here
- * are the ones §5 (tile → pixel) and §4.6 (tile size) give: an axis-aligned
- * 32×32 cell in 2D, a 64×32 diamond for an iso-stacked board. §4.8 leaves
- * iso-rotated boards unspecified, so they are refused with a located error,
+ * The pre-vector layout's "Conversion rules" pin the geometry per tile type; the shapes here
+ * are the ones [coordinates](../../../../../../docs/spec/formats/board.md#coordinates) (tile → pixel) and the board's 32×32 tile size give: an axis-aligned
+ * 32×32 cell in 2D, a 64×32 diamond for an iso-stacked board. The pre-vector
+ * layout leaves iso-rotated boards unspecified, so they are refused with a located error,
  * and it generates no vector base for the sprites (the bases come from each
- * sprite's own actor file, §6).
+ * sprite's own actor file, docs/spec/formats/character.md#layout.
  */
 
 import { err, ok, type Result } from "../result.ts";
@@ -30,55 +30,55 @@ import {
 } from "./model.ts";
 import { PRE_VECTOR_SECTION, type PreVectorBoard } from "./pre-vector-reader.ts";
 
-/** The vector type for a solid / passage blocking edge (format-spec §4.4). */
+/** The vector type for a solid / passage blocking edge ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 export const TT_SOLID = 1;
 
-/** The vector type for an under tile (format-spec §4.4). */
+/** The vector type for an under tile ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 export const TT_UNDER = 2;
 
-/** The vector type for a stair (format-spec §4.4). */
+/** The vector type for a stair ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 export const TT_STAIRS = 8;
 
-/** The under attribute that includes the board background image (format-spec §4.4). */
+/** The under attribute that includes the board background image ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 export const TA_BRD_BACKGROUND = 1;
 
-/** The program activation flag that stops the player's movement (format-spec §4.4). */
+/** The program activation flag that stops the player's movement ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 export const PRG_STOPS_MOVEMENT = 4;
 
-/** The legacy tile type for a solid tile (format-spec §4.7). */
+/** The legacy tile type for a solid tile ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 const TILE_SOLID = 1;
 
-/** The legacy tile type for an under tile (format-spec §4.7). */
+/** The legacy tile type for an under tile ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 const TILE_UNDER = 2;
 
-/** The legacy tile type for a north–south passage (format-spec §4.7). */
+/** The legacy tile type for a north–south passage ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 const TILE_PASSAGE_NS = 3;
 
-/** The legacy tile type for an east–west passage (format-spec §4.7). */
+/** The legacy tile type for an east–west passage ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 const TILE_PASSAGE_EW = 4;
 
-/** The first legacy stair tile type; 11…18 mean layers 1…8 (format-spec §4.7). */
+/** The first legacy stair tile type; 11…18 mean layers 1…8 ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 const TILE_STAIRS_FIRST = 11;
 
-/** The last legacy stair tile type (format-spec §4.7). */
+/** The last legacy stair tile type ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 const TILE_STAIRS_LAST = 18;
 
 /**
- * The `coordType` bit for pixel-absolute object coordinates (format-spec §5):
+ * The `coordType` bit for pixel-absolute object coordinates ([coordinates](../../../../../../docs/spec/formats/board.md#coordinates)):
  * a flag combinable with 0 (2D), 1 (iso stacked) or 2 (iso rotated), so it is
  * masked off before the coordinate-style check and passed through unchanged.
  */
 const COORD_PX_ABSOLUTE = 4;
 
 /**
- * The most cells one stored tile run marker may cover (format-spec §4.2): a
+ * The most cells one stored tile run marker may cover ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)): a
  * marker holds the negated count in an `i16`, so a longer uniform stretch is
  * split into several markers that still re-read cell for cell.
  */
 const MAX_TILE_RUN = 32768;
 
 /**
- * The most cells one shade record may cover (format-spec §4.2): the writer
+ * The most cells one shade record may cover ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)): the writer
  * stores `runCount` as an `i16`, so a longer uniform shade is split at 32767.
  */
 const MAX_SHADE_RUN = 32767;
@@ -89,9 +89,9 @@ function fail(message: string): Result<never> {
 }
 
 /**
- * The tile-top-left → pixel mapping of §5, with the base point already added
+ * The tile-top-left → pixel mapping ([coordinates](../../../../../../docs/spec/formats/board.md#coordinates)), with the base point already added
  * (2D +16,+31; the iso systems +0,+0, where the result is the tile centre).
- * §4.8 sends positions through this and §4.2 stores the result in pixels.
+ * The pre-vector layout sends positions through this and the vector layout stores the result in pixels.
  */
 function tilePixel(x: number, y: number, sizeX: number, coordType: number): BoardPoint {
   if ((coordType & COORD_ISO_ROTATED) !== 0) {
@@ -106,8 +106,8 @@ function tilePixel(x: number, y: number, sizeX: number, coordType: number): Boar
 /**
  * The closed pixel polygon of the horizontal run of tiles `x…xEnd` at row `y`
  * on a 2D board, in the winding order (top-left, top-right, bottom-right,
- * bottom-left). §4.8's program rectangle `((x−1)·32, (y−1)·32)`–`(x·32, y·32)`
- * is the single-tile case (`xEnd === x`), and §5 fixes the 32×32 extent.
+ * bottom-left). The pre-vector layout's program rectangle `((x−1)·32, (y−1)·32)`–`(x·32, y·32)`
+ * is the single-tile case (`xEnd === x`), and [coordinates](../../../../../../docs/spec/formats/board.md#coordinates) fixes the 32×32 extent.
  */
 function tileCellRect(x: number, y: number, xEnd: number): BoardPoint[] {
   const left = (x - 1) * 32;
@@ -124,9 +124,9 @@ function tileCellRect(x: number, y: number, xEnd: number): BoardPoint[] {
 
 /**
  * The closed 64×32 diamond centred on a tile of an iso-stacked board, in the
- * order (top, right, bottom, left). §4.8 asks for exactly this shape for a
- * program region; §4.6 plus the §5 stacked mapping, whose base point is the
- * tile centre, give the same cell for a tile vector.
+ * order (top, right, bottom, left). The pre-vector layout asks for this shape for a
+ * program region; the board's 32×32 tile extent ([coordinates](../../../../../../docs/spec/formats/board.md#coordinates)) plus the stacked mapping,
+ * whose base point is the tile centre, give the same cell for a tile vector.
  */
 function tileDiamond(x: number, y: number, sizeX: number): BoardPoint[] {
   const centre = tilePixel(x, y, sizeX, 1);
@@ -139,9 +139,9 @@ function tileDiamond(x: number, y: number, sizeX: number): BoardPoint[] {
 }
 
 /**
- * The two open blocking-edge polylines of a passage tile (§4.8): a north–south
+ * The two open blocking-edge polylines of a passage tile ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)): a north–south
  * passage blocks its **west and east** edges, an east–west passage blocks its
- * **north and south** edges, as §4.8's "Tile type vectorization" bullet rules;
+ * **north and south** edges, as the "Tile type vectorization" bullet rules;
  * the polylines are open (`closed = 0`) and passages are never merged.
  */
 function passageEdges(type: number, x: number, y: number, layer: number, board: PreVectorBoard): BoardVector[] {
@@ -188,16 +188,16 @@ function passageEdges(type: number, x: number, y: number, layer: number, board: 
 }
 
 /**
- * Merge the per-tile types of §4.8 into vectors (§4.8 "tile type
- * vectorization"): solid tiles become closed polygons, under tiles closed
+ * Merge the per-tile types of the pre-vector layout into vectors (its "Tile type
+ * vectorization" rule): solid tiles become closed polygons, under tiles closed
  * polygons with the background attribute, passages open polylines along their
  * blocking edges, and stairs closed polygons carrying the target layer.
  *
- * Per §4.8's "Merge" bullet, a 2D board merges each **maximal horizontal run
+ * Per the pre-vector layout's "Merge" rule, a 2D board merges each **maximal horizontal run
  * of one type within one layer** into one polygon; an iso-stacked board emits
  * one diamond per tile, because the horizontal-run rule has no diamond
- * analogue. Tile types §4.7 does not list (5…10 and values above 18) emit
- * nothing rather than an invented shape.
+ * analogue. Unlisted tile types (5…10 and values above 18) emit nothing
+ * rather than an invented shape.
  */
 function buildTileVectors(board: PreVectorBoard): BoardVector[] {
   const vectors: BoardVector[] = [];
@@ -247,7 +247,7 @@ function buildTileVectors(board: PreVectorBoard): BoardVector[] {
 }
 
 /**
- * The stored run-length encoding of an index matrix (§4.2), built from the
+ * The stored run-length encoding of an index matrix ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)), built from the
  * expanded cells: maximal runs of one index, a bare index when a run is one
  * cell. Kept so the converted board's writer is byte-stable (AD-18).
  */
@@ -282,7 +282,7 @@ function encodeTileRuns(indices: readonly number[]): BoardTileRun[] {
  * layer is the highest layer that carried any non-zero tint anywhere on the
  * board, and a board whose cells are all unshaded gets no shade layer.
  *
- * Citation: `docs/spec/formats/legacy/older-binary-versions.md#shading--reawakened-rule-r-02`.
+ * Citation: `docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector`.
  * This withdraws the entry 2.15 rule, which summed every layer's tint
  * unclamped (so a cell shaded `+255` on two layers became `+510`); the sums
  * were a guess made for lack of facts.
@@ -335,13 +335,13 @@ function buildShadeLayers(board: PreVectorBoard): BoardShadeLayer[] {
   return [{ castLayer, records }];
 }
 
-/** Strip a legacy VB type-declaration suffix (`!` or `$`) from a variable name (§4.8). */
+/** Strip a legacy VB type-declaration suffix (`!` or `$`) from a variable name ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)). */
 function stripLegacySuffix(name: string): string {
   const last = name.slice(-1);
   return last === "!" || last === "$" ? name.slice(0, -1) : name;
 }
 
-/** The additive ambience for an ambient preset of §4.8 (0 none, 1 mist, 2 dark, 3 water). */
+/** The additive ambience for an ambient preset of the pre-vector layout (0 none, 1 mist, 2 dark, 3 water). */
 function ambientFromPreset(preset: number, warnings: string[]): BoardRgb {
   if (preset === 1) {
     return { r: 75, g: 75, b: 75 };
@@ -353,14 +353,14 @@ function ambientFromPreset(preset: number, warnings: string[]): BoardRgb {
     return { r: 0, g: 0, b: 75 };
   }
   if (preset !== 0) {
-    warnings.push(`unknown ambient preset ${preset}; converted as none (format-spec §4.8)`);
+    warnings.push(`unknown ambient preset ${preset}; converted as none (see [pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector))`);
   }
   return { r: 0, g: 0, b: 0 };
 }
 
 /**
- * Convert a pre-vector board to the vector board model of §4.2, applying the
- * §4.8 conversion rules: per-tile-type vectorization, program trigger regions,
+ * Convert a pre-vector board to the vector board model ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)), applying the
+ * conversion rules of the [pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector): per-tile-type vectorization, program trigger regions,
  * shading flattened into layer 0, and tile → pixel positions for the start
  * point and the sprites. The result's minor is 4 and its `coordType` is the
  * source's.
@@ -370,20 +370,20 @@ function ambientFromPreset(preset: number, warnings: string[]): BoardRgb {
  * because the 3.1 editor's conversion compacts both lists — the reader still
  * keeps every stored slot), and the start's fallback is **per axis** (R-07:
  * `startX ≤ 0 → 64`, `startY ≤ 0 → 64`, `startL ≤ 0 → 1`). A shading rule
- * (R-02) withdraws entry 2.15's unclamped sum — see `buildShadeLayers`. §4.8
- * "Default vector bases" makes this conversion generate no base — a sprite's
- * collision and activation bases come from its own `.itm`/`.tem` (§6).
+ * (R-02) withdraws entry 2.15's unclamped sum — see `buildShadeLayers`. The
+ * "Default vector bases" rule makes this conversion generate no base — a
+ * sprite's collision and activation bases come from its own `.itm`/`.tem`.
  */
 export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
   const coordStyle = board.coordType & ~COORD_PX_ABSOLUTE;
   if (coordStyle !== 0 && coordStyle !== 1 && coordStyle !== COORD_ISO_ROTATED) {
     return fail(
-      `coordType ${board.coordType} is not one of §4.8's 0 (2D), 1 (iso stacked) or 2 (iso rotated), optionally combined with §5's 4 (pixel absolute)`,
+      `coordType ${board.coordType} is not one of docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector's 0 (2D), 1 (iso stacked) or 2 (iso rotated), optionally combined with docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector's 4 (pixel absolute)`,
     );
   }
   if ((board.coordType & COORD_ISO_ROTATED) !== 0) {
     return fail(
-      "iso-rotated pre-vector boards cannot be converted: §4.8 records no mapping from the sizeX×sizeY pre-vector tile matrix onto §4.2's (sizeX+sizeY)² rotated grid and gives no rotated program region",
+      "iso-rotated pre-vector boards cannot be converted: docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector records no mapping from the sizeX×sizeY pre-vector tile matrix onto docs/spec/formats/board.md#vector-layout-minor-4-and-later's (sizeX+sizeY)² rotated grid and gives no rotated program region",
     );
   }
   if (board.sizeX < 0 || board.sizeY < 0 || board.sizeL < 0) {
@@ -407,7 +407,7 @@ export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
 
   const iso = (board.coordType & 1) !== 0;
   // Empty program and item slots — Reawakened rule (R-05)
-  // (docs/spec/formats/legacy/older-binary-versions.md#empty-slots--reawakened-rule-r-05):
+  // (docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector):
   // the converter compacts both lists, dropping empty slots so no index gap or
   // invented geometry survives — an empty program slot would otherwise carry no
   // region (`points: []`, `closed: 0`) and an empty item slot position (0, 0).
@@ -458,9 +458,9 @@ export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
     });
 
   // The start falls back **per axis** — Reawakened rule (R-07)
-  // (docs/spec/formats/legacy/older-binary-versions.md#positions--reawakened-rule-r-07-per-axis):
+  // (docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector):
   // `startX ≤ 0 → x 64`, `startY ≤ 0 → y 64`, `startL ≤ 0 → layer 1`, each
-  // independent of the others, so one bad axis does not discard the other's §5
+  // independent of the others, so one bad axis does not discard the other's docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector
   // mapping. The start is the only field with a fallback; a sprite or program at
   // a non-positive tile converts with no special case.
   const startPixel = tilePixel(board.startX, board.startY, board.sizeX, board.coordType);

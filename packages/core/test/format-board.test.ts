@@ -1,4 +1,4 @@
-// The vector board format of format-spec §4.1 (version dispatch) and §4.2
+// The vector board format of docs/spec/formats/board.md#version-dispatch (version dispatch)
 // (layout, AD-18): dimensions and coordinate type, the tile lookup table, the
 // run-length tile matrix, shading, lights, vectors, programs, sprites, images,
 // threads, constants, layer titles, the four edge links and the trailing
@@ -34,14 +34,14 @@ function unwrap<T>(result: Result<T>): T {
   return result.value;
 }
 
-/** The stored upper bound for `count` entries (format-spec §1.2). */
+/** The stored upper bound for `count` entries (docs/spec/formats/README.md#counts-are-usually-upper-bounds). */
 function bound(count: number): number {
   return count === 0 ? -1 : count - 1;
 }
 
 const BLACK: Colorref = { r: 0, g: 0, b: 0 };
 
-/** One vector as the builder writes it (format-spec §4.2). */
+/** One vector as the builder writes it (docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 interface VectorSpec {
   readonly points: readonly (readonly [number, number])[];
   readonly attributes: number;
@@ -51,7 +51,7 @@ interface VectorSpec {
   readonly handle: string;
 }
 
-/** One program as the builder writes it (format-spec §4.2). */
+/** One program as the builder writes it (docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 interface ProgramSpec {
   readonly program: string;
   readonly graphic: string;
@@ -68,7 +68,7 @@ interface ProgramSpec {
   readonly handle: string;
 }
 
-/** One sprite as the builder writes it (format-spec §4.2). */
+/** One sprite as the builder writes it (docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 interface SpriteSpec {
   readonly itemFile: string;
   readonly activationPrg: string;
@@ -87,14 +87,14 @@ interface SpriteSpec {
   readonly reserved: number;
 }
 
-/** One shading layer as the builder writes it (format-spec §4.2). */
+/** One shading layer as the builder writes it (docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 interface ShadeSpec {
   readonly castLayer: number;
   /** `runCount, r, g, b` per record; `runCount` 0 or 1 covers one cell. */
   readonly records: readonly (readonly [number, number, number, number])[];
 }
 
-/** One precomputed light as the builder writes it (format-spec §4.2). */
+/** One precomputed light as the builder writes it (docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 interface LightSpec {
   readonly layer: number;
   /** 0 = elliptical spotlight, 1 = linear gradient, 2 = clipped gradient. */
@@ -103,7 +103,7 @@ interface LightSpec {
   readonly colours: readonly BoardRgb[];
 }
 
-/** One free image as the builder writes it (format-spec §4.2). */
+/** One free image as the builder writes it (docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 interface ImageSpec {
   readonly file: string;
   readonly left: number;
@@ -155,7 +155,7 @@ interface BuildOptions {
   readonly tail?: readonly number[];
 }
 
-/** Serialise a synthetic vector board in the §4.2 order. */
+/** Serialise a synthetic vector board in the docs/spec/formats/board.md#vector-layout-minor-4-and-later order. */
 function buildBoard(options: BuildOptions = {}): Uint8Array {
   const sizeX = options.sizeX ?? 2;
   const sizeY = options.sizeY ?? 2;
@@ -353,7 +353,7 @@ test("reads the header, the dimensions and the reserved LUT index 0", () => {
 });
 
 test("a board with lutUpperBound -1 has no LUT at all, and one below -1 is refused", () => {
-  // -1 means the table is absent: no entries and therefore no index 0 (§1.2, §4.2).
+  // -1 means the table is absent: no entries and therefore no index 0(docs/spec/formats/README.md#counts-are-usually-upper-bounds, docs/spec/formats/board.md#vector-layout-minor-4-and-later.
   const absent = buildBoard({ lutBound: -1, lut: [] });
   const none = unwrap(readBoard(new BinaryReader(absent)));
   deepEqual(none.lut, [], "an absent LUT has no index 0");
@@ -365,14 +365,14 @@ test("a board with lutUpperBound -1 has no LUT at all, and one below -1 is refus
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §1.2");
+  equal(result.error.section, "docs/spec/formats/README.md#counts-are-usually-upper-bounds");
   equal(result.error.offset, 27, "the LUT upper bound's first byte");
 });
 
 test("only the rotated style (bit 2) expands the tile grid; bits 1 and 4 keep sizeX by sizeY", () => {
   // coordType bit 1 (ISO_STACKED) is isometric yet stores sizeX × sizeY per
   // layer; bit 2 (ISO_ROTATED) alone expands it to (sizeX + sizeY)² per layer;
-  // bit 4 (pixel-absolute) changes neither, alone or combined (§4.2, §5, §14).
+  // bit 4 (pixel-absolute) changes neither, alone or combined(docs/spec/formats/board.md#vector-layout-minor-4-and-later, docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector, docs/spec/formats/README.md#cross-format-test-checklist.
   const cases: readonly [string, number, number, readonly number[]][] = [
     ["2D (bit 0 none)", 0, 6, [-6, 1]],
     ["iso stacked (bit 1)", 1, 6, [-6, 1]],
@@ -639,7 +639,7 @@ test("refuses a wrong magic at offset 0", () => {
   equal(result.error.message.includes("RPGTLKIT WRONG"), true, result.error.message);
 });
 
-test("refuses minors 2 and 3 with a pointer to §4.8", () => {
+test("refuses minors 2 and 3 with a pointer to pre-vector", () => {
   for (const minor of [2, 3]) {
     const bytes = buildBoard({ minor });
     const result = readBoard(new BinaryReader(bytes));
@@ -650,7 +650,7 @@ test("refuses minors 2 and 3 with a pointer to §4.8", () => {
     // magic (15 bytes) + major (2) = the minor field starts at 17.
     equal(result.error.offset, 17);
     equal(result.error.section, BOARD_SECTION);
-    equal(result.error.message.includes("§4.8"), true, result.error.message);
+    equal(result.error.message.includes("docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector"), true, result.error.message);
     equal(result.error.message.includes("pre-vector"), true, result.error.message);
   }
 });
@@ -675,7 +675,7 @@ test("refuses a negative minor version", () => {
     return;
   }
   equal(result.error.offset, 17);
-  equal(result.error.section, "format-spec §1.4");
+  equal(result.error.section, "docs/spec/formats/README.md#header-and-version");
 });
 
 test("refuses a negative sizeX, sizeY or sizeL", () => {
@@ -690,7 +690,7 @@ test("refuses a negative sizeX, sizeY or sizeL", () => {
     if (result.ok) {
       continue;
     }
-    equal(result.error.section, "format-spec §4.2");
+    equal(result.error.section, "docs/spec/formats/board.md#vector-layout-minor-4-and-later");
     equal(result.error.offset, 19, "the sizeX field");
   }
 });
@@ -706,7 +706,7 @@ test("a truncated file reports the field's offset", () => {
     return;
   }
   equal(result.error.offset, 19);
-  equal(result.error.section, "format-spec §1.1");
+  equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
 });
 
 test("a file too short for the detection byte reports the header read", () => {
@@ -716,7 +716,7 @@ test("a file too short for the detection byte reports the header read", () => {
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §1.1");
+  equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
 });
 
 test("refuses a run marker followed by a negative LUT index", () => {
@@ -726,7 +726,7 @@ test("refuses a run marker followed by a negative LUT index", () => {
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §4.2");
+  equal(result.error.section, "docs/spec/formats/board.md#vector-layout-minor-4-and-later");
 });
 
 test("round-trips a board with every section populated", () => {
@@ -807,7 +807,7 @@ test("refuses a tile matrix that disagrees with the stored runs", () => {
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §4.2");
+  equal(result.error.section, "docs/spec/formats/board.md#vector-layout-minor-4-and-later");
   equal(result.error.message.includes("tile cell 2"), true, result.error.message);
 });
 
@@ -823,7 +823,7 @@ test("refuses tile runs that cover fewer cells than the grid", () => {
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §4.2");
+  equal(result.error.section, "docs/spec/formats/board.md#vector-layout-minor-4-and-later");
 });
 
 test("refuses a run that follows the run completing the grid", () => {
@@ -841,7 +841,7 @@ test("refuses a run that follows the run completing the grid", () => {
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §4.2");
+  equal(result.error.section, "docs/spec/formats/board.md#vector-layout-minor-4-and-later");
 });
 
 test("keeps a final run that overshoots the grid and writes it back", () => {
@@ -866,7 +866,7 @@ test("refuses a board whose tile matrix would exceed the cell limit", () => {
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §4.2");
+  equal(result.error.section, "docs/spec/formats/board.md#vector-layout-minor-4-and-later");
   equal(result.error.offset, 19, "the sizeX field");
 });
 
@@ -884,7 +884,7 @@ test("accepts a board of exactly BOARD_MAX_CELLS cells built from 128 maximum ru
 test("refuses a model whose tile matrix would exceed the cell limit", () => {
   const model = unwrap(readBoard(new BinaryReader(buildBoard({}))));
   // 2048 × 2064 × 1 = 4227072 cells — 32768 over the limit — and 129 maximum
-  // runs (129 × 32768 = 4227072) cover it exactly, so only the §4.2 limit can
+  // runs (129 × 32768 = 4227072) cover it exactly, so only the docs/spec/formats/board.md#vector-layout-minor-4-and-later limit can
   // refuse this model; every other guard would accept it.
   equal(2048 * 2064, 129 * 32_768, "the runs cover the over-limit grid exactly");
   const tileMatrix = new Array<number>(129 * 32_768).fill(1);
@@ -894,16 +894,16 @@ test("refuses a model whose tile matrix would exceed the cell limit", () => {
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §4.2");
+  equal(result.error.section, "docs/spec/formats/board.md#vector-layout-minor-4-and-later");
 });
 
-test("refuses a model with a value the §4.2 layout cannot store", () => {
+test("refuses a model with a value the vector layout cannot store", () => {
   const model = unwrap(readBoard(new BinaryReader(buildBoard({}))));
 
   const wideDimension = writeBoard({ ...model, sizeX: 40_000 });
   equal(wideDimension.ok, false, "an i16-overflowing sizeX");
   if (!wideDimension.ok) {
-    equal(wideDimension.error.section, "format-spec §4.2");
+    equal(wideDimension.error.section, "docs/spec/formats/board.md#vector-layout-minor-4-and-later");
   }
 
   const tooManyLayers = writeBoard({
@@ -916,7 +916,7 @@ test("refuses a model with a value the §4.2 layout cannot store", () => {
   equal(wrongMagic.ok, false, "a magic the reader refuses");
 
   const oldMinor = writeBoard({ ...model, minor: 3 });
-  equal(oldMinor.ok, false, "a minor that dispatches to §4.8");
+  equal(oldMinor.ok, false, "a minor that dispatches to docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector");
 });
 
 // --- Sample fixtures (guard-rail G5 rule 4: fetched, never committed) --------
@@ -936,7 +936,7 @@ const sampleBoards = [
   ...collectBoards(join(repoRoot, "fixtures", "legacy", "Basic")),
 ];
 
-/** The observations the three shipped sample boards pin (format-spec §4.2). */
+/** The observations the three shipped sample boards pin (docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 const observed: readonly {
   readonly suffix: string;
   readonly coordType: number;
@@ -959,7 +959,7 @@ test(
       const result = readBoard(reader);
       const model = unwrap(result);
       // The reader absorbs trailing bytes into `residue` with this warning, so
-      // `remaining === 0` alone would hold even if the §4.2 layout stopped
+      // `remaining === 0` alone would hold even if the docs/spec/formats/board.md#vector-layout-minor-4-and-later layout stopped
       // matching the bytes. Asserting empty residue makes a layout drift — a
       // field read at the wrong width, a missing section — fail here instead.
       equal(reader.remaining, 0, `${path}: trailing bytes`);
