@@ -3,7 +3,7 @@ title: 'Effect records and generic command stubs: every catalogue name responds'
 type: 'feature'
 ticket: 21
 created: '2026-10-15'
-status: 'ready-for-dev'
+status: built
 baseline_revision: '43189ac35038e110f4265fd4e8e93342b575dedf'
 route: 'full'
 route_source: 'auto'
@@ -180,7 +180,7 @@ context:
 ## Plan Change Log
 
 - 2026-10-15 — Initial plan authored for Ticket 3.21. Reconciled 170 vs 176 stub counts; defined 11-field `EffectRecord` and `EffectPatch`; established schema v2 bump with v1 restore migration; designed parameter notation parser generator; established clean cutover removing temporary U1 sink.
-
+- 2026-10-15 — Implementation update: Reconciled schema bump to vm: 2 → 3 (ticket 3.5 previously bumped vm to 2 for operand stack); fixture updated to `v2-vm.json` with v2 → v3 restore migration.
 ## Design Notes
 
 - **Why a codegen tool (`tools/catalogue/generate.mjs`) instead of hand-authoring 176 stubs:** Hand-authoring 176 command specifications with parameter specs, aliases, and kinds across 900+ lines of TypeScript introduces severe human transcription risk and drifts easily when entry 27 updates catalogue definitions. The generator is hermetic, fast, tested with unit tests against all 88 notation variants, emits deterministic committed TypeScript, and provides `--check` in CI to guarantee that `packages/core/src/script/catalogue-stubs.ts` never desynchronizes from `command-effect-catalogue.json`.

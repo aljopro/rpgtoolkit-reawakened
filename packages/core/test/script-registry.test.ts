@@ -1,8 +1,8 @@
 // The plugin registry and the functional command contract (AD-8; ADR 0004
 // decisions 2 and 6): layer order with `next`, the override and no-next
 // warnings, the one rejection, the four tiers, by-ref write-back through a
-// program and a restored snapshot, purity, the effects sink and the refusal of
-// a `request` before entry 9.
+// program and a restored snapshot, purity, the stamped effect log and the
+// refusal of a `request` before entry 9.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -18,7 +18,6 @@ import {
   TIER_ORDER,
   type Arg,
   type BuiltinSpec,
-  type CommandEffect,
   type CommandView,
   type GameState,
   type LogRecord,
@@ -231,7 +230,7 @@ test("a command that uses neither port is pure over the same view and args", () 
     name: "pure",
     aliases: [],
     params: [{ name: "a", optional: false, byRef: true, variadic: false }],
-    call: () => ({ value: 2, out: [[0, 4]], effects: [{ kind: "nothing", args: [1, "a"] }] }),
+    call: () => ({ value: 2, out: [[0, 4]], effects: [{ kind: "pure", args: [1, "a"] }] }),
   };
   const { logger } = collectingLogger();
   const registry = assembleCommands([pack("test.pure", [pure])], logger);
@@ -241,7 +240,7 @@ test("a command that uses neither port is pure over the same view and args", () 
   const first = resolved.spec.call(view, args, resolved.next);
   const second = resolved.spec.call(view, args, resolved.next);
   deepEqual(first, second);
-  deepEqual(first, { value: 2, out: [[0, 4]], effects: [{ kind: "nothing", args: [1, "a"] }] });
+  deepEqual(first, { value: 2, out: [[0, 4]], effects: [{ kind: "pure", args: [1, "a"] }] });
   equal(draws, 0);
   equal(ticks, 0);
   deepEqual(args, [{ value: 5, ref: null }]);
@@ -267,23 +266,35 @@ test("a by-ref out writes the caller's variable, including from a snapshot taken
   equal(canon(restored), canon(state));
 });
 
-test("the VM drains a command's effects to the sink without touching the state shape", () => {
+test("the VM stamps a command's effects into the vm section's effect log", () => {
   const shout: BuiltinSpec = {
     name: "shout",
     aliases: [],
     params: [],
-    call: () => ({ value: null, effects: [{ kind: "dialogue", args: ["hi", 2] }] }),
+    call: () => ({ value: null, effects: [{ kind: "state-write", section: "ui" }] }),
   };
   const plugins = [pack("test.shout", [shout])];
-  const drained: CommandEffect[] = [];
 
   const state = makeState("shout()\n");
-  advanceScriptTick(state, createScriptServices(state, plugins, undefined, (effect) => {
-    drained.push(effect);
-  }));
+  advanceScriptTick(state, createScriptServices(state, plugins));
 
-  deepEqual(drained, [{ kind: "dialogue", args: ["hi", 2] }]);
-  equal(canon(state).includes("dialogue"), false);
+  deepEqual(state.vm.effects, [
+    {
+      seq: 1,
+      tick: 0,
+      thread: 1,
+      name: "shout",
+      kind: "state-write",
+      args: [],
+      out: {},
+      result: null,
+      patch: { section: "ui", path: [], op: "merge", value: null },
+      wait: null,
+      request: null,
+    },
+  ]);
+  equal(state.vm.effectSeq, 1);
+  equal(canon(state).includes("shout"), true);
 });
 
 test("a request is accepted by the registry unmodified and refused by the VM until entry 9", () => {

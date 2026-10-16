@@ -40,6 +40,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm fixtures:test
+      - run: pnpm catalogue:test
+      - run: pnpm catalogue:check
       - run: pnpm no-skips:test
       - run: pnpm icons:test
   golden:
