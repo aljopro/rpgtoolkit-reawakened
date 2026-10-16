@@ -24,8 +24,8 @@ Tile *n* (1-based) starts at byte `6 + (n − 1) × tileBytes`. There is no padd
 | 2 | 16×16 | 3 | 768 | R, G, B; drawn doubled to 32×32 | (0, 1, 2) |
 | 3 | 32×32 | 1 | 1024 | index into the 256-colour [DOS palette](#dos-palette) | 255 |
 | 4 | 16×16 | 1 | 256 | DOS palette index; doubled | 255 |
-| 5 | 32×32 | 1 | 1024 | DOS palette index ("16-colour" sets use the same palette) | 255 |
-| 6 | 16×16 | 1 | 256 | DOS palette index; doubled | 255 |
+| 5 | 32×32 | 1 | 1024 | DOS palette index; only the **first sixteen** entries (0…15) are used — the EGA set | 255 |
+| 6 | 16×16 | 1 | 256 | DOS palette index; only the **first sixteen** entries (0…15) are used, and the tile is drawn doubled | 255 |
 | 150 | isometric | 3 | 3072 | R, G, B, poured into the diamond (below) | (0, 1, 2) |
 
 **Pixel order is column-major:** x is the outer loop and y the inner loop. The first three bytes are pixel (0,0), the next three are (0,1), and so on down the first column. Reading the data as row-major gives transposed tiles. The 3.x editor only writes detail 1 (and 2 from its 16×16 batch importer) and detail 150.
@@ -95,7 +95,7 @@ Only cells 0..width−1 × 0..height−1 are drawn, always as a normal (non-isom
 
 Detail 3-6 tiles and `.gph` detail 3/5 values index a fixed 256-colour palette that both programs hard-code. It resembles the VGA default palette (16 CGA-style colours using 168 as full intensity, then greys and colour ramps), but its values are not exactly the standard ones. The full table is in [dos-palette.json](dos-palette.json) as `[R, G, B]` triples. Only very old tilesets use it; no shipped sample does.
 
-**Palette source of truth — Reawakened rule.** The table in [dos-palette.json](dos-palette.json) is normative: a reader must ship exactly it, rather than build a palette from the public VGA default (the values are close but not identical). *Legacy fact:* details **5 and 6** use only the **first sixteen** entries (the EGA set, the first 16 colours of the 13h VGA palette), while details 3 and 4 use all 256. The code reads the table in `packages/core/src/formats/tileset/vga-palette.ts:26-96` (imported at `tileset.ts:22`).
+**Palette source of truth — Reawakened rule.** The table in [dos-palette.json](dos-palette.json) is normative: a reader must ship exactly it, rather than build a palette from the public VGA default (the values are close but not identical). *Legacy fact:* details **5 and 6** use only the **first sixteen** entries (the EGA set, the first 16 colours of the 13h VGA palette), while details 3 and 4 use all 256. This 16-entry restriction is stated in the official 2.0 specification, *Tileset (TST) File Format Specification*, © 2000 Christopher B. Matthews (held in the archive at `wayback/rpgtoolkit.com/dev_repo/docs/tst.html`), whose header is `WORD version`, `WORD tileCount`, `WORD detail` with version `20` meaning 2.0 and `21` meaning 2.1 (only version 20 was ever produced); `format-spec §15.13` carries the full detail table. The code reads the table in `packages/core/src/formats/tileset/vga-palette.ts:26-96` (imported at `tileset.ts:22`).
 
 ## Readers not yet built
 
