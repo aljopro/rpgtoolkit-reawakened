@@ -3,7 +3,7 @@ title: 'Classes, objects and operator dispatch'
 type: 'feature'
 ticket: 6
 created: '2026-10-16'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: '5a7ad22679581abdda690a0232f1f1e2208af3dc'
 route: 'full'
 route_source: 'pinned'
@@ -65,6 +65,8 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/spec/engine/
 - Given a mid-method snapshot with linked objects, when restored and stepped beside an uninterrupted VM, then each canonical state hash and next handle are identical, and `AssertPlainData` passes.
 
 ## Implementation Notes
+
+**Ruled (Jensen, 2026-10-16).** Failure codes, shared with entry 3.7, which makes them catchable: `object.invalid` (freed handle, unknown class, non-object receiver), `object.abstract-class` (constructing an abstract class), `object.inaccessible-member` (private access from outside the class). Until 3.7 lands they are thrown as `ScriptError` with these codes.
 
 ## Plan Change Log
 
