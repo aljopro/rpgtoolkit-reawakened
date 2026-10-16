@@ -97,6 +97,7 @@ export function createEmptyCharacter(): Character {
     speed: undefined,
     customStances: undefined,
     vectorBases: undefined,
+    legacyGraphics: undefined,
     residue: new Uint8Array(0),
   };
 }
@@ -196,6 +197,8 @@ export function readTextCharacter(bytes: Uint8Array, path?: string): Result<Char
     sizeType = st.value;
   }
 
+  let legacyGraphics: LegacyCharacterGraphics | undefined;
+
   if (sizeType === 0) {
     for (let k = 0; k < 16 * 1024; k++) {
       const l = reader.nextLine("walkPixel", CHARACTER_SECTION);
@@ -214,33 +217,48 @@ export function readTextCharacter(bytes: Uint8Array, path?: string): Result<Char
       if (!l.ok) return l;
     }
   } else {
-    for (let k = 0; k < 32; k++) {
-      const l = reader.nextLine("walkTile", CHARACTER_SECTION);
-      if (!l.ok) return l;
+    const walkFrames: LegacyWalkFrame[] = [];
+    for (let k = 0; k < 16; k++) {
+      const top = reader.nextLine(`walkFrame[${k}].top`, CHARACTER_SECTION);
+      if (!top.ok) return top;
+      const bottom = reader.nextLine(`walkFrame[${k}].bottom`, CHARACTER_SECTION);
+      if (!bottom.ok) return bottom;
+      walkFrames.push({ top: top.value, bottom: bottom.value });
     }
+    const battleTiles: string[] = [];
+    const restTiles: string[] = [];
     if (minor.value === 1) {
       for (let k = 0; k < 32; k++) {
-        const l = reader.nextLine("battleTile", CHARACTER_SECTION);
+        const l = reader.nextLine(`battleTile[${k}]`, CHARACTER_SECTION);
         if (!l.ok) return l;
+        battleTiles.push(l.value);
       }
       for (let k = 0; k < 2; k++) {
-        const l = reader.nextLine("restTile", CHARACTER_SECTION);
+        const l = reader.nextLine(`restTile[${k}]`, CHARACTER_SECTION);
         if (!l.ok) return l;
+        restTiles.push(l.value);
       }
     } else {
       for (let k = 0; k < 64; k++) {
-        const l = reader.nextLine("battleTile", CHARACTER_SECTION);
+        const l = reader.nextLine(`battleTile[${k}]`, CHARACTER_SECTION);
         if (!l.ok) return l;
+        battleTiles.push(l.value);
       }
       for (let k = 0; k < 4; k++) {
-        const l = reader.nextLine("restTile", CHARACTER_SECTION);
+        const l = reader.nextLine(`restTile[${k}]`, CHARACTER_SECTION);
         if (!l.ok) return l;
+        restTiles.push(l.value);
       }
     }
-    for (let k = 0; k < 20; k++) {
-      const l = reader.nextLine("customTile", CHARACTER_SECTION);
-      if (!l.ok) return l;
+    const customFrames: LegacyWalkFrame[] = [];
+    for (let k = 0; k < 10; k++) {
+      const top = reader.nextLine(`customFrame[${k}].top`, CHARACTER_SECTION);
+      if (!top.ok) return top;
+      const bottom = reader.nextLine(`customFrame[${k}].bottom`, CHARACTER_SECTION);
+      if (!bottom.ok) return bottom;
+      customFrames.push({ top: top.value, bottom: bottom.value });
     }
+    legacyGraphics = { walkFrames, battleTiles, restTiles, customFrames };
   }
 
   const accessorySlots: string[] = [""];
@@ -314,6 +332,7 @@ export function readTextCharacter(bytes: Uint8Array, path?: string): Result<Char
     speed: undefined,
     customStances: undefined,
     vectorBases: undefined,
+    legacyGraphics,
     residue: new Uint8Array(0),
   });
 }
