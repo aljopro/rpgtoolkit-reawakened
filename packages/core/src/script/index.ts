@@ -25,11 +25,29 @@ export { lower } from "./lower.ts";
 export type { FunctionInfo, LowerResult, ParamInfo } from "./lower.ts";
 export { COMPILER_VERSION, compileInline, compileProgram } from "./program.ts";
 export type { Program, ProgramRef } from "./program.ts";
-export { createVmState, globalRef, localRef, startProgram } from "./state.ts";
+export {
+  createVmState,
+  endBoardThreads,
+  endItemThreads,
+  findBlockingThread,
+  findThread,
+  globalRef,
+  killThread,
+  localRef,
+  nextThreadId,
+  refreshBlock,
+  startProgram,
+  startThread,
+} from "./state.ts";
 export type {
+  CollectedMove,
   Frame,
+  GlobalBlock,
   LocalSlot,
+  PendingCall,
+  QueuedInline,
   Thread,
+  ThreadInit,
   ThreadKind,
   ThreadOwner,
   ThreadStatus,
@@ -49,7 +67,7 @@ export {
 export { CORE_PLUGIN } from "./builtins.ts";
 export type { Arg, BuiltinSpec, ParamSpec } from "./builtins.ts";
 export { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
-export { drainEffects, EFFECT_LOG_CAP, recordEffect } from "./effects.ts";
+export { drainEffects, EFFECT_LOG_CAP, recordDiagnostic, recordEffect } from "./effects.ts";
 export type {
   EffectKind,
   EffectPatch,
@@ -83,14 +101,27 @@ export type {
 export {
   advanceScriptTick,
   createScriptServices,
-  pollSleep,
+  replyToRequest,
   runThreadsPhase,
   runWaitsPhase,
   STEP_BUDGET,
+  stepThread,
 } from "./vm.ts";
+export {
+  createWaitPoll,
+  defaultWaitPoll,
+  describeWait,
+  pollInputKey,
+  pollMovement,
+  pollRequest,
+  pollSleep,
+  REQUEST_TIMEOUT_TEXT,
+  WAIT_KIND_RESOLVERS,
+} from "./waits.ts";
 export type { ScriptServices, ScriptStatus } from "./vm.ts";
 export { createDefaultVirtuals } from "./virtuals.ts";
 export type { VirtualVariablePort } from "./virtuals.ts";
 export { STRING_SPECS } from "./builtins/strings.ts";
 export { CONVERSION_SPECS } from "./builtins/conversions.ts";
 export { SCOPE_SPECS } from "./builtins/scope.ts";
+export { THREAD_SPECS } from "./builtins/threads.ts";

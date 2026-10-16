@@ -2,7 +2,7 @@
 // decisions 2 and 6): layer order with `next`, the override and no-next
 // warnings, the one rejection, the four tiers, by-ref write-back through a
 // program and a restored snapshot, purity, the stamped effect log and the
-// refusal of a `request` before entry 9.
+// request handling (entry 9: the VM parks the thread and records the request).
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -297,7 +297,7 @@ test("the VM stamps a command's effects into the vm section's effect log", () =>
   equal(canon(state).includes("shout"), true);
 });
 
-test("a request is accepted by the registry unmodified and refused by the VM until entry 9", () => {
+test("a request is accepted by the registry unmodified and parked by the VM", () => {
   const ask: BuiltinSpec = {
     name: "ask",
     aliases: [],
@@ -317,10 +317,16 @@ test("a request is accepted by the registry unmodified and refused by the VM unt
   deepEqual(result.then, { command: "ask.done", args: ["a.txt"] });
 
   const state = makeState("ask()\n");
-  equal(
-    errorOf(() => advanceScriptTick(state, createScriptServices(state, plugins))).code,
-    "command.request-unsupported",
-  );
+  advanceScriptTick(state, createScriptServices(state, plugins));
+  const thread = state.vm.threads[0]!;
+  equal(thread.status, "waiting");
+  equal(thread.wait?.kind, "request");
+  equal(state.vm.requestSeq, 1);
+  deepEqual(state.vm.effects[0]!.request, {
+    kind: "asset",
+    key: { area: "files", path: "a.txt" },
+    reqId: 1,
+  });
 });
 
 test("a name no tier resolves is still unknown.command, and core stays the default pack", () => {

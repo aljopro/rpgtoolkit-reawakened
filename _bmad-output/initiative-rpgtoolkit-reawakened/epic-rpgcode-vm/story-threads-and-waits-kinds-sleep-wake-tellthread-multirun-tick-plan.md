@@ -66,6 +66,12 @@ assignee: "Build39"
 
 ## Implementation Notes
 
+- Wait kinds are `sleep`, `input.key`, `movement`, `request`; each carries `global` (R-32). `createWaitPoll` folds per-kind resolvers into AD-9's single `WaitPoll` and refuses a duplicate kind. `vm.block` is derived from the threads after every wait change (`refreshBlock`).
+- Thread persistence is the thread kind (`persistent` / `board` / `item`); no separate flag. `thread(file, persist)` compiles its text inline (file loading is entry 8's). Item threads carry the item as `source` and `target`; `endItemThreads(vm, item)` and `endBoardThreads(vm)` are the engine's cleanup hooks.
+- `tellThread` stores `{ text, file, line }` in the target's `queue`; it runs on a detached frame at the target's next turn (only while the target is ready; a sleeping target runs it after it wakes). The call's value is `0`.
+- A request reply prepends `ok` (`1`/`0`) and the reply value to the continuation's `args`; with no continuation the call resumes with the value (`0` on failure). `replyToRequest(vm, reqId, reply)` stores a reply; `timeoutTicks` on the command result sets the tick deadline. A failed or timed-out request records a `diagnostic` effect (`request.failed`).
+- `multiRun` is the toggle form `multirun()` … `multirun()` (the grammar has no block form); movement commands report the `move` control effect, which the movement owner's epic registers.
+- Deadlock means no ready thread and every live thread in an indefinite sleep. Save schema `vm` is now 4 (migration from 3, fixture `v3-vm.json`).
 ## Plan Change Log
 
 - 2026-10-16: Build baseline is `50ffecdabadd35594c297773109d4cd8f65fbfe0` (current `origin/main`); the approved plan retains its earlier `baseline_revision` `5a7ad22679581abdda690a0232f1f1e2208af3dc`. The drift includes the merged 3.14 format-registry work and plan artifacts; implementation is based on the current main baseline.

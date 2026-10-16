@@ -925,20 +925,6 @@ const STUBS: readonly CatalogueStub[] = [
     params: [{ name: "speed", optional: false, byRef: false, variadic: false }],
   },
   {
-    name: "sourcehandle",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "dest", optional: false, byRef: true, variadic: false }],
-  },
-  {
-    name: "targethandle",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "dest", optional: false, byRef: true, variadic: false }],
-  },
-  {
     name: "sourcelocation",
     kind: "pure",
     sections: [],
@@ -993,20 +979,6 @@ const STUBS: readonly CatalogueStub[] = [
     sections: ["fx"],
     obsolete: false,
     params: [{ name: "id", optional: false, byRef: false, variadic: false }],
-  },
-  {
-    name: "getthreadid",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "id", optional: false, byRef: true, variadic: false }],
-  },
-  {
-    name: "threadsleepremaining",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "id", optional: false, byRef: false, variadic: false }, { name: "sec", optional: false, byRef: true, variadic: false }],
   },
   {
     name: "debug",

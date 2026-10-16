@@ -13,10 +13,11 @@
  * two commands. `end` returns normally (`{ value: null }`): that proves
  * registry resolution and the dispatch path, while `end`/`done`/`stop`'s real
  * unwinding (FUN-7) is entry 13's, and entry 21 registers the catalogue here.
- * `sleep` takes whole ticks directly, so it applies neither THR-1's
- * seconds→ticks formula (that is `core/time`'s `secondsToTicks`, for
- * `threadSleep`, entry 9) nor the `0`-means-indefinite rule: a `0`, fractional
- * or negative count is a `builtin.bad-arg` `ScriptError`.
+ * `sleep` takes whole ticks directly and is a blocking command (R-32: its wait
+ * is `global`), so it applies neither THR-1's seconds→ticks formula nor the
+ * `0`-means-indefinite rule: a `0`, fractional or negative count is a
+ * `builtin.bad-arg` `ScriptError`. The cooperative, per-thread sleep is
+ * `threadSleep` (`script/builtins/threads.ts`).
  *
  * docs/adr/0004 (decision 2); docs/spec/engine/rpgcode-errors-and-threads.md#threads (THR-1) (SEM-6).
  */
@@ -28,6 +29,7 @@ import type { CommandHandler, PluginDefinition } from "./plugin.ts";
 import { CONVERSION_SPECS } from "./builtins/conversions.ts";
 import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
+import { THREAD_SPECS } from "./builtins/threads.ts";
 /** One declared parameter of a built-in (AD-8). */
 export type ParamSpec = {
   readonly name: string;
@@ -79,11 +81,20 @@ export const CORE_PLUGIN: PluginDefinition = {
             "sleep: the tick count must be a positive whole number",
           );
         }
-        return { value: null, wait: { kind: "sleep", until: view.clock.tick() + ticks } };
+        return {
+          value: null,
+          wait: {
+            kind: "sleep",
+            global: true,
+            until: view.clock.tick() + ticks,
+            resumesCall: true,
+          },
+        };
       },
     },
     ...STRING_SPECS,
     ...CONVERSION_SPECS,
     ...SCOPE_SPECS,
+    ...THREAD_SPECS,
   ],
 };

@@ -91,6 +91,10 @@ export const pinThread: Thread = {
   ],
   status: "ready",
   wait: null,
+  queue: [],
+  pending: null,
+  detached: [],
+  collect: null,
 };
 
 // A draw list and an audio cue are plain data, so they hash (AD-3, AD-11, AD-16).
