@@ -11,6 +11,7 @@ import { deepEqual, equal } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { unzipSync } from "fflate/browser";
 import {
   BODY_SLOT_NAMES,
   CHARACTER_SECTION,
@@ -25,7 +26,7 @@ import {
   writeEnemy,
   writeItem,
 } from "../src/index.ts";
-import type { ActorBase, ActorStance, Result } from "../src/index.ts";
+import type { ActorBase, ActorStance, LegacyCharacterGraphics, Result } from "../src/index.ts";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(testDir, "..", "..", "..");
@@ -115,6 +116,7 @@ interface CharacterSpec {
   readonly hasSpecialMoves?: number;
   readonly levelUpType?: number;
   readonly sizeType?: number;
+  readonly legacyGraphics?: LegacyCharacterGraphics;
 }
 
 /** Build a character buffer in the exact §6.1 field order. */
@@ -160,6 +162,35 @@ function buildCharacter(spec: CharacterSpec = {}): Uint8Array {
   w.str(""); // level-up program
   w.i8(spec.levelUpType ?? 0); // level-up type
   w.i8(spec.sizeType ?? 1); // size type
+  if (minor < 5) {
+    if (spec.legacyGraphics !== undefined) {
+      for (const frame of spec.legacyGraphics.walkFrames) {
+        w.str(frame.top);
+        w.str(frame.bottom);
+      }
+      putStrings(w, spec.legacyGraphics.battleTiles);
+      putStrings(w, spec.legacyGraphics.restTiles);
+      for (const frame of spec.legacyGraphics.customFrames) {
+        w.str(frame.top);
+        w.str(frame.bottom);
+      }
+    } else {
+      for (let i = 0; i < 16; i += 1) {
+        w.str(`walk_${i}_top`);
+        w.str(`walk_${i}_bottom`);
+      }
+      for (let i = 0; i < 64; i += 1) {
+        w.str(`battle_${i}`);
+      }
+      for (let i = 0; i < 4; i += 1) {
+        w.str(`rest_${i}`);
+      }
+      for (let i = 0; i < 10; i += 1) {
+        w.str(`custom_${i}_top`);
+        w.str(`custom_${i}_bottom`);
+      }
+    }
+  }
   if (minor >= 5) {
     putStrings(w, spec.movement ?? BLANK8);
     putStrings(w, spec.battleStances ?? ["", "", "", "", "", ""]);
@@ -559,7 +590,35 @@ test("character: the version-conditional rows at minor 3 and minor 4 round-trip"
     equal(character.battleSounds?.length, 4, `minor ${minor}: battle sounds`);
     equal(character.firstLevelExp, 90, `minor ${minor}: first-level exp`);
     equal(character.movementAnimations, undefined, `minor ${minor}: no movement animations`);
+    equal(character.legacyGraphics?.walkFrames.length, 16, `minor ${minor}: 16 walk frames`);
+    equal(character.legacyGraphics?.battleTiles.length, 64, `minor ${minor}: 64 battle tiles`);
+    equal(character.legacyGraphics?.restTiles.length, 4, `minor ${minor}: 4 rest tiles`);
+    equal(character.legacyGraphics?.customFrames.length, 10, `minor ${minor}: 10 custom frames`);
+    const firstWalk = character.legacyGraphics?.walkFrames[0];
+    equal(firstWalk?.top, "walk_0_top");
+    equal(firstWalk?.bottom, "walk_0_bottom");
+    equal(character.legacyGraphics?.battleTiles[0], "battle_0");
+    equal(character.legacyGraphics?.restTiles[0], "rest_0");
+    const firstCustom = character.legacyGraphics?.customFrames[0];
+    equal(firstCustom?.top, "custom_0_top");
+    equal(firstCustom?.bottom, "custom_0_bottom");
     deepEqual(unwrap(writeCharacter(character)), bytes, `minor ${minor}: byte-identical round-trip`);
+  }
+});
+
+test("character: the writer refuses minor < 5 characters with missing or invalid legacy graphics", () => {
+  const char = unwrap(readCharacter(new BinaryReader(buildCharacter({ minor: 4 }))));
+  equal(writeCharacter({ ...char, legacyGraphics: undefined }).ok, false);
+  const lg = char.legacyGraphics;
+  if (lg !== undefined) {
+    const badWalk = { ...lg, walkFrames: lg.walkFrames.slice(0, 15) };
+    equal(writeCharacter({ ...char, legacyGraphics: badWalk }).ok, false);
+    const badBattle = { ...lg, battleTiles: lg.battleTiles.slice(0, 63) };
+    equal(writeCharacter({ ...char, legacyGraphics: badBattle }).ok, false);
+    const badRest = { ...lg, restTiles: lg.restTiles.slice(0, 3) };
+    equal(writeCharacter({ ...char, legacyGraphics: badRest }).ok, false);
+    const badCustom = { ...lg, customFrames: lg.customFrames.slice(0, 9) };
+    equal(writeCharacter({ ...char, legacyGraphics: badCustom }).ok, false);
   }
 });
 
@@ -879,5 +938,67 @@ test(
     equal(enemy.minor, 1);
     equal(enemy.stances.length, 6, "stored bound 5 yields six slots");
     equal(enemy.stances[5], "", "slot 5 is unused");
+  },
+);
+
+const archiveRoot = "/Users/jensen/projects/rpgtoolkit-archive";
+const archiveAvailable = existsSync(archiveRoot);
+
+test(
+  "all 16 binary .tem minor 3–4 files in the archive corpus read with 0 trailing bytes",
+  { skip: !archiveAvailable ? "archive corpus is not present on this host" : false },
+  () => {
+    const sources = [
+      join(archiveRoot, "archive-org/FinalDestiny_201810/Final_Destiny.zip"),
+      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/School2Demo.zip"),
+      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/chimeran_empire.zip"),
+      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/caoquest.zip"),
+      join(archiveRoot, "wayback/aljo.afraid.org/games/busd/busd.zip"),
+      join(archiveRoot, "wayback/aljo.afraid.org/games/littleman/LittleMan.zip"),
+    ];
+
+    const tems: { path: string; bytes: Uint8Array }[] = [];
+    function scanZip(bytes: Uint8Array): void {
+      const unzipped = unzipSync(bytes);
+      for (const [entryName, entryBytes] of Object.entries(unzipped)) {
+        const lower = entryName.toLowerCase();
+        if (lower.endsWith(".zip")) {
+          scanZip(entryBytes);
+        } else if (lower.endsWith(".tem")) {
+          tems.push({ path: entryName, bytes: entryBytes });
+        }
+      }
+    }
+
+    for (const src of sources) {
+      if (existsSync(src)) {
+        scanZip(new Uint8Array(readFileSync(src)));
+      }
+    }
+
+    const binaryTems = tems.filter((t) => t.bytes.length > 13 && t.bytes[13] === 0);
+    equal(binaryTems.length, 16, "all 16 binary .tem files found in corpus");
+    for (const t of binaryTems) {
+      const reader = new BinaryReader(t.bytes, t.path);
+      const res = readCharacter(reader);
+      equal(res.ok, true, `${t.path}: must read successfully`);
+      if (res.ok) {
+        equal(reader.remaining, 0, `${t.path}: 0 trailing bytes in stream`);
+        equal(res.value.legacyGraphics !== undefined, true, `${t.path}: legacy graphics present`);
+        equal(res.value.legacyGraphics?.walkFrames.length, 16, `${t.path}: 16 walk frames`);
+        equal(res.value.legacyGraphics?.battleTiles.length, 64, `${t.path}: 64 battle tiles`);
+        equal(res.value.legacyGraphics?.restTiles.length, 4, `${t.path}: 4 rest tiles`);
+        equal(res.value.legacyGraphics?.customFrames.length, 10, `${t.path}: 10 custom frames`);
+        if (t.path.toLowerCase().includes("finaldestiny")) {
+          if (t.path.toLowerCase().includes("start.tem")) {
+            equal(res.value.residue.length, 96, `${t.path}: Q8 96 residual bytes`);
+          } else {
+            equal(res.value.residue.length, 13, `${t.path}: Q8 13 residual bytes`);
+          }
+        } else {
+          equal(res.value.residue.length, 0, `${t.path}: 0 residue bytes`);
+        }
+      }
+    }
   },
 );

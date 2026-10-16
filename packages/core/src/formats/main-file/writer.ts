@@ -283,8 +283,8 @@ function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | unde
   // so a run the minor carries must be exactly the row's width and one the
   // minor does not carry must be empty (format-spec §2, §1.7).
   const runs =
-    checkRun(writer, "parallax", model.reservedRuns.parallax, minor < 3 ? 4 : 0, "row 10") ??
-    checkRun(writer, "menuPluginFallback", model.reservedRuns.menuPluginFallback, minor < 3 ? 4 : 0, "row 21") ??
+    checkRun(writer, "parallax", model.reservedRuns.parallax, minor < 3 ? 2 : 0, "row 10") ??
+    checkRun(writer, "menuPluginFallback", model.reservedRuns.menuPluginFallback, minor < 3 ? 2 : 0, "row 21") ??
     checkRun(writer, "multitask", model.reservedRuns.multitask, minor <= 2 ? 6 : 0, "row 22") ??
     checkRun(writer, "fightStyle", model.reservedRuns.fightStyle, minor < 3 ? 2 : 0, "row 29");
   if (runs !== undefined) {

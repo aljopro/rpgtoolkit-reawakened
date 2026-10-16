@@ -25,6 +25,10 @@ import {
   CHARACTER_SECTION,
   CHARACTER_VARIABLE_SLOTS,
   DIRECTIONAL_ANIMATION_COUNT,
+  LEGACY_CHARACTER_BATTLE_TILE_COUNT,
+  LEGACY_CHARACTER_CUSTOM_FRAME_COUNT,
+  LEGACY_CHARACTER_REST_TILE_COUNT,
+  LEGACY_CHARACTER_WALK_FRAME_COUNT,
   LEVEL_INCREASE_COUNT,
   SPECIAL_MOVE_SLOTS,
   actorError,
@@ -42,6 +46,8 @@ import {
   type Character,
   type CharacterStats,
   type CharacterSpecialMove,
+  type LegacyCharacterGraphics,
+  type LegacyWalkFrame,
 } from "./model.ts";
 
 /** The minor whose first-level-exp field is an `i8` rather than an `i32` (§6.1). */
@@ -78,6 +84,54 @@ function readSpecialMove(reader: BinaryReader): Result<CharacterSpecialMove> {
   });
 }
 
+
+/** Read the 120 legacy tile names of a minor < 5 character (§6.1). */
+function readLegacyCharacterGraphics(
+  reader: BinaryReader,
+): Result<LegacyCharacterGraphics> {
+  const walkFrames: LegacyWalkFrame[] = [];
+  for (let i = 0; i < LEGACY_CHARACTER_WALK_FRAME_COUNT; i += 1) {
+    const top = reader.str();
+    if (!top.ok) {
+      return top;
+    }
+    const bottom = reader.str();
+    if (!bottom.ok) {
+      return bottom;
+    }
+    walkFrames.push({ top: top.value, bottom: bottom.value });
+  }
+
+  const battleTiles = readStrings(reader, LEGACY_CHARACTER_BATTLE_TILE_COUNT);
+  if (!battleTiles.ok) {
+    return battleTiles;
+  }
+
+  const restTiles = readStrings(reader, LEGACY_CHARACTER_REST_TILE_COUNT);
+  if (!restTiles.ok) {
+    return restTiles;
+  }
+
+  const customFrames: LegacyWalkFrame[] = [];
+  for (let i = 0; i < LEGACY_CHARACTER_CUSTOM_FRAME_COUNT; i += 1) {
+    const top = reader.str();
+    if (!top.ok) {
+      return top;
+    }
+    const bottom = reader.str();
+    if (!bottom.ok) {
+      return bottom;
+    }
+    customFrames.push({ top: top.value, bottom: bottom.value });
+  }
+
+  return ok({
+    walkFrames,
+    battleTiles: battleTiles.value,
+    restTiles: restTiles.value,
+    customFrames,
+  });
+}
 /** Read the eight `i32` initial stats in file order (format-spec §6.1). */
 function readStats(reader: BinaryReader): Result<CharacterStats> {
   const order: ("experience" | "hp" | "maxHp" | "dp" | "fp" | "smp" | "maxSmp" | "level")[] = [
@@ -243,6 +297,7 @@ export function readCharacter(reader: BinaryReader): Result<Character> {
   let speed: number | undefined;
   let customStances: ActorStance[] | undefined;
   let vectorBases: ActorBase[] | undefined;
+  let legacyGraphics: LegacyCharacterGraphics | undefined;
 
   if (minor >= 5) {
     const movements = readStrings(reader, DIRECTIONAL_ANIMATION_COUNT);
@@ -289,6 +344,13 @@ export function readCharacter(reader: BinaryReader): Result<Character> {
     }
     vectorBases = bases.value;
   }
+  if (minor < 5) {
+    const legacy = readLegacyCharacterGraphics(reader);
+    if (!legacy.ok) {
+      return legacy;
+    }
+    legacyGraphics = legacy.value;
+  }
 
   const residue = reader.readBytes(reader.remaining);
   if (!residue.ok) {
@@ -330,6 +392,7 @@ export function readCharacter(reader: BinaryReader): Result<Character> {
       speed,
       customStances,
       vectorBases,
+      legacyGraphics,
       residue: residue.value,
     },
     warnings,
@@ -477,6 +540,70 @@ export function writeCharacter(model: Character): Result<Uint8Array> {
   }
   writer.i8(model.levelUpType);
   writer.i8(model.sizeType);
+  if (model.minor < 5) {
+    const legacy = model.legacyGraphics;
+    if (legacy === undefined) {
+      return writerError(
+        writer,
+        CHARACTER_SECTION,
+        "a minor < 5 character requires legacy graphics",
+      );
+    }
+    if (legacy.walkFrames.length !== LEGACY_CHARACTER_WALK_FRAME_COUNT) {
+      return writerError(
+        writer,
+        CHARACTER_SECTION,
+        `a minor < 5 character needs exactly ${LEGACY_CHARACTER_WALK_FRAME_COUNT} legacy walk frames but has ${legacy.walkFrames.length}`,
+      );
+    }
+    for (const frame of legacy.walkFrames) {
+      const top = writer.str(frame.top);
+      if (!top.ok) {
+        return writerError(writer, CHARACTER_SECTION, `legacy walk frame top: ${top.error.message}`);
+      }
+      const bottom = writer.str(frame.bottom);
+      if (!bottom.ok) {
+        return writerError(writer, CHARACTER_SECTION, `legacy walk frame bottom: ${bottom.error.message}`);
+      }
+    }
+    const battle = writeFixedStrings(
+      writer,
+      legacy.battleTiles,
+      LEGACY_CHARACTER_BATTLE_TILE_COUNT,
+      CHARACTER_SECTION,
+      "legacy battle tiles",
+    );
+    if (!battle.ok) {
+      return battle;
+    }
+    const rest = writeFixedStrings(
+      writer,
+      legacy.restTiles,
+      LEGACY_CHARACTER_REST_TILE_COUNT,
+      CHARACTER_SECTION,
+      "legacy rest tiles",
+    );
+    if (!rest.ok) {
+      return rest;
+    }
+    if (legacy.customFrames.length !== LEGACY_CHARACTER_CUSTOM_FRAME_COUNT) {
+      return writerError(
+        writer,
+        CHARACTER_SECTION,
+        `a minor < 5 character needs exactly ${LEGACY_CHARACTER_CUSTOM_FRAME_COUNT} legacy custom frames but has ${legacy.customFrames.length}`,
+      );
+    }
+    for (const frame of legacy.customFrames) {
+      const top = writer.str(frame.top);
+      if (!top.ok) {
+        return writerError(writer, CHARACTER_SECTION, `legacy custom frame top: ${top.error.message}`);
+      }
+      const bottom = writer.str(frame.bottom);
+      if (!bottom.ok) {
+        return writerError(writer, CHARACTER_SECTION, `legacy custom frame bottom: ${bottom.error.message}`);
+      }
+    }
+  }
 
   if (model.minor >= 5) {
     const movements = writeFixedStrings(
