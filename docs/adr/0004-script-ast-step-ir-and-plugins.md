@@ -30,7 +30,7 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
      id: string;
      version: string;
      commands?: readonly BuiltinSpec[]; // { name, aliases, params, call } — AD-8
-     decoders?: Record<string, AssetDecoder>;
+     decoders?: readonly AssetDecoder[]; // ordered format contributions — AD-31
      subsystems?: {
        battle?: BattleSubsystem;
        menu?: MenuSubsystem;
@@ -38,6 +38,14 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
      };
    }
    ```
+   `decoders` is an optional ordered contribution to the asset pipeline. The
+   plugin assembly layer starts with the core decoder set and layers plugin
+   definitions in manifest order. A plugin's own duplicate decoder id or
+   extension is rejected as a programmer error; across plugin layers, the later
+   plugin wins and emits exactly one `decoder.overridden` warning per replaced
+   claim, naming the previous and replacement plugins. The low-level
+   `createAssetRegistry` registration API remains strict for direct callers and
+   rejects every duplicate.
    No command has private backdoors into the VM.
 
    A `CommandHandler` is a pure function `(view, args, next) -> { value, out?, effects?, wait? }`, which the shorthand `{ out, effects, wait? }` abbreviates to the parts beyond a plain return. It reads a read-only view of the world and never mutates state: `value` is the call's result (`null` when the command has none), `out` carries by-reference outputs as `[index, Value]` pairs the VM writes back to the caller's variables, `effects` are plain-data records the VM drains to the section owners that apply them, and `wait` parks the calling thread (AD-9). `next` is the definition the same name has in the layer below. A handler may call `next` and adjust its result, or ignore it and replace the command; where no lower layer defines the name, `next` returns the empty result (`value: null`, no `out`, no `effects`, no `wait`) and emits one `command.no-next` warning. Each name is therefore a stack of layers (command middleware), not a single winner. A repeated name or alias is an **override, not an error**: the later layer runs first and its `next` reaches the earlier definition, and the registry emits exactly one `command.overridden` warning naming the previous and replacement plugins. The only rejection is one plugin repeating a name or alias *within itself*, which assembly refuses naming the plugin. The language constructs themselves (control flow, assignment, labels, calls, returns) are `StepIR` ops and are not in the command chain, so they can be neither removed nor wrapped.
@@ -127,7 +135,7 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
 **Negative / risks, with mitigations**
 * *IR Lowering overhead:* Compiling AST to Step IR introduces a small compilation step. **Mitigation:** IR is cached by source hash (`ProgramCache`, E-91); compilation occurs at asset load time.
 * *Plugin execution budget:* Malicious or buggy plugins could loop indefinitely. **Mitigation:** VM step machine enforces a maximum step budget per tick; commands must yield cooperatively.
-* *Command collisions:* Two plugins could register the same command name. **Mitigation:** layers stack in manifest order and the later layer runs first, with `next` reaching the one below; a repeated name raises one warning diagnostic. Only one plugin repeating its own name is rejected.
+* *Plugin collisions:* Command layers stack in manifest order and the later layer runs first, with `next` reaching the one below; a repeated name raises one `command.overridden` warning. Decoder layers use the same later-plugin-wins rule and emit one `decoder.overridden` warning per replaced id or extension. A plugin repeating its own command or decoder claim is rejected, while direct `createAssetRegistry` registration remains strict.
 * *Untrusted plugin code:* Plugins are ungated, so a game-shipped plugin runs with the engine's authority. **Accepted for now.** The seam for a stricter model is the manifest entry (see decision 6); the engine rules G1 to G3 still bind every plugin.
 
 ## Alternatives considered
