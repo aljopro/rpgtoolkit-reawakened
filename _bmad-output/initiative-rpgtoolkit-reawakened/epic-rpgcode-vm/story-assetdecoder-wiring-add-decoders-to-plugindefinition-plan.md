@@ -3,7 +3,7 @@ title: 'AssetDecoder wiring: add decoders to PluginDefinition'
 type: 'feature'
 ticket: '14'
 created: '2026-10-16'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: '5a7ad22679581abdda690a0232f1f1e2208af3dc'
 route: 'full'
 route_source: 'pinned'
