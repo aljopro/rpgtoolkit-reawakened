@@ -6,6 +6,8 @@ Header text: `RPGTLKIT SAVE`. The engine writes major **3**, minor **4** (Toolki
 
 **Counts here are exact counts** (not upper bounds), except the thread list.
 
+**Our own save format — Reawakened rule (R-13).** A rebuild may use its own save format; the legacy `.sav` layout on this page is an **import** concern only, not a format this project must write. Reading legacy saves is scoped with the menu/party/save work. Also note that the split into separate lists — numeric globals, object-handle globals and string globals, then redirects, party, inventory, equipment and the miscellany — is what a loader must reproduce; and since the serialised interpreter state (field 46) is engine-specific, a rebuild may fall back to restarting each saved thread from the top rather than resuming mid-program.
+
 ## Layout (minor 4)
 
 | # | Field | Type | Notes |
