@@ -22,9 +22,9 @@
  *   and no `wait`.
  * - `out` carries by-reference outputs as `[index, Value]` pairs; the VM writes
  *   each back to the caller's variable (AD-8's `Arg.ref`, AD-14's `null`).
- * - `effects` are plain-data records the VM drains to the section owners that
- *   apply them (AD-10; decision U1 — the interim sink is a function on
- *   `ScriptServices`, entry 21 replaces it with the stamped, stored record).
+ * - `effects` are plain-data records the VM stamps with `{ seq, tick, thread,
+ *   name, … }` and stores in the `vm` section's effect log; the section owners
+ *   drain them and apply the change (AD-10; decision U1; entry 21).
  * - `wait` parks only the calling thread (AD-9).
  * - `request` with `then` asks the host for something (ADR 0004 decision 7).
  *   Entry 3 accepts it in the contract and returns it unmodified; the VM
@@ -38,7 +38,9 @@ import type { RngPort } from "../ports/rng.ts";
 import type { ClockPort } from "../ports/time.ts";
 import type { Value } from "../ports/value.ts";
 import type { Wait } from "../ports/wait.ts";
+import type { SectionKey } from "../save/state.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
+import type { EffectKind } from "./effects.ts";
 
 /**
  * The read-only view a command runs against (AD-8; decision U2). It holds game
@@ -53,12 +55,20 @@ export type CommandView = {
 
 /**
  * One side effect a command reports as plain data (AD-10; decision U1). The
- * owning module applies it; a command never mutates a section itself. Entry 21
- * replaces this with the stamped effect record and may widen it.
+ * owning module applies it; a command never mutates a section itself.
+ *
+ * `section` names the AD-10 section the command writes; the VM turns it into
+ * the recorded `EffectPatch` (`path: []`, `op: "merge"`, `value: null`). A
+ * `pure` command reports no section, so its record's patch is `null`. `args`
+ * lets a command report the arguments to record; absent means the VM records
+ * the call's own argument values. `vm.control` is an internal marker the core
+ * pack uses to unwind control flow (FUN-7): it is consumed by the VM and never
+ * becomes an `EffectRecord`.
  */
 export type CommandEffect = {
-  readonly kind: string;
-  readonly args: readonly PlainData[];
+  readonly kind: EffectKind | "vm.control";
+  readonly section?: SectionKey;
+  readonly args?: readonly PlainData[];
 };
 
 /**

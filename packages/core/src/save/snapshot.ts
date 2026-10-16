@@ -13,6 +13,12 @@
  * Two errors are pinned: a different `schema.compiler` is
  * `restore.compiler-mismatch`, and a missing section is `restore.shape`.
  *
+ * **Migration (AD-7's migration chain).** A save whose `schema.vm` is behind
+ * `SCHEMA_VERSIONS.vm` is migrated forward before it is returned: v2 → v3 adds
+ * the effect log (`effects: []`, `effectSeq: 0`) that ticket 3.21 introduced,
+ * then the section version is set to the current one. The chain is keyed by the
+ * per-section numbers (AD-23).
+ *
  * AD-10 (the state tree) and AD-11 (the canonical form); format-spec §11 (the
  * saved game).
  */
@@ -25,6 +31,29 @@ import { SCHEMA_VERSIONS, type GameState } from "./state.ts";
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
   return canon(state);
+}
+
+/**
+ * Migrate a snapshot's `vm` section forward to `SCHEMA_VERSIONS.vm` (AD-7's
+ * migration chain). Only the effect log has a migration so far: v2 → v3 adds
+ * `effects` and `effectSeq`. A save already at the current version is left
+ * untouched.
+ */
+function migrateVm(record: Record<string, unknown>, schema: Record<string, unknown>): void {
+  const version = schema.vm;
+  if (typeof version !== "number") {
+    throw new ScriptError("restore.shape", "the snapshot's `schema` has no numeric `vm` version");
+  }
+  if (version >= SCHEMA_VERSIONS.vm) return;
+
+  const vm = record.vm;
+  if (typeof vm !== "object" || vm === null || Array.isArray(vm)) {
+    throw new ScriptError("restore.shape", "the snapshot's `vm` section is not an object");
+  }
+  const vmRecord = vm as Record<string, unknown>;
+  if (!Array.isArray(vmRecord.effects)) vmRecord.effects = [];
+  if (typeof vmRecord.effectSeq !== "number") vmRecord.effectSeq = 0;
+  schema.vm = SCHEMA_VERSIONS.vm;
 }
 
 /** Parse and check a snapshot's canonical form (see the file header). */
@@ -57,6 +86,8 @@ export function restoreGameState(json: string): GameState {
       throw new ScriptError("restore.shape", `the snapshot is missing the "${key}" section`);
     }
   }
+
+  migrateVm(record, schema as Record<string, unknown>);
 
   return parsed as GameState;
 }
