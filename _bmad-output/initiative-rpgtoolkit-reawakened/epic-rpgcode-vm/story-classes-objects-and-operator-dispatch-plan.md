@@ -3,7 +3,7 @@ title: 'Classes, objects and operator dispatch'
 type: 'feature'
 ticket: 6
 created: '2026-10-16'
-status: built
+status: done
 baseline_revision: '5a7ad22679581abdda690a0232f1f1e2208af3dc'
 route: 'full'
 route_source: 'pinned'
