@@ -1,5 +1,5 @@
 /**
- * The command registry: pure assembly of an ordered `PluginDefinition[]` and
+ * The command registry: pure assembly of an ordered resolved-plugin list and
  * the four-tier lookup (AD-8; ADR 0004 decisions 2 and 6).
  *
  * **Layer order.** Registration order is layer order. Where two plugins define
@@ -32,10 +32,14 @@
 import type { Logger } from "../ports/logger.ts";
 import type { BuiltinSpec } from "./builtins.ts";
 import type { ParamInfo } from "./lower.ts";
-import type { CommandHandler, CommandResult, PluginDefinition } from "./plugin.ts";
+import type { CommandHandler, CommandResult, ResolvedPlugin } from "./plugin.ts";
 import type { Program, ProgramRef } from "./program.ts";
 /** One layer of one name: the plugin that contributed it and its spec. */
-type CommandLayer = { readonly plugin: string; readonly spec: BuiltinSpec };
+type CommandLayer = {
+  readonly plugin: string;
+  readonly spec: BuiltinSpec;
+  readonly options?: ResolvedPlugin["options"];
+};
 
 /**
  * One resolved command: the winning layer and the handler of the layer below (a
@@ -146,21 +150,26 @@ export function resolveCall(
 }
 
 /**
- * Assemble an ordered plugin list into one layered registry (ADR 0004 decisions
- * 2 and 6). The list is the whole chain: `createScriptServices` passes the
- * built-in `core` pack as layer 0 followed by the caller's layers, and pinning
- * `core` against removal is entry 25's.
+ * Assemble the host-resolved ordered plugin list into one layered registry
+ * (ADR 0004 decisions 2 and 6). Manifest order is the whole chain; no built-in
+ * layer is inserted here.
  *
  * Pure over the list: the same plugins and the same logger records produce the
  * same registry, and nothing here touches game state.
  */
 export function assembleCommands(
-  plugins: readonly PluginDefinition[],
+  plugins: readonly ResolvedPlugin[],
   logger: Logger,
 ): CommandRegistry {
   const layers = new Map<string, CommandLayer[]>();
+  const pluginIds = new Set<string>();
 
-  for (const plugin of plugins) {
+  for (const resolved of plugins) {
+    const plugin = resolved.definition;
+    if (pluginIds.has(plugin.id)) {
+      throw new Error(`plugin "${plugin.id}" appears more than once in the resolved manifest`);
+    }
+    pluginIds.add(plugin.id);
     const claimed = new Set<string>();
     for (const spec of plugin.commands) {
       for (const key of [spec.name, ...spec.aliases]) {
@@ -184,16 +193,17 @@ export function assembleCommands(
             data: { name: key, kind: "plugin", previous: below.plugin, replacement: plugin.id },
           });
         }
-        stack.push({ plugin: plugin.id, spec });
+        const layer: CommandLayer =
+          resolved.options === undefined
+            ? { plugin: plugin.id, spec }
+            : { plugin: plugin.id, spec, options: resolved.options };
+        stack.push(layer);
         layers.set(key, stack);
       }
     }
   }
 
-  // `next` with nothing below (decision U4): one no-op handler per such name,
-  // so a dispatch allocates nothing. It returns the empty result and warns once
-  // per call, so a wrapper placed below the layer it meant to wrap is visible
-  // rather than silent.
+  // `next` with nothing below (decision U4): one no-op handler per such name.
   const noNext = new Map<string, CommandHandler>();
   for (const [key, stack] of layers) {
     if (stack.length !== 1) continue;
@@ -208,6 +218,13 @@ export function assembleCommands(
     });
   }
 
+  function handlerAt(stack: readonly CommandLayer[], index: number): CommandHandler {
+    const layer = stack[index]!;
+    const options = layer.options;
+    if (options === undefined) return layer.spec.call;
+    return (view, args, next) => layer.spec.call({ ...view, options }, args, next);
+  }
+
   return {
     get(name) {
       const stack = layers.get(name);
@@ -215,9 +232,11 @@ export function assembleCommands(
       const top = stack[stack.length - 1];
       if (top === undefined) return undefined;
       const below = stack[stack.length - 2];
-      const next = below === undefined ? noNext.get(name) : below.spec.call;
+      const next = below === undefined ? noNext.get(name) : handlerAt(stack, stack.length - 2);
       if (next === undefined) return undefined;
-      return { spec: top.spec, next };
+      const call = handlerAt(stack, stack.length - 1);
+      const spec = call === top.spec.call ? top.spec : { ...top.spec, call };
+      return { spec, next };
     },
     keys() {
       return [...layers.keys()];

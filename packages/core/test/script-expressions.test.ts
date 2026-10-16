@@ -4,7 +4,6 @@ import { test } from "node:test";
 import {
   advanceScriptTick,
   createGameState,
-  createScriptServices,
   pow,
   startProgram,
   type BuiltinSpec,
@@ -12,6 +11,7 @@ import {
   type PluginDefinition,
   type ScriptError,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 function errorOf(run: () => unknown): { code: string; message: string } {
   try {

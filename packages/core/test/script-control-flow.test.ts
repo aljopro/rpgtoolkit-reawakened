@@ -4,13 +4,13 @@ import { test } from "node:test";
 import {
   advanceScriptTick,
   createGameState,
-  createScriptServices,
   startProgram,
   type BuiltinSpec,
   type GameState,
   type PluginDefinition,
   type ScriptError,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 function errorOf(run: () => unknown): { code: string; message: string } {
   try {

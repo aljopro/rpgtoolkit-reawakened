@@ -8,11 +8,11 @@
  * the result). `script/registry.ts` layers specs and supplies `next`;
  * `script/vm.ts` resolves, checks arity and dispatches.
  *
- * `CORE_PLUGIN` is the built-in `core` pack: layer 0 of the ordered plugin list
- * every caller assembles (ADR 0004 decision 6). Entry 3 holds only the tracer's
- * two commands. `end` returns normally (`{ value: null }`): that proves
- * registry resolution and the dispatch path, while `end`/`done`/`stop`'s real
- * unwinding (FUN-7) is entry 13's, and entry 21 registers the catalogue here.
+ * `CORE_PLUGIN` is the built-in `core` pack. The engine default manifest
+ * resolves it as layer 0; explicit callers provide the resolved list (ADR 0004
+ * decision 6). Entry 3 holds only the tracer's two commands. `end` returns
+ * normally (`{ value: null }`): that proves registry resolution and the dispatch
+ * path, while `end`/`done`/`stop`'s real unwinding (FUN-7) is entry 13's, and
  * `sleep` takes whole ticks directly, so it applies neither THR-1's
  * seconds→ticks formula (that is `core/time`'s `secondsToTicks`, for
  * `threadSleep`, entry 9) nor the `0`-means-indefinite rule: a `0`, fractional

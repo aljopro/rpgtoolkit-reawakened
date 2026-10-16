@@ -11,7 +11,6 @@ import {
   canon,
   createCommandLookup,
   createGameState,
-  createScriptServices,
   restoreGameState,
   snapshot,
   startProgram,
@@ -27,6 +26,7 @@ import {
   type ScriptError,
   type TierLookup,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 /** A view that draws nothing, so a test can prove a command used no port. */
 const FIXTURE_VIEW: CommandView = { rng: { nextUint32: () => 0 }, clock: { tick: () => 0 } };
@@ -70,8 +70,8 @@ function collectingLogger(): { logger: Logger; records: LogRecord[] } {
   return { logger, records };
 }
 
-function pack(id: string, commands: readonly BuiltinSpec[]): PluginDefinition {
-  return { id, version: "1.0.0", commands };
+function pack(id: string, commands: readonly BuiltinSpec[]): { definition: PluginDefinition } {
+  return { definition: { id, version: "1.0.0", commands } };
 }
 
 function noParamsSpec(name: string, call: BuiltinSpec["call"]): BuiltinSpec {

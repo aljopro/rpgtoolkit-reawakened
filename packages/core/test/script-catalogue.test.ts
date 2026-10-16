@@ -17,7 +17,6 @@ import {
   canon,
   CATALOGUE_STUBS_PLUGIN,
   createGameState,
-  createScriptServices,
   drainEffects,
   EFFECT_LOG_CAP,
   hashState,
@@ -28,6 +27,7 @@ import {
   type GameState,
   type ScriptError,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 type CatalogueRow = {
   readonly name: string;

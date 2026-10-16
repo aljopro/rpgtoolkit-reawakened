@@ -69,7 +69,24 @@ export type {
   CommandResult,
   CommandView,
   PluginDefinition,
+  ResolvedPlugin,
 } from "./plugin.ts";
+export type {
+  PluginManifest,
+  PluginManifestDiagnostic,
+  PluginManifestEntry,
+  PluginManifestOperation,
+  PluginManifestParseResult,
+  PluginManifestPatch,
+  PluginManifestPatchResult,
+} from "./manifest.ts";
+export {
+  applyPluginManifestPatch,
+  DEFAULT_PLUGIN_MANIFEST,
+  ENGINE_DEFAULT_MANIFEST,
+  isPluginManifestEntryEnabled,
+  parsePluginManifest,
+} from "./manifest.ts";
 export {
   assembleCommands,
   createCommandLookup,

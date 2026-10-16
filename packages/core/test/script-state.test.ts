@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import {
   canon,
   createGameState,
-  createScriptServices,
   advanceScriptTick,
   restoreGameState,
   SCHEMA_VERSIONS,
@@ -17,6 +16,7 @@ import {
   type GameState,
   type ScriptError,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 function errorOf(run: () => unknown): { code: string; message: string } {
   try {
