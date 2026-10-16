@@ -116,11 +116,13 @@ export function createScriptServices(
   plugins: readonly ResolvedPlugin[] = [],
   logger: Logger = NULL_LOGGER,
   virtuals?: VirtualVariablePort,
+  gameId = "default",
 ): ScriptServices {
   const view: CommandView = {
     rng: createRngPort(state.rng),
     clock: createClockPort(state.time),
     state,
+    gameId,
   };
   const virt = virtuals ?? createDefaultVirtuals(state);
   const registry = assembleCommands(plugins, logger);
@@ -185,7 +187,7 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
     thread.status = "finished";
     return;
   }
-  if (wait.kind === "request") {
+  if (wait.kind === "request" || wait.kind === "blob") {
     if (!result.ok) {
       recordDiagnostic(vm, view.tick, thread.id, "request.failed", wait.file, wait.line, toStringValue(result.value));
     }
@@ -214,7 +216,7 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
 export function replyToRequest(vm: VmState, reqId: number, reply: WaitReply): void {
   for (const thread of vm.threads) {
     const wait = thread.wait;
-    if (thread.status !== "waiting" || wait === null || wait.kind !== "request") continue;
+    if (thread.status !== "waiting" || wait === null || (wait.kind !== "request" && wait.kind !== "blob")) continue;
     if (wait.reqId !== reqId) continue;
     if (wait.reply !== null) {
       throw new ScriptError("request.duplicate-reply", `request ${reqId} already has a reply`);
@@ -820,15 +822,17 @@ function argValues(args: readonly Arg[]): PlainData[] {
   return args.map((arg) => (typeof arg.value === "number" && arg.value === 0 ? 0 : arg.value));
 }
 
-/** A fresh `request` wait; each caller gets its own object, so the effect log never aliases a live wait. */
+/** A fresh host-request wait; file/blob requests use AD-9's dedicated `blob` kind. */
 function requestWait(
   reqId: number,
   deadline: number | null,
   then: CommandResult["then"],
   pos: SourcePos,
+  requestKind?: string,
 ): Wait {
+  const kind = requestKind === "asset" || requestKind === "loadBlob" || requestKind === "saveBlob" ? "blob" : "request";
   return {
-    kind: "request",
+    kind,
     global: true,
     reqId,
     deadline,
@@ -1012,6 +1016,40 @@ function performCall(
           setOwnValue(vm.globals, varName, 0);
         }
       }
+      if (action === "file") {
+        const fileAction = effect.args?.[1] as string;
+        const fileId = effect.args?.[2] as string;
+        if (fileAction === "open") {
+          const fileData = effect.args?.[6] as string;
+          const file = {
+            id: fileId,
+            mode: effect.args?.[3] as "input" | "output" | "append" | "binary",
+            path: effect.args?.[4] as string,
+            area: effect.args?.[5] as "saves" | "files",
+            data: fileData,
+            position: effect.args?.[3] === "append" ? fileData.length / 2 : 0,
+            loaded: true,
+          };
+          const existing = vm.files.findIndex((item) => item.id === fileId);
+          if (existing >= 0) vm.files.splice(existing, 1, file);
+          else vm.files.push(file);
+        }
+        if (fileAction === "close") {
+          const index = vm.files.findIndex((item) => item.id === fileId);
+          if (index >= 0) vm.files.splice(index, 1);
+        }
+        if (fileAction === "position") {
+          const file = vm.files.find((item) => item.id === fileId);
+          if (file !== undefined) file.position = effect.args?.[3] as number;
+        }
+        if (fileAction === "data") {
+          const file = vm.files.find((item) => item.id === fileId);
+          if (file !== undefined) {
+            file.data = effect.args?.[3] as string;
+            file.position = effect.args?.[4] as number;
+          }
+        }
+      }
       if (action === "thread") {
         startThread(vm, {
           ref: { kind: "inline", text: effect.args?.[1] as string, compiler: COMPILER_VERSION },
@@ -1150,10 +1188,10 @@ function performCall(
       out: {},
       result: null,
       patch: null,
-      wait: requestWait(reqId, deadline, result.then, pos),
+      wait: requestWait(reqId, deadline, result.then, pos, result.request.kind),
       request: { ...result.request, reqId },
     });
-    thread.wait = requestWait(reqId, deadline, result.then, pos);
+    thread.wait = requestWait(reqId, deadline, result.then, pos, result.request.kind);
     thread.status = "waiting";
     return "yield";
   }

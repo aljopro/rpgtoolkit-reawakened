@@ -1037,27 +1037,6 @@ const STUBS: readonly CatalogueStub[] = [
     params: [{ name: "ms", optional: true, byRef: true, variadic: false }],
   },
   {
-    name: "closefile",
-    kind: "state-write",
-    sections: ["engine"],
-    obsolete: false,
-    params: [{ name: "handle", optional: false, byRef: false, variadic: false }],
-  },
-  {
-    name: "fileeof",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "handle", optional: false, byRef: false, variadic: false }, { name: "flag", optional: false, byRef: true, variadic: false }],
-  },
-  {
-    name: "apppath",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "path", optional: true, byRef: true, variadic: false }],
-  },
-  {
     name: "mbox",
     kind: "state-write",
     sections: ["ui"],
