@@ -3,7 +3,7 @@ title: 'Plugin manifest and the engine''s default manifest'
 type: 'feature'
 ticket: 25
 created: '2026-10-16'
-status: draft
+status: ready-for-dev
 baseline_revision: 'a51613603f16df30a83311c79a584c869f1e2def'
 route: 'full'
 route_source: 'auto'
@@ -11,15 +11,19 @@ risk: 'medium'
 context: ['docs/guardrails.md', 'docs/architecture-options.md', 'docs/adr/0004-script-ast-step-ir-and-plugins.md', 'docs/spec/engine/plugins-and-battle.md', 'docs/spec/engine/main-loop-and-startup.md', 'docs/spec/formats/main-file.md']
 ---
 
-## Questions for the owner
+## Owner rulings (2026-10-16)
 
-- Confirm the plugin-manifest entry shape. The ticket names `{ id, enabled?, options? }`; ADR 0004 says only that entries are ordered plain data, while its request-timeout rule names manifest `options`. Decide whether an optional `version` selector is part of the entry, the allowed `options` plain-data value, and whether unknown fields are rejected.
-- Confirm the default pack list at this checkpoint. `core` is required and pinned, while catalogue stubs and later domain packs are currently separate definitions. Decide which definitions the default manifest names now and which are added only by later entries.
-- Confirm patch semantics. Decide the exact data operation for remove, disable, reorder, replace and append; whether duplicate ids are rejected; and whether replacement/`options` are whole-entry replacement or merge. A patch that removes every default id still leaves pinned `core` unless the owner chooses a different rule.
-- Confirm the pinned-`core` failure policy. If a user removes, disables, reorders or replaces `core`, decide which operations produce a located diagnostic, which are repaired/ignored, and whether the resolved list always puts the engine `core` definition at the bottom.
-- Confirm resolution diagnostics. Decide the stable code and location for an unresolved id (manifest path plus entry index, or another `Diagnostic` location), whether a disabled entry is resolved at all, and whether resolution continues with the other entries after a failure.
-- Confirm how manifest `options` reach a plugin without changing ADR 0004's `(view, args, next)` handler signature. Decide whether options are carried on an immutable per-command view, a resolved layer context, or another plain-data value, and whether the VM or only the plugin reads them.
-- Confirm the host/core seam. The host must map ids to loadable `PluginDefinition` values and core must not load modules or files. Decide whether the reusable patch/type functions live in `core` while resolution is a host adapter, and which runner/engine entry first proves that the default manifest is the actual assembly path.
+1. **Entry shape.** `{ id, enabled?, options? }`. No `version`. Unknown fields are rejected with a located diagnostic. `options` is plain JSON (G1).
+2. **Default packs.** Only what exists today: `core` and the catalogue stubs. Later epics add their own ids.
+3. **Patch grammar.** Data operations by id: `remove`, `disable`, `reorder`, `replace`, `append`. Duplicate ids are rejected; an unknown id in remove/disable/replace is diagnosed. `replace` swaps the whole entry, including `options` (no merge).
+4. **Pinned `core`.** Any remove/disable/reorder/replace of `core` is refused with a located diagnostic; `core` stays enabled at the bottom. No silent repair.
+5. **Resolution diagnostics.** One located diagnostic per unresolved id (manifest path + entry index, stable code); resolution continues with the remaining entries. A disabled entry is never resolved.
+6. **Options delivery.** Options are manifest configuration, never VM state. The registry takes resolved entries (`{ definition, options }`); a handler sees only its own layer's options as an optional plain-data field on `CommandView`, injected per layer at assembly (`(view, args, next)` unchanged; no wrapping when a layer has no options). The VM also reads the resolved options by plugin id, because ADR 0004 decision 7's request-timeout layering names manifest `options` as an input. So both the VM and plugins read them.
+7. **Core/host seam.** Core owns the types, the default manifest and the pure patch function. The host owns the id table and resolution. The runner-harness `script-host.ts` proves the default path; `createEngine` stays with the engine epic.
+
+## Sequencing
+
+Build after 3.9 and 3.6 merge: the `vm.ts` cutover and the registry change touch the same script VM files. Re-baseline `baseline_revision` onto current `main` before starting.
 
 <frozen-after-approval reason="human-owned intent — do not modify unless the human renegotiates">
 
