@@ -4,9 +4,9 @@
  *
  * ADR 0004 decision 2 dogfoods the engine's own command library as a plugin, so
  * first-party packs, the TK2 compat layer and a game-shipped plugin all use one
- * shape: `PluginDefinition = { id, version, commands }`. Decision 6 adds the
- * composition — the host resolves manifest ids to definitions and hands an
- * ordered list to `script/registry.ts`, which layers them, later first.
+ * shape: `PluginDefinition = { id, version, commands, decoders? }`. Decision 6
+ * adds the composition — the host resolves manifest ids to definitions and
+ * hands an ordered list to `script/registry.ts`, which layers them, later first.
  *
  * The handler is AD-8's functional contract,
  * `(view, args, next) -> { value, out?, effects?, wait? }`:
@@ -33,6 +33,7 @@
  * docs/adr/0004 (decisions 2 and 6); AD-8, AD-10.
  */
 
+import type { AssetDecoder } from "../formats/registry/decoder.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 import type { RngPort } from "../ports/rng.ts";
 import type { ClockPort } from "../ports/time.ts";
@@ -118,9 +119,11 @@ export type CommandHandler = (
   next: CommandHandler,
 ) => CommandResult;
 
-/** One plugin: an ordered command pack (ADR 0004 decisions 2 and 6). */
+/** One plugin: an ordered command and asset pack (ADR 0004 decisions 2 and 6). */
 export type PluginDefinition = {
   readonly id: string;
   readonly version: string;
   readonly commands: readonly BuiltinSpec[];
+  /** Optional format contributions layered after the core decoder set (AD-31). */
+  readonly decoders?: readonly AssetDecoder[];
 };

@@ -4,4 +4,5 @@
 // every landed reader.
 export * from "./decoder.ts";
 export * from "./registry.ts";
+export * from "./assembly.ts";
 export * from "./core-decoders.ts";
