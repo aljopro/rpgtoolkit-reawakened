@@ -1,7 +1,7 @@
 ---
 title: "Register the TK2 decoders in the format registry"
 ticket: 8
-status: done
+status: built
 ---
  
 ## Intent
