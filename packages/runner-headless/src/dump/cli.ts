@@ -18,7 +18,7 @@
  * act, like `golden:record` (G5) — never a CI step.
  */
 
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PACKAGE_ROOT, type AssetResolver } from "@tk-reawakened/core";
 import {
@@ -28,6 +28,7 @@ import {
   parseExpectation,
   serializeExpectation,
   toExpectationGame,
+  type Expectation,
   type ExpectationGame,
 } from "./expectation.ts";
 import { loadRoot } from "./fs.ts";
@@ -75,8 +76,9 @@ function checkCorpus(expectationPath: string, gamesDir: string): number {
     console.error(`dump: ${expectationPath} names no games to check`);
     return 1;
   }
+  const ignore = new Set(expectation.ignore ?? []);
   const unlisted = readdirSync(gamesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !names.includes(entry.name))
+    .filter((entry) => entry.isDirectory() && !names.includes(entry.name) && !ignore.has(entry.name))
     .map((entry) => entry.name)
     .sort();
   if (unlisted.length > 0) {
@@ -104,8 +106,10 @@ function checkCorpus(expectationPath: string, gamesDir: string): number {
       continue;
     }
     const { parsed, skipped } = result.report.counts;
+    const failCount = Object.keys(expected.expectedFailures ?? {}).length;
+    const failMsg = failCount > 0 ? `, ${failCount} expected failure(s)` : ", 0 failed";
     console.log(
-      `${name}: ${parsed} parsed, ${skipped} skipped, 0 failed, ${Object.keys(expected.digests).length} digests match`,
+      `${name}: ${parsed} parsed, ${skipped} skipped${failMsg}, ${Object.keys(expected.digests).length} digests match`,
     );
   }
   return failed ? 1 : 0;
@@ -113,8 +117,17 @@ function checkCorpus(expectationPath: string, gamesDir: string): number {
 
 /** `dump --record`: rebuild the expectation from every game folder under `gamesDir`. */
 function recordCorpus(expectationPath: string, gamesDir: string): number {
+  let existing: Expectation | undefined;
+  if (existsSync(expectationPath)) {
+    try {
+      existing = parseExpectation(readFileSync(expectationPath, "utf8"), expectationPath);
+    } catch {
+      // Re-record without existing expectation if it was missing or unparseable.
+    }
+  }
+  const ignore = new Set(existing?.ignore ?? []);
   const names = readdirSync(gamesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && !ignore.has(entry.name))
     .map((entry) => entry.name)
     .sort();
   if (names.length === 0) {
@@ -129,22 +142,30 @@ function recordCorpus(expectationPath: string, gamesDir: string): number {
       console.error(`dump: error: ${name}: ${result.message}`);
       return 1;
     }
-    if (result.report.counts.failed > 0) {
-      console.error(`dump: refusing to record ${name}: ${result.report.counts.failed} file(s) failed to parse`);
-      for (const entry of result.report.files) {
+    const expectedFailures = existing?.games[name]?.expectedFailures;
+    const expectedResidue = existing?.games[name]?.expectedResidue;
+    const unexpectedFailures = result.report.files.filter(
+      (entry) => entry.status === "failed" && (expectedFailures === undefined || !(entry.path in expectedFailures)),
+    );
+    if (unexpectedFailures.length > 0) {
+      console.error(
+        `dump: refusing to record ${name}: ${unexpectedFailures.length} file(s) failed unexpectedly to parse`,
+      );
+      for (const entry of unexpectedFailures) {
         if (entry.status === "failed") {
           console.error(`  ${entry.path}: ${entry.error.section} at offset ${entry.error.offset}: ${entry.error.message}`);
         }
       }
       return 1;
     }
-    const game = toExpectationGame(result.report);
+    const game = toExpectationGame(result.report, expectedFailures, expectedResidue);
     games[name] = game;
     digestCount += Object.keys(game.digests).length;
   }
   mkdirSync(dirname(expectationPath), { recursive: true });
   const temporary = `${expectationPath}.tmp.${process.pid}`;
-  writeFileSync(temporary, serializeExpectation(buildExpectation(games)), "utf8");
+  const recorded = buildExpectation(games, existing?.comment, existing?.ignore);
+  writeFileSync(temporary, serializeExpectation(recorded), "utf8");
   renameSync(temporary, expectationPath);
   console.log(`dump: recorded ${names.length} game(s), ${digestCount} digests to ${expectationPath}`);
   return 0;

@@ -45,7 +45,7 @@ import {
   toExpectationGame,
   type ExpectationGame,
 } from "../src/dump/expectation.ts";
-import { buildReport, digestsOf, serializeReport, type DumpEntry } from "../src/dump/report.ts";
+import { buildReport, digestsOf, serializeReport, type DumpEntry, type DumpReport } from "../src/dump/report.ts";
 
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const CLI_PATH = join(PACKAGE_ROOT, "dist/cli.js");
@@ -776,6 +776,197 @@ test("parseExpectation refuses a malformed expectation, naming the file", () => 
     ok(pattern.test(caught.message), caught.message);
     ok(caught.message.includes("expectation.json"));
   }
+});
+
+test("the expectation round-trips with ignore, expectedFailures, and expectedResidue", () => {
+  const report = buildReport(FILES);
+  const game = toExpectationGame(
+    report,
+    { "text.anm": "16.5" },
+    { "legacy.tem": "16.6" },
+  );
+  const expectation = buildExpectation({ sample: game }, "Custom comment", ["listings", "renders"]);
+  const text = serializeExpectation(expectation);
+  const parsed = parseExpectation(text, "spec-examples.json");
+  deepEqual(parsed.games, expectation.games);
+  deepEqual(parsed.ignore, ["listings", "renders"]);
+  equal(serializeExpectation(parsed), text);
+});
+
+test("parseExpectation validates ignore, expectedFailures, and expectedResidue", () => {
+  const cases: ReadonlyArray<readonly [string, RegExp]> = [
+    ['{"schema":1,"ignore":"not-array","games":{}}', /ignore must be an array/],
+    ['{"schema":1,"ignore":[""],"games":{}}', /ignore\[0\] must be a non-empty string/],
+    [
+      '{"schema":1,"games":{"x":{"counts":{"parsed":0,"skipped":0,"failed":0},"digests":{},"expectedFailures":"bad"}}}',
+      /expectedFailures must be an object/,
+    ],
+    [
+      '{"schema":1,"games":{"x":{"counts":{"parsed":0,"skipped":0,"failed":0},"digests":{},"expectedFailures":{"f":""}}}}',
+      /must be a non-empty string ticket reference/,
+    ],
+    [
+      '{"schema":1,"games":{"x":{"counts":{"parsed":0,"skipped":0,"failed":0},"digests":{},"expectedResidue":{"f":""}}}}',
+      /must be a non-empty string ticket reference/,
+    ],
+  ];
+  for (const [text, pattern] of cases) {
+    let caught: unknown;
+    try {
+      parseExpectation(text, "expectation.json");
+    } catch (cause) {
+      caught = cause;
+    }
+    equal(caught instanceof Error, true);
+    if (caught instanceof Error) {
+      equal(pattern.test(caught.message), true);
+      equal(caught.message.includes("expectation.json"), true);
+    }
+  }
+});
+
+test("compareGame passes on expected failures and expected residue", () => {
+  const parsedEntry = {
+    path: "legacy.tem",
+    status: "parsed" as const,
+    format: "character" as const,
+    section: "format-spec §6.1",
+    digest: "1234567890abcdef",
+    summary: "character with residue",
+    warnings: ["326 trailing byte(s) after the character were kept as residue (format-spec §6.1)"],
+  };
+  const failedEntry = {
+    path: "text.anm",
+    status: "failed" as const,
+    format: "animation" as const,
+    section: "format-spec §7.1",
+    error: { offset: 0, section: "format-spec §7.1", message: "unterminated string" },
+  };
+  const report: DumpReport = {
+    schema: 1,
+    counts: { parsed: 1, skipped: 0, failed: 1 },
+    files: [parsedEntry, failedEntry],
+  };
+  const expected: ExpectationGame = {
+    counts: { parsed: 1, skipped: 0, failed: 1 },
+    digests: { "legacy.tem": "1234567890abcdef" },
+    expectedFailures: { "text.anm": "16.5" },
+    expectedResidue: { "legacy.tem": "16.6" },
+  };
+  const drift = compareGame("sample", expected, report);
+  deepEqual(driftLines(drift), []);
+});
+
+test("compareGame fails when an expected failure starts passing", () => {
+  const parsedEntry = {
+    path: "text.anm",
+    status: "parsed" as const,
+    format: "animation" as const,
+    section: "format-spec §7.1",
+    digest: "fedcba0987654321",
+    summary: "animation parsed",
+    warnings: [],
+  };
+  const report: DumpReport = {
+    schema: 1,
+    counts: { parsed: 1, skipped: 0, failed: 0 },
+    files: [parsedEntry],
+  };
+  const expected: ExpectationGame = {
+    counts: { parsed: 0, skipped: 0, failed: 1 },
+    digests: {},
+    expectedFailures: { "text.anm": "16.5" },
+  };
+  const lines = driftLines(compareGame("sample", expected, report));
+  equal(
+    lines.some((l) => l.includes("text.anm") && l.includes("expected to fail") && l.includes("16.5")),
+    true,
+  );
+});
+
+test("compareGame fails when expected residue clears without expectation update", () => {
+  const parsedEntry = {
+    path: "legacy.tem",
+    status: "parsed" as const,
+    format: "character" as const,
+    section: "format-spec §6.1",
+    digest: "1234567890abcdef",
+    summary: "character with 0 residue",
+    warnings: [],
+  };
+  const report: DumpReport = {
+    schema: 1,
+    counts: { parsed: 1, skipped: 0, failed: 0 },
+    files: [parsedEntry],
+  };
+  const expected: ExpectationGame = {
+    counts: { parsed: 1, skipped: 0, failed: 0 },
+    digests: { "legacy.tem": "1234567890abcdef" },
+    expectedResidue: { "legacy.tem": "16.6" },
+  };
+  const lines = driftLines(compareGame("sample", expected, report));
+  equal(
+    lines.some((l) => l.includes("legacy.tem") && l.includes("expected to leave residue") && l.includes("16.6")),
+    true,
+  );
+});
+
+test("compareGame fails when a current-format file leaves unexpected residue", () => {
+  const parsedEntry = {
+    path: "modern.brd",
+    status: "parsed" as const,
+    format: "board" as const,
+    section: "format-spec §4.2",
+    digest: "abcdef1234567890",
+    summary: "board with residue",
+    warnings: ["4 trailing byte(s) after the board were kept as residue (format-spec §4.2)"],
+  };
+  const report: DumpReport = {
+    schema: 1,
+    counts: { parsed: 1, skipped: 0, failed: 0 },
+    files: [parsedEntry],
+  };
+  const expected: ExpectationGame = {
+    counts: { parsed: 1, skipped: 0, failed: 0 },
+    digests: { "modern.brd": "abcdef1234567890" },
+  };
+  const lines = driftLines(compareGame("sample", expected, report));
+  equal(lines.some((l) => l.includes("modern.brd") && l.includes("left unconsumed residue")), true);
+});
+
+test("dump --check ignores directories in expectation.ignore", () => {
+  const games = mkdtempSync(join(tmpdir(), "rpg-dump-games-"));
+  const alpha = join(games, "alpha");
+  const listings = join(games, "listings");
+  try {
+    mkdirSync(alpha, { recursive: true });
+    mkdirSync(listings, { recursive: true });
+    writeFileSync(join(alpha, "walk.anm"), ANIMATION_BYTES);
+    writeFileSync(join(listings, "readme.txt"), "hello");
+    const expectationPath = join(games, "expectation.json");
+    const exp = buildExpectation(
+      { alpha: { counts: { parsed: 1, skipped: 0, failed: 0 }, digests: { "walk.anm": "0d05a2f01d4863be" } } },
+      "test",
+      ["listings"],
+    );
+    writeFileSync(expectationPath, serializeExpectation(exp), "utf8");
+    const checked = runCli(["dump", "--check", expectationPath, games]);
+    equal(checked.status, 0, checked.stderr);
+    equal(checked.stdout.includes("alpha: 1 parsed, 0 skipped, 0 failed, 1 digests match"), true);
+  } finally {
+    rmSync(games, { recursive: true, force: true });
+  }
+});
+
+test("the committed spec-examples dump expectation matches docs/spec/examples", () => {
+  const root = join(PACKAGE_ROOT, "..", "..");
+  const expectationPath = join(root, "golden", "spec-examples.json");
+  const examplesDir = join(root, "docs", "spec", "examples");
+  const checked = runCli(["dump", "--check", expectationPath, examplesDir]);
+  equal(checked.status, 0, checked.stderr);
+  equal(checked.stdout.includes("files: 0 parsed, 3 skipped, 0 failed, 0 digests match"), true);
+  equal(checked.stdout.includes("game: 19 parsed, 7 skipped, 0 failed, 19 digests match"), true);
+  equal(checked.stdout.includes("versions: 42 parsed, 65 skipped, 14 expected failure(s), 42 digests match"), true);
 });
 
 // ------------------------------------------------------------------ the CLI
