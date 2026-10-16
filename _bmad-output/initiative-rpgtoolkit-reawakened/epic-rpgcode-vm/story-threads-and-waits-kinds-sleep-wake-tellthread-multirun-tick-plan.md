@@ -3,14 +3,16 @@ title: 'Threads and waits: kinds, sleep, wake, tellThread, multiRun, tick budget
 type: 'feature'
 ticket: 9
 created: '2026-10-16'
-status: in-progress
+status: built
 baseline_revision: '5a7ad22679581abdda690a0232f1f1e2208af3dc'
 route: 'full'
 route_source: 'pinned'
 risk: 'high'
 context: ['docs/guardrails.md', 'docs/spec/engine/rpgcode-errors-and-threads.md', 'docs/spec/engine/rpgcode-language.md', 'docs/spec/engine/rpgcode-functions.md', 'docs/spec/engine/main-loop-and-startup.md', 'docs/spec/engine/plugins-and-battle.md']
 assignee: "Build39"
----
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
@@ -77,6 +79,9 @@ assignee: "Build39"
 - 2026-10-16: Build baseline is `50ffecdabadd35594c297773109d4cd8f65fbfe0` (current `origin/main`); the approved plan retains its earlier `baseline_revision` `5a7ad22679581abdda690a0232f1f1e2208af3dc`. The drift includes the merged 3.14 format-registry work and plan artifacts; implementation is based on the current main baseline.
 ## Review Triage Log
 
+- `false` — `packages/core/src/script/vm.ts` request waits advance the fixed tick and use `timeoutTicks`; the approved matrix explicitly requires deterministic tick timeouts and says host wall-clock timeout remains external, so this behavior follows the frozen intent despite the older ADR wording.
+- `patch` — `packages/core/src/script/state.ts` and `packages/core/src/script/vm.ts` could leave `vm.block` stale after a same-thread wait-kind change, direct `stepThread`, or blocker cleanup; `refreshBlock` now replaces changed kinds, `stepThread` refreshes on every return, and `killThread` clears a removed blocker.
+- `patch` — `packages/core/test/script-threads.test.ts` previously restored only a mid-sleep snapshot; a new test snapshots and restores a live request wait before delivering the same reply and comparing replay hashes.
 ## Design Notes
 
 R-32 requires distinguishing a cooperative per-thread wait from a globally blocking command: the VM should expose the latter as a plain-data phase status rather than letting other thread phases run. `runWaitsPhase` still polls cooperative waits in ascending id, and a newly resolved wait runs in the same tick. Request continuations and `tellThread` remain data (`command`, arguments, inline source, and source position), never callbacks. The default budget stays a fixed 1000 only as the tested tuning point; callers may inject a smaller budget for deterministic unit tests, but no fps-derived value is introduced.

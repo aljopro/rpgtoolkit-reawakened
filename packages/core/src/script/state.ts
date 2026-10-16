@@ -222,6 +222,7 @@ export function killThread(state: VmState, id: number): boolean {
   const index = state.threads.findIndex((thread) => thread.id === id);
   if (index < 0) return false;
   const thread = state.threads[index]!;
+  const wasBlocker = state.block?.thread === id;
   thread.status = "finished";
   thread.frames = [];
   thread.wait = null;
@@ -230,6 +231,7 @@ export function killThread(state: VmState, id: number): boolean {
   thread.detached = [];
   thread.collect = null;
   state.threads.splice(index, 1);
+  if (wasBlocker) state.block = null;
   return true;
 }
 
@@ -265,7 +267,11 @@ export function refreshBlock(state: VmState, tick: number): void {
   const thread = findBlockingThread(state);
   if (thread === null || thread.wait === null) {
     state.block = null;
-  } else if (state.block === null || state.block.thread !== thread.id) {
+  } else if (
+    state.block === null ||
+    state.block.thread !== thread.id ||
+    state.block.kind !== thread.wait.kind
+  ) {
     state.block = { thread: thread.id, kind: thread.wait.kind, since: tick };
   }
 }

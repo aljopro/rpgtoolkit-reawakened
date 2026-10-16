@@ -339,5 +339,10 @@ test("a name no tier resolves is still unknown.command, and core stays the defau
   const tracer = makeState("count = 2\nsleep(count)\nend()\n");
   advanceScriptTick(tracer, createScriptServices(tracer));
   equal(tracer.vm.threads[0]!.status, "waiting");
-  deepEqual(tracer.vm.threads[0]!.wait, { kind: "sleep", until: 2 });
+  deepEqual(tracer.vm.threads[0]!.wait, {
+    kind: "sleep",
+    global: true,
+    until: 2,
+    resumesCall: true,
+  });
 });

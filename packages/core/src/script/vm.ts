@@ -867,6 +867,10 @@ export function stepThread(
   budget: number,
 ): number {
   let steps = 0;
+  const finish = (): number => {
+    refreshBlock(vm, services.view.clock.tick());
+    return steps;
+  };
   services.view.thread = thread.id;
   while (thread.status === "ready" && steps < budget) {
     if (thread.pending !== null) {
@@ -876,7 +880,7 @@ export function stepThread(
       const top = thread.frames[pendingIndex];
       if (top === undefined) {
         thread.status = "finished";
-        return steps;
+        return finish();
       }
       steps += 1;
       const pos: SourcePos = { file: pending.file, line: pending.line };
@@ -893,7 +897,7 @@ export function stepThread(
         pos,
         false,
       );
-      if (outcome === "yield") return steps;
+      if (outcome === "yield") return finish();
       continue;
     }
     const queued = thread.queue[0];
@@ -914,13 +918,13 @@ export function stepThread(
     const frame = thread.frames[frameIndex];
     if (frame === undefined) {
       thread.status = "finished";
-      return steps;
+      return finish();
     }
     const program = services.programs.get(frame.program);
     const op = program.ops[frame.ip];
     if (op === undefined) {
       thread.status = "finished";
-      return steps;
+      return finish();
     }
     steps += 1;
 
@@ -1164,7 +1168,7 @@ export function stepThread(
           performCall(thread, vm, services, program, frame, frameIndex, op.name, args, op.pos, true) ===
           "yield"
         ) {
-          return steps;
+          return finish();
         }
         break;
       }
@@ -1175,7 +1179,7 @@ export function stepThread(
         thread.frames.pop();
         if (thread.frames.length === 0) {
           thread.status = "finished";
-          return steps;
+          return finish();
         }
         if (thread.detached[thread.detached.length - 1] === poppedIndex) {
           // A `tellThread` frame ends: nothing in the target was waiting for its value.
@@ -1188,5 +1192,5 @@ export function stepThread(
       }
     }
   }
-  return steps;
+  return finish();
 }

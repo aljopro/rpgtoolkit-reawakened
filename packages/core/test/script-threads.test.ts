@@ -3,7 +3,7 @@
 // per-thread source/target, the global block of a blocking command, request
 // replies and tick timeouts, `multiRun`, the step budget, deadlock reporting,
 // and snapshot/replay identity.
-import { deepEqual, equal, ok } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
   advanceScriptTick,
@@ -223,7 +223,7 @@ test("killThread removes a thread, including the caller, and refuses an unknown 
   const missing = setup("killthread(99)\n");
   const error = errorOf(() => runTicks(missing.state, missing.plugins, 1));
   equal(error.code, "thread.unknown");
-  ok(error.pos !== null);
+  equal(error.pos !== null, true);
 });
 
 test("threadSleep wakes threads on the due tick in ascending id order", () => {
@@ -269,12 +269,12 @@ test("threadSleepRemaining reports (end - now) / 60, and 0 for an indefinite sle
   const { state, plugins } = setup(
     "threadsleep(2, 1)\nthreadsleepremaining(2, r)\nthreadsleep(2, 0)\nthreadsleepremaining(2, q)\nthreadwake(2)\nend()\n",
   );
-  startThread(state.vm, { ref: ref("end()"), kind: "board", owner: "script" });
+  startThread(state.vm, { ref: ref("x = 1\n"), kind: "board", owner: "script" });
   runTicks(state, plugins, 1);
 
   equal(state.vm.globals.r, 1);
   equal(state.vm.globals.q, 0);
-  equal(state.vm.threads[1]!.status, "ready");
+  equal(state.vm.threads[1]!.status, "finished");
 });
 
 test("an invalid duration or id is a located error and no wait is entered", () => {
@@ -287,7 +287,7 @@ test("an invalid duration or id is a located error and no wait is entered", () =
     const { state, plugins } = setup(program);
     const error = errorOf(() => runTicks(state, plugins, 1));
     equal(error.code, "builtin.bad-arg", program);
-    ok(error.pos !== null, program);
+    equal(error.pos !== null, true, program);
     equal(state.vm.threads[0]!.wait, null, program);
     equal(state.vm.threads[0]!.status, "ready", program);
   }
@@ -312,7 +312,7 @@ test("tellThread queues code for the target's next turn, with the target's sourc
   // The caller runs to its end without being interrupted; the code is only queued.
   stepThread(main, state.vm, services, 100);
   equal(main.status, "finished");
-  equal(state.vm.globals.callerSrc, 0);
+  equal(state.vm.globals.callersrc, 0);
   deepEqual(
     target.queue.map((queued) => queued.text),
     ["src = sourcehandle()", "tgt = targethandle()"],
@@ -502,7 +502,7 @@ test("budget: a never-yielding loop is preempted at STEP_BUDGET, not failed, and
   }
   const before = state.vm.globals.n as number;
   advanceScriptTick(state, services);
-  ok((state.vm.globals.n as number) > before);
+  equal((state.vm.globals.n as number) > before, true);
 });
 
 test("deadlock: two mutually parked threads fail the tick, naming both ids and waits", () => {
@@ -511,10 +511,10 @@ test("deadlock: two mutually parked threads fail the tick, naming both ids and w
 
   const error = errorOf(() => runTicks(state, plugins, 1));
   equal(error.code, "vm.deadlock");
-  ok(error.message.includes("thread 1"));
-  ok(error.message.includes("thread 2"));
-  ok(error.message.includes("sleep(indefinite)"));
-  ok(error.pos !== null);
+  equal(error.message.includes("thread 1"), true);
+  equal(error.message.includes("thread 2"), true);
+  equal(error.message.includes("sleep(indefinite)"), true);
+  equal(error.pos !== null, true);
 });
 
 test("no deadlock while a timed sleep, a request or a key wait can still end", () => {
@@ -549,6 +549,24 @@ test("snapshot and replay: a mid-sleep and a mid-request restore with identical 
   replyToRequest(first.state.vm, 1, { ok: true, value: 5 });
   replyToRequest(restored.vm, 1, { ok: true, value: 5 });
   deepEqual(runTicks(restored, second.plugins, 3, 50), runTicks(first.state, first.plugins, 3, 50));
+  equal(canon(restored), canon(first.state));
+});
+
+test("snapshot and replay preserves a request wait and continuation", () => {
+  const first = setup("r = ask()\nend()\n");
+  runTicks(first.state, first.plugins, 1);
+  const json = snapshot(first.state);
+  const restored = restoreGameState(json);
+  const second = setup("end()\n");
+  equal(canon(restored), json);
+  equal(restored.vm.threads[0]!.wait?.kind, "request");
+
+  replyToRequest(first.state.vm, 1, { ok: true, value: 7 });
+  replyToRequest(restored.vm, 1, { ok: true, value: 7 });
+  deepEqual(
+    runTicks(restored, second.plugins, 2, 50),
+    runTicks(first.state, first.plugins, 2, 50),
+  );
   equal(canon(restored), canon(first.state));
 });
 
