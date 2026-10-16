@@ -14,14 +14,14 @@ import type { Diagnostic } from "../ports/engine.ts";
 import type { Logger } from "../ports/logger.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 import type { ObjectValue, RefId, Value, VarScope } from "../ports/value.ts";
-import type { Wait, WaitPoll, WaitResult, WaitView } from "../ports/wait.ts";
+import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState } from "../save/state.ts";
-import { createClockPort, runTimePhase } from "../time/time.ts";
+import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
 import { CORE_PLUGIN, type Arg, type BuiltinSpec } from "./builtins.ts";
 import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
-import { recordEffect } from "./effects.ts";
+import { recordDiagnostic, recordEffect } from "./effects.ts";
 import {
   failureClass,
   HANDLER_NOT_HANDLING,
@@ -33,8 +33,9 @@ import {
 } from "./errors.ts";
 import { NULL_LOGGER } from "./logging.ts";
 import type { SourcePos, StepOp } from "./ops.ts";
-import type { CommandView, PluginDefinition } from "./plugin.ts";
+import type { CommandResult, CommandView, PluginDefinition } from "./plugin.ts";
 import {
+  COMPILER_VERSION,
   compileProgram,
   type FunctionInfo,
   type Program,
@@ -48,13 +49,19 @@ import {
   type CommandLookup,
 } from "./registry.ts";
 import {
+  findBlockingThread,
+  findThread,
   globalRef,
+  killThread,
   localRef,
+  refreshBlock,
+  startThread,
   type Frame,
   type LocalSlot,
   type Thread,
   type VmState,
 } from "./state.ts";
+import { defaultWaitPoll, describeWait } from "./waits.ts";
 import {
   compareEqual,
   compareRelational,
@@ -65,7 +72,11 @@ import {
   truthy,
 } from "./values.ts";
 
-/** The provisional per-thread, per-tick VM-step budget(docs/spec/engine/rpgcode-runtime.md THR-3). */
+/**
+ * The per-thread, per-tick VM-step budget (docs/spec/engine/rpgcode-errors-and-threads.md THR-3, R-33).
+ * A fixed number, not a frame-rate formula: 1000 is the tuning point the
+ * stress tests exercise, and callers may pass a smaller budget to a phase.
+ */
 export const STEP_BUDGET = 1000;
 
 /** What one tick left the script threads doing. */
@@ -127,39 +138,109 @@ export function createScriptServices(
   return { view, commands, programs, virtuals: virt, logger, diagnostics: [] };
 }
 
-export function pollSleep(view: WaitView, wait: Wait): WaitResult | null {
-  return view.tick >= wait.until ? { value: null } : null;
-}
-
+/**
+ * The waits phase (AD-9, AD-26; THR-1, THR-3, R-32). Waiting threads are
+ * polled in ascending id, so threads due on the same tick resume in that order
+ * and a thread that wakes runs in this tick's threads phase. While a blocking
+ * command waits (R-32) only that command's wait is polled; the cooperative
+ * waits of the other threads are polled once it resolves, in the same phase.
+ * `poll` is AD-9's one resolver; it defaults to the VM-owned kinds.
+ */
 export function runWaitsPhase(
   vm: VmState,
   view: WaitView,
-  poll: WaitPoll = pollSleep,
+  poll: WaitPoll = defaultWaitPoll,
 ): void {
-  const due = vm.threads.filter((thread) => thread.status === "waiting" && thread.wait !== null);
-  due.sort((left, right) => left.id - right.id);
-  for (const thread of due) {
-    const wait = thread.wait;
-    if (wait === null) continue;
-    const result = poll(view, wait);
-    if (result === null) continue;
-    thread.status = "ready";
-    thread.wait = null;
-    const frame = thread.frames[thread.frames.length - 1];
-    if (frame === undefined) {
-      thread.status = "finished";
-      continue;
+  const waiting = vm.threads.filter((thread) => thread.status === "waiting" && thread.wait !== null);
+  waiting.sort((left, right) => left.id - right.id);
+  const blocker = findBlockingThread(vm);
+  if (blocker !== null) {
+    resolveWait(vm, view, poll, blocker);
+    if (blocker.status === "waiting") {
+      refreshBlock(vm, view.tick);
+      return;
     }
-    frame.operands.push({ value: result.value, ref: null });
   }
+  for (const thread of waiting) {
+    if (thread !== blocker) resolveWait(vm, view, poll, thread);
+  }
+  refreshBlock(vm, view.tick);
 }
 
+/** Poll one thread's wait; on a result, make the thread ready and hand it the wake value. */
+function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread): void {
+  const wait = thread.wait;
+  if (wait === null) return;
+  const result = poll(view, wait);
+  if (result === null) return;
+  thread.status = "ready";
+  thread.wait = null;
+  const frame = thread.frames[thread.frames.length - 1];
+  if (frame === undefined) {
+    thread.status = "finished";
+    return;
+  }
+  if (wait.kind === "request") {
+    if (!result.ok) {
+      recordDiagnostic(vm, view.tick, thread.id, "request.failed", wait.file, wait.line, toStringValue(result.value));
+    }
+    if (wait.then !== null) {
+      thread.pending = {
+        command: wait.then.command,
+        args: [result.ok ? 1 : 0, result.value, ...wait.then.args],
+        file: wait.file,
+        line: wait.line,
+      };
+      return;
+    }
+    frame.operands.push({ value: result.ok ? result.value : 0, ref: null });
+    return;
+  }
+  if (wait.kind === "sleep" && !wait.resumesCall) return;
+  frame.operands.push({ value: result.value, ref: null });
+}
+
+/**
+ * Deliver a request's reply, or a recorded one on replay (AD-5). The reply is
+ * stored in the request's wait; the next waits phase resolves it. Throws
+ * `request.unknown` when no thread waits on `reqId` and `request.duplicate-reply`
+ * when a reply is already stored.
+ */
+export function replyToRequest(vm: VmState, reqId: number, reply: WaitReply): void {
+  for (const thread of vm.threads) {
+    const wait = thread.wait;
+    if (thread.status !== "waiting" || wait === null || wait.kind !== "request") continue;
+    if (wait.reqId !== reqId) continue;
+    if (wait.reply !== null) {
+      throw new ScriptError("request.duplicate-reply", `request ${reqId} already has a reply`);
+    }
+    wait.reply = { ok: reply.ok, value: reply.value };
+    return;
+  }
+  throw new ScriptError("request.unknown", `no thread waits on request ${reqId}`);
+}
+
+/**
+ * The threads phase (AD-26; THR-3, R-32). Ready threads take their turn in
+ * ascending id, each for at most `budget` VM steps; a thread that reaches the
+ * budget keeps its state and continues next tick. Nothing runs while a
+ * blocking command waits (R-32), and a thread that enters one stops the rest
+ * of the phase. Threads started or woken during the phase take their first
+ * turn next tick.
+ */
 export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: number): void {
+  if (!Number.isInteger(budget) || budget < 1) {
+    throw new ScriptError("vm.bad-budget", `the step budget must be a positive whole number, got ${budget}`);
+  }
   const ready = vm.threads.filter((thread) => thread.status === "ready");
   ready.sort((left, right) => left.id - right.id);
   for (const thread of ready) {
-    runThread(thread, vm, services, budget);
+    if (findBlockingThread(vm) !== null) break;
+    if (thread.status !== "ready") continue;
+    stepThread(thread, vm, services, budget);
+    refreshBlock(vm, services.view.clock.tick());
   }
+  refreshBlock(vm, services.view.clock.tick());
 }
 
 function collectObjects(vm: VmState): void {
@@ -182,8 +263,11 @@ function collectObjects(vm: VmState): void {
   }
   const rootSet: { [handle: string]: true } = {};
   for (const handle of roots) rootSet[String(handle)] = true;
-  vm.objects = vm.objects.filter((record) => rootSet[String(record.handle)] === true || (incoming[String(record.handle)] ?? 0) > 0);
+  vm.objects = vm.objects.filter(
+    (record) => rootSet[String(record.handle)] === true || (incoming[String(record.handle)] ?? 0) > 0,
+  );
 }
+
 export function advanceScriptTick(
   state: GameState,
   services: ScriptServices,
@@ -191,6 +275,7 @@ export function advanceScriptTick(
 ): ScriptStatus {
   runWaitsPhase(state.vm, state.time);
   runThreadsPhase(state.vm, services, budget);
+  assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
   collectObjects(state.vm);
   return scriptStatus(state.vm);
@@ -206,6 +291,43 @@ function scriptStatus(vm: VmState): ScriptStatus {
   if (running) return "running";
   if (waiting) return "waiting";
   return "finished";
+}
+
+/** `file:line` of the call a thread is parked at, or the program's name when it has none. */
+function threadLocation(thread: Thread, services: ScriptServices): SourcePos | null {
+  const frame = thread.frames[thread.frames.length - 1];
+  if (frame === undefined) return null;
+  const program = services.programs.get(frame.program);
+  return program.ops[frame.ip - 1]?.pos ?? program.ops[frame.ip]?.pos ?? null;
+}
+
+/**
+ * Fail headless when nothing can ever run again: no thread is ready and every
+ * live thread is parked in an indefinite sleep, which only another running
+ * thread's `threadWake` could end (THR-1). The error names every stuck thread
+ * with its wait and location. Any other wait (`input.key`, a request, timed
+ * sleeps) can still be resolved from outside, so it is not a deadlock.
+ */
+function assertNoDeadlock(vm: VmState, services: ScriptServices): void {
+  const stuck: Thread[] = [];
+  for (const thread of vm.threads) {
+    if (thread.status === "finished") continue;
+    const wait = thread.wait;
+    if (thread.status !== "waiting" || wait === null || wait.kind !== "sleep" || wait.until !== null) return;
+    stuck.push(thread);
+  }
+  if (stuck.length === 0) return;
+  stuck.sort((left, right) => left.id - right.id);
+  const parts = stuck.map((thread) => {
+    const pos = threadLocation(thread, services);
+    const where = pos === null ? "" : ` at ${pos.file}:${pos.line}`;
+    return `thread ${thread.id} waits on ${thread.wait === null ? "nothing" : describeWait(thread.wait)}${where}`;
+  });
+  throw new ScriptError(
+    "vm.deadlock",
+    `deadlock at tick ${services.view.clock.tick()}: ${parts.join("; ")}`,
+    threadLocation(stuck[0]!, services),
+  );
 }
 
 function refName(ref: RefId): string {
@@ -225,7 +347,8 @@ function parseObjectRef(ref: RefId): { handle: number; name: string } | null {
   const separator = ref.indexOf(":", 7);
   if (separator < 0) return null;
   const handle = Number(ref.slice(7, separator));
-  return Number.isInteger(handle) ? { handle, name: ref.slice(separator + 1) } : null;
+  if (!Number.isInteger(handle)) return null;
+  return { handle, name: ref.slice(separator + 1) };
 }
 
 function setOwnValue(record: { [name: string]: Value }, name: string, value: Value): void {
@@ -431,15 +554,14 @@ function resumeAfterFailure(frame: Frame, frameIndex: number, pos: SourcePos): v
 }
 
 function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId): Value {
-  const object = parseObjectRef(ref);
-  if (object !== null) {
-    const record = vm.objects.find((item) => item.handle === object.handle);
-    if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${object.handle}`);
-    return record.members[object.name] ?? 0;
-  }
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
+  if (scope === "object") {
+    const object = parseObjectRef(ref);
+    const record = object === null ? undefined : vm.objects.find((item) => item.handle === object.handle);
+    return record?.members[object?.name ?? name] ?? 0;
+  }
   if (scope === "global") {
     return vm.globals[name] ?? 0;
   }
@@ -462,16 +584,15 @@ function writeRef(
   value: Value,
 ): void {
   const stored = value === null ? 0 : value;
-  const object = parseObjectRef(ref);
-  if (object !== null) {
-    const record = vm.objects.find((item) => item.handle === object.handle);
-    if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${object.handle}`);
-    record.members[object.name] = stored;
-    return;
-  }
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
+  if (scope === "object") {
+    const object = parseObjectRef(ref);
+    const record = object === null ? undefined : vm.objects.find((item) => item.handle === object.handle);
+    if (record !== undefined && object !== null) record.members[object.name] = stored;
+    return;
+  }
   if (scope === "global") {
     setOwnValue(vm.globals, name, stored);
     return;
@@ -489,7 +610,9 @@ function writeRef(
     }
   }
   const currentFrame = thread.frames[frameIndex];
-  if (currentFrame) setOwnSlot(currentFrame.locals, name, { value: stored, ref: localRef(name) });
+  if (currentFrame) {
+    setOwnSlot(currentFrame.locals, name, { value: stored, ref: localRef(name) });
+  }
 }
 
 function deleteVariable(vm: VmState, thread: Thread, frameIndex: number, target: string): void {
@@ -653,8 +776,7 @@ function classWalk(program: Program, name: string, seen: string[] = []): string[
 
 function findMethod(program: Program, className: string, name: string, argc: number) {
   for (const current of classWalk(program, className)) {
-    const info = classInfo(program, current);
-    const list = info?.methods[name];
+    const list = classInfo(program, current)?.methods[name];
     const method = list?.find((candidate) => candidate.params.length === argc);
     if (method !== undefined) return method;
   }
@@ -663,13 +785,16 @@ function findMethod(program: Program, className: string, name: string, argc: num
 
 function findMember(program: Program, className: string, name: string) {
   for (const current of classWalk(program, className)) {
-    const info = classInfo(program, current);
-    const member = info?.members.find((candidate) => candidate.name === name);
+    const member = classInfo(program, current)?.members.find((candidate) => candidate.name === name);
     if (member !== undefined) return member;
   }
   return undefined;
 }
-function bindMethodLocals(method: { readonly params: readonly { readonly name: string; readonly byRef: boolean }[] }, args: readonly Arg[]): { [name: string]: LocalSlot } {
+
+function bindMethodLocals(
+  method: { readonly params: readonly { readonly name: string; readonly byRef: boolean }[] },
+  args: readonly Arg[],
+): { [name: string]: LocalSlot } {
   const locals: { [name: string]: LocalSlot } = {};
   for (let index = 0; index < method.params.length; index += 1) {
     const parameter = method.params[index]!;
@@ -682,26 +807,452 @@ function bindMethodLocals(method: { readonly params: readonly { readonly name: s
   }
   return locals;
 }
-function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget: number): void {
+/** Whether the thread keeps running after a call or must stop its turn here. */
+type CallOutcome = "continue" | "yield";
+
+/** The recorded form of a call's arguments: values only, with `-0` normalised (AD-14). */
+function argValues(args: readonly Arg[]): PlainData[] {
+  return args.map((arg) => (typeof arg.value === "number" && arg.value === 0 ? 0 : arg.value));
+}
+
+/** A fresh `request` wait; each caller gets its own object, so the effect log never aliases a live wait. */
+function requestWait(
+  reqId: number,
+  deadline: number | null,
+  then: CommandResult["then"],
+  pos: SourcePos,
+): Wait {
+  return {
+    kind: "request",
+    global: true,
+    reqId,
+    deadline,
+    reply: null,
+    then: then === undefined ? null : { command: then.command, args: [...then.args] },
+    file: pos.file,
+    line: pos.line,
+  };
+}
+
+/** The thread `id` names, for an operation that needs it to be running code (`threadSleep`, `tellThread`). */
+function liveTarget(vm: VmState, id: number, what: string, pos: SourcePos): Thread {
+  const target = findThread(vm, id);
+  if (target === undefined) {
+    throw new ScriptError("thread.unknown", `${what}: no thread ${id} is registered`, pos);
+  }
+  if (target.status === "finished") {
+    throw new ScriptError("thread.finished", `${what}: thread ${id} has finished`, pos);
+  }
+  return target;
+}
+
+/**
+ * Dispatch one resolved call: a script function pushes a frame, a command runs
+ * and its effects are applied (control effects, the effect log, thread
+ * operations), then the call parks the thread (a wait, a request, a self-sleep,
+ * a movement), or pushes its value. `advance` is false for a request
+ * continuation, whose call site was already passed.
+ */
+function performCall(
+  thread: Thread,
+  vm: VmState,
+  services: ScriptServices,
+  program: Program,
+  frame: Frame,
+  frameIndex: number,
+  name: string,
+  args: Arg[],
+  pos: SourcePos,
+  advance: boolean,
+): CallOutcome {
+  const resolved = resolveCall(name, args.length, program, services.commands);
+  if (resolved === undefined) {
+    throw new ScriptError("unknown.command", `no built-in or function named "${name}"`, pos);
+  }
+
+  if (resolved.kind === "function") {
+    if (advance) frame.ip += 1;
+    const target = resolved.target;
+    const locals: { [name: string]: LocalSlot } = {};
+    for (let i = 0; i < target.params.length; i++) {
+      const param = target.params[i]!;
+      const arg = args[i];
+      if (param.byRef && arg && arg.ref !== null) {
+        setOwnSlot(locals, param.name, { value: arg.value, ref: arg.ref });
+      } else {
+        const v = arg ? (arg.value === null ? 0 : arg.value) : 0;
+        setOwnSlot(locals, param.name, { value: v, ref: localRef(param.name) });
+      }
+    }
+    thread.frames.push({
+      program: target.program,
+      ip: target.entry,
+      locals,
+      operands: [],
+      errorHandler: null,
+      autoLocal: frame.autoLocal,
+    });
+    return "continue";
+  }
+
+  checkArity(resolved.command.spec, args, name, pos);
+  let result: CommandResult;
+  try {
+    result = resolved.command.spec.call(services.view, args, resolved.command.next);
+  } catch (error) {
+    // A command cannot know where it was called from: locate its error here.
+    if (error instanceof ScriptError && error.pos === null) {
+      throw new ScriptError(error.code, error.message, pos);
+    }
+    throw error;
+  }
+  if (advance) frame.ip += 1;
+
+  const tick = services.view.clock.tick();
+  let controlApplied = false;
+  let parked = false;
+  for (const effect of result.effects ?? []) {
+    if (effect.kind === "vm.control") {
+      const action = effect.args?.[0];
+      if (action === "end") {
+        thread.frames = [];
+        thread.status = "finished";
+        thread.wait = null;
+        thread.detached = [];
+        thread.collect = null;
+        return "yield";
+      }
+      if (action === "run") {
+        const newRef = effect.args?.[1] as ProgramRef;
+        thread.frames = [
+          {
+            program: newRef,
+            ip: 0,
+            locals: {},
+            operands: [],
+            errorHandler: null,
+            autoLocal: false,
+          },
+        ];
+        thread.status = "ready";
+        thread.wait = null;
+        thread.detached = [];
+        thread.collect = null;
+        return "yield";
+      }
+      if (action === "jump") {
+        const labelName = effect.args?.[1] as string;
+        const targetIp = lookupLabel(program, frame.ip, labelName);
+        if (targetIp === undefined) {
+          throw new ScriptError(
+            "vm.unknown-label",
+            `label \`:${labelName}\` not found in current function scope`,
+            pos,
+          );
+        }
+        frame.ip = targetIp;
+        controlApplied = true;
+      }
+      if (action === "setErrorHandler") {
+        installHandler(program, frame, frameIndex, frame.ip, pos, effect.args?.[1] as string);
+      }
+      if (action === "setResumeNextHandler") {
+        installHandler(program, frame, frameIndex, frame.ip, pos, null);
+      }
+      if (action === "resumeNext") {
+        resumeAfterFailure(frame, frameIndex, pos);
+        controlApplied = true;
+      }
+      if (action === "debug") {
+        if (effect.args?.[1] === true) delete vm.messagesOff;
+        else vm.messagesOff = true;
+      }
+      if (action === "debugger") {
+        services.logger.info({
+          level: "info",
+          code: "script.debugger",
+          message: String(effect.args?.[1] ?? ""),
+          data: { file: pos.file, line: pos.line, thread: thread.id },
+        });
+      }
+      if (action === "autoLocal") {
+        frame.autoLocal = Boolean(effect.args?.[1]);
+      }
+      if (action === "kill") {
+        const targets = (effect.args?.slice(1) ?? []) as string[];
+        for (const target of targets) {
+          deleteVariable(vm, thread, frameIndex, target);
+        }
+      }
+      if (action === "split") {
+        const baseRef = effect.args?.[1] as RefId;
+        const baseName = refName(baseRef);
+        const isGlobal = baseRef.startsWith("global:");
+        const parts = (effect.args?.slice(2) ?? []) as Value[];
+        for (let i = 0; i < parts.length; i++) {
+          const elemName = `${baseName}[${i}]`;
+          const elemRef = isGlobal ? globalRef(elemName) : localRef(elemName);
+          writeRef(vm, thread, frameIndex, elemRef, parts[i]!);
+        }
+      }
+      if (action === "local") {
+        const varName = effect.args?.[1] as string;
+        if (!Object.hasOwn(frame.locals, varName)) {
+          setOwnSlot(frame.locals, varName, { value: 0, ref: localRef(varName) });
+        }
+      }
+      if (action === "global") {
+        const varName = effect.args?.[1] as string;
+        if (!Object.hasOwn(vm.globals, varName)) {
+          setOwnValue(vm.globals, varName, 0);
+        }
+      }
+      if (action === "thread") {
+        startThread(vm, {
+          ref: { kind: "inline", text: effect.args?.[1] as string, compiler: COMPILER_VERSION },
+          kind: effect.args?.[2] === true ? "persistent" : "board",
+          owner: "script",
+        });
+      }
+      if (action === "threadKill") {
+        const id = effect.args?.[1] as number;
+        if (!killThread(vm, id)) {
+          throw new ScriptError("thread.unknown", `killThread: no thread ${id} is registered`, pos);
+        }
+        if (id === thread.id) return "yield";
+      }
+      if (action === "threadSleep") {
+        const target = liveTarget(vm, effect.args?.[1] as number, "threadSleep", pos);
+        const current = target.wait;
+        if (
+          target.status === "waiting" &&
+          (current === null || current.kind !== "sleep" || current.global)
+        ) {
+          throw new ScriptError(
+            "thread.busy",
+            `threadSleep: thread ${target.id} is waiting on something other than a sleep`,
+            pos,
+          );
+        }
+        const resumesCall =
+          target === thread || (current !== null && current.kind === "sleep" && current.resumesCall);
+        target.wait = {
+          kind: "sleep",
+          global: false,
+          until: (effect.args?.[2] ?? null) as number | null,
+          resumesCall,
+        };
+        target.status = "waiting";
+        if (target === thread) parked = true;
+      }
+      if (action === "threadWake") {
+        const id = effect.args?.[1] as number;
+        const target = findThread(vm, id);
+        if (target === undefined) {
+          throw new ScriptError("thread.unknown", `threadWake: no thread ${id} is registered`, pos);
+        }
+        const slept = target.wait;
+        if (target.status === "waiting" && slept !== null && slept.kind === "sleep" && !slept.global) {
+          target.status = "ready";
+          target.wait = null;
+          if (slept.resumesCall) {
+            const top = target.frames[target.frames.length - 1];
+            if (top === undefined) target.status = "finished";
+            else top.operands.push({ value: null, ref: null });
+          }
+        }
+      }
+      if (action === "threadTell") {
+        const target = liveTarget(vm, effect.args?.[1] as number, "tellThread", pos);
+        target.queue.push({ text: effect.args?.[2] as string, file: pos.file, line: pos.line });
+      }
+      if (action === "move") {
+        const sprite = effect.args?.[1] as string;
+        const ticks = effect.args?.[2] as number;
+        if (!Number.isInteger(ticks) || ticks < 1 || tick + ticks > MAX_TICK) {
+          throw new ScriptError("builtin.bad-arg", `"${name}": a move takes a positive whole number of ticks`, pos);
+        }
+        if (thread.collect !== null) {
+          thread.collect.push({ sprite, until: tick + ticks });
+        } else {
+          thread.wait = {
+            kind: "movement",
+            global: thread.kind === "blocking",
+            moves: [{ sprite, until: tick + ticks }],
+          };
+          thread.status = "waiting";
+          parked = true;
+        }
+      }
+      if (action === "multiRun") {
+        const moves = thread.collect;
+        if (moves === null) {
+          thread.collect = [];
+        } else {
+          thread.collect = null;
+          if (moves.length > 0) {
+            thread.wait = { kind: "movement", global: thread.kind === "blocking", moves };
+            thread.status = "waiting";
+            parked = true;
+          }
+        }
+      }
+    } else {
+      const section = effect.section;
+      const out: { [index: string]: PlainData } = {};
+      for (const [index, value] of result.out ?? []) {
+        out[String(index)] = typeof value === "number" && value === 0 ? 0 : value;
+      }
+      recordEffect(vm, {
+        tick,
+        thread: thread.id,
+        name,
+        kind: effect.kind,
+        args: effect.args !== undefined ? [...effect.args] : argValues(args),
+        out,
+        result: result.value,
+        patch: section === undefined ? null : { section, path: [], op: "merge", value: null },
+        wait: null,
+        request: null,
+      });
+    }
+  }
+
+  if (controlApplied) return "continue";
+  if (parked) return "yield";
+
+  if (result.request !== undefined) {
+    const timeout = result.timeoutTicks;
+    let deadline: number | null = null;
+    if (timeout !== undefined) {
+      if (!Number.isInteger(timeout) || timeout < 1 || tick + timeout > MAX_TICK) {
+        throw new ScriptError(
+          "builtin.bad-arg",
+          `"${name}": a request timeout is a positive whole number of ticks`,
+          pos,
+        );
+      }
+      deadline = tick + timeout;
+    }
+    vm.requestSeq += 1;
+    const reqId = vm.requestSeq;
+    recordEffect(vm, {
+      tick,
+      thread: thread.id,
+      name,
+      kind: "request",
+      args: argValues(args),
+      out: {},
+      result: null,
+      patch: null,
+      wait: requestWait(reqId, deadline, result.then, pos),
+      request: { ...result.request, reqId },
+    });
+    thread.wait = requestWait(reqId, deadline, result.then, pos);
+    thread.status = "waiting";
+    return "yield";
+  }
+
+  if (result.wait !== undefined) {
+    thread.wait = result.wait;
+    thread.status = "waiting";
+    return "yield";
+  }
+
+  applyOut(vm, thread, frameIndex, resolved.command.spec, args, result.out ?? [], name, pos);
+  frame.operands.push({ value: result.value, ref: null });
+  return "continue";
+}
+
+/** A continuation argument is a script value; booleans become `1`/`0` and anything structured is refused. */
+function continuationArg(value: PlainData, pos: SourcePos): Arg {
+  if (typeof value === "number" || typeof value === "string" || value === null) {
+    return { value, ref: null };
+  }
+  if (typeof value === "boolean") return { value: value ? 1 : 0, ref: null };
+  throw new ScriptError("request.bad-reply", "a request continuation argument must be a number, a string or null", pos);
+}
+
+/**
+ * Run one thread for at most `budget` VM steps and return the steps it ran
+ * (THR-3). The thread keeps its whole state between calls, so a thread
+ * preempted at the budget resumes at the same instruction next tick, and a
+ * test can single-step with a budget of 1. A pending request continuation runs
+ * first; then code queued by `tellThread` runs, one item at a time, each on a
+ * frame of its own on top of the thread's frames (THR-2).
+ */
+export function stepThread(
+  thread: Thread,
+  vm: VmState,
+  services: ScriptServices,
+  budget: number,
+): number {
   let steps = 0;
+  const finish = (): number => {
+    refreshBlock(vm, services.view.clock.tick());
+    return steps;
+  };
+  services.view.thread = thread.id;
   while (thread.status === "ready" && steps < budget) {
+    if (thread.pending !== null) {
+      const pending = thread.pending;
+      thread.pending = null;
+      const pendingIndex = thread.frames.length - 1;
+      const top = thread.frames[pendingIndex];
+      if (top === undefined) {
+        thread.status = "finished";
+        return finish();
+      }
+      steps += 1;
+      const pos: SourcePos = { file: pending.file, line: pending.line };
+      const args = pending.args.map((value) => continuationArg(value, pos));
+      const outcome = performCall(
+        thread,
+        vm,
+        services,
+        services.programs.get(top.program),
+        top,
+        pendingIndex,
+        pending.command,
+        args,
+        pos,
+        false,
+      );
+      if (outcome === "yield") return finish();
+      continue;
+    }
+    const queued = thread.queue[0];
+    if (queued !== undefined && thread.detached.length === 0) {
+      thread.queue.shift();
+      thread.frames.push({
+        program: { kind: "inline", text: queued.text, compiler: COMPILER_VERSION },
+        ip: 0,
+        locals: {},
+        operands: [],
+        errorHandler: null,
+        autoLocal: false,
+      });
+      thread.detached.push(thread.frames.length - 1);
+      continue;
+    }
     const frameIndex = thread.frames.length - 1;
     const frame = thread.frames[frameIndex];
     if (frame === undefined) {
       thread.status = "finished";
-      return;
+      return finish();
     }
     const program = services.programs.get(frame.program);
     const op = program.ops[frame.ip];
     if (op === undefined) {
       thread.status = "finished";
-      return;
+      return finish();
     }
     steps += 1;
     const opIp = frame.ip;
     const depth = frame.operands.length;
 
     try {
+
 
     switch (op.op) {
       case "push":
@@ -752,6 +1303,7 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         frame.ip += 1;
         break;
       }
+
       case "declRef":
         if (op.scope === "local") {
           if (!Object.hasOwn(frame.locals, op.name)) {
@@ -797,10 +1349,13 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         frame.ip += 1;
         break;
       }
+
       case "compound": {
         const valueArg = frame.operands.pop();
         const refArg = frame.operands.pop();
-        if (!valueArg || !refArg || refArg.ref === null) throw new ScriptError("vm.stack-underflow", "compound assignment stack underflow", op.pos);
+        if (!valueArg || !refArg || refArg.ref === null) {
+          throw new ScriptError("vm.stack-underflow", "compound assignment stack underflow", op.pos);
+        }
         const current = readRef(vm, thread, frameIndex, refArg.ref);
         if (isObjectValue(current)) {
           const record = vm.objects.find((item) => item.handle === current.handle);
@@ -843,10 +1398,8 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         if (baseArg.ref !== null) {
           const object = parseObjectRef(baseArg.ref);
           if (object !== null) {
-            frame.operands.push({
-              value: readRef(vm, thread, frameIndex, objectRef(object.handle, `${object.name}[${keyText}]`)),
-              ref: objectRef(object.handle, `${object.name}[${keyText}]`),
-            });
+            const ref = objectRef(object.handle, `${object.name}[${keyText}]`);
+            frame.operands.push({ value: readRef(vm, thread, frameIndex, ref), ref });
             frame.ip += 1;
             break;
           }
@@ -898,8 +1451,8 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         frame.operands.push(elementArg);
         frame.ip += 1;
         break;
-      }
 
+      }
       case "construct": {
         const args = takeArgs(frame, op.argc, op.pos);
         const info = classInfo(program, op.className);
@@ -926,6 +1479,7 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         } else frame.operands.push({ value, ref: null });
         break;
       }
+
       case "methodCall": {
         const args = takeArgs(frame, op.argc, op.pos);
         const receiver = frame.operands.pop();
@@ -979,7 +1533,9 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
 
       case "unop": {
         const operand = frame.operands.pop();
-        if (!operand) throw new ScriptError("vm.stack-underflow", "unop: operand stack underflow", op.pos);
+        if (!operand) {
+          throw new ScriptError("vm.stack-underflow", "unop: operand stack underflow", op.pos);
+        }
         if (isObjectValue(operand.value)) {
           const method = findMethod(program, operand.value.className, `operator${op.operator}`, 0);
           if (method === undefined) throw new ScriptError("object.invalid", `operator${op.operator} not found`, op.pos);
@@ -1166,204 +1722,35 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
             break;
           }
         }
-        if (resolved === undefined) {
-          throw new ScriptError(
-            "unknown.command",
-            `no built-in or function named "${op.name}"`,
-            op.pos,
-          );
+        if (
+          performCall(thread, vm, services, program, frame, frameIndex, op.name, args, op.pos, true) ===
+          "yield"
+        ) {
+          return finish();
         }
 
-        if (resolved.kind === "function") {
-          frame.ip += 1;
-          const target = resolved.target;
-          const locals: { [name: string]: LocalSlot } = {};
-          for (let i = 0; i < target.params.length; i++) {
-            const param = target.params[i]!;
-            const arg = args[i];
-            if (param.byRef && arg && arg.ref !== null) {
-              setOwnSlot(locals, param.name, { value: arg.value, ref: arg.ref });
-            } else {
-              const v = arg ? (arg.value === null ? 0 : arg.value) : 0;
-              setOwnSlot(locals, param.name, { value: v, ref: localRef(param.name) });
-            }
-          }
-          thread.frames.push({
-            program: target.program,
-            ip: target.entry,
-            locals,
-            operands: [],
-            errorHandler: null,
-            autoLocal: frame.autoLocal,
-          });
-          break;
-        }
-
-        checkArity(resolved.command.spec, args, op.name, op.pos);
-        const result = resolved.command.spec.call(services.view, args, resolved.command.next);
-        frame.ip += 1;
-
-        if (result.request !== undefined) {
-          throw new ScriptError(
-            "command.request-unsupported",
-            `"${op.name}" asked the host for something the VM cannot answer yet (entry 9)`,
-            op.pos,
-          );
-        }
-
-        let controlApplied = false;
-        for (const effect of result.effects ?? []) {
-          if (effect.kind === "vm.control") {
-            const action = effect.args?.[0];
-            if (action === "end") {
-              thread.frames = [];
-              thread.status = "finished";
-              thread.wait = null;
-              return;
-            }
-            if (action === "run") {
-              const newRef = effect.args?.[1] as ProgramRef;
-              thread.frames = [
-                {
-                  program: newRef,
-                  ip: 0,
-                  locals: {},
-                  operands: [],
-                  errorHandler: null,
-                  autoLocal: false,
-                },
-              ];
-              thread.status = "ready";
-              thread.wait = null;
-              return;
-            }
-            if (action === "jump") {
-              const labelName = effect.args?.[1] as string;
-              const targetIp = lookupLabel(program, frame.ip, labelName);
-              if (targetIp === undefined) {
-                throw new ScriptError(
-                  "vm.unknown-label",
-                  `label \`:${labelName}\` not found in current function scope`,
-                  op.pos,
-                );
-              }
-              frame.ip = targetIp;
-              controlApplied = true;
-            }
-            if (action === "setErrorHandler") {
-              installHandler(program, frame, frameIndex, opIp, op.pos, effect.args?.[1] as string);
-            }
-            if (action === "setResumeNextHandler") {
-              installHandler(program, frame, frameIndex, opIp, op.pos, null);
-            }
-            if (action === "resumeNext") {
-              resumeAfterFailure(frame, frameIndex, op.pos);
-              controlApplied = true;
-            }
-            if (action === "debug") {
-              if (effect.args?.[1] === true) delete vm.messagesOff;
-              else vm.messagesOff = true;
-            }
-            if (action === "debugger") {
-              services.logger.info({
-                level: "info",
-                code: "script.debugger",
-                message: String(effect.args?.[1] ?? ""),
-                data: { file: op.pos.file, line: op.pos.line, thread: thread.id },
-              });
-            }
-            if (action === "autoLocal") {
-              frame.autoLocal = Boolean(effect.args?.[1]);
-            }
-            if (action === "kill") {
-              const targets = (effect.args?.slice(1) ?? []) as string[];
-              for (const target of targets) {
-                deleteVariable(vm, thread, frameIndex, target);
-              }
-            }
-            if (action === "split") {
-              const baseRef = effect.args?.[1] as RefId;
-              const baseName = refName(baseRef);
-              const isGlobal = baseRef.startsWith("global:");
-              const parts = (effect.args?.slice(2) ?? []) as Value[];
-              for (let i = 0; i < parts.length; i++) {
-                const elemName = `${baseName}[${i}]`;
-                const elemRef = isGlobal ? globalRef(elemName) : localRef(elemName);
-                writeRef(vm, thread, frameIndex, elemRef, parts[i]!);
-              }
-            }
-            if (action === "local") {
-              const varName = effect.args?.[1] as string;
-              if (!Object.hasOwn(frame.locals, varName)) {
-                setOwnSlot(frame.locals, varName, { value: 0, ref: localRef(varName) });
-              }
-            }
-            if (action === "global") {
-              const varName = effect.args?.[1] as string;
-              if (!Object.hasOwn(vm.globals, varName)) {
-                setOwnValue(vm.globals, varName, 0);
-              }
-            }
-          } else {
-            const section = effect.section;
-            const out: { [index: string]: PlainData } = {};
-            for (const [index, value] of result.out ?? []) {
-              out[String(index)] = typeof value === "number" && value === 0 ? 0 : value;
-            }
-            recordEffect(vm, {
-              tick: services.view.clock.tick(),
-              thread: thread.id,
-              name: op.name,
-              kind: effect.kind,
-              args:
-                effect.args !== undefined
-                  ? [...effect.args]
-                  : args.map((arg) =>
-                      typeof arg.value === "number" && arg.value === 0 ? 0 : arg.value,
-                    ),
-              out,
-              result: result.value,
-              patch: section === undefined ? null : { section, path: [], op: "merge", value: null },
-              wait: null,
-              request: null,
-            });
-          }
-        }
-
-        if (controlApplied) break;
-
-        if (result.wait !== undefined) {
-          thread.wait = result.wait;
-          thread.status = "waiting";
-          return;
-        }
-
-        applyOut(
-          vm,
-          thread,
-          frameIndex,
-          resolved.command.spec,
-          args,
-          result.out ?? [],
-          op.name,
-          op.pos,
-        );
-        frame.operands.push({ value: result.value, ref: null });
-        break;
       }
 
+        break;
       case "return": {
-        const returnArg = frame.returnValue !== undefined
-          ? { value: frame.returnValue, ref: null }
-          : frame.operands.pop() ?? { value: 0, ref: null };
+        const returnArg =
+          frame.returnValue !== undefined
+            ? { value: frame.returnValue, ref: null }
+            : frame.operands.pop() ?? { value: 0, ref: null };
         const releaseHandle = frame.releaseHandle;
+        const poppedIndex = thread.frames.length - 1;
         thread.frames.pop();
         if (releaseHandle !== undefined) {
           vm.objects = vm.objects.filter((item) => item.handle !== releaseHandle);
         }
         if (thread.frames.length === 0) {
           thread.status = "finished";
-          return;
+          return finish();
+        }
+        if (thread.detached[thread.detached.length - 1] === poppedIndex) {
+          // A `tellThread` frame ends: nothing in the target was waiting for its value.
+          thread.detached.pop();
+          break;
         }
         const callerFrame = thread.frames[thread.frames.length - 1]!;
         callerFrame.operands.push(returnArg);
@@ -1376,4 +1763,5 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
       handleFailure(vm, services, program, frame, op, opIp, depth, caught);
     }
   }
+  return finish();
 }

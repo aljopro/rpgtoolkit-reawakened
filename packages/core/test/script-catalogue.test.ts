@@ -126,8 +126,8 @@ function callArity(spec: BuiltinSpec): number {
 test("every catalogue stub name resolves to its own spec, folded to lower case", () => {
   const services = createScriptServices(createGameState({ seed: 0 }));
 
-  equal(COMMANDS.length, 151);
-  equal(new Set(COMMANDS.map((spec) => spec.name)).size, 151);
+  equal(COMMANDS.length, 147);
+  equal(new Set(COMMANDS.map((spec) => spec.name)).size, 147);
   for (const spec of COMMANDS) {
     equal(spec.name, spec.name.toLowerCase());
     const resolved = services.commands.get(spec.name);
@@ -142,7 +142,7 @@ test("every catalogue stub name resolves to its own spec, folded to lower case",
 });
 
 test("the stub layer declares the catalogue's by-reference outputs", () => {
-  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 45);
+  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 41);
   // 22 stub-safe names have variadic `...` parameters, including the four
   // variadic output names that cannot fix an output position.
   equal(COMMANDS.filter((spec) => spec.params.some((param) => param.variadic)).length, 22);

@@ -63,7 +63,11 @@ function waitingThread(id: number, until: number): Thread {
       },
     ],
     status: "waiting",
-    wait: { kind: "sleep", until },
+    wait: { kind: "sleep", global: false, until, resumesCall: true },
+    queue: [],
+    pending: null,
+    detached: [],
+    collect: null,
   };
 }
 
@@ -86,6 +90,10 @@ function readyThread(id: number, text: string): Thread {
     ],
     status: "ready",
     wait: null,
+    queue: [],
+    pending: null,
+    detached: [],
+    collect: null,
   };
 }
 
@@ -214,7 +222,7 @@ test("sleep leaves the thread waiting with ip past the call", () => {
 
   const thread = state.vm.threads[0]!;
   equal(thread.status, "waiting");
-  deepEqual(thread.wait, { kind: "sleep", until: 2 });
+  deepEqual(thread.wait, { kind: "sleep", global: true, until: 2, resumesCall: true });
   equal(thread.frames[0]!.ip, 10);
   equal(thread.frames[0]!.operands.length, 0);
   equal(state.time.tick, 1);
@@ -225,9 +233,9 @@ test("the waits phase wakes exactly at until and polls in ascending id order", (
   // Pushed as ids 3, 1, 2 so array order (3, 1, 2) differs from id order.
   vm.threads.push(waitingThread(3, 10), waitingThread(1, 4), waitingThread(2, 7));
 
-  const polled: number[] = [];
+  const polled: Array<number | null> = [];
   const spy: WaitPoll = (view, wait) => {
-    polled.push(wait.until);
+    polled.push(wait.kind === "sleep" ? wait.until : null);
     return pollSleep(view, wait);
   };
 

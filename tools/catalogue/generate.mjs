@@ -124,7 +124,7 @@ export function stubParams(row) {
   return params;
 }
 
-/** Names implemented in CORE_PLUGIN (ticket 3.12 pure built-ins); excluded from stubs. */
+/** Names implemented in CORE_PLUGIN (ticket 3.12 pure built-ins, ticket 3.9 thread reads); excluded from stubs. */
 const IMPLEMENTED_COMMANDS = new Set([
   "len",
   "length",
@@ -149,6 +149,10 @@ const IMPLEMENTED_COMMANDS = new Set([
   "kill",
   "local",
   "global",
+  "getthreadid",
+  "threadsleepremaining",
+  "sourcehandle",
+  "targethandle",
   "debug",
   "debugger",
 ]);
