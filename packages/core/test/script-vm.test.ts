@@ -21,6 +21,7 @@ import {
   type Arg,
   type BuiltinSpec,
   type GameState,
+  type PluginDefinition,
   type ScriptError,
   type Thread,
   type WaitPoll,
@@ -107,14 +108,17 @@ test("binds a variable argument with its RefId and a literal without", () => {
       { name: "a", optional: false, byRef: false, variadic: false },
       { name: "b", optional: false, byRef: false, variadic: false },
     ],
-    call: (_ctx, args) => {
+    call: (_view, args) => {
       captured = args;
-      return { done: null, out: [] };
+      return { value: null };
     },
   };
+  const plugins: readonly PluginDefinition[] = [
+    { id: "test.probe", version: "1.0.0", commands: [probe] },
+  ];
 
   const state = makeState("x = 5\nprobe(x, 7)\n");
-  advanceScriptTick(state, createScriptServices(state, [probe]));
+  advanceScriptTick(state, createScriptServices(state, plugins));
 
   deepEqual(captured, [
     { value: 5, ref: globalRef("x") },
@@ -127,21 +131,27 @@ test("writes a by-ref out back into the caller's variable inside the hash", () =
     name: "writev",
     aliases: [],
     params: [{ name: "target", optional: false, byRef: true, variadic: false }],
-    call: () => ({ done: null, out: [[0, 9]] }),
+    call: () => ({ value: null, out: [[0, 9]] }),
   };
   const passthrough: BuiltinSpec = {
     name: "writev",
     aliases: [],
     params: [{ name: "target", optional: false, byRef: true, variadic: false }],
-    call: () => ({ done: null, out: [] }),
+    call: () => ({ value: null }),
   };
+  const writerPack: readonly PluginDefinition[] = [
+    { id: "test.writer", version: "1.0.0", commands: [writer] },
+  ];
+  const passthroughPack: readonly PluginDefinition[] = [
+    { id: "test.passthrough", version: "1.0.0", commands: [passthrough] },
+  ];
 
   const written = makeState("writev(v)\n");
-  advanceScriptTick(written, createScriptServices(written, [writer]));
+  advanceScriptTick(written, createScriptServices(written, writerPack));
   equal(written.vm.globals.v, 9);
 
   const untouched = makeState("writev(v)\n");
-  advanceScriptTick(untouched, createScriptServices(untouched, [passthrough]));
+  advanceScriptTick(untouched, createScriptServices(untouched, passthroughPack));
 
   equal(written.vm.globals.v === untouched.vm.globals.v, false);
   equal(hashState(written) === hashState(untouched), false);
@@ -150,11 +160,15 @@ test("writes a by-ref out back into the caller's variable inside the hash", () =
     name: "bad",
     aliases: [],
     params: [{ name: "x", optional: false, byRef: false, variadic: false }],
-    call: () => ({ done: null, out: [[0, 1]] }),
+    call: () => ({ value: null, out: [[0, 1]] }),
   };
   const broken = makeState("bad(z)\n");
   equal(
-    errorOf(() => advanceScriptTick(broken, createScriptServices(broken, [badOut]))).code,
+    errorOf(() =>
+      advanceScriptTick(broken, createScriptServices(broken, [
+        { id: "test.bad", version: "1.0.0", commands: [badOut] },
+      ])),
+    ).code,
     "builtin.out-not-by-ref",
   );
 
@@ -163,10 +177,12 @@ test("writes a by-ref out back into the caller's variable inside the hash", () =
     name: "nullout",
     aliases: [],
     params: [{ name: "target", optional: false, byRef: true, variadic: false }],
-    call: () => ({ done: null, out: [[0, null]] }),
+    call: () => ({ value: null, out: [[0, null]] }),
   };
   const nulled = makeState("nullout(v)\n");
-  advanceScriptTick(nulled, createScriptServices(nulled, [nullout]));
+  advanceScriptTick(nulled, createScriptServices(nulled, [
+    { id: "test.nullout", version: "1.0.0", commands: [nullout] },
+  ]));
   equal(nulled.vm.globals.v, 0);
 });
 
@@ -257,15 +273,22 @@ test("the threads phase runs ready threads in ascending id order", () => {
     name: "mark",
     aliases: [],
     params: [{ name: "n", optional: false, byRef: false, variadic: false }],
-    call: (_ctx, args) => {
+    call: (_view, args) => {
       order.push(args[0]!.value as number);
-      return { done: null, out: [] };
+      return { value: null };
     },
   };
   // Pushed as ids 3, 1, 2 so array order (3, 1, 2) differs from id order.
   vm.threads.push(readyThread(3, "mark(300)\n"), readyThread(1, "mark(100)\n"), readyThread(2, "mark(200)\n"));
 
-  runThreadsPhase(vm, createScriptServices(createGameState({ seed: 0 }), [mark]), STEP_BUDGET);
+  const plugins: readonly PluginDefinition[] = [
+    { id: "test.mark", version: "1.0.0", commands: [mark] },
+  ];
+  runThreadsPhase(
+    vm,
+    createScriptServices(createGameState({ seed: 0 }), plugins),
+    STEP_BUDGET,
+  );
   deepEqual(order, [100, 200, 300]);
 });
 
@@ -317,11 +340,14 @@ test("sleep rejects zero, fractional and negative counts", () => {
     name: "setnegative",
     aliases: [],
     params: [{ name: "target", optional: false, byRef: true, variadic: false }],
-    call: () => ({ done: null, out: [[0, -1]] }),
+    call: () => ({ value: null, out: [[0, -1]] }),
   };
+  const plugins: readonly PluginDefinition[] = [
+    { id: "test.negative", version: "1.0.0", commands: [setnegative] },
+  ];
   const negative = makeState("setnegative(n)\nsleep(n)\n");
   equal(
-    errorOf(() => advanceScriptTick(negative, createScriptServices(negative, [setnegative]))).code,
+    errorOf(() => advanceScriptTick(negative, createScriptServices(negative, plugins))).code,
     "builtin.bad-arg",
   );
 });

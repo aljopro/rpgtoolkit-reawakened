@@ -23,26 +23,28 @@ import {
   startProgram,
   STEP_BUDGET,
   type Breakpoint,
-  type BuiltinSpec,
   type DrawList,
   type Engine,
   type GameState,
+  type PluginDefinition,
   type ScriptServices,
   type SurfaceId,
   type SurfacePixels,
   type TickReport,
 } from "@tk-reawakened/core";
 
-/** How to build a fresh host: the inline program, the seed and any extra built-ins. */
+/** How to build a fresh host: the inline program, the seed and the plugin layers. */
 export type ScriptHostInit = {
   readonly program: string;
   readonly seed: number;
-  readonly builtins?: readonly BuiltinSpec[];
+  /** The layers above the built-in `core` pack (ADR 0004 decision 6). */
+  readonly plugins?: readonly PluginDefinition[];
 };
 
 /** How to rebuild a host from a snapshot: the registry is code, not state. */
 export type ScriptHostRestore = {
-  readonly builtins?: readonly BuiltinSpec[];
+  /** The layers above the built-in `core` pack, as the fresh host had them. */
+  readonly plugins?: readonly PluginDefinition[];
 };
 
 /** The tracer's test host: the engine API plus state access for tests. */
@@ -104,7 +106,7 @@ function createHost(gameState: GameState, services: ScriptServices): ScriptHost 
 /** Start `program` (inline source) as a fresh VM in a fresh game state. */
 export function createScriptHost(init: ScriptHostInit): ScriptHost {
   const gameState = createGameState({ seed: init.seed });
-  const services = createScriptServices(gameState, init.builtins);
+  const services = createScriptServices(gameState, init.plugins);
   startProgram(gameState.vm, {
     kind: "inline",
     text: init.program,
@@ -113,9 +115,9 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
   return createHost(gameState, services);
 }
 
-/** Restore a host from a snapshot, rebinding the registry from `builtins`. */
+/** Restore a host from a snapshot, rebinding the registry from `plugins`. */
 export function restoreScriptHost(json: string, init: ScriptHostRestore): ScriptHost {
   const gameState = restoreGameState(json);
-  const services = createScriptServices(gameState, init.builtins);
+  const services = createScriptServices(gameState, init.plugins);
   return createHost(gameState, services);
 }

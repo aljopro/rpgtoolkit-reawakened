@@ -15,29 +15,26 @@
  *
  * Epic 4 owns the phase list and the loop: `createEngine` will call
  * `runWaitsPhase`/`runThreadsPhase` in its own order with the registry from
- * entry 3. This file's dispatch is provisional in AD-8's old shape and entry 3
- * rewrites it to ADR 0004 decision 2's functional contract.
+ * entry 3. The `call` dispatch is that entry's: it resolves the name through
+ * AD-8's four tiers, builds the read-only view, runs the winning layer's
+ * handler with the layer below as `next`, drains the reported effects to the
+ * sink and writes a by-reference `out` back through the frame.
  *
- * docs/adr/0004; format-spec §9.15 (THR-3) and §9.16 (SEM-4/SEM-6).
+ * docs/adr/0004 (decisions 2 and 6); format-spec §9.15 (THR-3) and §9.16
+ * (SEM-4/SEM-6).
  */
 
 import type { RefId, VarScope, Value } from "../ports/value.ts";
-import type { ClockPort } from "../ports/time.ts";
-import type { RngPort } from "../ports/rng.ts";
+import type { Logger } from "../ports/logger.ts";
 import type { Wait, WaitPoll, WaitResult, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState } from "../save/state.ts";
 import { createClockPort, runTimePhase } from "../time/time.ts";
-import {
-  createBuiltinLookup,
-  PROVISIONAL_BUILTINS,
-  type Arg,
-  type BuiltinCtx,
-  type BuiltinLookup,
-  type BuiltinSpec,
-} from "./builtins.ts";
+import { CORE_PLUGIN, type Arg, type BuiltinSpec } from "./builtins.ts";
 import { ScriptError } from "./errors.ts";
+import type { CommandEffect, CommandView, PluginDefinition } from "./plugin.ts";
 import { compileProgram, type Program, type ProgramRef } from "./program.ts";
+import { assembleCommands, createCommandLookup, type CommandLookup } from "./registry.ts";
 import { globalRef, localRef, type Frame, type Thread, type VmState } from "./state.ts";
 
 /** The provisional per-thread, per-tick VM-step budget (§9.15 THR-3). */
@@ -51,12 +48,18 @@ type ProgramMemo = { get(ref: ProgramRef): Program };
 
 /** Everything the script phases need that is not state. */
 export type ScriptServices = {
-  readonly rng: RngPort;
-  readonly clock: ClockPort;
-  readonly ctx: BuiltinCtx;
-  readonly lookup: BuiltinLookup;
+  readonly view: CommandView;
+  readonly commands: CommandLookup;
+  readonly effects: (effect: CommandEffect) => void;
   readonly programs: ProgramMemo;
 };
+
+/**
+ * The default logger: AD-24 wants every warning to have a destination, and a
+ * caller that has no sink yet gets this discarding one. Entry 7 adds the real
+ * sinks and wires them through the host.
+ */
+const DISCARD_LOGGER: Logger = { warn: () => {}, error: () => {} };
 
 function programMemoKey(ref: ProgramRef): string {
   return ref.kind === "inline"
@@ -64,18 +67,26 @@ function programMemoKey(ref: ProgramRef): string {
     : `file\u0000${ref.path}\u0000${ref.sourceHash}\u0000${ref.compiler}`;
 }
 
-/** Bind the ports, the built-in lookup and the program memo to a game state. */
+/**
+ * Bind the ports, the assembled command registry and the program memo to a game
+ * state. `plugins` is the ordered list of layers above the built-in `core` pack,
+ * which is always layer 0 (ADR 0004 decision 6: it can be wrapped, not removed);
+ * `effects` receives every command's reported effects (decision U1) and
+ * `logger` receives the registry's warnings (AD-24). Resolving the manifest into
+ * the `core` pinning proper is entry 25's.
+ */
 export function createScriptServices(
   state: GameState,
-  extraBuiltins?: readonly BuiltinSpec[],
+  plugins: readonly PluginDefinition[] = [],
+  logger: Logger = DISCARD_LOGGER,
+  effects: (effect: CommandEffect) => void = () => {},
 ): ScriptServices {
-  const rng = createRngPort(state.rng);
-  const clock = createClockPort(state.time);
-  const ctx: BuiltinCtx = { rng, clock };
-  const specs =
-    extraBuiltins === undefined
-      ? PROVISIONAL_BUILTINS
-      : [...PROVISIONAL_BUILTINS, ...extraBuiltins];
+  const view: CommandView = {
+    rng: createRngPort(state.rng),
+    clock: createClockPort(state.time),
+  };
+  const registry = assembleCommands([CORE_PLUGIN, ...plugins], logger);
+  const commands = createCommandLookup({ builtin: (name) => registry.get(name) });
   const cache = new Map<string, Program>();
   const programs: ProgramMemo = {
     get(ref) {
@@ -87,7 +98,7 @@ export function createScriptServices(
       return compiled;
     },
   };
-  return { rng, clock, ctx, lookup: createBuiltinLookup(specs), programs };
+  return { view, commands, effects, programs };
 }
 
 /** Poll a sleep wait: resolved exactly when the tick reaches `until` (§9.15). */
@@ -199,20 +210,29 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         break;
       case "call": {
         const args = takeArgs(frame, op.argc);
-        const spec = services.lookup.get(op.name);
-        if (spec === undefined) {
+        const resolved = services.commands.get(op.name);
+        if (resolved === undefined) {
           throw new ScriptError("unknown.command", `no built-in named "${op.name}"`);
         }
-        checkArity(spec, args, op.name);
-        const result = spec.call(services.ctx, args);
+        checkArity(resolved.spec, args, op.name);
+        const result = resolved.spec.call(services.view, args, resolved.next);
         frame.ip += 1;
-        if ("yield" in result) {
-          thread.wait = result.yield;
+        if (result.request !== undefined) {
+          // Decision U3: a request is accepted by the contract and refused here
+          // until entry 9 handles it, rather than dropped silently.
+          throw new ScriptError(
+            "command.request-unsupported",
+            `"${op.name}" asked the host for something the VM cannot answer yet (entry 9)`,
+          );
+        }
+        for (const effect of result.effects ?? []) services.effects(effect);
+        if (result.wait !== undefined) {
+          thread.wait = result.wait;
           thread.status = "waiting";
           return;
         }
-        applyOut(vm, frame, spec, args, result.out, op.name);
-        frame.operands.push({ value: result.done, ref: null });
+        applyOut(vm, frame, resolved.spec, args, result.out ?? [], op.name);
+        frame.operands.push({ value: result.value, ref: null });
         break;
       }
       case "return":
@@ -257,8 +277,8 @@ function setOwn(record: { [name: string]: Value }, name: string, value: Value): 
 /**
  * Assign the operand-stack top to a variable, leaving the value in place
  * (§9.4 makes an assignment yield a value; the trailing `pop` discards it). A
- * `null` result — `end`'s `done`, or a woken `sleep` — stores as the number `0`,
- * because no op stores `null` (ports/value.ts).
+ * `null` result — `end`'s `value`, or a woken `sleep` — stores as the number
+ * `0`, because no op stores `null` (ports/value.ts).
  */
 function storeVar(vm: VmState, frame: Frame, name: string): void {
   const top = frame.operands[frame.operands.length - 1];

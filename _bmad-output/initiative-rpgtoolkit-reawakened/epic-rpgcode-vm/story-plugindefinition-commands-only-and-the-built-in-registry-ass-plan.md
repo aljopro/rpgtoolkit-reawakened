@@ -3,7 +3,7 @@ title: 'PluginDefinition (commands only) and the built-in registry assembly'
 type: 'feature'
 ticket: '3'
 created: '2026-10-15'
-status: ready-for-dev
+status: built
 baseline_revision: '0fd79bfc7178d9254cb42d082268abe705482af4'
 route: 'full'
 route_source: 'auto'
