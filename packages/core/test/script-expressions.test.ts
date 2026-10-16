@@ -12,6 +12,7 @@ import {
   type PluginDefinition,
   type ScriptError,
 } from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
 
 function errorOf(run: () => unknown): { code: string; message: string } {
   try {
@@ -27,7 +28,7 @@ function errorOf(run: () => unknown): { code: string; message: string } {
 function runScript(source: string, plugins: readonly PluginDefinition[] = []): GameState {
   const state = createGameState({ seed: 0 });
   startProgram(state.vm, { kind: "inline", text: source, compiler: "2" });
-  advanceScriptTick(state, createScriptServices(state, plugins));
+  advanceOrFail(state, createScriptServices(state, plugins));
   return state;
 }
 

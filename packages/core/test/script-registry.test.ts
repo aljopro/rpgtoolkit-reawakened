@@ -27,6 +27,7 @@ import {
   type ScriptError,
   type TierLookup,
 } from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
 
 /** A view that draws nothing, so a test can prove a command used no port. */
 const FIXTURE_VIEW: CommandView = { rng: { nextUint32: () => 0 }, clock: { tick: () => 0 } };
@@ -60,6 +61,12 @@ function thrownMessage(run: () => unknown): string {
 function collectingLogger(): { logger: Logger; records: LogRecord[] } {
   const records: LogRecord[] = [];
   const logger: Logger = {
+    debug(record) {
+      records.push(record);
+    },
+    info(record) {
+      records.push(record);
+    },
     warn(record) {
       records.push(record);
     },
@@ -318,7 +325,7 @@ test("a request is accepted by the registry unmodified and refused by the VM unt
 
   const state = makeState("ask()\n");
   equal(
-    errorOf(() => advanceScriptTick(state, createScriptServices(state, plugins))).code,
+    errorOf(() => advanceOrFail(state, createScriptServices(state, plugins))).code,
     "command.request-unsupported",
   );
 });
@@ -326,7 +333,7 @@ test("a request is accepted by the registry unmodified and refused by the VM unt
 test("a name no tier resolves is still unknown.command, and core stays the default pack", () => {
   const unknown = makeState("nope()\n");
   equal(
-    errorOf(() => advanceScriptTick(unknown, createScriptServices(unknown))).code,
+    errorOf(() => advanceOrFail(unknown, createScriptServices(unknown))).code,
     "unknown.command",
   );
 

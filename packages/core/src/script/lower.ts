@@ -42,12 +42,16 @@ export type CompiledClass = {
   readonly abstract: boolean;
 };
 
-/** Lowering result: instructions, hoisted function/class tables and top-level labels. */
+/** The op range `[start, end)` of one statement, its trailing `pop` included (ERR-1 `resumeNext`). */
+export type StatementRange = { readonly start: number; readonly end: number };
+
+/** Lowering result: instructions, hoisted function/class tables, top-level labels and statement ranges. */
 export type LowerResult = {
   readonly ops: StepOp[];
   readonly functions: { readonly [name: string]: readonly FunctionInfo[] };
   readonly classes: { readonly [name: string]: CompiledClass };
   readonly labels: { readonly [name: string]: number };
+  readonly statements: readonly StatementRange[];
 };
 
 /** Lower an AST to the flat Step IR array and function tables. */
@@ -55,6 +59,7 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
   const classNames = new Set(ast.classes.map((item) => item.name));
   const ops: StepOp[] = [];
   const posCache = new Map<number, SourcePos>();
+  const statements: StatementRange[] = [];
 
   function getPos(line: number): SourcePos {
     let p = posCache.get(line);
@@ -222,11 +227,16 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
     }
   }
 
+  /** Lower one statement and its trailing `pop`, recording its op range. */
+  function emitStatement(statement: Statement, currentLabels: { [name: string]: number }): void {
+    const start = ops.length;
+    lowerStatement(statement, currentLabels);
+    ops.push({ op: "pop", pos: getPos(statement.line) });
+    statements.push({ start, end: ops.length });
+  }
+
   function lowerBlock(block: Block, currentLabels: { [name: string]: number }): void {
-    for (const statement of block) {
-      lowerStatement(statement, currentLabels);
-      ops.push({ op: "pop", pos: getPos(statement.line) });
-    }
+    for (const statement of block) emitStatement(statement, currentLabels);
   }
 
   function lowerStatement(stmt: Statement, currentLabels: { [name: string]: number }): void {
@@ -367,10 +377,7 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
 
   // --- Top-level lowering ---
   const topLabels: { [name: string]: number } = {};
-  for (const statement of ast.statements) {
-    lowerStatement(statement, topLabels);
-    ops.push({ op: "pop", pos: getPos(statement.line) });
-  }
+  for (const statement of ast.statements) emitStatement(statement, topLabels);
   const lastLine = ast.statements[ast.statements.length - 1]?.line ?? 1;
   ops.push({ op: "return", pos: getPos(lastLine) });
 
@@ -381,10 +388,7 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
   function lowerBody(body: Block, line: number): { entry: number; end: number; labels: { [name: string]: number } } {
     const entry = ops.length;
     const labels: { [name: string]: number } = {};
-    for (const statement of body) {
-      lowerStatement(statement, labels);
-      ops.push({ op: "pop", pos: getPos(statement.line) });
-    }
+    for (const statement of body) emitStatement(statement, labels);
     const lastLine = body[body.length - 1]?.line ?? line;
     ops.push({ op: "return", pos: getPos(lastLine) });
     return { entry, end: ops.length, labels };
@@ -429,5 +433,5 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
     classes[cls.name] = { name: cls.name, bases: cls.bases, members: cls.members, methods, constructor, destructor, abstract };
   }
 
-  return { ops, functions, classes, labels: topLabels };
+  return { ops, functions, classes, labels: topLabels, statements };
 }

@@ -927,6 +927,64 @@ export function parse(tokens: readonly Token[]): Ast {
     return { kind: "return", value, byRef: false, line: token.line };
   }
 
+  /**
+   * Legacy `on error goto :label` and `on error resume next` (ERR-1). Each
+   * lowers to the same call as its modern form, `setErrorHandler(:label)` or
+   * `setResumeNextHandler()`, so both share one runtime path.
+   */
+  function parseOnError(): Statement {
+    const token = consume(); // 'on'
+    consume(); // 'error'
+    const mode = peek();
+    if (isIdent(mode, "resume")) {
+      consume();
+      const word = peek();
+      if (!isIdent(word, "next")) {
+        throw new ScriptError(
+          "syntax.error",
+          `expected \`next\` after \`on error resume\` but found ${describe(word)}`,
+          { file: "", line: word.line },
+        );
+      }
+      consume();
+      expectStatementEnd();
+      return {
+        kind: "expr",
+        expr: { kind: "call", name: "setresumenexthandler", args: [], line: token.line },
+        line: token.line,
+      };
+    }
+    if (isIdent(mode, "goto")) {
+      consume();
+      expectOp(":", "before the handler label of `on error goto`");
+      const label = peek();
+      if (label.kind !== "identifier") {
+        throw new ScriptError(
+          "syntax.error",
+          `expected a label name after \`on error goto :\` but found ${describe(label)}`,
+          { file: "", line: token.line },
+        );
+      }
+      consume();
+      expectStatementEnd();
+      return {
+        kind: "expr",
+        expr: {
+          kind: "call",
+          name: "seterrorhandler",
+          args: [{ kind: "labelRef", name: label.name, line: token.line }],
+          line: token.line,
+        },
+        line: token.line,
+      };
+    }
+    throw new ScriptError(
+      "syntax.error",
+      `expected \`goto\` or \`resume next\` after \`on error\` but found ${describe(mode)}`,
+      { file: "", line: token.line },
+    );
+  }
+
   function parseStatement(inBlock = false): Statement {
     const token = peek();
 
@@ -994,6 +1052,7 @@ export function parse(tokens: readonly Token[]): Ast {
     if (isIdent(token, "for")) return parseFor();
     if (isIdent(token, "switch")) return parseSwitch();
     if (isIdent(token, "return")) return parseReturn();
+    if (isIdent(token, "on") && isIdent(tokens[index + 1] ?? eof, "error")) return parseOnError();
 
     // :label statement (STX-5) vs :x = 1 global variable write
     if (isOp(token, ":")) {

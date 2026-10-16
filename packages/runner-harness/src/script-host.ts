@@ -6,9 +6,10 @@
  * logic and no world. `advance` runs one whole `advanceScriptTick` per
  * requested tick (clamped by `maxTicks` exactly as the test double is) and
  * reports the state hash; `drawList` is `{ tick, 320×240, commands: [] }`,
- * `surfacePixels` is `null`, and the report's `consumed`/`requests`/
- * `diagnostics`/`audioCues` are empty with `loading: false`, `paused: null`, so
- * the golden `runLog` driver accepts it. Epic 4's `createEngine` supersedes it
+ * `surfacePixels` is `null`, and the report's `consumed`/`requests`/`audioCues`
+ * are empty with `loading: false`, `paused: null`. `diagnostics` carries the
+ * located runtime failures the VM collected during the batch (AD-24), so the
+ * golden `runLog` driver accepts it. Epic 4's `createEngine` supersedes it
  * by calling the same phase handlers with the registry from entry 3.
  */
 
@@ -16,7 +17,9 @@ import {
   advanceScriptTick,
   COMPILER_VERSION,
   createGameState,
+  createLogger,
   createScriptServices,
+  drainDiagnostics,
   hashState,
   restoreGameState,
   snapshot,
@@ -26,6 +29,7 @@ import {
   type DrawList,
   type Engine,
   type GameState,
+  type LogSink,
   type PluginDefinition,
   type ScriptServices,
   type SurfaceId,
@@ -39,12 +43,16 @@ export type ScriptHostInit = {
   readonly seed: number;
   /** The layers above the built-in `core` pack (ADR 0004 decision 6). */
   readonly plugins?: readonly PluginDefinition[];
+  /** Where the VM's Logger records go, in order; none means they are dropped. */
+  readonly sinks?: readonly LogSink[];
 };
 
 /** How to rebuild a host from a snapshot: the registry is code, not state. */
 export type ScriptHostRestore = {
   /** The layers above the built-in `core` pack, as the fresh host had them. */
   readonly plugins?: readonly PluginDefinition[];
+  /** Where the VM's Logger records go, in order; none means they are dropped. */
+  readonly sinks?: readonly LogSink[];
 };
 
 /** The tracer's test host: the engine API plus state access for tests. */
@@ -69,7 +77,7 @@ function createHost(gameState: GameState, services: ScriptServices): ScriptHost 
         consumed: [],
         audioCues: [],
         requests: [],
-        diagnostics: [],
+        diagnostics: drainDiagnostics(services),
         loading: false,
         paused: null,
         stateHash: hashState(gameState),
@@ -106,7 +114,7 @@ function createHost(gameState: GameState, services: ScriptServices): ScriptHost 
 /** Start `program` (inline source) as a fresh VM in a fresh game state. */
 export function createScriptHost(init: ScriptHostInit): ScriptHost {
   const gameState = createGameState({ seed: init.seed });
-  const services = createScriptServices(gameState, init.plugins);
+  const services = createScriptServices(gameState, init.plugins, createLogger(init.sinks ?? []));
   startProgram(gameState.vm, {
     kind: "inline",
     text: init.program,
@@ -118,6 +126,6 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
 /** Restore a host from a snapshot, rebinding the registry from `plugins`. */
 export function restoreScriptHost(json: string, init: ScriptHostRestore): ScriptHost {
   const gameState = restoreGameState(json);
-  const services = createScriptServices(gameState, init.plugins);
+  const services = createScriptServices(gameState, init.plugins, createLogger(init.sinks ?? []));
   return createHost(gameState, services);
 }

@@ -149,6 +149,8 @@ const IMPLEMENTED_COMMANDS = new Set([
   "kill",
   "local",
   "global",
+  "debug",
+  "debugger",
 ]);
 
 /** The stub-safe rows of the catalogue, in catalogue order. */
