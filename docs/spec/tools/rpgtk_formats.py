@@ -83,7 +83,7 @@ def parse_gam(r):
     r.s16('registered'); r.string('registration code')
     r.string('projectPath'); r.string('gameTitle')
     r.s16('mainScreenType'); r.s16('extendToFullScreen'); r.s16('mainResolution')
-    if mv < 3: r.s32('(unused int, minor<3)')
+    if mv < 3: r.s16('(unused short, minor<3)')
     r.s16('mainDisableProtectReg'); r.string('language file')
     r.string('startupPrg'); r.string('initBoard'); r.string('initChar')
     r.string('runTime'); r.s16('runKey (ASCII)'); r.s16('menuKey (ASCII)'); r.s16('key (ASCII)')
@@ -93,7 +93,7 @@ def parse_gam(r):
     if mv >= 3:
         r.string('menuPlugin'); r.string('fightPlugin')
     else:
-        r.s32('(unused int, minor<3)')
+        r.s16('(unused short, minor<3)')
     if mv <= 2:
         r.s32('(unused int, minor<=2)'); r.s16('(unused short, minor<=2)')
     r.s16('fightGameYn')
