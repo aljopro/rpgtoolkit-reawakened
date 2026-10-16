@@ -2,6 +2,9 @@
 
 All 282 command names the 3.1 engine registers, grouped by area. Names are case-insensitive. 14 names are aliases of another command. Signatures use the engine's own notation: `[x]` = optional parameter, `&` = the argument must be a variable (it receives a result), `ret` = the value the command returns. Types are `int`/`double` (numbers), `string`, `bool` (number or "on"/"off"), `canvas`/`thread`/`animation` (numeric handles).
 
+<a id="e-94"></a>
+**E-94 Built-in library.** About 280 functions, grouped by capability. Parity means every name in the catalogue resolves, with the same argument conventions, including optional trailing by-reference outputs and handles that accept a name, an index, `"source"` or `"target"`. The catalogue on this page is the 282 names the engine registers, aliases included.
+
 **Compatibility notes.**
 
 * **Binding is at compile time (R-35).** Calls to built-ins are bound when a program is compiled, so a script method with the same name as a built-in is never called at those call sites. If a name were registered twice the first registration would win. The control-flow words `if`, `elseif`, `else`, `while`, `until` and `for` are also built-ins internally but are documented in [rpgcode-language.md](rpgcode-language.md).
@@ -44,6 +47,9 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `gettextwidth` | `int gettextwidth(string text)` | Get the width of a string of text in pixels, relative to the current font and size. |  |
 | `gettextheight` | `int gettextheight(string text)` | Get the height of a string of text in pixels, relative to the current font and size. |  |
 | `setmwintranslucency` | `void setmwintranslucency(int percent)` | Set the translucency of the message window. 0% is invisible; 100% is opaque. |  |
+
+<a id="e-55"></a>
+**E-55 Message window ("mwin").** A dialogue box along the top of the screen, with a background colour or image, a size (per cent of the screen), translucency, a font, a size, bold/italic/underline and a colour. `Mwin(text)` appends a line and `MwinCls` hides and clears it; the text supports variable splicing (`<var>`), and the text speed is configurable.
 
 ## Program flow, errors & debugging (25)
 
@@ -160,6 +166,15 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `boardgetprogrampoint` | `void boardgetprogrampoint(int programIndex, int pointIndex, int &x, int &y)` | Get a single point on a board program. x, y are always pixel values. |  |
 | `boardsetprogrampoint` | `void boardsetprogrampoint(int programIndex, int pointIndex, int x, int y)` | Set/move a single point on a board program. x, y are always pixel values. |  |
 
+<a id="e-14"></a>
+**E-14 Runtime board edits.** Scripts can place tiles (`Put`, `LayerPut`), change legacy tile types, read tiles, add, modify or delete **vectors** and **programs** point by point, and redraw. Path-finding data is rebuilt when a vector edit is "applied".
+
+<a id="e-59"></a>
+**E-59 Transitions and effects.** Fades of several types, wipes with an image (several effects and speeds), zoom, earthquake shake, and the border colour.
+
+<a id="e-63"></a>
+**E-63 Board preview.** `ViewBrd` renders a board, or part of one, to the screen or to a canvas without entering it.
+
 ## Players, party & sprite movement (31)
 
 | Command | Signature | Purpose | Notes |
@@ -229,6 +244,12 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `itemgetpath` | `int itemgetpath(variant handle)` | void itemGetPath(variant handle, int index, int &x, int &y) |  |
 | `itemdirection` | `int itemdirection(variant handle)` | void itemDirection(variant handle, int dir) |  |
 
+<a id="e-31"></a>
+**E-31 Sprite translucency.** The parts of a sprite that are covered by higher content are drawn translucently (`SpriteTranslucency(%)`), so the player stays visible behind trees and roofs.
+
+<a id="e-32"></a>
+**E-32 Scripted sprite control.** Place, erase, create and destroy items; get or set a location and a facing; set a speed; play a stance; swap a player's graphics (`NewPlayer`); wander randomly, optionally restricted; query the queued path.
+
 ## Battle, stats & menus (29)
 
 | Command | Signature | Purpose | Notes |
@@ -262,6 +283,15 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `removestatus` | `void removestatus(string target, string file)` | Remove a status effect from a fighter. |  |
 | `drawenemy` | `void drawenemy(string file, int x, int y, [canvas cnv])` | Draw an enemy. |  |
 | `giveexp` | `void giveexp(string handle, int amount)` | Give experience to a player. |  |
+
+<a id="e-83"></a>
+**E-83 Shop.** `CallShop(item, …)` opens a buy/sell screen that uses each item's buy and sell prices and the party's gold; its colours are configurable.
+
+<a id="e-84"></a>
+**E-84 Inn.** `Inn()` fully restores the party.
+
+<a id="e-86"></a>
+**E-86 Gold.** A global integer, changed by battle rewards, by the shop and by scripts.
 
 ## Graphics, canvases, animation & video (31)
 
@@ -299,6 +329,12 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `canvasdrawpart` | `void canvasdrawpart(int cnv, int x, int y, int xSrc, int ySrc, int width, int height[, canvas cnvDest])` | Draw part of a canvas. |  |
 | `canvasgetscreen` | `void canvasgetscreen(canvas cnvDest)` | Copy the screen onto a canvas. |  |
 
+<a id="e-56"></a>
+**E-56 Text and primitives.** Text at tile-cell or pixel coordinates; lines, rectangles and circles, filled or outlined; pixel get and set; images drawn normally, colour-keyed, translucent (50 %) or additive (per cent). All of them work on the screen or on an **off-screen canvas**, and a canvas can be created, drawn whole or in part, colour-keyed and captured from the screen.
+
+<a id="e-58"></a>
+**E-58 Screen save and restore.** Save the screen to numbered slots and restore it, whole or as partial rectangles.
+
 ## Mouse, buttons & cursor maps (11)
 
 | Command | Signature | Purpose | Notes |
@@ -314,6 +350,9 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `cursormaprun` | `int cursormaprun(cursor_map map, [int &ret])` | Run a cursor map. |  |
 | `cursormaphand` | `void cursormaphand(string cursor[, bool stretch = true])` | Change the cursor used everywhere cursors are used (e.g. cursor maps, the menu, the battle system), optionally not stretching it to 32 by 32 pixels. |  |
 | `mousecursor` | `void mousecursor(string file, int x, int y, int red, int green. int blue)` | Change the mouse cursor. "TK DEFAULT" or "" restores the default cursor. |  |
+
+<a id="e-60"></a>
+**E-60 Modal UI primitives.** A message box with OK or Yes/No buttons (keyboard or mouse), a text prompt, **cursor maps** (a list of hotspots navigated with the arrow keys or the mouse, returning the chosen index, with a custom cursor image), on-screen clickable **buttons** (slots with images), and a save-file picker (`DirSav`).
 
 ## Audio (12)
 
@@ -331,6 +370,9 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `mp3` | `void mp3(string file)` | Play a wave file (e.g. a sound effect). | alias of `wav` |
 | `mp3pause` | `void mp3pause()` | Play a sound effect and pause the engine until it finishes. |  |
 | `setvolume` | `void setvolume(int percent)` | Set the volume of all music and sound using a value between 0 and 100. |  |
+
+<a id="e-102"></a>
+**E-102 Volume.** A master volume as a percentage, applied to all music and sound.
 
 ## Files, saves & OS (15)
 
@@ -351,6 +393,11 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `fileput` | `void fileput(string file, string byte)` | Write a byte to a file. |  |
 | `fileeof` | `bool fileeof(string file, [bool &ret])` | Check whether the end of a file has been reached. |  |
 | `apppath` | `string apppath([string &dest])` | Retrieve the path of trans3.exe, without the final backslash. |  |
+
+<a id="e-97"></a>
+**E-97 File I/O.** Scripts can open text or binary files *inside the game's folders* (input, output, append, binary) to read and write lines or bytes ([../formats/rpgcode-program.md](../formats/rpgcode-program.md#other-script-created-files)).
+
+**Reawakened rule.** Script file I/O is **sandboxed to the game's save area**: a script's file commands can only reach files under the game's own folders, never an arbitrary host path.
 
 ## Ownership of names with no single owner
 

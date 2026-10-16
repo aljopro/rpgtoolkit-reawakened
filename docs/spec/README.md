@@ -17,6 +17,7 @@ This is a behaviour and file-format specification of **RPG Toolkit 3.1** (the ed
 | [engine/rpgcode-functions.md](engine/rpgcode-functions.md) | All 282 built-in commands with signatures |
 | [engine/plugins-and-battle.md](engine/plugins-and-battle.md) | Menu, battle and command plugins; the battle model and enemy AI; the 140-method callback interface |
 | [engine/plugin-constants.md](engine/plugin-constants.md) | Info codes and enumerations used by the callback interface |
+| [engine/parity-checklist.md](engine/parity-checklist.md) | What "plays legacy games" requires, area by area: the reference the headless golden tests hold the engine to |
 | [tools/](tools/README.md) | Python readers and writers for every format, a renderer, and the example-game builder |
 | [examples/](examples/) | A small complete game in every format, with annotated byte listings and renders, built from original placeholder art |
 | [examples/versions/](examples/versions/README.md) | One example file for every version of every asset format (older binary minors, Toolkit 1/2 text, every tile detail level), for testing an importer that upgrades files on the fly |

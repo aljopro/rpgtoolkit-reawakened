@@ -3,7 +3,7 @@ title: 'Migrate engine-features.md into docs/spec/engine with its E-xx IDs'
 type: 'chore'
 ticket: '14'
 created: '2026-10-15'
-status: ready-for-dev
+status: built
 baseline_revision: '3509ec22bc67524ceaf142724245cf7e254f14db'
 route: 'full'
 route_source: 'auto'

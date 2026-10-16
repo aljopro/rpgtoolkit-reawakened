@@ -12,6 +12,13 @@ The engine has **no built-in menu and no built-in battle screen**. Both are plug
 
 Without a menu plugin the menu key does nothing; without a battle plugin battles end immediately.
 
+<a id="e-99"></a>
+**E-99 Plugins (extension point).** Legacy native plugins could add script functions, replace the menu, or replace the battle UI, and they were offered every unknown function call. The two stock plugins (menu and battle) have no other home and must be re-implemented natively.
+
+**Reawakened rule.** The rebuild provides **one plugin contract**, used by the engine's own packs and by third parties alike, selected by an **editable manifest**, with every external effect going out through **host requests**. It is not trust-gated for now, and legacy native plugin binaries are not supported.
+
+> **Open conflict R-61 — plugin contract and API shape.** `docs/engine-features.md:313` (E-99) records only the unknown-call back-off and native plugins; this page, `docs/spec/engine/plugins-and-battle.md:167`, specifies the 140-method callback interface, the native and COM export shapes, the menu and battle protocols and the loader rules. Owner epics: **rpgcode-vm** (entries 3.23 and 3.24 hold the evidence) and **battle**. Landed code: the port contracts already carry the plugin and request shapes (`packages/core/src/ports/input.ts:79`, `packages/core/src/ports/requests.ts:52`). The owners settle the boundary at inception; this page rules nothing.
+
 ## Two plugin kinds
 
 **Native ("old") plugins** export plain functions (`__stdcall`, ANSI strings):
@@ -52,13 +59,44 @@ COM plugins cannot receive keyboard and mouse events.
 
 At compile time each unknown command name is offered to every RPGCode plugin's *query*. At run time the engine rebuilds the call as **source text** — numbers formatted, strings in quotes (no escaping), variables by name — and passes it to *execute*. The plugin reads and writes script variables through the callbacks; during the call those resolve to the calling program's locals first.
 
+<a id="e-95"></a>
+**E-95 Source/target context.** Each running program has a *source* and a *target* entity (player, item or enemy), set by whatever triggered it, and functions resolve the `"source"` and `"target"` handles against that pair ([rpgcode-language.md](rpgcode-language.md#threads), [rpgcode-functions.md](rpgcode-functions.md)). The engine sets the same pair for a plugin call, which is what callbacks 79 and 80 below are for.
+
 ## Menu plugin
 
 `menu(request)`: 1 main menu, 2 inventory, 4 equipment, 8 abilities. The plugin draws its own UI and returns when closed.
 
+<a id="e-80"></a>
+**E-80 Default menu.** Opened with the menu key or `InternalMenu(n)`; in legacy the presentation came from a plugin and the rules from the engine:
+* main screen: party members with portraits and stats, gold and play time;
+* **Items:** use (on a chosen member; consumes), info, drop (not key items);
+* **Equip:** choose member, slot, then item; remove;
+* **Abilities:** use board-usable special moves, info;
+* **Save** (disabled when the board forbids it), **Load**, **Quit**.
+
+A custom menu image can be set (`MenuGraphic`), cursor sounds come from the main file, and the main menu, inventory, equip and abilities screens can each be opened directly.
+
+<a id="e-81"></a>
+**E-81 Inventory.** A list of (item file, handle, quantity). `GiveItem` and `TakeItem` add and remove; key items cannot be dropped. Using an item from the menu or in battle applies +HP/+SMP and/or runs the use program, then consumes it ([../formats/item.md](../formats/item.md#board-items-vs-inventory-items)).
+
+<a id="e-82"></a>
+**E-82 Equipment.** Body slots: head, neck, left hand, right hand, body, legs and named accessories. An item lists the slots it fits and which characters may use it. Equipping adds HP/DP/FP/SMP bonuses and runs the equip program; removing subtracts them, runs the remove program, caps HP and SMP, and returns the item to the inventory ([../formats/item.md](../formats/item.md)).
+
+<a id="e-18"></a>
+**E-18 Saving permission per board.** The board carries a disable-saving flag, and the default menu's Save option is disabled on such a board ([../formats/board.md](../formats/board.md#threads-constants-and-settings)).
+
+<a id="e-123"></a>
+**E-123 Save gating.** The default menu respects that flag, so the Save option and `Save()` behave as the board allows; the file itself is [../formats/save-game.md](../formats/save-game.md).
+
 ## Battle protocol
 
 The engine keeps the battle **model**; the plugin owns the **loop and the UI**.
+
+<a id="e-70"></a>
+**E-70 Battle start.** *Random:* after each whole-tile step on a board that allows battles, and with fighting enabled globally, roll 1-in-`chances` (type 0) or check every `chances` tiles (type 1); if the main file names a custom battle program it runs instead; otherwise 1-4 enemies are drawn at random from the main file's pool among those whose skill level equals the board's, and the board's battle background is used. *Scripted:* `Fight(skill, bkg)` or `FightEnemy(e1, e2, …, bkg)`.
+
+<a id="e-71"></a>
+**E-71 Battle setup.** Two parties (enemies and the player's), the battle background's music replacing the board music, the background image and menu sounds loaded, and running away allowed unless an enemy forbids it.
 
 1. The engine sets up two parties: party 0 = enemies, party 1 = the player's party. It switches to the battle music.
 2. It calls `fight(enemyCount, skill, background, canRun)` and waits. **`skill` is always −1** in the original engine.
@@ -75,6 +113,13 @@ The engine keeps the battle **model**; the plugin owns the **loop and the UI**.
 
 5. The engine restores the board music and redraws.
 
+<a id="e-79"></a>
+**E-79 Battle-facing script API.** The fight plugin interface exposes fighter queries (HP, SMP, FP, DP, name, animation, charge %), actions (attack, use item, use special, release charge, add or remove a status effect) and a `fightTick` — callbacks 114 to 132 below.
+
+**Reawakened rule.** The rebuild ships a **default battle UI** that reproduces the stock look and feel, and keeps the battle **rules in the core** rather than in the UI.
+
+**Reawakened rule.** **RPGCode-written battle systems** must be able to drive the same core operations as that default UI (they replace it through the main file's custom fight program), so a script can build its own battle screen without a second rules engine.
+
 `fightInform` codes: 0 HP removed, 1 SMP removed, 2 source attacked, 3 source used a special move, 4 source used an item, 5 source fully charged, 6 source died, 7 party defeated. **The original engine never sends 6 or 7**: the plugin must detect deaths and the end of the battle itself.
 
 ### Battle model
@@ -82,6 +127,23 @@ The engine keeps the battle **model**; the plugin owns the **loop and the UI**.
 - **Charge:** every fighter has a charge counter; each tick adds the fighter's speed (3, ±2 per speed/slow status effect). Players act at 75, enemies at 123. A "disable" status effect freezes charge.
 - **Attacks and special moves:** HP and SMP changes are clamped at 0; critical-hit chances come from the enemy's `takeCrit`/`giveCrit` ("1 in N"). Special-move effects are described in [../formats/battle-data.md](../formats/battle-data.md#special-move-spc).
 - **Status effects** apply each round until their `rounds` run out ([../formats/battle-data.md](../formats/battle-data.md#status-effect-ste)).
+
+<a id="e-72"></a>
+**E-72 Charge-bar turns ("active time").** Each fighter's charge fills by *speed* per tick — players' maximum 75, enemies' maximum 123, both starting at a random value. A charged **player** stops charging and waits for a menu choice; a charged **enemy** acts immediately and resets. Disabled fighters do not charge.
+
+<a id="e-73"></a>
+**E-73 Player actions.** Fight (physical attack), Special Move (named per character, e.g. "Magic"), Item (a battle-usable item; consumes one), Run.
+
+<a id="e-74"></a>
+**E-74 Damage rules.** A physical attack uses the attacker's FP ±10 % random variance; the target's DP is subtracted **unless a critical hit happens** (enemies define 1-in-N crit chances for being hit and for hitting); minimum 1 damage; damage can be applied to SMP instead of HP. A special move removes its *FP* from the target's HP and its *target SMP drain* from the target's SMP, costs the user SMP, and may apply a status effect and play an animation. HP and SMP are clamped at 0.
+
+<a id="e-75"></a>
+**E-75 Status effects.** Applied by moves or by script and keyed by file (re-applying restarts it). Each round while the fighter is charged: apply ±HP and ±SMP and optionally run a program (with `source`/`target` = the fighter); it lasts a number of rounds. **Speed up / slow down** change the charge rate; **disable** freezes charging and is reference-counted when several disables are active.
+
+<a id="e-77"></a>
+**E-77 Outcome.** **Win:** the total gold and experience of all enemies, a "Gained N experience / GP" message, the experience given to every party member (which may level them up), and the enemy defeat program. **Run:** the run-away program and no rewards. **Lose:** the game-over program, or `reset()` when there is none. The board music resumes afterwards.
+
+> **Open conflict R-57 — battle model and notification quirks.** `docs/engine-features.md:237,241` (E-74, E-72) says players act at a maximum charge of 75, enemies at 123, damage has a ±10 % variance and a critical hit bypasses DP; this page, `docs/spec/engine/plugins-and-battle.md:102`, says "`skill` is always −1" in the original engine and gives the charge, damage and notification codes above, including that the engine "never sends 6 or 7". Owner epic: **battle**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ### Enemy AI
 
@@ -93,6 +155,9 @@ The engine keeps the battle **model**; the plugin owns the **loop and the UI**.
 | 3 | the weakest target; special moves first |
 | any, with `useCode` | runs the enemy's AI program instead |
 
+<a id="e-76"></a>
+**E-76 Enemy AI.** The four built-in levels are the table above. An enemy can instead use a **custom AI program** (with `source` = enemy and `target` = a random player). Enemies use only specials they can afford, and curative specials target allies.
+
 ### Random encounters
 
 Tested at most once per tile the player moves, on boards that allow battles, when the main file enables fighting (`fightGameYn = 0`). Type 0: a fight starts with probability 1 / `chances`. Type 1: a fight starts every `chances` tiles walked. If the main file's custom-fight flag is set, its fight program runs instead. Otherwise 1-4 enemies (random count) are drawn from the main file's encounter table among those whose skill level matches the board's battle skill, and the board's battle background is used. If no enemy has that skill level the message "No enemies of skill level N found." is shown.
@@ -102,6 +167,9 @@ Tested at most once per tile the player moves, on boards that allow battles, whe
 Plugins reach the engine through the 140 methods below. Native plugins receive the first 45 or 133 as an array of function pointers (in this order; methods 133-139 are COM only). COM plugins get an automation object (`Trans3.Callbacks`). All methods return success; failures show only in their results. Canvas, animation and other "handles" are numbers issued by the engine. `→T` marks the return value. Info codes for the `Get…`/`Set…` families are listed in [plugin-constants.md](plugin-constants.md).
 
 Notable conventions: `CBCanvasDrawText` positions text in **character cells**, `CBDrawTextAbsolute` in pixels; `CBGetBracketElement` is **1-based**; the element-value callbacks only work during an RPGCode plugin call.
+
+<a id="e-54"></a>
+**E-54 Animations.** `.anm` files and animated GIFs: a per-frame image (a picture, a tile or a tile bitmap), a per-frame transparent colour, a per-frame sound and a frame delay in seconds. They are used for sprites, battle effects and stand-alone screen animations (`Animation`, `SizedAnimation`, and persistent ones that keep running until `EndAnimation`), and frames are shared and cached between sprites that use the same file ([../formats/animation.md](../formats/animation.md)). Callbacks 105 to 113 below create, draw and query them.
 
 | # | Method | Purpose |
 |---|---|---|

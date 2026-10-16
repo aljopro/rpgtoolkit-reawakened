@@ -2,6 +2,9 @@
 
 RPGCode is the scripting language of every game event. This page describes the language as the 3.1 engine actually accepts and runs it, including the quirks existing games may depend on, and states where this rebuild deliberately differs. The built-in commands are listed in [rpgcode-functions.md](rpgcode-functions.md). Four sibling pages cover one area each: [modules and objects](rpgcode-modules-and-objects.md), [errors and threads](rpgcode-errors-and-threads.md), [values, scope and conversion](rpgcode-runtime.md), and the [older dialects](rpgcode-dialects.md).
 
+<a id="e-90"></a>
+**E-90 Language.** The language surface is the subject of this page and its four siblings: dynamic values, arrays and maps, functions with overloading and references, classes with multiple inheritance, operator overloading, destructors, includes and implicit includes, redirects, error handlers, plus the legacy syntax the frontends accept. Every feature named there is a parity requirement.
+
 **How to read this page.** A plain paragraph says what Toolkit 3.1 does. A block that opens with the words **Reawakened rule** is a deliberate addition or difference of this project, written beside the legacy behaviour it changes ([ADR 0007](../../adr/0007-docs-spec-is-the-normative-specification.md), decision 2). Where such a rule is a *departure* — a case where Toolkit 3.1 behaved differently and a game written for 3.1 could notice — the block says so and gives the reason. Rule ids such as LEX-2 and STX-4 are stable labels that code, tests and plans cite.
 
 ## Programs and encodings
@@ -152,6 +155,12 @@ Operators on one row have equal precedence. Written from the top down, as a pars
 
   **Reawakened rule.** Reports carry the exact line, with no offset. *Legacy fact:* 3.1 prepends a dummy first line before compiling and compensates for it, so syntax errors came out exact; two declaration errors — a method defined twice with the same parameter count, and a call to a class method that does not exist — came out one line too high, an unmatched brace came out approximate, and a runtime error was approximate and probably exact (round 5, Q5). Since a script cannot observe the offset, reporting the exact line is the safest reading and nothing depends on the old off-by-one.
 
+<a id="e-91"></a>
+**E-91 Program cache.** Parsed programs are cached by file name, so re-running one is cheap.
+
+<a id="e-98"></a>
+**E-98 Debugging.** A debug window shows runtime error messages ("near line N") that name the file and the line; `Debugger(text)` writes to it, and a debug toggle (`Debug(on)`) turns error and warning output on or off. Which line a message names is the R-38a rule above.
+
 ## Threads
 
 A thread is a whole program run in the background, a slice of instructions per frame ([main-loop-and-startup.md](main-loop-and-startup.md#timing)), while the game keeps playing.
@@ -164,6 +173,12 @@ A thread is a whole program run in the background, a slice of instructions per f
 - Threads are saved with their full execution state ([../formats/save-game.md](../formats/save-game.md#program-state-inside-each-thread-field-46)).
 
 The sleep unit, the per-thread `source`/`target` handles, the preemption budget and the blocking-command rule are in [errors and threads](rpgcode-errors-and-threads.md).
+
+<a id="e-93"></a>
+**E-93 Threads.** Board threads (they die on board exit), persistent threads (`Thread(file, true)`) and item threads (they die with the item). The operations are sleep (timed or indefinite), wake, query the remaining sleep, kill, get id, and `TellThread(id, code)` to run code in the thread's context. A thread whose program reaches its end finishes, and loops must be explicit.
+
+<a id="e-46"></a>
+**E-46 Item multitask program.** Runs as a thread for as long as the item is on the board and active; `source` and `target` are the item.
 
 ## Objects and memory
 
@@ -187,6 +202,15 @@ The engine exposes 44 read-only variables that mirror engine state (R-37):
 **Compatibility note:** assigning to a virtual variable in the original engine breaks its link to the engine for the rest of the session.
 
 **Reawakened rule.** Two engine-backed names that the legacy engine also had are kept as additions here, because existing games use them and `docs/spec` does not list them: `threads[i]`, the live thread table, and `ambientRed`, `ambientGreen`, `ambientBlue`, the ambient light level (call `forceRedraw()` after assigning one). They are marked as additions, not as part of the 44 read-only set, so an implementer can tell which names come from the legacy specification. (Owner ruling U2, 2026-10-15.)
+
+<a id="e-92"></a>
+**E-92 Variables.** One global namespace that persists across programs and boards and is included in saves; locals are per call; the engine-backed "virtual" variables in the table above are read and written through the engine (party positions, board data, ambient light, game time).
+
+<a id="e-15"></a>
+**E-15 Board constants and titles.** The current board's constants and layer titles are exposed to scripts (`constant[0..10]`, `boardtitle[1..8]`) and are also substituted as named constants, under the board-constant rule (LEX-7) in the lexical rules above.
+
+<a id="e-87"></a>
+**E-87 Game time and steps.** The total play time in seconds and the total step count are exposed to scripts (`gametime`) and are saved with the game.
 
 ## Compile-time constants
 
