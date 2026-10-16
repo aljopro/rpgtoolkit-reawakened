@@ -165,6 +165,7 @@ const CORE_HEADERS: ReadonlyArray<readonly [CoreFormatId, Uint8Array]> = [
   ["battle-background", asciiBytes(BATTLE_BACKGROUND_MAGIC)],
   ["image", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
   ["image", new Uint8Array([0x42, 0x4d, 0x36, 0x00])],
+  ["image", asciiBytes("GIF89a")],
 ];
 
 test("the core registry claims each core decoder's extensions and magic header", () => {
@@ -240,6 +241,7 @@ const SAMPLES: readonly Uint8Array[] = [
   new Uint8Array([0x42, 0x4d, 0x36, 0x00, 0x00, 0x00]),
   asciiBytes("not a game file at all; just some bytes to fail on"),
   TILESET_BYTES,
+  new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "gif-still87a.gif"))),
 ];
 
 test("every core decoder returns exactly what its own reader returns", () => {

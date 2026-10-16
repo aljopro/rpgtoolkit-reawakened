@@ -32,6 +32,9 @@
 //   * three Windows bitmaps (docs/spec/formats/images.md) — 24-bit with padded
 //     rows, 1-bit with a two-entry palette, and an 8-bit RLE8 stream — so the
 //     BMP decoder is pinned without a real game file in the repository.
+//   * four GIFs (docs/spec/formats/images.md#gif) — still GIF87a, animated
+//     three-page GIF89a with sub-rectangles and disposal, interlaced GIF89a,
+//     and a 128×64 page that exercises the deferred clear code.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -94,6 +97,311 @@ function monoRow(pixels) {
     if (value !== 0) row[x >> 3] |= 0x80 >> (x & 7);
   });
   return row;
+}
+
+/**
+ * The size bits a GIF packed field stores for a colour table of `entries`
+ * entries: `N` in `2^(N+1)`
+ * (docs/spec/formats/images.md#logical-screen-descriptor-7-bytes-at-offset-6).
+ */
+function gifTableBits(entries) {
+  let bits = 0;
+  while (1 << (bits + 1) < entries) bits += 1;
+  return bits;
+}
+
+/** A GIF colour table: three bytes per `[r, g, b]` entry. */
+function gifColorTable(colors) {
+  return concat(colors.map(([r, g, b]) => new Uint8Array([r, g, b])));
+}
+
+/**
+ * A GIF sub-block chain (docs/spec/formats/images.md#the-sub-block-chain): the
+ * payload split into 255-byte sub-blocks, then the zero terminator.
+ */
+function gifSubBlocks(bytes) {
+  const parts = [];
+  for (let at = 0; at < bytes.length; at += 255) {
+    const chunk = bytes.subarray(at, at + 255);
+    parts.push(new Uint8Array([chunk.length]), chunk);
+  }
+  parts.push(new Uint8Array([0x00]));
+  return concat(parts);
+}
+
+/** A GIF header and logical screen descriptor, with the global colour table. */
+function gifScreen(version, { width, height, colors, background = 0 }) {
+  const bits = gifTableBits(colors.length);
+  return concat([
+    ascii(version),
+    le16(width),
+    le16(height),
+    new Uint8Array([0x80 | (bits << 4) | bits, background, 0]),
+    gifColorTable(colors),
+  ]);
+}
+
+/** A GIF image descriptor, with the page's local colour table when `colors` is given. */
+function gifImage({ left = 0, top = 0, width, height, colors, interlaced = false }) {
+  const local = colors !== undefined;
+  return concat([
+    new Uint8Array([0x2c]),
+    le16(left),
+    le16(top),
+    le16(width),
+    le16(height),
+    new Uint8Array([
+      (local ? 0x80 : 0) | (interlaced ? 0x40 : 0) | (local ? gifTableBits(colors.length) : 0),
+    ]),
+    ...(local ? [gifColorTable(colors)] : []),
+  ]);
+}
+
+/** A GIF graphic control extension, applied to the page that follows. */
+function gifControl({ disposal = 0, delay = 0, transparent = -1 }) {
+  const flagged = transparent >= 0;
+  return concat([
+    new Uint8Array([0x21, 0xf9, 0x04, ((disposal & 0x07) << 2) | (flagged ? 0x01 : 0)]),
+    le16(delay),
+    new Uint8Array([flagged ? transparent : 0, 0x00]),
+  ]);
+}
+
+/**
+ * A GIF page: its optional control extension, its image descriptor and its LZW
+ * stream. `entries` is the entry count of the table the page reads through (its
+ * local one, or the global one), and the minimum code size is the smallest that
+ * addresses it.
+ */
+function gifPage({
+  control,
+  colors,
+  left,
+  top,
+  width,
+  height,
+  interlaced = false,
+  entries = colors === undefined ? 4 : colors.length,
+  indices,
+}) {
+  const minimum = Math.max(2, gifTableBits(entries) + 1);
+  return concat([
+    ...(control === undefined ? [] : [gifControl(control)]),
+    gifImage({ left, top, width, height, colors, interlaced }),
+    new Uint8Array([minimum]),
+    gifSubBlocks(lzwEncode(indices, minimum).bytes),
+  ]);
+}
+
+/**
+ * A GIF LZW encoder of the algorithm
+ * docs/spec/formats/images.md#the-lzw-image-data-stream describes, so a fixture
+ * can carry a stream a real encoder would produce: LSB-first with no padding to
+ * a byte boundary, a code width that grows with the table, and — once the table
+ * holds 4096 entries — no further entry (the format's deferred clear), so the
+ * stream keeps emitting 12-bit codes. Returns the stream and how many **data**
+ * codes it emitted after the table froze (the end code is not counted).
+ */
+function lzwEncode(indices, minimum) {
+  const clearCode = 1 << minimum;
+  const endCode = clearCode + 1;
+  const bytes = [];
+  let width = minimum + 1;
+  let hi = clearCode + 1;
+  let overflow = clearCode << 1;
+  let acc = 0;
+  let bits = 0;
+  let afterFreeze = 0;
+
+  const emit = (code) => {
+    if (hi >= 4096) afterFreeze += 1;
+    acc |= code << bits;
+    bits += width;
+    while (bits >= 8) {
+      bytes.push(acc & 0xff);
+      acc >>>= 8;
+      bits -= 8;
+    }
+  };
+  const incHi = () => {
+    if (hi < 4096) {
+      hi += 1;
+      if (hi === overflow && width < 12) {
+        width += 1;
+        overflow <<= 1;
+      }
+    }
+  };
+
+  emit(clearCode);
+  let code = indices[0];
+  const table = new Map();
+
+  for (let i = 1; i < indices.length; i += 1) {
+    const literal = indices[i];
+    const key = (code << 16) | literal;
+    if (table.has(key)) {
+      code = table.get(key);
+      continue;
+    }
+    emit(code);
+    code = literal;
+    incHi();
+    if (hi < 4096) {
+      table.set(key, hi);
+    }
+  }
+  emit(code);
+  incHi();
+  const dataCodesAfterFreeze = afterFreeze;
+  emit(endCode);
+  if (bits > 0) bytes.push(acc & 0xff);
+  return { bytes: new Uint8Array(bytes), afterFreeze: dataCodesAfterFreeze };
+}
+
+/** The four-colour table every GIF fixture below shares. */
+const GIF_COLORS = [
+  [10, 20, 30],
+  [40, 50, 60],
+  [70, 80, 90],
+  [100, 110, 120],
+];
+
+/**
+ * A still GIF87a (docs/spec/formats/images.md#gif): 3×2, a four-entry global
+ * colour table and no control extension, so its delay is 0, it has no
+ * transparent index and its disposal is 0.
+ */
+function gifStill87a() {
+  const indices = [];
+  for (let k = 0; k < 6; k += 1) indices.push(k & 3);
+  return concat([
+    gifScreen("GIF87a", { width: 3, height: 2, colors: GIF_COLORS }),
+    gifPage({ width: 3, height: 2, indices }),
+    new Uint8Array([0x3b]),
+  ]);
+}
+
+/**
+ * A three-page GIF89a on a 4×3 screen: page 1 full-screen with a transparent
+ * index 1 and a 10-hundredths delay, page 2 a 2×2 sub-rectangle at (1, 1) with
+ * its own two-entry local table, no delay and disposal 2 (restore to
+ * background), and page 3 the same 2×2 rectangle again with a 20-hundredths
+ * delay, so its frame shows nothing of page 2.
+ */
+function gifAnimated() {
+  const first = [];
+  for (let y = 0; y < 3; y += 1) {
+    for (let x = 0; x < 4; x += 1) first.push((x + y) & 3);
+  }
+  const second = [];
+  const third = [];
+  for (let y = 0; y < 2; y += 1) {
+    for (let x = 0; x < 2; x += 1) {
+      second.push((x + y) & 1);
+      third.push((x + y + 1) & 3);
+    }
+  }
+  return concat([
+    gifScreen("GIF89a", { width: 4, height: 3, colors: GIF_COLORS, background: 1 }),
+    gifPage({ control: { disposal: 1, delay: 10, transparent: 1 }, width: 4, height: 3, indices: first }),
+    gifPage({
+      control: { disposal: 2 },
+      left: 1,
+      top: 1,
+      width: 2,
+      height: 2,
+      colors: [
+        [200, 0, 0],
+        [0, 200, 0],
+      ],
+      indices: second,
+    }),
+    gifPage({ control: { disposal: 0, delay: 20 }, left: 1, top: 1, width: 2, height: 2, indices: third }),
+    new Uint8Array([0x3b]),
+  ]);
+}
+
+/** The rows the four interlace passes store, in stored order. */
+function gifInterlaceOrder(height) {
+  const order = [];
+  for (const [start, step] of [
+    [0, 8],
+    [4, 8],
+    [2, 4],
+    [1, 2],
+  ]) {
+    for (let y = start; y < height; y += step) order.push(y);
+  }
+  return order;
+}
+
+/** An interlaced GIF89a: 5×9, so all four passes carry rows. */
+function gifInterlaced() {
+  const indices = [];
+  for (const y of gifInterlaceOrder(9)) {
+    for (let x = 0; x < 5; x += 1) indices.push((x * 2 + y * 3) & 3);
+  }
+  return concat([
+    gifScreen("GIF89a", { width: 5, height: 9, colors: GIF_COLORS }),
+    gifPage({ width: 5, height: 9, interlaced: true, indices }),
+    new Uint8Array([0x3b]),
+  ]);
+}
+
+/**
+ * The number of data codes the full-table fixture emits after its LZW table has
+ * frozen at 4096 entries. The generator refuses to build the fixture if the
+ * pattern does not reach exactly this, so the committed bytes always carry the
+ * deferred-clear path.
+ */
+const FULL_TABLE_TAIL = 110;
+
+/**
+ * The 128×64 pattern the full-table fixture encodes: a deterministic 32-bit
+ * xorshift stream reduced modulo 24, over a 32-entry palette. Twenty-four
+ * equally likely symbols make the LZW table fill (4096 entries) before the last
+ * pixel and leave `FULL_TABLE_TAIL` codes after it, and both the generator and
+ * the decoder's test reproduce the same stream.
+ */
+function fullTableIndices(count) {
+  const indices = new Uint8Array(count);
+  let state = 49;
+  for (let k = 0; k < count; k += 1) {
+    state ^= state << 13;
+    state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    indices[k] = state % 24;
+  }
+  return indices;
+}
+
+/** The 32-entry grey palette the full-table fixture reads through. */
+const FULL_TABLE_COLORS = Array.from({ length: 32 }, (_, k) => [k * 8, k * 8, k * 8]);
+
+/**
+ * A GIF whose LZW table fills and then keeps emitting 12-bit codes: 128×64 of
+ * the pattern above fills the 4096-entry table before the last pixel, and the
+ * tail of the stream is a run of 12-bit codes that add no entry (the deferred
+ * clear). The generator refuses to build it unless the tail is exactly
+ * `FULL_TABLE_TAIL` codes.
+ */
+function gifTableFull() {
+  const indices = fullTableIndices(128 * 64);
+  const stream = lzwEncode(indices, 5);
+  if (stream.afterFreeze !== FULL_TABLE_TAIL) {
+    throw new Error(
+      `the full-table fixture emits ${stream.afterFreeze} data codes after its table froze; ` +
+        `${FULL_TABLE_TAIL} are expected`,
+    );
+  }
+  return concat([
+    gifScreen("GIF87a", { width: 128, height: 64, colors: FULL_TABLE_COLORS }),
+    gifPage({ width: 128, height: 64, entries: FULL_TABLE_COLORS.length, indices }),
+    new Uint8Array([0x3b]),
+  ]);
 }
 
 /**
@@ -183,6 +491,17 @@ const AUTHORED = {
       0x00, 0x01, // end of bitmap
     ]),
   }),
+
+  // The GIF decoder's fixtures (docs/spec/formats/images.md#gif): a still
+  // GIF87a with no control extension, a three-page GIF89a whose middle page is
+  // a sub-rectangle with its own local table and disposal 2, an interlaced
+  // GIF89a 5 wide and 9 tall so all four passes carry rows, and a 128×64 page
+  // whose LZW stream fills the table and then keeps emitting 12-bit codes
+  // (the deferred clear).
+  "gif-still87a.gif": gifStill87a(),
+  "gif-anim89a.gif": gifAnimated(),
+  "gif-interlace.gif": gifInterlaced(),
+  "gif-table-full.gif": gifTableFull(),
 };
 
 /**

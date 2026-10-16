@@ -397,13 +397,13 @@ test("the RGBA buffer is fresh and non-aliasing", () => {
 });
 
 test("an unknown signature is a located error, not a throw", () => {
-  // `GIF8` is a kind no decoder of §10 recognises; `BM` now dispatches to BMP.
-  const result = decodeTexture(new Uint8Array([0x47, 0x49, 0x46, 0x38]), "x.gif");
+  // `D7 CD C6 9A` is a Windows metafile (WMF), a kind §10.4 drops by name.
+  const result = decodeTexture(new Uint8Array([0xd7, 0xcd, 0xc6, 0x9a]), "x.wmf");
   equal(result.ok, false);
   if (!result.ok) {
     equal(result.error.offset, 0);
     equal(result.error.section, "format-spec §10");
-    equal(result.error.path, "x.gif");
+    equal(result.error.path, "x.wmf");
   }
 });
 

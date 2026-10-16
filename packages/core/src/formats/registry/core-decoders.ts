@@ -68,6 +68,9 @@ const JPEG_SIGNATURE = [0xff, 0xd8, 0xff] as const;
 /** The Windows bitmap file-header signature: `BM` (docs/spec/formats/images.md). */
 const BMP_SIGNATURE = [0x42, 0x4d] as const;
 
+/** The GIF versions' common prefix: `GIF8` (docs/spec/formats/images.md#gif-header). */
+const GIF_SIGNATURE = [0x47, 0x49, 0x46, 0x38] as const;
+
 /** The `i16` version bytes a `.tst` (20) or `.iso` (30) starts with, little-endian (§3.1). */
 const TILESET_VERSION_BYTES = [0x14, 0x1e] as const;
 
@@ -153,7 +156,7 @@ export interface CoreDecoders {
   "status-effect": AssetDecoder<StatusEffect>;
   /** §8.3 — battle backgrounds. */
   "battle-background": AssetDecoder<BattleBackground>;
-  /** §10 — images (`decodeTexture` matches the PNG and JPEG signatures). */
+  /** §10 — images (`decodeTexture` matches the PNG, JPEG, BMP and GIF signatures). */
   image: AssetDecoder<DecodedTexture>;
 }
 
@@ -242,11 +245,12 @@ export const CORE_DECODERS: CoreDecoders = {
   image: {
     id: "image",
     section: "format-spec §10",
-    extensions: ["png", "jpg", "jpeg", "bmp"],
+    extensions: ["png", "jpg", "jpeg", "bmp", "gif"],
     detect: (header) =>
       startsWithBytes(header, PNG_SIGNATURE) ||
       startsWithBytes(header, JPEG_SIGNATURE) ||
-      startsWithBytes(header, BMP_SIGNATURE),
+      startsWithBytes(header, BMP_SIGNATURE) ||
+      startsWithBytes(header, GIF_SIGNATURE),
     decode: (bytes) => decodeTexture(bytes),
   },
 };
