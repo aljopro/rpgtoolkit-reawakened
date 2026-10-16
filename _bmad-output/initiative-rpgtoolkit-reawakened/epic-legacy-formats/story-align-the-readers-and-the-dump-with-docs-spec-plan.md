@@ -3,7 +3,7 @@ title: 'Align the readers and the dump with docs/spec'
 type: 'feature'
 ticket: '24'
 created: '2026-10-15'
-status: in-progress
+status: built
 baseline_revision: '43189ac35038e110f4265fd4e8e93342b575dedf'
 route: 'full'
 route_source: 'auto'
