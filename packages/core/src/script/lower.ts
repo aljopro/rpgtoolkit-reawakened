@@ -110,7 +110,7 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
   }
 
   function lowerIndexBase(base: Expr): void {
-    if (base.kind === "variable") {
+    if (base.kind === "variable" && base.name !== "this") {
       ops.push({ op: "name", name: base.name, pos: getPos(base.line) });
     } else {
       lowerExpr(base);

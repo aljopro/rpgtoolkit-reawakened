@@ -574,7 +574,6 @@ export function parse(tokens: readonly Token[]): Ast {
     } else if (isOp(peek(), "{")) {
       body = expectBlock(`in method \`${name}\``);
     } else if (allowPrototype) {
-      expectStatementEnd();
       body = null;
     } else {
       body = expectBlock(`in method \`${name}\``);
