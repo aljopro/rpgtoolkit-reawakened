@@ -614,17 +614,17 @@ test("keeps trailing bytes as residue and does not error on them", () => {
   deepEqual(unwrap(writeBoard(model)), bytes);
 });
 
-test("refuses a 2.x text board at offset 14", () => {
-  const bytes = buildBoard({});
-  bytes[BOARD_DETECT_OFFSET] = 0x0d;
+test("dispatches a 2.x text board at byte 14 and reports located error on malformed data", () => {
+  const text = "RPGTLKIT BOARD\r\nname=Wrong\r\n";
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i += 1) bytes[i] = text.charCodeAt(i);
   const result = readBoard(new BinaryReader(bytes));
   equal(result.ok, false);
   if (result.ok) {
     return;
   }
-  equal(result.error.offset, BOARD_DETECT_OFFSET);
-  equal(result.error.section, BOARD_SECTION);
-  equal(result.error.message.includes("text"), true, result.error.message);
+  equal(result.error.offset, 16);
+  equal(result.error.section.includes("text-formats"), true);
 });
 
 test("refuses a wrong magic at offset 0", () => {

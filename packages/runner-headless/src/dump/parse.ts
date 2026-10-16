@@ -19,10 +19,13 @@
 import {
   CORE_DECODERS,
   createAssetIndex,
+  createEmptyBoard,
+  createEmptyItem,
   PACKAGE_ROOT,
   type AssetResolver,
   type Board,
   type FormatError,
+  type Item,
   type MainFile,
   type PackageFile,
   type Result,
@@ -93,6 +96,15 @@ function boardSummary(model: Board, layout: "vector" | "pre-vector"): string {
     `${model.threads.length} threads, ${model.constants.length} constants`
   );
 }
+/** The §6.2 item facts for summary output. */
+function itemSummary(model: Item): string {
+  return (
+    `item ${model.major}.${model.minor} "${model.name}", buy ${model.buyPrice} / sell ${model.sellPrice}, ` +
+    `${model.allowedCharacters.length} allowed-character slots, ` +
+    `${model.movementAnimations?.length ?? 0} movement animations, residue ${model.residue.length} bytes`
+  );
+}
+
 
 /**
  * The decode context a file gets when it is decoded outside a project (AD-31):
@@ -107,6 +119,16 @@ const EMPTY_CONTEXT: AssetResolver = { index: createAssetIndex([]), root: PACKAG
 /** Parse one **data-format** file with the core decoder its dispatch row names (G7). */
 function parseData(cls: DataFormatClass, file: PackageFile, context: AssetResolver): Result<ParsedModel> {
   const { bytes, path } = file;
+  if (bytes.length === 0) {
+    if (cls.format === "board") {
+      const empty = createEmptyBoard();
+      return modelOutcome(empty, ["zero-byte placeholder file treated as empty document (Z-1)"], boardSummary(empty, "vector"));
+    }
+    if (cls.format === "item") {
+      const empty = createEmptyItem();
+      return modelOutcome(empty, ["zero-byte placeholder file treated as empty document (Z-1)"], itemSummary(empty));
+    }
+  }
   switch (cls.format) {
     case "gam": {
       const read = CORE_DECODERS.gam.decode(bytes, context);
