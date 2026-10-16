@@ -3,7 +3,7 @@ title: 'BMP decoder'
 type: 'feature'
 ticket: '11'
 created: '2026-10-15'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: '3509ec22bc67524ceaf142724245cf7e254f14db'
 route: 'full'
 route_source: 'auto'
@@ -109,7 +109,7 @@ Rows marked **Proposed (needs owner)** are the plan's answer where no document d
 ## Implementation Notes
 
 - **Doc-first, and why it is a prerequisite, not a courtesy.** G7 rule 4 requires that a layout exist in `docs/` before code implements it, and the archive evidence that would justify any specific reading lives outside the repository. BMP is a public Microsoft format, so the section is authored rather than extracted: the layout is public knowledge, and the *support boundary* plus the alpha policy are our own rules, marked **Reawakened rule** per ADR 0007 decision 2. The evidence line cites the archive files by count, the way ADR 0007 decision 3 asks.
-- **Four points for the owner** (all in the frozen matrix, with the files named): the support boundary, the 32-bit alpha policy, where the layout page lives, and how the 18-file gate is satisfied. The first two change the bytes a caller receives, so they must be ruled before code exists; the third and fourth change scheduling (2.23) and the entry's verify text.
+- **Ruled (Jensen, 2026-10-15): all four points approved.** Support boundary is uncompressed 1/4/8/24/32-bit `BI_RGB` + 8-bit `RLE8`; 32-bit alpha is 255; layout doc is `docs/spec/formats/images.md#windows-bitmap-bmp`; verification gates on authored BMPs with 16.9 recording corpus digests. No open points remain; plan is `ready-for-dev`.
 - **The entry's verify is satisfied in two of its three clauses.** Malformed and oversized files refused with a located error, and the other decoders still passing, are this entry's. The 18-file digest clause is deferred to 16.9 as proposed above; if the owner rules otherwise (expand the fixture fetch here), the entry gains that work and the plan is amended.
 - **No writer, no dependency, no golden.** `decodeTexture` takes bytes and returns pixels; nothing needs to write a BMP (T-32 export is the editor's), so no library and no new `core` dependency is involved (G6 stays untouched, and `pnpm lint`'s core dependency check should not move). `golden/legacy-corpus.json` digests only `demo` and `Basic`, whose `Bitmap\` holds no BMP, so `pnpm dump:record` is not run here; when 16.9 adds the TK2 games, recording their digests is that entry's deliberate act (G5, `CONTRIBUTING.md:114`).
 - **A consequence worth naming.** Once `.bmp` is a registered extension, `classify` (`packages/runner-headless/src/dump/formats.ts:128-137`) routes every project bitmap to the registry, so a BMP we refuse becomes a *failure* rather than a skip. That is §10.4's "refuse rather than approximate" applied to the dump, and every BMP the corpus actually holds fits the supported set; the alternative (keep skipping unsupported variants) would hide a damaged game file, so it is not taken.
@@ -119,6 +119,7 @@ Rows marked **Proposed (needs owner)** are the plan's answer where no document d
 ## Plan Change Log
 
 - 2026-10-15 — initial plan, from ticket 16.11, the epic file, `docs/format-spec.md` §10 and §1.2, the landed PNG/JPEG decoders, the registry, the dump and the test conventions. Measured the archive corpus read-only (343 BMPs; 17 across three of the six TK2 games) to settle which depths are real. Four OWNER points recorded (support boundary, 32-bit alpha, doc placement, the 18-file gate), which is why the status is `draft` even though the ticket carries `hitl = false`: two of them change the decoded bytes and two change scheduling and the entry's verify text.
+- 2026-10-15 — owner approved all four points (support boundary, 32-bit alpha, doc location, fixture verification); plan is `ready-for-dev`.
 
 ## Design Notes
 

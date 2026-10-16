@@ -1,4 +1,4 @@
-# main minor 1: main_minor1.gam (1831 bytes), parse ends at EOF: True 
+# main minor 1: main_minor1.gam (1827 bytes), parse ends at EOF: True 
 000000  52 50 47 54 4c 4b 49 54 20 4d 41 49 .. header = 'RPGTLKIT MAIN'
 00000e  02 00                                  majorVer = 2
 000010  01 00                                  minorVer = 1
@@ -9,43 +9,43 @@
 000036  01 00                                  mainScreenType = 1
 000038  00 00                                  extendToFullScreen = 0
 00003a  00 00                                  mainResolution = 0
-00003c  00 00 00 00                            (unused int, minor<3) = 0
-000040  00 00                                  mainDisableProtectReg = 0
-000042  30 65 6e 67 6c 69 73 68 2e 6c 6e 67 .. language file = '0english.lng'
-00004f  73 74 61 72 74 2e 70 72 67 00          startupPrg = 'start.prg'
-000059  76 69 6c 6c 61 67 65 2e 62 72 64 00    initBoard = 'village.brd'
-000065  61 64 61 2e 74 65 6d 00                initChar = 'ada.tem'
-00006d  00                                     runTime = ''
-00006e  00 00                                  runKey (ASCII) = 0
-000070  0d 00                                  menuKey (ASCII) = 13
-000072  20 00                                  key (ASCII) = 32
-000074  32 00                                  runTimeKeys upper bound = 50
-000076  00 00                                  runTimeKey[0] = 0
-000078  00                                     runTimePrg[0] = ''
-                                               ... block above repeated x51 in total (through runTimePrg[50], ending at 0x10f)
-00010f  00 00 00 00                            (unused int, minor<3) = 0
-000113  00 00 00 00                            (unused int, minor<=2) = 0
-000117  00 00                                  (unused short, minor<=2) = 0
-000119  00 00                                  fightGameYn = 0
-00011b  f4 01                                  enemy list upper bound = 500
-00011d  73 6c 69 6d 65 2e 65 6e 65 00          enemy[0] = 'slime.ene'
-000127  01 00                                  enemySkill[0] = 1
-000129  00                                     enemy[1] = ''
-00012a  00 00                                  enemySkill[1] = 0
-                                               ... block above repeated x500 in total (through enemySkill[500], ending at 0x705)
-000705  00 00                                  fightType = 0
-000707  14 00 00 00                            chances = 20
-00070b  00 00                                  fprgYn = 0
-00070d  00                                     fightPrg = ''
-00070e  00 00                                  (unused short, minor<3) = 0
-000710  00                                     gameOverPrg = ''
-000711  00                                     skinButton = ''
-000712  00                                     skinWindow = ''
-000713  04 00                                  plugin list upper bound = 4
-000715  01 00                                  plugin[0] enabled = 1
-000717  00 00                                  plugin[1] enabled = 0
-                                               ... block above repeated x4 in total (through plugin[4] enabled, ending at 0x71f)
-00071f  00 00                                  mainUseDayNight = 0
-000721  00 00                                  mainDayNightType = 0
-000723  00 00 00 00                            mainDayLength = 0
-000727  <end of parse; file length 0x727>
+00003c  00 00                                  (unused short, minor<3) = 0
+00003e  00 00                                  mainDisableProtectReg = 0
+000040  30 65 6e 67 6c 69 73 68 2e 6c 6e 67 .. language file = '0english.lng'
+00004d  73 74 61 72 74 2e 70 72 67 00          startupPrg = 'start.prg'
+000057  76 69 6c 6c 61 67 65 2e 62 72 64 00    initBoard = 'village.brd'
+000063  61 64 61 2e 74 65 6d 00                initChar = 'ada.tem'
+00006b  00                                     runTime = ''
+00006c  00 00                                  runKey (ASCII) = 0
+00006e  0d 00                                  menuKey (ASCII) = 13
+000070  20 00                                  key (ASCII) = 32
+000072  32 00                                  runTimeKeys upper bound = 50
+000074  00 00                                  runTimeKey[0] = 0
+000076  00                                     runTimePrg[0] = ''
+                                               ... block above repeated x51 in total (through runTimePrg[50], ending at 0x10d)
+00010d  00 00                                  (unused short, minor<3) = 0
+00010f  00 00 00 00                            (unused int, minor<=2) = 0
+000113  00 00                                  (unused short, minor<=2) = 0
+000115  00 00                                  fightGameYn = 0
+000117  f4 01                                  enemy list upper bound = 500
+000119  73 6c 69 6d 65 2e 65 6e 65 00          enemy[0] = 'slime.ene'
+000123  01 00                                  enemySkill[0] = 1
+000125  00                                     enemy[1] = ''
+000126  00 00                                  enemySkill[1] = 0
+                                               ... block above repeated x500 in total (through enemySkill[500], ending at 0x701)
+000701  00 00                                  fightType = 0
+000703  14 00 00 00                            chances = 20
+000707  00 00                                  fprgYn = 0
+000709  00                                     fightPrg = ''
+00070a  00 00                                  (unused short, minor<3) = 0
+00070c  00                                     gameOverPrg = ''
+00070d  00                                     skinButton = ''
+00070e  00                                     skinWindow = ''
+00070f  04 00                                  plugin list upper bound = 4
+000711  01 00                                  plugin[0] enabled = 1
+000713  00 00                                  plugin[1] enabled = 0
+                                               ... block above repeated x4 in total (through plugin[4] enabled, ending at 0x71b)
+00071b  00 00                                  mainUseDayNight = 0
+00071d  00 00                                  mainDayNightType = 0
+00071f  00 00 00 00                            mainDayLength = 0
+000723  <end of parse; file length 0x723>
