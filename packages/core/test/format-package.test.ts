@@ -24,6 +24,8 @@ import {
 import type { FolderEntry, FormatError, LoadedPackage, Result } from "../src/index.ts";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(testDir, "..", "..", "..");
+
 const encoder = new TextEncoder();
 
 /** The bytes of an ASCII string. */
@@ -816,5 +818,40 @@ test("the loader never throws, whatever bytes it is given", () => {
     equal(tpk.ok, false, `expected a .tpk failure for ${bytes.length} bytes`);
     const exe = loadPackage({ kind: "exe", name: "t.exe", bytes });
     equal(exe.ok, false, `expected an EXE failure for ${bytes.length} bytes`);
+  }
+});
+
+test("a legacy .tpk with backslash separators loads to normalized slash paths (R-08)", () => {
+  // `docs/spec/examples/files/example_game.tpk` was produced by legacy tools
+  // and stores its entry names with Windows backslashes (`Bitmap\forest.tbm`).
+  // The loader must accept them and normalize every entry to a forward-slash
+  // path, matching the loose example folder byte for byte.
+  const tpkPath = join(repoRoot, "docs", "spec", "examples", "files", "example_game.tpk");
+  const tpkBytes = new Uint8Array(readFileSync(tpkPath));
+  const loaded = unwrap(loadPackage({ kind: "tpk", name: "example_game.tpk", bytes: tpkBytes }));
+
+  // 25 entries in total: 24 under Game/Example and main.gam.
+  equal(loaded.files.length, 25);
+
+  // Every entry's path is forward-slash-separated and contains no backslash.
+  for (const file of loaded.files) {
+    equal(file.path.includes("\\"), false, `${file.path} should use forward slashes only`);
+  }
+
+  // main.gam equals the committed Main/example.gam.
+  const mainGam = loaded.files.find((file) => file.path === "main.gam");
+  equal(mainGam !== undefined, true, "main.gam is present");
+  const expectedMain = new Uint8Array(
+    readFileSync(join(repoRoot, "docs", "spec", "examples", "game", "Main", "example.gam")),
+  );
+  deepEqual(mainGam?.bytes, expectedMain, "main.gam matches Main/example.gam byte for byte");
+
+  // The other 24 files match the files under Game/Example byte for byte.
+  const exampleRoot = join(repoRoot, "docs", "spec", "examples", "game", "Game", "Example");
+  const nonMain = loaded.files.filter((file) => file.path !== "main.gam");
+  equal(nonMain.length, 24);
+  for (const file of nonMain) {
+    const expected = new Uint8Array(readFileSync(join(exampleRoot, file.path)));
+    deepEqual(file.bytes, expected, `${file.path} matches the loose example file byte for byte`);
   }
 });

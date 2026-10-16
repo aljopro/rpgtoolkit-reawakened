@@ -437,15 +437,18 @@ test("a program at a known tile becomes a closed 32×32 rectangle", () => {
   );
 });
 
-test("shading on more than one layer flattens into layer 0 with the top cast layer", () => {
-  // 2 × 1 cells per layer, two layers; the second layer carries shading.
+test("shading flattens to the highest tinting layer, not the sum of the layers", () => {
+  // 2 × 1 cells per layer, two layers. Cell 0 is tinted on both layers, so the
+  // higher layer's 5 wins (the withdrawn 2.15 rule summed them to 15); cell 1
+  // is tinted on the lower layer only, so its 3 survives. `castLayer` is the
+  // highest layer that carried any tint anywhere.
   const bytes = buildPreVectorBoard({
     sizeX: 2,
     sizeY: 1,
     sizeL: 2,
     cells: [
       { count: 1, index: 1, r: 10, g: 0, b: 0, tileType: 0 },
-      { count: 1, index: 0, r: 0, g: 0, b: 0, tileType: 0 },
+      { count: 1, index: 1, r: 3, g: 0, b: 0, tileType: 0 },
       { count: 1, index: 1, r: 5, g: 0, b: 0, tileType: 0 },
       { count: 1, index: 0, r: 0, g: 0, b: 0, tileType: 0 },
     ],
@@ -455,8 +458,8 @@ test("shading on more than one layer flattens into layer 0 with the top cast lay
     {
       castLayer: 2,
       records: [
-        { runCount: 1, r: 15, g: 0, b: 0 },
-        { runCount: 1, r: 0, g: 0, b: 0 },
+        { runCount: 1, r: 5, g: 0, b: 0 },
+        { runCount: 1, r: 3, g: 0, b: 0 },
       ],
     },
   ]);
@@ -480,36 +483,38 @@ test("equal flattened shades merge into one record", () => {
   ]);
 });
 
-test("the flattened shade sums are not clamped to ±255", () => {
-  // One 1×1 cell on each of two layers, both shaded: §4.8 "Shading" sums them
-  // without clamping, so +255 on two layers is +510 (and −510 for two −255s).
-  const positive = readAndConvert(
+test("the winning layer's tint is stored as written, never summed or clamped", () => {
+  // A tint of exactly (0,0,0) is unshaded and does not win, so it cannot erase
+  // a lower layer's tint; a tint beyond ±255 passes through as the stored i16
+  // (the withdrawn rule's +510 sum is gone, and R-02 leaves §4.5's clamp to the
+  // renderer).
+  const zeroDoesNotWin = readAndConvert(
     buildPreVectorBoard({
       sizeX: 1,
       sizeY: 1,
       sizeL: 2,
       cells: [
         { count: 1, index: 1, r: 255, g: 0, b: 0, tileType: 0 },
-        { count: 1, index: 1, r: 255, g: 0, b: 0, tileType: 0 },
+        { count: 1, index: 1, r: 0, g: 0, b: 0, tileType: 0 },
       ],
     }),
   );
-  deepEqual(positive.converted.shadeLayers, [
-    { castLayer: 2, records: [{ runCount: 1, r: 510, g: 0, b: 0 }] },
+  deepEqual(zeroDoesNotWin.converted.shadeLayers, [
+    { castLayer: 1, records: [{ runCount: 1, r: 255, g: 0, b: 0 }] },
   ]);
-  const negative = readAndConvert(
+  const unclamped = readAndConvert(
     buildPreVectorBoard({
       sizeX: 1,
       sizeY: 1,
       sizeL: 2,
       cells: [
-        { count: 1, index: 1, r: -255, g: 0, b: 0, tileType: 0 },
-        { count: 1, index: 1, r: -255, g: 0, b: 0, tileType: 0 },
+        { count: 1, index: 1, r: 0, g: 0, b: 0, tileType: 0 },
+        { count: 1, index: 1, r: -300, g: 0, b: 300, tileType: 0 },
       ],
     }),
   );
-  deepEqual(negative.converted.shadeLayers, [
-    { castLayer: 2, records: [{ runCount: 1, r: -510, g: 0, b: 0 }] },
+  deepEqual(unclamped.converted.shadeLayers, [
+    { castLayer: 2, records: [{ runCount: 1, r: -300, g: 0, b: 300 }] },
   ]);
 });
 
@@ -566,17 +571,22 @@ test("the start point and sprites convert from tiles to pixels with the base poi
   ]);
 });
 
-test("the start falls back to (64, 64) on layer 1 when its tiles are ≤ 0", () => {
-  const zero = readAndConvert(buildPreVectorBoard({ startX: 0, startY: 4, startLayer: 3 }));
-  deepEqual(zero.converted.properties.start, { x: 64, y: 64, layer: 1 });
-  const negative = readAndConvert(buildPreVectorBoard({ startX: 2, startY: -1 }));
-  deepEqual(negative.converted.properties.start, { x: 64, y: 64, layer: 1 });
+test("the start falls back per axis when only one of its fields is ≤ 0", () => {
+  // startX 0 → x 64, but startY 4 is still mapped through §5: (4−1)·32 + 31 = 127.
+  const zeroX = readAndConvert(buildPreVectorBoard({ startX: 0, startY: 4, startLayer: 3 }));
+  deepEqual(zeroX.converted.properties.start, { x: 64, y: 127, layer: 3 });
+  // The mirror case: startY −1 → y 64, and startX 2 maps to (2−1)·32 + 16 = 48.
+  const negativeY = readAndConvert(buildPreVectorBoard({ startX: 2, startY: -1 }));
+  deepEqual(negativeY.converted.properties.start, { x: 48, y: 64, layer: 1 });
+  // startL ≤ 0 falls back to layer 1 on its own, with both axes mapped.
+  const zeroLayer = readAndConvert(buildPreVectorBoard({ startX: 2, startY: 3, startLayer: 0 }));
+  deepEqual(zeroLayer.converted.properties.start, { x: 48, y: 95, layer: 1 });
 });
 
-test("empty program and sprite slots invent no geometry, and keep their indices", () => {
-  // The empty slots sit at a positive tile to prove the empty rule wins over a
-  // §5 mapping of that tile. §4.8: an empty program slot has an empty point
-  // list and `closed = 0`; an empty sprite slot is at (0, 0) on its stored layer.
+test("empty program and sprite slots are dropped, and the filled slots keep their order", () => {
+  // R-05: the converter compacts both lists (the reader keeps every stored slot,
+  // R-06). An empty slot at a positive tile must not become a region around that
+  // tile nor an item at (0, 0) — it simply disappears, and no index gap is left.
   for (const coordType of [0, 1]) {
     const bytes = buildPreVectorBoard({
       minor: 3,
@@ -600,6 +610,19 @@ test("empty program and sprite slots invent no geometry, and keep their indices"
         },
         {
           file: "",
+          x: 3,
+          y: 2,
+          layer: 2,
+          graphic: "",
+          activate: 0,
+          initialVar: "",
+          finalVar: "",
+          initialValue: "",
+          finalValue: "",
+          activationType: 2,
+        },
+        {
+          file: "q.prg",
           x: 3,
           y: 2,
           layer: 2,
@@ -643,22 +666,83 @@ test("empty program and sprite slots invent no geometry, and keep their indices"
         },
       ],
     });
-    const { converted } = readAndConvert(bytes);
-    equal(converted.programs.length, 2, "the empty program slot is kept");
-    deepEqual(converted.programs[1]?.points, [], `coordType ${coordType}: no region is invented`);
-    equal(converted.programs[1]?.closed, 0, `coordType ${coordType}: an empty region is open`);
+    const { board, converted } = readAndConvert(bytes);
+    equal(board.programs.length, 3, "the reader keeps every stored program slot (R-06)");
+    equal(board.sprites.length, 2, "the reader keeps every stored sprite slot (R-06)");
+    deepEqual(
+      converted.programs.map((program) => program.program),
+      ["p.prg", "q.prg"],
+      `coordType ${coordType}: the empty program slot is dropped and p, q keep their order`,
+    );
+    equal(converted.programs[1]?.closed, -1, `coordType ${coordType}: q keeps a real region`);
     equal(
       converted.programs[1]?.activationType,
       6,
-      `coordType ${coordType}: an empty slot still receives PRG_STOPS_MOVEMENT and keeps bit 2`,
+      `coordType ${coordType}: q keeps its activation bits and gains PRG_STOPS_MOVEMENT`,
     );
     equal(converted.programs[1]?.repeatDistance, 0);
-    equal(converted.sprites.length, 2, "the empty sprite slot is kept");
-    equal(converted.sprites[1]?.itemFile, "");
-    equal(converted.sprites[1]?.x, 0, `coordType ${coordType}: the empty sprite sits at x = 0`);
-    equal(converted.sprites[1]?.y, 0, `coordType ${coordType}: the empty sprite sits at y = 0`);
-    equal(converted.sprites[1]?.layer, 2, `coordType ${coordType}: the empty sprite keeps its stored layer`);
+    deepEqual(
+      converted.sprites.map((sprite) => sprite.itemFile),
+      ["npc.itm"],
+      `coordType ${coordType}: the empty sprite slot is dropped`,
+    );
+    equal(converted.sprites[0]?.layer, 1, `coordType ${coordType}: the kept sprite keeps its stored layer`);
   }
+});
+
+test("the committed minor-2 and minor-3 example boards read and convert with no residue", () => {
+  // `docs/spec/examples/versions/board/board_minor{2,3}.brd` are the same board
+  // in both layouts: 4 × 3 × 2, start (2, 2) on layer 1, one program (`note.prg`
+  // at 2, 3) and one sprite (`chest.itm` at 3, 2), coordType 0. The minor-2 file
+  // ends exactly at the sprite list, so R-04 reads no coordType byte from it.
+  for (const [name, minor] of [
+    ["board_minor2", 2],
+    ["board_minor3", 3],
+  ] as const) {
+    const bytes = new Uint8Array(
+      readFileSync(join(repoRoot, "docs", "spec", "examples", "versions", "board", `${name}.brd`)),
+    );
+    const { board, converted } = readAndConvert(bytes);
+    equal(board.minor, minor, `${name}: the layout read is the file's`);
+    equal(board.coordType, 0, `${name}: coordType 0 (2D)`);
+    deepEqual([...board.residue], [], `${name}: every byte is consumed`);
+    equal(converted.minor, 4, `${name}: converts to the vector layout`);
+    equal(converted.coordType, 0, `${name}: the source's coordType is kept`);
+    deepEqual(converted.properties.start, { x: 48, y: 63, layer: 1 }, `${name}: (2, 2) maps to (48, 63)`);
+    deepEqual(converted.programs.map((program) => program.program), ["note.prg"], `${name}: one program`);
+    deepEqual(converted.sprites.map((sprite) => sprite.itemFile), ["chest.itm"], `${name}: one sprite`);
+    deepEqual(
+      [converted.sprites[0]?.x, converted.sprites[0]?.y],
+      [80, 63],
+      `${name}: the sprite at (3, 2) maps to (80, 63)`,
+    );
+    equal(converted.properties.backgroundDrawType, 1, `${name}: 2.16 keeps the parallax draw type`);
+    equal(converted.properties.backgroundImage, "sky.png", `${name}: the background image name is kept`);
+  }
+});
+
+test("a minor-2 board with exactly one trailing byte reads it as coordType", () => {
+  // R-04: most corpus boards end right after the sprite list and 12 end with one
+  // 0x00 byte, so the reader follows the editor — but only when that byte is the
+  // last one, leaving a board with more trailing data as residue.
+  const oneByte = buildPreVectorBoard({ minor: 2, tail: [1] });
+  const reader = new BinaryReader(oneByte);
+  const board = unwrap(readPreVectorBoard(reader));
+  equal(board.minor, 2);
+  equal(board.coordType, 1, "the single trailing byte is coordType");
+  equal(reader.remaining, 0, "the byte is consumed, so no residue is left");
+  deepEqual([...board.residue], [], "the consumed byte is not residue");
+  equal(unwrap(convertPreVectorBoard(board)).coordType, 1, "the converted board keeps coordType 1");
+
+  const twoBytes = buildPreVectorBoard({ minor: 2, tail: [1, 2] });
+  const kept = unwrap(readPreVectorBoard(new BinaryReader(twoBytes)));
+  equal(kept.coordType, 0, "two trailing bytes are not read as a coordType");
+  deepEqual([...kept.residue], [1, 2], "they stay as residue");
+
+  const zeroByte = buildPreVectorBoard({ minor: 2, tail: [0] });
+  const zero = unwrap(readPreVectorBoard(new BinaryReader(zeroByte)));
+  equal(zero.coordType, 0, "a lone 0x00 byte reads as coordType 0 (2D)");
+  deepEqual([...zero.residue], [], "and is consumed rather than kept");
 });
 
 test("a legacy repeat bit is passed through with repeatDistance 0", () => {

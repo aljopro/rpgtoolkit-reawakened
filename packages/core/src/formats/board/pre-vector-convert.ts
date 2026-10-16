@@ -272,17 +272,26 @@ function encodeTileRuns(indices: readonly number[]): BoardTileRun[] {
 }
 
 /**
- * Flatten the per-tile shades of every layer into shade layer 0 (§4.8
- * "Shading"): the per-cell RGB of every layer are **summed**, not clamped, and
- * the cast layer is the **highest** layer that carried any non-zero shade; a
- * board whose cells are all unshaded gets no shade layer. §4.5's clamp is a
- * render-time concern, so a cell shaded `+255` on two layers becomes `+510`.
+ * Flatten the per-tile shades of every layer into shade layer 0: for each cell
+ * the stored value is the tint of the **highest layer whose tile has a non-zero
+ * tint** — not the sum of the layers' tints, and never clamped (the clamp stays
+ * render-time, `docs/spec/formats/tiles.md#shading`). Layers are walked
+ * ascending, so a higher layer's tint overwrites a lower layer's for the cells
+ * it tints, and a lower layer's tint survives for the cells no higher layer
+ * tints. A tint of exactly `(0,0,0)` is "unshaded" and does not win. The cast
+ * layer is the highest layer that carried any non-zero tint anywhere on the
+ * board, and a board whose cells are all unshaded gets no shade layer.
+ *
+ * Citation: `docs/spec/formats/legacy/older-binary-versions.md#shading--reawakened-rule-r-02`.
+ * This withdraws the entry 2.15 rule, which summed every layer's tint
+ * unclamped (so a cell shaded `+255` on two layers became `+510`); the sums
+ * were a guess made for lack of facts.
  */
 function buildShadeLayers(board: PreVectorBoard): BoardShadeLayer[] {
   const cellsPerLayer = board.sizeX * board.sizeY;
-  const sums: BoardRgb[] = [];
+  const shades: BoardRgb[] = [];
   for (let cell = 0; cell < cellsPerLayer; cell += 1) {
-    sums.push({ r: 0, g: 0, b: 0 });
+    shades.push({ r: 0, g: 0, b: 0 });
   }
   let castLayer = 0;
   for (let layer = 1; layer <= board.sizeL; layer += 1) {
@@ -290,16 +299,11 @@ function buildShadeLayers(board: PreVectorBoard): BoardShadeLayer[] {
     let layerHasShade = false;
     for (let cell = 0; cell < cellsPerLayer; cell += 1) {
       const tile = board.tileMatrix[base + cell];
-      if (tile === undefined) {
+      if (tile === undefined || (tile.r === 0 && tile.g === 0 && tile.b === 0)) {
         continue;
       }
-      if (tile.r !== 0 || tile.g !== 0 || tile.b !== 0) {
-        layerHasShade = true;
-      }
-      const sum = sums[cell];
-      if (sum !== undefined) {
-        sums[cell] = { r: sum.r + tile.r, g: sum.g + tile.g, b: sum.b + tile.b };
-      }
+      layerHasShade = true;
+      shades[cell] = { r: tile.r, g: tile.g, b: tile.b };
     }
     if (layerHasShade) {
       castLayer = layer;
@@ -311,10 +315,10 @@ function buildShadeLayers(board: PreVectorBoard): BoardShadeLayer[] {
   const records: BoardShadeRecord[] = [];
   let cell = 0;
   while (cell < cellsPerLayer) {
-    const current = sums[cell] ?? { r: 0, g: 0, b: 0 };
+    const current = shades[cell] ?? { r: 0, g: 0, b: 0 };
     let end = cell + 1;
     while (end < cellsPerLayer) {
-      const next = sums[end];
+      const next = shades[end];
       if (next === undefined || next.r !== current.r || next.g !== current.g || next.b !== current.b) {
         break;
       }
@@ -361,10 +365,12 @@ function ambientFromPreset(preset: number, warnings: string[]): BoardRgb {
  * point and the sprites. The result's minor is 4 and its `coordType` is the
  * source's.
  *
- * The start falls back to `(64, 64)` on layer 1 when its tile coordinates are
- * ≤ 0 (§4.8). An empty program or sprite slot invents no geometry either: an
- * empty program slot keeps an empty point list with `closed = 0`, an empty
- * sprite slot sits at `(0, 0)` on its stored layer (§4.8 "Empty slots"). §4.8
+ * Two rules the entry 2.23 conflict rulings settled reach this function (both
+ * cited at their site): empty program and item slots are **dropped** (R-05,
+ * because the 3.1 editor's conversion compacts both lists — the reader still
+ * keeps every stored slot), and the start's fallback is **per axis** (R-07:
+ * `startX ≤ 0 → 64`, `startY ≤ 0 → 64`, `startL ≤ 0 → 1`). A shading rule
+ * (R-02) withdraws entry 2.15's unclamped sum — see `buildShadeLayers`. §4.8
  * "Default vector bases" makes this conversion generate no base — a sprite's
  * collision and activation bases come from its own `.itm`/`.tem` (§6).
  */
@@ -400,13 +406,16 @@ export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
   }
 
   const iso = (board.coordType & 1) !== 0;
-  // §4.8 "Empty slots": an empty program slot (empty `program` string) carries
-  // no region — its point list is empty and `closed` is 0 — rather than a
-  // region around an invented tile. Every slot is kept so the indices stay
-  // stable, and every slot still receives PRG_STOPS_MOVEMENT and distance 0.
-  const programs: BoardProgram[] = board.programs.map((program) => {
-    const empty = program.file === "";
-    return {
+  // Empty program and item slots — Reawakened rule (R-05)
+  // (docs/spec/formats/legacy/older-binary-versions.md#empty-slots--reawakened-rule-r-05):
+  // the converter compacts both lists, dropping empty slots so no index gap or
+  // invented geometry survives — an empty program slot would otherwise carry no
+  // region (`points: []`, `closed: 0`) and an empty item slot position (0, 0).
+  // This matches the 3.1 editor's conversion; the *reader* still keeps every
+  // stored slot so a board round-trips byte for byte (R-06).
+  const programs: BoardProgram[] = board.programs
+    .filter((program) => program.file !== "")
+    .map((program) => ({
       program: program.file,
       graphic: program.graphic,
       initialVar: stripLegacySuffix(program.initialVar),
@@ -417,46 +426,49 @@ export function convertPreVectorBoard(board: PreVectorBoard): Result<Board> {
       activationType: program.activationType | PRG_STOPS_MOVEMENT,
       repeatDistance: 0,
       layer: program.layer,
-      points: empty
-        ? []
-        : iso
-          ? tileDiamond(program.x, program.y, board.sizeX)
-          : tileCellRect(program.x, program.y, program.x),
-      closed: empty ? 0 : -1,
+      points: iso
+        ? tileDiamond(program.x, program.y, board.sizeX)
+        : tileCellRect(program.x, program.y, program.x),
+      closed: -1,
       handle: "",
-    };
-  });
+    }));
 
-  const sprites: BoardSprite[] = board.sprites.map((sprite) => {
-    const initialVar = stripLegacySuffix(sprite.initialVar);
-    // §4.8 "Empty slots": an empty sprite slot (empty `itemFile`) carries
-    // position (0, 0) and its stored layer, and nothing is drawn — never a §5
-    // mapping of an invented tile.
-    const pixel = sprite.file === "" ? { x: 0, y: 0 } : tilePixel(sprite.x, sprite.y, board.sizeX, board.coordType);
-    return {
-      itemFile: sprite.file,
-      activationPrg: sprite.activationPrg,
-      multitaskPrg: sprite.multitaskPrg,
-      initialVar,
-      initialValue: sprite.initialValue,
-      finalVar: stripLegacySuffix(sprite.finalVar),
-      finalValue: sprite.finalValue,
-      loadingVar: initialVar,
-      loadingValue: sprite.initialValue,
-      activate: sprite.activate,
-      activationType: sprite.activationType,
-      x: pixel.x,
-      y: pixel.y,
-      layer: sprite.layer,
-      reserved: -1,
-    };
-  });
+  const sprites: BoardSprite[] = board.sprites
+    .filter((sprite) => sprite.file !== "")
+    .map((sprite) => {
+      const initialVar = stripLegacySuffix(sprite.initialVar);
+      const pixel = tilePixel(sprite.x, sprite.y, board.sizeX, board.coordType);
+      return {
+        itemFile: sprite.file,
+        activationPrg: sprite.activationPrg,
+        multitaskPrg: sprite.multitaskPrg,
+        initialVar,
+        initialValue: sprite.initialValue,
+        finalVar: stripLegacySuffix(sprite.finalVar),
+        finalValue: sprite.finalValue,
+        loadingVar: initialVar,
+        loadingValue: sprite.initialValue,
+        activate: sprite.activate,
+        activationType: sprite.activationType,
+        x: pixel.x,
+        y: pixel.y,
+        layer: sprite.layer,
+        reserved: -1,
+      };
+    });
 
+  // The start falls back **per axis** — Reawakened rule (R-07)
+  // (docs/spec/formats/legacy/older-binary-versions.md#positions--reawakened-rule-r-07-per-axis):
+  // `startX ≤ 0 → x 64`, `startY ≤ 0 → y 64`, `startL ≤ 0 → layer 1`, each
+  // independent of the others, so one bad axis does not discard the other's §5
+  // mapping. The start is the only field with a fallback; a sprite or program at
+  // a non-positive tile converts with no special case.
   const startPixel = tilePixel(board.startX, board.startY, board.sizeX, board.coordType);
-  const start =
-    board.startX <= 0 || board.startY <= 0
-      ? { x: 64, y: 64, layer: 1 }
-      : { x: startPixel.x, y: startPixel.y, layer: board.startLayer > 0 ? board.startLayer : 1 };
+  const start = {
+    x: board.startX <= 0 ? 64 : startPixel.x,
+    y: board.startY <= 0 ? 64 : startPixel.y,
+    layer: board.startLayer > 0 ? board.startLayer : 1,
+  };
 
   const warnings: string[] = [];
   const layerTitles: string[] = [];
