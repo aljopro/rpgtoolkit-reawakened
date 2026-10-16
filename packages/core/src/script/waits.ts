@@ -100,5 +100,7 @@ export function describeWait(wait: Wait): string {
     case "request":
     case "blob":
       return `${wait.kind}(reqId ${wait.reqId})`;
+    default:
+      return `${wait.kind}(${wait.id})`;
   }
 }
