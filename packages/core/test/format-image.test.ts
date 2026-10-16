@@ -397,12 +397,13 @@ test("the RGBA buffer is fresh and non-aliasing", () => {
 });
 
 test("an unknown signature is a located error, not a throw", () => {
-  const result = decodeTexture(new Uint8Array([0x42, 0x4d, 0x00, 0x00]), "x.bmp");
+  // `GIF8` is a kind no decoder of §10 recognises; `BM` now dispatches to BMP.
+  const result = decodeTexture(new Uint8Array([0x47, 0x49, 0x46, 0x38]), "x.gif");
   equal(result.ok, false);
   if (!result.ok) {
     equal(result.error.offset, 0);
     equal(result.error.section, "format-spec §10");
-    equal(result.error.path, "x.bmp");
+    equal(result.error.path, "x.gif");
   }
 });
 

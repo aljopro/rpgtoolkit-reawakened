@@ -298,6 +298,32 @@ function onePixelPng(red: number, green: number, blue: number): Uint8Array {
 const PIXEL_PNG = onePixelPng(200, 100, 50);
 const PIXEL_RGBA = new Uint8Array([200, 100, 50, 255]);
 
+/**
+ * A 1×1 24-bit Windows bitmap of the given pixel
+ * (docs/spec/formats/images.md): the two headers, then B, G, R and the byte of
+ * row padding the 4-byte stride requires.
+ */
+function onePixelBmp(red: number, green: number, blue: number): Uint8Array {
+  const bytes = new Uint8Array(58);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 0x42;
+  bytes[1] = 0x4d;
+  view.setInt32(2, bytes.length, true); // bfSize
+  view.setInt32(10, 54, true); // bfOffBits
+  view.setInt32(14, 40, true); // biSize
+  view.setInt32(18, 1, true); // biWidth
+  view.setInt32(22, 1, true); // biHeight
+  view.setInt16(26, 1, true); // biPlanes
+  view.setInt16(28, 24, true); // biBitCount
+  view.setInt32(34, 4, true); // biSizeImage
+  bytes[54] = blue;
+  bytes[55] = green;
+  bytes[56] = red;
+  return bytes;
+}
+
+const PIXEL_BMP = onePixelBmp(200, 100, 50);
+
 /** A board file truncated just after its magic, so `readBoard` reports a located EOF. */
 const TRUNCATED_BOARD = asciiBytes("RPGTLKIT BOARD\0");
 
@@ -417,6 +443,7 @@ const DISPATCH: ReadonlyArray<readonly [string, DataFormatId, string]> = [
   ["Bitmap/layout.png", "image", "format-spec §10"],
   ["Bitmap/bkg.jpg", "image", "format-spec §10"],
   ["Bitmap/bkg.jpeg", "image", "format-spec §10"],
+  ["Bitmap/mwin.bmp", "image", "format-spec §10"],
 ];
 
 test("classify sends every data extension to the reader its section names", () => {
@@ -439,24 +466,43 @@ test("classify is case-insensitive, so the legacy uppercase names land on the sa
   }
   const upperBmp = classify("Bitmap/OLD.BMP");
   const lowerBmp = classify("Bitmap/old.bmp");
-  equal(upperBmp.kind, "skip");
-  equal(lowerBmp.kind, "skip");
-  if (upperBmp.kind === "skip" && lowerBmp.kind === "skip") {
-    equal(upperBmp.reason, lowerBmp.reason);
+  equal(upperBmp.kind, "data");
+  equal(lowerBmp.kind, "data");
+  if (upperBmp.kind === "data" && lowerBmp.kind === "data") {
+    equal(upperBmp.format, lowerBmp.format);
+    equal(upperBmp.format, "image");
   }
 });
 
-test("classify skips .bmp and .gif, which §10 lists but core cannot decode", () => {
-  for (const path of ["Bitmap/old.bmp", "Bitmap/anim.gif", "Bitmap/ANIM.GIF"]) {
+test("classify parses .bmp and still skips .gif", () => {
+  for (const path of ["Bitmap/old.bmp", "Bitmap/OLD.BMP"]) {
+    const cls = classify(path);
+    equal(cls.kind, "data", path);
+    if (cls.kind === "data") {
+      equal(cls.format, "image", path);
+      equal(cls.section, "format-spec §10", path);
+    }
+  }
+  for (const path of ["Bitmap/anim.gif", "Bitmap/ANIM.GIF"]) {
     const cls = classify(path);
     equal(cls.kind, "skip", path);
     if (cls.kind === "skip") {
       ok(cls.reason.includes("format-spec §10"), cls.reason);
     }
   }
-  // A bitmap in a project is reported as skipped, so it never fails a dump.
-  const report = buildReport([{ path: "Bitmap/old.bmp", bytes: new Uint8Array([0x42, 0x4d]) }]);
-  deepEqual(report.counts, { parsed: 0, skipped: 1, failed: 0 });
+  // A bitmap in a project is parsed and digested, and a truncated one is a
+  // failure, not a skip (§10.4 refuses rather than approximating).
+  const parsed = buildReport([{ path: "Bitmap/mwin.bmp", bytes: PIXEL_BMP }]);
+  deepEqual(parsed.counts, { parsed: 1, skipped: 0, failed: 0 });
+  const entry = parsed.files[0];
+  ok(entry !== undefined && entry.status === "parsed");
+  if (entry?.status === "parsed") {
+    equal(entry.format, "image");
+    equal(entry.digest, digestRgba(PIXEL_RGBA));
+    ok(entry.summary.includes("image bmp 1×1"), entry.summary);
+  }
+  const truncated = buildReport([{ path: "Bitmap/mwin.bmp", bytes: new Uint8Array([0x42, 0x4d]) }]);
+  deepEqual(truncated.counts, { parsed: 0, skipped: 0, failed: 1 });
 });
 
 test("classify skips the non-format, media and plugin files with a reason", () => {
