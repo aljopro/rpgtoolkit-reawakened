@@ -5613,6 +5613,240 @@
    "obsolete": false,
    "confidence": "stated",
    "note": "unsets a variable"
+  },
+  {
+   "name": "mbox",
+   "group": "Dialogue & text",
+   "params": "text",
+   "paramsSource": "docs/spec",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "docs/spec: alias of mwin"
+  },
+  {
+   "name": "fbranch",
+   "group": "Program flow & threads",
+   "params": ":label",
+   "paramsSource": "docs/spec",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "docs/spec: alias of branch (TK2 #FBranch)"
+  },
+  {
+   "name": "resumeNext",
+   "group": "Program flow & threads",
+   "params": "",
+   "paramsSource": "docs/spec",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "error handler; also language-level (section 9.8)"
+  },
+  {
+   "name": "setErrorHandler",
+   "group": "Program flow & threads",
+   "params": ":label",
+   "paramsSource": "docs/spec",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "error handler; also language-level (section 9.8)"
+  },
+  {
+   "name": "setResumeNextHandler",
+   "group": "Program flow & threads",
+   "params": "",
+   "paramsSource": "docs/spec",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "flow-control",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "error handler; also language-level (section 9.8)"
+  },
+  {
+   "name": "empty",
+   "group": "Scope",
+   "params": "",
+   "paramsSource": "docs/spec",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [
+    "vm"
+   ],
+   "sectionsWrite": [
+    "vm"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "clears the global table"
+  },
+  {
+   "name": "underarrow",
+   "group": "Board",
+   "params": "",
+   "paramsSource": "docs/spec",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "world"
+   ],
+   "sectionsWrite": [
+    "world"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": true,
+   "confidence": "stated",
+   "note": "obsolete: raises an error and the statement is skipped"
+  },
+  {
+   "name": "newplyr",
+   "group": "Party & players",
+   "params": "file",
+   "paramsSource": "docs/spec",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "party",
+    "sprites",
+    "world"
+   ],
+   "sectionsWrite": [
+    "party",
+    "sprites"
+   ],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "docs/spec name; the earlier spelling is newPlayer, and newplayer is its alias"
+  },
+  {
+   "name": "itemwalkspeed",
+   "group": "Items & NPCs",
+   "params": "",
+   "paramsSource": "docs/spec",
+   "owner": 5,
+   "ownerEpic": "movement-triggers",
+   "sectionsRead": [
+    "sprites"
+   ],
+   "sectionsWrite": [
+    "sprites"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": true,
+   "confidence": "stated",
+   "note": "obsolete: raises an error and the statement is skipped"
+  },
+  {
+   "name": "shopcolors",
+   "group": "Inventory & equipment",
+   "params": "index,r,g,b",
+   "paramsSource": "docs/spec",
+   "owner": 8,
+   "ownerEpic": "menu-party-save",
+   "sectionsRead": [
+    "ui"
+   ],
+   "sectionsWrite": [
+    "ui"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "obsolete from 3.1.0: shows a warning and still runs"
+  },
+  {
+   "name": "restorearrayscreen",
+   "group": "Screen & drawing",
+   "params": "pos[,x1,y1,x2,y2,xdest,ydest]",
+   "paramsSource": "docs/spec",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "surfaces"
+   ],
+   "sectionsWrite": [
+    "surfaces"
+   ],
+   "effectKind": "state-write",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": true,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "docs/spec: alias of restoreScreenArray"
   }
  ],
  "variables": [
@@ -6842,36 +7076,36 @@
   "#While(cond){\u2026}"
  ],
  "summaries": {
-  "totalNames": 271,
+  "totalNames": 282,
   "byEffectKind": {
-   "state-write": 84,
-   "mixed": 67,
+   "state-write": 90,
+   "mixed": 68,
    "draw-audio-cue": 17,
    "pure": 69,
    "wait": 9,
    "spawn-thread": 2,
-   "flow-control": 19,
+   "flow-control": 23,
    "request": 4
   },
   "byOwnerEpic": {
    "audio-synth": 14,
    "battle": 11,
-   "board-rendering": 89,
-   "menu-party-save": 46,
-   "movement-triggers": 45,
-   "rpgcode-vm": 66
+   "board-rendering": 92,
+   "menu-party-save": 48,
+   "movement-triggers": 46,
+   "rpgcode-vm": 71
   },
   "bySectionWrite": {
-   "vm": 34,
-   "sprites": 33,
-   "ui": 30,
-   "surfaces": 27,
+   "vm": 39,
+   "sprites": 35,
+   "ui": 32,
+   "surfaces": 28,
    "engine": 26,
-   "world": 18,
+   "world": 19,
    "audio": 14,
    "battle": 11,
    "fx": 10,
-   "party": 9,
+   "party": 10,
    "inventory": 9,
    "menu": 5,
    "input": 4,
@@ -6881,18 +7115,18 @@
    "rng": 2
   },
   "bySectionRead": {
-   "world": 60,
-   "vm": 46,
-   "ui": 41,
-   "sprites": 39,
+   "world": 62,
+   "vm": 51,
+   "ui": 43,
+   "sprites": 41,
    "engine": 29,
-   "surfaces": 28,
+   "surfaces": 29,
    "audio": 14,
    "inventory": 13,
    "input": 11,
    "battle": 9,
    "fx": 8,
-   "party": 7,
+   "party": 8,
    "camera": 4,
    "menu": 3,
    "rng": 2,
@@ -6901,7 +7135,9 @@
   "obsolete": [
    "godos",
    "dos",
-   "windows"
+   "windows",
+   "underarrow",
+   "itemwalkspeed"
   ],
   "legacyAliases": [
    "show",
@@ -6925,7 +7161,10 @@
    "mp3",
    "done",
    "stop",
-   "autoCommand"
+   "autoCommand",
+   "mbox",
+   "fbranch",
+   "restorearrayscreen"
   ],
   "byRefOutCount": 78,
   "waitNames": [
@@ -7088,7 +7327,7 @@
     "9.11 group implies epic 8, sections put it with epic 3"
    ]
   ],
-  "stubSafeCount": 170,
-  "needsOwnerCodeCount": 101
+  "stubSafeCount": 176,
+  "needsOwnerCodeCount": 106
  }
 }

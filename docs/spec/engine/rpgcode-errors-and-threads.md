@@ -1,0 +1,92 @@
+# RPGCode: errors and threads
+
+Two areas that share the same machinery: how a runtime failure is handled, and how a background program is scheduled and paused. The language itself is in [rpgcode-language.md](rpgcode-language.md), the values a failed call produces in [values, scope and conversion](rpgcode-runtime.md).
+
+**How to read this page.** A rule is marked **legacy behaviour** when the extraction facts fix it, and **Reawakened rule** when this project deliberately departs from or adds to 3.1 ([ADR 0007](../../adr/0007-docs-spec-is-the-normative-specification.md), decision 2). Every departure says why.
+
+Terms used below: a **frame** is one active function or method call; a **report** is the engine's error report (the file, a line and a message); the **unset value** is what a never-assigned variable or a failed call produces (the number 0, which reads as the empty string in string context); a **tick** is one fixed simulation update, 60 of them a second, and it runs a whole phase list; a **VM step** is one instruction the interpreter executes, so a tick holds many steps; a **thread** is one independent RPGCode execution with its own frames; a **wait** is the plain-data record a blocked thread holds until something wakes it.
+
+## Error handling
+
+Error handlers work inside functions only:
+
+* `setErrorHandler(:label)`: on a runtime error, jump to the label.
+* `setResumeNextHandler()`: ignore errors and continue with the next statement.
+* `resumeNext()`: from inside a handler, continue after the failing statement.
+* Legacy forms: `on error goto :label`, `on error resume next`.
+
+Errors in nested calls are **not** caught by the caller's handler.
+
+### ERR-1 — the handler, its label and `resumeNext`
+
+* A handler can be set inside a function only. Setting one at program top level is itself an error; at top level an error is never caught, and it is reported unless messages are off. — legacy behaviour (R2-Q10).
+* **Reawakened rule — the handler and its label (R-43).** The handler belongs to the function frame that set it and lasts until that frame returns. It stays active after it fires; it is cleared only when the error fires and its label cannot be found in that function, in which case the error is reported. The lifetime and the clearing rule are legacy behaviour (R2-Q10); the label check is ours: a handler's label must be in the function that set the handler, so it can never jump into another function. Legacy resolved labels across the whole loaded program by a first-match scan (see the note below); the rebuild keeps the one label rule already ruled for `branch`.
+* A built-in that fails inside a frame is seen by that frame's handler. An error raised inside a called script function is seen only by that function's own handler; with none there it is reported and the callee continues, and it never reaches the caller's handler. — legacy behaviour (R2-Q10).
+* `setResumeNextHandler()` swallows the error and continues at the next VM step, which may be in the middle of the failing statement, with the failed call contributing the unset value. It is not "the next statement". — legacy behaviour (R2-Q3).
+* `resumeNext()` continues at the statement after the one that was executing when the error was raised. The return point is remembered per frame and used once, and it is part of the frame's handler state, so a snapshot taken while a handler is running restores it. Calling `resumeNext()` when no handler is currently handling an error, or outside a function, is itself an error. — legacy behaviour (R2-Q10); **Reawakened rule:** the return point stays inside the frame's single handler slot.
+* When a labelled handler takes over, the failing statement's partial operand state is dropped. — legacy behaviour (R2-Q10); **Reawakened rule:** this is restated as plain state so a snapshot taken inside a handler restores identically.
+
+**Note (unreconciled).** Legacy error labels were found to be program-wide, so a handler could jump into another function (R2-Q10); the label ruling above keeps labels inside the function. The difference between the legacy engine and this spec is recorded here rather than hidden.
+
+### ERR-2 — which failures are errors, and which are catchable
+
+* Without a handler, a runtime error is reported and the program continues with the next VM step; a runtime error never stops the program. — legacy behaviour (R2-Q11).
+* Reports are suppressed while `debug(false)` has turned messages off (they are on by default). A failure that is not one of the interpreter's own kinds is always reported and is not affected by `debug`. — legacy behaviour (R2-Q11).
+* **Reawakened rule:** every catchable runtime error is also handed to the host as a diagnostic carrying a code, the file, the line and a message, so a script error is both catchable by the script and visible to the harness.
+
+| Failure | Outcome | Catchable |
+|---|---|---|
+| A call the resolver cannot match, or a script function called with the wrong number of arguments | Runtime error; the call's result is the unset value | Yes |
+| A built-in called with the wrong number of arguments, or with an invalid one | Runtime error naming the count it needs | Yes |
+| An ordinary parameter given a value of the wrong type | Not an error: the value is converted by the coercion rules | — |
+| A typed parameter given an object of the wrong class | Runtime error | Yes |
+| An invalid object handle, a missing class, or an inaccessible member or method | Runtime error | Yes |
+| An array index with no element | Not an error: arrays are sparse, and reading a missing element yields the unset value | — |
+| Division by zero (`/`) | Not an error: infinity or NaN | — |
+| Modulo by zero (`%`) | A catchable runtime error of the division-by-zero class; no value is produced | Yes |
+| A built-in that fails (a missing file, item, player or board index) | Runtime error; a handful instead return the unset value silently | Yes, where raised |
+| An obsolete built-in | Runtime error for most, a warning for a few; a handler treats both the same way | Yes |
+| A load-time problem (a syntax error, an unmatched brace, a missing base class or constructor) | Reported once while loading; the partially built program still runs | No — no frame exists yet |
+
+Every row above except the modulo row is legacy behaviour (R2-Q11). The modulo row is **Reawakened rule R-44** (R3-Q3): the legacy build had no zero check, so a zero divisor faulted the processor, producing no value and no catchable script error, and the process ended abnormally. The rebuild raises a catchable runtime error of the division-by-zero class instead, so a failed script is reported, replayable and never takes the runner down.
+
+**References.** R2-Q3, R2-Q10, R2-Q11 (`docs/provenance/facts-round-2.md`); R3-Q3 (`docs/provenance/facts-round-3.md`); the label scope in [rpgcode-language.md](rpgcode-language.md); AD-7 (the frame's handler slot) and AD-24 (diagnostics) in the architecture spine.
+
+## Threads
+
+### THR-1 — the sleep, its unit and wake order
+
+* `threadSleep(id, seconds)` takes a number of real seconds, and a fraction is allowed. A duration of exactly `0` (or `-0`, which the rebuild normalises to `0`) means sleep until `threadWake`. `threadSleepRemaining` reports the time left in seconds, or `0` while the thread sleeps indefinitely or is not sleeping. — legacy behaviour (R2-Q23).
+* **Reawakened rule — the tick formula.** A positive duration is converted to whole ticks with exactly this formula and no other rounding:
+
+  `ticks = max(1, floor(seconds * 60 + 0.5))`
+
+  using a double multiply and `Math.floor`/`Math.max` only. *Reason:* the legacy engine truncated seconds to whole milliseconds and woke on a wall clock (R2-Q23), which cannot be replayed. A stated formula removes the "halfway" ambiguity (the decimal half is not the binary half), keeps the error under half a tick, and stops a small positive sleep from aliasing the indefinite sleep.
+* A negative or non-finite duration, or one whose tick count would exceed 2^53 − 1, is a catchable runtime error; a tick must stay an exact integer. — **Reawakened rule:** legacy left a negative duration undefined (it became a huge wait). No sleep is entered, and the thread continues with the next VM step unless a handler runs.
+* **Reawakened rule — the end tick.** The wait stores the absolute end tick `T + ticks`, where `T` is the tick in progress when the call runs. A one-tick sleep therefore ends in the next tick: the wait phase of tick `T + 1` sees `now >= end` and wakes the thread.
+* **Reawakened rule — remaining time.** `threadSleepRemaining` returns `(end − now) / 60`, unrounded, and `0` for an indefinite or not-sleeping thread.
+* **Reawakened rule — wake order.** When several threads are due to wake on the same tick they resume in ascending thread id. Legacy stepped threads in an unspecified order (a pointer-ordered set); ascending id is deterministic and matches the wait phase, which polls waiting threads in ascending id.
+
+### THR-2 — the `source` and `target` handles
+
+* Legacy kept `source` and `target` as two engine-wide slots shared by everything: the code that started an entity event (an item's thread, an equip, a sprite program, a fight) set them and restored them afterwards, a plain thread left them alone, and `tellThread` code saw whatever the caller had left there. — legacy behaviour (R2-Q24).
+* **Reawakened rule — one pair per thread, in state.** Each thread carries its own `source` and `target`, part of the snapshot, so a thread restored mid-run sees the same context.
+  * An entity event (an item's own thread, an equip or a remove, a sprite-triggered program, a fight) sets the pair on the thread that runs that event's program, for the program's duration, and the previous values are restored when it ends. A plain thread has `null` for both.
+  * The `"source"` and `"target"` special handles read those slots; `sourceHandle()` and `targetHandle()` return `0` when a slot is `null`.
+  * `run()` does not change the pair. — legacy behaviour (R2-Q24).
+  * Reason this departs from legacy: the shared slots make one thread's context depend on unrelated events and cannot be replayed; per-thread slots are deterministic.
+* **Reawakened rule — `tellThread` is queued, not immediate.** `tellThread(id, code)` stores the injected code on the target thread, which runs it at its next turn in the threads phase, spending the target thread's own budget and seeing the target thread's `source` and `target`; the caller's step is not interrupted. Legacy ran the code at once, inside the caller's moment, with the caller's slots; queuing keeps a step's outcome independent of another thread's state, which a deterministic replay requires.
+
+### THR-3 — what a "step" is, and the preemption budget
+
+* **Reawakened rule — a step is one VM instruction.** In this spec a `step` is one instruction the VM executes, and it is not the same as a `tick`, which is one fixed simulation update (the whole phase list). A snapshot may be taken between any two steps, and a test that compares "the same state hash after N steps" counts VM steps, not ticks.
+* **Reawakened rule — the budget (R-33).** A thread's preemption budget counts the VM steps that thread runs in one tick. A thread that reaches the budget without yielding keeps its state and continues at the next tick, so being preempted is not an error. *Legacy fact:* 3.1 set the per-tick instruction budget to `(fps − 60) × 10`, with a floor of 10, and the arithmetic wrapped for a frame rate below 60. At our fixed 60 Hz tick that formula gives 0, floored to 10, so the number is not inherited from it and this rebuild's budget stays provisional; the entry that implements threads tunes it against the demo, together with the movement entry that shares it. The unsigned wrap is a quirk and is not reproduced.
+* **Reawakened rule — waiting and the budget.** A waiting thread runs no VM steps and so uses no budget. The wait phase polls waiting threads in ascending id before the threads phase, so a thread that wakes in a tick runs in that same tick and spends that tick's budget.
+
+### Blocking commands (R-32)
+
+* A blocking command inside any program stops **all** script execution, movement and frame updates until it finishes, because everything runs on the engine's single main loop. The screen keeps redrawing throughout, so the window does not look hung. Threads do not pump window messages, so a thread that needs to pause without freezing the game must use `threadSleep` instead. — legacy behaviour (round 5, Q4; read from the logic and certain).
+
+**Reawakened rule — a deliberate departure from our own earlier design.** This project's earlier per-thread wait model — a blocking command blocking only the thread that ran it, while other threads and the world kept running — is **withdrawn**. A blocking command now waits the whole game, always, matching 3.1. There is no per-project setting to restore the old behaviour; a setting for new games (with imported games defaulting to off) is a possible future enhancement, and nothing is built or reserved for it. *Reason:* the legacy freeze is what existing games were written against, and a save cannot contain a half-pumped main loop. (Owner ruling U1, 2026-10-15.) The VM's wait registry and the wait kinds it yields (`input.key`, `sleep`, `menu.screen`, `movement`, …) are unchanged; what changes is that a blocked program blocks the world, not just itself.
+
+**References.** R2-Q23, R2-Q24, `docs/provenance/facts-round-5.md` Q4; the engine-provided variables and the thread operations in [rpgcode-language.md](rpgcode-language.md) and [rpgcode-functions.md](rpgcode-functions.md); AD-2 (fixed tick), AD-7 (`Thread.source`/`target` in state), AD-9 (one wait contract, ascending-id polling) and AD-26 (phase list and the per-tick budget) in the architecture spine.

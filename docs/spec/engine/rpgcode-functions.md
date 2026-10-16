@@ -2,7 +2,12 @@
 
 All 282 command names the 3.1 engine registers, grouped by area. Names are case-insensitive. 14 names are aliases of another command. Signatures use the engine's own notation: `[x]` = optional parameter, `&` = the argument must be a variable (it receives a result), `ret` = the value the command returns. Types are `int`/`double` (numbers), `string`, `bool` (number or "on"/"off"), `canvas`/`thread`/`animation` (numeric handles).
 
-**Compatibility notes.** Calls to built-ins are bound when a program is compiled, so a script method with the same name as a built-in is never called at those call sites. If a name were registered twice the first registration would win. The control-flow words `if`, `elseif`, `else`, `while`, `until` and `for` are also built-ins internally but are documented in [rpgcode-language.md](rpgcode-language.md).
+**Compatibility notes.**
+
+* **Binding is at compile time (R-35).** Calls to built-ins are bound when a program is compiled, so a script method with the same name as a built-in is never called at those call sites. If a name were registered twice the first registration would win. The control-flow words `if`, `elseif`, `else`, `while`, `until` and `for` are also built-ins internally but are documented in [rpgcode-language.md](rpgcode-language.md).
+
+  **Reawakened rule.** A script method whose name matches a built-in is never called where the compiler binds the built-in — that is 3.1 behaviour, kept for parity — and the definition raises a **required warning** naming the built-in it shadows. The warning follows the owner's standing rule that every override warns (2026-10-11). This binding order is the reverse of the one the architecture spine's AD-8 described; the change is recorded here and applied by entry 3.8.
+* **Obsolete commands (R-36).** A command marked *obsolete: raises an error* is a catchable runtime error, and its statement is skipped; a command marked *obsolete: warning* stays callable and shows a warning when warnings are on. Both kinds are handled the same way by an error handler. The eight names `empty`, `fbranch`, `mbox`, `newplyr` (`newplayer` is its alias), `restorearrayscreen`, `underarrow`, `itemwalkspeed` and `shopcolors` are part of the 282-name catalogue, and the command-effect catalogue JSON lists all 282 names.
 
 
 ## Message window, text & fonts (30)
@@ -346,6 +351,23 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `fileput` | `void fileput(string file, string byte)` | Write a byte to a file. |  |
 | `fileeof` | `bool fileeof(string file, [bool &ret])` | Check whether the end of a file has been reached. |  |
 | `apppath` | `string apppath([string &dest])` | Retrieve the path of trans3.exe, without the final backslash. |  |
+
+## Ownership of names with no single owner
+
+The catalogue above groups names by capability, not by which part of the engine implements them, and a few names fell between two owners. This is the map the build uses so that every name resolves exactly once. It follows the command-effect catalogue's proposal; where it differs from a group label above, this map wins.
+
+* **Input** (`wait`, `get`, `mouseClick`, `mouseMove`, `scan`, `mem`, `clearBuffer`, `setButton`, `checkButton`, `clearButtons`) belongs to the **movement-and-input** part. The `input.key` and `sleep` wait *kinds* those commands yield are the **VM's** (the VM owns the wait registry); the built-in itself is the input part's.
+* **Cursor maps and the mouse cursor** (`createCursorMap`, `cursorMapAdd`, `cursorMapRun`, `killCursorMap`, `cursorMapHand`, `mouseCursor`) belong to **board-rendering**, even though the catalogue above files them under mouse, buttons and cursor maps: they draw onto the `ui` surface, so the section owner decides.
+* **`wait`** is the input part's built-in and its `input.key` wait kind is the VM's — a split name, both parts stated.
+* **`dirSav`** (the save/load picker) belongs to **menu-and-save**, which owns the save list and the `menu.screen` wait; board-rendering supplies the surface it draws on — a split name.
+* **Game lifecycle** (`reset`, `start`, `mainFile`, `win`, `gone`, `over`) belongs to **board-rendering**, which owns boot, reset and quit. The "Game state" group above does not imply the menu part. <!-- OWNER: §9.13 game lifecycle — alternatives: leave these with menu-and-save (where the catalogue guessed) or move them to board-rendering (the proposal). Decided: board-rendering, to match the boot/reset/quit owner. -->
+* **`menuGraphic`** belongs to **menu-and-save**, not battle, even though the catalogue above lists `menuGraphic` under battle; `internalMenu` and `fightMenuGraphic` stay with menu-and-save and battle respectively.
+* **`godos`, `dos` and `windows` are obsolete and dropped**: no owner registers them, and no game needs them to resolve.
+* The remaining names the catalogue's ownership table flags as ambiguous (`itemCount`, `giveExp`, `sourceHandle`, `targetHandle`, `sourceLocation`, `targetLocation`, and the party/player movement names) are owned as that table says: movement-and-input for the sprite and player movement names, battle for the fight stat writes, the VM for the source/target handle reads.
+
+<!-- OWNER: §9.13 — the owner should confirm the game-lifecycle move (to board-rendering) and the two split names (`wait`,
+`dirSav`) hardest; the rest follows the catalogue. If the game-lifecycle names stay with menu-and-save, edit this bullet
+and the catalogue together. -->
 
 ## Not callable by name
 
