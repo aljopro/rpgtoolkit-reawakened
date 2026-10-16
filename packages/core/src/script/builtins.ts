@@ -27,6 +27,7 @@ import type { RefId } from "../ports/value.ts";
 import { ScriptError } from "./errors.ts";
 import type { CommandHandler, PluginDefinition } from "./plugin.ts";
 import { CONVERSION_SPECS } from "./builtins/conversions.ts";
+import { ERROR_SPECS } from "./builtins/errors.ts";
 import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
 import { THREAD_SPECS } from "./builtins/threads.ts";
@@ -96,5 +97,6 @@ export const CORE_PLUGIN: PluginDefinition = {
     ...CONVERSION_SPECS,
     ...SCOPE_SPECS,
     ...THREAD_SPECS,
+    ...ERROR_SPECS,
   ],
 };

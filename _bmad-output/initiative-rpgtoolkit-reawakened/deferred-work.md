@@ -25,9 +25,6 @@
 - source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md`
   summary: An exported `./testing` entry point for runner-harness (AD-22) is deferred because dependency-cruiser rule r2 bans subpath imports.
   evidence: Review finding F17 / probe b2. Revisit when DAP needs runner-harness testing helpers.
-- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-runner-harness-driver-synth-scaffold-and-the-golden-job-plan.md`
-  summary: The harness driver (entry 1.9) throws if a step report contains non-empty requests or diagnostics.
-  evidence: Review finding F10 / Design Notes. Revisit when a real engine emits diagnostics or blocking requests.
 - source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-required-ci-checks-branch-protection-and-contributor-docs-plan.md`
   summary: If a merge queue is ever enabled for `main`, `merge_group:` must be added to `ci.yml`'s `on:`.
   evidence: GitHub reports required checks for a queue entry only from workflows triggered by `merge_group`; without it every required check stops reporting and the merge fails. No merge queue exists today (entry 1.10).
@@ -212,3 +209,4 @@
 - `deferred-work` (code review of 2.5/2.6: the accepted `.tem`/`.itm` minor ranges were not stated in the spec) and (code review of 2.9/2.10: the Unicode `toLowerCase` case fold contradicted AD-5's ASCII-only fold) — resolved by epic 2.17's spec amendment and epic 2.21 (`ac71468`), which switches the fold to `asciiLower()` and adds AD-5's fold test.
 - `deferred-work` (code review of 2.10: the L17 proof returned a truncated prefix at `acf48f8`) and (code review of 2.11: `.bmp`/`.gif` failed the dump at `2aa135e`) — resolved by the round-1 review patches (`93efb03`).
 - `deferred-work` (code review of 2.10/2.12: the declared-size proof's work was unbounded, and the manifest `index` kept the caller's order) — resolved by branch `fix/epic2-fold-and-zip-work-bound` (`6514031`, docs `c87c82e`, test `9759eb8`): the inflate streams and aborts past the declaration, and `index` is written in code-unit order.
+- `deferred-work` (entry 1.9: the harness driver threw if a step report contained non-empty `requests` or `diagnostics`) — resolved by entry 3.7: `runLog` validates each request and diagnostic (a malformed one still throws, naming the call) and hands the non-empty ones to an optional `ReportObserver`, leaving the `{ tick, state, draw }` golden records and the golden shape unchanged; the VM-backed host now drains the located runtime diagnostics into `TickReport.diagnostics`.

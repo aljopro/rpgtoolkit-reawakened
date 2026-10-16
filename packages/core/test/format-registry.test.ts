@@ -99,6 +99,12 @@ function plugin(id: string, decoders: readonly AssetDecoder[]): PluginDefinition
 function warningLogger(): { logger: Logger; records: LogRecord[] } {
   const records: LogRecord[] = [];
   const logger: Logger = {
+    debug(record) {
+      records.push(record);
+    },
+    info(record) {
+      records.push(record);
+    },
     warn(record) {
       records.push(record);
     },

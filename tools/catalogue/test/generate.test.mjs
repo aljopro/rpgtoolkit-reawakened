@@ -16,8 +16,8 @@ const rows = stubRows(catalogue);
 const spec = (name, optional, byRef, variadic = false) => ({ name, optional, byRef, variadic });
 
 test("keeps exactly the stub-safe catalogue names", () => {
-  equal(rows.length, 149);
-  equal(new Set(rows.map((row) => row.name)).size, 149);
+  equal(rows.length, 147);
+  equal(new Set(rows.map((row) => row.name)).size, 147);
   const stubSafe = new Set(["pure", "state-write", "draw-audio-cue"]);
   ok(rows.every((row) => stubSafe.has(row.effectKind)));
   // The kinds entries 9, 13 and 22 own never leak in.
@@ -133,8 +133,8 @@ test("every byRefOut name declares byRef except the four variadic ones", () => {
 test("generates one folded spec per name and the obsolete throw", () => {
   const source = generate(catalogue);
   const generated = [...source.matchAll(/^ {4}name: "([a-z][a-z0-9]*)",$/gm)].map((match) => match[1]);
-  equal(generated.length, 149);
-  equal(new Set(generated).size, 149);
+  equal(generated.length, 147);
+  equal(new Set(generated).size, 147);
   ok(generated.includes("mwincls"), "a mixed-case catalogue name is folded to its registry key");
   ok(source.includes("builtin.obsolete"), "the obsolete stub raises builtin.obsolete");
   equal((source.match(/obsolete: true/g) ?? []).length, 2);

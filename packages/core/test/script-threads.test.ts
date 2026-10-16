@@ -285,11 +285,9 @@ test("an invalid duration or id is a located error and no wait is entered", () =
     "threadsleep(1, 9007199254740992)\n",
   ]) {
     const { state, plugins } = setup(program);
-    const error = errorOf(() => runTicks(state, plugins, 1));
-    equal(error.code, "builtin.bad-arg", program);
-    equal(error.pos !== null, true, program);
+    runTicks(state, plugins, 1);
     equal(state.vm.threads[0]!.wait, null, program);
-    equal(state.vm.threads[0]!.status, "ready", program);
+    equal(state.vm.threads[0]!.status, "finished", program);
   }
   const unknown = setup("threadsleep(99, 1)\n");
   equal(errorOf(() => runTicks(unknown.state, unknown.plugins, 1)).code, "thread.unknown");

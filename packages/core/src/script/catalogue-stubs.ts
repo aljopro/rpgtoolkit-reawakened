@@ -981,20 +981,6 @@ const STUBS: readonly CatalogueStub[] = [
     params: [{ name: "id", optional: false, byRef: false, variadic: false }],
   },
   {
-    name: "debug",
-    kind: "state-write",
-    sections: ["engine"],
-    obsolete: false,
-    params: [{ name: "state", optional: false, byRef: false, variadic: false }],
-  },
-  {
-    name: "debugger",
-    kind: "state-write",
-    sections: ["engine"],
-    obsolete: false,
-    params: [{ name: "msg", optional: false, byRef: false, variadic: false }],
-  },
-  {
     name: "random",
     kind: "pure",
     sections: [],

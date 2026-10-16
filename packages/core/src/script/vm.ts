@@ -10,6 +10,7 @@
  */
 
 import { pow } from "../fmath/index.ts";
+import type { Diagnostic } from "../ports/engine.ts";
 import type { Logger } from "../ports/logger.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 import type { ObjectValue, RefId, Value, VarScope } from "../ports/value.ts";
@@ -21,10 +22,26 @@ import { CORE_PLUGIN, type Arg, type BuiltinSpec } from "./builtins.ts";
 import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
 import { recordDiagnostic, recordEffect } from "./effects.ts";
-import { ScriptError } from "./errors.ts";
-import type { SourcePos } from "./ops.ts";
+import {
+  failureClass,
+  HANDLER_NOT_HANDLING,
+  HANDLER_TOP_LEVEL,
+  HANDLER_UNKNOWN_LABEL,
+  locateError,
+  ScriptError,
+  toDiagnostic,
+} from "./errors.ts";
+import { NULL_LOGGER } from "./logging.ts";
+import type { SourcePos, StepOp } from "./ops.ts";
 import type { CommandResult, CommandView, PluginDefinition } from "./plugin.ts";
-import { COMPILER_VERSION, compileProgram, type Program, type ProgramRef } from "./program.ts";
+import {
+  COMPILER_VERSION,
+  compileProgram,
+  type FunctionInfo,
+  type Program,
+  type ProgramRef,
+  type StatementRange,
+} from "./program.ts";
 import {
   assembleCommands,
   createCommandLookup,
@@ -68,15 +85,24 @@ export type ScriptStatus = "running" | "waiting" | "finished";
 /** Compiled programs are rebuilt from their ref and memoised outside state. */
 type ProgramMemo = { get(ref: ProgramRef): Program };
 
-/** Everything the script phases need that is not state. */
+/**
+ * Everything the script phases need that is not state. `logger` is the human
+ * debug channel (AD-24); `diagnostics` collects the located host diagnostics
+ * of every runtime failure until the engine drains them into a `TickReport`.
+ */
 export type ScriptServices = {
   readonly view: CommandView;
   readonly commands: CommandLookup;
   readonly programs: ProgramMemo;
   readonly virtuals: VirtualVariablePort;
+  readonly logger: Logger;
+  readonly diagnostics: Diagnostic[];
 };
 
-const DISCARD_LOGGER: Logger = { warn: () => {}, error: () => {} };
+/** Take every diagnostic collected since the last drain, oldest first. */
+export function drainDiagnostics(services: ScriptServices): Diagnostic[] {
+  return services.diagnostics.splice(0, services.diagnostics.length);
+}
 
 function programMemoKey(ref: ProgramRef): string {
   return ref.kind === "inline"
@@ -87,7 +113,7 @@ function programMemoKey(ref: ProgramRef): string {
 export function createScriptServices(
   state: GameState,
   plugins: readonly PluginDefinition[] = [],
-  logger: Logger = DISCARD_LOGGER,
+  logger: Logger = NULL_LOGGER,
   virtuals?: VirtualVariablePort,
 ): ScriptServices {
   const view: CommandView = {
@@ -109,7 +135,7 @@ export function createScriptServices(
       return compiled;
     },
   };
-  return { view, commands, programs, virtuals: virt };
+  return { view, commands, programs, virtuals: virt, logger, diagnostics: [] };
 }
 
 /**
@@ -352,6 +378,179 @@ function lookupLabel(program: Program, ip: number, name: string): number | undef
     }
   }
   return program.labels[name];
+}
+
+/** The function or method whose op range holds `ip`, or `undefined` for top-level code. */
+function enclosingFunction(program: Program, ip: number): FunctionInfo | undefined {
+  for (const fnList of Object.values(program.functions)) {
+    for (const fn of fnList) {
+      if (ip >= fn.entry && ip < fn.end) return fn;
+    }
+  }
+  for (const cls of Object.values(program.classes)) {
+    for (const fnList of Object.values(cls.methods)) {
+      for (const fn of fnList) {
+        if (ip >= fn.entry && ip < fn.end) return fn;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve a handler label inside the function holding `ip` only (ERR-1: a
+ * handler can never jump into another function).
+ */
+function handlerLabel(program: Program, ip: number, name: string): number | undefined {
+  const fn = enclosingFunction(program, ip);
+  return fn !== undefined && Object.hasOwn(fn.labels, name) ? fn.labels[name] : undefined;
+}
+
+/** The op index just after the innermost statement holding `ip` (ERR-1 `resumeNext`). */
+function statementEnd(program: Program, ip: number): number {
+  let best: StatementRange | undefined;
+  for (const range of program.statements) {
+    if (ip < range.start || ip >= range.end) continue;
+    if (best === undefined || range.end - range.start < best.end - best.start) best = range;
+  }
+  return best === undefined ? ip + 1 : best.end;
+}
+
+/** How many operands an op consumes and how many values it leaves (net of ops that duplicate). */
+function stackEffect(op: StepOp): { readonly pops: number; readonly pushes: number } {
+  switch (op.op) {
+    case "push":
+    case "name":
+    case "load":
+    case "declRef":
+    case "dup":
+      return { pops: 0, pushes: 1 };
+    case "storeRef":
+    case "index":
+    case "compound":
+    case "binop":
+      return { pops: 2, pushes: 1 };
+    case "member":
+    case "unop":
+      return { pops: 1, pushes: 1 };
+    case "select":
+      return { pops: 3, pushes: 1 };
+    case "methodCall":
+      return { pops: op.argc + 1, pushes: 1 };
+    case "construct":
+    case "call":
+      return { pops: op.argc, pushes: 1 };
+    case "pop":
+    case "jumpIfFalse":
+      return { pops: 1, pushes: 0 };
+    case "jump":
+    case "return":
+      return { pops: 0, pushes: 0 };
+  }
+}
+
+/**
+ * Record one catchable runtime failure: always as a located host diagnostic,
+ * and as an `error` Logger record unless `debug(false)` has silenced the
+ * interpreter's own messages (ERR-2). An `internal` fault is never silenced.
+ */
+function reportFailure(vm: VmState, services: ScriptServices, error: ScriptError): void {
+  services.diagnostics.push(toDiagnostic(error));
+  const family = failureClass(error.code);
+  if (vm.messagesOff === true && family !== "internal") return;
+  services.logger.error({
+    level: "error",
+    code: error.code,
+    message: error.message,
+    data: { file: error.pos?.file ?? "", line: error.pos?.line ?? 0, class: family },
+  });
+}
+
+/**
+ * Route one failed operation at its own frame (ERR-1/ERR-2). The failure is
+ * located at the op, reported, then either the frame's label handler takes
+ * over (operands dropped, resume point remembered) or the thread continues at
+ * the next VM step with the failed op contributing the unset value. Never
+ * touches another frame, so a caller's handler cannot catch a callee failure.
+ */
+function handleFailure(
+  vm: VmState,
+  services: ScriptServices,
+  program: Program,
+  frame: Frame,
+  op: StepOp,
+  opIp: number,
+  depth: number,
+  error: ScriptError,
+): void {
+  const located = locateError(error, op.pos);
+  reportFailure(vm, services, located);
+  const handler = frame.errorHandler;
+  if (handler !== null && handler.mode === "label") {
+    const target = handler.label === null ? undefined : handlerLabel(program, opIp, handler.label);
+    if (target !== undefined) {
+      frame.operands.length = 0;
+      handler.active = true;
+      handler.resume = statementEnd(program, opIp);
+      frame.ip = target;
+      return;
+    }
+    // ERR-1: the handler is cleared only when its label cannot be found; the error is reported.
+    frame.errorHandler = null;
+  }
+  const effect = stackEffect(op);
+  const target = Math.max(0, depth - effect.pops) + effect.pushes;
+  if (frame.operands.length > target) frame.operands.length = target;
+  while (frame.operands.length < target) frame.operands.push({ value: 0, ref: null });
+  frame.ip = opIp + 1;
+}
+
+/** Install or replace the calling frame's handler, keeping any in-flight resume point (ERR-1). */
+function installHandler(
+  program: Program,
+  frame: Frame,
+  frameIndex: number,
+  opIp: number,
+  pos: SourcePos,
+  label: string | null,
+): void {
+  if (frameIndex === 0) {
+    throw new ScriptError(
+      HANDLER_TOP_LEVEL,
+      "an error handler can be set inside a function only",
+      pos,
+    );
+  }
+  if (label !== null && handlerLabel(program, opIp, label) === undefined) {
+    throw new ScriptError(
+      HANDLER_UNKNOWN_LABEL,
+      `handler label \`:${label}\` not found in the current function`,
+      pos,
+    );
+  }
+  const previous = frame.errorHandler;
+  frame.errorHandler = {
+    mode: label === null ? "resumeNext" : "label",
+    label,
+    active: previous?.active ?? false,
+    resume: previous?.resume ?? null,
+  };
+}
+
+/** `resumeNext()`: continue after the failing statement, consuming the remembered point once (ERR-1). */
+function resumeAfterFailure(frame: Frame, frameIndex: number, pos: SourcePos): void {
+  const handler = frame.errorHandler;
+  if (frameIndex === 0 || handler === null || handler.resume === null) {
+    throw new ScriptError(
+      HANDLER_NOT_HANDLING,
+      "resumeNext() is legal only inside a function while its error handler is handling an error",
+      pos,
+    );
+  }
+  frame.operands.length = 0;
+  frame.ip = handler.resume;
+  handler.resume = null;
+  handler.active = false;
 }
 
 function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId): Value {
@@ -754,6 +953,28 @@ function performCall(
         frame.ip = targetIp;
         controlApplied = true;
       }
+      if (action === "setErrorHandler") {
+        installHandler(program, frame, frameIndex, frame.ip, pos, effect.args?.[1] as string);
+      }
+      if (action === "setResumeNextHandler") {
+        installHandler(program, frame, frameIndex, frame.ip, pos, null);
+      }
+      if (action === "resumeNext") {
+        resumeAfterFailure(frame, frameIndex, pos);
+        controlApplied = true;
+      }
+      if (action === "debug") {
+        if (effect.args?.[1] === true) delete vm.messagesOff;
+        else vm.messagesOff = true;
+      }
+      if (action === "debugger") {
+        services.logger.info({
+          level: "info",
+          code: "script.debugger",
+          message: String(effect.args?.[1] ?? ""),
+          data: { file: pos.file, line: pos.line, thread: thread.id },
+        });
+      }
       if (action === "autoLocal") {
         frame.autoLocal = Boolean(effect.args?.[1]);
       }
@@ -1027,6 +1248,10 @@ export function stepThread(
       return finish();
     }
     steps += 1;
+    const opIp = frame.ip;
+    const depth = frame.operands.length;
+
+    try {
 
 
     switch (op.op) {
@@ -1503,6 +1728,7 @@ export function stepThread(
         ) {
           return finish();
         }
+
       }
 
         break;
@@ -1530,6 +1756,11 @@ export function stepThread(
         callerFrame.operands.push(returnArg);
         break;
       }
+    }
+    } catch (caught) {
+      // Load-time errors are not catchable; only a runtime failure of this one op is routed here.
+      if (!(caught instanceof ScriptError) || failureClass(caught.code) === null) throw caught;
+      handleFailure(vm, services, program, frame, op, opIp, depth, caught);
     }
   }
   return finish();

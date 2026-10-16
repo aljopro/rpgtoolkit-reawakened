@@ -153,6 +153,8 @@ const IMPLEMENTED_COMMANDS = new Set([
   "threadsleepremaining",
   "sourcehandle",
   "targethandle",
+  "debug",
+  "debugger",
 ]);
 
 /** The stub-safe rows of the catalogue, in catalogue order. */

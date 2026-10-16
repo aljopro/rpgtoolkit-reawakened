@@ -10,11 +10,11 @@
 
 import { ScriptError } from "./errors.ts";
 import { tokenizeObjects } from "./lex.ts";
-import { lower, type CompiledClass, type FunctionInfo } from "./lower.ts";
+import { lower, type CompiledClass, type FunctionInfo, type StatementRange } from "./lower.ts";
 import type { StepOp } from "./ops.ts";
 import { parse } from "./parse.ts";
 
-export type { CompiledClass, FunctionInfo } from "./lower.ts";
+export type { CompiledClass, FunctionInfo, StatementRange } from "./lower.ts";
 
 
 /**
@@ -40,6 +40,8 @@ export type Program = {
   readonly functions: { readonly [name: string]: readonly FunctionInfo[] };
   readonly classes: { readonly [name: string]: CompiledClass };
   readonly labels: { readonly [name: string]: number };
+  /** Every statement's op range, for `resumeNext()` (ERR-1). */
+  readonly statements: readonly StatementRange[];
 };
 
 /** Compile inline source text (docs/spec/engine/rpgcode-language.md#threads, a thread given text instead of a file). */
@@ -52,6 +54,7 @@ export function compileInline(text: string, file = "<inline>"): Program {
     functions: result.functions,
     classes: result.classes,
     labels: result.labels,
+    statements: result.statements,
   };
 }
 

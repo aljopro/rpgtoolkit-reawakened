@@ -3,7 +3,7 @@
 // the empty Engine contract that keeps the golden job green.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import type { BuiltinSpec, PluginDefinition, SurfaceId } from "@tk-reawakened/core";
+import type { BuiltinSpec, Diagnostic, LogRecord, PluginDefinition, SurfaceId } from "@tk-reawakened/core";
 import { createNullAudio, createScriptHost, restoreScriptHost, runLog, type Run } from "../src/index.ts";
 
 const TRACER = 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n';
@@ -168,4 +168,29 @@ test("mid-expression yield restores into a fresh host with identical per-tick st
   equal(restored.state().vm.globals.result, 4);
   equal(host.state().vm.threads[0]!.status, "finished");
   equal(restored.state().vm.threads[0]!.status, "finished");
+});
+
+test("a runtime failure reaches the report as a located diagnostic and runLog observes it", () => {
+  const records: LogRecord[] = [];
+  const host = createScriptHost({
+    program: "a = 1\nnope()\nb = 2\n",
+    seed: 0,
+    sinks: [(record) => records.push(record)],
+  });
+  const seen: Diagnostic[] = [];
+  const log = runLog(host, { schema: 1, ticks: 2, log: [] }, 1, createNullAudio(), (observation) => {
+    seen.push(...observation.diagnostics);
+  });
+
+  equal(log.length, 2);
+  deepEqual(seen, [
+    { code: "unknown.command", file: "<inline>", line: 2, message: 'no built-in or function named "nope"' },
+  ]);
+  equal(host.state().vm.globals.b, 2);
+  deepEqual(
+    records.map((record) => record.code),
+    ["unknown.command"],
+  );
+  // Draining is per advance: a later batch with no failure reports none.
+  deepEqual(host.advance(1, []).diagnostics, []);
 });

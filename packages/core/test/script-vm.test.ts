@@ -26,6 +26,7 @@ import {
   type Thread,
   type WaitPoll,
 } from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
 
 function errorOf(run: () => unknown): { code: string; message: string } {
   try {
@@ -174,7 +175,7 @@ test("writes a by-ref out back into the caller's variable inside the hash", () =
   const broken = makeState("bad(z)\n");
   equal(
     errorOf(() =>
-      advanceScriptTick(broken, createScriptServices(broken, [
+      advanceOrFail(broken, createScriptServices(broken, [
         { id: "test.bad", version: "1.0.0", commands: [badOut] },
       ])),
     ).code,
@@ -198,19 +199,19 @@ test("writes a by-ref out back into the caller's variable inside the hash", () =
 test("throws unknown.command and arity.mismatch", () => {
   const unknown = makeState("nope()\n");
   equal(
-    errorOf(() => advanceScriptTick(unknown, createScriptServices(unknown))).code,
+    errorOf(() => advanceOrFail(unknown, createScriptServices(unknown))).code,
     "unknown.command",
   );
 
   const tooMany = makeState("sleep(1, 2)\n");
   equal(
-    errorOf(() => advanceScriptTick(tooMany, createScriptServices(tooMany))).code,
+    errorOf(() => advanceOrFail(tooMany, createScriptServices(tooMany))).code,
     "arity.mismatch",
   );
 
   const tooFew = makeState("sleep()\n");
   equal(
-    errorOf(() => advanceScriptTick(tooFew, createScriptServices(tooFew))).code,
+    errorOf(() => advanceOrFail(tooFew, createScriptServices(tooFew))).code,
     "arity.mismatch",
   );
 });
@@ -335,13 +336,13 @@ test("the step budget preempts a long program with ip advanced by exactly the bu
 test("sleep rejects zero, fractional and negative counts", () => {
   const zero = makeState("sleep(0)\n");
   equal(
-    errorOf(() => advanceScriptTick(zero, createScriptServices(zero))).code,
+    errorOf(() => advanceOrFail(zero, createScriptServices(zero))).code,
     "builtin.bad-arg",
   );
 
   const fractional = makeState("sleep(1.5)\n");
   equal(
-    errorOf(() => advanceScriptTick(fractional, createScriptServices(fractional))).code,
+    errorOf(() => advanceOrFail(fractional, createScriptServices(fractional))).code,
     "builtin.bad-arg",
   );
 
@@ -356,7 +357,7 @@ test("sleep rejects zero, fractional and negative counts", () => {
   ];
   const negative = makeState("setnegative(n)\nsleep(n)\n");
   equal(
-    errorOf(() => advanceScriptTick(negative, createScriptServices(negative, plugins))).code,
+    errorOf(() => advanceOrFail(negative, createScriptServices(negative, plugins))).code,
     "builtin.bad-arg",
   );
 });

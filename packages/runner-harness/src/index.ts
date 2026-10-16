@@ -1,5 +1,5 @@
 export { createNullAudio, type AudioSink, type NullAudio } from "./audio.ts";
-export { runLog } from "./driver.ts";
+export { runLog, type ReportObservation, type ReportObserver } from "./driver.ts";
 export {
   compareGolden,
   formatGolden,
