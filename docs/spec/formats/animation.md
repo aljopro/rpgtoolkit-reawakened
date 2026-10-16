@@ -2,7 +2,7 @@
 
 A sequence of frames with a fixed delay, used for every sprite stance (walking, idling, battle), for scripts and for battle effects. Animations live in `Misc\`. Animated GIFs can be used anywhere an animation is expected.
 
-Header text: `RPGTLKIT ANIM`. The only accepted minor is **3**; the engine rejects anything else with "This is not a valid animation file". The editor and the engine both write major 2, minor 3.
+Header text: `RPGTLKIT ANIM`. The only accepted minor for the binary layout is **3**; the Toolkit 2 line-based text form is minor 0 ([legacy/text-formats.md](legacy/text-formats.md#animation)). Detection is the byte at offset 13: `00` = binary, non-zero = text.
 
 ## Layout
 
