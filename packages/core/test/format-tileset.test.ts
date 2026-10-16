@@ -13,14 +13,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BinaryWriter,
+  DOS_PALETTE,
+  dosPaletteEntry,
   expandTileToRgba,
   isInsideIsoDiamond,
   ISO_INSIDE_PIXEL_COUNT,
   readTileset,
   tilesetDetail,
   TRANSPARENT_INDEX,
-  VGA_DEFAULT_PALETTE,
-  vgaPaletteEntry,
   writeTileset,
 } from "../src/index.ts";
 import type { Result, Tileset } from "../src/index.ts";
@@ -137,24 +137,30 @@ test("the 24-bit transparent key is exactly R=0, G=1, B=2", () => {
   equal(rgba[11], 255);
 });
 
-test("8-bit tiles use the VGA palette and index 255 is transparent", () => {
+test("8-bit tiles use the DOS palette and index 255 is transparent", () => {
   const pixels = new Uint8Array(32 * 32);
   pixels.set([1, TRANSPARENT_INDEX, 0, 2], 0);
   const model = unwrap(readTileset(tilesetBytes(20, 1, 3, pixels)));
 
   const rgba = unwrap(expandTileToRgba(model, 0));
-  deepEqual([rgba[0], rgba[1], rgba[2], rgba[3]], [0x00, 0x00, 0xaa, 255]); // palette[1]
+  deepEqual([rgba[0], rgba[1], rgba[2], rgba[3]], [0x00, 0x00, 0xa8, 255]); // dos-palette[1]
   deepEqual([rgba[4], rgba[5], rgba[6], rgba[7]], [0, 0, 0, 0]); // index 255
-  deepEqual([rgba[8], rgba[9], rgba[10], rgba[11]], [0, 0, 0, 255]); // palette[0]
-  deepEqual([rgba[12], rgba[13], rgba[14], rgba[15]], [0x00, 0xaa, 0x00, 255]); // palette[2]
+  deepEqual([rgba[8], rgba[9], rgba[10], rgba[11]], [0, 0, 0, 255]); // dos-palette[0]
+  deepEqual([rgba[12], rgba[13], rgba[14], rgba[15]], [0x00, 0xa8, 0x00, 255]); // dos-palette[2]
 });
 
-test("the VGA default palette ships as 256 entries", () => {
-  equal(VGA_DEFAULT_PALETTE.length, 768);
-  deepEqual(vgaPaletteEntry(0), { r: 0x00, g: 0x00, b: 0x00 });
-  deepEqual(vgaPaletteEntry(1), { r: 0x00, g: 0x00, b: 0xaa });
-  deepEqual(vgaPaletteEntry(15), { r: 0xff, g: 0xff, b: 0xff });
-  deepEqual(vgaPaletteEntry(255), { r: 0x00, g: 0x00, b: 0x00 });
+test("the DOS palette ships as 256 entries", () => {
+  equal(DOS_PALETTE.length, 768);
+  deepEqual(dosPaletteEntry(0), { r: 0x00, g: 0x00, b: 0x00 });
+  deepEqual(dosPaletteEntry(1), { r: 0x00, g: 0x00, b: 0xa8 });
+  deepEqual(dosPaletteEntry(2), { r: 0x00, g: 0xa8, b: 0x00 });
+  deepEqual(dosPaletteEntry(15), { r: 0xff, g: 0xff, b: 0xff });
+  deepEqual(dosPaletteEntry(255), { r: 0x00, g: 0x00, b: 0x00 });
+  // The table is the programs' own palette, not the IBM VGA mode-13h default:
+  // entry 6 is 168, 88, 0 where VGA has 170, 85, 0, and entry 1 is 0, 0, 168
+  // where VGA has 0, 0, 170 (docs/spec/formats/dos-palette.json, R-01).
+  deepEqual(dosPaletteEntry(6), { r: 0xa8, g: 0x58, b: 0x00 });
+  deepEqual(dosPaletteEntry(29), { r: 0xc8, g: 0xc8, b: 0xc8 });
 });
 
 test("the isometric diamond mask has exactly 1024 inside pixels", () => {

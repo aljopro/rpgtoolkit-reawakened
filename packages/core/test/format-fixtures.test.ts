@@ -84,7 +84,7 @@ test("the authored detail-4 tileset parses and its palette pixels expand", () =>
   // index 0 at (0, 0) → black; index 1 at (0, 1) → the palette's blue; index 15
   // (white) at (0, 15).
   deepEqual(pixel(rgba, 0, 0), [0, 0, 0, 255]);
-  deepEqual(pixel(rgba, 0, 1), [0x00, 0x00, 0xaa, 255]); // VGA palette index 1 is blue
+  deepEqual(pixel(rgba, 0, 1), [0x00, 0x00, 0xa8, 255]); // DOS palette index 1 is blue
   deepEqual(pixel(rgba, 0, 15), [255, 255, 255, 255]);
   // stored index 255 is the transparent key; k = 255 is (15, 15).
   deepEqual(pixel(rgba, 15, 15), [0, 0, 0, 0]);
@@ -104,7 +104,7 @@ test("the authored detail-5 tileset parses (32x32 palette)", () => {
   const rgba = unwrap(expandTileToRgba(model, 0));
   equal(rgba.length, 32 * 32 * 4);
   // index 1 is at k = 1 → (0, 1), i.e. offset (0*32+1)*4.
-  deepEqual([rgba[4], rgba[5], rgba[6], rgba[7]], [0x00, 0x00, 0xaa, 255]);
+  deepEqual([rgba[4], rgba[5], rgba[6], rgba[7]], [0x00, 0x00, 0xa8, 255]);
 });
 
 test("the authored detail-6 tileset parses (16x16 palette)", () => {

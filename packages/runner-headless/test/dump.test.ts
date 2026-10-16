@@ -8,7 +8,7 @@
 // image path is exercised end to end.
 import { equal, notEqual, deepEqual, ok } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -526,6 +526,18 @@ test("the .prg skip reports size and line count, not just a reason", () => {
   equal(cls.describe?.(PRG_TEXT), "15 bytes, 2 lines");
   equal(cls.describe?.(new Uint8Array(0)), "0 bytes, 0 lines");
   equal(cls.describe?.(new Uint8Array([0x61])), "1 bytes, 1 lines");
+  // §9's compiled form: a first byte of `00` is a compiled program, not source
+  // text (docs/spec/formats/rpgcode-program.md#compiled-form, R-12).
+  const compiled = new Uint8Array(
+    readFileSync(
+      join(PACKAGE_ROOT, "..", "..", "docs", "spec", "examples", "versions", "program", "start_compiled.prg"),
+    ),
+  );
+  equal(compiled[0], 0x00, "the committed example starts with the compiled marker");
+  ok(cls.describe?.(compiled)?.includes("compiled"), `the compiled example is reported as compiled`);
+  // The 0x00-first rule wins over any line count, and an empty file is not compiled.
+  equal(cls.describe?.(new Uint8Array([0x00, 0x0a])), `compiled (format-spec §9 "Compiled form"), 2 bytes`);
+  ok(cls.describe?.(new Uint8Array([0x0a]))?.includes("lines"), "a text file still reports lines");
 });
 
 test("the .gam, .spc and .ste rows parse the models their writers produced", () => {
