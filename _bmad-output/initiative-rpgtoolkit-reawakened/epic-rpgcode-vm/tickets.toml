@@ -149,9 +149,11 @@ after = [1, 3, 4, 27]
 hitl = false
 risk = "medium"
 references = [
-  "reference - docs/format-spec.md, sections 9.3, 9.4, 9.5",
+  "reference - docs/spec/engine/rpgcode-language.md, the lexical rules, 'Keywords and structure' (STX-1 to STX-6, FUN-1 to FUN-7) and 'Expressions' (EXP-2 to EXP-6, R-30, R-31, R-39, R-40)",
+  "reference - docs/spec/engine/rpgcode-runtime.md, SEM-3 to SEM-6 (comparison and conversion, scope, unset values, by-reference write-back)",
   "reference - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/language-readiness.md, sections 'What the parser found' and 'Ambiguity list'",
-  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7 (Frame.operands), AD-13 (^ is fmath.pow)",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7 (Frame.operands), AD-8 (lookup precedence), AD-13 (^ is fmath.pow)",
+  "plan - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/story-statements-control-flow-functions-expressions-and-the-operan-plan.md",
 ]
 
 [[entry]]
