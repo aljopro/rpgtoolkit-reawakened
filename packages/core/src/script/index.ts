@@ -9,26 +9,31 @@
 export { ScriptError } from "./errors.ts";
 export type { BinaryOp, SourcePos, StepOp, UnaryOp } from "./ops.ts";
 export type {
+  AccessLevel,
   Ast,
   Block,
+  ClassDef,
   Expr,
   FunctionDef,
   IfBranch,
+  MemberDef,
+  MethodDef,
   Param,
   Statement,
   SwitchCase,
 } from "./ast.ts";
-export { foldAscii, tokenize } from "./lex.ts";
+export { foldAscii, tokenize, tokenizeObjects } from "./lex.ts";
 export type { Token } from "./lex.ts";
 export { parse } from "./parse.ts";
 export { lower } from "./lower.ts";
-export type { FunctionInfo, LowerResult, ParamInfo } from "./lower.ts";
+export type { CompiledClass, FunctionInfo, LowerResult, ParamInfo } from "./lower.ts";
 export { COMPILER_VERSION, compileInline, compileProgram } from "./program.ts";
 export type { Program, ProgramRef } from "./program.ts";
 export { createVmState, globalRef, localRef, startProgram } from "./state.ts";
 export type {
   Frame,
   LocalSlot,
+  ObjectRecord,
   Thread,
   ThreadKind,
   ThreadOwner,

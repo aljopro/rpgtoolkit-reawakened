@@ -30,6 +30,34 @@ export type FunctionDef = {
   readonly line: number;
 };
 
+export type AccessLevel = "public" | "private";
+
+export type MemberDef = {
+  readonly name: string;
+  readonly arraySize: number | null;
+  readonly access: AccessLevel;
+  readonly line: number;
+};
+
+export type MethodDef = {
+  readonly name: string;
+  readonly params: readonly Param[];
+  readonly body: Block | null;
+  readonly isPure: boolean;
+  readonly access: AccessLevel;
+  readonly owner: string;
+  readonly line: number;
+};
+
+export type ClassDef = {
+  readonly name: string;
+  readonly bases: readonly string[];
+  readonly members: readonly MemberDef[];
+  methods: MethodDef[];
+  readonly isStruct: boolean;
+  readonly line: number;
+};
+
 /** A value-producing or variable-reading expression (docs/spec/formats/rpgcode-program.md#text-form. */
 export type Expr =
   | { readonly kind: "literal"; readonly value: Value; readonly line: number }
@@ -49,6 +77,25 @@ export type Expr =
   | {
       readonly kind: "call";
       readonly name: string;
+      readonly args: readonly Expr[];
+      readonly line: number;
+    }
+  | {
+      readonly kind: "methodCall";
+      readonly receiver: Expr;
+      readonly name: string;
+      readonly args: readonly Expr[];
+      readonly line: number;
+    }
+  | {
+      readonly kind: "member";
+      readonly receiver: Expr;
+      readonly name: string;
+      readonly line: number;
+    }
+  | {
+      readonly kind: "construct";
+      readonly className: string;
       readonly args: readonly Expr[];
       readonly line: number;
     }
@@ -158,8 +205,9 @@ export type Statement =
       readonly line: number;
     };
 
-/** A parsed program: statements and hoisted function definitions. */
+/** A parsed program: statements, hoisted functions and class declarations. */
 export type Ast = {
   readonly statements: Block;
   readonly functions: readonly FunctionDef[];
+  readonly classes: readonly ClassDef[];
 };
