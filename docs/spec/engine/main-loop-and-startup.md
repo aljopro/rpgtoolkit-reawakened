@@ -2,6 +2,25 @@
 
 The original engine is a single-threaded Windows program. It loads the main file, starts its subsystems, runs the start-up program, shows the first board and then loops forever: handle one window message, run one frame of game logic. This page describes that observable behaviour.
 
+## Legacy subsystems
+
+The original engine's responsibilities, named here so the rest of this spec can be organised by them. They are described as responsibilities, not as code.
+
+| Subsystem | Responsibility |
+|---|---|
+| Loader / asset resolver | Folder and package lookup, case-insensitive paths, version-tolerant readers, legacy upgrades (pre-vector boards → vectors, old items → generated animations) |
+| World model | The current board (tiles, vectors, programs, images, lights), the party, board items, global variables |
+| Movement & collision | Per-sprite movement queues, vector intersection, sliding, stairs, board edges, path-finding, z-ordering |
+| Trigger/event system | Deciding when programs run: step-on and key-press regions, item activation, board entry, edge links, run-time keys, random battles, level-up, equip, death |
+| Script runtime (RPGCode) | Parser, interpreter, cooperative threads, global and local variables, objects, error handlers, ~280 built-ins |
+| Renderer | Layered tile and image compositing with a scroll cache, sprites, under-vector occlusion, translucency, shading and ambient light, overlays, message window, transitions |
+| Audio/video | Looping background music, one-shot effects, volume, full-screen video |
+| Input | Keyboard (named keys, scan codes), mouse (click-to-move, cursor maps), joystick |
+| Battle system | Charge-bar ("active-time") battles, status effects, enemy AI, rewards; the UI lived in a plugin |
+| Menu system | Party / items / equip / abilities / save / load / quit; the UI lived in a plugin |
+| Persistence | Saving and restoring the entire game state, including running threads |
+| Plugin host | Native extensions for script functions, menu and battle |
+
 ## Command line
 
 The engine runs with the Toolkit folder as its working directory (`Main\` and `Saved\` are relative to it). Arguments are split on single spaces, so file names with spaces cannot be passed.
@@ -16,7 +35,23 @@ The engine runs with the Toolkit folder as its working directory (`Main\` and `S
 
 The editor's "Test game" runs `engine <file.gam>` without saving open editors first.
 
+<a id="e-130"></a>
+**E-130 Folder play.** A game is played from the main file plus the project folder, read in place ([../formats/packaging-and-paths.md](../formats/packaging-and-paths.md)).
+
+<a id="e-131"></a>
+**E-131 Single-file package.** The other distribution forms are the legacy `.tpk` ZIP and the standalone EXE (the engine with a ZIP appended), both handled by the same invocation as a folder ([../formats/packaging-and-paths.md](../formats/packaging-and-paths.md#standalone-exe)).
+
+**Reawakened rule.** The rebuild needs its own equivalents of both and must **import** the legacy ones. Our single-file form is the *distribution package*: a `.tpk`-compatible ZIP carrying `manifest.json { schema, main, index }`, so a runner boots from `main` and builds its asset index from `index` without listing the archive, and a loose folder and a package load to the same files ([../formats/packaging-and-paths.md](../formats/packaging-and-paths.md)).
+
+> **Open conflict R-60 — editor and test-game behaviour.** `docs/engine-features.md:6` says this inventory covers the *engine runtime only* and that the authoring tools are in `editor-features.md`; this page, `docs/spec/engine/main-loop-and-startup.md:32` and `:131`, documents two editor-facing behaviours anyway: the `engine <file.gam> <program.prg>` **program test mode** the editor's "Run program" uses, and the per-resolution frame-rate estimate the engine saves between runs. Owner epics: **editor-foundation** and **editor-assets-p0**. Landed code: none. The owners settle whether these belong in an engine page at inception; this page rules nothing.
+
 ## Start-up sequence
+
+<a id="e-01"></a>
+**E-01 Game discovery.** The game comes from an explicit main file, a `main.gam` beside the executable, a package (`.tpk` ZIP or an EXE with an appended ZIP) or a picker — the invocations in the table above. A **program test mode** runs one `.prg` against a main file without loading a board (the editor's *Run program*).
+
+<a id="e-02"></a>
+**E-02 Start-up sequence.** In order:
 
 1. Create `Saved\`. Decide which main file to run (table above) and load it.
 2. Install every `*.ttf` font in the project's `Font\` folder for the duration of the run.
@@ -29,7 +64,29 @@ The editor's "Test game" runs `engine <file.gam>` without saving open editors fi
 9. Load `initBoard` (skipped if the start-up program loaded a saved game with `Load()`, which is how title screens offer "continue"), place the player at the board's start position, start the board's background music and run the board's `enterPrg`.
 10. Enter the main loop.
 
+### Board loading and layers
+
+<a id="e-10"></a>
+**E-10 Board loading.** Any supported board version is read and converted to the vector model ([../formats/board.md](../formats/board.md#version-dispatch)). Loading the active board creates its run-time objects: the items whose *loading condition* holds, image surfaces, under-vector occlusion surfaces and the board's threads. A board opened only for a test — checking whether a linked board can accept the player — is loaded without side effects.
+
+<a id="e-12"></a>
+**E-12 Layers.** Any number of tile layers (1-based), each of which may also hold free-placed images. A background colour and an optional background image (normal, parallax or stretched) sit below layer 1. A sprite lives on exactly one layer and interacts only with the vectors, programs and items on that layer ([../formats/board.md](../formats/board.md#dimensions-and-tiles)).
+
+### Saved games
+
+<a id="e-120"></a>
+**E-120 Save.** The save holds the whole state: globals, redirects, party and stats, inventory, equipment, gold, message-window and font settings, play time, steps, the current board, every party member's position, layer and waypoint link, **all items on the current board** (position, active flag, activation data, waypoint link), the threads (file, persistence, owner, sleep and serialised interpreter state), the movement mode, objects and the game-speed offset. Saves go in the per-game saved-games folder ([../formats/save-game.md](../formats/save-game.md)).
+
+<a id="e-121"></a>
+**E-121 Load.** Restore exactly, including the board with its *live* item list (not the board file's original list) and the running threads at their saved positions ([../formats/save-game.md](../formats/save-game.md#program-state-inside-each-thread-field-46)).
+
+<a id="e-122"></a>
+**E-122 Legacy save compatibility** (optional but desirable): read 3.1.0 `.sav` files ([../formats/save-game.md](../formats/save-game.md)).
+
 ## Main loop
+
+<a id="e-03"></a>
+**E-03 Main loop (one frame).** The game state is one of **Idle** (accepting player input), **Moving** (sprites moving), **Paused** (the window lost focus) or **Quit**.
 
 Each pass of the loop:
 
@@ -50,7 +107,22 @@ There is **no frame-rate cap** in the original engine: the loop runs as fast as 
 
 Programs started by triggers (board programs, item activation, the start-up program, menu choices) run **to completion inside the frame that started them**. While one runs the rest of the world is frozen, but the window stays responsive because the program loop handles a window message after every instruction. Background threads ([rpgcode-language.md](rpgcode-language.md#threads)) are different: they get a slice of instructions per frame and do not freeze the world.
 
+The original engine's concurrency model has **one logical thread of game state**: everything is single-threaded and cooperative. A program started by a trigger takes exclusive control (above), while the threads spawned by the board, by an item's multitask program and by `Thread()` run alongside the main loop and are given a time-slice measured in **execution units** (statements) each frame; a thread can sleep, wake, and pause until a sprite finishes moving. The original engine's blocking primitives (`wait()`, `delay()`, a blocking movement) keep the window responsive by pumping input and redrawing while they block.
+
+> **Open conflict R-32 — blocking inside a thread.** The blocking-primitives sentence above is `docs/engine-features.md:44`: "Blocking primitives inside a program … pump input and redraw while blocking." This page and `docs/spec/engine/rpgcode-language.md:171` say that threads do not pump window messages, so a blocking command inside a thread freezes the whole game and only the redraw continues. Owner epic: **rpgcode-vm** (entry 3.27, which ruled it); recorded here as a pointer only, and this page rules nothing.
+
+<a id="e-33"></a>
+**E-33 Thread–movement coupling.** Movement started from a **thread** runs concurrently, or pauses that thread until the movement ends (`tkMV_PAUSE_THREAD`). Movement started from a **blocking program** runs to completion before the program continues, **unless** it is inside `multiRun { … }`, which collects several sprites' movements and runs them together ([rpgcode-language.md](rpgcode-language.md#threads)).
+
+<a id="e-96"></a>
+**E-96 Script-driven UI loop.** Scripts can build entire custom screens — title menus, custom battle systems, HUDs — from canvases, cursor maps, key and mouse polling and `renderNow`. The engine must allow a blocking script to own the frame for as long as it likes while still presenting frames and reading input ([rpgcode-language.md](rpgcode-language.md#execution)).
+
+**Reawakened rule.** Both blocking and threaded programs must run on a runtime with no OS threads, such as a browser, so the script runtime is a **resumable interpreter** — a step machine, continuation or coroutine equivalent — rather than one native thread per program. The step machine's states and the per-thread budget are specified in [rpgcode-language.md](rpgcode-language.md#execution) (G1 in [../../guardrails.md](../../guardrails.md)).
+
 ## Timing
+
+<a id="e-04"></a>
+**E-04 Timing.** The frame rate is uncapped up to about 120 fps. The engine keeps a running **frames-per-millisecond** estimate and converts every sprite's "seconds per step" into a **frame count per move**, so movement speed is time-based. A global **game speed** offset (−4…+4, ±10 % per step) adjusts it, and the last measured average frame time per resolution is saved so the first frames start from a sensible estimate.
 
 Movement speed is **tied to the measured frame rate**, not to wall-clock time:
 
@@ -61,6 +133,10 @@ Movement speed is **tied to the measured frame rate**, not to wall-clock time:
 
 A modern engine should use a fixed time step and convert the stored speeds to time directly; the result is equivalent at the frame rates the original ran at.
 
+**Reawakened rule.** The rebuild runs a **fixed simulation tick** of real elapsed time and drops the frame-rate-dependent quirks above (the unsigned-budget wrap, the per-resolution saved estimate, the uncapped loop), while keeping the *perceived* speeds: the stored seconds-per-step values convert to ticks through the tick length, not through a measured frame rate.
+
+> **Open conflict R-56 — the frame-loop cap.** `docs/engine-features.md:83` (E-04) says the frame rate is "uncapped up to about 120 fps"; this page, `docs/spec/engine/main-loop-and-startup.md:104`, says "There is **no frame-rate cap** in the original engine … A 120 fps cap was defined but disabled." Owner epic: **board-rendering**. Landed code: the fixed tick (AD-2) makes the difference unobservable, so nothing depends on it. The owner settles it at inception; this page rules nothing.
+
 ## Drawing a frame
 
 1. Clear to the board's background colour; draw the board background image.
@@ -70,8 +146,34 @@ A modern engine should use a fixed time step and convert the stored speeds to ti
 
 Ambient light (board ambient colour plus script changes) is applied as a gamma ramp in full-screen mode and by re-tinting tiles in windowed mode.
 
+<a id="e-52"></a>
+**E-52 Board compositing.** The full order is: background colour → background image (normal, stretched, or parallax with a computed scroll factor) → for each layer: tiles (shaded), then that layer's images (with colour-key transparency) → the sprites on that layer in z-order → higher-layer content that overlaps a sprite → under-vector promotions → animations → the overlay. The original engine kept a **scroll cache**: a pre-rendered region larger than the screen, re-rendered only when the camera left it or after a forced redraw, with animated tiles patched into it each frame.
+
+<a id="e-57"></a>
+**E-57 Render-now overlay.** A script-owned canvas, composited over the game every frame while it is enabled — the mechanism behind script-drawn HUDs and custom screens ([rpgcode-language.md](rpgcode-language.md#virtual-variables)).
+
 ## Shutdown and reset
 
 - **Exit** (window closed, or script `windows()` / its alias `dos()`): plugins are shut down first, then threads, graphics, audio and fonts; the frame-rate estimate is saved and any PAK temporary folder is deleted.
 - **Reset** (script `Reset`, or losing a battle with no game-over program): all variables, redirects and threads are cleared, plugins are restarted, and start-up runs again from step 3.
 - Closing the window while a blocking program or plugin is running exits immediately from inside it.
+
+<a id="e-06"></a>
+**E-06 Shutdown & reset.** `reset()` — also used after a lost battle with no game-over program — clears globals, redirects, plugins and threads and then reruns the start-up sequence. Quit tears down plugins first, then everything else.
+
+## Reawakened architecture
+
+**Reawakened rule.** The rebuild decomposes the behaviour this page describes into a **runner** (the platform layer: window/canvas, input devices, audio out, file and package access, clock, save) and a **core** that holds the format readers, world model, movement and collision, triggers, the script VM, the battle and menu rules, the render *list* builder and the save/load model. The seam is thin and data-only:
+
+```
+┌─────────────────────────── Runner (platform layer) ───────────────────────────┐
+│ window/canvas · input devices · audio out · file/package access · clock · save │
+└───────────────▲───────────────────────────────▲───────────────────────────────┘
+                │ thin, data-only interface     │
+┌───────────────┴─────────────── Game Core ─────┴───────────────────────────────┐
+│ format readers · world model · movement/collision · triggers · script VM ·    │
+│ battle & menu rules · render *list* builder (not pixels) · save/load model    │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+The core is **deterministic given its inputs** — the time tick, input events and the RNG seed — and produces **draw commands and audio commands**, not pixels or sound. That keeps the runners swappable (browser, desktop, mobile, headless test) and is what makes a recorded play-through replayable (G2 and G4 in [../../guardrails.md](../../guardrails.md); [ADR 0001](../../adr/0001-typescript-core.md)).
