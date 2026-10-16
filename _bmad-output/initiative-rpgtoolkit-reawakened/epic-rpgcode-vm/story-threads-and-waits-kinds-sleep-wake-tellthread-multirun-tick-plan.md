@@ -3,12 +3,13 @@ title: 'Threads and waits: kinds, sleep, wake, tellThread, multiRun, tick budget
 type: 'feature'
 ticket: 9
 created: '2026-10-16'
-status: ready-for-dev
+status: in-progress
 baseline_revision: '5a7ad22679581abdda690a0232f1f1e2208af3dc'
 route: 'full'
 route_source: 'pinned'
 risk: 'high'
 context: ['docs/guardrails.md', 'docs/spec/engine/rpgcode-errors-and-threads.md', 'docs/spec/engine/rpgcode-language.md', 'docs/spec/engine/rpgcode-functions.md', 'docs/spec/engine/main-loop-and-startup.md', 'docs/spec/engine/plugins-and-battle.md']
+assignee: "Build39"
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
@@ -67,6 +68,7 @@ context: ['docs/guardrails.md', 'docs/spec/engine/rpgcode-errors-and-threads.md'
 
 ## Plan Change Log
 
+- 2026-10-16: Build baseline is `50ffecdabadd35594c297773109d4cd8f65fbfe0` (current `origin/main`); the approved plan retains its earlier `baseline_revision` `5a7ad22679581abdda690a0232f1f1e2208af3dc`. The drift includes the merged 3.14 format-registry work and plan artifacts; implementation is based on the current main baseline.
 ## Review Triage Log
 
 ## Design Notes
