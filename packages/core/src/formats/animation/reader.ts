@@ -1,5 +1,5 @@
 /**
- * Reading an animation (format-spec §7.1): the binary layout of `RPGTLKIT
+ * Reading an animation (docs/spec/formats/animation.md#layout): the binary layout of `RPGTLKIT
  * ANIM`, minor 3.
  *
  * Pure (G2): it consumes a `BinaryReader` the caller positioned and never
@@ -21,11 +21,11 @@ import {
 } from "./model.ts";
 
 /**
- * Read an animation from `reader` (format-spec §7.1). The header's minor must
+ * Read an animation from `reader` (docs/spec/formats/animation.md#layout). The header's minor must
  * be 3; the frame count comes from the `i32` upper bound (`n` means `n + 1`
- * slots, `-1` means none, §1.2), and every slot — empty ones included — is
+ * slots, `-1` means none, `docs/spec/formats/README.md#counts-are-usually-upper-bounds`), and every slot — empty ones included — is
  * returned. The reader consumes the whole file: bytes after the trailing `f64`
- * delay are kept as `residue` (§1.7), so a caller sees `remaining === 0`.
+ * delay are kept as `residue` (`docs/spec/formats/README.md#bytes-after-the-last-documented-field`), so a caller sees `remaining === 0`.
  */
 export function readAnimation(reader: BinaryReader): Result<Animation> {
   const start = reader.offset;
@@ -97,7 +97,7 @@ export function readAnimation(reader: BinaryReader): Result<Animation> {
   const warnings: string[] = [];
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the animation were kept as residue (format-spec §7.1, §1.7)`,
+      `${residue.value.length} trailing byte(s) after the animation were kept as residue (docs/spec/formats/animation.md#layout, docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
     );
   }
 

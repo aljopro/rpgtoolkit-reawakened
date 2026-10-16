@@ -1,4 +1,4 @@
-// The RPGCode frontend (format-spec §9.2/§9.3/§9.5/§9.12; ADR 0004
+// The RPGCode frontend (docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands/§9.12; ADR 0004
 // decision 1): the tokenizer, construct rejections, leniency forms and the
 // exact Step IR the tracer program lowers to.
 import { deepEqual, equal } from "node:assert/strict";
@@ -53,7 +53,7 @@ test("tokenizes case-folded identifiers with sigils stripped", () => {
   ]);
 });
 
-test("tokenizes every §9.2 operator, comment form and the `_` continuation with line numbers", () => {
+test("tokenizes every lexical operator, comment form and the `_` continuation with line numbers", () => {
   // Comments and line continuation
   const source = `x = 1 /* block
 comment */ + 2 _ // continuation

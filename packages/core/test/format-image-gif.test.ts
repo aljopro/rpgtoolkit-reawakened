@@ -1,4 +1,4 @@
-// The GIF decoder of format-spec §10 (AD-28,
+// The GIF decoder of docs/spec/formats/images.md#the-shared-decode-contract (AD-28,
 // docs/spec/formats/images.md#gif): synthetic and authored GIFs pin GIF87a and
 // GIF89a, global and local colour tables, the four-pass interlace, the graphic
 // control extension (transparency, delay, disposal 0 to 3), the LZW stream
@@ -622,7 +622,7 @@ test("wrong version GIF88a is refused at offset 0", () => {
   equal(result.ok, false);
   if (!result.ok) {
     equal(result.error.offset, 0);
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     ok(result.error.message.includes("GIF88a"));
   }
 });
@@ -646,7 +646,7 @@ test("zero-size screen is refused at offset 6", () => {
     equal(result.ok, false);
     if (!result.ok) {
       equal(result.error.offset, 6);
-      equal(result.error.section, "format-spec §10");
+      equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
       ok(result.error.message.includes("both dimensions are positive"));
     }
   }
@@ -988,7 +988,7 @@ test("every truncation and one-byte mutation of a GIF returns a Result, never th
     const expectedOk = cut >= gif.length - 1;
     equal(result.ok, expectedOk, `truncated to ${cut} bytes`);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §10", `truncated to ${cut} bytes`);
+      equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract", `truncated to ${cut} bytes`);
       equal(result.error.offset >= 0, true, `truncated to ${cut} bytes`);
     } else if (cut < gif.length) {
       equal(result.warnings.length, 1, "missing trailer emitted a warning");
@@ -999,7 +999,7 @@ test("every truncation and one-byte mutation of a GIF returns a Result, never th
     mutated[at] = mutated[at]! ^ 0xff;
     const result = decodeGif(mutated);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §10", `byte ${at} mutated`);
+      equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract", `byte ${at} mutated`);
       equal(result.error.offset >= 0, true, `byte ${at} mutated`);
     }
   }

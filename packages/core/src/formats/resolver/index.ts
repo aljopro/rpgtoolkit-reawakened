@@ -1,4 +1,4 @@
-// The pure asset resolver and its index (format-spec §1.5, AD-5): the
+// The pure asset resolver and its index (docs/spec/formats/README.md#paths-inside-files, AD-5): the
 // case-insensitive, separator- and type-folder-normalising lookup a runner
 // answers asset requests from, and the asset roots a game folder or a package
 // resolves against.

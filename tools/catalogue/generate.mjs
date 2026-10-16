@@ -143,7 +143,7 @@ function renderParam(param) {
 
 /** One catalogue stub entry, indented two spaces and spread over lines. */
 function renderStub(row) {
-  // The lexer ASCII case-folds every name (format-spec §9.2 LEX-10) and the
+  // The lexer ASCII case-folds every name (docs/spec/engine/rpgcode-language.md#lexical-rules LEX-10) and the
   // registry keys on the string as given, so the stub's registry key is the
   // folded name even where the catalogue spells a name mixed-case.
   const name = row.name.toLowerCase();
@@ -178,7 +178,7 @@ const HEADER = `/**
  * \`CommandEffect\` per section it writes (none for a \`pure\` getter). The VM
  * stamps each reported effect into the \`vm\` section's effect log. The two
  * obsolete names raise \`builtin.obsolete\` and report nothing. Names are the
- * ASCII case-folded catalogue names (format-spec §9.2 LEX-10), which is how the
+ * ASCII case-folded catalogue names (docs/spec/engine/rpgcode-language.md#lexical-rules LEX-10), which is how the
  * lexer and the registry key them.
  *
  * Names whose kind is \`wait\`, \`request\`, \`spawn-thread\`, \`flow-control\`

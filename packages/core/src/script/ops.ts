@@ -1,11 +1,11 @@
 /**
  * The Step IR: the flat, linear instruction array the VM steps through
- * (ADR 0004 decision 1; format-spec §9.15 THR-3).
+ * (ADR 0004 decision 1; docs/spec/engine/rpgcode-errors-and-threads.md#threads THR-3).
  *
  * Each variant carries `pos: SourcePos` ({ file, line }), the single owner
  * of the bytecode-to-source mapping.
  *
- * docs/adr/0004 decision 1; format-spec §9.2/§9.3/§9.5/§9.15.
+ * docs/adr/0004 decision 1; docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands.
  */
 
 import type { Value, VarScope } from "../ports/value.ts";

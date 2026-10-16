@@ -36,7 +36,7 @@ Anyone can play a legacy game in a browser; the CAP-12 success check, sample gam
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
 - spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-1, AD-3, AD-4, AD-5, AD-6, AD-14, AD-27
 - constraint - docs/guardrails.md, sections G3 and G4
-- reference - docs/engine-features.md, E-130 to E-132
+- reference - docs/spec/engine/main-loop-and-startup.md#e-130 to E-132
 - reference - docs/architecture-options.md, section 8
 
 ## Notes
@@ -48,7 +48,7 @@ Anyone can play a legacy game in a browser; the CAP-12 success check, sample gam
 - Waits on battle because: battle.
 - Waits on menu-party-save because: menu and save.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
-- Open question: image storage and transfer for web play. Legacy art is BMP, GIF and JPG with no PNG (format-spec section 10 survey, PR 2.19). Decide the stored image format, whether BMP and GIF transcode to it on import, and whether lossless WebP is added beside PNG. Settle at inception.
+- Open question: image storage and transfer for web play. Legacy art is BMP, GIF and JPG with no PNG (`docs/spec/formats/images.md` survey, PR 2.19). Decide the stored image format, whether BMP and GIF transcode to it on import, and whether lossless WebP is added beside PNG. Settle at inception.
 - Assumption: PNG is the baseline stored format, indexed where the image has 256 colours or fewer. JPG stays JPG, never transcoded to a lossless format.
 - Assumption: WebP is adopted only if lossless WebP beats PNG by enough on the sample games, after gzip or brotli, to justify a second pure-TS decoder in core (G2, G3). Any encoder dependency must meet G6; `sharp` is out because libvips is LGPL.
 - Assumption: a per-board asset preload and a decoded-pixel cache live in the runner layer and can be discarded without changing behaviour (G4, guardrails.md section G4).

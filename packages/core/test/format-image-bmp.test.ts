@@ -1,4 +1,4 @@
-// The Windows bitmap decoder of format-spec §10 (AD-28,
+// The Windows bitmap decoder of docs/spec/formats/images.md#the-shared-decode-contract (AD-28,
 // docs/spec/formats/images.md#windows-bitmap-bmp): synthetic bitmaps built byte
 // by byte pin the 1/4/8/24/32-bit BI_RGB paths, the 4-byte-padded stride, the
 // bottom-up and top-down row orders, the palette and its declared count, 32-bit
@@ -254,7 +254,7 @@ test("a wrong DIB header size is refused at offset 14", () => {
   equal(result.ok, false);
   if (!result.ok) {
     equal(result.error.offset, 14);
-    equal(result.error.section, "format-spec §10");
+    equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract");
     equal(result.error.message.includes("12"), true);
   }
 });
@@ -460,7 +460,7 @@ test("every truncation and one-byte change of a bitmap returns a Result", () => 
     const result = decodeTexture(bmp.subarray(0, cut));
     equal(result.ok, cut === bmp.length, `truncated to ${cut} bytes`);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §10", `truncated to ${cut} bytes`);
+      equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract", `truncated to ${cut} bytes`);
       equal(result.error.offset >= 0, true, `truncated to ${cut} bytes`);
     }
   }
@@ -469,7 +469,7 @@ test("every truncation and one-byte change of a bitmap returns a Result", () => 
     mutated[at] = mutated[at]! ^ 0xff;
     const result = decodeTexture(mutated);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §10", `byte ${at} changed`);
+      equal(result.error.section, "docs/spec/formats/images.md#the-shared-decode-contract", `byte ${at} changed`);
       equal(result.error.offset >= 0, true, `byte ${at} changed`);
     }
   }

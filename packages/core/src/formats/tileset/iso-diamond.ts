@@ -1,27 +1,27 @@
 /**
- * The isometric diamond mask and its inside-pixel count (format-spec §3.3).
+ * The isometric diamond mask and its inside-pixel count (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso).
  *
  * An isometric tile (`.iso`, detail 150) is a 64×32 image whose usable area is
  * a diamond. Only the inside pixels are stored, packed into a 32×32 block
- * (§3.3 step 2); the four corners are always transparent. This module owns the
+ * (`docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`, section on isometric tiles); the four corners are always transparent. This module owns the
  * mask test on its own so the packer and the tests share exactly one rule.
  */
 
-/** The drawn width of an isometric tile: 64 (format-spec §3.3). */
+/** The drawn width of an isometric tile: 64 (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 export const ISO_IMAGE_WIDTH = 64;
 
-/** The drawn height of an isometric tile: 32 (format-spec §3.3). */
+/** The drawn height of an isometric tile: 32 (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 export const ISO_IMAGE_HEIGHT = 32;
 
-/** The side of the stored 32×32 block an isometric tile is packed into (§3.3). */
+/** The side of the stored 32×32 block an isometric tile is packed into (`docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`). */
 export const ISO_STORED_SIZE = 32;
 
-/** The inside-pixel count of the diamond (format-spec §3.3 step 1). */
+/** The inside-pixel count of the diamond (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso step 1). */
 export const ISO_INSIDE_PIXEL_COUNT = 1024;
 
 /**
  * Whether the drawn pixel `(x, y)` lies inside the 64×32 diamond
- * (format-spec §3.3 step 1).
+ * (docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso step 1).
  *
  * The mask is stated over four 32×16 quadrants with local coordinates
  * `qx 0…31`, `qy 0…15`:

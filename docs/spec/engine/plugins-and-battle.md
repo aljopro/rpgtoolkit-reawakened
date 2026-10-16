@@ -17,7 +17,7 @@ Without a menu plugin the menu key does nothing; without a battle plugin battles
 
 **Reawakened rule.** The rebuild provides **one plugin contract**, used by the engine's own packs and by third parties alike, selected by an **editable manifest**, with every external effect going out through **host requests**. It is not trust-gated for now, and legacy native plugin binaries are not supported.
 
-> **Open conflict R-61 — plugin contract and API shape.** `docs/engine-features.md:313` (E-99) records only the unknown-call back-off and native plugins; this page, `docs/spec/engine/plugins-and-battle.md:167`, specifies the 140-method callback interface, the native and COM export shapes, the menu and battle protocols and the loader rules. Owner epics: **rpgcode-vm** (entries 3.23 and 3.24 hold the evidence) and **battle**. Landed code: the port contracts already carry the plugin and request shapes (`packages/core/src/ports/input.ts:79`, `packages/core/src/ports/requests.ts:52`). The owners settle the boundary at inception; this page rules nothing.
+> **Open conflict R-61 — plugin contract and API shape.** the legacy feature inventory (E-99) records only the unknown-call back-off and native plugins; this page, `docs/spec/engine/plugins-and-battle.md:167`, specifies the 140-method callback interface, the native and COM export shapes, the menu and battle protocols and the loader rules. Owner epics: **rpgcode-vm** (entries 3.23 and 3.24 hold the evidence) and **battle**. Landed code: the port contracts already carry the plugin and request shapes (`packages/core/src/ports/input.ts:79`, `packages/core/src/ports/requests.ts:52`). The owners settle the boundary at inception; this page rules nothing.
 
 ## Two plugin kinds
 
@@ -143,7 +143,7 @@ The engine keeps the battle **model**; the plugin owns the **loop and the UI**.
 <a id="e-77"></a>
 **E-77 Outcome.** **Win:** the total gold and experience of all enemies, a "Gained N experience / GP" message, the experience given to every party member (which may level them up), and the enemy defeat program. **Run:** the run-away program and no rewards. **Lose:** the game-over program, or `reset()` when there is none. The board music resumes afterwards.
 
-> **Open conflict R-57 — battle model and notification quirks.** `docs/engine-features.md:237,241` (E-74, E-72) says players act at a maximum charge of 75, enemies at 123, damage has a ±10 % variance and a critical hit bypasses DP; this page, `docs/spec/engine/plugins-and-battle.md:102`, says "`skill` is always −1" in the original engine and gives the charge, damage and notification codes above, including that the engine "never sends 6 or 7". Owner epic: **battle**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-57 — battle model and notification quirks.** the legacy feature inventory (E-74, E-72) says players act at a maximum charge of 75, enemies at 123, damage has a ±10 % variance and a critical hit bypasses DP; this page, `docs/spec/engine/plugins-and-battle.md:102`, says "`skill` is always −1" in the original engine and gives the charge, damage and notification codes above, including that the engine "never sends 6 or 7". Owner epic: **battle**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ### Enemy AI
 

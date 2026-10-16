@@ -1,14 +1,15 @@
 /**
- * Reading a vector board (format-spec §4.1 version dispatch, §4.2 layout).
+ * Reading a vector board (docs/spec/formats/board.md#version-dispatch,
+ * docs/spec/formats/board.md#vector-layout-minor-4-and-later).
  *
  * Pure (G2): it consumes a `BinaryReader` the caller positioned and never
  * touches a host. Bad data, a wrong magic, an unsupported version or a short
  * file is a `Result` carrying a located `FormatError`, never a throw (AD-18).
  *
- * Version dispatch is exact (§4.1): a 2.x text board (non-zero byte at offset
+ * Version dispatch is exact: a 2.x text board (non-zero byte at offset
  * 14) and minors 0–1 are refused, minors 2–3 are refused with a pointer at the
- * pre-vector layout of §4.8 — which ticket 2.8 converts, not this reader — and
- * minor ≥ 4 uses the §4.2 vector layout. Every slot is returned, empty ones
+ * pre-vector layout of docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector — which ticket 2.8 converts, not this reader — and
+ * minor ≥ 4 uses the vector layout. Every slot is returned, empty ones
  * included, so table indices stay stable; the reader consumes the whole file,
  * keeping any trailing bytes as `residue`, so a caller sees `remaining === 0`.
  */
@@ -64,7 +65,7 @@ function readPoints(reader: BinaryReader): Result<BoardPoint[]> {
   return ok(points);
 }
 
-/** Read an `i16 r, i16 g, i16 b` triple (format-spec §4.2). */
+/** Read an `i16 r, i16 g, i16 b` triple ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function readRgb(reader: BinaryReader): Result<BoardRgb> {
   const r = reader.i16();
   if (!r.ok) {
@@ -81,7 +82,7 @@ function readRgb(reader: BinaryReader): Result<BoardRgb> {
   return ok({ r: r.value, g: g.value, b: b.value });
 }
 
-/** Read an upper bound of `i16` RGB triples (a light's colours, format-spec §4.2). */
+/** Read an upper bound of `i16` RGB triples (a light's colours, [vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function readColours(reader: BinaryReader): Result<BoardRgb[]> {
   const bound = reader.readUpperBound();
   if (!bound.ok) {
@@ -98,7 +99,7 @@ function readColours(reader: BinaryReader): Result<BoardRgb[]> {
   return ok(colours);
 }
 
-/** Read exactly `count` NUL-terminated strings (format-spec §4.2, §1.1). */
+/** Read exactly `count` NUL-terminated strings ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function readStrings(reader: BinaryReader, count: number): Result<string[]> {
   const strings: string[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -112,7 +113,7 @@ function readStrings(reader: BinaryReader, count: number): Result<string[]> {
 }
 
 /**
- * Read the tile matrix of §4.2: `sizeL` layers, each `height` rows of `width`
+ * Read the tile matrix ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)): `sizeL` layers, each `height` rows of `width`
  * cells, row-major within the layer. A non-negative `i16` is one cell's LUT
  * index; a negative value is a run marker — `count = -value` cells all use the
  * following `i16` as their index — and runs may wrap rows and layers. Returns
@@ -156,7 +157,7 @@ function readTileMatrix(
   return ok({ matrix, runs });
 }
 
-/** Read a board from `reader` (format-spec §4.1 dispatch, §4.2 layout). */
+/** Read a board from [version dispatch](../../../../../../docs/spec/formats/board.md#version-dispatch) and the [vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 export function readBoard(reader: BinaryReader): Result<Board> {
   const start = reader.offset;
 
@@ -164,7 +165,7 @@ export function readBoard(reader: BinaryReader): Result<Board> {
     return fail(start, BOARD_SECTION, "unexpected end of data reading magic: need 1 byte(s), 0 remain", reader.path);
   }
 
-  // §4.1 lists the detection byte first and the header second; the probe does
+  // [Version dispatch](../../../../../../docs/spec/formats/board.md#version-dispatch) lists the detection byte first and the header second; the probe does
   // not move the cursor, so the header is read first and the detection checked
   // before any header error — a text board has no NUL-terminated magic to read.
   const header = reader.header();
@@ -196,7 +197,7 @@ export function readBoard(reader: BinaryReader): Result<Board> {
       return fail(
         at,
         section,
-        `unsupported board minor version ${header.value.minor}: it stores the pre-vector layout of format-spec §4.8 (tile-coordinate objects and per-tile collision), which this reader does not convert — see ticket 2.8`,
+        `unsupported board minor version ${header.value.minor}: it stores the [pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector) (tile-coordinate objects and per-tile collision), which this reader does not convert — see ticket 2.8`,
         reader.path,
       );
     }
@@ -225,7 +226,7 @@ export function readBoard(reader: BinaryReader): Result<Board> {
     return coordType;
   }
 
-  // §4.2 "Size limits": the dimensions bound the tile matrix, so a negative
+  // docs/spec/formats/board.md#vector-layout-minor-4-and-later "Size limits": the dimensions bound the tile matrix, so a negative
   // one is invalid and an over-large declared cell count is refused here —
   // before a single run is read or expanded — so a crafted file cannot make
   // the reader reserve gigabytes.
@@ -265,7 +266,7 @@ export function readBoard(reader: BinaryReader): Result<Board> {
   }
   if (tile.value.matrix.length > totalCells) {
     warnings.push(
-      `tile matrix covers ${tile.value.matrix.length} cells but the ${grid.width}×${grid.height}×${sizeL.value} grid has ${totalCells} (format-spec §4.2)`,
+      `tile matrix covers ${tile.value.matrix.length} cells but the ${grid.width}×${grid.height}×${sizeL.value} grid has ${totalCells} ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later))`,
     );
   }
 
@@ -300,7 +301,7 @@ export function readBoard(reader: BinaryReader): Result<Board> {
     }
     if (covered > cellsPerLayer) {
       warnings.push(
-        `shade layer ${layer} covers ${covered} cells but the grid has ${cellsPerLayer} (format-spec §4.2)`,
+        `shade layer ${layer} covers ${covered} cells but the grid has ${cellsPerLayer} ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later))`,
       );
     }
     shadeLayers.push({ castLayer: castLayer.value, records });
@@ -456,7 +457,7 @@ export function readBoard(reader: BinaryReader): Result<Board> {
   }
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the board were kept as residue (format-spec §4.2)`,
+      `${residue.value.length} trailing byte(s) after the board were kept as residue ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later))`,
     );
   }
 
@@ -489,7 +490,7 @@ export function readBoard(reader: BinaryReader): Result<Board> {
   );
 }
 
-/** The `attributes, closed, layer, type` scalars shared by a vector (§4.2). */
+/** The `attributes, closed, layer, type` scalars shared by a vector(docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 function readVectorScalars(
   reader: BinaryReader,
 ): Result<{ attributes: number; closed: number; layer: number; type: number }> {
@@ -517,7 +518,7 @@ function readVectorScalars(
   });
 }
 
-/** The `activate, activationType, repeatDistance, layer` scalars of a program (§4.2). */
+/** The `activate, activationType, repeatDistance, layer` scalars of a program(docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 function readProgramScalars(
   reader: BinaryReader,
 ): Result<{ activate: number; activationType: number; repeatDistance: number; layer: number }> {
@@ -545,7 +546,7 @@ function readProgramScalars(
   });
 }
 
-/** The `activate, activationType, x, y, layer, reserved` scalars of a sprite (§4.2). */
+/** The `activate, activationType, x, y, layer, reserved` scalars of a sprite(docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 function readSpriteScalars(
   reader: BinaryReader,
 ): Result<{
@@ -590,7 +591,7 @@ function readSpriteScalars(
   });
 }
 
-/** The six leading strings of a program entry (format-spec §4.2). */
+/** The six leading strings of a program entry ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function readProgramStrings(reader: BinaryReader): Result<{
   program: string;
   graphic: string;
@@ -633,7 +634,7 @@ function readProgramStrings(reader: BinaryReader): Result<{
   });
 }
 
-/** The nine leading strings of a sprite entry (format-spec §4.2). */
+/** The nine leading strings of a sprite entry ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function readSpriteStrings(reader: BinaryReader): Result<{
   itemFile: string;
   activationPrg: string;
@@ -694,7 +695,7 @@ function readSpriteStrings(reader: BinaryReader): Result<{
   });
 }
 
-/** The four edge links in file order North, South, East, West (format-spec §4.2). */
+/** The four edge links in file order North, South, East, West ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function readLinks(reader: BinaryReader): Result<{
   north: string;
   south: string;
@@ -725,7 +726,7 @@ function readLinks(reader: BinaryReader): Result<{
   });
 }
 
-/** One free image (format-spec §4.2). */
+/** One free image ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function readImage(reader: BinaryReader): Result<BoardImage> {
   const file = reader.str();
   if (!file.ok) {
@@ -766,7 +767,7 @@ function readImage(reader: BinaryReader): Result<BoardImage> {
   });
 }
 
-/** The trailing board properties (format-spec §4.2). */
+/** The trailing board properties ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function readProperties(reader: BinaryReader): Result<BoardProperties> {
   const backgroundImage = reader.str();
   if (!backgroundImage.ok) {

@@ -20,6 +20,6 @@ If a task seems to need breaking a rule, stop and ask. Exceptions require an ADR
 
 ## Working notes
 
-- Specs: `docs/spec/` is the normative specification of what Toolkit 3.1 does ([ADR 0007](docs/adr/0007-docs-spec-is-the-normative-specification.md)); its engine pages carry the E-xx IDs as anchors. `docs/editor-features.md` (T-xx IDs) is not replaced. `docs/format-spec.md` and `docs/engine-features.md` are superseded and frozen until entry 3.28 deletes them. Cite `docs/spec/<path>#<anchor>` in commits and PRs.
+- Specs: `docs/spec/` is the normative specification of what Toolkit 3.1 does ([ADR 0007](docs/adr/0007-docs-spec-is-the-normative-specification.md)); its engine pages carry the E-xx IDs as anchors. `docs/editor-features.md` (T-xx IDs) is not replaced. Cite `docs/spec/<path>#<anchor>` in commits and PRs.
 - Editor features land in `editor-ui` first. Host packages (`host-vscode`, `host-web`, `host-desktop`) contain only platform services and chrome. The VS Code extension is a primary host, not the only one.
 - Legacy sample games are CI fixtures fetched at test time. Never commit whole games. G7 is about the GPL source, so small anonymised or authored fixtures under `packages/core/test/fixtures/` are fine.

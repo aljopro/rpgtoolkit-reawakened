@@ -3,11 +3,11 @@
  * over them — the core format registry the epic's Description names.
  *
  * One entry per reader family, keyed by its `CoreFormatId`: the main game file
- * (§2), boards (§4, with §4.1's branch decided here and a pre-vector board
- * converted to the §4.2 model), tilesets (§3.1), animations (§7.1), characters,
- * items and enemies (§6.1–§6.3), special moves, status effects and battle
- * backgrounds (§8.1–§8.3), the Toolkit 2 single tiles, animated tiles and
- * bitmap fonts (§3.2, §3.5, §15.12), and images (§10). The dump reads its data-format rows
+ *(docs/spec/formats/main-file.md#layout), boards(docs/spec/formats/board.md, with docs/spec/formats/board.md#version-dispatch's branch decided here and a pre-vector board
+ * converted to the docs/spec/formats/board.md#vector-layout-minor-4-and-later model), tilesets(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso), animations(docs/spec/formats/animation.md#layout), characters,
+ * items and enemies(docs/spec/formats/character.md#layout), special moves, status effects and battle
+ * backgrounds(docs/spec/formats/battle-data.md#special-move-spc), the Toolkit 2 single tiles, animated tiles and
+ * bitmap fonts(docs/spec/formats/tiles.md#tile-data, docs/spec/formats/tiles.md#animated-tile-tan, docs/spec/formats/legacy/README.md, and images(docs/spec/formats/images.md). The dump reads its data-format rows
  * from `CORE_REGISTRY` and decodes through `CORE_DECODERS`, so the project has
  * one dispatch.
  *
@@ -63,10 +63,10 @@ import type { Result } from "../result.ts";
 import type { AssetDecoder } from "./decoder.ts";
 import { createAssetRegistry } from "./registry.ts";
 
-/** The PNG signature `89 50 4E 47 0D 0A 1A 0A` (format-spec §10). */
+/** The PNG signature `89 50 4E 47 0D 0A 1A 0A` (docs/spec/formats/images.md#the-shared-decode-contract). */
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 
-/** The JPEG SOI marker plus the start of any following segment: `FF D8 FF` (§10). */
+/** The JPEG SOI marker plus the start of any following segment: `FF D8 FF`(docs/spec/formats/images.md). */
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff] as const;
 
 /** The Windows bitmap file-header signature: `BM` (docs/spec/formats/images.md). */
@@ -75,7 +75,7 @@ const BMP_SIGNATURE = [0x42, 0x4d] as const;
 /** The GIF versions' common prefix: `GIF8` (docs/spec/formats/images.md#gif-header). */
 const GIF_SIGNATURE = [0x47, 0x49, 0x46, 0x38] as const;
 
-/** The `i16` version bytes a `.tst` (20) or `.iso` (30) starts with, little-endian (§3.1). */
+/** The `i16` version bytes a `.tst` (20) or `.iso` (30) starts with, little-endian(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 const TILESET_VERSION_BYTES = [0x14, 0x1e] as const;
 
 /** Whether `bytes` begins with `magic`, matched as ASCII byte for byte. */
@@ -109,7 +109,7 @@ function magicIs(magic: string): (header: Uint8Array) => boolean {
   return (header) => startsWithAscii(header, magic);
 }
 
-/** Read a board of either §4.1 branch, converting a §4.8 pre-vector board (§4.2 model). */
+/** Read a board of either docs/spec/formats/board.md#version-dispatch branch, converting a docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector pre-vector board(docs/spec/formats/board.md#vector-layout-minor-4-and-later model). */
 function decodeBoard(bytes: Uint8Array): Result<DecodedBoard> {
   if (bytes.length === 0) {
     const read = readBoard(new BinaryReader(bytes));
@@ -147,35 +147,35 @@ function decodeBoard(bytes: Uint8Array): Result<DecodedBoard> {
  * magics do not overlap, so the order changes nothing today.
  */
 export interface CoreDecoders {
-  /** §2 — the main game file. */
+  /** docs/spec/formats/main-file.md#layout — the main game file. */
   gam: AssetDecoder<MainFile>;
-  /** §4 — boards; the branch of §4.1 is decided inside. */
+  /** docs/spec/formats/board.md — boards; the branch of docs/spec/formats/board.md#version-dispatch is decided inside. */
   board: AssetDecoder<DecodedBoard>;
-  /** §3.1 — tilesets (`.tst` version 20, `.iso` version 30). */
+  /** docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso — tilesets (`.tst` version 20, `.iso` version 30). */
   tileset: AssetDecoder<Tileset>;
-  /** §3.6 — tile bitmaps (`.tbm`). */
+  /** docs/spec/formats/tiles.md#tile-bitmap-tbm — tile bitmaps (`.tbm`). */
   "tile-bitmap": AssetDecoder<TileBitmap>;
-  /** §7.1 — animations. */
+  /** docs/spec/formats/animation.md#layout — animations. */
   animation: AssetDecoder<Animation>;
-  /** §6.1 — characters. */
+  /** docs/spec/formats/character.md#layout — characters. */
   character: AssetDecoder<Character>;
-  /** §6.2 — items. */
+  /** docs/spec/formats/item.md#layout — items. */
   item: AssetDecoder<Item>;
-  /** §6.3 — enemies. */
+  /** docs/spec/formats/enemy.md#layout — enemies. */
   enemy: AssetDecoder<Enemy>;
-  /** §8.1 — special moves. */
+  /** docs/spec/formats/battle-data.md#special-move-spc — special moves. */
   "special-move": AssetDecoder<SpecialMove>;
-  /** §8.2 — status effects. */
+  /** docs/spec/formats/battle-data.md#status-effect-ste — status effects. */
   "status-effect": AssetDecoder<StatusEffect>;
-  /** §8.3 — battle backgrounds. */
+  /** docs/spec/formats/battle-data.md#fight-background-bkg — battle backgrounds. */
   "battle-background": AssetDecoder<BattleBackground>;
-  /** §3.2 — single tiles (`.gph`, text); a version 1 file has no magic and is claimed by extension. */
+  /** docs/spec/formats/tiles.md#tile-data — single tiles (`.gph`, text); a version 1 file has no magic and is claimed by extension. */
   "single-tile": AssetDecoder<SingleTile>;
-  /** §3.5 — animated tiles (`.tan`). */
+  /** docs/spec/formats/tiles.md#animated-tile-tan — animated tiles (`.tan`). */
   "tile-animation": AssetDecoder<TileAnimation>;
-  /** §15.12 — Toolkit 2 bitmap fonts (`.fnt`, text). */
+  /** docs/spec/formats/legacy/README.md — Toolkit 2 bitmap fonts (`.fnt`, text). */
   font: AssetDecoder<LegacyFont>;
-  /** §10 — images (`decodeTexture` matches the PNG, JPEG, BMP and GIF signatures). */
+  /** docs/spec/formats/images.md — images (`decodeTexture` matches the PNG, JPEG, BMP and GIF signatures). */
   image: AssetDecoder<DecodedTexture>;
 }
 
@@ -185,21 +185,21 @@ export type CoreFormatId = keyof CoreDecoders;
 export const CORE_DECODERS: CoreDecoders = {
   gam: {
     id: "gam",
-    section: "format-spec §2",
+    section: "docs/spec/formats/main-file.md#layout",
     extensions: ["gam"],
     detect: (header) => startsWithAscii(header, MAIN_MAGIC) || startsWithAscii(header, "RPGTLKIT mainForm"),
     decode: (bytes) => readMainFile(new BinaryReader(bytes)),
   },
   board: {
     id: "board",
-    section: "format-spec §4",
+    section: "docs/spec/formats/board.md#vector-layout-minor-4-and-later",
     extensions: ["brd"],
     detect: magicIs(BOARD_MAGIC),
     decode: (bytes) => decodeBoard(bytes),
   },
   tileset: {
     id: "tileset",
-    section: "format-spec §3.1",
+    section: "docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso",
     extensions: ["tst", "iso"],
     detect: (header) =>
       header.length >= 2 && header[1] === 0 && TILESET_VERSION_BYTES.some((value) => header[0] === value),
@@ -214,56 +214,56 @@ export const CORE_DECODERS: CoreDecoders = {
   },
   animation: {
     id: "animation",
-    section: "format-spec §7.1",
+    section: "docs/spec/formats/animation.md#layout",
     extensions: ["anm"],
     detect: magicIs(ANIMATION_MAGIC),
     decode: (bytes) => readAnimation(new BinaryReader(bytes)),
   },
   character: {
     id: "character",
-    section: "format-spec §6.1",
+    section: "docs/spec/formats/character.md#layout",
     extensions: ["tem"],
     detect: magicIs(CHARACTER_MAGIC),
     decode: (bytes) => readCharacter(new BinaryReader(bytes)),
   },
   item: {
     id: "item",
-    section: "format-spec §6.2",
+    section: "docs/spec/formats/item.md#layout",
     extensions: ["itm"],
     detect: magicIs(ITEM_MAGIC),
     decode: (bytes) => readItem(new BinaryReader(bytes)),
   },
   enemy: {
     id: "enemy",
-    section: "format-spec §6.3",
+    section: "docs/spec/formats/enemy.md#layout",
     extensions: ["ene"],
     detect: magicIs(ENEMY_MAGIC),
     decode: (bytes) => readEnemy(new BinaryReader(bytes)),
   },
   "special-move": {
     id: "special-move",
-    section: "format-spec §8.1",
+    section: "docs/spec/formats/battle-data.md#special-move-spc",
     extensions: ["spc"],
     detect: magicIs(SPECIAL_MOVE_MAGIC),
     decode: (bytes) => readSpecialMove(new BinaryReader(bytes)),
   },
   "status-effect": {
     id: "status-effect",
-    section: "format-spec §8.2",
+    section: "docs/spec/formats/battle-data.md#status-effect-ste",
     extensions: ["ste"],
     detect: magicIs(STATUS_EFFECT_MAGIC),
     decode: (bytes) => readStatusEffect(new BinaryReader(bytes)),
   },
   "battle-background": {
     id: "battle-background",
-    section: "format-spec §8.3",
+    section: "docs/spec/formats/battle-data.md#fight-background-bkg",
     extensions: ["bkg"],
     detect: magicIs(BATTLE_BACKGROUND_MAGIC),
     decode: (bytes) => readBattleBackground(new BinaryReader(bytes)),
   },
   "single-tile": {
     id: "single-tile",
-    section: "format-spec §3.2",
+    section: "docs/spec/formats/tiles.md#single-tile-gph",
     extensions: ["gph"],
     // `RPGTLKIT TILE` is a prefix of the animated tile's `RPGTLKIT TILEANIM`.
     detect: (header) => startsWithAscii(header, SINGLE_TILE_MAGIC) && !startsWithAscii(header, TILE_ANIMATION_MAGIC),
@@ -271,21 +271,21 @@ export const CORE_DECODERS: CoreDecoders = {
   },
   "tile-animation": {
     id: "tile-animation",
-    section: "format-spec §3.5",
+    section: "docs/spec/formats/tiles.md#animated-tile-tan",
     extensions: ["tan"],
     detect: magicIs(TILE_ANIMATION_MAGIC),
     decode: (bytes) => readTileAnimation(new BinaryReader(bytes)),
   },
   font: {
     id: "font",
-    section: "format-spec §15.12",
+    section: "docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text",
     extensions: ["fnt"],
     detect: magicIs(FONT_MAGIC),
     decode: (bytes) => readLegacyFont(bytes),
   },
   image: {
     id: "image",
-    section: "format-spec §10",
+    section: "docs/spec/formats/images.md#the-shared-decode-contract",
     extensions: ["png", "jpg", "jpeg", "bmp", "gif"],
     detect: (header) =>
       startsWithBytes(header, PNG_SIGNATURE) ||

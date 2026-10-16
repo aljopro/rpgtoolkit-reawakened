@@ -1,12 +1,11 @@
 /**
- * The shared snapshot→restore→hash check (decision Q5/Q12; format-spec
- * §9.15 THR-3).
+ * The shared snapshot→restore→hash check (decision Q5/Q12; docs/spec/engine/rpgcode-runtime.md THR-3).
  *
  * `checkSnapshotRestore` drives two hosts one tick at a time and compares
  * `TickReport.stateHash` at every tick after the split, throwing with the first
  * mismatching tick named. Its unit is the host's advance unit, which for
  * `ScriptHost` is the tick; THR-3's snapshot "step" is a VM instruction, and no
- * VM-step counter exists in `GameState` (format-spec §9.14 follow-up 7), so a
+ * VM-step counter exists in `GameState` (docs/spec/engine/rpgcode-language.md#open-questions follow-up 7), so a
  * VM-step-granular variant waits for that counter.
  *
  * `randomSplit` picks a split point through `core/rng`, never `Math.random`, so

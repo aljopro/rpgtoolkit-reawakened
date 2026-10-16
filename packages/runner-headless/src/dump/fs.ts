@@ -4,10 +4,11 @@
  *
  * The epic's deliverable says the dump opens "an extracted project folder, a
  * game folder, or a `.tpk`/standalone-EXE package", so this module resolves the
- * three forms of format-spec §13 exactly as `core`'s loader expects them: a
- * directory becomes a `folder` input (the host lists the entries, because `core`
- * performs no I/O — G2), and a `.tpk`/`.exe` file is read whole and handed to
- * the `tpk`/`exe` input. `core` then applies every untrusted-input limit (AD-17).
+ * three forms documented in `docs/spec/formats/packaging-and-paths.md#distribution-package-this-projects-own`
+ * exactly as `core`'s loader expects them: a directory becomes a `folder` input
+ * (the host lists the entries, because `core` performs no I/O — G2), and a
+ * `.tpk`/`.exe` file is read whole and handed to the `tpk`/`exe` input. `core`
+ * then applies every untrusted-input limit (AD-17).
  *
  * `runner-headless` is the Node host shell, so `node:fs`/`node:path` are allowed
  * here; G2 restricts `core` only. `node:fs` throws, so this is the one module
@@ -30,10 +31,10 @@ import {
   type Result,
 } from "@tk-reawakened/core";
 
-/** The format-spec section every failure here cites: the three package forms. */
-const SECTION = "format-spec §13";
+/** The spec section every failure here cites: the three package forms. */
+const SECTION = "docs/spec/formats/packaging-and-paths.md#distribution-package-this-projects-own";
 
-/** A located failure for a path `dump` cannot load (§13). */
+/** A located failure for a path `dump` cannot load (see `SECTION`). */
 function failure(path: string, offset: number, message: string): FormatError {
   return { path, offset, section: SECTION, message };
 }
@@ -44,7 +45,8 @@ function messageOf(cause: unknown): string {
 }
 
 /**
- * List a directory tree as `loadPackage`'s folder entries (§13, §1.5).
+ * List a directory tree as `loadPackage`'s folder entries (see `SECTION` and
+ * `docs/spec/formats/packaging-and-paths.md#resolving-names`).
  *
  * Paths are POSIX and relative to `root`; names are sorted so the listing is
  * deterministic. A symbolic link is reported as a `link` entry, which the loader
@@ -108,11 +110,11 @@ function readPackageBytes(absolute: string, path: string, size: number): Result<
 
 /**
  * Load the project at `path`: an extracted project or game folder, a `.tpk`
- * ZIP archive, or a standalone EXE with an appended ZIP (format-spec §13).
+ * ZIP archive, or a standalone EXE with an appended ZIP (see `SECTION`).
  *
- * A `.exe` is only treated as a package by extension — §13's `CMP1` trailer is
- * part of the format, not a guess — and a path that is none of the three is a
- * located error naming what was expected.
+ * A `.exe` is only treated as a package by extension — `SECTION`'s `CMP1`
+ * trailer is part of the format, not a guess — and a path that is none of the
+ * three is a located error naming what was expected.
  */
 export function loadRoot(path: string): Result<LoadedPackage> {
   try {
@@ -142,7 +144,7 @@ export function loadRoot(path: string): Result<LoadedPackage> {
         failure(
           path,
           0,
-          `"${path}" is not a project folder, a .tpk or a .exe; dump reads the three forms of format-spec §13`,
+          `"${path}" is not a project folder, a .tpk or a .exe; dump reads the three forms documented in ${SECTION}`,
         ),
       );
     }

@@ -3,8 +3,8 @@ id: SPEC-rpgtoolkit-reawakened
 companions:
   - packages.md
   - ../architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md
-  - ../../../docs/format-spec.md
-  - ../../../docs/engine-features.md
+  - ../../../docs/spec/formats/README.md
+  - ../../../docs/spec/engine/parity-checklist.md
   - ../../../docs/editor-features.md
   - ../../../docs/architecture-options.md
   - ../../../docs/guardrails.md
@@ -18,13 +18,13 @@ sources: []
 
 ## Why
 
-A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2 engine and editor with a living community of legacy games and no maintained path forward. This project rebuilds the engine and the authoring tools from scratch, clean-room and MIT/Apache, so legacy worlds keep playing and can be edited on modern platforms (browser, desktop, mobile, VS Code). Legacy authors, modders and players are affected. Behavioural parity with legacy games is the bar. The detailed capability inventory lives in the adopted companions (E-xx in engine-features, T-xx in editor-features, layouts in format-spec).
+A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2 engine and editor with a living community of legacy games and no maintained path forward. This project rebuilds the engine and the authoring tools from scratch, clean-room and MIT/Apache, so legacy worlds keep playing and can be edited on modern platforms (browser, desktop, mobile, VS Code). Legacy authors, modders and players are affected. Behavioural parity with legacy games is the bar. The detailed capability inventory lives in the adopted companions (E-xx in `docs/spec/engine/`, T-xx in editor-features, layouts in `docs/spec/formats/`).
 
 ## Capabilities
 
 - **CAP-1**
-  - **intent:** A runner or tool can load any legacy RPG Toolkit 3 project from a folder, a `.tpk`, or an appended-ZIP EXE, upgrading pre-vector boards to the vector model (E-01, E-10, E-130, E-131, format-spec §2–9, §13).
-  - **success:** A headless dump of every file in the legacy `demo` and `Basic` sample games parses, and re-serialising the formats we write round-trips byte-for-byte or semantically as format-spec states.
+  - **intent:** A runner or tool can load any legacy RPG Toolkit 3 project from a folder, a `.tpk`, or an appended-ZIP EXE, upgrading pre-vector boards to the vector model (E-01, E-10, E-130, E-131, `docs/spec/formats/README.md`).
+  - **success:** A headless dump of every file in the legacy `demo` and `Basic` sample games parses, and re-serialising the formats we write round-trips byte-for-byte or semantically as `docs/spec/formats/` states.
 - **CAP-2**
   - **intent:** The engine boots a game (discovery, startup sequence), runs a fixed-tick main loop with legacy-perceived timing, resets and shuts down, and models boards, layers, 2D and both isometric coordinate systems, tiles (incl. animated), runtime board edits, lighting and ambient shading, and board transitions (E-01…E-06, E-10…E-19).
   - **success:** Scripted startup, board loads, edits, `send` transitions and lighting on 2D and both iso boards produce the expected state and golden draw-list images; `reset()` reruns startup cleanly.
@@ -35,8 +35,8 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
   - **intent:** Programs fire from the legacy trigger points with the exact observable rules (E-40…E-49 and the fixed hooks).
   - **success:** Unit tests cover once-per-entry, repeat distance, key-press vs step-on, items-before-regions precedence, layer matching and run-if/then-set; the demo's NPC and battle triggers fire end-to-end headlessly.
 - **CAP-5**
-  - **intent:** Authors can run RPGCode 3.1 programs: the full language, every built-in in the catalogue, cooperative threads, blocking calls, source/target context, error handlers, sandboxed file I/O, and an extension point replacing native plugins: one plugin contract and an editable manifest (E-33, E-90…E-99, format-spec §9).
-  - **success:** `system.prg` and `start.prg` of the sample games run to completion headlessly; every built-in name in format-spec §9.11 resolves; a mid-script snapshot restored into a fresh VM finishes identically (G1).
+  - **intent:** Authors can run RPGCode 3.1 programs: the full language, every built-in in the catalogue, cooperative threads, blocking calls, source/target context, error handlers, sandboxed file I/O, and an extension point replacing native plugins: one plugin contract and an editable manifest (E-33, E-90…E-99, `docs/spec/engine/rpgcode-language.md`).
+  - **success:** `system.prg` and `start.prg` of the sample games run to completion headlessly; every built-in name in `docs/spec/engine/rpgcode-functions.md` resolves; a mid-script snapshot restored into a fresh VM finishes identically (G1).
 - **CAP-6**
   - **intent:** The core emits ordered draw lists, and runners replay them, covering layer compositing, iso drawing, occlusion, translucency, shading, animations, message window, text and primitives, canvases, overlay, transitions, modal UI primitives, cursor and board preview (E-50…E-63).
   - **success:** Golden images at defined ticks match legacy-reference expectations for 2D and both iso modes within the golden tolerance, and the CPU rasteriser and WebGL2 replayer agree.
@@ -63,7 +63,7 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
   - **success:** CI blocks merges on any failing or skipped job among typecheck, lint, unit, golden (format round-trips, play-throughs, golden images, G1 snapshot/restore, G3 replay hashes), licence and provenance.
 - **CAP-14**
   - **intent:** Script authors get RPGCode language tooling in any LSP/DAP client: diagnostics from the core parser, hover and call tips, go-to-definition across includes, outline, formatting, legacy-syntax quick fixes, plus a debugger with breakpoints, stepping, watches, threads and call stack (T-40…T-44, T-46, E-98).
-  - **success:** The LSP flags and fixes every legacy-syntax form of format-spec §9.9 in the sample games; a DAP session steps a program across threads against a test fixture; both run in the `vscode.dev` web build.
+  - **success:** The LSP flags and fixes every legacy-syntax form of `docs/spec/engine/rpgcode-dialects.md` in the sample games; a DAP session steps a program across threads against a test fixture; both run in the `vscode.dev` web build.
 - **CAP-15**
   - **intent:** Authors can build a complete game with the P0 editors: workspace and file tree, main file, board editor, program editor with test-run, character, item, animation and tile bitmap editors, and packaging (editor-features §11 P0).
   - **success:** A new game authored only with these tools, in each editor host, loads and plays in the web runner.
@@ -85,14 +85,14 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
 - G4: renderers only replay draw lists, never own the loop or state; Phaser/Pixi-class engines only under `runner-*/src/render/**`.
 - G5: headless golden tests run on every PR; goldens change only deliberately with a stated reason; legacy sample games are fetched at CI time and never committed.
 - G6: shipped dependencies are under licences rated Bronze or better on the Blue Oak Council list (pinned version; MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, BlueOak and the like; CC0 assets), minus an exception list that starts with MS-PL (ADR 0003); copyleft (GPL, LGPL, AGPL, MPL-2.0, EPL, SSPL) and source-available or restricted are blocked; Lead-rated and unlisted licences need an ADR; bundled assets are listed in `THIRD_PARTY_NOTICES`; own code is MIT and/or Apache-2.0.
-- G7: clean-room. Implement from `docs/` only; never open, copy or translate the legacy GPL source; fix a wrong or missing doc first in its own commit; code and PRs cite the E-xx, T-xx and format-spec sections they implement.
-- Legacy observable behaviour is the compatibility bar (trigger rules, battle rules, collision and movement semantics). Pixel parity is not required for projecting 2D tiles on iso boards (format-spec §3.4) or for scroll-cache behaviour.
+- G7: clean-room. Implement from `docs/` only; never open, copy or translate the legacy GPL source; fix a wrong or missing doc first in its own commit; code and PRs cite the E-xx, T-xx and `docs/spec/` anchors they implement.
+- Legacy observable behaviour is the compatibility bar (trigger rules, battle rules, collision and movement semantics). Pixel parity is not required for projecting 2D tiles on iso boards (`docs/spec/formats/tiles.md#isometric-tiles`) or for scroll-cache behaviour.
 - Script-readable pixels, image decoding, text layout and glyph rasterisation are core-owned so output is identical on every runner (architecture spine AD-4, AD-15, AD-28). This amends `architecture-options.md` §2 and the seam text of `packages.md`, and needs ADR 0002 before guard-rail scaffolding.
 - Cross-epic contracts (engine API, draw list and surfaces, requests and replies, VM state, `GameState` sections, tick pipeline, platform-services) are fixed by the architecture spine and cited by id.
 - Every editor capability lands in `editor-ui` first; `host-*` packages hold only platform services and chrome.
 - Legacy native plugins cannot load. The stock menu and battle plugins are reimplemented natively; third-party extension uses the same plugin contract as the engine's own packs, ungated for now.
 - TypeScript is the language of the core, runners, editor, LSP, DAP and VS Code extension (ADR 0001); a hot path moves to Rust/wasm only behind an unchanged TS interface.
-- Scope ordering follows engine-features §14 must-haves, then editor P0 before P1 before P2.
+- Scope ordering follows docs/spec/engine/parity-checklist.md must-haves, then editor P0 before P1 before P2.
 
 ## Non-goals
 
@@ -101,7 +101,7 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
 - The legacy built-in web browser (T-81), the legacy Pak file compiler as a distinct tool (T-71), and the legacy 2.x file-system upgrade as a priority (T-73).
 - Alternate core stacks (Rust, C++, Godot, .NET) or moving game logic into a third-party engine.
 - Shipping legacy sample games or their assets in this repository or releases.
-- Optional items per engine-features §14 as must-haves: text-era formats, compiled `.prg`, legacy `.sav` import, tracker modules.
+- Optional items per docs/spec/engine/parity-checklist.md as must-haves: text-era formats, compiled `.prg`, legacy `.sav` import, tracker modules.
 
 ## Success signal
 
@@ -112,7 +112,7 @@ The headless runner plays the legacy `demo` and `Basic` sample games end to end 
 - The spec covers the whole rebuild at capability altitude. `bmad-ticket` orders and slices the work; detail stays in the adopted docs.
 - `guardrails.md` G6 prevails over `architecture-options.md` §7.2, which lists MPL-2.0 as allowed.
 - The architecture spine's `[ASSUMPTION]` tags (60 Hz tick, ASCII-only case fold, `fflate`, a pure-TypeScript TrueType rasteriser, editor-model in the VS Code extension host, restart-on-compiler-mismatch, FNV-1a, xoshiro128**, semver and PWA update policy) stand until corrected.
-- Engine-features §14 "nice-to-have" items are outside the must-have contract. Legacy-syntax conversion ships as LSP quick fixes (CAP-14).
+- `docs/spec/engine/parity-checklist.md` "nice-to-have" items are outside the must-have contract. Legacy-syntax conversion ships as LSP quick fixes (CAP-14).
 - The non-goals T-71 (separate Pak compiler) and T-73 (2.x file-system upgrade) are my inference: editor-features calls T-71 superseded by the EXE route and T-73 serves only 2.x projects. T-72 setup builder stays in CAP-17. Overturn either if wrong.
 
 ## Open Questions

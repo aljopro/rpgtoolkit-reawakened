@@ -1,5 +1,5 @@
 /**
- * CRC-32 over a byte span (format-spec §10). PNG stores one at the end of every
+ * CRC-32 over a byte span (docs/spec/formats/images.md#the-shared-decode-contract). PNG stores one at the end of every
  * chunk, computed over the chunk type and data, so a flipped bit in `IHDR` or
  * `PLTE` is a located error rather than a silently wrong image.
  *

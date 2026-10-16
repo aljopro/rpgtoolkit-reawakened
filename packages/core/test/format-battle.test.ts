@@ -1,5 +1,5 @@
-// The battle-data formats of format-spec §8 (AD-18): special moves (§8.1),
-// status effects (§8.2) and battle backgrounds (§8.3). The tests cover the
+// The battle-data formats of docs/spec/formats/battle-data.md (AD-18): special moves,
+// status effects(docs/spec/formats/battle-data.md#status-effect-ste) and battle backgrounds(docs/spec/formats/battle-data.md#fight-background-bkg). The tests cover the
 // magic/major/minor header, each field's documented width and signedness, the
 // signed per-round amounts of a status effect, empty versus non-empty strings,
 // the text-form detection byte, located errors and byte-identical round-trips,
@@ -167,7 +167,7 @@ function buildBkg(options: BkgOptions = {}): Uint8Array {
   return writer.toBytes();
 }
 
-// --- Special moves (§8.1) ---------------------------------------------------
+// --- Special moves(docs/spec/formats/battle-data.md#special-move-spc) ---------------------------------------------------
 
 test("reads a special move's header and every field", () => {
   const reader = new BinaryReader(buildSpc());
@@ -255,19 +255,19 @@ test("a short special move reports the field offset", () => {
   }
   // magic (17) + major (2) + minor (2) + name (9): the damage `i32` starts here.
   equal(result.error.offset, 30);
-  equal(result.error.section, "format-spec §1.1");
+  equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
 });
 
 test("a special move too short to probe reports a located error", () => {
   // The probe at offset 16 is past the end of these three bytes; that is not
-  // fatal, so the unterminated magic's own §1.1 error is what the caller sees.
+  // fatal, so the unterminated magic's own docs/spec/formats/README.md#primitive-encoding error is what the caller sees.
   const result = readSpecialMove(new BinaryReader(new Uint8Array([82, 80, 71])));
   equal(result.ok, false);
   if (result.ok) {
     return;
   }
   equal(result.error.offset, 0);
-  equal(result.error.section, "format-spec §1.1");
+  equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
 });
 
 test("a parsed anonymised special move writes back byte-for-byte", () => {
@@ -329,7 +329,7 @@ test("an unencodable special-move string fails the writer", () => {
   equal(writeSpecialMove(model).ok, false);
 });
 
-// --- Status effects (§8.2) --------------------------------------------------
+// --- Status effects(docs/spec/formats/battle-data.md#status-effect-ste) --------------------------------------------------
 
 test("reads a status effect's header and every field", () => {
   // Distinct non-zero values for the five `i16`s that used to be 0 pin the
@@ -442,7 +442,7 @@ test("a clean synthetic status effect has no residue and no warnings", () => {
   equal(result.warnings.length, 0);
 });
 
-// --- Battle backgrounds (§8.3) ---------------------------------------------
+// --- Battle backgrounds(docs/spec/formats/battle-data.md#fight-background-bkg) ---------------------------------------------
 
 test("reads a battle background's header and six string fields", () => {
   const reader = new BinaryReader(buildBkg());
@@ -551,9 +551,9 @@ test("an unencodable battle-background string fails the writer", () => {
   equal(writeBattleBackground(model).ok, false);
 });
 
-// --- Version ranges (§8.1–§8.3, §1.4) ---------------------------------------
+// --- Version ranges(docs/spec/formats/battle-data.md#special-move-spc, docs/spec/formats/README.md#header-and-version ---------------------------------------
 
-/** A battle format's reader with its magic-derived minor-field offset (§1.3). */
+/** A battle format's reader with its magic-derived minor-field offset(docs/spec/formats/README.md#header-and-version). */
 const battleVersionCases: readonly {
   readonly name: string;
   readonly section: string;
@@ -588,21 +588,21 @@ test("each battle format refuses a minor outside 2..3 at the minor field", () =>
   }
 });
 
-test("each battle format refuses a negative minor at its own byte (§1.4)", () => {
+test("each battle format refuses a negative minor at its own byte", () => {
   for (const { name, minorOffset, read, build } of battleVersionCases) {
     const result = read(new BinaryReader(build(-1)));
     equal(result.ok, false, `${name}: negative minor is refused`);
     if (result.ok) {
       continue;
     }
-    equal(result.error.section, "format-spec §1.4", `${name}: negative minor section`);
+    equal(result.error.section, "docs/spec/formats/README.md#header-and-version", `${name}: negative minor section`);
     equal(result.error.offset, minorOffset, `${name}: negative minor offset`);
   }
 });
 
 test("a truncated status effect reports the header's short read before the detection byte", () => {
   // 16 bytes is the whole magic with no terminator, so the header read fails at
-  // offset 0 (§1.1); the detection byte at offset 16 is past the end and must
+  // offset 0(docs/spec/formats/README.md#primitive-encoding); the detection byte at offset 16 is past the end and must
   // not be the error a caller sees (it was, before the reader read the header
   // first).
   const result = readStatusEffect(new BinaryReader(buildSte().slice(0, 16)));
@@ -610,19 +610,19 @@ test("a truncated status effect reports the header's short read before the detec
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §1.1");
+  equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
   equal(result.error.offset, 0);
 });
 
 test("a truncated battle background reports the header's short read before the detection byte", () => {
   // 12 bytes is the whole magic with no terminator: the header read fails at
-  // offset 0 (§1.1) rather than the detection probe at offset 12.
+  // offset 0(docs/spec/formats/README.md#primitive-encoding) rather than the detection probe at offset 12.
   const result = readBattleBackground(new BinaryReader(buildBkg().slice(0, 12)));
   equal(result.ok, false);
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §1.1");
+  equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
   equal(result.error.offset, 0);
 });
 

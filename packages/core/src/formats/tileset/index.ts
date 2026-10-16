@@ -1,6 +1,5 @@
-// The tileset formats of format-spec §3 (AD-18): the `.tst`/`.iso` reader and
-// writer, the §3.3 isometric diamond mask, and the DOS palette the 8-bit
-// details index.
+// The tileset formats of `docs/spec/formats/tiles.md`: `.tst`/`.iso` reader,
+// writer, isometric diamond mask, and DOS palette used by 8-bit details.
 export * from "./tileset.ts";
 export * from "./iso-diamond.ts";
 export * from "./dos-palette.ts";

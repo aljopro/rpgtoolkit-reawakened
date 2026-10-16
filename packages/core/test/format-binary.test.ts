@@ -1,4 +1,4 @@
-// The binary primitives of format-spec §1 (AD-18): exact round-trips through
+// The binary primitives of docs/spec/formats/README.md#primitive-encoding (AD-18): exact round-trips through
 // synthetic buffers, and located errors for EOF, bounds and strings.
 //
 // The reader never throws, so the tests assert on values and on the error's
@@ -117,7 +117,7 @@ test("an unencodable character is reported, not mangled", () => {
   const result = w.str("AĀ"); // U+0100 has no cp1252 byte
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §1.1");
+    equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
     equal(result.error.offset, 1);
     equal(result.error.message.includes("U+0100"), true);
   }
@@ -154,13 +154,13 @@ test("the upper-bound count rule is n + 1 entries and -1 is none", () => {
 test("a stored upper bound below -1 is reported, not read as none", () => {
   const w = new BinaryWriter();
   w.i16(3); // 4 entries
-  w.i16(-2); // invalid: only -1 means "none" (format-spec §1.2)
+  w.i16(-2); // invalid: only -1 means "none" (docs/spec/formats/README.md#counts-are-usually-upper-bounds)
   const r = new BinaryReader(w.toBytes());
   equal(unwrap(r.readUpperBound()), 4);
   const bad = r.readUpperBound();
   equal(bad.ok, false);
   if (!bad.ok) {
-    equal(bad.error.section, "format-spec §1.2");
+    equal(bad.error.section, "docs/spec/formats/README.md#counts-are-usually-upper-bounds");
     equal(bad.error.offset, 2); // the invalid bound's first byte
   }
 });
@@ -181,7 +181,7 @@ test("a short read reports the field offset and does not advance", () => {
   equal(short.ok, false);
   if (!short.ok) {
     equal(short.error.offset, 0);
-    equal(short.error.section, "format-spec §1.1");
+    equal(short.error.section, "docs/spec/formats/README.md#primitive-encoding");
     equal(short.error.path, "demo.brd");
   }
   equal(r.offset, 0);
@@ -236,7 +236,7 @@ test("an unterminated string is an error at its first byte", () => {
   equal(s.ok, false);
   if (!s.ok) {
     equal(s.error.offset, 0);
-    equal(s.error.section, "format-spec §1.1");
+    equal(s.error.section, "docs/spec/formats/README.md#primitive-encoding");
     equal(s.error.message.includes("unterminated"), true);
   }
   const later = new BinaryReader(new Uint8Array([1, 0x41]));
@@ -253,13 +253,13 @@ test("a negative byte span is reported", () => {
   const b = r.readBytes(-1);
   equal(b.ok, false);
   if (!b.ok) {
-    equal(b.error.section, "format-spec §1.1");
+    equal(b.error.section, "docs/spec/formats/README.md#primitive-encoding");
   }
 });
 
 test("ok carries warnings and err carries the error", () => {
   deepEqual(ok(7, ["assumed codes"]), { ok: true, value: 7, warnings: ["assumed codes"] });
-  const bad = err({ offset: 2, section: "format-spec §1.1", message: "x" });
+  const bad = err({ offset: 2, section: "docs/spec/formats/README.md#primitive-encoding", message: "x" });
   equal(bad.ok, false);
   if (!bad.ok) {
     equal(bad.error.offset, 2);
@@ -336,7 +336,7 @@ test("a negative version field is an error at its own byte", () => {
   const minorResult = new BinaryReader(negativeMinor.toBytes()).header();
   equal(minorResult.ok, false);
   if (!minorResult.ok) {
-    equal(minorResult.error.section, "format-spec §1.4");
+    equal(minorResult.error.section, "docs/spec/formats/README.md#header-and-version");
     equal(minorResult.error.offset, 17);
   }
 
@@ -347,7 +347,7 @@ test("a negative version field is an error at its own byte", () => {
   const majorResult = new BinaryReader(negativeMajor.toBytes()).header();
   equal(majorResult.ok, false);
   if (!majorResult.ok) {
-    equal(majorResult.error.section, "format-spec §1.4");
+    equal(majorResult.error.section, "docs/spec/formats/README.md#header-and-version");
     equal(majorResult.error.offset, 15);
   }
 });
@@ -361,6 +361,6 @@ test("the detection probe reports binary at a caller offset without moving", () 
   const out = text.isBinaryAt(9);
   equal(out.ok, false);
   if (!out.ok) {
-    equal(out.error.section, "format-spec §1.3");
+    equal(out.error.section, "docs/spec/formats/README.md#header-and-version");
   }
 });

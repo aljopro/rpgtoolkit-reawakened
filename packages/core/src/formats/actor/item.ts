@@ -1,11 +1,11 @@
 /**
  * Reading and writing an item — an inventory object, a piece of equipment or a
- * board NPC (format-spec §6.2, magic `RPGTLKIT ITEM`).
+ * board NPC (docs/spec/formats/item.md#layout, magic `RPGTLKIT ITEM`).
  *
  * Pure (G2). The reader never throws (AD-18) and the writer reproduces the
  * bytes `readItem` consumed exactly, including empty slots and any residue.
- * §6.2 carries two traps this file pins: items store `speed` before `idleTime`
- * (the reverse of characters, §6.1), and the custom-stance block sits right
+ * docs/spec/formats/item.md#layout carries two traps this file pins: items store `speed` before `idleTime` (the
+ * reverse of characters (docs/spec/formats/character.md#layout)), and the custom-stance block sits right
  * after the ten movement strings at `minor = 4` but after the idle animations
  * and speed/idleTime at `minor >= 5`.
  */
@@ -274,7 +274,7 @@ export function readTextItem(bytes: Uint8Array, path?: string): Result<Item> {
  }
 
 
-/** Read the legacy two-tile-tall walk frames of a minor < 4 item (§6.2). */
+/** Read the legacy two-tile-tall walk frames of a minor < 4 item (docs/spec/formats/item.md#layout). */
 function readLegacyWalk(reader: BinaryReader): Result<LegacyWalk> {
   const frames: LegacyWalkFrame[] = [];
   for (let i = 0; i < LEGACY_WALK_FRAME_COUNT; i += 1) {
@@ -295,7 +295,7 @@ function readLegacyWalk(reader: BinaryReader): Result<LegacyWalk> {
   return ok({ frames, restTiles: restTiles.value });
 }
 
-/** Read an item from `reader` (format-spec §6.2). */
+/** Read an item from `reader` (docs/spec/formats/item.md#layout). */
 export function readItem(reader: BinaryReader): Result<Item> {
   const start = reader.offset;
 
@@ -303,7 +303,7 @@ export function readItem(reader: BinaryReader): Result<Item> {
     return actorError(reader, start, ITEM_SECTION, "unexpected end of data reading magic: need 1 byte(s), 0 remain");
   }
 
-  // §6.2 requires the byte at offset 13 to be 0 to mark the binary form; the
+  // docs/spec/formats/item.md#layout requires the byte at offset 13 to be 0 to mark the binary form; the
   // probe does not move the cursor, so the header is read first and the
   // detection checked before any header error.
   const detection = reader.isBinaryAt(start + ITEM_DETECT_OFFSET);
@@ -513,7 +513,7 @@ export function readItem(reader: BinaryReader): Result<Item> {
   const warnings: string[] = [];
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the item were kept as residue (format-spec §6.2)`,
+      `${residue.value.length} trailing byte(s) after the item were kept as residue (docs/spec/formats/item.md#layout)`,
     );
   }
 
@@ -564,7 +564,7 @@ export function readItem(reader: BinaryReader): Result<Item> {
 }
 
 /**
- * Append a `wide ? i32 : i16` value (format-spec §6.2: `i32` at `minor >= 3`,
+ * Append a `wide ? i32 : i16` value (docs/spec/formats/item.md#layout: `i32` at `minor >= 3`,
  * applied to prices, equip bonuses and the menu/battle use deltas).
  */
 function writeWide(writer: BinaryWriter, value: number, wide: boolean): void {
@@ -575,7 +575,7 @@ function writeWide(writer: BinaryWriter, value: number, wide: boolean): void {
   }
 }
 
-/** Serialise `model` to the item layout (format-spec §6.2). */
+/** Serialise `model` to the item layout (docs/spec/formats/item.md#layout). */
 export function writeItem(model: Item): Result<Uint8Array> {
   const writer = new BinaryWriter();
   const magic = writer.str(model.magic);

@@ -1,5 +1,5 @@
 /**
- * Single tile model (`docs/spec/formats/tiles.md#single-tile-gph`, format-spec §3.2, §15.11).
+ * Single tile model (`docs/spec/formats/tiles.md#single-tile-gph`).
  *
  * A text file storing a single 32×32 or 16×16 tile in column-major order
  * (x outer, y inner), uncompressed or run-length compressed.
@@ -8,7 +8,7 @@
 export const SINGLE_TILE_MAGIC = "RPGTLKIT TILE";
 export const SINGLE_TILE_MAJOR = 2;
 export const SINGLE_TILE_MINOR = 0;
-export const SINGLE_TILE_SECTION = "format-spec §3.2";
+export const SINGLE_TILE_SECTION = "docs/spec/formats/tiles.md#single-tile-gph";
 
 export interface SingleTile {
   readonly magic: string;

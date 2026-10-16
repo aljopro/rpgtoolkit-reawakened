@@ -1,141 +1,138 @@
 /**
- * The battle-data models and their constants (format-spec §8): special moves
- * (§8.1), status effects (§8.2) and battle backgrounds (§8.3).
+ * The battle-data models and their constants: special moves
+ * (`docs/spec/formats/battle-data.md#special-move-spc`), status effects (`docs/spec/formats/battle-data.md#status-effect-ste`) and battle backgrounds (`docs/spec/formats/battle-data.md#fight-background-bkg`).
  *
  * Each of the three is a magic-and-version header (`str magic`, `i16 major`,
- * `i16 minor`, §1.3/§1.4) followed by a fixed field list. The models keep every
+ * `i16` minor, `docs/spec/formats/README.md#header-and-version`) followed by a fixed field list. The models keep every
  * field verbatim plus any bytes after the last documented one as `residue`, so
- * a parsed file writes back byte-for-byte (AD-18, §1.7).
+ * a parsed file writes back byte-for-byte (AD-18, docs/spec/formats/README.md#bytes-after-the-last-documented-field.
  *
  * Each format also has a 2.x-era line-oriented text form. Its presence is
  * detected by the byte at a documented offset — `0x00` means binary, a CR/LF
- * means text (§1.3, §8.1–§8.3). This ticket implements the binary layout only;
+ * means text (`docs/spec/formats/README.md#header-and-version`, `docs/spec/formats/battle-data.md#special-move-spc`, `docs/spec/formats/battle-data.md#status-effect-ste`, `docs/spec/formats/battle-data.md#fight-background-bkg`). This ticket implements the binary layout only;
  * the readers refuse the text form rather than mis-parsing it.
  */
 
 import type { BinaryReader } from "../binary/reader.ts";
 import type { FormatError } from "../result.ts";
 
-/** The magic every binary special move starts with (format-spec §8.1). */
+/** The magic every binary special move starts with (`docs/spec/formats/battle-data.md#special-move-spc`). */
 export const SPECIAL_MOVE_MAGIC = "RPGTLKIT SPLMOVE";
 
 /**
- * The offset of the binary/text detection byte for `.spc` (format-spec §8.1):
- * `0x00` means binary, non-zero means the 2.x text form.
+ * The offset of the binary/text detection byte for `.spc` (`docs/spec/formats/battle-data.md#special-move-spc`):
  */
 export const SPECIAL_MOVE_DETECT_OFFSET = 16;
 
-/** The format-spec section the special-move reader and writer implement (G7). */
-export const SPECIAL_MOVE_SECTION = "format-spec §8.1";
+/** The format specification section the special-move reader and writer implement (G7). */
+export const SPECIAL_MOVE_SECTION = "docs/spec/formats/battle-data.md#special-move-spc";
 
-/** The magic every binary status effect starts with (format-spec §8.2). */
+/** The magic every binary status effect starts with (`docs/spec/formats/battle-data.md#status-effect-ste`). */
 export const STATUS_EFFECT_MAGIC = "RPGTLKIT STATUSE";
 
 /**
- * The offset of the binary/text detection byte for `.ste` (format-spec §8.2):
- * `0x00` means binary, non-zero means the 2.x text form.
+ * The offset of the binary/text detection byte for `.ste` (`docs/spec/formats/battle-data.md#status-effect-ste`):
  */
 export const STATUS_EFFECT_DETECT_OFFSET = 16;
 
-/** The format-spec section the status-effect reader and writer implement (G7). */
-export const STATUS_EFFECT_SECTION = "format-spec §8.2";
+/** The format specification section the status-effect reader and writer implement (G7). */
+export const STATUS_EFFECT_SECTION = "docs/spec/formats/battle-data.md#status-effect-ste";
 
-/** The magic every binary battle background starts with (format-spec §8.3). */
+/** The magic every binary battle background starts with (`docs/spec/formats/battle-data.md#fight-background-bkg`). */
 export const BATTLE_BACKGROUND_MAGIC = "RPGTLKIT BKG";
 
 /**
- * The offset of the binary/text detection byte for `.bkg` (format-spec §8.3):
- * `0x00` means binary, non-zero means the 2.x text form.
+ * The offset of the binary/text detection byte for `.bkg` (`docs/spec/formats/battle-data.md#fight-background-bkg`):
  */
 export const BATTLE_BACKGROUND_DETECT_OFFSET = 12;
 
-/** The format-spec section the battle-background reader and writer implement (G7). */
-export const BATTLE_BACKGROUND_SECTION = "format-spec §8.3";
+/** The format specification section the battle-background reader and writer implement (G7). */
+export const BATTLE_BACKGROUND_SECTION = "docs/spec/formats/battle-data.md#fight-background-bkg";
 
 /**
- * The lowest `minor` the three battle formats accept (format-spec §8.1–§8.3):
+ * The lowest `minor` the three battle formats accept (`docs/spec/formats/battle-data.md#special-move-spc`, `docs/spec/formats/battle-data.md#status-effect-ste`, `docs/spec/formats/battle-data.md#fight-background-bkg`):
  * the 2.x-era binary archive writes 2. Their field list does not vary across
  * the accepted range, so `minor` selects no layout; a lower value is reported
- * rather than guessed at (§1.4).
+ * rather than guessed at(docs/spec/formats/README.md#header-and-version).
  */
 export const BATTLE_MIN_MINOR = 2;
 
 /**
- * The highest `minor` the three battle formats accept (format-spec §8.1–§8.3):
+ * The highest `minor` the three battle formats accept (`docs/spec/formats/battle-data.md#special-move-spc`, `docs/spec/formats/battle-data.md#status-effect-ste`, `docs/spec/formats/battle-data.md#fight-background-bkg`):
  * the 3.1.0 sample family writes 3. A higher value is reported rather than
- * guessed at (§1.4).
+ * guessed at(docs/spec/formats/README.md#header-and-version).
  */
 export const BATTLE_MAX_MINOR = 3;
 
-/** A parsed special move (format-spec §8.1). */
+/** A parsed special move (`docs/spec/formats/battle-data.md#special-move-spc`). */
 export interface SpecialMove {
-  /** The magic string, `"RPGTLKIT SPLMOVE"` in a binary file (§1.3, §8.1). */
+  /** The magic string, `"RPGTLKIT SPLMOVE"` in a binary file (`docs/spec/formats/README.md#header-and-version`, `docs/spec/formats/battle-data.md#special-move-spc`). */
   readonly magic: string;
-  /** The major version; informational only (§1.4). */
+  /** The major version; informational only(docs/spec/formats/README.md#header-and-version). */
   readonly major: number;
-  /** The minor version (§1.4). */
+  /** The minor version(docs/spec/formats/README.md#header-and-version). */
   readonly minor: number;
-  /** The move's name / handle (§8.1). */
+  /** The move's name / handle(docs/spec/formats/battle-data.md#special-move-spc). */
   readonly name: string;
-  /** The FP damage dealt (an `i32`, §8.1). */
+  /** The FP damage dealt (an `i32`, docs/spec/formats/battle-data.md#special-move-spc. */
   readonly damage: number;
-  /** The SMP the move costs its user (an `i32`, §8.1). */
+  /** The SMP the move costs its user (an `i32`, docs/spec/formats/battle-data.md#special-move-spc. */
   readonly smpCost: number;
-  /** The RPGCode program the move runs (§8.1). */
+  /** The RPGCode program the move runs(docs/spec/formats/battle-data.md#special-move-spc). */
   readonly program: string;
-  /** The SMP drained from the target (an `i32`, §8.1). */
+  /** The SMP drained from the target (an `i32`, docs/spec/formats/battle-data.md#special-move-spc. */
   readonly targetSmpDrain: number;
-  /** Whether the move may be used in battle: the raw `i8` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.1). */
+  /** Whether the move may be used in battle: the raw `i8` is kept verbatim, non-zero is true and `-1` is possible(docs/spec/formats/README.md#primitive-encoding, docs/spec/formats/battle-data.md#special-move-spc. */
   readonly usableInBattle: number;
-  /** Whether the move may be used from the menu: the raw `i8` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.1). */
+  /** Whether the move may be used from the menu: the raw `i8` is kept verbatim, non-zero is true and `-1` is possible(docs/spec/formats/README.md#primitive-encoding, docs/spec/formats/battle-data.md#special-move-spc. */
   readonly usableFromMenu: number;
-  /** The status effect the move applies, by handle (§8.1). */
+  /** The status effect the move applies, by handle(docs/spec/formats/battle-data.md#special-move-spc). */
   readonly statusEffect: string;
-  /** The animation the move plays, by reference (§8.1). */
+  /** The animation the move plays, by reference(docs/spec/formats/battle-data.md#special-move-spc). */
   readonly animation: string;
-  /** The move's one-line description (§8.1). */
+  /** The move's one-line description(docs/spec/formats/battle-data.md#special-move-spc). */
   readonly description: string;
   /**
    * Bytes after the last documented field, kept so a write is byte-identical
-   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * (AD-18, docs/spec/formats/README.md#bytes-after-the-last-documented-field. The spec defines no trailing data, so a non-empty residue is
    * reported as a warning rather than dropped.
    */
   readonly residue: Uint8Array;
 }
 
-/** A parsed status effect (format-spec §8.2). */
+/** A parsed status effect (`docs/spec/formats/battle-data.md#status-effect-ste`). */
 export interface StatusEffect {
-  /** The magic string, `"RPGTLKIT STATUSE"` in a binary file (§1.3, §8.2). */
+  /** The magic string, `"RPGTLKIT STATUSE"` in a binary file (`docs/spec/formats/README.md#header-and-version`, `docs/spec/formats/battle-data.md#status-effect-ste`). */
   readonly magic: string;
-  /** The major version; informational only (§1.4). */
+  /** The major version; informational only(docs/spec/formats/README.md#header-and-version). */
   readonly major: number;
-  /** The minor version (§1.4). */
+  /** The minor version(docs/spec/formats/README.md#header-and-version). */
   readonly minor: number;
-  /** The effect's name / handle (§8.2). */
+  /** The effect's name / handle(docs/spec/formats/battle-data.md#status-effect-ste). */
   readonly name: string;
-  /** How many rounds the effect lasts (an `i16`, §8.2). */
+  /** How many rounds the effect lasts (an `i16`, docs/spec/formats/battle-data.md#status-effect-ste. */
   readonly rounds: number;
-  /** The speed bonus (an `i16`, §8.2). */
+  /** The speed bonus (an `i16`, docs/spec/formats/battle-data.md#status-effect-ste. */
   readonly speedUp: number;
-  /** The speed penalty (an `i16`, §8.2). */
+  /** The speed penalty (an `i16`, docs/spec/formats/battle-data.md#status-effect-ste. */
   readonly slowDown: number;
-  /** The raw `disable` value (an `i16`, §8.2), kept verbatim: the spec does not make it a flag, so any signed value, `-1` included, is stored as-is (§1.1). */
+  /** The raw `disable` value (an `i16`, docs/spec/formats/battle-data.md#status-effect-ste, kept verbatim: the spec does not make it a flag, so any signed value, `-1` included, is stored as-is(docs/spec/formats/README.md#primitive-encoding). */
   readonly disable: number;
-  /** Whether HP is affected: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
+  /** Whether HP is affected: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible(docs/spec/formats/README.md#primitive-encoding, docs/spec/formats/battle-data.md#status-effect-ste. */
   readonly hpEnabled: number;
-  /** HP changed per round; negative heals (an `i16`, §8.2). */
+  /** HP changed per round; negative heals (an `i16`, docs/spec/formats/battle-data.md#status-effect-ste. */
   readonly hpPerRound: number;
-  /** Whether SMP is affected: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
+  /** Whether SMP is affected: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible(docs/spec/formats/README.md#primitive-encoding, docs/spec/formats/battle-data.md#status-effect-ste. */
   readonly smpEnabled: number;
-  /** SMP changed per round; negative heals (an `i16`, §8.2). */
+  /** SMP changed per round; negative heals (an `i16`, docs/spec/formats/battle-data.md#status-effect-ste. */
   readonly smpPerRound: number;
-  /** Whether the program runs: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible (§1.1, §8.2). */
+  /** Whether the program runs: the raw `i16` is kept verbatim, non-zero is true and `-1` is possible(docs/spec/formats/README.md#primitive-encoding, docs/spec/formats/battle-data.md#status-effect-ste. */
   readonly runProgram: number;
-  /** The RPGCode program the effect runs (§8.2). */
+  /** The RPGCode program the effect runs(docs/spec/formats/battle-data.md#status-effect-ste). */
   readonly program: string;
   /**
    * Bytes after the last documented field, kept so a write is byte-identical
-   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * (AD-18, docs/spec/formats/README.md#bytes-after-the-last-documented-field. The spec defines no trailing data, so a non-empty residue is
    * reported as a warning rather than dropped.
    */
   readonly residue: Uint8Array;
@@ -148,29 +145,29 @@ export interface BattleBackgroundTint {
   readonly b: number;
 }
 
-/** A parsed battle background (format-spec §8.3). */
+/** A parsed battle background (`docs/spec/formats/battle-data.md#fight-background-bkg`). */
 export interface BattleBackground {
-  /** The magic string, `"RPGTLKIT BKG"` in a binary file (§1.3, §8.3). */
+  /** The magic string, `"RPGTLKIT BKG"` in a binary file (`docs/spec/formats/README.md#header-and-version`, `docs/spec/formats/battle-data.md#fight-background-bkg`). */
   readonly magic: string;
-  /** The major version; informational only (§1.4). */
+  /** The major version; informational only(docs/spec/formats/README.md#header-and-version). */
   readonly major: number;
-  /** The minor version (§1.4). */
+  /** The minor version(docs/spec/formats/README.md#header-and-version). */
   readonly minor: number;
-  /** The background image reference (§8.3). */
+  /** The background image reference(docs/spec/formats/battle-data.md#fight-background-bkg). */
   readonly image: string;
-  /** The music reference (§8.3). */
+  /** The music reference(docs/spec/formats/battle-data.md#fight-background-bkg). */
   readonly music: string;
-  /** The menu-move sound cue (§8.3). */
+  /** The menu-move sound cue(docs/spec/formats/battle-data.md#fight-background-bkg). */
   readonly menuMoveSound: string;
-  /** The menu-choose sound cue (§8.3). */
+  /** The menu-choose sound cue(docs/spec/formats/battle-data.md#fight-background-bkg). */
   readonly menuChooseSound: string;
-  /** The "ready" sound cue (§8.3). */
+  /** The "ready" sound cue(docs/spec/formats/battle-data.md#fight-background-bkg). */
   readonly readySound: string;
-  /** The "can't do that" sound cue (§8.3). */
+  /** The "can't do that" sound cue(docs/spec/formats/battle-data.md#fight-background-bkg). */
   readonly cantDoSound: string;
   /**
    * Bytes after the last documented field, kept so a write is byte-identical
-   * (AD-18, §1.7). The spec defines no trailing data, so a non-empty residue is
+   * (AD-18, docs/spec/formats/README.md#bytes-after-the-last-documented-field. The spec defines no trailing data, so a non-empty residue is
    * reported as a warning rather than dropped.
    */
   readonly residue: Uint8Array;
@@ -181,9 +178,8 @@ export interface BattleBackground {
 }
 
 /**
- * Build the located `FormatError` a reader returns when the detection byte at
- * `offset` says the file is the 2.x line-oriented text form (format-spec §1.3,
- * §8.1–§8.3). The error names the form as unsupported so the caller never
+ * `offset` and the detection byte meaning the 2.x line-oriented text form (`docs/spec/formats/README.md#header-and-version`,
+ * `docs/spec/formats/battle-data.md#special-move-spc`, `docs/spec/formats/battle-data.md#status-effect-ste`, `docs/spec/formats/battle-data.md#fight-background-bkg`). The error names the form as unsupported so the caller never
  * mis-parses text as binary (AD-18).
  */
 export function unsupportedTextForm(
@@ -202,9 +198,8 @@ export function unsupportedTextForm(
 
 /**
  * Build the located `FormatError` a battle reader returns for a `minor` outside
- * the accepted `BATTLE_MIN_MINOR..BATTLE_MAX_MINOR` range (format-spec
- * §8.1–§8.3, §1.4). `offset` is the minor field's first byte; the error names
- * the range so the caller never guesses a neighbouring layout.
+ * the accepted `BATTLE_MIN_MINOR..BATTLE_MAX_MINOR` range (`docs/spec/formats/battle-data.md#special-move-spc`,
+ * `docs/spec/formats/battle-data.md#status-effect-ste`, `docs/spec/formats/battle-data.md#fight-background-bkg`, `docs/spec/formats/README.md#header-and-version`). `offset` is the minor field's first byte; the error names
  */
 export function unsupportedBattleMinor(
   reader: BinaryReader,
@@ -217,6 +212,6 @@ export function unsupportedBattleMinor(
     ...(reader.path === undefined ? {} : { path: reader.path }),
     offset,
     section,
-    message: `${magic}: unsupported minor version ${minor}: this reader implements ${BATTLE_MIN_MINOR}..${BATTLE_MAX_MINOR} (format-spec §1.4)`,
+    message: `${magic}: unsupported minor version ${minor}: this reader implements ${BATTLE_MIN_MINOR}..${BATTLE_MAX_MINOR} (docs/spec/formats/README.md#header-and-version)`,
   };
 }

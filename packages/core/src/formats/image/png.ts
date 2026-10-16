@@ -1,5 +1,5 @@
 /**
- * PNG decoding for `decodeTexture` (format-spec §10, AD-28).
+ * PNG decoding for `decodeTexture` (docs/spec/formats/images.md#the-shared-decode-contract, AD-28).
  *
  * A PNG is the 8-byte signature followed by length-prefixed, CRC-checked chunks.
  * `IHDR` gives the geometry; `PLTE` a palette and `tRNS` per-palette-entry (or
@@ -25,7 +25,7 @@ import { err, ok, type Result } from "../result.ts";
 import { crc32 } from "./crc32.ts";
 import type { DecodedTexture } from "./model.ts";
 
-const SECTION = "format-spec §10";
+const SECTION = "docs/spec/formats/images.md#the-shared-decode-contract";
 
 /** The 8-byte PNG signature `89 50 4E 47 0D 0A 1A 0A` occupies. */
 const SIGNATURE_LENGTH = 8;
@@ -163,7 +163,7 @@ function readChunks(bytes: Uint8Array, view: DataView, path?: string): Result<Ch
 /**
  * Check the chunk list's structure: `IHDR` appears exactly once, every critical
  * chunk is one the spec defines, `PLTE` and `tRNS` precede the first `IDAT`, and
- * `PLTE` holds no more entries than the bit depth can select (format-spec §10).
+ * `PLTE` holds no more entries than the bit depth can select (docs/spec/formats/images.md#the-shared-decode-contract).
  * Each defect is a located error at the offending chunk, never a throw.
  */
 function checkStructure(chunks: readonly Chunk[], header: Header, path?: string): Result<void> {
@@ -214,7 +214,7 @@ function checkStructure(chunks: readonly Chunk[], header: Header, path?: string)
   return ok(undefined);
 }
 
-/** Validate the leading `IHDR` chunk's geometry (format-spec §10). */
+/** Validate the leading `IHDR` chunk's geometry (docs/spec/formats/images.md#the-shared-decode-contract). */
 function readHeader(ihdr: Chunk, path?: string): Result<Header> {
   if (ihdr.data.length !== 13) {
     return fail(ihdr.at, `IHDR is ${ihdr.data.length} bytes; the spec fixes 13`, path);
@@ -500,7 +500,7 @@ function emitPixel(
 }
 
 /**
- * Decode a PNG file to the file's own straight RGBA (AD-28, format-spec §10):
+ * Decode a PNG file to the file's own straight RGBA (AD-28, docs/spec/formats/images.md#the-shared-decode-contract):
  * the palette/truecolour channels and the file's own alpha (`tRNS`, alpha
  * channels), nothing added. No colour key is applied — the key is not part of
  * the file; it is the `key` of a `blit` (AD-3) and `core/raster` tests it on

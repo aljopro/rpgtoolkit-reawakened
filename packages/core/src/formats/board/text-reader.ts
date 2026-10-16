@@ -1,9 +1,8 @@
 /**
- * Reading a Toolkit 2 line-oriented text board (format-spec §15.3,
- * docs/spec/formats/legacy/text-formats.md#board-toolkit-2-text).
+ * Reading a Toolkit 2 line-oriented text board ([text-board specification](../../../../../../docs/spec/formats/legacy/text-formats.md#board-toolkit-2-text).
  *
  * Pure (G2): consumes bytes, parses the text layout into a PreVectorBoard,
- * and turns it into a vector Board through convertPreVectorBoard (§4.8).
+ * and turns it into a vector Board through convertPreVectorBoard ([pre-vector layout](../../../../../../docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)).
  */
 
 import { err, ok, type Result } from "../result.ts";
@@ -19,7 +18,7 @@ import {
 } from "./pre-vector-reader.ts";
 import { convertPreVectorBoard } from "./pre-vector-convert.ts";
 
-export const TEXT_BOARD_SECTION = "legacy/text-formats.md#board";
+export const TEXT_BOARD_SECTION = "docs/spec/formats/legacy/text-formats.md#board-toolkit-2-text";
 
 /** Parse a Toolkit 2 text board from bytes and convert it to a vector Board. */
 export function readTextBoard(bytes: Uint8Array, path?: string): Result<Board> {

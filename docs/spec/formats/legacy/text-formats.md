@@ -226,7 +226,7 @@ A `.gph` whose first line is not `RPGTLKIT TILE`: 16 lines of 16 characters. Eac
 
 Not readable by Toolkit 3.1. The 3.1 editor rejects it with "Please save this board using RPGToolkit version 3.0.6 or below to upgrade the file format"; the engine asks for the board to be saved in the editor. Converting such a board needs Toolkit 3.0.6 or an importer written from a Toolkit 2 sample.
 
-**17 files in four games** (FinalDestiny 1, Caoquest 14, School2Demo 1, ChimeranEmpire 1), all `major 2 / minor 1`. One field per line; the tile cube is stored with **x outermost, then y, then layer innermost** (the reverse nesting of the binary board, [../board.md](../board.md)). Layout (`format-spec §15.3`, entry-2 answer Q1; minor-0 differences noted):
+**17 files in four games** (FinalDestiny 1, Caoquest 14, School2Demo 1, ChimeranEmpire 1), all `major 2 / minor 1`. One field per line; the tile cube is stored with **x outermost, then y, then layer innermost** (the reverse nesting of the binary board, [../board.md](../board.md)). Layout (this page, entry-2 answer Q1; minor-0 differences noted):
 
 | # | Lines | Field |
 |---|---|---|

@@ -1,7 +1,8 @@
 /**
  * The little-endian binary reader the legacy format readers build on
- * (format-spec §1.1 primitives, §1.2 counts, §1.3 binary/text detection).
+ * ([formats/README.md#primitive-encoding], [formats/README.md#counts-are-usually-upper-bounds], [formats/README.md#header-and-version]).
  *
+ * Pure (G2): it reads a `Uint8Array` the caller supplied and never touches a
  * Pure (G2): it reads a `Uint8Array` the caller supplied and never touches a
  * host file. Every read returns a `Result` and reports a `FormatError` with the
  * field's byte offset instead of throwing (AD-18), so a truncated or corrupt
@@ -12,34 +13,34 @@ import { err, ok, type Result } from "../result.ts";
 import { decodeCp1252 } from "./cp1252.ts";
 import { type Colorref, unpackColorref } from "./color.ts";
 
-const SECTION = "format-spec §1.1";
-const COUNT_SECTION = "format-spec §1.2";
-const DETECT_SECTION = "format-spec §1.3";
-const VERSION_SECTION = "format-spec §1.4";
+const SECTION = "docs/spec/formats/README.md#primitive-encoding";
+const COUNT_SECTION = "docs/spec/formats/README.md#counts-are-usually-upper-bounds";
+const DETECT_SECTION = "docs/spec/formats/README.md#header-and-version";
+const VERSION_SECTION = "docs/spec/formats/README.md#header-and-version";
 
-/** The width a count or upper bound is stored in (format-spec §1.2). */
+/** The width a count or upper bound is stored in ([formats/README.md#counts-are-usually-upper-bounds]). */
 export type CountWidth = "i16" | "i32";
 
 /**
  * The magic-and-version triple a binary Toolkit file that carries a magic
- * starts with (format-spec §1.3, §1.4). `.tst`, `.iso` and a pre-compiled
+ * starts with ([formats/README.md#header-and-version]). `.tst`, `.iso` and a pre-compiled
  * `.prg` have no magic and do not use it.
  */
 export interface FormatHeader {
-  /** The ASCII magic string, e.g. `"RPGTLKIT BOARD"` (format-spec §1.3). */
+  /** The ASCII magic string, e.g. `"RPGTLKIT BOARD"` ([formats/README.md#header-and-version]). */
   readonly magic: string;
-  /** The major version (format-spec §1.4). */
+  /** The major version ([formats/README.md#header-and-version]). */
   readonly major: number;
-  /** The minor version; selects the layout (format-spec §1.4). */
+  /** The minor version; selects the layout ([formats/README.md#header-and-version]). */
   readonly minor: number;
 }
 
 /**
- * The upper-bound rule (format-spec §1.2): a stored `n` means the entries are
+ * The upper-bound rule ([formats/README.md#counts-are-usually-upper-bounds]): a stored `n` means the entries are
  * indexed `0..n`, so there are `n + 1` entries, and a stored `-1` means none.
  *
- * This is *not* a true count: `tileCount` (§3.1), `frameCount` (§3.5) and the
- * `.sav` counts (§11) use `trueCount` instead. Applying this rule to them is a
+ * This is *not* a true count: `tileCount`(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso), `frameCount`(docs/spec/formats/tiles.md#animated-tile-tan) and the
+ * `.sav` counts(docs/spec/formats/save-game.md#layout-minor-4) use `trueCount` instead. Applying this rule to them is a
  * real bug class, so the two names exist to keep them apart.
  */
 export function upperBoundCount(stored: number): number {
@@ -47,7 +48,7 @@ export function upperBoundCount(stored: number): number {
 }
 
 /**
- * The true-count rule (format-spec §1.2, where a format says a field is a
+ * The true-count rule ([formats/README.md#counts-are-usually-upper-bounds], where a format says a field is a
  * count, not an upper bound): the stored value is exactly the number of
  * entries, with no `+1`.
  */
@@ -55,7 +56,7 @@ export function trueCount(stored: number): number {
   return stored;
 }
 
-/** A cursor over a byte span (format-spec §1.1). */
+/** A cursor over a byte span ([formats/README.md#primitive-encoding]). */
 export class BinaryReader {
   /** The file the bytes came from, echoed in every `FormatError` when set. */
   readonly path: string | undefined;
@@ -111,7 +112,7 @@ export class BinaryReader {
   /**
    * Read a little-endian signed 16-bit integer (the legacy "Integer"). The
    * sign is preserved: negative values are run markers and `closed = -1`
-   * (format-spec §1.1).
+   * ([formats/README.md#primitive-encoding]).
    */
   i16(): Result<number> {
     const at = this.take(2, "i16");
@@ -137,7 +138,7 @@ export class BinaryReader {
   }
 
   /**
-   * Read a boolean stored as an `i16` (format-spec §1.1): `0` is false and any
+   * Read a boolean stored as an `i16` ([formats/README.md#primitive-encoding]): `0` is false and any
    * non-zero value (the legacy `-1` included) is true. On write the canonical
    * value is `1`.
    */
@@ -153,7 +154,7 @@ export class BinaryReader {
   }
 
   /**
-   * Read a NUL-terminated Windows-1252 string (format-spec §1.1). The `0x00`
+   * Read a NUL-terminated Windows-1252 string ([formats/README.md#primitive-encoding]). The `0x00`
    * is consumed but not part of the value; an empty string is a single `0x00`.
    * A missing terminator before the end of the data is an error at the
    * string's first byte — the scan never runs past the end and never hangs.
@@ -177,7 +178,7 @@ export class BinaryReader {
   }
 
   /**
-   * Read a Windows COLORREF (format-spec §1.1): a 32-bit value laid out
+   * Read a Windows COLORREF ([formats/README.md#primitive-encoding]): a 32-bit value laid out
    * `0x00BBGGRR`, so red is the low byte. The high byte is ignored on read.
    */
   color(): Result<Colorref> {
@@ -189,9 +190,9 @@ export class BinaryReader {
   }
 
   /**
-   * Read `str magic`, `i16 major`, `i16 minor` (format-spec §1.3, §1.4), the
+   * Read `str magic`, `i16 major`, `i16 minor` ([formats/README.md#header-and-version]), the
    * header every magic-carrying binary Toolkit file starts with. A negative
-   * version field is invalid (§1.4) and is reported at its own offset.
+   * version field is invalid ([formats/README.md#header-and-version]) and is reported at its own offset.
    */
   header(): Result<FormatHeader> {
     const magic = this.str();
@@ -213,7 +214,7 @@ export class BinaryReader {
         ...(this.path === undefined ? {} : { path: this.path }),
         offset: majorAt,
         section: VERSION_SECTION,
-        message: `negative major version ${major.value} (format-spec §1.4)`,
+        message: `negative major version ${major.value} (${VERSION_SECTION})`,
       });
     }
     if (minor.value < 0) {
@@ -221,7 +222,7 @@ export class BinaryReader {
         ...(this.path === undefined ? {} : { path: this.path }),
         offset: minorAt,
         section: VERSION_SECTION,
-        message: `negative minor version ${minor.value} (format-spec §1.4)`,
+        message: `negative minor version ${minor.value} (${VERSION_SECTION})`,
       });
     }
     return ok({ magic: magic.value, major: major.value, minor: minor.value });
@@ -229,10 +230,10 @@ export class BinaryReader {
 
   /**
    * Read a stored upper bound of the given width and return the entry count it
-   * means (format-spec §1.2). The bound is `i16` unless a format says
+   * means ([formats/README.md#counts-are-usually-upper-bounds]). The bound is `i16` unless a format says
    * otherwise; the `.tem`/`.itm`/`.ene` custom stances use `i32`
-   * (§6.1–§6.3), so readers pass `"i32"` there. A stored value below `-1` is
-   * invalid (§1.2) and is reported at the bound's first byte.
+   *(docs/spec/formats/character.md#layout), so readers pass `"i32"` there. A stored value below `-1` is
+   * invalid ([formats/README.md#counts-are-usually-upper-bounds]) and is reported at the bound's first byte.
    */
   readUpperBound(width: CountWidth = "i16"): Result<number> {
     const at = this.pos;
@@ -252,10 +253,10 @@ export class BinaryReader {
   }
 
   /**
-   * Read a stored true count of the given width (format-spec §1.2). Unlike
+   * Read a stored true count of the given width ([formats/README.md#counts-are-usually-upper-bounds]). Unlike
    * `readUpperBound` there is no `+1`: the value is exactly the entry count.
-   * Used by `tileCount` (§3.1), `frameCount` (§3.5) and the `.sav` counts
-   * (§11), where the upper-bound rule would over-read.
+   * Used by `tileCount`(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso), `frameCount`(docs/spec/formats/tiles.md#animated-tile-tan) and the `.sav` counts
+   *(docs/spec/formats/save-game.md#layout-minor-4), where the upper-bound rule would over-read.
    */
   readTrueCount(width: CountWidth = "i16"): Result<number> {
     const stored = width === "i32" ? this.i32() : this.i16();
@@ -263,7 +264,7 @@ export class BinaryReader {
   }
 
   /**
-   * The binary-vs-text probe of format-spec §1.3 without moving the cursor:
+   * The binary-vs-text probe ([formats/README.md#header-and-version]) without moving the cursor:
    * the byte at `offset` is a NUL for a binary file, anything else (a CR/LF)
    * for text. Callers pass `len(magic)` or a format's fixed detection offset
    * (12/13/14/16), whichever that section names.

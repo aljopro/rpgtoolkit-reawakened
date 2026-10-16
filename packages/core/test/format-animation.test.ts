@@ -1,4 +1,4 @@
-// The animation format of format-spec §7.1 (AD-18): the header and the minor
+// The animation format of docs/spec/formats/animation.md#layout (AD-18): the header and the minor
 // check, the upper-bound frame slots, per-frame image/transparent/sound, the
 // trailing f64 delay, the image-reference classifier, and the sample
 // fixtures when they have been fetched.

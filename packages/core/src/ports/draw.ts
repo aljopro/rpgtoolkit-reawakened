@@ -29,7 +29,7 @@ export type Rgb = {
 /**
  * A signed per-channel colour offset. `blit` carries the full pre-summed
  * shade, board and global ambient offset, so a channel reaches ±1020
- * (format-spec §4.5; AD-3).
+ * (docs/spec/formats/board.md#vector-layout-minor-4-and-later; AD-3).
  */
 export type Tint = {
   readonly r: number;

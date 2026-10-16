@@ -1,6 +1,5 @@
 /**
- * The little-endian binary writer that round-trips the reader (format-spec
- * §1.1 primitives). It appends to an internal buffer and hands back the bytes
+ * The little-endian binary writer that round-trips the reader ([formats/README.md#primitive-encoding]). It appends to an internal buffer and hands back the bytes
  * with `toBytes`.
  *
  * Pure (G2): it owns nothing but a `Uint8Array` and never touches a host. Only
@@ -12,7 +11,7 @@ import { ok, type Result } from "../result.ts";
 import { encodeCp1252 } from "./cp1252.ts";
 import { type Colorref, packColorref } from "./color.ts";
 
-/** An append-only little-endian byte writer (format-spec §1.1). */
+/** An append-only little-endian byte writer ([formats/README.md#primitive-encoding]). */
 export class BinaryWriter {
   private buf = new Uint8Array(64);
   private view = new DataView(this.buf.buffer);
@@ -68,7 +67,7 @@ export class BinaryWriter {
   }
 
   /**
-   * Append a boolean as an `i16` (format-spec §1.1). The canonical value is
+   * Append a boolean as an `i16` ([formats/README.md#primitive-encoding]). The canonical value is
    * `1`; the reader accepts any non-zero (including the legacy `-1`) as true,
    * but new files always write `1` rather than `-1`.
    */
@@ -84,7 +83,7 @@ export class BinaryWriter {
   }
 
   /**
-   * Append a NUL-terminated Windows-1252 string (format-spec §1.1). Fails if
+   * Append a NUL-terminated Windows-1252 string ([formats/README.md#primitive-encoding]). Fails if
    * any character has no code-page byte; `FormatError.offset` is then the
    * character's index within `value`.
    */

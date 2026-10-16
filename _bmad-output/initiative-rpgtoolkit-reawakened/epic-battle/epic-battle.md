@@ -34,8 +34,8 @@ Battle rules, levelling, default battle UI and battle built-ins. Battle state ho
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
 - spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-8, AD-10, AD-12, AD-26
 - constraint - docs/guardrails.md, section G3
-- reference - docs/engine-features.md, E-70 to E-79
-- reference - docs/format-spec.md, section 8
+- reference - docs/spec/engine/plugins-and-battle.md#e-70 to E-79
+- reference - `docs/spec/formats/battle-data.md`
 
 ## Notes
 

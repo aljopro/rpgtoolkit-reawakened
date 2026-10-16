@@ -1,5 +1,5 @@
 /**
- * The VM state tree (AD-7, AD-26; format-spec §9.15 THR-2).
+ * The VM state tree (AD-7, AD-26; docs/spec/engine/rpgcode-errors-and-threads.md#threads THR-2).
  *
  * `VmState` is AD-10's `vm` section: `threads`, `globals`, `objects`,
  * `redirects` and the effect log (`effects` and `effectSeq`, ticket 3.21).
@@ -8,12 +8,12 @@
  * this entry fixes: `ThreadKind`/`ThreadOwner` are AD-26's, `source`/`target`
  * are THR-2's per-thread pair and `null` for a plain thread, and `errorHandler`
  * is `null` until entry 7. `Frame.operands` holds bound `Arg`s so a
- * by-reference reference survives to dispatch (format-spec §9.16 SEM-6).
+ * by-reference reference survives to dispatch (docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-6).
  *
  * Everything here is `PlainData` (G1 rule 2): the `GameState` assertion in
  * `core/save` proves it at build time.
  *
- * docs/adr/0004; format-spec §9.15 (THR-2) and §9.16 (SEM-4/SEM-6).
+ * docs/adr/0004; docs/spec/engine/rpgcode-errors-and-threads.md#threads (THR-2) (SEM-4/SEM-6).
  */
 
 import type { AssertPlainData } from "../ports/plain-data.ts";

@@ -1,18 +1,18 @@
 /**
- * Reading a main game file (format-spec §2): the binary layout of
+ * Reading a main game file (docs/spec/formats/main-file.md#layout): the binary layout of
  * `RPGTLKIT MAIN` across minors 0–9.
  *
  * Pure (G2): it consumes a `BinaryReader` the caller positioned and never
  * touches a host. A wrong magic, a version outside 0–9, a truncated file or a
  * short read is a `Result` carrying a located `FormatError`, never a throw
- * (AD-18). The reader consumes exactly the rows §2 lists for the file's minor,
- * then keeps any bytes after them as the file's `residue` and warns once
- * (§1.7).
+ * (AD-18). The reader consumes exactly the fields listed in `docs/spec/formats/main-file.md#layout`
+ * for the file's minor, then keeps any bytes after them as the file's `residue`
+ * and warns once (`docs/spec/formats/README.md#bytes-after-the-last-documented-field`).
  *
- * The twelve version-dependent rows are read here in the order §2 lists them;
+ * The twelve version-dependent rows are read here in the order listed in
+ * `docs/spec/formats/main-file.md#layout`;
  * each is guarded by the condition the spec gives it (`minor < 3`, `minor ≤ 2`,
  * `minor ≥ 3`, `minor ≥ 4`, `minor = 5`, `minor ≥ 6`, `minor ≥ 7`, `minor ≥ 8`,
- * `minor ≥ 9`). Reserved runs are read as raw bytes and kept so the writer
  * reproduces them (AD-18).
  */
 
@@ -345,9 +345,9 @@ export function readTextMainFile(bytes: Uint8Array, path?: string): Result<MainF
 
 
 /**
- * Read a main game file from `reader` (format-spec §2). The header's minor must
- * be 0–9; every field §2 lists for that minor is read in order. Any bytes after
- * the last row are kept as `residue` and reported as one warning (§1.7).
+ * Read a main game file from `reader` (docs/spec/formats/main-file.md#layout). The header's minor must
+ * be 0–9; every field listed for that minor is read in order. Any bytes after
+ * the last row are kept as `residue` and reported as one warning (`docs/spec/formats/README.md#bytes-after-the-last-documented-field`).
  */
 export function readMainFile(reader: BinaryReader): Result<MainFile> {
   const start = reader.offset;
@@ -374,7 +374,7 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     return fail(reader, start, `not a main file: magic is "${magic}", expected "${MAIN_MAGIC}"`);
   }
   if (major < 0) {
-    return fail(reader, start + MAIN_MAGIC.length + 1, `negative major version ${major} (format-spec §1.4)`);
+    return fail(reader, start + MAIN_MAGIC.length + 1, `negative major version ${major} (docs/spec/formats/README.md#header-and-version)`);
   }
   if (minor < MAIN_MIN_MINOR || minor > MAIN_MAX_MINOR) {
     return fail(
@@ -387,7 +387,7 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
   // Rows 3–4: the registration quirk. The editor writes an i16 flag and then
   // the `"NOCODE"` str; the legacy C++ reader read an i32 here, eating two bytes
   // of the string and then reading `"CODE"`, and both land at the same offset
-  // (`projectPath`, §2 rows 3–4). Reading the editor's shape round-trips.
+  // (`projectPath`, `docs/spec/formats/main-file.md#layout`, rows 4–5). Reading the editor's shape round-trips.
   const registrationFlag = reader.i16();
   if (!registrationFlag.ok) {
     return registrationFlag;
@@ -467,8 +467,8 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
   }
 
   // Row 19: the extra run-time keys. The upper bound is `n` meaning `n + 1`
-  // entries (`-1` means none, §1.2); empty-program entries are kept so the file
-  // round-trips, even though the engine skips them at runtime (§2 row 19).
+  // entries (`-1` means none, `docs/spec/formats/README.md#counts-are-usually-upper-bounds`); empty-program entries are kept so the file
+  // round-trips, even though the engine skips them at runtime (`docs/spec/formats/main-file.md#layout`, row 22).
   const extKeys: MainFileExtKey[] = [];
   const extBound = reader.readUpperBound("i16");
   if (!extBound.ok) {
@@ -782,7 +782,7 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
   const warnings: string[] = [];
   if (trailing.value.length > 0) {
     warnings.push(
-      `${trailing.value.length} trailing byte(s) after the main file were kept as residue (format-spec §2, §1.7)`,
+      `${trailing.value.length} trailing byte(s) after the main file were kept as residue (docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
     );
   }
 

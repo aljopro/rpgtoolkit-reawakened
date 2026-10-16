@@ -1,6 +1,6 @@
 /**
  * Lowering: the Unified AST to the flat Step IR (ADR 0004 decision 1;
- * format-spec §9.15 THR-3).
+ * docs/spec/engine/rpgcode-errors-and-threads.md#threads THR-3).
  *
  * Emits a linear StepOp array whose every instruction carries an interned
  * `pos: SourcePos`. Top-level code is emitted from op 0, ending with `return`.
@@ -9,7 +9,7 @@
  * Each statement leaves exactly one value on the operand stack, and the caller
  * appends a `pop`. Control statements leave the unset value (`push 0`).
  *
- * docs/adr/0004 decision 1; format-spec §9.2/§9.3/§9.5/§9.15.
+ * docs/adr/0004 decision 1; docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands.
  */
 
 import type { Ast, Block, Expr, Statement } from "./ast.ts";

@@ -1,6 +1,6 @@
 /**
  * The built-in command seam: `ParamSpec`, `Arg`, `BuiltinSpec` and the `core`
- * pack (AD-8; ADR 0004 decisions 2 and 6; format-spec §9.15 THR-1).
+ * pack (AD-8; ADR 0004 decisions 2 and 6; docs/spec/engine/rpgcode-errors-and-threads.md#threads THR-1).
  *
  * `BuiltinSpec` is AD-8's registry unit — a name, its aliases, its declared
  * parameters and the handler — and `call` is ADR 0004 decision 2's functional
@@ -18,7 +18,7 @@
  * `threadSleep`, entry 9) nor the `0`-means-indefinite rule: a `0`, fractional
  * or negative count is a `builtin.bad-arg` `ScriptError`.
  *
- * docs/adr/0004 (decision 2); format-spec §9.15 (THR-1) and §9.16 (SEM-6).
+ * docs/adr/0004 (decision 2); docs/spec/engine/rpgcode-errors-and-threads.md#threads (THR-1) (SEM-6).
  */
 
 import type { Value } from "../ports/value.ts";
@@ -36,7 +36,7 @@ export type ParamSpec = {
 
 /**
  * One bound argument at dispatch: its value, plus the variable reference to
- * write back when the parameter is by-reference (AD-8; format-spec §9.16
+ * write back when the parameter is by-reference (AD-8; docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion
  * SEM-6). `ref` is `null` for a literal or any non-variable argument.
  */
 export type Arg = { readonly value: Value; readonly ref: RefId | null };

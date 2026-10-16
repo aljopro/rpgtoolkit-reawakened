@@ -1,5 +1,5 @@
 /**
- * Baseline JPEG decoding for `decodeTexture` (format-spec §10, AD-28).
+ * Baseline JPEG decoding for `decodeTexture` (docs/spec/formats/images.md#the-shared-decode-contract, AD-28).
  *
  * Hand-written rather than delegated to `jpeg-js`. That library fails the
  * "prefer the library" test this ticket sets: its shipped `index.d.ts` names
@@ -24,7 +24,7 @@
 import { err, ok, type Result } from "../result.ts";
 import type { DecodedTexture } from "./model.ts";
 
-const SECTION = "format-spec §10";
+const SECTION = "docs/spec/formats/images.md#the-shared-decode-contract";
 
 /**
  * The largest image this decoder will allocate for, in pixels. A header is
@@ -315,7 +315,7 @@ function decodeHuffman(reader: BitReader, table: HuffmanTable): number {
  * Those dummy blocks are decoded to keep the entropy stream in step but are not
  * part of the picture; writing one at this flat offset would land in the next
  * plane row and overwrite samples already decoded, so it is dropped here
- * (format-spec §10.3).
+ * (docs/spec/formats/images.md#gif).
  */
 function idct(
   coeff: Float64Array,
@@ -522,7 +522,7 @@ function compose(frame: Frame, adobeTransform: number | undefined): DecodedTextu
   return { w: width, h: height, rgba };
 }
 
-/** Parse a SOF0/SOF1 frame segment into a `Frame` (format-spec §10, T.81 §B.2.2). */
+/** Parse a SOF0/SOF1 frame segment into a `Frame` (docs/spec/formats/images.md#the-shared-decode-contract, T.81 §B.2.2). */
 function readFrame(bytes: Uint8Array, segmentAt: number, segmentEnd: number, path?: string): Result<Frame> {
   const count = bytes[segmentAt + 5]!;
   if (segmentEnd - segmentAt !== 6 + count * 3) {
@@ -590,7 +590,7 @@ function readFrame(bytes: Uint8Array, segmentAt: number, segmentEnd: number, pat
   });
 }
 
-/** Read a DQT segment into `quant` (format-spec §10, T.81 §B.2.4.1). */
+/** Read a DQT segment into `quant` (docs/spec/formats/images.md#the-shared-decode-contract, T.81 §B.2.4.1). */
 function readQuant(bytes: Uint8Array, segmentAt: number, segmentEnd: number, quant: (QuantTable | undefined)[], path?: string): Result<void> {
   let at = segmentAt;
   while (at < segmentEnd) {
@@ -626,7 +626,7 @@ function readQuant(bytes: Uint8Array, segmentAt: number, segmentEnd: number, qua
   return ok(undefined);
 }
 
-/** Read a DHT segment into `huffman` (format-spec §10, T.81 §B.2.4.2). */
+/** Read a DHT segment into `huffman` (docs/spec/formats/images.md#the-shared-decode-contract, T.81 §B.2.4.2). */
 function readHuffman(
   bytes: Uint8Array,
   segmentAt: number,
@@ -664,7 +664,7 @@ function readHuffman(
 
 /**
  * Decode a baseline JPEG file to the file's own straight RGBA (AD-28,
- * format-spec §10): the component channels and alpha 255 (JPEG carries no
+ * docs/spec/formats/images.md#the-shared-decode-contract): the component channels and alpha 255 (JPEG carries no
  * alpha), nothing added. No colour key is applied — the key is not part of the
  * file; it is the `key` of a `blit` (AD-3) and `core/raster` tests it on these
  * pixels. Never throws: nothing here is a `FormatError` escape hatch. `path`,

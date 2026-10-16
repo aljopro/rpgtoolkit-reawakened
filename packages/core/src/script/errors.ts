@@ -1,11 +1,11 @@
 /**
- * The script error channel (AD-24; format-spec §9.8 ERR-1/ERR-2).
+ * The script error channel (AD-24; docs/spec/engine/rpgcode-errors-and-threads.md#error-handling ERR-1/ERR-2).
  *
  * A `ScriptError` is thrown, never stored in state, so it is an ordinary class
  * (guard-rail G1 rule 2 binds saveable state only). It carries a stable
  * machine-readable `code` and an optional source position `pos`.
  *
- * docs/adr/0004; format-spec §9.8 (ERR-1/ERR-2).
+ * docs/adr/0004; docs/spec/engine/rpgcode-errors-and-threads.md#error-handling (ERR-1/ERR-2).
  */
 
 import type { SourcePos } from "./ops.ts";

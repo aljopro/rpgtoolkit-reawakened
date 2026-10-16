@@ -1,12 +1,12 @@
 /**
  * The decoded-image model shared by the PNG, JPEG, BMP and GIF decoders
- * (format-spec §10, AD-28).
+ * (docs/spec/formats/images.md#the-shared-decode-contract, AD-28).
  *
  * `decodeTexture` is the single place a game image becomes pixels: `core/raster`,
  * every runner and the editor ask for this type and cannot disagree about what
  * an image contains. The bytes are **straight** (non-premultiplied) 8-bit RGBA —
  * the file's own colours and its own alpha (`tRNS`, alpha channels), nothing
- * added. A colour key is not part of the file (format-spec §10 keeps it per
+ * added. A colour key is not part of the file (docs/spec/formats/images.md#the-shared-decode-contract keeps it per
  * image or per frame, outside the image), so the decoder never applies one: the
  * key is the `key` of a `blit` (AD-3), and `core/raster` tests it on these
  * pixels.
@@ -18,7 +18,7 @@
  */
 
 /**
- * A decoded game image (AD-28, format-spec §10).
+ * A decoded game image (AD-28, docs/spec/formats/images.md#the-shared-decode-contract).
  *
  * `rgba` is a fresh, non-aliasing array of exactly `w * h * 4` bytes in
  * row-major order — R, G, B, A per pixel, top row first. The caller owns it and

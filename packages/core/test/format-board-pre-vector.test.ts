@@ -1,8 +1,8 @@
-// The pre-vector board layout of format-spec §4.1 (dispatch) and §4.8
-// (minors 2–3) and its conversion to the vector model of §4.2. The sample
+// The pre-vector board layout of docs/spec/formats/board.md#version-dispatch (dispatch)
+// (minors 2–3) and its conversion to the vector model of docs/spec/formats/board.md#vector-layout-minor-4-and-later. The sample
 // corpus ships no minor 2–3 board (all three fixture `.brd` files are minor 4),
 // so the layout and the conversion are pinned by synthetic boards built byte
-// by byte here, including runs that wrap rows and layers, and the §4.2 cell
+// by byte here, including runs that wrap rows and layers, and the docs/spec/formats/board.md#vector-layout-minor-4-and-later cell
 // limit the reader applies to the declared grid.
 //
 // The reader never throws, so the tests assert on values and on the error's
@@ -39,7 +39,7 @@ function unwrap<T>(result: Result<T>): T {
   return result.value;
 }
 
-/** The stored upper bound for `count` entries (format-spec §1.2). */
+/** The stored upper bound for `count` entries (docs/spec/formats/README.md#counts-are-usually-upper-bounds). */
 function bound(count: number): number {
   return count === 0 ? -1 : count - 1;
 }
@@ -47,7 +47,7 @@ function bound(count: number): number {
 const BLACK: Colorref = { r: 0, g: 0, b: 0 };
 
 /**
- * One tile-matrix record as the builder writes it (format-spec §4.8): `count`
+ * One tile-matrix record as the builder writes it (docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector): `count`
  * 1 is a bare cell, anything else a run marker covering that many cells.
  */
 interface CellSpec {
@@ -59,7 +59,7 @@ interface CellSpec {
   readonly tileType: number;
 }
 
-/** One pre-vector program as the builder writes it (format-spec §4.8). */
+/** One pre-vector program as the builder writes it (docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector). */
 interface ProgramSpec {
   readonly file: string;
   readonly x: number;
@@ -74,7 +74,7 @@ interface ProgramSpec {
   readonly activationType: number;
 }
 
-/** One pre-vector sprite as the builder writes it (format-spec §4.8). */
+/** One pre-vector sprite as the builder writes it (docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector). */
 interface SpriteSpec {
   readonly file: string;
   readonly x: number;
@@ -125,7 +125,7 @@ interface BuildOptions {
   readonly tail?: readonly number[];
 }
 
-/** Serialise a synthetic pre-vector board in the §4.8 order. */
+/** Serialise a synthetic pre-vector board in the docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector order. */
 function buildPreVectorBoard(options: BuildOptions = {}): Uint8Array {
   const sizeX = options.sizeX ?? 2;
   const sizeY = options.sizeY ?? 2;
@@ -313,7 +313,7 @@ test("a run marker wraps a row end and one wraps a layer boundary", () => {
   equal(board.tileMatrix[5]?.lutIndex, board.tileMatrix[6]?.lutIndex);
 });
 
-test("each legacy tile type vectorizes to the §4.8 shape", () => {
+test("each legacy tile type vectorizes to the pre-vector shape", () => {
   // One 5 × 1 layer: two solid tiles, one under tile, one stair to layer 3 and
   // one normal tile, which emits no vector at all.
   const bytes = buildPreVectorBoard({
@@ -433,7 +433,7 @@ test("a program at a known tile becomes a closed 32×32 rectangle", () => {
   equal(
     converted.programs[0]?.activationType,
     5,
-    "§4.8 sets PRG_STOPS_MOVEMENT (bit 4) on every old program",
+    "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector sets PRG_STOPS_MOVEMENT (bit 4) on every old program",
   );
 });
 
@@ -486,7 +486,7 @@ test("equal flattened shades merge into one record", () => {
 test("the winning layer's tint is stored as written, never summed or clamped", () => {
   // A tint of exactly (0,0,0) is unshaded and does not win, so it cannot erase
   // a lower layer's tint; a tint beyond ±255 passes through as the stored i16
-  // (the withdrawn rule's +510 sum is gone, and R-02 leaves §4.5's clamp to the
+  // (the withdrawn rule's +510 sum is gone, and R-02 leaves docs/spec/formats/board.md#tile-shading's clamp to the
   // renderer).
   const zeroDoesNotWin = readAndConvert(
     buildPreVectorBoard({
@@ -572,7 +572,7 @@ test("the start point and sprites convert from tiles to pixels with the base poi
 });
 
 test("the start falls back per axis when only one of its fields is ≤ 0", () => {
-  // startX 0 → x 64, but startY 4 is still mapped through §5: (4−1)·32 + 31 = 127.
+  // startX 0 → x 64, but startY 4 is still mapped through docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector: (4−1)·32 + 31 = 127.
   const zeroX = readAndConvert(buildPreVectorBoard({ startX: 0, startY: 4, startLayer: 3 }));
   deepEqual(zeroX.converted.properties.start, { x: 64, y: 127, layer: 3 });
   // The mirror case: startY −1 → y 64, and startX 2 maps to (2−1)·32 + 16 = 48.
@@ -767,12 +767,12 @@ test("a legacy repeat bit is passed through with repeatDistance 0", () => {
   equal(
     converted.programs[0]?.activationType,
     6,
-    "bit 2 (repeat) stays set alongside PRG_STOPS_MOVEMENT (§4.8 chose passthrough)",
+    "bit 2 (repeat) stays set alongside PRG_STOPS_MOVEMENT(docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector chose passthrough)",
   );
-  equal(converted.programs[0]?.repeatDistance, 0, "§4.8 gives the pre-vector record no distance field");
+  equal(converted.programs[0]?.repeatDistance, 0, "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector gives the pre-vector record no distance field");
 });
 
-test("legacy tile types §4.7 does not define emit nothing and are not reported", () => {
+test("legacy tile types the spec does not define emit nothing and are not reported", () => {
   const types = [5, 6, 7, 8, 9, 10, 19, 25];
   const bytes = buildPreVectorBoard({
     sizeX: types.length,
@@ -809,8 +809,8 @@ test("the conversion generates no vector base for a sprite", () => {
       ],
     }),
   );
-  // §4.8 "Default vector bases": the vector `BoardSprite` carries no base — the
-  // bases come from the actor file (§6) — so the converted sprite has exactly
+  // docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector "Default vector bases": the vector `BoardSprite` carries no base — the
+  // bases come from the actor file(docs/spec/formats/character.md#layout) — so the converted sprite has exactly
   // the model's fields and no invented collision/activation base.
   deepEqual(
     Object.keys(converted.sprites[0] ?? {}).sort(),
@@ -834,13 +834,13 @@ test("the conversion generates no vector base for a sprite", () => {
   );
 });
 
-test("the fields with no §4.2 home are dropped from the converted board", () => {
+test("the fields with no vector home are dropped from the converted board", () => {
   const { board, converted } = readAndConvert(buildPreVectorBoard({}));
   // The pre-vector board carries them …
   equal("registrationFlag" in board, true);
   equal("foregroundImage" in board, true);
   equal("dayNight" in board, true);
-  // … and the §4.2 vector board has no field for any of them (§4.8 "Dropped fields").
+  // … and the docs/spec/formats/board.md#vector-layout-minor-4-and-later vector board has no field for any of them(docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector "Dropped fields").
   for (const key of [
     "registrationFlag",
     "registrationKey",
@@ -940,7 +940,7 @@ test("converting the same bytes twice gives deep-equal boards", () => {
   deepEqual(first, second);
 });
 
-test("accepts §5's combinable PX_ABSOLUTE flag and passes the value through", () => {
+test("accepts the pre-vector combinable PX_ABSOLUTE flag and passes the value through", () => {
   for (const coordType of [4, 5]) {
     const { board, converted } = readAndConvert(buildPreVectorBoard({ minor: 3, coordType }));
     equal(board.coordType, coordType);
@@ -954,7 +954,7 @@ test("accepts §5's combinable PX_ABSOLUTE flag and passes the value through", (
   const result = convertPreVectorBoard(rotated);
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §4.8");
+    equal(result.error.section, "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector");
     equal(result.error.message.includes("iso-rotated"), true);
   }
 });
@@ -1042,7 +1042,7 @@ test("the converted board carries the LUT, constants, links and trailing propert
   equal(converted.layerTitles.length, converted.sizeL + 1);
   deepEqual(converted.layerTitles, ["sky", "ground"]);
   equal(converted.properties.backgroundImage, "bg.img");
-  equal(converted.properties.backgroundDrawType, 1, "§4.8 draws the background as parallax");
+  equal(converted.properties.backgroundDrawType, 1, "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector draws the background as parallax");
   equal(converted.properties.backgroundMusic, "song.mid");
   equal(converted.properties.enterPrg, "enter.prg");
   equal(converted.properties.battleSkill, 7);
@@ -1128,7 +1128,7 @@ test("refuses minors 0 and 1 with a located error", () => {
     const result = readPreVectorBoard(new BinaryReader(buildPreVectorBoard({ minor })));
     equal(result.ok, false, `minor ${minor} is refused`);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §4.1");
+      equal(result.error.section, "docs/spec/formats/board.md#version-dispatch");
       equal(result.error.offset, 17, "the minor field's first byte");
       equal(result.error.message.includes("obsolete"), true);
     }
@@ -1140,7 +1140,7 @@ test("refuses minor 4 and above with a located error", () => {
     const result = readPreVectorBoard(new BinaryReader(buildPreVectorBoard({ minor })));
     equal(result.ok, false, `minor ${minor} is refused`);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §4.1");
+      equal(result.error.section, "docs/spec/formats/board.md#version-dispatch");
       equal(result.error.offset, 17);
       equal(result.error.message.includes("vector layout"), true);
     }
@@ -1153,7 +1153,7 @@ test("refuses a wrong magic", () => {
   equal(result.ok, false);
   if (!result.ok) {
     equal(result.error.offset, 0);
-    equal(result.error.section, "format-spec §4.8");
+    equal(result.error.section, "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector");
     equal(result.error.message.includes("not a board"), true);
   }
 });
@@ -1174,7 +1174,7 @@ test("reports a located error for a truncated board", () => {
   const result = readPreVectorBoard(new BinaryReader(bytes.slice(0, 30)));
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §1.1");
+    equal(result.error.section, "docs/spec/formats/README.md#primitive-encoding");
     equal(result.error.offset, 30, "the startY field has no bytes left");
   }
 });
@@ -1192,7 +1192,7 @@ test("refuses a pre-vector board whose tile matrix would exceed the cell limit",
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §4.8");
+  equal(result.error.section, "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector");
   equal(result.error.offset, 22, "the sizeX field");
   equal(result.error.message.includes("64000000"), true, "the error names the declared grid");
   equal(result.error.message.includes("4194304"), true, "the error names the limit");
@@ -1200,7 +1200,7 @@ test("refuses a pre-vector board whose tile matrix would exceed the cell limit",
 
 test("refuses a board one cell over the limit, at any size", () => {
   // 397 × 2113 × 5 = BOARD_MAX_CELLS + 1 cells, and the crafted file holds no
-  // matrix bytes at all, so only the §4.2 "Size limits" rule can refuse it.
+  // matrix bytes at all, so only the docs/spec/formats/board.md#vector-layout-minor-4-and-later "Size limits" rule can refuse it.
   equal(397 * 2113 * 5, BOARD_MAX_CELLS + 1, "the crafted grid is one cell over the limit");
   const result = readPreVectorBoard(
     new BinaryReader(buildPreVectorBoard({ sizeX: 397, sizeY: 2113, sizeL: 5, cells: [] })),
@@ -1209,7 +1209,7 @@ test("refuses a board one cell over the limit, at any size", () => {
   if (result.ok) {
     return;
   }
-  equal(result.error.section, "format-spec §4.8");
+  equal(result.error.section, "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector");
   equal(result.error.offset, 22, "the sizeX field");
 });
 
@@ -1239,7 +1239,7 @@ test("refuses to convert an iso-rotated board", () => {
   const result = convertPreVectorBoard(board);
   equal(result.ok, false);
   if (!result.ok) {
-    equal(result.error.section, "format-spec §4.8");
+    equal(result.error.section, "docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector");
     equal(result.error.message.includes("iso-rotated"), true);
   }
 });

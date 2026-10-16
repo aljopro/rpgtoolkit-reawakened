@@ -1,5 +1,5 @@
 /**
- * The path rules a package entry must satisfy (format-spec §1.5, §13).
+ * The path rules a package entry must satisfy (docs/spec/formats/README.md#paths-inside-files.
  *
  * Entry names arrive from untrusted archives, so they are checked before
  * anything is materialised: no escape from the package root (absolute paths,
@@ -45,10 +45,10 @@ export function canonicalEntryPath(path: string): string {
 }
 
 /**
- * Check one entry path against the §1.5 path rules and return the failure
+ * Check one entry path against the docs/spec/formats/README.md#paths-inside-files path rules and return the failure
  * message — naming the limit it hit — or `null` when the path is acceptable.
  *
- * The path is normalised first (`\` becomes `/`, §1.5), then rejected if it
+ * The path is normalised first (`\` becomes `/`, docs/spec/formats/README.md#paths-inside-files, then rejected if it
  * names nothing, is absolute, starts with a drive letter, carries a `..`
  * segment or a NUL, or breaches the length, depth or basename caps. The caps
  * are measured on the canonical path, so empty and `.` segments do not count;

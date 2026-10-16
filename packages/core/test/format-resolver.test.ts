@@ -1,4 +1,4 @@
-// The pure asset resolver of format-spec §1.5 (AD-5): a logical reference
+// The pure asset resolver of docs/spec/formats/README.md#paths-inside-files (AD-5): a logical reference
 // becomes the canonical `AssetKey` of the matching entry in a host-supplied
 // index — case-insensitive, `\` and `/` equivalent, the type-folder prefix
 // stripped, subfolders allowed, and the project path ignored inside a package.
@@ -45,7 +45,7 @@ const GAME_PATHS: readonly string[] = [
   "Game/demo/Misc/title.anm",
 ];
 
-/** The same game as a package: the project's contents at the package root (§13). */
+/** The same game as a package: the project's contents at the package root(docs/spec/formats/packaging-and-paths.md). */
 const PACKAGE_PATHS: readonly string[] = [
   "main.gam",
   "Boards/inn.brd",
@@ -76,8 +76,8 @@ test("the lookup is case-insensitive in both directions", () => {
   equal(unwrap(resolveAsset(index, PACKAGE_ROOT, "characters", "HERO.TEM")), "chrs/hero.tem");
 });
 
-test("the fold is ASCII only: a letter above 0x7F never matches another (§1.5, AD-5)", () => {
-  // Rewriting `A`-`Z` and nothing else is what §1.5 rules. A reference that
+test("the fold is ASCII only: a letter above 0x7F never matches another", () => {
+  // Rewriting `A`-`Z` and nothing else is what docs/spec/formats/README.md#paths-inside-files rules. A reference that
   // differs from the stored name only in the case of a letter above 0x7F is a
   // miss, never a different file, and U+212A (KELVIN SIGN) is not ASCII `k`.
   const index = createAssetIndex(["Boards/CAF\u00C9.BRD", "Boards/shop.brd", "Tiles/K.tst", "Tiles/\u212A.tst"]);
@@ -131,10 +131,10 @@ test("a package ignores the project path; a game folder inserts it", () => {
   equal(resolveAsset(asPackage, PACKAGE_ROOT, "boards", "game/demo/inn.brd").ok, false);
 });
 
-test("a reference with no matching entry is a located failure citing §1.5", () => {
+test("a reference with no matching entry is a located failure citing path", () => {
   const index = createAssetIndex(PACKAGE_PATHS);
   const error = failureOf(resolveAsset(index, PACKAGE_ROOT, "boards", "missing.brd"));
-  equal(error.section, "format-spec §1.5");
+  equal(error.section, "docs/spec/formats/README.md#paths-inside-files");
   equal(error.offset, 0);
   equal(error.message, 'asset "Boards/missing.brd" is not in the index (missing asset)');
 });
@@ -142,7 +142,7 @@ test("a reference with no matching entry is a located failure citing §1.5", () 
 test("an empty index resolves nothing", () => {
   const index = createAssetIndex([]);
   const error = failureOf(resolveAsset(index, PACKAGE_ROOT, "boards", "inn.brd"));
-  equal(error.section, "format-spec §1.5");
+  equal(error.section, "docs/spec/formats/README.md#paths-inside-files");
 });
 
 test("odd references never throw and never resolve", () => {
@@ -163,7 +163,7 @@ test("odd references never throw and never resolve", () => {
     const result = resolveAsset(index, PACKAGE_ROOT, "boards", reference);
     equal(result.ok, false, `expected "${reference}" not to resolve`);
     if (!result.ok) {
-      equal(result.error.section, "format-spec §1.5");
+      equal(result.error.section, "docs/spec/formats/README.md#paths-inside-files");
     }
   }
 });
@@ -198,7 +198,7 @@ test("a game folder accepts both stored forms of the project path", () => {
     );
   }
   // A package root ignores the project path and looks the reference up at the
-  // package root (§13).
+  // package root(docs/spec/formats/packaging-and-paths.md).
   const asPackage = createAssetIndex(["Boards/start.brd"]);
   equal(unwrap(resolveAsset(asPackage, PACKAGE_ROOT, "boards", "start.brd")), "boards/start.brd");
 });
@@ -253,7 +253,7 @@ test("resolveTileReference resolves .tan, .gph, .tst, and .iso references", () =
   const missing = resolveTileReference(index, root, "missing.tan");
   equal(missing.ok, false);
   if (!missing.ok) {
-    equal(missing.error.section, "format-spec §1.5");
+    equal(missing.error.section, "docs/spec/formats/README.md#paths-inside-files");
   }
 });
 test("resolveTileReference resolves board references with spaces and mixed case", () => {

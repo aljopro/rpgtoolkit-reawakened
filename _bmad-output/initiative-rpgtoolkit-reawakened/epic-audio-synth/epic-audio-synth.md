@@ -35,7 +35,7 @@ Audio cues in core (full verb set, `cueId`, `audio.ended`), the `synth` package,
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
 - spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-14, AD-16
 - constraint - docs/guardrails.md, section G6
-- reference - docs/engine-features.md, E-100 to E-104
+- reference - docs/spec/engine/display-input-audio.md#e-100 to E-104
 - reference - docs/architecture-options.md, section 7.3
 
 ## Notes

@@ -15,7 +15,7 @@
  * bump; the per-section numbers are the migration chain's keys.
  *
  * AD-10 (the state tree), AD-11 (the canonical form) and AD-23 (per-section
- * versions); format-spec §11 (the saved game).
+ * versions); docs/spec/formats/save-game.md#layout-minor-4 (the saved game).
  */
 
 import type { AssertPlainData } from "../ports/plain-data.ts";

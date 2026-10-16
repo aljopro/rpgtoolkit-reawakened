@@ -20,8 +20,8 @@ Script authors get modern tooling in any LSP or DAP client; the CAP-14 success c
 ## Done when
 
 1. The LSP reports diagnostics, hover, go-to-definition across includes and outline on the sample games' programs.
-2. Each legacy-syntax form of format-spec section 9.9 gets a quick fix that preserves behaviour.
-3. The whole built-in catalogue of format-spec section 9.11 resolves across the registered domains, asserted by a test.
+2. Each legacy-syntax form of `docs/spec/engine/rpgcode-dialects.md` gets a quick fix that preserves behaviour.
+3. The whole built-in catalogue of `docs/spec/engine/rpgcode-functions.md` resolves across the registered domains, asserted by a test.
 4. A DAP session built on `runner-harness` sets a breakpoint, steps and shows threads, call stack and variables against a test fixture, and runs in the `vscode.dev` web build too.
 5. The LSP ships as a VS Code and Open VSX extension build on its own, before the editor.
 
@@ -34,7 +34,7 @@ Script authors get modern tooling in any LSP or DAP client; the CAP-14 success c
 - spec - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md, section Capabilities
 - reference - docs/editor-features.md, T-40 to T-46
 - reference - docs/architecture-options.md, section 4.1
-- reference - docs/engine-features.md, E-98
+- reference - docs/spec/engine/rpgcode-language.md#e-98
 
 ## Notes
 

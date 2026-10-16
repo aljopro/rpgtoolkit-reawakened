@@ -3,7 +3,7 @@
 * **Status:** Accepted (2026-10-10)
 * **Date:** 2026-10-10
 * **Amends:** [guardrails.md](../guardrails.md) G3, G4 and G6; [architecture-options.md](../architecture-options.md) §2
-* **Context documents:** [ADR 0001](0001-typescript-core.md), [guardrails.md](../guardrails.md), [architecture-options.md](../architecture-options.md), [engine-features.md](../engine-features.md), [format-spec.md](../format-spec.md)
+* **Context documents:** [ADR 0001](0001-typescript-core.md), [guardrails.md](../guardrails.md), [architecture-options.md](../architecture-options.md), [spec/README.md](../spec/README.md)
 
 ## Summary
 
@@ -93,6 +93,6 @@ It also amends [architecture-options.md](../architecture-options.md) §2: the se
 
 * Architecture spine (`_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md`): AD-1 (engine API, `advance`), AD-3 (draw list and pixel pipeline), AD-4 (one reference rasteriser, in core), AD-6 (`fflate` as the first `core` allowlist entry), AD-13 (deterministic maths), AD-15 (text, fonts and layout are core-owned), AD-27 (surface model), AD-28 (images decoded once, in core), AD-30 (hot paths are ports); Deferred, "ADR 0002".
 * Spec companion `packages.md` (`_bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/packages.md`): `core` responsibilities and the core ↔ runner seam; already consistent with this ADR.
-* [engine-features.md](../engine-features.md): E-22…E-34 (movement), E-56 (text and primitives, pixel get and set, off-screen canvases), E-57 (render-now overlay), E-58 (screen save and restore), E-70…E-76 (battle), E-132 (private fonts).
-* [format-spec.md](../format-spec.md): §4.5 (shading arithmetic), §10 (media and assets).
+* The engine spec ([spec/engine/](../spec/engine/)): [E-22](../spec/engine/movement-and-collision.md#e-22)…E-34 (movement), [E-56](../spec/engine/rpgcode-functions.md#e-56) (text and primitives, pixel get and set, off-screen canvases), [E-57](../spec/engine/main-loop-and-startup.md#e-57) (render-now overlay), [E-58](../spec/engine/rpgcode-functions.md#e-58) (screen save and restore), [E-70](../spec/engine/plugins-and-battle.md#e-70)…E-76 (battle), [E-132](../spec/engine/display-input-audio.md#e-132) (private fonts).
+* The format spec ([spec/formats/](../spec/formats/README.md)): [tile shading](../spec/formats/board.md#tile-shading) (shading arithmetic), [images](../spec/formats/images.md) (media and assets).
 * [guardrails.md](../guardrails.md): G2 rule 3 (`core` runtime allowlist), G3, G4, G5 rule 1, G6.

@@ -1,6 +1,6 @@
 # RPG Toolkit 3 — Authoring Toolset: Feature Inventory
 
-> **Purpose.** This describes what the legacy editor (RPG Toolkit 3.1.0's "Toolkit" application) let authors do, in **feature terms**, so a rebuild can offer equivalent workflows. It describes no code and assumes no UI technology. The files each tool produces are in [format-spec.md](format-spec.md). The runtime behaviour they configure is in [engine-features.md](engine-features.md).
+> **Purpose.** This describes what the legacy editor (RPG Toolkit 3.1.0's "Toolkit" application) let authors do, in **feature terms**, so a rebuild can offer equivalent workflows. It describes no code and assumes no UI technology. The files each tool produces are in [spec/formats/](spec/formats/README.md). The runtime behaviour they configure is in [spec/engine/](spec/engine/).
 >
 > IDs (**T-xx**) are referenced by [architecture-options.md](architecture-options.md).
 
@@ -19,7 +19,7 @@
 
 **T-04 New project wizard.** Name the game. Create the main file and the standard folder tree. Optionally copy a starter kit (default tiles, character, start/system programs, menu and battle plugins, music pack).
 
-**T-05 Reserved folders & relative paths.** Each asset type has a folder (format-spec §1.5). Pickers save links relative to that folder, including subfolders. Choosing a file from **outside** the project copies it into the right folder automatically.
+**T-05 Reserved folders & relative paths.** Each asset type has a folder ([paths inside files](spec/formats/README.md#paths-inside-files)). Pickers save links relative to that folder, including subfolders. Choosing a file from **outside** the project copies it into the right folder automatically.
 
 **T-06 Save / save as / save all / close.** Unsaved-change tracking per editor.
 

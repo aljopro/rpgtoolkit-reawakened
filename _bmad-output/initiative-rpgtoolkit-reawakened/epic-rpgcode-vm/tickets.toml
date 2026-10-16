@@ -5,7 +5,7 @@
 id = 1
 type = "story"
 title = "RPGCode §9 doc amendments and dialect rulings"
-description = "Applies the discovery's 12 format-spec section 9 doc-fix proposals and the TK2 RPGCode gaps (the `< >` inline-block form is TK 1.x only while 2.x uses `{ }`; `#x! = 1` assignment lines; labels with #Branch and #FBranch; #Method and #ReturnMethod; includes and namespace includes; the `=`-as-comparison set; #For and one-line blocks; `<var>` interpolation), ratifies the 14 corpus-settled rows, rules the lexical, expression, statement, function and program rows (LEX, EXP, STX, FUN, PRG) the grammar needs, and settles the 9.11 ownership gaps, in one docs-only commit (G7). The semantic rows (OOP, ERR, THR, SEM, MOD) are ruled by a doc-first step inside the entry that implements them. Also records the shapes the community survey found missing from section 9: inline trailing `*` comments, `#` before any statement, `#if(cond)` without spaces, `!=` and `=` as equality, `#RPGCode` as runtime eval, `<var>` splicing in message text, `#redirect(#a,#b.c)` and the `system.*` namespace."
+description = "Applies the discovery's 12 `docs/spec/engine/rpgcode-language.md` doc-fix proposals and the TK2 RPGCode gaps (the `< >` inline-block form is TK 1.x only while 2.x uses `{ }`; `#x! = 1` assignment lines; labels with #Branch and #FBranch; #Method and #ReturnMethod; includes and namespace includes; the `=`-as-comparison set; #For and one-line blocks; `<var>` interpolation), ratifies the 14 corpus-settled rows, rules the lexical, expression, statement, function and program rows (LEX, EXP, STX, FUN, PRG) the grammar needs, and settles the 9.11 ownership gaps, in one docs-only commit (G7). The semantic rows (OOP, ERR, THR, SEM, MOD) are ruled by a doc-first step inside the entry that implements them. Also records the shapes the community survey found missing from section 9: inline trailing `*` comments, `#` before any statement, `#if(cond)` without spaces, `!=` and `=` as equality, `#RPGCode` as runtime eval, `<var>` splicing in message text, `#redirect(#a,#b.c)` and the `system.*` namespace."
 verify = "The commit touches only `docs/` and a person reads and approves it; every LEX, EXP, STX, FUN and PRG rule entries 5 to 17 rely on is stated in the amended section 9 or named as deferred with the entry it affects."
 covers = ["CAP-5"]
 after = []
@@ -16,7 +16,7 @@ done_checkpoint = true
 references = [
   "research - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/tk2-rpgcode-coverage.md and _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/tk2-rpgcode-commands.csv (301 TK2 commands over 268 programs; doc gaps listed)",
   "epic - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/language-readiness.md, sections 'Doc-fix proposals (not applied)' and 'Ambiguity list'",
-  "reference - docs/format-spec.md, section 9",
+  "reference - `docs/spec/engine/rpgcode-language.md`",
   "constraint - docs/guardrails.md, section G7",
 ]
 
@@ -69,7 +69,7 @@ plan_checkpoint = true
 references = [
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-1, AD-7, AD-8, AD-9, AD-10, AD-12, AD-26",
   "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decision 1 (three-tier lowering)",
-  "reference - docs/format-spec.md, sections 9.3, 9.5, 9.11",
+  "reference - `docs/spec/engine/rpgcode-functions.md`, `docs/spec/engine/rpgcode-language.md#keywords-and-structure`",
   "spec companion - _bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/packages.md, 'Core/runner seam'",
 ]
 
@@ -86,7 +86,7 @@ risk = "medium"
 references = [
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-8 (assembly, duplicate rejection, precedence), AD-10 (vm section ownership)",
   "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decisions 2, 6 and 7 (dogfooded standard library, one contract and manifest, async at the boundary)",
-  "reference - docs/format-spec.md, section 9.11",
+  "reference - `docs/spec/engine/rpgcode-functions.md`",
   "contract - packages/core/src/ports/engine.ts, line 4 (createEngine deferred to the engine epic; epic 4 owns it)",
 ]
 plan_checkpoint = true
@@ -95,7 +95,7 @@ plan_checkpoint = true
 id = 25
 type = "story"
 title = "Plugin manifest and the engine's default manifest"
-description = "Defines the plugin manifest as plain data (ADR 0004 decision 6): an ordered list of entries `{ id, enabled?, options? }` that selects and orders the `PluginDefinition`s entry 3's assembly function layers, with the engine's own default manifest listing the built-in `core` pack (pinned: it can be wrapped but not removed or disabled) and growing as optional packs land. A game or user manifest is a patch over the default (add, remove, disable, reorder or replace by id; replacing everything is removing every default id). The host resolves each `id` to a loadable definition and hands the resolved list to core; core loads nothing (G2), and an unresolvable id is a located diagnostic, not a crash. `options` is passed to the plugin and read by the VM for the request timeout default (entry 9). The engine's own wiring reads the default through this same path, with no private route. It is distinct from the distribution package's `manifest.json` (format-spec section 13)."
+description = "Defines the plugin manifest as plain data (ADR 0004 decision 6): an ordered list of entries `{ id, enabled?, options? }` that selects and orders the `PluginDefinition`s entry 3's assembly function layers, with the engine's own default manifest listing the built-in `core` pack (pinned: it can be wrapped but not removed or disabled) and growing as optional packs land. A game or user manifest is a patch over the default (add, remove, disable, reorder or replace by id; replacing everything is removing every default id). The host resolves each `id` to a loadable definition and hands the resolved list to core; core loads nothing (G2), and an unresolvable id is a located diagnostic, not a crash. `options` is passed to the plugin and read by the VM for the request timeout default (entry 9). The engine's own wiring reads the default through this same path, with no private route. It is distinct from the distribution package's `manifest.json` (`docs/spec/formats/packaging-and-paths.md`)."
 verify = "The default manifest assembles to the same registry the engine uses, a user manifest that removes, disables, reorders, replaces and appends entries produces the documented chain, removing or disabling `core` is refused with a diagnostic, an unresolvable id yields a located diagnostic and the rest still load, and `core` imports no module loader or file API."
 covers = ["CAP-5"]
 after = [3]
@@ -127,7 +127,7 @@ references = [
 id = 21
 type = "story"
 title = "Effect records and generic command stubs: every catalogue name responds"
-description = "Defines the plain-data effect record (seq, tick, thread, name, kind, args, out, result, patch, wait, request) stored in the `vm` section behind an AD-23 schema entry, and registers one generic stub per catalogue name that is safe to stub (170 of the 271 names in format-spec 9.11; entry 27 brings the catalogue to the 282 of docs/spec/engine/rpgcode-functions.md and assigns the 8 new names to the stub or wait sets) through `PluginDefinition.commands`: it validates args against the name's `ParamSpec`, records its side effect as an effect record naming the owning state section, writes by-reference outputs, and returns a documented default. Owner epics later replace a stub with real behaviour and apply its effects to their section. Log growth is bounded (drained per tick by the owning module, ring-capped in headless runs)."
+description = "Defines the plain-data effect record (seq, tick, thread, name, kind, args, out, result, patch, wait, request) stored in the `vm` section behind an AD-23 schema entry, and registers one generic stub per catalogue name that is safe to stub (170 of the 271 names in `docs/spec/engine/rpgcode-functions.md`; entry 27 brings the catalogue to the 282 of docs/spec/engine/rpgcode-functions.md and assigns the 8 new names to the stub or wait sets) through `PluginDefinition.commands`: it validates args against the name's `ParamSpec`, records its side effect as an effect record naming the owning state section, writes by-reference outputs, and returns a documented default. Owner epics later replace a stub with real behaviour and apply its effects to their section. Log growth is bounded (drained per tick by the owning module, ring-capped in headless runs)."
 verify = "A catalogue test resolves every one of the 170 stub names with its documented arity and byRef parameters, calls each with valid args and sees one effect record of the catalogue's kind naming the catalogue's section, a snapshot taken after the calls restores with an identical state hash, and the same call twice on the same view returns equal results."
 covers = ["CAP-5"]
 after = [3, 27]
@@ -160,7 +160,7 @@ references = [
 id = 6
 type = "story"
 title = "Classes, objects and operator dispatch"
-description = "First step, doc-first (G7): a person rules OOP-4 to OOP-9 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Delivers the class and object slice end-to-end: in-class method bodies, `var x[]`, typed and `&` parameters, `this`, `operator=` and `operator[]` dispatch (read and write), constructors, the destructor and `release()`, and the object handle table in `VmState.objects` that snapshots (AD-7); its synthetic program uses the statements, functions and expressions entry 5 delivers."
+description = "First step, doc-first (G7): a person rules OOP-4 to OOP-9 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Delivers the class and object slice end-to-end: in-class method bodies, `var x[]`, typed and `&` parameters, `this`, `operator=` and `operator[]` dispatch (read and write), constructors, the destructor and `release()`, and the object handle table in `VmState.objects` that snapshots (AD-7); its synthetic program uses the statements, functions and expressions entry 5 delivers."
 verify = "A synthetic program instantiates a class, copies it with `operator=`, writes through `operator[]` as an lvalue, calls `release()`, and a snapshot taken mid-call restores to the identical object table and state hash."
 covers = ["CAP-5"]
 after = [3, 5]
@@ -168,69 +168,69 @@ hitl = true
 risk = "high"
 refine = true
 references = [
-  "reference - docs/format-spec.md, section 9.7",
+  "reference - `docs/spec/engine/rpgcode-modules-and-objects.md#objects`",
   "reference - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/language-readiness.md, sections 'What system.prg needs from the VM', OOP-1..OOP-9",
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7 (objects), AD-8 (lookup precedence)",
 ]
 plan_checkpoint = true
-notes = ["Doc-first step done 2026-10-12: OOP-4 to OOP-9 are ruled in docs/format-spec.md section 9.17 (facts from extraction rounds 2 and 3; our rules marked there). Start at the code."]
+notes = ["Doc-first step done 2026-10-12: OOP-4 to OOP-9 are ruled in `docs/spec/engine/rpgcode-modules-and-objects.md` (facts from extraction rounds 2 and 3; our rules marked there). Start at the code."]
 
 [[entry]]
 id = 7
 type = "story"
 title = "Error handling, located diagnostics, Logger and the harness report change"
-description = "First step, doc-first (G7): a person rules ERR-1 and ERR-2 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements `setErrorHandler`, `setResumeNextHandler`, `resumeNext` and the legacy `on error goto` / `on error resume next` forms inside functions, with handler state in `Frame.errorHandler`, `debugger(msg)` and `debug`, the `core` `Logger` port with levels and plain-data records (AD-24), every runtime error reported as a `TickReport` diagnostic `{ code, file, line, message }`, and the entry-1.9 harness driver change so a tick report may carry non-empty requests and diagnostics (format-spec section 9.8, E-98, `deferred-work.md`, audit row 3). Extends the entry 3 `Logger` port with the remaining levels and sinks."
+description = "First step, doc-first (G7): a person rules ERR-1 and ERR-2 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Implements `setErrorHandler`, `setResumeNextHandler`, `resumeNext` and the legacy `on error goto` / `on error resume next` forms inside functions, with handler state in `Frame.errorHandler`, `debugger(msg)` and `debug`, the `core` `Logger` port with levels and plain-data records (AD-24), every runtime error reported as a `TickReport` diagnostic `{ code, file, line, message }`, and the entry-1.9 harness driver change so a tick report may carry non-empty requests and diagnostics (`docs/spec/engine/rpgcode-errors-and-threads.md#error-handling`, E-98, `deferred-work.md`, audit row 3). Extends the entry 3 `Logger` port with the remaining levels and sinks."
 verify = "A synthetic bad program reports the file and line, its handler runs and `resumeNext` continues after the failing statement, a nested-call error escapes the caller's handler, a `Logger` record reaches the port with no `console` call in `core`, and the harness accepts the report."
 covers = ["CAP-5"]
 after = [5, 27]
 hitl = true
 risk = "medium"
 references = [
-  "reference - docs/format-spec.md, section 9.8",
-  "reference - docs/engine-features.md, E-98",
+  "reference - `docs/spec/engine/rpgcode-errors-and-threads.md#error-handling`",
+  "reference - docs/spec/engine/rpgcode-language.md#e-98",
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-24 (diagnostics, Logger port, no console)",
   "deferred - _bmad-output/initiative-rpgtoolkit-reawakened/deferred-work.md, the 1.9 harness finding (driver throws on non-empty requests or diagnostics)",
   "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/foundations-audit.md, row 3 (Logger port unowned)",
 ]
 plan_checkpoint = true
-notes = ["Doc-first step done 2026-10-12: ERR-1 and ERR-2 are ruled in docs/format-spec.md section 9.8, including modulo by zero as a catchable error. Start at the code."]
+notes = ["Doc-first step done 2026-10-12: ERR-1 and ERR-2 are ruled in `docs/spec/engine/rpgcode-errors-and-threads.md#error-handling`, including modulo by zero as a catchable error. Start at the code."]
 
 [[entry]]
 id = 8
 type = "story"
 title = "Modules: includes, implicit includes, redirects, hoisting, program cache"
-description = "First step, doc-first (G7): a person rules MOD-2 and MOD-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements `#include` and `include()`, implicit include `file.func(args)`, `redirect`/`killRedirect`/`killAllRedirects` with their `redirects` state section, per-file hoisting and visibility after include, `Prg/` path resolution through the epic-2 asset resolver, `ProgramCache` keyed by `sourceHash` (E-91), and the refusal of a pre-compiled `.prg` (first byte `0x00`) with the section 9.1 message. Function names clash across files in real code (two queue and stack libraries both define AddLit and PopLit, told apart only by the `file.` prefix), and the unqualified-after-first-use rule is claimed by one community tutorial but not seen across files, so this entry's doc-first ruling decides it. A script function replaced by a later include or definition raises a `command.overridden` warn record and a located `TickReport` diagnostic { code, file, line, message } so script authors and handlers can see it."
+description = "First step, doc-first (G7): a person rules MOD-2 and MOD-3 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Implements `#include` and `include()`, implicit include `file.func(args)`, `redirect`/`killRedirect`/`killAllRedirects` with their `redirects` state section, per-file hoisting and visibility after include, `Prg/` path resolution through the epic-2 asset resolver, `ProgramCache` keyed by `sourceHash` (E-91), and the refusal of a pre-compiled `.prg` (first byte `0x00`) with the section 9.1 message. Function names clash across files in real code (two queue and stack libraries both define AddLit and PopLit, told apart only by the `file.` prefix), and the unqualified-after-first-use rule is claimed by one community tutorial but not seen across files, so this entry's doc-first ruling decides it. A script function replaced by a later include or definition raises a `command.overridden` warn record and a located `TickReport` diagnostic { code, file, line, message } so script authors and handlers can see it."
 verify = "An include cycle, an implicit include and a redirect chain each resolve as documented, a cached program is not re-parsed, and a `.prg` whose first byte is `0x00` is refused with the section 9.1 message."
 covers = ["CAP-5"]
 after = [7, "2.10"]
 hitl = true
 risk = "medium"
 references = [
-  "reference - docs/format-spec.md, sections 9.1, 9.6",
-  "reference - docs/engine-features.md, E-91",
+  "reference - `docs/spec/formats/rpgcode-program.md#compiled-form`, `docs/spec/engine/rpgcode-modules-and-objects.md#modules`",
+  "reference - docs/spec/engine/rpgcode-language.md#e-91",
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-5, AD-7",
   "provider - epic-legacy-formats entry 2.10 (asset resolver and package loader)",
 ]
 plan_checkpoint = true
-notes = ["#Include gives access to that file's functions under a namespace-like structure, a nested function name. (Jensen, 2026-10-11)", "Working rule until evidence says otherwise: #Include, an implicit file.func call and first run each add the file's functions to one flat command list at that moment, a later definition replaces an earlier one with the same name, and the file. prefix always reaches that file's own definition. (Jensen, 2026-10-11)", "Doc-first step done 2026-10-12: MOD-2 and MOD-3 are ruled in docs/format-spec.md section 9.6. Start at the code."]
+notes = ["#Include gives access to that file's functions under a namespace-like structure, a nested function name. (Jensen, 2026-10-11)", "Working rule until evidence says otherwise: #Include, an implicit file.func call and first run each add the file's functions to one flat command list at that moment, a later definition replaces an earlier one with the same name, and the file. prefix always reaches that file's own definition. (Jensen, 2026-10-11)", "Doc-first step done 2026-10-12: MOD-2 and MOD-3 are ruled in `docs/spec/engine/rpgcode-modules-and-objects.md#modules`. Start at the code."]
 
 [[entry]]
 id = 9
 type = "story"
 title = "Threads and waits: kinds, sleep, wake, tellThread, multiRun, tick budget"
-description = "First step, doc-first (G7): a person rules THR-1 to THR-3 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Implements the four thread kinds (`blocking`, `board`, `persistent`, `item`) with `thread(file,persist)` and the E-93 operations (`threadSleep`, `threadWake`, `threadSleepRemaining`, `killThread`, `getThreadId`, `tellThread`) registered through entry 3's registry, the AD-9 wait registry with `poll`-only resolution and duplicate rejection, the VM-owned `input.key` and `sleep` kinds plus a test-double `movement` kind that movement-triggers takes over, per-thread source and target context, `multiRun` movement coupling, and the per-tick budget tuned with movement-triggers (E-33, E-95, AD-26; spine Deferred, D10). Implements ADR 0004 decision 7 on the VM side, on AD-5's existing request and reply inputs: running a command's `then` continuation with the reply prepended; a tick-counted timeout for AD-9 waits (layered engine default, plugin `options`, the wait's own value, harness override; zero means none) that resumes the thread with an error result and a located diagnostic; a failure reply delivered as an ordinary input for a frozen request, whose wall-clock timeout the host owns; deadlock detection (every live thread parked on another parked thread, no reply outstanding) reported with the stuck threads and what they wait on, a hard failure in headless runs; and scripted replies in the harness. Exposes the VM's `waits` and `threads` phase handlers and an instruction-granular resumable step for epic 4's `createEngine` to register (AD-26); the open-tick cursor and pause state belong to `core/engine` (AD-10), so the breakpoint hook and the E-03 pause are epic 4's."
+description = "First step, doc-first (G7): a person rules THR-1 to THR-3 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Implements the four thread kinds (`blocking`, `board`, `persistent`, `item`) with `thread(file,persist)` and the E-93 operations (`threadSleep`, `threadWake`, `threadSleepRemaining`, `killThread`, `getThreadId`, `tellThread`) registered through entry 3's registry, the AD-9 wait registry with `poll`-only resolution and duplicate rejection, the VM-owned `input.key` and `sleep` kinds plus a test-double `movement` kind that movement-triggers takes over, per-thread source and target context, `multiRun` movement coupling, and the per-tick budget tuned with movement-triggers (E-33, E-95, AD-26; spine Deferred, D10). Implements ADR 0004 decision 7 on the VM side, on AD-5's existing request and reply inputs: running a command's `then` continuation with the reply prepended; a tick-counted timeout for AD-9 waits (layered engine default, plugin `options`, the wait's own value, harness override; zero means none) that resumes the thread with an error result and a located diagnostic; a failure reply delivered as an ordinary input for a frozen request, whose wall-clock timeout the host owns; deadlock detection (every live thread parked on another parked thread, no reply outstanding) reported with the stuck threads and what they wait on, a hard failure in headless runs; and scripted replies in the harness. Exposes the VM's `waits` and `threads` phase handlers and an instruction-granular resumable step for epic 4's `createEngine` to register (AD-26); the open-tick cursor and pause state belong to `core/engine` (AD-10), so the breakpoint hook and the E-03 pause are epic 4's."
 verify = "The synthetic thread program (board, persistent and item threads, sleep and wake, `tellThread` injected inline code, a never-yielding loop preempted at the budget, `multiRun` over two sprites) runs deterministically and restores identically mid-wait, a scripted reply input is applied at its recorded tick on replay, an AD-9 wait with no wake times out in ticks with an error result, a failure reply resumes a frozen request with the missing-asset result, and two threads parked on each other fail the headless run with both named."
 covers = ["CAP-5"]
 after = [3, 5, 27]
 hitl = true
 risk = "high"
 references = [
-  "reference - docs/engine-features.md, E-33, E-93, E-95",
-  "reference - docs/format-spec.md, sections 9.10, 9.11 (program flow and threads)",
+  "reference - docs/spec/engine/main-loop-and-startup.md#e-33, E-93, E-95",
+  "reference - `docs/spec/engine/rpgcode-errors-and-threads.md#threads`, `docs/spec/engine/rpgcode-functions.md` (program flow and threads)",
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-9, AD-26, and its Deferred list (per-tick budget owners rpgcode-vm and movement-triggers)",
 ]
 plan_checkpoint = true
-notes = ["THR-1 starting point (Jensen, 2026-10-12): legacy `threadSleep(id, seconds)` takes real seconds, `0` means sleep until woken, and a sleeping thread just skips its turn (docs/provenance/facts-round-2.md R2-Q23; the archive's research note rpgcode-threads-for-implementers.md). Our simulation is a fixed 60 Hz tick (AD-2, G3.2), so `core/time`'s `secondsToTicks` converts seconds to a whole number of ticks (a tick is one fixed simulation update) and the wait stores an absolute `until` tick, which keeps snapshots, restores and replays identical at any frame rate. The ruling still has to pick the rounding rule, what `0` maps to (an indefinite sleep), and the wake order when several threads wake on the same tick. The tracer's provisional `sleep(ticks)` (entry 2) is not `threadSleep`; this entry replaces its callers.", "Doc-first step done 2026-10-12: THR-1 to THR-3 are ruled in docs/format-spec.md section 9.15 (sleep rounding formula, same-tick wake order, per-thread source and target, VM step vs tick, per-tick budget). Start at the code."]
+notes = ["THR-1 starting point (Jensen, 2026-10-12): legacy `threadSleep(id, seconds)` takes real seconds, `0` means sleep until woken, and a sleeping thread just skips its turn (docs/provenance/facts-round-2.md R2-Q23; the archive's research note rpgcode-threads-for-implementers.md). Our simulation is a fixed 60 Hz tick (AD-2, G3.2), so `core/time`'s `secondsToTicks` converts seconds to a whole number of ticks (a tick is one fixed simulation update) and the wait stores an absolute `until` tick, which keeps snapshots, restores and replays identical at any frame rate. The ruling still has to pick the rounding rule, what `0` maps to (an indefinite sleep), and the wake order when several threads wake on the same tick. The tracer's provisional `sleep(ticks)` (entry 2) is not `threadSleep`; this entry replaces its callers.", "Doc-first step done 2026-10-12: THR-1 to THR-3 are ruled in `docs/spec/engine/rpgcode-runtime.md` (sleep rounding formula, same-tick wake order, per-thread source and target, VM step vs tick, per-tick budget). Start at the code."]
 
 [[entry]]
 id = 22
@@ -247,15 +247,15 @@ risk = "high"
 id = 11
 type = "story"
 title = "Snapshot and restore hardening: state shape, hashState, bounds, mismatch policy"
-description = "Completes the AD-7 `VmState`/`Thread`/`Frame` shape for every construct above, implements the compiler and `sourceHash` mismatch policy as restart-the-thread confirmed against format-spec section 11, wires `hashState` into `advance` with the deferred-work fixes (a fixed explicit `canon` depth bound, and the density-check and per-property allocation cost), and bounds script-created nesting well below the about 3,900-level `RangeError` depth (AD-17)."
+description = "Completes the AD-7 `VmState`/`Thread`/`Frame` shape for every construct above, implements the compiler and `sourceHash` mismatch policy as restart-the-thread confirmed against `docs/spec/formats/save-game.md#layout-minor-4`, wires `hashState` into `advance` with the deferred-work fixes (a fixed explicit `canon` depth bound, and the density-check and per-property allocation cost), and bounds script-created nesting well below the about 3,900-level `RangeError` depth (AD-17)."
 verify = "For every synthetic program committed so far a random-step snapshot restores into a fresh VM with an identical state hash, a deliberately deep script value fails with the same documented error on every runner, and a compiler or source-hash mismatch restarts the thread from source."
 covers = ["CAP-5"]
 after = [6, 8, 9]
 hitl = false
 risk = "high"
 references = [
-  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7, AD-11, AD-17, AD-23, and its Deferred list (restore policy: AD-7 restarts the thread; confirm against format-spec section 11)",
-  "reference - docs/format-spec.md, section 11 (saved game)",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7, AD-11, AD-17, AD-23, and its Deferred list (restore policy: AD-7 restarts the thread; confirm against `docs/spec/formats/save-game.md#layout-minor-4`)",
+  "reference - `docs/spec/formats/save-game.md#layout-minor-4` (saved game)",
   "deferred - _bmad-output/initiative-rpgtoolkit-reawakened/deferred-work.md, the `canon` recursion-depth bound and the `hashState` cost notes",
   "plan - _bmad-output/initiative-rpgtoolkit-reawakened/epic-platform-baseline/story-contract-types-canonical-form-and-hashes-plan.md, findings F10 and F11",
 ]
@@ -264,32 +264,32 @@ references = [
 id = 12
 type = "story"
 title = "Pure built-ins: scope, variables, arrays, maps, strings and conversions"
-description = "First step, doc-first (G7): a person rules SEM-3 to SEM-6 from the discovery's ambiguity list in `docs/format-spec.md` in its own commit. Registers the language-only built-ins through entry 3's registry: scope (`local`, `global`, `autoLocal`, `kill` in its element and variadic forms), the E-92 engine-backed virtual variables through their ports, sparse arrays and maps, and the string and conversion set (`len`/`length`, `left`, `right`, `mid`, `inStr`, `replace`, `regExpReplace`, `split`, `trim`, `lcase`, `ucase`, `asc`, `chr`, `charAt`, `castLit`, `castNum`, `castInt`, `spliceVariables`) (format-spec sections 9.3 and 9.11)."
+description = "First step, doc-first (G7): a person rules SEM-3 to SEM-6 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Registers the language-only built-ins through entry 3's registry: scope (`local`, `global`, `autoLocal`, `kill` in its element and variadic forms), the E-92 engine-backed virtual variables through their ports, sparse arrays and maps, and the string and conversion set (`len`/`length`, `left`, `right`, `mid`, `inStr`, `replace`, `regExpReplace`, `split`, `trim`, `lcase`, `ucase`, `asc`, `chr`, `charAt`, `castLit`, `castNum`, `castInt`, `spliceVariables`) (`docs/spec/engine/rpgcode-functions.md`)."
 verify = "A synthetic program exercises each family as ruled, unset reads give the documented `\"\"` and 0, the `kill` forms behave as documented, and every registered name resolves with the documented arity and `byRef` parameters."
 covers = ["CAP-5"]
 after = [3, 5, 27]
 hitl = true
 risk = "medium"
 references = [
-  "reference - docs/format-spec.md, sections 9.3, 9.11 (strings and math, scope)",
-  "reference - docs/engine-features.md, E-92",
+  "reference - `docs/spec/engine/rpgcode-functions.md` (strings and math, scope)",
+  "reference - docs/spec/engine/rpgcode-language.md#e-92",
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-8, AD-10",
 ]
 plan_checkpoint = true
-notes = ["Doc-first step done 2026-10-12: SEM-3 to SEM-6 are ruled in docs/format-spec.md section 9.16. Start at the code."]
+notes = ["Doc-first step done 2026-10-12: SEM-3 to SEM-6 are ruled in `docs/spec/engine/rpgcode-runtime.md`. Start at the code."]
 
 [[entry]]
 id = 13
 type = "story"
 title = "Pure built-ins: maths, seeded random and flow"
 description = "Registers the maths names (`sin`, `cos`, `tan`, `sqrt`, `log` and the rest) by consuming `core/fmath` (entry 4), draws `random` through entry 2's single seeded RNG with the draw order fixed by the tick pipeline, and registers the flow built-ins `run`, `change`, `rpgCode`, `delay`, `end`/`done`/`stop`, `branch`, `iif` and `getTickCount` (AD-12, AD-13)."
-verify = "A fixed seed gives identical `random` sequences that round-trip through a snapshot, and `end()` unwinds fully as format-spec §9.5 rules (FUN-7, R2-Q20): called inside nested function calls, inside an included function (ending the including program) and inside a `run()` program (ending the whole chain), it stops the program immediately and abandons every pending frame, and a snapshot taken before the `end()` restores and ends identically."
+verify = "A fixed seed gives identical `random` sequences that round-trip through a snapshot, and `end()` unwinds fully as `docs/spec/engine/rpgcode-language.md#keywords-and-structure` rules (FUN-7, R2-Q20): called inside nested function calls, inside an included function (ending the including program) and inside a `run()` program (ending the whole chain), it stops the program immediately and abandons every pending frame, and a snapshot taken before the `end()` restores and ends identically."
 covers = ["CAP-5"]
 after = [4, 5, 8, 9, 12]
 hitl = false
 risk = "medium"
 references = [
-  "reference - docs/format-spec.md, sections 9.4 (`^`), 9.11 (program flow and threads, strings and math)",
+  "reference - `docs/spec/engine/rpgcode-language.md#expressions` (`^`), 9.11 (program flow and threads, strings and math)",
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-12, AD-13, AD-26",
   "provider - this epic's entry 4 (core/fmath) and entry 2 (core/rng)",
 ]
@@ -321,7 +321,7 @@ references = [
   "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decision 2 (PluginDefinition), and AD-31 (AssetDecoder registration)",
   "epic - _bmad-output/initiative-rpgtoolkit-reawakened/epic-legacy-formats/epic-legacy-formats.md, the 2026-10-11 Source conflict and Decision (decoders wiring handed to the plugin mechanism, whose API is epic rpgcode-vm's E-99 open question)",
   "provider - epic-legacy-formats entry 2.13 (AssetDecoder interface and core format registry)",
-  "reference - docs/engine-features.md, E-99",
+  "reference - docs/spec/engine/plugins-and-battle.md#e-99",
 ]
 
 [[entry]]
@@ -336,7 +336,7 @@ hitl = false
 risk = "medium"
 references = [
   "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decisions 1 and 3",
-  "reference - docs/format-spec.md, section 9.9",
+  "reference - `docs/spec/engine/rpgcode-dialects.md`",
   "reference - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/language-readiness.md, 'Legacy syntax (RPGCode 2)' row and the spec-example probe",
 ]
 notes = ["We should support TK2 games and TK3 games on launch. There are so many V2 era games still around. (Jensen, 2026-10-11)", "RPGCode v1 (TK 1.x) is a nice to have and not part of our MVP. (Jensen, 2026-10-11)"]
@@ -352,8 +352,8 @@ after = [7, 9, 12, 27, "1.8", "1.9"]
 hitl = false
 risk = "medium"
 references = [
-  "reference - docs/engine-features.md, E-97",
-  "reference - docs/format-spec.md, section 9.11 (files in game folders)",
+  "reference - docs/spec/engine/rpgcode-functions.md#e-97",
+  "reference - `docs/spec/engine/rpgcode-functions.md` (files in game folders)",
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-9 (the blob kind), AD-17",
   "provider - epic-platform-baseline entries 1.8 (request and reply contract types) and 1.12 (the reply shape)",
 ]

@@ -1,5 +1,5 @@
 /**
- * Writing a vector board (format-spec §4.2).
+ * Writing a vector board ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)).
  *
  * Pure (G2): it fills a `BinaryWriter` and never touches a host. It emits the
  * version it was given and reproduces the bytes `readBoard` consumed exactly
@@ -8,7 +8,7 @@
  * unmodified board writes back byte for byte. A value the reader would refuse
  * is refused here — an unencodable string, an out-of-range `i16` scalar or
  * count, a magic or version this layout cannot write, a negative dimension, a
- * tile matrix past the §4.2 cell limit, or an inconsistent tile matrix — and
+ * tile matrix past the vector layout's cell limit, or an inconsistent tile matrix — and
  * comes back as a located `FormatError`.
  */
 
@@ -29,13 +29,13 @@ function fail(writer: BinaryWriter, message: string): Result<never> {
   return err({ offset: writer.toBytes().length, section: BOARD_LAYOUT_SECTION, message });
 }
 
-/** The stored `i16` range a §4.2 scalar must fit (format-spec §1.1). */
+/** The stored `i16` range a board scalar must fit. */
 const I16_MIN = -32_768;
 const I16_MAX = 32_767;
 
 /**
  * Check the stored tile runs against the grid and the decompressed matrix
- * (format-spec §4.2). The writer serialises the stored runs, so they must be
+ * ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). The writer serialises the stored runs, so they must be
  * the runs `readBoard` would read back — its `readTileMatrix` stops at the run
  * that completes the grid, so the runs must cover at least `sizeL × width ×
  * height` cells with no run after the completing one (only a final run may
@@ -95,7 +95,7 @@ function bound(count: number): number {
 }
 
 /**
- * Write a list's `i16` upper bound (format-spec §1.2) after checking it fits:
+ * Write a list's `i16` upper bound after checking it fits:
  * a count above 32768 would wrap `count - 1` and re-read as "none", so it is
  * refused (AD-18).
  */
@@ -128,7 +128,7 @@ function writeI16s(
   return ok(undefined);
 }
 
-/** Write an upper-bounded list of strings (format-spec §1.2, §4.2). */
+/** Write an upper-bounded list of strings ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function writeStrings(writer: BinaryWriter, values: readonly string[]): Result<void> {
   const count = writeUpperBound(writer, values.length, "a string list");
   if (!count.ok) {
@@ -143,7 +143,7 @@ function writeStrings(writer: BinaryWriter, values: readonly string[]): Result<v
   return ok(undefined);
 }
 
-/** Write an upper-bounded list of `i32 x, i32 y` points (format-spec §4.2). */
+/** Write an upper-bounded list of `i32 x, i32 y` points ([vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later)). */
 function writePoints(writer: BinaryWriter, points: readonly BoardPoint[]): Result<void> {
   const count = writeUpperBound(writer, points.length, "a point list");
   if (!count.ok) {
@@ -157,17 +157,17 @@ function writePoints(writer: BinaryWriter, points: readonly BoardPoint[]): Resul
 }
 
 /**
- * Serialise `model` to the vector board layout (format-spec §4.2). Every
+ * Serialise `model` to the [vector layout](../../../../../../docs/spec/formats/board.md#vector-layout-minor-4-and-later). Every
  * section's bound is derived back from the model's array length, so empty
- * slots round-trip and table indices stay stable (§1.2).
+ * slots round-trip and table indices stay stable.
  */
 export function writeBoard(model: Board): Result<Uint8Array> {
   const writer = new BinaryWriter();
 
   // Everything the reader refuses is refused here first, so the writer never
   // hands back a file its own reader would reject (AD-18): the magic is fixed,
-  // the version must select the §4.2 vector layout, the dimensions must be
-  // non-negative and the tile matrix must fit the §4.2 cell limit.
+  // the version must select the vector layout, the dimensions must be
+  // non-negative and the tile matrix must fit the vector layout's cell limit.
   if (model.magic !== BOARD_MAGIC) {
     return fail(
       writer,

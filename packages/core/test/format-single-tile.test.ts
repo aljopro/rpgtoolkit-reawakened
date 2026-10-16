@@ -1,5 +1,5 @@
-// Single tile (.gph v2) format of `docs/spec/formats/tiles.md#single-tile-gph`
-// (format-spec §3.2, §15.11): text format, details 1..6, compression 0 (uncompressed)
+// Single tile (.gph v2) format of `docs/spec/formats/tiles.md#single-tile-gph`:
+// text format, details 1..6, compression 0 (uncompressed)
 // and 1 (RLE), RGBA expansion and writer.
 
 import { test } from "node:test";

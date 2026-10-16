@@ -35,7 +35,7 @@ Byte and text readers in `core`, their spec amendment, registry registration and
 - spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-18, AD-31
 - constraint - docs/guardrails.md, section G7
 - constraint - docs/adr/0006-clean-room-spec-extraction.md
-- reference - docs/format-spec.md, sections 1.3, 1.4, 3, 4, 6, 7, 8
+- reference - `docs/spec/formats/README.md#header-and-version`, `docs/spec/formats/tiles.md`, `docs/spec/formats/board.md`, `docs/spec/formats/character.md#layout`, `docs/spec/formats/animation.md#layout`, `docs/spec/formats/battle-data.md`
 - research - _bmad-output/initiative-rpgtoolkit-reawakened/epic-tk2-support/discovery/tk2-formats-research.md (coverage table, gap list, evidence index)
 
 ## Notes

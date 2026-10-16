@@ -1,5 +1,5 @@
 /**
- * Time is the tick counter (AD-2, AD-10; format-spec §9.15).
+ * Time is the tick counter (AD-2, AD-10; docs/spec/engine/rpgcode-errors-and-threads.md#threads).
  *
  * `TimeState` is the `time` section of `GameState`: one integer, the tick the
  * phases read. `runTimePhase` is the `time` phase action — it increments the
@@ -10,7 +10,7 @@
  * `core/time` is the sole owner of seconds↔ticks conversion (AD-2):
  * `secondsToTicks`, `fpsToTicks` and `frameAt` arrive with the entries that use
  * them. Q8 gives the seconds-to-ticks formula `max(1, floor(seconds * 60 +
- * 0.5))` (§9.15 THR-1) to `threadSleep` (entry 9); entry 13's `delay` only uses
+ * 0.5))`(docs/spec/engine/rpgcode-runtime.md THR-1) to `threadSleep` (entry 9); entry 13's `delay` only uses
  * it, and the provisional `sleep(ticks)` built-in takes whole ticks, so no
  * conversion is needed yet.
  */

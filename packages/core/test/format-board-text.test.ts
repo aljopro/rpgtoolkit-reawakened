@@ -1,4 +1,4 @@
-// TK2 text board reader tests (format-spec §15.3, docs/spec/formats/legacy/text-formats.md#board-toolkit-2-text)
+// TK2 text board reader tests (docs/spec/formats/legacy/text-formats.md#board-toolkit-2-text, docs/spec/formats/legacy/text-formats.md#board-toolkit-2-text)
 import { test } from "node:test";
 import { equal } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";

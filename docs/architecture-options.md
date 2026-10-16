@@ -1,8 +1,8 @@
 # Architecture Options — RPG Toolkit Reawakened
 
-> **Question.** What is a realistic technology stack for a from-scratch, **MIT/Apache-licensed** 2D tile RPG engine plus authoring toolset that must **read legacy RPG Toolkit 3 worlds** (`.brd` boards, `.prg` RPGCode, and the rest; see [format-spec.md](format-spec.md))?
+> **Question.** What is a realistic technology stack for a from-scratch, **MIT/Apache-licensed** 2D tile RPG engine plus authoring toolset that must **read legacy RPG Toolkit 3 worlds** (`.brd` boards, `.prg` RPGCode, and the rest; see [spec/formats/](spec/formats/README.md))?
 >
-> **Approach.** Split the product into a **game core** and swappable **runners** (browser and native), plus an **editor** that reuses the core. Each option is judged on fitness, ecosystem maturity, licence, tooling friction, and how well the core-to-runner seam survives. Each option is tied back to the capability IDs in [engine-features.md](engine-features.md) (E-xx) and [editor-features.md](editor-features.md) (T-xx).
+> **Approach.** Split the product into a **game core** and swappable **runners** (browser and native), plus an **editor** that reuses the core. Each option is judged on fitness, ecosystem maturity, licence, tooling friction, and how well the core-to-runner seam survives. Each option is tied back to the capability IDs in [spec/engine/](spec/engine/) (E-xx) and [editor-features.md](editor-features.md) (T-xx).
 >
 > Research current as of **October 2026**. Versions and statuses are cited at the end. Re-verify before committing.
 >
@@ -21,7 +21,7 @@ Most stack debates about 2D engines are settled by a few hard requirements. For 
 | R3 | **Deterministic simulation** independent of frame rate. | E-04, E-22…E-34 | Fixed-tick core with an injected clock and RNG. The legacy fps-coupled speed maths is replaced by real-time equivalents. |
 | R4 | **Layered 2D compositing** with colour-key transparency, per-pixel **additive RGB tint** (−255…+255), translucency, masked iso diamonds, off-screen canvases, read-back (`getPixel`, `canvasGetScreen`). | E-52…E-59, E-17 | Needs render-to-texture and a simple tint shader, *or* a CPU compositor. Any WebGL2-class renderer is enough. 3D engines are overkill. Read-back rules out "fire-and-forget" GPU-only APIs unless the runner supports copies back to the CPU (under [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md), read-back is served by `core/raster`, so runners need no CPU copy). |
 | R5 | **General MIDI playback everywhere.** | E-100, E-103 | Browsers and mobile have no OS MIDI synth, so a **SoundFont synthesiser must ship with the runner**, together with a permissively licensed SoundFont. This is a licensing trap (FluidSynth is LGPL; some popular SoundFonts are GPL or have unclear provenance). |
-| R6 | **Binary legacy formats + ZIP + appended-ZIP EXE import.** | format-spec §1–13, E-01, E-131 | Byte-level readers in the core, kept I/O-free. The runner provides bytes. Needs a permissive ZIP reader. |
+| R6 | **Binary legacy formats + ZIP + appended-ZIP EXE import.** | [spec/formats/](spec/formats/README.md), E-01, E-131 | Byte-level readers in the core, kept I/O-free. The runner provides bytes. Needs a permissive ZIP reader. |
 | R7 | **Editor with heavy forms, trees, a code editor with syntax colouring and call tips, a pixel editor, and a zoomable vector/tile canvas.** | T-01…T-64 | Favours a mature UI toolkit with a strong text-editor component. The web platform is the strongest here (CodeMirror/Monaco). Immediate-mode GUIs are weak at rich text. |
 | R8 | **Editor live preview and test-run** using the *same* core. | T-07, T-41, E-01 test mode | The core must embed in the editor (in-process, or as wasm in the editor's web view). |
 | R9 | **Licence: MIT/Apache for everything we ship;** clean-room relative to the GPL-2 legacy code. | brief | No GPL/LGPL in shipped binaries (including the wasm bundle). Non-OSI "source-available" engines are excluded. GPL tools may be used *externally* only (e.g. as importers run by the user). |
@@ -51,7 +51,7 @@ outputs: frame = ordered draw list   [blit(tex | surface, src, dst, key, tint, a
 ```
 
 Rules that keep the seam honest:
-* **No I/O in the core.** It *asks* for assets by logical path. Case-folding and package lookup (format-spec §1.5) live in a shared "asset resolver" module that runners call with their own byte source (file system, fetch, OPFS, embedded archive).
+* **No I/O in the core.** It *asks* for assets by logical path. Case-folding and package lookup ([paths inside files](spec/formats/README.md#paths-inside-files)) live in a shared "asset resolver" module that runners call with their own byte source (file system, fetch, OPFS, embedded archive).
 * **Draw lists out, one reference rasteriser inside** (amended by [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md)). The core emits a **draw list** against abstract textures and surfaces. A runner replays it with WebGL2, WebGPU, Canvas2D or SDL3's renderer. The core also holds the single reference rasteriser (`core/raster`) and owns persistent surfaces, because scripts read pixels back (`getPixel`, `canvasGetScreen`, screen save and restore) and must get the same pixels on every runner. The headless harness uses that rasteriser for golden images.
 * **Text layout, glyphs and image decoding are core-owned** (amended by [ADR 0002](adr/0002-core-pixels-and-deterministic-maths.md)). Line breaks, glyph advances and glyph rasterisation come from the core, and game images are decoded once in the core, so word wrap and script-read pixels do not depend on the platform. Game fonts arrive as assets (E-132); a bundled bitmap font is the fallback and the test font. Platform fonts are an opt-in runner mode, off in golden and conformance runs.
 * **Audio is cues, not samples.** A runner may synthesise MIDI natively or in an AudioWorklet. Offer a shared synth module so behaviour matches across runners.
@@ -160,7 +160,7 @@ This is not just "another shell". Because the editor UI in the recommended path 
 
 | Piece | What it delivers | Capabilities | Reuse outside VS Code |
 |---|---|---|---|
-| **RPGCode language server (LSP)** | Syntax colouring (TextMate grammar), diagnostics from the *core's own parser*, call tips and hover from the built-in catalogue (format-spec §9.11), go-to-definition across `#include` and implicit includes, outline of functions/classes/labels (replaces the legacy bookmark bar), formatting (replaces the indent wizard), quick fixes for legacy syntax (replaces the update and cleanup wizards). | T-40, T-42, T-43, T-44, T-46 | Any LSP client: Neovim, Zed, Helix, JetBrains, and the standalone editor's CodeMirror. |
+| **RPGCode language server (LSP)** | Syntax colouring (TextMate grammar), diagnostics from the *core's own parser*, call tips and hover from the built-in catalogue ([rpgcode-functions.md](spec/engine/rpgcode-functions.md)), go-to-definition across `#include` and implicit includes, outline of functions/classes/labels (replaces the legacy bookmark bar), formatting (replaces the indent wizard), quick fixes for legacy syntax (replaces the update and cleanup wizards). | T-40, T-42, T-43, T-44, T-46 | Any LSP client: Neovim, Zed, Helix, JetBrains, and the standalone editor's CodeMirror. |
 | **RPGCode debug adapter (DAP)** | Launch the game or a single program against a test fixture. Breakpoints, step, watch variables, thread list, call stack. The step VM (R1) makes this cheap to build. | T-07, T-41, E-98 (exceeds legacy, which only had an error window) | Any DAP client. |
 | **Custom editors (webviews)** | `.brd`, `.tem`, `.itm`, `.ene`, `.anm`, `.tbm`, `.tst`, `.gam` and the rest open in the same web components the standalone editor uses, with the core (wasm) for parsing, preview and saving. The Custom Editor API supports binary documents with undo/redo and dirty tracking. | T-10…T-64 | The components are shared with the browser, Tauri and Electron editors. |
 
@@ -203,7 +203,7 @@ How each hard capability lands in an Option A build, with notes on alternatives.
 
 | Capability | Where it lives | Notes / alternative impact |
 |---|---|---|
-| Format readers (format-spec §2–9), legacy upgrades (E-10, T-31) | core `formats` module | Same code serves runners, editor and a CLI converter. In B, TS DataView readers work equally well. |
+| Format readers ([spec/formats/](spec/formats/README.md)), legacy upgrades (E-10, T-31) | core `formats` module | Same code serves runners, editor and a CLI converter. In B, TS DataView readers work equally well. |
 | Coordinates & iso (E-11, E-53) | core | Pure maths. |
 | Collision, sliding, stairs, edges, z-order, pathfinding (E-26…E-34) | core | Fixed-tick, deterministic. Golden tests from the legacy demo games. |
 | Trigger rules (E-40…E-49) | core | Data-driven. Unit-testable without a renderer. |
@@ -213,7 +213,7 @@ How each hard capability lands in an Option A build, with notes on alternatives.
 | Music and MIDI (E-100…E-103) | shared synth module (rustysynth) + runner output | Same MIDI sound on web and native. B uses SpessaSynth. C uses TinySoundFont. |
 | Video (E-104) | runner | Transcode AVI on import (editor-side tool) to a web-playable format. |
 | Save/load incl. threads (E-120…E-122) | core serialises plain state | Optional legacy `.sav` reader. |
-| Packaging/import (E-131, T-70…T-72) | editor backend (native core in Tauri) or browser ZIP | Import legacy `.tpk`/appended-ZIP EXE (format-spec §13). Export a web bundle and desktop runner bundle. |
+| Packaging/import (E-131, T-70…T-72) | editor backend (native core in Tauri) or browser ZIP | Import legacy `.tpk`/appended-ZIP EXE ([packaging and paths](spec/formats/packaging-and-paths.md)). Export a web bundle and desktop runner bundle. |
 | Board editor canvas (T-20…T-35) | editor UI (web canvas/WebGL) using core types for vectors, tiles and coordinates | Reuses the same renderer code as the web runner for WYSIWYG. |
 | Program editor, call tips, test-run (T-40…T-41) | CodeMirror 6 + core parser (wasm) as a language service | Diagnostics match the engine exactly because it is the same parser. |
 | Pixel/tile tools, grabber, tilesets (T-36…T-39) | editor UI | Pure web canvas work. Tileset writer in core `formats`. |
@@ -223,7 +223,7 @@ How each hard capability lands in an Option A build, with notes on alternatives.
 
 ## 7. Licence implications (summary)
 
-1. **Clean-room boundary.** The legacy engine and editor are GPL-2. Only the documentation in `docs/` crosses into the new repo. No source, no translated code, no copied tables beyond what is needed to describe file layouts. Keep a short *provenance note* in the repo stating this process. The VGA palette (format-spec §3.1) and similar tables should come from public specifications.
+1. **Clean-room boundary.** The legacy engine and editor are GPL-2. Only the documentation in `docs/` crosses into the new repo. No source, no translated code, no copied tables beyond what is needed to describe file layouts. Keep a short *provenance note* in the repo stating this process. The VGA palette ([DOS palette](spec/formats/tiles.md#dos-palette)) and similar tables should come from public specifications.
 2. **Dependencies:** allow licences rated Bronze or better on the Blue Oak Council list (MIT, Apache-2.0, BSD, ISC, Zlib, 0BSD, BlueOak and the like; CC0-1.0 for data and assets), as [guardrails.md](guardrails.md) G6 and [ADR 0003](adr/0003-permissive-licences-acceptable.md) state. MPL-2.0 and other copyleft needs an ADR exception. **Block GPL/LGPL/AGPL and source-available or restricted licences** (Defold) in anything shipped. Run a licence check in CI (`cargo-deny` for Rust, `license-checker`-style auditing for npm).
 3. **MIDI SoundFont.** Ship **FluidR3_GM** (generally described as MIT; large, ~140 MB, so ship a compressed or trimmed build and lazy-load it on the web). Treat **GeneralUser GS** as optional: it has a custom permissive licence but its author disclaims sample provenance. Avoid GPL SoundFonts. Let users point the runner at their own `.sf2`.
 4. **External GPL tools are fine as tools.** For example, letting users import maps from Tiled (GPL editor) is fine, because we only read its file format. LDtk is MIT.
@@ -278,7 +278,7 @@ Spike the board editor and the game runner on all three desktop OSes (Linux WebK
 
 ## 9. First milestones (stack-independent)
 
-1. **Format readers + headless dump tool** for every format in format-spec. Round-trip tests on `build/game/demo` and `build/game/Basic` from the legacy repo.
+1. **Format readers + headless dump tool** for every format in [spec/formats/](spec/formats/README.md). Round-trip tests on `build/game/demo` and `build/game/Basic` from the legacy repo.
 2. **RPGCode parser + step VM** with blocking and threads. Run `system.prg`/`start.prg` headlessly with scripted input.
 3. **Board render** (draw list → headless PNG) matching legacy screenshots for 2D and both iso modes.
 4. **Movement/collision/triggers.** Play the demo's NPC intercept and battle trigger end-to-end headlessly.

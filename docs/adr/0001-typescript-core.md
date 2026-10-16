@@ -2,7 +2,7 @@
 
 * **Status:** Accepted
 * **Date:** 2026-10-10
-* **Context documents:** [architecture-options.md](../architecture-options.md), [engine-features.md](../engine-features.md), [editor-features.md](../editor-features.md), [format-spec.md](../format-spec.md)
+* **Context documents:** [architecture-options.md](../architecture-options.md), [spec/README.md](../spec/README.md), [editor-features.md](../editor-features.md)
 
 ## Context
 

@@ -1,5 +1,5 @@
 /**
- * The full RPGCode §9.2 tokenizer.
+ * The full RPGCode docs/spec/engine/rpgcode-language.md#lexical-rules tokenizer.
  *
  * Scans identifiers with sigils stripped and case-folded (LEX-10), numbers
  * (LEX-2), strings (LEX-8), operators and punctuation, line endings and EOF,
@@ -55,7 +55,7 @@ function rejectKeyword(name: string, line: number): void {
     case "continue":
       throw new ScriptError(
         "syntax.unsupported",
-        `the \`${name}\` statement is not in the RPGCode 3.1 specification (docs/spec/engine/rpgcode-language.md:55-70)`,
+        `the \`${name}\` statement is not in the RPGCode 3.1 specification (docs/spec/engine/rpgcode-language.md#keywords-and-structure)`,
         { file: "", line },
       );
     case "class":
@@ -144,7 +144,7 @@ const SINGLE_CHAR_OPS = [
 ];
 
 /**
- * Tokenize `text` (format-spec §9.2). The last line need not end in a newline;
+ * Tokenize `text` (docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands). The last line need not end in a newline;
  * an empty source yields only the `eof` token.
  */
 export function tokenize(text: string): Token[] {
@@ -234,7 +234,7 @@ export function tokenize(text: string): Token[] {
       }
       if (cursor >= length || text[cursor] !== '"') {
         lexical(
-          "unterminated string; a string is single-line and ends with `\"` (format-spec §9.2 LEX-8)",
+          "unterminated string; a string is single-line and ends with `\"` (docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands LEX-8)",
           line,
         );
       }
@@ -272,7 +272,7 @@ export function tokenize(text: string): Token[] {
           const literal = text.slice(start, cursor);
           const value = Number(literal);
           if (!Number.isFinite(value)) {
-            lexical(`the number literal \`${literal}\` is not finite (format-spec §9.2)`, line);
+            lexical(`the number literal \`${literal}\` is not finite (docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands)`, line);
           }
           tokens.push({ kind: "number", value, line });
           index = cursor;
@@ -362,7 +362,7 @@ export function tokenize(text: string): Token[] {
     }
 
     lexical(
-      `unknown character ${JSON.stringify(ch)}; format-spec §9.2 (LEX-11) makes this a lexical error`,
+      `unknown character ${JSON.stringify(ch)}; docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands (LEX-11) makes this a lexical error`,
       line,
     );
   }

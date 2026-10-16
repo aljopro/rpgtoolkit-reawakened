@@ -74,7 +74,7 @@ function extensionOf(path: string): string {
   return dot < 0 ? "" : path.slice(dot + 1).toLowerCase();
 }
 
-/** The §2 main-file facts worth printing (§2 rows 3–43). */
+/** The docs/spec/formats/main-file.md#layout main-file facts worth printing(docs/spec/formats/main-file.md#layout rows 3–43). */
 function gamSummary(model: MainFile): string {
   return (
     `main file ${model.major}.${model.minor}, project "${model.projectPath}", ` +
@@ -85,7 +85,7 @@ function gamSummary(model: MainFile): string {
   );
 }
 
-/** The §4 board facts: size, layers, and how much geometry the board carries (§4.2). */
+/** The docs/spec/formats/board.md board facts: size, layers, and how much geometry the board carries(docs/spec/formats/board.md#vector-layout-minor-4-and-later). */
 function boardSummary(model: Board, layout: "vector" | "pre-vector"): string {
   return (
     `board ${model.major}.${model.minor}${layout === "pre-vector" ? " (pre-vector, converted to vectors)" : ""}, ` +
@@ -96,7 +96,7 @@ function boardSummary(model: Board, layout: "vector" | "pre-vector"): string {
     `${model.threads.length} threads, ${model.constants.length} constants`
   );
 }
-/** The §6.2 item facts for summary output. */
+/** The docs/spec/formats/item.md#layout item facts for summary output. */
 function itemSummary(model: Item): string {
   return (
     `item ${model.major}.${model.minor} "${model.name}", buy ${model.buyPrice} / sell ${model.sellPrice}, ` +
@@ -135,8 +135,8 @@ function parseData(cls: DataFormatClass, file: PackageFile, context: AssetResolv
       return read.ok ? modelOutcome(read.value, read.warnings, gamSummary(read.value)) : read;
     }
     case "board": {
-      // §4.1 version dispatch happens inside the decoder: a pre-vector board
-      // comes back already converted to the §4.2 model, with its branch named.
+      // docs/spec/formats/board.md#version-dispatch version dispatch happens inside the decoder: a pre-vector board
+      // comes back already converted to the docs/spec/formats/board.md#vector-layout-minor-4-and-later model, with its branch named.
       const read = CORE_DECODERS.board.decode(bytes, context);
       if (!read.ok) return read;
       const { board, layout } = read.value;
@@ -170,7 +170,7 @@ function parseData(cls: DataFormatClass, file: PackageFile, context: AssetResolv
       const read = CORE_DECODERS["tile-bitmap"].decode(bytes, context);
       if (!read.ok) return read;
       const model = read.value;
-      // §3.6: the bounds count the drawn columns and rows; the stored grid holds
+      // docs/spec/formats/tiles.md#tile-bitmap-tbm: the bounds count the drawn columns and rows; the stored grid holds
       // one more of each, and only x < width and y < height are drawn.
       const drawn = Math.max(model.width, 0) * Math.max(model.height, 0);
       return modelOutcome(
@@ -283,7 +283,7 @@ function parseData(cls: DataFormatClass, file: PackageFile, context: AssetResolv
       );
     }
     case "image": {
-      // §10: the decoder matches the PNG/JPEG signature and returns straight RGBA.
+      // docs/spec/formats/images.md: the decoder matches the PNG/JPEG signature and returns straight RGBA.
       const read = CORE_DECODERS.image.decode(bytes, context);
       if (!read.ok) return read;
       const { w, h, rgba } = read.value;

@@ -1,5 +1,5 @@
 /**
- * Writing the project's own distribution package (format-spec §13, AD-6).
+ * Writing the project's own distribution package (docs/spec/formats/packaging-and-paths.md, AD-6).
  *
  * A distribution package is a `.tpk`-compatible ZIP — the same container the
  * reader in `zip.ts` accepts — holding the game files plus `manifest.json`
@@ -8,7 +8,7 @@
  * index without listing the archive:
  *
  * * `schema` — the project-level integer schema version (AD-23).
- * * `main` — the in-package path of the main file (the `.gam`, §1.5/§13). A
+ * * `main` — the in-package path of the main file (the `.gam`, docs/spec/formats/README.md#paths-inside-files and docs/spec/formats/packaging-and-paths.md. A
  *   package ignores the main file's `projectPath` (AD-5), so this names the file
  *   rather than a game-folder root.
  * * `index` — the relative paths the resolver keys on (AD-5): every game file in
@@ -20,7 +20,7 @@
  * The writer's contract is that a package it emits is always one the landed
  * reader (`readZip`) accepts: every entry carries a CRC-32, entries are ordered
  * deterministically so the same input is byte-identical (G3), a per-entry
- * compression method is chosen so the §13 limits hold (a highly compressible
+ * compression method is chosen so the docs/spec/formats/packaging-and-paths.md limits hold (a highly compressible
  * entry is stored rather than emitting a ratio above L5), and the finished bytes
  * are read back through `readZip` before they are returned. Anything that would
  * breach a limit or the path rules is a located `FormatError` naming the rule
@@ -50,10 +50,10 @@ import { checkEntryPath } from "./path-rules.ts";
 import { readZip } from "./zip.ts";
 import type { PackageFile } from "./model.ts";
 
-/** The format-spec section every failure here cites. */
-const SECTION = "format-spec §13";
+/** The format specification section every failure here cites. */
+const SECTION = "docs/spec/formats/packaging-and-paths.md";
 
-// The ZIP container's structure (PKZIP APPNOTE 4.3, §13): the signatures the
+// The ZIP container's structure (PKZIP APPNOTE 4.3, docs/spec/formats/packaging-and-paths.md: the signatures the
 // reader looks for, the two header sizes and the UTF-8 name flag. The writer
 // emits the container itself rather than calling `fflate`'s `zipSync`, because
 // `zipSync` stamps a DOS timestamp derived from the local clock and time zone
@@ -85,7 +85,7 @@ export interface DistributionInput {
   readonly manifest: DistributionManifest;
 }
 
-/** A located failure citing §13 (AD-18). */
+/** A located failure citing docs/spec/formats/packaging-and-paths.md (AD-18). */
 function failure(offset: number, message: string): FormatError {
   return { offset, section: SECTION, message };
 }
@@ -154,7 +154,7 @@ interface PreparedEntry {
 }
 
 /**
- * Write already-ordered entries into a ZIP container (PKZIP APPNOTE 4.3, §13):
+ * Write already-ordered entries into a ZIP container (PKZIP APPNOTE 4.3, docs/spec/formats/packaging-and-paths.md:
  * a local header and body per entry, then the central directory, then the
  * end-of-central-directory record.
  *
@@ -271,7 +271,7 @@ function buildZip(entries: readonly PackageFile[]): Result<Uint8Array> {
 }
 
 /**
- * Write the project's distribution package (format-spec §13, AD-6): a
+ * Write the project's distribution package (docs/spec/formats/packaging-and-paths.md, AD-6): a
  * `.tpk`-compatible ZIP carrying `input.files` plus `manifest.json` at the
  * archive root.
  *
@@ -357,7 +357,7 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
     if (pathProblem !== null) return err(failure(0, `${pathProblem}.`));
     const shapeProblem = checkFilePath(file.path);
     if (shapeProblem !== null) return err(failure(0, `${shapeProblem}.`));
-    // The package stores `/`-separated names (§1.5), so the entry name written
+    // The package stores `/`-separated names(docs/spec/formats/README.md#paths-inside-files), so the entry name written
     // and the tree's own spelling are the normalised path, not the raw string.
     const normalised = toSlashes(file.path);
     const folded = foldPath(file.path);
@@ -397,7 +397,7 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
   // the caller's object happens to hold (G3, AD-25). The schema version is the
   // project-level integer of AD-23; `schema` is written first, `main`, `index`.
   // `main` and every index entry take the tree's own spelling, so the manifest
-  // names the archive's normalised paths (§1.5) rather than the caller's strings,
+  // names the archive's normalised paths(docs/spec/formats/README.md#paths-inside-files) rather than the caller's strings,
   // and `index` is then put in the same code-unit order the archive's entries
   // are, so the caller's array order cannot reach the written bytes (G3).
   const index = manifest.index.map((value) => tree.get(foldPath(value)) ?? value);
@@ -451,13 +451,13 @@ export function writeDistributionPackage(input: DistributionInput): Result<Uint8
     return err(
       failure(
         0,
-        `The writer produced a package its own reader rejects: ${reread.error.message} (writer self-check, §13)`,
+        `The writer produced a package its own reader rejects: ${reread.error.message} (writer self-check, docs/spec/formats/packaging-and-paths.md`,
       ),
     );
   }
   if (!sameTree(reread.value, ordered)) {
     return err(
-      failure(0, "The writer produced a package whose read-back tree differs from its input (writer self-check, §13)."),
+      failure(0, "The writer produced a package whose read-back tree differs from its input (writer self-check, docs/spec/formats/packaging-and-paths.md."),
     );
   }
   return built;

@@ -1,4 +1,4 @@
-// The tracer's step machine (G1; AD-8/AD-9/AD-26; format-spec §9.15 THR-3):
+// The tracer's step machine (G1; AD-8/AD-9/AD-26; docs/spec/engine/rpgcode-errors-and-threads.md#threads THR-3):
 // stores and loads, by-reference binding and write-back, error codes, the sleep
 // yield and wait order, and the per-tick step budget.
 import { deepEqual, equal } from "node:assert/strict";

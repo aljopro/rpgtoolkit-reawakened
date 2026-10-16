@@ -1,5 +1,5 @@
 /**
- * Waits: one wake contract (AD-9; format-spec §9.15 THR-1).
+ * Waits: one wake contract (AD-9; docs/spec/engine/rpgcode-errors-and-threads.md#threads THR-1).
  *
  * A blocked thread holds a `Wait` — plain data in `Thread.wait` — until its
  * owner's `poll` resolves it. The tracer implements exactly one kind, `sleep`,
@@ -16,7 +16,7 @@
 
 import type { Value } from "./value.ts";
 
-/** A sleep wait, in whole ticks: wake at absolute tick `until` (§9.15 THR-1). */
+/** A sleep wait, in whole ticks: wake at absolute tick `until`(docs/spec/engine/rpgcode-runtime.md THR-1). */
 export type Wait = { readonly kind: "sleep"; readonly until: number };
 
 /** What a poll may read of the world while deciding: the current tick. */

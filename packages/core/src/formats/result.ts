@@ -2,8 +2,8 @@
  * The shared result contract for legacy-format readers and writers (AD-18).
  *
  * Every reader returns `Result<Model, FormatError>` and never throws for bad
- * data (AD-18, format-spec §1). `section` cites the format-spec section the
- * error was detected under, e.g. `"format-spec §1.1"`, so a message always
+ * data (AD-18, docs/spec/formats/README.md#primitive-encoding). `section` cites the format specification section the
+ * error was detected under, e.g. `"docs/spec/formats/README.md#primitive-encoding"`, so a message always
  * points at the bytes it is about.
  */
 
@@ -13,7 +13,7 @@ export interface FormatError {
   readonly path?: string;
   /** The byte offset the error is about (the field's first byte). */
   readonly offset: number;
-  /** The format-spec section the reader was applying, e.g. `"format-spec §1.1"`. */
+  /** The format specification section the reader was applying, e.g. `"docs/spec/formats/README.md#primitive-encoding"`. */
   readonly section: string;
   /** A human-readable description of what went wrong. */
   readonly message: string;

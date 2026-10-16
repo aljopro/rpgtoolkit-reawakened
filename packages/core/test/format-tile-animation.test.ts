@@ -1,4 +1,4 @@
-// Animated tile format of `docs/spec/formats/tiles.md#animated-tile-tan` (format-spec §3.5, §15.10):
+// Animated tile format of `docs/spec/formats/tiles.md#animated-tile-tan`:
 // binary header, speed 1..200, exact frame count, and frame references.
 // Tests assert on values, error offsets and sections, with strict typing.
 

@@ -1,5 +1,5 @@
 /**
- * What a loaded package is (format-spec §13, AD-6).
+ * What a loaded package is (docs/spec/formats/packaging-and-paths.md, AD-6).
  *
  * A game reaches the core in one of three forms: a loose folder, a `.tpk`
  * (a ZIP archive), or a standalone EXE whose last 12 bytes are a `CMP1` trailer
@@ -14,12 +14,12 @@
 
 import type { AssetIndex } from "../resolver/model.ts";
 
-/** Which of §13's three forms a package came in. */
+/** Which of docs/spec/formats/packaging-and-paths.md's three forms a package came in. */
 export type PackageFormat = "folder" | "tpk" | "exe";
 
-/** One file of a loaded package: its path and its bytes (§13). */
+/** One file of a loaded package: its path and its bytes(docs/spec/formats/packaging-and-paths.md). */
 export interface PackageFile {
-  /** The path as stored, with `\` normalised to `/` (§1.5); case is preserved. */
+  /** The path as stored, with `\` normalised to `/`(docs/spec/formats/README.md#paths-inside-files); case is preserved. */
   readonly path: string;
   /** The file's bytes, exactly as the package holds them. */
   readonly bytes: Uint8Array;
@@ -38,7 +38,7 @@ export interface LoadedPackage {
 }
 
 /**
- * One item a host reports from a loose folder (format-spec §13).
+ * One item a host reports from a loose folder (docs/spec/formats/packaging-and-paths.md).
  *
  * The core performs no I/O (G2), so the host lists the folder's entries: a file
  * with its bytes, a directory (which counts toward the entry limit but is not
@@ -50,7 +50,7 @@ export type FolderEntry =
   | { readonly kind: "link"; readonly path: string };
 
 /**
- * The input to `loadPackage`: the three forms of §13.
+ * The input to `loadPackage`: the three forms of docs/spec/formats/packaging-and-paths.md.
  *
  * A loose folder is a list of entries; a `.tpk` and a standalone EXE are bytes.
  * An EXE is only ever an EXE when the caller says so, because its `CMP1`

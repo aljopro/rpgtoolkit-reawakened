@@ -1,5 +1,5 @@
 /**
- * The Windows COLORREF value (format-spec §1.1): a 32-bit integer laid out
+ * The Windows COLORREF value ([formats/README.md#primitive-encoding]): a 32-bit integer laid out
  * `0x00BBGGRR`, so red sits in the low byte. Reader and writer share these two
  * functions so the channel order cannot drift between them.
  */

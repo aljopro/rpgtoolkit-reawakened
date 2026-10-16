@@ -1,5 +1,5 @@
 /**
- * Project layout and path resolution (format-spec §1.5).
+ * Project layout and path resolution (docs/spec/formats/README.md#paths-inside-files).
  *
  * A game is a main file plus a project folder: `<root>/Main/<game>.gam` pairs
  * with `<root>/Game/<projectPath>/`, and each asset type lives in its own
@@ -9,9 +9,9 @@
  * These functions are pure and take the root as a string: they return path
  * strings and lookup keys, never touching a file system (G2). The asset
  * resolver (a later ticket) does the actual lookup, using `foldPath` for the
- * case-insensitive match §1.5 requires.
+ * case-insensitive match `docs/spec/formats/README.md#paths-inside-files` requires.
  *
- * §1.5 rules applied here:
+ * `docs/spec/formats/README.md#paths-inside-files` rules applied here:
  * - the legacy separator is backslash; `\` and `/` are equivalent;
  * - matching is case-insensitive, so `foldPath` folds ASCII letters of a path for lookup;
  * - a saved reference may repeat the type-folder prefix (`Item\npc.itm`); a
@@ -23,7 +23,7 @@ import type { MainFile } from "./model.ts";
 /** A main file's project folder name; any main-file model satisfies it. */
 export type MainFileProject = Pick<MainFile, "projectPath">;
 
-/** The asset types §1.5 gives a subfolder, named by what they hold. */
+/** The asset types `docs/spec/formats/README.md#paths-inside-files` gives a subfolder, named by what they hold. */
 export type AssetKind =
   | "tiles"
   | "boards"
@@ -40,7 +40,7 @@ export type AssetKind =
   | "fonts"
   | "plugins";
 
-/** The subfolder each asset type lives in (format-spec §1.5). */
+/** The subfolder each asset type lives in (docs/spec/formats/README.md#paths-inside-files). */
 export const ASSET_FOLDERS: Readonly<Record<AssetKind, string>> = {
   tiles: "Tiles",
   boards: "Boards",
@@ -58,21 +58,21 @@ export const ASSET_FOLDERS: Readonly<Record<AssetKind, string>> = {
   plugins: "Plugin",
 };
 
-/** The subfolder a reference of `kind` resolves under (format-spec §1.5). */
+/** The subfolder a reference of `kind` resolves under (docs/spec/formats/README.md#paths-inside-files). */
 export function typeFolder(kind: AssetKind): string {
   return ASSET_FOLDERS[kind];
 }
 
 /**
  * Normalise the legacy separator: backslashes become forward slashes, so a
- * stored `village\inn.brd` and a modern `village/inn.brd` compare equal (§1.5).
+ * stored `village\inn.brd` and a modern `village/inn.brd` compare equal (`docs/spec/formats/README.md#paths-inside-files`).
  */
 export function toSlashes(path: string): string {
   return path.split("\\").join("/");
 }
 
 /**
- * Fold `A`-`Z` to `a`-`z` and leave every other code point as it is (§1.5).
+ * Fold `A`-`Z` to `a`-`z` and leave every other code point as it is (`docs/spec/formats/README.md#paths-inside-files`).
  * `String.prototype.toLowerCase` is not used: it follows the runtime's Unicode
  * tables, merges `U+212A` with `k` and expands `U+0130` into two code points,
  * so two runners could key one project differently (G3).
@@ -87,7 +87,7 @@ export function asciiLower(text: string): string {
 }
 
 /**
- * Case-fold a path for the case-insensitive lookup §1.5 requires, with the
+ * Case-fold a path for the case-insensitive lookup `docs/spec/formats/README.md#paths-inside-files` requires, with the
  * separators normalised first: ASCII letters only (see `asciiLower`). The
  * asset resolver keys its index on this.
  */
@@ -97,7 +97,7 @@ export function foldPath(path: string): string {
 
 /**
  * Strip a leading type-folder prefix from a reference, case-insensitively
- * (§1.5): `Item\npc.itm` under the `items` kind becomes `npc.itm`. A reference
+ * (`docs/spec/formats/README.md#paths-inside-files`): `Item\npc.itm` under the `items` kind becomes `npc.itm`. A reference
  * that is only the folder becomes the empty string; one with no prefix is
  * returned with its separators normalised.
  */
@@ -113,7 +113,7 @@ export function stripTypeFolder(kind: AssetKind, reference: string): string {
 }
 
 /**
- * The project folder `<root>/Game/<projectPath>/` (format-spec §1.5). The root
+ * The project folder `<root>/Game/<projectPath>/` (docs/spec/formats/README.md#paths-inside-files). The root
  * has any trailing separator removed and backslashes normalised. The stored
  * project path is normalised the same way, with its leading and trailing
  * separators stripped: if its first segment is `Game` (any case) and more
@@ -138,7 +138,7 @@ export function projectFolder(root: string, project: MainFileProject): string {
 /**
  * Resolve a stored reference of `kind` under the project folder:
  * `<projectFolder>/<TypeFolder>/<reference>`, with the separators normalised and
- * any leading type-folder prefix stripped (§1.5). `lookup` the result with
+ * any leading type-folder prefix stripped (`docs/spec/formats/README.md#paths-inside-files`). `lookup` the result with
  * `foldPath` for the case-insensitive match.
  */
 export function resolveReference(

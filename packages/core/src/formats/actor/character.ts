@@ -1,5 +1,5 @@
 /**
- * Reading and writing a player character (format-spec §6.1, magic
+ * Reading and writing a player character (docs/spec/formats/character.md#layout, magic
  * `RPGTLKIT CHAR`).
  *
  * Pure (G2): both functions consume/produce a caller-supplied byte buffer and
@@ -337,10 +337,10 @@ export function readTextCharacter(bytes: Uint8Array, path?: string): Result<Char
   });
 }
 
-/** The minor whose first-level-exp field is an `i8` rather than an `i32` (§6.1). */
+/** The minor whose first-level-exp field is an `i8` rather than an `i32`(docs/spec/formats/character.md#layout). */
 const FIRST_LEVEL_EXP_I8_MINOR = 3;
 
-/** Read one special-move slot (format-spec §6.1). */
+/** Read one special-move slot (docs/spec/formats/character.md#layout). */
 function readSpecialMove(reader: BinaryReader): Result<CharacterSpecialMove> {
   const file = reader.str();
   if (!file.ok) {
@@ -372,7 +372,7 @@ function readSpecialMove(reader: BinaryReader): Result<CharacterSpecialMove> {
 }
 
 
-/** Read the 120 legacy tile names of a minor < 5 character (§6.1). */
+/** Read the 120 legacy tile names of a minor < 5 character(docs/spec/formats/character.md#layout). */
 function readLegacyCharacterGraphics(
   reader: BinaryReader,
 ): Result<LegacyCharacterGraphics> {
@@ -419,7 +419,7 @@ function readLegacyCharacterGraphics(
     customFrames,
   });
 }
-/** Read the eight `i32` initial stats in file order (format-spec §6.1). */
+/** Read the eight `i32` initial stats in file order (docs/spec/formats/character.md#layout). */
 function readStats(reader: BinaryReader): Result<CharacterStats> {
   const order: ("experience" | "hp" | "maxHp" | "dp" | "fp" | "smp" | "maxSmp" | "level")[] = [
     "experience",
@@ -442,7 +442,7 @@ function readStats(reader: BinaryReader): Result<CharacterStats> {
   return ok(stats as unknown as CharacterStats);
 }
 
-/** Read a character from `reader` (format-spec §6.1). */
+/** Read a character from `reader` (docs/spec/formats/character.md#layout). */
 export function readCharacter(reader: BinaryReader): Result<Character> {
   const start = reader.offset;
 
@@ -450,7 +450,7 @@ export function readCharacter(reader: BinaryReader): Result<Character> {
     return actorError(reader, start, CHARACTER_SECTION, "unexpected end of data reading magic: need 1 byte(s), 0 remain");
   }
 
-  // §6.1 places the detection byte at offset 13, just past the magic; the probe
+  // docs/spec/formats/character.md#layout places the detection byte at offset 13, just past the magic; the probe
   // does not move the cursor, so the header is read first and the detection
   // checked before any header error — a text character has no binary magic.
   const detection = reader.isBinaryAt(start + CHARACTER_DETECT_OFFSET);
@@ -649,7 +649,7 @@ export function readCharacter(reader: BinaryReader): Result<Character> {
   const warnings: string[] = [];
   if (residue.value.length > 0) {
     warnings.push(
-      `${residue.value.length} trailing byte(s) after the character were kept as residue (format-spec §6.1)`,
+      `${residue.value.length} trailing byte(s) after the character were kept as residue (docs/spec/formats/character.md#layout)`,
     );
   }
 
@@ -689,7 +689,7 @@ export function readCharacter(reader: BinaryReader): Result<Character> {
   );
 }
 
-/** Serialise `model` to the character layout (format-spec §6.1). */
+/** Serialise `model` to the character layout (docs/spec/formats/character.md#layout). */
 export function writeCharacter(model: Character): Result<Uint8Array> {
   const writer = new BinaryWriter();
   const magic = writer.str(model.magic);
@@ -727,7 +727,7 @@ export function writeCharacter(model: Character): Result<Uint8Array> {
   if (!profilePicture.ok) {
     return writerError(writer, CHARACTER_SECTION, `profile picture: ${profilePicture.error.message}`);
   }
-  // §6.1 stores each special-move slot as one record, not two blocks: emit the
+  // docs/spec/formats/character.md#layout stores each special-move slot as one record, not two blocks: emit the
   // file, minExp, minLevel, condVar and condValue of a slot together, in the
   // order `readSpecialMove` reads them.
   if (model.specialMoves.length !== SPECIAL_MOVE_SLOTS) {

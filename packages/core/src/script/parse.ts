@@ -1,5 +1,5 @@
 /**
- * The full RPGCode §9.3/§9.5 parser.
+ * The full RPGCode docs/spec/engine/rpgcode-runtime.md and docs/spec/engine/rpgcode-language.md#keywords-and-structure parser.
  *
  * Precedence-climbing over the 15-level operator table (EXP-2), statement
  * forms (`if`, `while`, `until`, `for`, `switch`, `label`, `return`,

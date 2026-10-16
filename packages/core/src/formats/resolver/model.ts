@@ -1,34 +1,34 @@
 /**
- * The asset index and the roots a reference resolves from (format-spec §1.5,
+ * The asset index and the roots a reference resolves from (docs/spec/formats/README.md#paths-inside-files,
  * AD-5).
  *
  * The core never touches a file system (G2): a runner gives it an `AssetIndex`
  * — the relative paths the host can serve — and the resolver turns a logical
  * reference into a canonical `AssetKey` over that list. The layout rules are
- * §1.5's: backslash and slash are equivalent, matching is case-insensitive, and
+ * docs/spec/formats/README.md#paths-inside-files's: backslash and slash are equivalent, matching is case-insensitive, and
  * a reference is relative to the folder of its asset type.
  */
 
 import type { AssetKey } from "../../ports/keys.ts";
 
 /**
- * A package or a game folder — where an index's paths are rooted (AD-5, §13).
+ * A package or a game folder — where an index's paths are rooted (AD-5, docs/spec/formats/packaging-and-paths.md.
  *
  * A reference resolves under `<root>/Game/<projectPath>/` for a game folder,
  * but for a package the project folder is the package root and the main file's
- * `projectPath` is ignored (§13, AD-5).
+ * `projectPath` is ignored(docs/spec/formats/packaging-and-paths.md, AD-5).
  */
 export type AssetRoot = PackageAssetRoot | GameAssetRoot;
 
-/** A package root: the index's paths are the package's, and `projectPath` is ignored (§13). */
+/** A package root: the index's paths are the package's, and `projectPath` is ignored(docs/spec/formats/packaging-and-paths.md). */
 export interface PackageAssetRoot {
   readonly kind: "package";
 }
 
-/** A game-folder root: references resolve under `<root>/Game/<projectPath>/` (§1.5). */
+/** A game-folder root: references resolve under `<root>/Game/<projectPath>/`(docs/spec/formats/README.md#paths-inside-files). */
 export interface GameAssetRoot {
   readonly kind: "game";
-  /** The main file's `projectPath`; leading and trailing separators are ignored (§1.5). */
+  /** The main file's `projectPath`; leading and trailing separators are ignored(docs/spec/formats/README.md#paths-inside-files). */
   readonly projectPath: string;
 }
 
