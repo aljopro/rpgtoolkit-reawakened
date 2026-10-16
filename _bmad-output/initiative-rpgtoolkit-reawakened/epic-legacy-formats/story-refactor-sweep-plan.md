@@ -3,7 +3,7 @@ title: "Refactor sweep"
 type: 'chore'
 ticket: '14'
 created: '2026-10-16'
-status: in-progress
+status: done
 risk: 'low'
 review: 'thorough'
 context: ['{project-root}/docs/guardrails.md', '{project-root}/_bmad-output/initiative-rpgtoolkit-reawakened/deferred-work.md']
