@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ANIMATION_MAGIC,
+  assembleDecoders,
   BATTLE_BACKGROUND_MAGIC,
   BinaryReader,
   boardLayout,
@@ -55,6 +56,9 @@ import {
   type AssetDecoder,
   type AssetResolver,
   type CoreFormatId,
+  type LogRecord,
+  type Logger,
+  type PluginDefinition,
   type Result,
   type Tileset,
 } from "../src/index.ts";
@@ -87,6 +91,159 @@ const CUSTOM: AssetDecoder<string> = {
   detect: (header) => header.length > 0 && header[0] === 0x7f,
   decode: (bytes) => okResult(`custom ${bytes.length}`),
 };
+
+function plugin(id: string, decoders: readonly AssetDecoder[]): PluginDefinition {
+  return { id, version: "1.0.0", commands: [], decoders };
+}
+
+function warningLogger(): { logger: Logger; records: LogRecord[] } {
+  const records: LogRecord[] = [];
+  const logger: Logger = {
+    warn(record) {
+      records.push(record);
+    },
+    error(record) {
+      records.push(record);
+    },
+  };
+  return { logger, records };
+}
+
+test("assembled core decoders remain available without plugins", () => {
+  const { logger } = warningLogger();
+  const registry = assembleDecoders([], logger);
+  for (const decoder of Object.values(CORE_DECODERS)) {
+    for (const extension of decoder.extensions) {
+      equal(registry.byExtension(extension), CORE_REGISTRY.byExtension(extension));
+    }
+  }
+  for (const [id, header] of CORE_HEADERS) {
+    equal(registry.byHeader(header), CORE_DECODERS[id]);
+  }
+});
+
+test("a plugin decoder resolves by extension and header and receives bytes and resolver", () => {
+  let seenBytes: Uint8Array | undefined;
+  let seenContext: AssetResolver | undefined;
+  const decoder: AssetDecoder<string> = {
+    id: "plugin-format",
+    section: "docs/spec/formats/README.md#primitive-encoding",
+    extensions: ["zzz"],
+    detect: (header) => header.length > 0 && header[0] === 0x7f,
+    decode(bytes, context) {
+      seenBytes = bytes;
+      seenContext = context;
+      return okResult(`plugin ${bytes[0]}`);
+    },
+  };
+  const { logger } = warningLogger();
+  const registry = assembleDecoders([plugin("plugin.format", [decoder])], logger);
+  const bytes = new Uint8Array([0x7f, 0x01]);
+  equal(registry.byExtension("ZZZ"), decoder);
+  equal(registry.byHeader(bytes), decoder);
+  equal(registry.resolve("unknown", bytes), decoder);
+  const resolver: AssetResolver = { index: createAssetIndex([]), root: PACKAGE_ROOT };
+  deepEqual(registry.resolve("unknown", bytes)?.decode(bytes, resolver), okResult("plugin 127"));
+  equal(seenBytes, bytes);
+  equal(seenContext, resolver);
+});
+
+test("later plugin decoder claims replace earlier claims with one warning per claim", () => {
+  const first: AssetDecoder = {
+    id: "shared",
+    section: "docs/spec/formats/README.md#primitive-encoding",
+    extensions: ["aaa", "old"],
+    detect: (header) => header.length > 0 && header[0] === 0x55,
+    decode: () => okResult("first"),
+  };
+  const idReplacement: AssetDecoder = {
+    ...first,
+    extensions: ["bbb"],
+    decode: () => okResult("id replacement"),
+  };
+  const extensionReplacement: AssetDecoder = {
+    ...first,
+    id: "extension-replacement",
+    extensions: ["bbb"],
+    decode: () => okResult("extension replacement"),
+  };
+  const { logger, records } = warningLogger();
+  const registry = assembleDecoders(
+    [plugin("first", [first]), plugin("second", [idReplacement]), plugin("third", [extensionReplacement])],
+    logger,
+  );
+  equal(registry.byExtension("aaa"), undefined);
+  equal(registry.byExtension("old"), undefined);
+  equal(registry.byExtension("bbb"), extensionReplacement);
+  equal(registry.byHeader(new Uint8Array([0x55])), extensionReplacement);
+  equal(records.length, 2);
+  equal(records[0]?.code, "decoder.overridden");
+  deepEqual(records[0]?.data, {
+    kind: "decoder",
+    claim: "id",
+    name: "shared",
+    previous: "first",
+    replacement: "second",
+  });
+  deepEqual(records[1]?.data, {
+    kind: "decoder",
+    claim: "extension",
+    name: "bbb",
+    previous: "second",
+    replacement: "third",
+  });
+});
+
+test("header precedence keeps order within a layer and gives later layers priority", () => {
+  const broad: AssetDecoder = {
+    id: "broad",
+    section: "docs/spec/formats/README.md#primitive-encoding",
+    extensions: ["broad"],
+    detect: (header) => header[0] === 0x66,
+    decode: () => okResult("broad"),
+  };
+  const specific: AssetDecoder = {
+    ...broad,
+    id: "specific",
+    extensions: ["specific"],
+  };
+  const later: AssetDecoder = {
+    ...broad,
+    id: "later",
+    extensions: ["later"],
+  };
+  const { logger } = warningLogger();
+  const firstOnly = assembleDecoders([plugin("first", [broad, specific])], logger);
+  equal(firstOnly.byHeader(new Uint8Array([0x66])), broad);
+  const registry = assembleDecoders(
+    [plugin("first", [broad, specific]), plugin("second", [later])],
+    logger,
+  );
+  equal(registry.byHeader(new Uint8Array([0x66])), later);
+});
+
+test("a plugin cannot repeat its own decoder id or extension", () => {
+  const base: AssetDecoder = {
+    id: "duplicate",
+    section: "docs/spec/formats/README.md#primitive-encoding",
+    extensions: ["dup"],
+    detect: () => false,
+    decode: () => okResult(null),
+  };
+  const { logger } = warningLogger();
+  throws(
+    () => assembleDecoders([plugin("bad-id", [base, { ...base, extensions: ["other"] }])], logger),
+    /plugin "bad-id" lists decoder id "duplicate" more than once/,
+  );
+  throws(
+    () =>
+      assembleDecoders(
+        [plugin("bad-extension", [base, { ...base, id: "other", extensions: ["DUP"] }])],
+        logger,
+      ),
+    /plugin "bad-extension" lists extension "dup" more than once/,
+  );
+});
 
 test("a registered decoder is dispatched by extension and by magic header", () => {
   const registry = createAssetRegistry();
