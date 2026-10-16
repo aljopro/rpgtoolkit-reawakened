@@ -1,9 +1,9 @@
 ---
 title: 'Error handling, located diagnostics, Logger and the harness report change'
 type: 'feature'
-ticket: '3.7'
+ticket: 7
 created: '2026-10-16'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: '5a7ad22679581abdda690a0232f1f1e2208af3dc'
 route: 'full'
 route_source: 'auto'
