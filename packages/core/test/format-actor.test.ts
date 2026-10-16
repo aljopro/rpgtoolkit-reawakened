@@ -11,7 +11,6 @@ import { deepEqual, equal } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { unzipSync } from "fflate/browser";
 import {
   BODY_SLOT_NAMES,
   CHARACTER_SECTION,
@@ -941,64 +940,26 @@ test(
   },
 );
 
-const archiveRoot = "/Users/jensen/projects/rpgtoolkit-archive";
-const archiveAvailable = existsSync(archiveRoot);
-
-test(
-  "all 16 binary .tem minor 3–4 files in the archive corpus read with 0 trailing bytes",
-  { skip: !archiveAvailable ? "archive corpus is not present on this host" : false },
-  () => {
-    const sources = [
-      join(archiveRoot, "archive-org/FinalDestiny_201810/Final_Destiny.zip"),
-      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/School2Demo.zip"),
-      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/chimeran_empire.zip"),
-      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/caoquest.zip"),
-      join(archiveRoot, "wayback/aljo.afraid.org/games/busd/busd.zip"),
-      join(archiveRoot, "wayback/aljo.afraid.org/games/littleman/LittleMan.zip"),
-    ];
-
-    const tems: { path: string; bytes: Uint8Array }[] = [];
-    function scanZip(bytes: Uint8Array): void {
-      const unzipped = unzipSync(bytes);
-      for (const [entryName, entryBytes] of Object.entries(unzipped)) {
-        const lower = entryName.toLowerCase();
-        if (lower.endsWith(".zip")) {
-          scanZip(entryBytes);
-        } else if (lower.endsWith(".tem")) {
-          tems.push({ path: entryName, bytes: entryBytes });
-        }
-      }
+test("the committed character version examples parse with zero trailing bytes and round-trip", () => {
+  for (const minor of [3, 4, 5, 6, 7, 8]) {
+    const file = join(repoRoot, "docs", "spec", "examples", "versions", "character", `character_minor${minor}.tem`);
+    const bytes = new Uint8Array(readFileSync(file));
+    const reader = new BinaryReader(bytes, file);
+    const character = unwrap(readCharacter(reader));
+    equal(reader.remaining, 0, `minor ${minor}: trailing bytes`);
+    equal(character.residue.length, 0, `minor ${minor}: residue bytes`);
+    equal(character.minor, minor, `minor ${minor}: expected minor`);
+    if (minor < 5) {
+      equal(character.legacyGraphics !== undefined, true, `minor ${minor}: legacy graphics present`);
+      equal(character.legacyGraphics?.walkFrames.length, 16, `minor ${minor}: 16 walk frames`);
+      equal(character.legacyGraphics?.battleTiles.length, 64, `minor ${minor}: 64 battle tiles`);
+      equal(character.legacyGraphics?.restTiles.length, 4, `minor ${minor}: 4 rest tiles`);
+      equal(character.legacyGraphics?.customFrames.length, 10, `minor ${minor}: 10 custom frames`);
+      equal(character.battleSounds?.length, 4, `minor ${minor}: 4 battle sounds`);
+      equal(character.firstLevelExp, 50, `minor ${minor}: first-level exp`);
+    } else {
+      equal(character.legacyGraphics, undefined, `minor ${minor}: no legacy graphics`);
     }
-
-    for (const src of sources) {
-      if (existsSync(src)) {
-        scanZip(new Uint8Array(readFileSync(src)));
-      }
-    }
-
-    const binaryTems = tems.filter((t) => t.bytes.length > 13 && t.bytes[13] === 0);
-    equal(binaryTems.length, 16, "all 16 binary .tem files found in corpus");
-    for (const t of binaryTems) {
-      const reader = new BinaryReader(t.bytes, t.path);
-      const res = readCharacter(reader);
-      equal(res.ok, true, `${t.path}: must read successfully`);
-      if (res.ok) {
-        equal(reader.remaining, 0, `${t.path}: 0 trailing bytes in stream`);
-        equal(res.value.legacyGraphics !== undefined, true, `${t.path}: legacy graphics present`);
-        equal(res.value.legacyGraphics?.walkFrames.length, 16, `${t.path}: 16 walk frames`);
-        equal(res.value.legacyGraphics?.battleTiles.length, 64, `${t.path}: 64 battle tiles`);
-        equal(res.value.legacyGraphics?.restTiles.length, 4, `${t.path}: 4 rest tiles`);
-        equal(res.value.legacyGraphics?.customFrames.length, 10, `${t.path}: 10 custom frames`);
-        if (t.path.toLowerCase().includes("finaldestiny")) {
-          if (t.path.toLowerCase().includes("start.tem")) {
-            equal(res.value.residue.length, 96, `${t.path}: Q8 96 residual bytes`);
-          } else {
-            equal(res.value.residue.length, 13, `${t.path}: Q8 13 residual bytes`);
-          }
-        } else {
-          equal(res.value.residue.length, 0, `${t.path}: 0 residue bytes`);
-        }
-      }
-    }
-  },
-);
+    deepEqual(unwrap(writeCharacter(character)), bytes, `minor ${minor}: byte-identical round-trip`);
+  }
+});

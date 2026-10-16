@@ -11,7 +11,6 @@ import { deepEqual, equal } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { unzipSync } from "fflate/browser";
 import {
   BinaryReader,
   BinaryWriter,
@@ -840,51 +839,19 @@ test(
   },
 );
 
-const archiveRoot = "/Users/jensen/projects/rpgtoolkit-archive";
-const archiveAvailable = existsSync(archiveRoot);
-
-test(
-  "all 15 binary .gam files in the archive corpus read with 0 trailing bytes and 0 residue",
-  { skip: !archiveAvailable ? "archive corpus is not present on this host" : false },
-  () => {
-    const sources = [
-      join(archiveRoot, "archive-org/FinalDestiny_201810/Final_Destiny.zip"),
-      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/School2Demo.zip"),
-      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/chimeran_empire.zip"),
-      join(archiveRoot, "wayback/mysticsoftware.net/games.mysticsoftware.net/caoquest.zip"),
-      join(archiveRoot, "wayback/aljo.afraid.org/games/busd/busd.zip"),
-      join(archiveRoot, "wayback/aljo.afraid.org/games/littleman/LittleMan.zip"),
-    ];
-
-    const gams: { path: string; bytes: Uint8Array }[] = [];
-    function scanZip(bytes: Uint8Array): void {
-      const unzipped = unzipSync(bytes);
-      for (const [entryName, entryBytes] of Object.entries(unzipped)) {
-        const lower = entryName.toLowerCase();
-        if (lower.endsWith(".zip")) {
-          scanZip(entryBytes);
-        } else if (lower.endsWith(".gam")) {
-          gams.push({ path: entryName, bytes: entryBytes });
-        }
-      }
+test("the committed main-file version examples parse with zero trailing bytes and round-trip", () => {
+  for (let minor = 1; minor <= 9; minor++) {
+    const file = join(repoRoot, "docs", "spec", "examples", "versions", "main", `main_minor${minor}.gam`);
+    const bytes = new Uint8Array(readFileSync(file));
+    const reader = new BinaryReader(bytes, file);
+    const model = unwrap(readMainFile(reader));
+    equal(reader.remaining, 0, `minor ${minor}: trailing bytes`);
+    equal(model.residue.length, 0, `minor ${minor}: residue bytes`);
+    equal(model.minor, minor, `minor ${minor}: expected minor`);
+    if (minor < 3) {
+      equal(model.reservedRuns.parallax.length, 2, `minor ${minor}: 2-byte parallax (R-18)`);
+      equal(model.reservedRuns.menuPluginFallback.length, 2, `minor ${minor}: 2-byte menuPluginFallback (R-18)`);
     }
-
-    for (const src of sources) {
-      if (existsSync(src)) {
-        scanZip(new Uint8Array(readFileSync(src)));
-      }
-    }
-
-    const binaryGams = gams.filter((g) => g.bytes.length > 13 && g.bytes[13] === 0);
-    equal(binaryGams.length, 15, "all 15 binary .gam files found in corpus");
-    for (const g of binaryGams) {
-      const reader = new BinaryReader(g.bytes, g.path);
-      const res = readMainFile(reader);
-      equal(res.ok, true, `${g.path}: must read successfully`);
-      if (res.ok) {
-        equal(reader.remaining, 0, `${g.path}: 0 trailing bytes in stream`);
-        equal(res.value.residue.length, 0, `${g.path}: 0 residue bytes`);
-      }
-    }
-  },
-);
+    deepEqual(unwrap(writeMainFile(model)), bytes, `minor ${minor}: byte-identical round-trip`);
+  }
+});
