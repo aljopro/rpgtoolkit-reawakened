@@ -40,7 +40,7 @@ Ordinary `.tst` tiles placed on isometric boards are instead rotated and squashe
 
 ### Shading
 
-Board shading and ambient light add a signed (r, g, b) to every non-transparent pixel, clamped to 0..255. The original engine first replaces pure white with (245, 245, 245) and pure black with (10, 10, 10), so shading can still tint them.
+Board shading and ambient light add a signed (r, g, b) to every non-transparent pixel, clamped to 0..255. The original engine first replaces pure white with (245, 245, 245) and pure black with (10, 10, 10), so shading can still tint them. **Reawakened rule (R-15):** the pre-tint is adopted as written (white → (245, 245, 245), black → (10, 10, 10)) before the clamp; it is a render-time concern owned by board rendering.
 
 ### Editing model
 
@@ -94,6 +94,12 @@ Only cells 0..width−1 × 0..height−1 are drawn, always as a normal (non-isom
 ## DOS palette
 
 Detail 3-6 tiles and `.gph` detail 3/5 values index a fixed 256-colour palette that both programs hard-code. It resembles the VGA default palette (16 CGA-style colours using 168 as full intensity, then greys and colour ramps), but its values are not exactly the standard ones. The full table is in [dos-palette.json](dos-palette.json) as `[R, G, B]` triples. Only very old tilesets use it; no shipped sample does.
+
+**Palette source of truth — Reawakened rule.** The table in [dos-palette.json](dos-palette.json) is normative: a reader must ship exactly it, rather than build a palette from the public VGA default (the values are close but not identical). *Legacy fact:* details **5 and 6** use only the **first sixteen** entries (the EGA set, the first 16 colours of the 13h VGA palette), while details 3 and 4 use all 256. The code reads the table in `packages/core/src/formats/tileset/vga-palette.ts:26-96` (imported at `tileset.ts:22`).
+
+## Readers not yet built
+
+The `.tst`/`.iso` tileset reader and writer exist (`packages/core/src/formats/tileset/`). The animated-tile (`.tan`) reader stays with entry 16.7, and the tile-bitmap (`.tbm`) reader and writer with entry 2.25, so `.tan` and `.tbm` files are documented here but not yet parsed.
 
 ## Examples
 

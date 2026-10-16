@@ -6,6 +6,8 @@ Three small files used by battles and the menu. All three have no version branch
 
 Lives in `Bkrounds\`. Referenced by boards (`battleBackground`) and scripts.
 
+**Accepted `minor`: 2-3 — Reawakened rule.** The field list does not vary with `minor`, so it selects no layout: the 3.1.0 sample is `minor` 3 and the family's 2.x-era binaries are `minor` 2. A reader refuses `minor` 0, 1 and 4-or-more and a negative version field rather than guessing, and the text form is refused by the detection byte above. <!-- OWNER: chose 2–3 for §8.3 over "3 only", because §8.1–§8.3 share one header and era pattern and a 2.x-era binary `.bkg` (unobserved) would be minor 2, not 3. -->
+
 | # | Field | Type | Meaning |
 |---|---|---|---|
 | 1 | header | string | `RPGTLKIT BKG` |
@@ -22,6 +24,8 @@ Toolkit 2 text backgrounds: [legacy/text-formats.md](legacy/text-formats.md#figh
 ## Status effect (`.ste`)
 
 Lives in `StatusE\`. Applied by special moves and scripts during battle.
+
+**Accepted `minor`: 2-3 — Reawakened rule.** The field list does not vary with `minor`, so it selects no layout; the 2.x-era binary archive writes 2. A reader refuses `minor` 0, 1 and 4-or-more and a negative version field rather than guessing, and the text form is refused by the detection byte above. <!-- OWNER: chose 2–3 for §8.2 for the same reason as §8.1; no binary `.ste` sample exists in either corpus beyond the 2.x-era minor 2. -->
 
 | # | Field | Type | Meaning |
 |---|---|---|---|
@@ -44,6 +48,8 @@ Toolkit 2 text status effects: [legacy/text-formats.md](legacy/text-formats.md#s
 ## Special move (`.spc`)
 
 Lives in `SpcMove\`. Learned by characters (see [character.md](character.md)) and used by enemies.
+
+**Accepted `minor`: 2-3 — Reawakened rule.** The field list does not vary with `minor`, so it selects no layout: the 2.x-era binary archive writes 2 and the 3.1.0 family writes 3. A reader refuses `minor` 0, 1 and 4-or-more and a negative version field rather than guessing, and the text form is refused by the detection byte above whatever `minor` it carries. <!-- OWNER: chose 2–3 for §8.1 over "any non-negative minor", because §1.4 wants a stated accepted set and the corpus shows only 2 (2.x-era) and 3 (3.1.0); if a 3.1.0-era `.spc` is ever found at another minor, widen the range rather than guess a layout. -->
 
 | # | Field | Type | Meaning |
 |---|---|---|---|

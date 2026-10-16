@@ -4,6 +4,8 @@ An item: inventory behaviour (equip, use from the menu, use in battle), prices, 
 
 Header text: `RPGTLKIT ITEM`. Newest minor: **7**. No minimum version; the engine converts minor < 4.
 
+**Accepted `minor`: 0-7 — Reawakened rule.** The conditional rows above span that range (`i32` prices at `minor ≥ 3`, movement at `≥ 4`, idle and speed/idleTime at `≥ 5`, bases at `≥ 7`, legacy walk frames at `minor < 4`), so a reader accepts 0-7 and refuses `minor` 8 or higher and a negative version field rather than guessing a neighbouring layout ([README.md](README.md#header-and-version)); the 2.x **text** form is a separate layout in [legacy/text-formats.md](legacy/text-formats.md#item). <!-- OWNER: chose 0–7 for §6.2 (the range the conditional rows span and the reader hard-codes) over 3–7, because the minor<4 legacy walk-frame row is part of the layout and must be addressable. -->
+
 ## Layout
 
 | # | Field | Type | Present when | Meaning |

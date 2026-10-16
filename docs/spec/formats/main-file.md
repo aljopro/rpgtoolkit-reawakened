@@ -76,6 +76,8 @@ Types and conventions are defined in [README.md](README.md#primitive-encoding). 
 
 The file ends after the last field present.
 
+**Version-dependent fields (legacy fact).** Twelve logical rows are conditional, and the "Present when" column above is the whole of it: the unused `int` at row 11 (`minor < 3`); the menu/fight plugins at rows 23-24 against the reserved `int` at row 23′; rows 25 and 33 (`minor ≤ 2`); the plugin-slot form at rows 38a/38b (`minor ≤ 2` uses `enabled` flags named `tkplug<i>.dll`, `minor ≥ 3` uses names); and, in order, rows 42-46 (`minor ≥ 3`), 47-48 (`≥ 4`), 49 (`= 5`), 50-53 (`≥ 6`), 54-55 (`≥ 7`), 56 (`≥ 8`) and 57-61 (`≥ 9`). Every row carries a unique number 1-61 in storage order across the file's lifetime, so it can be cited. The minor history is in [legacy/older-binary-versions.md](legacy/older-binary-versions.md#main-file-minor-history).
+
 ## Compatibility notes
 
 - **Alignment accident in fields 4-5.** The editor writes a 2-byte `registered` and then the string `NOCODE`. The original engine reads a 4-byte int and then a string, so it sees `CODE`. Both are discarded and the total length is the same, so the following field lines up either way. A new reader should read *short + string*.
@@ -84,6 +86,7 @@ The file ends after the last field present.
 - **Default path-finding mode differs.** The engine defaults to 2 (diagonal) for files older than minor 9. The editor's "new project" default is 1 (axial). A re-saved file always carries an explicit value. A value of 0 or out of range probably crashed the original engine when path-finding was first used (inferred from the code; not observed).
 - **Fields stored but unused by the engine:** `mainScreenType`, `mainDisableProtectReg`, the language file, both skins, the three day/night fields.
 - **Array sizes.** The editor always writes 51 run-time key slots and 501 enemy slots, so an empty project's `.gam` is about 1.9 KB.
+- **Plugins are capabilities, not code (legacy fact; §12).** The main file lists its menu, battle and RPGCode-command plugins by name only (`Plugin/*.dll`). These legacy plugins are native Windows libraries of three kinds — an RPGCode extension, a menu and a battle system — and cannot be loaded by a cross-platform rebuild, which must instead supply each named plugin's capability natively. The menu and battle systems are the two that matter, because 3.1 has no built-in ones (see [../engine/plugins-and-battle.md](../engine/plugins-and-battle.md)). When the original editor opens a minor ≤ 2 main file it copies the shared `Plugin\` folder's files into the project's `Plugin\` folder.
 
 ## Validation in the original programs
 
