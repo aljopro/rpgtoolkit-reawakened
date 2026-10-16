@@ -17,6 +17,7 @@
 import type { AssetKey } from "../../ports/keys.ts";
 import { err, ok, type Result } from "../result.ts";
 import {
+  asciiLower,
   foldPath,
   projectFolder,
   stripTypeFolder,
@@ -97,4 +98,89 @@ export function resolveAsset(
     });
   }
   return ok(resolved);
+}
+
+/** A resolved tile reference (docs/spec/formats/README.md#tile-references). */
+export type ResolvedTileReference =
+  | { readonly kind: "empty" }
+  | { readonly kind: "tileset"; readonly tileset: string; readonly tile: number; readonly asset: AssetKey }
+  | { readonly kind: "isometric"; readonly tileset: string; readonly tile: number; readonly asset: AssetKey }
+  | { readonly kind: "singleTile"; readonly path: string; readonly asset: AssetKey }
+  | { readonly kind: "animatedTile"; readonly path: string; readonly asset: AssetKey };
+
+/**
+ * Resolve a tile reference against the index (docs/spec/formats/README.md#tile-references, format-spec §1.6).
+ *
+ * Tile references take four forms:
+ * - `name.tstN` -> tile N of `Tiles\name.tst`
+ * - `name.isoN` -> tile N of `Tiles\name.iso`
+ * - `name.gph` -> single-tile file `Tiles\name.gph`
+ * - `name.tan` -> animated tile `Tiles\name.tan`
+ *
+ * Empty strings return `{ kind: "empty" }`. References with no matching entry in
+ * `index` fail with a located FormatError citing §1.5.
+ */
+export function resolveTileReference(
+  index: AssetIndex,
+  root: AssetRoot,
+  reference: string,
+): Result<ResolvedTileReference> {
+  if (reference === "") {
+    return ok({ kind: "empty" });
+  }
+  const dot = reference.lastIndexOf(".");
+  if (dot < 0) {
+    return err({
+      offset: 0,
+      section: SECTION,
+      message: `invalid tile reference "${reference}": no extension found (docs/spec/formats/README.md#tile-references)`,
+    });
+  }
+  const ext = asciiLower(reference.slice(dot + 1, dot + 4));
+  const rest = reference.slice(dot + 4);
+
+  if ((ext === "tst" || ext === "iso") && rest.length > 0 && /^\d+$/.test(rest)) {
+    const tilesetName = reference.slice(0, dot + 4);
+    const tileIndex = parseInt(rest, 10);
+    const resolved = resolveAsset(index, root, "tiles", tilesetName);
+    if (!resolved.ok) {
+      return resolved;
+    }
+    return ok({
+      kind: ext === "tst" ? "tileset" : "isometric",
+      tileset: tilesetName,
+      tile: tileIndex,
+      asset: resolved.value,
+    });
+  }
+
+  if (ext === "gph" && rest === "") {
+    const resolved = resolveAsset(index, root, "tiles", reference);
+    if (!resolved.ok) {
+      return resolved;
+    }
+    return ok({
+      kind: "singleTile",
+      path: reference,
+      asset: resolved.value,
+    });
+  }
+
+  if (ext === "tan" && rest === "") {
+    const resolved = resolveAsset(index, root, "tiles", reference);
+    if (!resolved.ok) {
+      return resolved;
+    }
+    return ok({
+      kind: "animatedTile",
+      path: reference,
+      asset: resolved.value,
+    });
+  }
+
+  return err({
+    offset: 0,
+    section: SECTION,
+    message: `unrecognised tile reference "${reference}" (docs/spec/formats/README.md#tile-references)`,
+  });
 }

@@ -174,6 +174,7 @@ test("the image-reference classifier reads tile references, pictures and .tbm", 
     tileset: "forest.iso",
     index: 3,
   });
+  deepEqual(classifyImageReference("flower.gph"), { kind: "singleTile", path: "flower.gph" });
   deepEqual(classifyImageReference("man_n.png"), { kind: "picture", path: "man_n.png" });
   deepEqual(classifyImageReference("Bitmap/tiles.tbm"), {
     kind: "tileBitmap",

@@ -13,6 +13,7 @@ import {
   foldPath,
   PACKAGE_ROOT,
   resolveAsset,
+  resolveTileReference,
 } from "../src/index.ts";
 import type { AssetKey, AssetRoot, Result } from "../src/index.ts";
 
@@ -200,4 +201,65 @@ test("a game folder accepts both stored forms of the project path", () => {
   // package root (§13).
   const asPackage = createAssetIndex(["Boards/start.brd"]);
   equal(unwrap(resolveAsset(asPackage, PACKAGE_ROOT, "boards", "start.brd")), "boards/start.brd");
+});
+
+test("resolveTileReference resolves .tan, .gph, .tst, and .iso references", () => {
+  const index = createAssetIndex([
+    "Game/demo/Tiles/water.tan",
+    "Game/demo/Tiles/flower.gph",
+    "Game/demo/Tiles/default.tst",
+    "Game/demo/Tiles/diamond.iso",
+  ]);
+  const root: AssetRoot = { kind: "game", projectPath: "demo" };
+
+  // Empty string
+  equal(unwrap(resolveTileReference(index, root, "")).kind, "empty");
+
+  // Animated tile (.tan)
+  const tanRef = unwrap(resolveTileReference(index, root, "water.tan"));
+  deepEqual(tanRef, {
+    kind: "animatedTile",
+    path: "water.tan",
+    asset: "game/demo/tiles/water.tan" as AssetKey,
+  });
+
+  // Single tile (.gph)
+  const gphRef = unwrap(resolveTileReference(index, root, "flower.gph"));
+  deepEqual(gphRef, {
+    kind: "singleTile",
+    path: "flower.gph",
+    asset: "game/demo/tiles/flower.gph" as AssetKey,
+  });
+
+  // Tileset (.tst)
+  const tstRef = unwrap(resolveTileReference(index, root, "default.tst12"));
+  deepEqual(tstRef, {
+    kind: "tileset",
+    tileset: "default.tst",
+    tile: 12,
+    asset: "game/demo/tiles/default.tst" as AssetKey,
+  });
+
+  // Isometric tileset (.iso)
+  const isoRef = unwrap(resolveTileReference(index, root, "diamond.iso3"));
+  deepEqual(isoRef, {
+    kind: "isometric",
+    tileset: "diamond.iso",
+    tile: 3,
+    asset: "game/demo/tiles/diamond.iso" as AssetKey,
+  });
+
+  // Missing tile asset fails with located error
+  const missing = resolveTileReference(index, root, "missing.tan");
+  equal(missing.ok, false);
+  if (!missing.ok) {
+    equal(missing.error.section, "format-spec §1.5");
+  }
+});
+
+test("resolves fonts under Font/ directory", () => {
+  const index = createAssetIndex(["Game/demo/Font/base.fnt"]);
+  const root: AssetRoot = { kind: "game", projectPath: "demo" };
+  const key = unwrap(resolveAsset(index, root, "fonts", "base.fnt"));
+  equal(key, "game/demo/font/base.fnt");
 });
