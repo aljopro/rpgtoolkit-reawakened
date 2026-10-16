@@ -63,10 +63,10 @@ const UNRECOGNISED = skip(
  * Extension (lowercase, no dot) → why `dump` skips it.
  *
  * A file with no extension, or one not listed, is skipped as unrecognised. The
- * `.prg`, `.gph`, `.tan` and `.sav` rows are skipped *by design*: a later epic
- * parses §9 programs (the `.prg` row still reports whether the file is source
- * text or §9's compiled form), and §3.2/§3.5/§11 have no core decoder yet, so
- * reporting them as failures would fail every game that ships one.
+ * `.prg` and `.sav` rows are skipped *by design*: a later epic parses §9
+ * programs (the `.prg` row still reports whether the file is source text or
+ * §9's compiled form), and §11 saves are outside this tool's scope. Reporting
+ * files of either extension as failures would fail games that ship them.
  */
 const SKIP_TABLE: Readonly<Record<string, SkipFormatClass>> = {
   // §9 — RPGCode programs are source text, or a compiled binary whose **first
@@ -80,9 +80,7 @@ const SKIP_TABLE: Readonly<Record<string, SkipFormatClass>> = {
         ? `compiled (format-spec §9 "Compiled form"), ${bytes.length} bytes`
         : `${bytes.length} bytes, ${countLines(bytes)} lines`,
   ),
-  // Formats the spec describes but no `core` reader implements yet — skipped, not failed.
-  gph: skip("single-column tile text file (format-spec §3.2): no reader in core yet"),
-  tan: skip("animated tile (format-spec §3.5): no reader in core yet"),
+  // A format the spec describes but no `core` reader implements yet — skipped, not failed.
   sav: skip("saved game (format-spec §11): out of scope for this epic"),
   // §10 — media this tool does not decode.
   mid: skip("MIDI music (format-spec §10): audio, not a data format"),

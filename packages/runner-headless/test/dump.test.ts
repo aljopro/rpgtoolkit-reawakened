@@ -452,10 +452,13 @@ const DISPATCH: ReadonlyArray<readonly [string, DataFormatId, string]> = [
   ["Bkrounds/bkg.bkg", "battle-background", "format-spec §8.3"],
   ["SpcMove/fire.spc", "special-move", "format-spec §8.1"],
   ["StatusE/poison.ste", "status-effect", "format-spec §8.2"],
-  ["Bitmap/layout.png", "image", "format-spec §10"],
+  ["Tiles/single.gph", "single-tile", "format-spec §3.2"],
+  ["Tiles/animated.tan", "tile-animation", "format-spec §3.5"],
+  ["Font/legacy.fnt", "font", "format-spec §15.12"],
   ["Bitmap/bkg.jpg", "image", "format-spec §10"],
   ["Bitmap/bkg.jpeg", "image", "format-spec §10"],
   ["Bitmap/mwin.bmp", "image", "format-spec §10"],
+  ["Bitmap/layout.png", "image", "format-spec §10"],
 ];
 
 test("classify sends every data extension to the reader its section names", () => {
@@ -465,6 +468,23 @@ test("classify sends every data extension to the reader its section names", () =
     if (cls.kind !== "data") continue;
     equal(cls.format, format, path);
     equal(cls.section, section, path);
+  }
+});
+
+test("the TK2 tile and font examples parse through dump", () => {
+  const examples = join(PACKAGE_ROOT, "..", "..", "docs", "spec", "examples", "versions");
+  const files: PackageFile[] = [
+    "single-tile/tile_v2_compressed.gph",
+    "tile-animation/water.tan",
+    "font/base.fnt",
+  ].map((relativePath) => ({
+    path: relativePath,
+    bytes: new Uint8Array(readFileSync(join(examples, relativePath))),
+  }));
+  const report = buildReport(files);
+  deepEqual(report.counts, { parsed: 3, skipped: 0, failed: 0 });
+  for (const entry of report.files) {
+    ok(entry.status === "parsed", `${entry.path} should parse`);
   }
 });
 
@@ -964,9 +984,9 @@ test("the committed spec-examples dump expectation matches docs/spec/examples", 
   const examplesDir = join(root, "docs", "spec", "examples");
   const checked = runCli(["dump", "--check", expectationPath, examplesDir]);
   equal(checked.status, 0, checked.stderr);
-  equal(checked.stdout.includes("files: 0 parsed, 3 skipped, 0 failed, 0 digests match"), true);
-  equal(checked.stdout.includes("game: 19 parsed, 7 skipped, 0 failed, 19 digests match"), true);
-  equal(checked.stdout.includes("versions: 55 parsed, 67 skipped, 1 expected failure(s), 55 digests match"), true);
+  equal(checked.stdout.includes("files: 1 parsed, 2 skipped, 0 failed, 1 digests match"), true);
+  equal(checked.stdout.includes("game: 21 parsed, 5 skipped, 0 failed, 21 digests match"), true);
+  equal(checked.stdout.includes("versions: 60 parsed, 61 skipped, 2 expected failure(s), 60 digests match"), true);
 });
 
 // ------------------------------------------------------------------ the CLI

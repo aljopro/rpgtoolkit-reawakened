@@ -6,7 +6,8 @@
  * (§2), boards (§4, with §4.1's branch decided here and a pre-vector board
  * converted to the §4.2 model), tilesets (§3.1), animations (§7.1), characters,
  * items and enemies (§6.1–§6.3), special moves, status effects and battle
- * backgrounds (§8.1–§8.3), and images (§10). The dump reads its data-format rows
+ * backgrounds (§8.1–§8.3), the Toolkit 2 single tiles, animated tiles and
+ * bitmap fonts (§3.2, §3.5, §15.12), and images (§10). The dump reads its data-format rows
  * from `CORE_REGISTRY` and decodes through `CORE_DECODERS`, so the project has
  * one dispatch.
  *
@@ -18,6 +19,9 @@
 import { BinaryReader } from "../binary/reader.ts";
 import { decodeTexture } from "../image/index.ts";
 import { readTileset } from "../tileset/tileset.ts";
+import { readTileAnimation, TILE_ANIMATION_MAGIC, type TileAnimation } from "../tile-animation/index.ts";
+import { readSingleTile, SINGLE_TILE_MAGIC, type SingleTile } from "../single-tile/index.ts";
+import { readLegacyFont, FONT_MAGIC, type LegacyFont } from "../font/index.ts";
 import {
   readTileBitmap,
   TILE_BITMAP_MAGIC,
@@ -165,6 +169,12 @@ export interface CoreDecoders {
   "status-effect": AssetDecoder<StatusEffect>;
   /** §8.3 — battle backgrounds. */
   "battle-background": AssetDecoder<BattleBackground>;
+  /** §3.2 — single tiles (`.gph`, text); a version 1 file has no magic and is claimed by extension. */
+  "single-tile": AssetDecoder<SingleTile>;
+  /** §3.5 — animated tiles (`.tan`). */
+  "tile-animation": AssetDecoder<TileAnimation>;
+  /** §15.12 — Toolkit 2 bitmap fonts (`.fnt`, text). */
+  font: AssetDecoder<LegacyFont>;
   /** §10 — images (`decodeTexture` matches the PNG, JPEG, BMP and GIF signatures). */
   image: AssetDecoder<DecodedTexture>;
 }
@@ -250,6 +260,28 @@ export const CORE_DECODERS: CoreDecoders = {
     extensions: ["bkg"],
     detect: magicIs(BATTLE_BACKGROUND_MAGIC),
     decode: (bytes) => readBattleBackground(new BinaryReader(bytes)),
+  },
+  "single-tile": {
+    id: "single-tile",
+    section: "format-spec §3.2",
+    extensions: ["gph"],
+    // `RPGTLKIT TILE` is a prefix of the animated tile's `RPGTLKIT TILEANIM`.
+    detect: (header) => startsWithAscii(header, SINGLE_TILE_MAGIC) && !startsWithAscii(header, TILE_ANIMATION_MAGIC),
+    decode: (bytes) => readSingleTile(bytes),
+  },
+  "tile-animation": {
+    id: "tile-animation",
+    section: "format-spec §3.5",
+    extensions: ["tan"],
+    detect: magicIs(TILE_ANIMATION_MAGIC),
+    decode: (bytes) => readTileAnimation(new BinaryReader(bytes)),
+  },
+  font: {
+    id: "font",
+    section: "format-spec §15.12",
+    extensions: ["fnt"],
+    detect: magicIs(FONT_MAGIC),
+    decode: (bytes) => readLegacyFont(bytes),
   },
   image: {
     id: "image",

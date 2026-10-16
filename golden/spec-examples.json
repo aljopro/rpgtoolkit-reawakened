@@ -4,16 +4,18 @@
     "files": {
       "counts": {
         "failed": 0,
-        "parsed": 0,
-        "skipped": 3
+        "parsed": 1,
+        "skipped": 2
       },
-      "digests": {}
+      "digests": {
+        "flower.gph": "9131ae96648d8338"
+      }
     },
     "game": {
       "counts": {
         "failed": 0,
-        "parsed": 19,
-        "skipped": 7
+        "parsed": 21,
+        "skipped": 5
       },
       "digests": {
         "Game/Example/Bitmap/forest.tbm": "157978a0d861ddf9",
@@ -32,16 +34,18 @@
         "Game/Example/Misc/slime/slime.anm": "4fa79b0365ab3b7b",
         "Game/Example/SpcMove/fireball.spc": "ddd4f5c779a06b6d",
         "Game/Example/StatusE/burn.ste": "da4250ee29f6d16c",
+        "Game/Example/Tiles/flower.gph": "9131ae96648d8338",
         "Game/Example/Tiles/grass.iso": "0c284ef4560ba23f",
         "Game/Example/Tiles/village.tst": "70b891629eb90380",
+        "Game/Example/Tiles/water.tan": "f1a3a9d00735b370",
         "Main/example.gam": "1517c834ade86497"
       }
     },
     "versions": {
       "counts": {
-        "failed": 1,
-        "parsed": 55,
-        "skipped": 67
+        "failed": 2,
+        "parsed": 60,
+        "skipped": 61
       },
       "digests": {
         "animation/animation_minor3.anm": "aaa17203c4a80d78",
@@ -62,6 +66,7 @@
         "enemy/enemy_text.ene": "6e1ab835340a620b",
         "fight-background/background_minor3.bkg": "40ec33bfa540386f",
         "fight-background/background_text.bkg": "56cc45e12fe61872",
+        "font/base.fnt": "5d8b3659e73095f9",
         "item/item_minor2.itm": "6e0b8a43b291f83c",
         "item/item_minor3.itm": "1c83d7120310c6bb",
         "item/item_minor4.itm": "0b5c7fee2f124993",
@@ -80,10 +85,14 @@
         "main/main_minor8.gam": "720b056ae9b2a7b9",
         "main/main_minor9.gam": "299169586a38da61",
         "main/main_tk2_text.gam": "d7a5c9da8d8c2257",
+        "single-tile/tile_v2_compressed.gph": "5530fa399d3d6efb",
+        "single-tile/tile_v2_detail2.gph": "863ae6d83d5092f9",
+        "single-tile/tile_v2_uncompressed.gph": "57e97d7e9e633132",
         "special-move/special_minor2.spc": "ddd4f5c779a06b6d",
         "special-move/special_text.spc": "efb20442a36eb762",
         "status-effect/status_minor2.ste": "da4250ee29f6d16c",
         "status-effect/status_text.ste": "c034de6d062c815e",
+        "tile-animation/water.tan": "f1a3a9d00735b370",
         "tile-bitmap/tilebitmap.tbm": "96cdc0cf28b52f15",
         "tileset/tileset_detail1.png": "ae194a0fde089c89",
         "tileset/tileset_detail1.tst": "c70a03d31f1b3801",
@@ -101,7 +110,8 @@
         "tileset/tileset_iso.png": "6fa020b29c3d9125"
       },
       "expectedFailures": {
-        "main/main_tk1.gam": "16.4"
+        "main/main_tk1.gam": "16.4",
+        "single-tile/tile_v1.gph": "16.7"
       }
     }
   },
