@@ -1,11 +1,9 @@
 // The main game file (.gam) reader, writer and project layout of format-spec
 // §2 and §1.5 (AD-18).
 //
-// The corpus ships no `.gam` (the fixture fetch copies only `Build/game/<game>`,
-// never `Main/*.gam`), so the layout is pinned entirely by synthetic buffers:
-// one per minor, covering every one of §2's twelve version-dependent rows. The
-// reader never throws, so the tests assert on values and on the error's offset
-// and section rather than on exceptions.
+// Synthetic buffers, one per minor, pin the layout and all twelve of §2's
+// version-dependent rows. The fetched corpus `demo.gam` is exercised by
+// `pnpm dump:check`.
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
