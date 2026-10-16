@@ -19,6 +19,7 @@ import type { GameState } from "../save/state.ts";
 import { createClockPort, runTimePhase } from "../time/time.ts";
 import { CORE_PLUGIN, type Arg, type BuiltinSpec } from "./builtins.ts";
 import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
+import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
 import { recordEffect } from "./effects.ts";
 import { ScriptError } from "./errors.ts";
 import type { SourcePos } from "./ops.ts";
@@ -62,6 +63,7 @@ export type ScriptServices = {
   readonly view: CommandView;
   readonly commands: CommandLookup;
   readonly programs: ProgramMemo;
+  readonly virtuals: VirtualVariablePort;
 };
 
 const DISCARD_LOGGER: Logger = { warn: () => {}, error: () => {} };
@@ -76,11 +78,14 @@ export function createScriptServices(
   state: GameState,
   plugins: readonly PluginDefinition[] = [],
   logger: Logger = DISCARD_LOGGER,
+  virtuals?: VirtualVariablePort,
 ): ScriptServices {
   const view: CommandView = {
     rng: createRngPort(state.rng),
     clock: createClockPort(state.time),
+    state,
   };
+  const virt = virtuals ?? createDefaultVirtuals(state);
   const registry = assembleCommands([CORE_PLUGIN, CATALOGUE_STUBS_PLUGIN, ...plugins], logger);
   const commands = createCommandLookup({ builtin: (name) => registry.get(name) });
   const cache = new Map<string, Program>();
@@ -94,7 +99,7 @@ export function createScriptServices(
       return compiled;
     },
   };
-  return { view, commands, programs };
+  return { view, commands, programs, virtuals: virt };
 }
 
 export function pollSleep(view: WaitView, wait: Wait): WaitResult | null {
@@ -240,21 +245,67 @@ function writeRef(
   }
 }
 
+function deleteVariable(vm: VmState, thread: Thread, frameIndex: number, target: string): void {
+  const isWholeArray = !target.includes("[");
+  const prefix = `${target}[`;
+
+  for (let i = frameIndex; i >= 0; i--) {
+    const f = thread.frames[i];
+    if (f) {
+      delete f.locals[target];
+      if (isWholeArray) {
+        for (const key of Object.keys(f.locals)) {
+          if (key.startsWith(prefix)) {
+            delete f.locals[key];
+          }
+        }
+      }
+    }
+  }
+
+  delete vm.globals[target];
+  if (isWholeArray) {
+    for (const key of Object.keys(vm.globals)) {
+      if (key.startsWith(prefix)) {
+        delete vm.globals[key];
+      }
+    }
+  }
+}
+
 function loadArg(
   vm: VmState,
   thread: Thread,
   frameIndex: number,
   name: string,
   scope?: VarScope,
+  virtuals?: VirtualVariablePort,
 ): Arg {
   if (scope === "global") {
-    if (!Object.hasOwn(vm.globals, name)) {
-      setOwnValue(vm.globals, name, 0);
+    if (Object.hasOwn(vm.globals, name)) {
+      return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
     }
-    return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
+    const virt = virtuals?.read(name);
+    if (virt !== undefined) {
+      return { value: virt, ref: globalRef(name) };
+    }
+    setOwnValue(vm.globals, name, 0);
+    return { value: 0, ref: globalRef(name) };
   }
 
   const frame = thread.frames[frameIndex]!;
+  if (scope === "local") {
+    if (!Object.hasOwn(frame.locals, name)) {
+      setOwnSlot(frame.locals, name, { value: 0, ref: localRef(name) });
+    }
+    const slot = frame.locals[name]!;
+    if (slot.ref === localRef(name)) {
+      return { value: slot.value ?? 0, ref: slot.ref };
+    }
+    const val = readRef(vm, thread, frameIndex, slot.ref);
+    return { value: val, ref: slot.ref };
+  }
+
   if (Object.hasOwn(frame.locals, name)) {
     const slot = frame.locals[name]!;
     if (slot.ref === localRef(name)) {
@@ -266,6 +317,16 @@ function loadArg(
 
   if (Object.hasOwn(vm.globals, name)) {
     return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
+  }
+
+  const virtVal = virtuals?.read(name);
+  if (virtVal !== undefined) {
+    return { value: virtVal, ref: globalRef(name) };
+  }
+
+  if (frame.autoLocal) {
+    setOwnSlot(frame.locals, name, { value: 0, ref: localRef(name) });
+    return { value: 0, ref: localRef(name) };
   }
 
   // SEM-4/SEM-5: Read creates the variable as global (unset -> 0)
@@ -358,7 +419,7 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         break;
 
       case "load":
-        frame.operands.push(loadArg(vm, thread, frameIndex, op.name, op.scope));
+        frame.operands.push(loadArg(vm, thread, frameIndex, op.name, op.scope, services.virtuals));
         frame.ip += 1;
         break;
 
@@ -412,7 +473,7 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
         if (baseArg.ref !== null) {
           scope = baseArg.ref.startsWith("global:") ? "global" : "local";
         }
-        const elementArg = loadArg(vm, thread, frameIndex, fullName, scope ?? undefined);
+        const elementArg = loadArg(vm, thread, frameIndex, fullName, scope ?? undefined, services.virtuals);
         frame.operands.push(elementArg);
         frame.ip += 1;
         break;
@@ -610,7 +671,7 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
             locals,
             operands: [],
             errorHandler: null,
-            autoLocal: false,
+            autoLocal: frame.autoLocal,
           });
           break;
         }
@@ -665,6 +726,38 @@ function runThread(thread: Thread, vm: VmState, services: ScriptServices, budget
               }
               frame.ip = targetIp;
               controlApplied = true;
+            }
+            if (action === "autoLocal") {
+              frame.autoLocal = Boolean(effect.args?.[1]);
+            }
+            if (action === "kill") {
+              const targets = (effect.args?.slice(1) ?? []) as string[];
+              for (const target of targets) {
+                deleteVariable(vm, thread, frameIndex, target);
+              }
+            }
+            if (action === "split") {
+              const baseRef = effect.args?.[1] as RefId;
+              const baseName = refName(baseRef);
+              const isGlobal = baseRef.startsWith("global:");
+              const parts = (effect.args?.slice(2) ?? []) as Value[];
+              for (let i = 0; i < parts.length; i++) {
+                const elemName = `${baseName}[${i}]`;
+                const elemRef = isGlobal ? globalRef(elemName) : localRef(elemName);
+                writeRef(vm, thread, frameIndex, elemRef, parts[i]!);
+              }
+            }
+            if (action === "local") {
+              const varName = effect.args?.[1] as string;
+              if (!Object.hasOwn(frame.locals, varName)) {
+                setOwnSlot(frame.locals, varName, { value: 0, ref: localRef(varName) });
+              }
+            }
+            if (action === "global") {
+              const varName = effect.args?.[1] as string;
+              if (!Object.hasOwn(vm.globals, varName)) {
+                setOwnValue(vm.globals, varName, 0);
+              }
             }
           } else {
             const section = effect.section;

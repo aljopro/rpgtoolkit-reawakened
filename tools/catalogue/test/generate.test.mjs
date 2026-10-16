@@ -16,8 +16,8 @@ const rows = stubRows(catalogue);
 const spec = (name, optional, byRef, variadic = false) => ({ name, optional, byRef, variadic });
 
 test("keeps exactly the stub-safe catalogue names", () => {
-  equal(rows.length, 176);
-  equal(new Set(rows.map((row) => row.name)).size, 176);
+  equal(rows.length, 153);
+  equal(new Set(rows.map((row) => row.name)).size, 153);
   const stubSafe = new Set(["pure", "state-write", "draw-audio-cue"]);
   ok(rows.every((row) => stubSafe.has(row.effectKind)));
   // The kinds entries 9, 13 and 22 own never leak in.
@@ -26,7 +26,7 @@ test("keeps exactly the stub-safe catalogue names", () => {
 
 test("parses every distinct catalogue notation into named boolean parameters", () => {
   const distinct = [...new Set(rows.map((row) => row.params))].sort();
-  equal(distinct.length, 88);
+  equal(distinct.length, 77);
 
   for (const notation of distinct) {
     const params = parseParams(notation);
@@ -110,7 +110,7 @@ test("rejects a malformed notation rather than guessing", () => {
 });
 
 test("marks the trailing output of a byRefOut getter that omits the &", () => {
-  const row = (name) => rows.find((candidate) => candidate.name === name);
+  const row = (name) => catalogue.names.find((candidate) => candidate.name === name);
   deepEqual(stubParams(row("charAt")), [spec("s", false, false), spec("pos", false, false), spec("dest", false, true)]);
   deepEqual(stubParams(row("split")), [spec("str", false, false), spec("delim", false, false), spec("arr", false, true)]);
   deepEqual(stubParams(row("tileType")), [
@@ -125,16 +125,16 @@ test("marks the trailing output of a byRefOut getter that omits the &", () => {
 
 test("every byRefOut name declares byRef except the four variadic ones", () => {
   const byRefOut = rows.filter((row) => row.byRefOut);
-  equal(byRefOut.length, 68);
+  equal(byRefOut.length, 49);
   equal(byRefOut.filter((row) => row.params === "...").length, 4);
-  equal(byRefOut.filter((row) => stubParams(row).some((param) => param.byRef)).length, 64);
+  equal(byRefOut.filter((row) => stubParams(row).some((param) => param.byRef)).length, 45);
 });
 
 test("generates one folded spec per name and the obsolete throw", () => {
   const source = generate(catalogue);
   const generated = [...source.matchAll(/^ {4}name: "([a-z][a-z0-9]*)",$/gm)].map((match) => match[1]);
-  equal(generated.length, 176);
-  equal(new Set(generated).size, 176);
+  equal(generated.length, 153);
+  equal(new Set(generated).size, 153);
   ok(generated.includes("mwincls"), "a mixed-case catalogue name is folded to its registry key");
   ok(source.includes("builtin.obsolete"), "the obsolete stub raises builtin.obsolete");
   equal((source.match(/obsolete: true/g) ?? []).length, 2);
