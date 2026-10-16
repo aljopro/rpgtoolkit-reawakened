@@ -4,7 +4,7 @@ Games made with Toolkit 1.x, 2.x and early 3.0 releases stored their files in ol
 
 | Page | Contents |
 |---|---|
-| [text-formats.md](text-formats.md) | Line-by-line layouts of the Toolkit 1/2 text files: main file, character, item, enemy, fight background, status effect, special move, animation, single tile |
+| [text-formats.md](text-formats.md) | Line-by-line layouts of the Toolkit 1/2 text files: main file, character, item, enemy, fight background, status effect, special move, animation, font, board, single tile |
 | [older-binary-versions.md](older-binary-versions.md) | Older minor versions of the binary formats: main file minors 1-8, pre-vector boards (minor 2-3), characters before minor 8, items before minor 7, saved games before minor 4 |
 | [../../examples/versions/](../../examples/versions/README.md) | An example file for every version of every asset format, with annotated listings: fixtures for an importer |
 | [conversion.md](conversion.md) | What the original programs generate when they convert legacy files (tile bitmaps, animations, tilesets), the file names they use, and the Toolkit 2 folder-layout upgrade |
@@ -32,6 +32,7 @@ This matches what the original programs did in practice: the 3.1 engine could no
 | Status effect | `RPGTLKIT STATUSE` | 16 | binary | text |
 | Special move | `RPGTLKIT SPLMOVE` | 16 | binary | text |
 | Animation | `RPGTLKIT ANIM` | — | the first NUL-terminated string equals the header → binary | text |
+| Font | `RPGTLKIT FONT` | 13 | — (no binary form) | text |
 | Single tile | `RPGTLKIT TILE` (text in both) | — | first line is the header → version 2 tile | version 1 tile |
 
 The probe offset is the length of the header text, i.e. the position of the binary header's terminating `00`. In a text file that position holds part of the line ending or the next line.
@@ -54,3 +55,30 @@ The probe offset is the length of the header text, i.e. the position of the bina
 | Text animation | reads | reads |
 | Version 1 single tile | reads | reads |
 | Saved game, minor < 4 (Toolkit 3.0) | — | reads |
+
+**Toolkit 1 (R-24).** Toolkit 1 is out of scope for the first release (owner decision 2026-10-11): the Toolkit 1 main file and the version-1 single tile are recorded as evidence-backed but carry **no reader** — an importer detects them and reports them as unsupported. See the Reawakened rule on [text-formats.md](text-formats.md).
+
+## §15 corpus evidence
+
+Every layout on [text-formats.md](text-formats.md) was checked against the archive's real 2.x **data files**, not only against the original programs' reading logic. The evidence is the six-game corpus — **FinalDestiny, LittleMan, BusDriver, Caoquest, School2Demo, ChimeranEmpire** — plus the official 2.20b demo where it adds a sample, and the reviewed clean-room extraction in [../../../provenance/facts-round-5.md](../../../provenance/facts-round-5.md) (round 5). File counts, per extension:
+
+| Extension | Corpus |
+|---|---|
+| `.gam` | 15 binary minor 2, 3 text (`DEMO.GAM`, `caoquest.gam`, `devilsnight.tpk`'s `main.gam`) |
+| `.brd` | 144 binary minor 2, 17 text minor 1 |
+| `.tem` | 16 binary minor 3-4, 2 text minor 2 |
+| `.itm` | 87 binary minor 3, 16 text minor 1 |
+| `.ene` | 52 text minor 0, no binary |
+| `.spc` | 22 binary minor 2, 8 text minor 0 |
+| `.ste` | 5 binary minor 2, no text |
+| `.bkg` | 23 text minor 0, no binary |
+| `.anm` | 17 text minor 0, no binary |
+| `.fnt` | 5 text, no binary |
+| `.tan` | 33 binary minor 0 |
+| `.gph` | 6 v2 text |
+
+The layouts, their per-file worked examples, their seven `<!-- OWNER: … -->` note entries and §15's open questions were migrated here from `format-spec.md` §15 (superseded; `docs/spec/` is now normative under [ADR 0007](../../../adr/0007-docs-spec-is-the-normative-specification.md)). Each format question is ruled in [text-formats.md](text-formats.md) as a legacy fact with its evidence, a **Reawakened rule** block, or a named open question — never silently. The open questions still open are the `.gam` text plugin count of 5 with four flags, the binary `.tem` minor-3/4 residual bytes, and the text `.bkg` line 218; §15.15's other five are closed.
+
+**Zero-byte placeholder files — Reawakened rule (Z-1).** Tolerate a zero-byte file as an empty placeholder, with a warning. The corpus holds **7** zero-byte data files left by their authors — two `.brd` (one named `Boards/.brd` in School2Demo, one in ChimeranEmpire), two `.itm` (FinalDestiny, ChimeranEmpire) and three `.spc` (FinalDestiny and two in ChimeranEmpire) — and some are referenced by real games, so a hard error would break a shipped game. A reader treats such a file as an empty document and lets the referencing code see "no asset".
+
+<!-- OWNER: placeholder files — alternatives: (a) tolerate a zero-byte file as an empty placeholder and let the referencing entry see "no asset"; (b) skip it silently; (c) report it as a located error. The corpus shows they were left by their authors and are referenced in some cases, so a hard error would break a real game; decided: (a) tolerate with a warning, and (b) only if a caller asks to skip. Change here if the owner prefers skip. -->
