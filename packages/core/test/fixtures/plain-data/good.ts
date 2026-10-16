@@ -1,5 +1,5 @@
 // Plain-data fixtures that must satisfy the `PlainData` constraint (G1.2, AD-7).
-import type { AssertPlainData, GameState, PlainData, VmState } from "../../../src/index.ts";
+import type { AssertPlainData, Frame, GameState, LocalSlot, PlainData, VmState } from "../../../src/index.ts";
 import { createGameState } from "../../../src/index.ts";
 
 export const value: PlainData = {
@@ -13,6 +13,8 @@ export const value: PlainData = {
 // earlier stand-ins proves the production types satisfy AssertPlainData.
 export type VmStateIsPlainData = AssertPlainData<VmState>;
 export type GameStateIsPlainData = AssertPlainData<GameState>;
+export type FrameIsPlainData = AssertPlainData<Frame>;
+export type LocalSlotIsPlainData = AssertPlainData<LocalSlot>;
 
 // A mid-yield game state: the `time` section is a plain tick counter (AD-2).
 export const midYieldState: GameState = {

@@ -26,6 +26,7 @@ import type {
   FillCommand,
   FocusInput,
   Frame,
+  LocalSlot,
   GamepadInput,
   GameState,
   InputEvent,
@@ -62,6 +63,7 @@ import { createGameState } from "../../../src/index.ts";
 export type VmStateIsPlainData = AssertPlainData<VmState>;
 export type GameStateIsPlainData = AssertPlainData<GameState>;
 export type FrameIsPlainData = AssertPlainData<Frame>;
+export type LocalSlotIsPlainData = AssertPlainData<LocalSlot>;
 
 // A mid-yield game state: the `time` section is a plain tick counter (AD-2) and
 // `vm` holds the real thread tree (AD-7, §9.15 THR-3).
@@ -79,7 +81,7 @@ export const pinThread: Thread = {
   target: null,
   frames: [
     {
-      program: { kind: "inline", text: "end()", compiler: "1" },
+      program: { kind: "inline", text: "end()", compiler: "2" },
       ip: 0,
       locals: {},
       operands: [],

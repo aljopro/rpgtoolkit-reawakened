@@ -1,6 +1,6 @@
-// The tracer's RPGCode frontend (format-spec §9.2/§9.3/§9.5/§9.12; ADR 0004
-// decision 1): the tokenizer's subset, the construct rejections and the exact
-// Step IR the tracer program lowers to.
+// The RPGCode frontend (format-spec §9.2/§9.3/§9.5/§9.12; ADR 0004
+// decision 1): the tokenizer, construct rejections, leniency forms and the
+// exact Step IR the tracer program lowers to.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import { compileInline, compileProgram, tokenize, type ScriptError } from "../src/index.ts";
@@ -18,97 +18,172 @@ function errorOf(run: () => unknown): { code: string; message: string } {
 
 test("tokenizes case-folded identifiers with sigils stripped", () => {
   deepEqual(tokenize('Count! = 2 ; name$ = "hi"\nend'), [
-    { kind: "identifier", name: "count" },
-    { kind: "punct", text: "=" },
-    { kind: "number", value: 2 },
-    { kind: "end" },
-    { kind: "identifier", name: "name" },
-    { kind: "punct", text: "=" },
-    { kind: "string", value: "hi" },
-    { kind: "end" },
-    { kind: "identifier", name: "end" },
-    { kind: "eof" },
+    { kind: "identifier", name: "count", line: 1 },
+    { kind: "op", text: "=", line: 1 },
+    { kind: "number", value: 2, line: 1 },
+    { kind: "end", line: 1 },
+    { kind: "identifier", name: "name", line: 1 },
+    { kind: "op", text: "=", line: 1 },
+    { kind: "string", value: "hi", line: 1 },
+    { kind: "end", line: 1 },
+    { kind: "identifier", name: "end", line: 2 },
+    { kind: "eof", line: 2 },
   ]);
 
-  // `x!=1` is the operator (LEX-3); `x! = 1` keeps the sigil reading.
-  equal(errorOf(() => tokenize("x!=1")).message.includes("entry 5"), true);
+  // `x!=1` is the `!=` operator (LEX-3); `x! = 1` keeps the sigil reading.
+  deepEqual(tokenize("x!=1"), [
+    { kind: "identifier", name: "x", line: 1 },
+    { kind: "op", text: "!=", line: 1 },
+    { kind: "number", value: 1, line: 1 },
+    { kind: "eof", line: 1 },
+  ]);
   deepEqual(tokenize("x! = true"), [
-    { kind: "identifier", name: "x" },
-    { kind: "punct", text: "=" },
-    { kind: "number", value: 1 },
-    { kind: "eof" },
+    { kind: "identifier", name: "x", line: 1 },
+    { kind: "op", text: "=", line: 1 },
+    { kind: "number", value: 1, line: 1 },
+    { kind: "eof", line: 1 },
   ]);
 
   // `$` followed by `=` is a sigil, only `!` followed by `=` is the operator.
   deepEqual(tokenize('name$="hi"'), [
-    { kind: "identifier", name: "name" },
-    { kind: "punct", text: "=" },
-    { kind: "string", value: "hi" },
-    { kind: "eof" },
+    { kind: "identifier", name: "name", line: 1 },
+    { kind: "op", text: "=", line: 1 },
+    { kind: "string", value: "hi", line: 1 },
+    { kind: "eof", line: 1 },
   ]);
 });
 
-test("rejects every construct the subset excludes naming its entry", () => {
+test("tokenizes every §9.2 operator, comment form and the `_` continuation with line numbers", () => {
+  // Comments and line continuation
+  const source = `x = 1 /* block
+comment */ + 2 _ // continuation
++ 3
+** legacy comment
+* comment at line start
+x = 4 * 5
+`;
+  const tokens = tokenize(source);
+  deepEqual(tokens, [
+    { kind: "identifier", name: "x", line: 1 },
+    { kind: "op", text: "=", line: 1 },
+    { kind: "number", value: 1, line: 1 },
+    { kind: "op", text: "+", line: 2 },
+    { kind: "number", value: 2, line: 2 },
+    { kind: "op", text: "+", line: 3 },
+    { kind: "number", value: 3, line: 3 },
+    { kind: "end", line: 3 },
+    { kind: "end", line: 4 },
+    { kind: "end", line: 5 },
+    { kind: "identifier", name: "x", line: 6 },
+    { kind: "op", text: "=", line: 6 },
+    { kind: "number", value: 4, line: 6 },
+    { kind: "op", text: "*", line: 6 },
+    { kind: "number", value: 5, line: 6 },
+    { kind: "end", line: 6 },
+    { kind: "eof", line: 7 },
+  ]);
+});
+
+test("rejects the TK2, class, module and error-handling constructs by name and entry", () => {
   const cases: readonly (readonly [string, string])[] = [
-    ["x = 1 + 2", "entry 5"],
-    ["x = a ~= b", "entry 5"],
-    ["x = a ? b : c", "entry 5"],
-    ["if (x) { y = 1 }", "entry 5"],
-    ["while (x) { y = 1 }", "entry 5"],
-    ["for (i = 0; i < 2; i = i + 1) { y = 1 }", "entry 5"],
-    ["return 1", "entry 5"],
-    ["function f() { }", "entry 5"],
-    ["method C::C() { }", "entry 5"],
     ["class C { }", "entry 6"],
-    ["x[0] = 1", "entry 5"],
-    ["local(x) = 1", "entry 5"],
-    ["global(x) = 1", "entry 5"],
-    ["x = 1 /* comment */", "entry 5"],
-    ["x = 1 _\ny = 2", "entry 5"],
+    ["struct S { }", "entry 6"],
+    ["var v = 1", "entry 6"],
+    ["public: method f() { }", "entry 6"],
+    ["private: method f() { }", "entry 6"],
+    ["protected: method f() { }", "entry 6"],
+    ["this.x", "entry 6"],
+    ["new C()", "entry 6"],
+    ["x->y", "entry 6"],
+    ["method C::C() { }", "entry 6"],
     ['#include "other.prg"', "entry 8"],
     ['redirect("a", "b")', "entry 8"],
+    ['killredirect("a")', "entry 8"],
+    ["killallredirects()", "entry 8"],
     ["a.b()", "entry 8"],
     ["@", "entry 15"],
   ];
 
-  for (const [source, entry] of cases) {
-    const error = errorOf(() => tokenize(source));
-    equal(error.code, "syntax.unsupported", source);
-    equal(error.message.includes(entry), true, `${source} -> ${error.message}`);
+  for (const [src, entry] of cases) {
+    const error = errorOf(() => tokenize(src));
+    equal(error.code, "syntax.unsupported", src);
+    equal(error.message.includes(entry), true, `${src} -> ${error.message}`);
   }
+
+  // break and continue name the spec
+  equal(errorOf(() => tokenize("break")).code, "syntax.unsupported");
+  equal(errorOf(() => tokenize("break")).message.includes("rpgcode-language.md"), true);
+  equal(errorOf(() => tokenize("continue")).code, "syntax.unsupported");
+  equal(errorOf(() => tokenize("continue")).message.includes("rpgcode-language.md"), true);
 
   // An unknown character is a lexical error (LEX-11), not an unsupported construct.
   equal(errorOf(() => tokenize("x = 1 \\")).code, "syntax.error");
   equal(errorOf(() => tokenize('x = "unterminated')).code, "syntax.error");
-  // A non-finite number literal is rejected at lex time, not at snapshot time.
   equal(errorOf(() => tokenize("x = 1e400")).code, "syntax.error");
+});
+
+test("parses the seven corpus-settled leniency forms", () => {
+  // 1. Brace on the next line
+  equal(compileInline("if (x)\n{\n  y = 1\n}\n").ops.length > 0, true);
+
+  // 2. case (1) without a colon
+  equal(compileInline('switch (x) {\n  case (1)\n  { return "one" }\n}\n').ops.length > 0, true);
+
+  // 3. else on a later line
+  equal(compileInline("if (x) {\n  y = 1\n}\nelse {\n  y = 2\n}\n").ops.length > 0, true);
+
+  // 4. Typed parameter (CArray rhs)
+  equal(compileInline("method clone(CArray rhs) {\n  return 0\n}\n").ops.length > 0, true);
+
+  // 5. local(x) = v as a for initialiser
+  equal(compileInline("for (local(i) = 0; i < 3; ++i) {\n  y = 1\n}\n").ops.length > 0, true);
+
+  // 6. return &a[i]
+  equal(compileInline("function f() {\n  return &a[i]\n}\n").ops.length > 0, true);
+
+  // 7. a[ident] bare identifier index
+  equal(compileInline("y = a[i]\n").ops.length > 0, true);
+});
+
+test("rejects a brace-less body naming STX-1", () => {
+  const errIf = errorOf(() => compileInline("if (x) y = 1\n"));
+  equal(errIf.code, "syntax.unsupported");
+  equal(errIf.message.includes("STX-1"), true);
+
+  const errWhile = errorOf(() => compileInline("while (x) y = 1\n"));
+  equal(errWhile.code, "syntax.unsupported");
+  equal(errWhile.message.includes("STX-1"), true);
+
+  const errUntil = errorOf(() => compileInline("until (x) y = 1\n"));
+  equal(errUntil.code, "syntax.unsupported");
+  equal(errUntil.message.includes("STX-1"), true);
 });
 
 test("accepts comments, a legacy # line and the numeric literals", () => {
   deepEqual(tokenize("x = 1 // trailing"), [
-    { kind: "identifier", name: "x" },
-    { kind: "punct", text: "=" },
-    { kind: "number", value: 1 },
-    { kind: "eof" },
+    { kind: "identifier", name: "x", line: 1 },
+    { kind: "op", text: "=", line: 1 },
+    { kind: "number", value: 1, line: 1 },
+    { kind: "eof", line: 1 },
   ]);
   deepEqual(tokenize("// whole line\nx = 1"), [
-    { kind: "end" },
-    { kind: "identifier", name: "x" },
-    { kind: "punct", text: "=" },
-    { kind: "number", value: 1 },
-    { kind: "eof" },
+    { kind: "end", line: 1 },
+    { kind: "identifier", name: "x", line: 2 },
+    { kind: "op", text: "=", line: 2 },
+    { kind: "number", value: 1, line: 2 },
+    { kind: "eof", line: 2 },
   ]);
-  deepEqual(tokenize("#legacy command"), [{ kind: "eof" }]);
-  deepEqual(tokenize("1.5"), [{ kind: "number", value: 1.5 }, { kind: "eof" }]);
-  deepEqual(tokenize("2e3"), [{ kind: "number", value: 2000 }, { kind: "eof" }]);
-  deepEqual(tokenize("null"), [{ kind: "number", value: 0 }, { kind: "eof" }]);
+  deepEqual(tokenize("#legacy command"), [{ kind: "eof", line: 1 }]);
+  deepEqual(tokenize("1.5"), [{ kind: "number", value: 1.5, line: 1 }, { kind: "eof", line: 1 }]);
+  deepEqual(tokenize("2e3"), [{ kind: "number", value: 2000, line: 1 }, { kind: "eof", line: 1 }]);
+  deepEqual(tokenize("null"), [{ kind: "number", value: 0, line: 1 }, { kind: "eof", line: 1 }]);
 });
 
 test("lowers a bare identifier to a zero-argument call", () => {
   deepEqual(compileInline("end\n").ops, [
-    { op: "call", name: "end", argc: 0 },
-    { op: "pop" },
-    { op: "return" },
+    { op: "call", name: "end", argc: 0, pos: { file: "<inline>", line: 1 } },
+    { op: "pop", pos: { file: "<inline>", line: 1 } },
+    { op: "return", pos: { file: "<inline>", line: 1 } },
   ]);
 });
 
@@ -119,30 +194,33 @@ test("lowers the tracer program to the exact op array", () => {
   deepEqual(program.ref, {
     kind: "inline",
     text: 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n',
-    compiler: "1",
+    compiler: "2",
   });
   deepEqual(program.ops, [
-    { op: "push", value: "hi" },
-    { op: "store", name: "greeting" },
-    { op: "pop" },
-    { op: "push", value: 2 },
-    { op: "store", name: "count" },
-    { op: "pop" },
-    { op: "load", name: "count" },
-    { op: "call", name: "sleep", argc: 1 },
-    { op: "pop" },
-    { op: "push", value: 3 },
-    { op: "store", name: "count" },
-    { op: "pop" },
-    { op: "call", name: "end", argc: 0 },
-    { op: "pop" },
-    { op: "return" },
+    { op: "load", name: "greeting", pos: { file: "<inline>", line: 1 } },
+    { op: "push", value: "hi", pos: { file: "<inline>", line: 1 } },
+    { op: "storeRef", pos: { file: "<inline>", line: 1 } },
+    { op: "pop", pos: { file: "<inline>", line: 1 } },
+    { op: "load", name: "count", pos: { file: "<inline>", line: 2 } },
+    { op: "push", value: 2, pos: { file: "<inline>", line: 2 } },
+    { op: "storeRef", pos: { file: "<inline>", line: 2 } },
+    { op: "pop", pos: { file: "<inline>", line: 2 } },
+    { op: "load", name: "count", pos: { file: "<inline>", line: 3 } },
+    { op: "call", name: "sleep", argc: 1, pos: { file: "<inline>", line: 3 } },
+    { op: "pop", pos: { file: "<inline>", line: 3 } },
+    { op: "load", name: "count", pos: { file: "<inline>", line: 4 } },
+    { op: "push", value: 3, pos: { file: "<inline>", line: 4 } },
+    { op: "storeRef", pos: { file: "<inline>", line: 4 } },
+    { op: "pop", pos: { file: "<inline>", line: 4 } },
+    { op: "call", name: "end", argc: 0, pos: { file: "<inline>", line: 5 } },
+    { op: "pop", pos: { file: "<inline>", line: 5 } },
+    { op: "return", pos: { file: "<inline>", line: 5 } },
   ]);
 
   // A file reference is refused until entry 8 loads files.
   equal(
     errorOf(() =>
-      compileProgram({ kind: "file", path: "a.prg", sourceHash: "0", compiler: "1" }),
+      compileProgram({ kind: "file", path: "a.prg", sourceHash: "0", compiler: "2" }),
     ).code,
     "program.file-unsupported",
   );

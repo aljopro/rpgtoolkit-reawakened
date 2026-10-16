@@ -40,7 +40,7 @@ function errorOf(run: () => unknown): { code: string; message: string } {
 
 function makeState(program: string, seed = 0): GameState {
   const state = createGameState({ seed });
-  startProgram(state.vm, { kind: "inline", text: program, compiler: "1" });
+  startProgram(state.vm, { kind: "inline", text: program, compiler: "2" });
   return state;
 }
 
@@ -53,7 +53,7 @@ function waitingThread(id: number, until: number): Thread {
     target: null,
     frames: [
       {
-        program: { kind: "inline", text: "", compiler: "1" },
+        program: { kind: "inline", text: "", compiler: "2" },
         ip: 0,
         locals: {},
         operands: [],
@@ -75,7 +75,7 @@ function readyThread(id: number, text: string): Thread {
     target: null,
     frames: [
       {
-        program: { kind: "inline", text, compiler: "1" },
+        program: { kind: "inline", text, compiler: "2" },
         ip: 0,
         locals: {},
         operands: [],
@@ -95,7 +95,8 @@ test("stores and loads a global and reads an unset name as 0", () => {
   equal(state.vm.globals.x, 1);
   equal(state.vm.globals.y, 1);
   equal(state.vm.globals.z, 0);
-  equal(Object.hasOwn(state.vm.globals, "n"), false);
+  equal(Object.hasOwn(state.vm.globals, "n"), true);
+  equal(state.vm.globals.n, 0);
   equal(state.vm.threads[0]!.status, "finished");
 });
 
@@ -213,7 +214,7 @@ test("sleep leaves the thread waiting with ip past the call", () => {
   const thread = state.vm.threads[0]!;
   equal(thread.status, "waiting");
   deepEqual(thread.wait, { kind: "sleep", until: 2 });
-  equal(thread.frames[0]!.ip, 8);
+  equal(thread.frames[0]!.ip, 10);
   equal(thread.frames[0]!.operands.length, 0);
   equal(state.time.tick, 1);
 });
@@ -314,7 +315,7 @@ test("stores end's null result as the number 0", () => {
 });
 
 test("the step budget preempts a long program with ip advanced by exactly the budget", () => {
-  const statements = Math.ceil((STEP_BUDGET + 10) / 3);
+  const statements = Math.ceil((STEP_BUDGET + 10) / 4);
   const state = makeState("x = 1\n".repeat(statements));
   advanceScriptTick(state, createScriptServices(state));
 
@@ -354,7 +355,7 @@ test("sleep rejects zero, fractional and negative counts", () => {
 
 test("a second blocking thread is refused", () => {
   const state = createGameState({ seed: 0 });
-  const ref = { kind: "inline", text: "end()", compiler: "1" } as const;
+  const ref = { kind: "inline", text: "end()", compiler: "2" } as const;
   startProgram(state.vm, ref);
   equal(errorOf(() => startProgram(state.vm, ref)).code, "thread.blocking-exists");
 });

@@ -32,8 +32,9 @@
 
 import type { Logger } from "../ports/logger.ts";
 import type { BuiltinSpec } from "./builtins.ts";
+import type { ParamInfo } from "./lower.ts";
 import type { CommandHandler, CommandResult, PluginDefinition } from "./plugin.ts";
-
+import type { Program, ProgramRef } from "./program.ts";
 /** One layer of one name: the plugin that contributed it and its spec. */
 type CommandLayer = { readonly plugin: string; readonly spec: BuiltinSpec };
 
@@ -96,6 +97,53 @@ export function createCommandLookup(tiers: Partial<CommandTiers>): CommandLookup
       return undefined;
     },
   };
+}
+
+/** Target metadata when a call resolves to a script function (FUN-1). */
+export type FunctionTarget = {
+  readonly program: ProgramRef;
+  readonly entry: number;
+  readonly params: readonly ParamInfo[];
+};
+
+/** The outcome of AD-8 call resolution: either a script function target or a command. */
+export type CallResolution =
+  | { readonly kind: "function"; readonly target: FunctionTarget }
+  | { readonly kind: "command"; readonly command: ResolvedCommand };
+
+/**
+ * Resolve a call in AD-8's order: redirect -> script function -> built-in -> extension.
+ * A script function resolves by name and parameter count (FUN-1).
+ */
+export function resolveCall(
+  name: string,
+  argc: number,
+  program: Program,
+  commands: CommandLookup,
+): CallResolution | undefined {
+  // 1. Script function tier
+  const fnList = program.functions[name];
+  if (fnList) {
+    const match = fnList.find((fn) => fn.params.length === argc);
+    if (match) {
+      return {
+        kind: "function",
+        target: {
+          program: program.ref,
+          entry: match.entry,
+          params: match.params,
+        },
+      };
+    }
+  }
+
+  // 2. Builtin / Extension tier
+  const command = commands.get(name);
+  if (command !== undefined) {
+    return { kind: "command", command };
+  }
+
+  return undefined;
 }
 
 /**

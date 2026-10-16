@@ -63,7 +63,7 @@ export const CORE_PLUGIN: PluginDefinition = {
       name: "end",
       aliases: [],
       params: NO_PARAMS,
-      call: () => ({ value: null }),
+      call: () => ({ value: null, effects: [{ kind: "vm.control", args: ["end"] }] }),
     },
     {
       name: "sleep",

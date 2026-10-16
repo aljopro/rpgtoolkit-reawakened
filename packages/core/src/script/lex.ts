@@ -1,37 +1,26 @@
 /**
- * The tracer's tokenizer: the format-spec §9.2 lexical subset only.
+ * The full RPGCode §9.2 tokenizer.
  *
- * IN: identifiers `[A-Za-z0-9_]` with a trailing `!`/`$` sigil stripped and
- * ASCII case-folded (LEX-10; `N` and `n` are one variable), decimal and
- * fractional numbers with an optional exponent (LEX-2), `"strings"` with no
- * escapes (LEX-8), the punctuation `(`, `)`, `,`, `=` (LEX-3's adjacency rule
- * keeps `x!=1` an operator and `x! = 1` a sigil), a statement ending at a
- * newline or `;`, `//` comments, `true`/`false`/`null` as `1`/`0`/`0`, and a
- * leading `#` line ignored as legacy — except `#include`, which is recognised
- * by name and rejected (LEX-6).
+ * Scans identifiers with sigils stripped and case-folded (LEX-10), numbers
+ * (LEX-2), strings (LEX-8), operators and punctuation, line endings and EOF,
+ * with 1-based line accounting on every token.
  *
- * OUT: every other operator (§9.4), arrays/indexes and blocks, `local(x)` /
- * `global(x)` declarations, `if`/`while`/`until`/`for`/`switch`/`function`/
- * `method`/`class`/`label`/`return`, `_` continuation and C-style block
- * comments, `#include` / implicit includes / `redirect` and the Toolkit 2.x
- * forms. Each
- * is rejected with a `ScriptError` naming the construct and the entry that adds
- * it. The rules these rejections cite are in format-spec §9.2/§9.12/§9.13 and
- * ADR 0004 decision 1.
- *
- * Format-spec §9.2/§9.3/§9.5/§9.15; docs/adr/0004 decision 1.
+ * docs/spec/engine/rpgcode-language.md#lexical-rules
  */
 
 import { ScriptError } from "./errors.ts";
+import { foldAscii } from "./values.ts";
+
+export { foldAscii };
 
 /** One lexical token. `end` terminates a statement; `eof` ends the source. */
 export type Token =
-  | { readonly kind: "identifier"; readonly name: string }
-  | { readonly kind: "number"; readonly value: number }
-  | { readonly kind: "string"; readonly value: string }
-  | { readonly kind: "punct"; readonly text: "(" | ")" | "," | "=" }
-  | { readonly kind: "end" }
-  | { readonly kind: "eof" };
+  | { readonly kind: "identifier"; readonly name: string; readonly line: number }
+  | { readonly kind: "number"; readonly value: number; readonly line: number }
+  | { readonly kind: "string"; readonly value: string; readonly line: number }
+  | { readonly kind: "op"; readonly text: string; readonly line: number }
+  | { readonly kind: "end"; readonly line: number }
+  | { readonly kind: "eof"; readonly line: number };
 
 function isDigit(ch: string): boolean {
   return ch >= "0" && ch <= "9";
@@ -45,55 +34,30 @@ function isIdentifierChar(ch: string): boolean {
   return isIdentifierStart(ch) || isDigit(ch);
 }
 
-/**
- * ASCII-only case fold (LEX-10): `A`–`Z` to `a`–`z`, every other code point
- * unchanged. Written out rather than `String.prototype.toLowerCase`, which
- * follows the engine's Unicode tables (G3 wants one answer on every runner).
- */
-function foldAscii(text: string): string {
-  let out = "";
-  for (let index = 0; index < text.length; index++) {
-    const code = text.charCodeAt(index);
-    out += code >= 65 && code <= 90 ? String.fromCharCode(code + 32) : text[index]!;
-  }
-  return out;
-}
-
-/** Reject a construct the subset excludes, naming the entry that adds it. */
-function unsupported(construct: string, entry: string): never {
+/** Reject a construct the rebuild excludes, naming the entry that adds it. */
+function unsupported(construct: string, entry: string, line: number): never {
   throw new ScriptError(
     "syntax.unsupported",
     `${construct} is not in the tracer's RPGCode subset; ${entry} adds it`,
+    { file: "", line },
   );
 }
 
-/** Reject malformed subset input (an unknown character, an unterminated string). */
-function lexical(message: string): never {
-  throw new ScriptError("syntax.error", message);
+/** Reject malformed input (an unknown character, an unterminated string). */
+function lexical(message: string, line: number): never {
+  throw new ScriptError("syntax.error", message, { file: "", line });
 }
 
-/** Refuse an identifier the subset treats as a keyword, by name and entry. */
-function rejectKeyword(name: string): void {
+/** Refuse an identifier the spec or scope excludes, by name and entry. */
+function rejectKeyword(name: string, line: number): void {
   switch (name) {
-    case "if":
-    case "elseif":
-    case "else":
-    case "while":
-    case "until":
-    case "for":
-    case "switch":
-    case "case":
-    case "default":
     case "break":
     case "continue":
-    case "return":
-    case "inline":
-      unsupported(`the \`${name}\` statement`, "entry 5");
-      break;
-    case "function":
-    case "method":
-      unsupported(`a \`${name}\` definition`, "entry 5");
-      break;
+      throw new ScriptError(
+        "syntax.unsupported",
+        `the \`${name}\` statement is not in the RPGCode 3.1 specification (docs/spec/engine/rpgcode-language.md:55-70)`,
+        { file: "", line },
+      );
     case "class":
     case "struct":
     case "var":
@@ -102,69 +66,82 @@ function rejectKeyword(name: string): void {
     case "protected":
     case "this":
     case "new":
-      unsupported(`the \`${name}\` class construct`, "entry 6");
-      break;
-    case "local":
-    case "global":
-      unsupported(`the \`${name}(x)\` declaration`, "entry 5");
+      unsupported(`the \`${name}\` class construct`, "entry 6", line);
       break;
     case "include":
     case "redirect":
     case "killredirect":
     case "killallredirects":
-      unsupported(`\`${name}\``, "entry 8");
-      break;
-    case "and":
-    case "or":
-      unsupported(`the \`${name}\` operator`, "entry 5");
+      unsupported(`\`${name}\``, "entry 8", line);
       break;
     default:
       break;
   }
 }
 
-/** Reject an operator or punctuation character the subset excludes. */
-function rejectCharacter(ch: string): never {
-  switch (ch) {
-    case "+":
-    case "-":
-    case "*":
-    case "/":
-    case "%":
-    case "^":
-    case "<":
-    case ">":
-    case "&":
-    case "|":
-    case "~":
-    case "!":
-    case "?":
-    case "`":
-      unsupported(`the \`${ch}\` operator`, "entry 5");
-      break;
-    case "[":
-    case "]":
-      unsupported("an array or index expression", "entry 5");
-      break;
-    case "{":
-    case "}":
-      unsupported("a `{ }` block", "entry 5");
-      break;
-    case ":":
-      unsupported("a label or the ternary `:`", "entry 5");
-      break;
-    case ".":
-      unsupported("a `.` (implicit-include or member syntax)", "entry 8");
-      break;
-    case "@":
-      unsupported("the Toolkit 2.x `@` line", "entry 15");
-      break;
-    default:
-      lexical(
-        `unknown character ${JSON.stringify(ch)}; format-spec §9.2 (LEX-11) makes this a lexical error`,
-      );
+/** Whether only spaces, tabs or a `//` comment lie from `index` to the newline. */
+function restIsBlank(text: string, index: number, length: number): boolean {
+  let cursor = index;
+  while (
+    cursor < length &&
+    (text[cursor] === " " || text[cursor] === "\t" || text[cursor] === "\r")
+  ) {
+    cursor++;
   }
+  if (cursor < length && text[cursor] === "/" && text[cursor + 1] === "/") return true;
+  return cursor >= length || text[cursor] === "\n";
 }
+
+const THREE_CHAR_OPS = ["<<=", ">>="];
+const TWO_CHAR_OPS = [
+  "==",
+  "~=",
+  "!=",
+  "<=",
+  ">=",
+  "<<",
+  ">>",
+  "+=",
+  "-=",
+  "*=",
+  "/=",
+  "%=",
+  "^=",
+  "&=",
+  "|=",
+  "`=",
+  "++",
+  "--",
+  "&&",
+  "||",
+  "->",
+  "::",
+];
+const SINGLE_CHAR_OPS = [
+  "(",
+  ")",
+  "[",
+  "]",
+  "{",
+  "}",
+  ",",
+  ":",
+  "?",
+  "=",
+  "+",
+  "-",
+  "*",
+  "/",
+  "%",
+  "^",
+  "&",
+  "|",
+  "`",
+  "~",
+  "!",
+  "<",
+  ">",
+];
 
 /**
  * Tokenize `text` (format-spec §9.2). The last line need not end in a newline;
@@ -174,7 +151,8 @@ export function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   const length = text.length;
   let index = 0;
-  let atLineStart = true;
+  let line = 1;
+  let firstNonBlankOnLine = true;
 
   while (index < length) {
     const ch = text[index]!;
@@ -183,39 +161,70 @@ export function tokenize(text: string): Token[] {
       index++;
       continue;
     }
+
     if (ch === "\n") {
-      tokens.push({ kind: "end" });
+      tokens.push({ kind: "end", line });
       index++;
-      atLineStart = true;
-      continue;
-    }
-    if (ch === ";") {
-      tokens.push({ kind: "end" });
-      index++;
-      atLineStart = false;
+      line++;
+      firstNonBlankOnLine = true;
       continue;
     }
 
+    if (ch === ";") {
+      tokens.push({ kind: "end", line });
+      index++;
+      firstNonBlankOnLine = false;
+      continue;
+    }
+
+    // Line comment //
     if (ch === "/" && text[index + 1] === "/") {
       index += 2;
       while (index < length && text[index] !== "\n") index++;
       continue;
     }
+
+    // Block comment /* ... */
     if (ch === "/" && text[index + 1] === "*") {
-      unsupported("a `/* */` block comment", "entry 5");
+      index += 2;
+      while (index < length && !(text[index] === "*" && text[index + 1] === "/")) {
+        if (text[index] === "\n") line++;
+        index++;
+      }
+      if (index >= length) {
+        lexical("unterminated block comment; a `/* */` comment must end with `*/`", line);
+      }
+      index += 2;
+      continue;
     }
 
-    if (ch === "#" && atLineStart) {
+    // Legacy comment ** anywhere on line
+    if (ch === "*" && text[index + 1] === "*") {
+      index += 2;
+      while (index < length && text[index] !== "\n") index++;
+      continue;
+    }
+
+    // Legacy comment * at start of non-blank line
+    if (ch === "*" && firstNonBlankOnLine) {
+      index++;
+      while (index < length && text[index] !== "\n") index++;
+      continue;
+    }
+
+    // Legacy # line (LEX-6)
+    if (ch === "#" && firstNonBlankOnLine) {
       let lineEnd = index;
       while (lineEnd < length && text[lineEnd] !== "\n") lineEnd++;
-      const line = text.slice(index, lineEnd);
-      if (/^#\s*include\b/i.test(line)) {
-        unsupported("`#include`", "entry 8");
+      const lineText = text.slice(index, lineEnd);
+      if (/^#\s*include\b/i.test(lineText)) {
+        unsupported("`#include`", "entry 8", line);
       }
       index = lineEnd;
       continue;
     }
 
+    // String literal "..."
     if (ch === '"') {
       let cursor = index + 1;
       let value = "";
@@ -224,24 +233,18 @@ export function tokenize(text: string): Token[] {
         cursor++;
       }
       if (cursor >= length || text[cursor] !== '"') {
-        lexical("unterminated string; a string is single-line and ends with `\"` (format-spec §9.2 LEX-8)");
+        lexical(
+          "unterminated string; a string is single-line and ends with `\"` (format-spec §9.2 LEX-8)",
+          line,
+        );
       }
-      tokens.push({ kind: "string", value });
+      tokens.push({ kind: "string", value, line });
       index = cursor + 1;
-      atLineStart = false;
+      firstNonBlankOnLine = false;
       continue;
     }
 
-    if (ch === "(" || ch === ")" || ch === "," || ch === "=") {
-      if (ch === "=" && text[index + 1] === "=") {
-        unsupported("the `==` operator", "entry 5");
-      }
-      tokens.push({ kind: "punct", text: ch });
-      index++;
-      atLineStart = false;
-      continue;
-    }
-
+    // Numbers or Identifiers
     if (isDigit(ch) || isIdentifierStart(ch)) {
       const start = index;
 
@@ -269,11 +272,11 @@ export function tokenize(text: string): Token[] {
           const literal = text.slice(start, cursor);
           const value = Number(literal);
           if (!Number.isFinite(value)) {
-            lexical(`the number literal \`${literal}\` is not finite (format-spec §9.2)`);
+            lexical(`the number literal \`${literal}\` is not finite (format-spec §9.2)`, line);
           }
-          tokens.push({ kind: "number", value });
+          tokens.push({ kind: "number", value, line });
           index = cursor;
-          atLineStart = false;
+          firstNonBlankOnLine = false;
           continue;
         }
       }
@@ -281,47 +284,89 @@ export function tokenize(text: string): Token[] {
       let end = start;
       while (end < length && isIdentifierChar(text[end]!)) end++;
       const nameEnd = end;
+
       // LEX-3: only `!` directly followed by `=` is the not-equal operator; a
       // `$` (or a `!` not followed by `=`) is a sigil and is ignored.
       if (end < length && text[end] === "!") {
-        if (text[end + 1] === "=") {
-          unsupported("the `!=` operator", "entry 5");
+        if (text[end + 1] !== "=") {
+          end++;
         }
-        end++;
       } else if (end < length && text[end] === "$") {
         end++;
       }
       const name = foldAscii(text.slice(start, nameEnd));
 
       if (name === "true" || name === "false") {
-        tokens.push({ kind: "number", value: name === "true" ? 1 : 0 });
+        tokens.push({ kind: "number", value: name === "true" ? 1 : 0, line });
       } else if (name === "null") {
-        tokens.push({ kind: "number", value: 0 });
+        tokens.push({ kind: "number", value: 0, line });
+      } else if (name === "and" || name === "or") {
+        tokens.push({ kind: "op", text: name, line });
       } else if (name === "_" && restIsBlank(text, end, length)) {
-        unsupported("the `_` line continuation", "entry 5");
+        // Line continuation: consume to newline, increment line, do not emit end
+        let scan = end;
+        while (scan < length && text[scan] !== "\n") scan++;
+        if (scan < length && text[scan] === "\n") {
+          scan++;
+          line++;
+        }
+        index = scan;
+        firstNonBlankOnLine = false; // continued line is not start of line (so * is multiply)
+        continue;
       } else {
-        rejectKeyword(name);
-        tokens.push({ kind: "identifier", name });
+        rejectKeyword(name, line);
+        tokens.push({ kind: "identifier", name, line });
       }
 
       index = end;
-      atLineStart = false;
+      firstNonBlankOnLine = false;
       continue;
     }
 
-    rejectCharacter(ch);
+    // Check operators / punctuation
+    const sub3 = text.slice(index, index + 3);
+    if (THREE_CHAR_OPS.includes(sub3)) {
+      tokens.push({ kind: "op", text: sub3, line });
+      index += 3;
+      firstNonBlankOnLine = false;
+      continue;
+    }
+
+    const sub2 = text.slice(index, index + 2);
+    if (TWO_CHAR_OPS.includes(sub2)) {
+      if (sub2 === "->") {
+        unsupported("the `->` member access operator", "entry 6", line);
+      }
+      if (sub2 === "::") {
+        unsupported("the `::` class scope operator", "entry 6", line);
+      }
+      tokens.push({ kind: "op", text: sub2, line });
+      index += 2;
+      firstNonBlankOnLine = false;
+      continue;
+    }
+
+    if (SINGLE_CHAR_OPS.includes(ch)) {
+      tokens.push({ kind: "op", text: ch, line });
+      index += 1;
+      firstNonBlankOnLine = false;
+      continue;
+    }
+
+    // Unsupported single-character constructs
+    if (ch === ".") {
+      unsupported("a `.` (implicit-include or member syntax)", "entry 8", line);
+    }
+    if (ch === "@") {
+      unsupported("the Toolkit 2.x `@` line", "entry 15", line);
+    }
+
+    lexical(
+      `unknown character ${JSON.stringify(ch)}; format-spec §9.2 (LEX-11) makes this a lexical error`,
+      line,
+    );
   }
 
-  tokens.push({ kind: "eof" });
+  tokens.push({ kind: "eof", line });
   return tokens;
-}
-
-/** Whether only spaces, tabs or a `//` comment lie from `index` to the newline. */
-function restIsBlank(text: string, index: number, length: number): boolean {
-  let cursor = index;
-  while (cursor < length && (text[cursor] === " " || text[cursor] === "\t" || text[cursor] === "\r")) {
-    cursor++;
-  }
-  if (cursor < length && text[cursor] === "/" && text[cursor + 1] === "/") return true;
-  return cursor >= length || text[cursor] === "\n";
 }

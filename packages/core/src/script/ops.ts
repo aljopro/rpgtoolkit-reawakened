@@ -2,25 +2,72 @@
  * The Step IR: the flat, linear instruction array the VM steps through
  * (ADR 0004 decision 1; format-spec §9.15 THR-3).
  *
- * The tracer's lowering emits six ops. `push`, `call` and `return` map to
- * ADR 0004 decision 1's `OP_PUSH`/`OP_CALL`/`OP_RETURN`; `load`, `store` and
- * `pop` are this entry's additions for variable access and for discarding a
- * statement-position value. Each op is exactly one VM step in §9.15 (THR-3)'s
- * sense, so `STEP_BUDGET` counts `StepOp` executions. Entry 5 extends the union
- * with control flow (`jump`) and the full expression grammar; a blocking call
- * *is* the yield (AD-8 makes yielding a call outcome, not an opcode), so there
- * is no `yield` op.
+ * Each variant carries `pos: SourcePos` ({ file, line }), the single owner
+ * of the bytecode-to-source mapping.
  *
- * Format-spec §9.2/§9.3/§9.5/§9.15; docs/adr/0004 decision 1.
+ * docs/adr/0004 decision 1; format-spec §9.2/§9.3/§9.5/§9.15.
  */
 
-import type { Value } from "../ports/value.ts";
+import type { Value, VarScope } from "../ports/value.ts";
 
-/** One VM instruction (ADR 0004 decision 1; see the file header). */
+/** Source position attached to every Step IR instruction (R-38a, E-98). */
+export type SourcePos = { readonly file: string; readonly line: number };
+
+/** The unary operator vocabulary (EXP-2 level 2, prefix ++/--). */
+export type UnaryOp = "-" | "+" | "!" | "~" | "++" | "--";
+
+/** The binary operator vocabulary (EXP-2 levels 3 to 13). */
+export type BinaryOp =
+  | "+"
+  | "-"
+  | "*"
+  | "/"
+  | "%"
+  | "^"
+  | "<<"
+  | ">>"
+  | "<"
+  | "<="
+  | ">"
+  | ">="
+  | "=="
+  | "~="
+  | "!="
+  | "&"
+  | "`"
+  | "|"
+  | "&&"
+  | "||";
+
+/** One VM instruction (ADR 0004 decision 1). */
 export type StepOp =
-  | { readonly op: "push"; readonly value: Value }
-  | { readonly op: "load"; readonly name: string }
-  | { readonly op: "store"; readonly name: string }
-  | { readonly op: "call"; readonly name: string; readonly argc: number }
-  | { readonly op: "pop" }
-  | { readonly op: "return" };
+  | { readonly op: "push"; readonly value: Value; readonly pos: SourcePos }
+  | { readonly op: "name"; readonly name: string; readonly pos: SourcePos }
+  | {
+      readonly op: "load";
+      readonly name: string;
+      readonly scope?: VarScope;
+      readonly pos: SourcePos;
+    }
+  | {
+      readonly op: "declRef";
+      readonly scope: VarScope;
+      readonly name: string;
+      readonly pos: SourcePos;
+    }
+  | { readonly op: "storeRef"; readonly pos: SourcePos }
+  | { readonly op: "index"; readonly pos: SourcePos }
+  | { readonly op: "dup"; readonly pos: SourcePos }
+  | { readonly op: "pop"; readonly pos: SourcePos }
+  | { readonly op: "unop"; readonly operator: UnaryOp; readonly pos: SourcePos }
+  | { readonly op: "binop"; readonly operator: BinaryOp; readonly pos: SourcePos }
+  | { readonly op: "select"; readonly pos: SourcePos }
+  | { readonly op: "jump"; readonly target: number; readonly pos: SourcePos }
+  | { readonly op: "jumpIfFalse"; readonly target: number; readonly pos: SourcePos }
+  | {
+      readonly op: "call";
+      readonly name: string;
+      readonly argc: number;
+      readonly pos: SourcePos;
+    }
+  | { readonly op: "return"; readonly pos: SourcePos };

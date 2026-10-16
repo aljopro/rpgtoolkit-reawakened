@@ -34,7 +34,7 @@ const FIXTURE_VIEW: CommandView = { rng: { nextUint32: () => 0 }, clock: { tick:
 
 function makeState(program: string): GameState {
   const state = createGameState({ seed: 0 });
-  startProgram(state.vm, { kind: "inline", text: program, compiler: "1" });
+  startProgram(state.vm, { kind: "inline", text: program, compiler: "2" });
   return state;
 }
 
