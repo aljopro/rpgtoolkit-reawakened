@@ -362,7 +362,7 @@ test("a request waits globally; its reply runs the continuation with the reply p
   deepEqual(state.vm.effects[0]!.request, { kind: "asset", name: "a", reqId: 1 });
   equal(state.vm.effects[0]!.kind, "request");
   deepEqual(log.marks, []); // R-32: the world stands still until the reply
-  equal(state.vm.block?.kind, "blob");
+  equal(state.vm.block?.kind, "request");
 
   replyToRequest(state.vm, 1, { ok: true, value: 42 });
   // The logged effect is a copy: the stored reply does not leak into it.
@@ -557,7 +557,7 @@ test("snapshot and replay preserves a request wait and continuation", () => {
   const restored = restoreGameState(json);
   const second = setup("end()\n");
   equal(canon(restored), json);
-  equal(restored.vm.threads[0]!.wait?.kind, "blob");
+  equal(restored.vm.threads[0]!.wait?.kind, "request");
 
   replyToRequest(first.state.vm, 1, { ok: true, value: 7 });
   replyToRequest(restored.vm, 1, { ok: true, value: 7 });

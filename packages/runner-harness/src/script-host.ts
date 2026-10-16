@@ -174,7 +174,7 @@ function serviceBlobRequests(
   while (next < effects.length) {
     const request = effects[next]?.request;
     next += 1;
-    if (request === undefined || typeof request.reqId !== "number" || typeof request.kind !== "string") continue;
+    if (request === undefined || request === null || typeof request.reqId !== "number" || typeof request.kind !== "string") continue;
     const reqId = request.reqId;
     if (request.kind === "loadBlob") {
       const blob = { area: String(request.blob?.area ?? "files") as "saves" | "files", path: String(request.blob?.path ?? "") };

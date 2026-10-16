@@ -835,7 +835,7 @@ function requestWait(
   pos: SourcePos,
   requestKind?: string,
 ): Wait {
-  const kind = requestKind === "asset" || requestKind === "loadBlob" || requestKind === "saveBlob" ? "blob" : "request";
+  const kind = requestKind === "loadBlob" || requestKind === "saveBlob" ? "blob" : "request";
   return {
     kind,
     global: true,

@@ -328,7 +328,7 @@ test("a request is accepted by the registry unmodified and parked by the VM", ()
   advanceScriptTick(state, createScriptServices(state, plugins));
   const thread = state.vm.threads[0]!;
   equal(thread.status, "waiting");
-  equal(thread.wait?.kind, "blob");
+  equal(thread.wait?.kind, "request");
   equal(state.vm.requestSeq, 1);
   deepEqual(state.vm.effects[0]!.request, {
     kind: "asset",

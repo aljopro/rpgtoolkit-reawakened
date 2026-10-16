@@ -213,9 +213,12 @@ export const CATALOGUE_RESPONDERS_PLUGIN: PluginDefinition = {
   commands: ROWS.map(makeResponder),
 };
 
+/** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
+const CORE_FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
+
 /** The default catalogue layer combines the safe stubs and these responders. */
 export const CATALOGUE_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
-  commands: [...CATALOGUE_STUBS_PLUGIN.commands, ...CATALOGUE_RESPONDERS_PLUGIN.commands],
+  commands: [...CATALOGUE_STUBS_PLUGIN.commands, ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter((command) => !CORE_FILE_COMMANDS.has(command.name))],
 };

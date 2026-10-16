@@ -3,7 +3,7 @@ title: 'Sandboxed file I/O built-ins through the AD-17 requests'
 type: 'feature'
 ticket: 16
 created: '2026-10-16'
-status: 'ready-for-dev'
+status: built
 baseline_revision: 'a66b186cfddfdd67ed8e58a0a4d4c11ff17c06e4'
 route: 'full'
 route_source: 'pinned'
