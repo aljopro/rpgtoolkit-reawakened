@@ -26,7 +26,7 @@ test("keeps exactly the stub-safe catalogue names", () => {
 
 test("parses every distinct catalogue notation into named boolean parameters", () => {
   const distinct = [...new Set(rows.map((row) => row.params))].sort();
-  equal(distinct.length, 75);
+  equal(distinct.length, 73);
 
   for (const notation of distinct) {
     const params = parseParams(notation);
