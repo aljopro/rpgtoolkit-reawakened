@@ -27,6 +27,7 @@ import {
   type GameState,
   type ScriptError,
 } from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
 import { createScriptServices } from "./script-test-services.ts";
 
 type CatalogueRow = {
@@ -113,7 +114,7 @@ function callProgram(spec: BuiltinSpec, argc: number): { text: string; byRef: nu
 function run(program: string): GameState {
   const state = createGameState({ seed: 0 });
   startProgram(state.vm, { kind: "inline", text: program, compiler: "2" });
-  advanceScriptTick(state, createScriptServices(state));
+  advanceOrFail(state, createScriptServices(state));
   return state;
 }
 
@@ -125,8 +126,8 @@ function callArity(spec: BuiltinSpec): number {
 test("every catalogue stub name resolves to its own spec, folded to lower case", () => {
   const services = createScriptServices(createGameState({ seed: 0 }));
 
-  equal(COMMANDS.length, 153);
-  equal(new Set(COMMANDS.map((spec) => spec.name)).size, 153);
+  equal(COMMANDS.length, 147);
+  equal(new Set(COMMANDS.map((spec) => spec.name)).size, 147);
   for (const spec of COMMANDS) {
     equal(spec.name, spec.name.toLowerCase());
     const resolved = services.commands.get(spec.name);
@@ -141,7 +142,7 @@ test("every catalogue stub name resolves to its own spec, folded to lower case",
 });
 
 test("the stub layer declares the catalogue's by-reference outputs", () => {
-  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 45);
+  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 41);
   // 22 stub-safe names have variadic `...` parameters, including the four
   // variadic output names that cannot fix an output position.
   equal(COMMANDS.filter((spec) => spec.params.some((param) => param.variadic)).length, 22);
@@ -235,7 +236,7 @@ test("the obsolete names raise builtin.obsolete and record nothing", () => {
   for (const name of ["underarrow", "itemwalkspeed"]) {
     const state = createGameState({ seed: 0 });
     startProgram(state.vm, { kind: "inline", text: `${name}()\n`, compiler: "2" });
-    const error = errorOf(() => advanceScriptTick(state, createScriptServices(state)));
+    const error = errorOf(() => advanceOrFail(state, createScriptServices(state)));
     equal(error.code, "builtin.obsolete", `code for "${name}"`);
     equal(state.vm.effects.length, 0, `record for "${name}"`);
     equal(state.vm.effectSeq, 0, `seq for "${name}"`);
@@ -300,6 +301,8 @@ test("a caller plugin overrides a stub and warns once", () => {
   const services = createScriptServices(state, [
     { id: "game", version: "1.0.0", commands: [replacement] },
   ], {
+    debug: () => {},
+    info: () => {},
     warn: (record) => warnings.push(record.code),
     error: () => {},
   });

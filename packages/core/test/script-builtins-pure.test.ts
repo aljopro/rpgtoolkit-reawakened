@@ -11,12 +11,13 @@ import {
   type GameState,
   type ScriptError,
 } from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
 import { createScriptServices } from "./script-test-services.ts";
 
 function run(program: string, seed = 0): GameState {
   const state = createGameState({ seed });
   startProgram(state.vm, { kind: "inline", text: program, compiler: "2" });
-  advanceScriptTick(state, createScriptServices(state));
+  advanceOrFail(state, createScriptServices(state));
   return state;
 }
 

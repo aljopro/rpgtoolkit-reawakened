@@ -176,20 +176,20 @@ test("runLog throws naming call and cause for engine violations", () => {
       expectedSnippet: "paused is not null",
     },
     {
-      name: "request not empty",
+      name: "malformed request",
       modifier: (b) => ({
         ...b,
-        requests: [{ kind: "asset", reqId: 1, key: "foo" as never }],
+        requests: [{ kind: "asset", key: "foo" as never } as never],
       }),
-      expectedSnippet: "requests is not empty",
+      expectedSnippet: "a request is malformed",
     },
     {
-      name: "diagnostic not empty",
+      name: "malformed diagnostic",
       modifier: (b) => ({
         ...b,
-        diagnostics: [{ code: "E1", file: "main.rc", line: 1, message: "err" }],
+        diagnostics: [{ code: "E1", file: "main.rc", line: 1.5, message: "err" }],
       }),
-      expectedSnippet: "diagnostics is not empty",
+      expectedSnippet: "a diagnostic is malformed",
     },
   ];
 
@@ -236,4 +236,54 @@ test("runLog forwards report.audioCues to audio.handle", () => {
     loop: null,
     volume: 100,
   });
+});
+
+test("runLog accepts non-empty requests and diagnostics and hands them to the observer", () => {
+  const run: Run = { schema: 1, ticks: 4, log: [] };
+  const diagnostic = { code: "unknown.command", file: "<inline>", line: 2, message: "no such" };
+  const request = { kind: "asset", reqId: 1, key: "foo" as never } as const;
+  const makeEngine = (): Engine => {
+    let now = 0;
+    return {
+    advance(ticks: number): TickReport {
+      now += ticks;
+      return {
+        ticksRun: ticks,
+        tickAfter: now,
+        consumed: [],
+        audioCues: [],
+        requests: [request],
+        diagnostics: [diagnostic],
+        loading: false,
+        paused: null,
+        stateHash: "0123456789abcdef",
+      };
+    },
+    drawList(): DrawList {
+      return { tick: 0, width: 320, height: 240, commands: [] };
+    },
+    surfacePixels(): SurfacePixels | null {
+      return null;
+    },
+    setBreakpoints(): void {},
+    };
+  };
+  const seen: { call: number; tickAfter: number; requests: number; diagnostics: unknown }[] = [];
+  const records = runLog(makeEngine(), run, 2, createNullAudio(), (observation) => {
+    seen.push({
+      call: observation.call,
+      tickAfter: observation.tickAfter,
+      requests: observation.requests.length,
+      diagnostics: observation.diagnostics,
+    });
+  });
+  // The golden records keep their `{ tick, state, draw }` shape.
+  deepEqual(Object.keys(records[0]!).sort(), ["draw", "state", "tick"]);
+  equal(records.length, 2);
+  deepEqual(seen, [
+    { call: 0, tickAfter: 2, requests: 1, diagnostics: [diagnostic] },
+    { call: 1, tickAfter: 4, requests: 1, diagnostics: [diagnostic] },
+  ]);
+  // Without an observer the report is still accepted.
+  equal(runLog(makeEngine(), run, 2, createNullAudio()).length, 2);
 });

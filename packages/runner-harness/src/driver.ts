@@ -2,17 +2,70 @@ import {
   canon,
   encodeLog,
   hashDrawList,
+  type Diagnostic,
   type Engine,
   type InputRecord,
+  type RunnerRequest,
 } from "@tk-reawakened/core";
 import type { AudioSink } from "./audio.ts";
 import type { Run, TickRecord } from "./golden.ts";
+
+function isBlobKey(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const blob = value as { readonly area?: unknown; readonly path?: unknown };
+  return (blob.area === "saves" || blob.area === "files") && typeof blob.path === "string";
+}
+
+function isBytes(value: unknown): boolean {
+  return value instanceof Uint8Array;
+}
+
+function isRequest(value: unknown): value is RunnerRequest {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const request = value as { readonly kind?: unknown; readonly reqId?: unknown; readonly [key: string]: unknown };
+  if (typeof request.kind !== "string" || !Number.isInteger(request.reqId)) return false;
+  switch (request.kind) {
+    case "asset":
+    case "playVideo":
+      return typeof request.key === "string";
+    case "loadBlob":
+      return isBlobKey(request.blob);
+    case "saveBlob":
+      return isBlobKey(request.blob) && isBytes(request.bytes);
+    case "listBlobs":
+      return request.area === "saves" || request.area === "files";
+    case "extension.call":
+      return typeof request.name === "string" && Array.isArray(request.args);
+    case "quit":
+      return true;
+    case "openUrl":
+      return typeof request.url === "string";
+    default:
+      return false;
+  }
+}
+
+/**
+ * The non-empty part of one `advance` report: the host requests and the located
+ * runtime diagnostics (AD-24) it carried. `runLog` hands it to the observer
+ * without putting it in the golden records, so the golden shape is unchanged.
+ */
+export type ReportObservation = {
+  readonly call: number;
+  readonly tickAfter: number;
+  readonly requests: readonly RunnerRequest[];
+  readonly diagnostics: readonly Diagnostic[];
+};
+
+/** Called once per `advance` call whose report has requests or diagnostics. */
+export type ReportObserver = (observation: ReportObservation) => void;
 
 export function runLog(
   engine: Engine,
   run: Run,
   n: number,
   audio: AudioSink,
+  observer?: ReportObserver,
 ): TickRecord[] {
   if (!Number.isInteger(n) || n < 1) {
     throw new RangeError("runLog: n must be an integer >= 1");
@@ -62,15 +115,31 @@ export function runLog(
     if (report.paused !== null) {
       throw new Error(`runLog: call ${callIndex}: paused is not null`);
     }
-    if (report.requests.length > 0) {
-      throw new Error(
-        `runLog: call ${callIndex}: requests is not empty (${report.requests.length} requests)`,
-      );
+    for (const request of report.requests) {
+      if (!isRequest(request)) {
+        throw new Error(`runLog: call ${callIndex}: a request is malformed`);
+      }
     }
-    if (report.diagnostics.length > 0) {
-      throw new Error(
-        `runLog: call ${callIndex}: diagnostics is not empty (${report.diagnostics.length} diagnostics)`,
-      );
+    for (const diagnostic of report.diagnostics) {
+      if (
+        typeof diagnostic !== "object" ||
+        diagnostic === null ||
+        typeof diagnostic.code !== "string" ||
+        typeof diagnostic.file !== "string" ||
+        !Number.isInteger(diagnostic.line) ||
+        diagnostic.line < 0 ||
+        typeof diagnostic.message !== "string"
+      ) {
+        throw new Error(`runLog: call ${callIndex}: a diagnostic is malformed`);
+      }
+    }
+    if (report.requests.length > 0 || report.diagnostics.length > 0) {
+      observer?.({
+        call: callIndex,
+        tickAfter: report.tickAfter,
+        requests: report.requests,
+        diagnostics: report.diagnostics,
+      });
     }
 
     if (report.consumed.length !== fedInputs.length) {

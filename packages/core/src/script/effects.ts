@@ -44,7 +44,8 @@ export type EffectKind =
   | "spawn-thread"
   | "flow-control"
   | "draw-audio-cue"
-  | "mixed";
+  | "mixed"
+  | "diagnostic";
 
 /** How an effect patch indexes into its owning section (command-effect-catalogue.md:580-588). */
 export type EffectPatchOp = "set" | "append" | "remove" | "add" | "merge";
@@ -109,6 +110,35 @@ export function recordEffect(vm: EffectState, record: Omit<EffectRecord, "seq">)
   const excess = vm.effects.length - EFFECT_LOG_CAP;
   if (excess > 0) vm.effects.splice(0, excess);
   return stamped;
+}
+
+/**
+ * Record a located diagnostic (AD-24; ERR-2): a `diagnostic` effect named
+ * `vm.diagnostic` whose args are `[code, file, line, message]`. The host drains
+ * it beside the other effects, so a failure is visible to the harness even when
+ * the script survives it (a request that timed out, for instance).
+ */
+export function recordDiagnostic(
+  vm: EffectState,
+  tick: number,
+  thread: number,
+  code: string,
+  file: string,
+  line: number,
+  message: string,
+): EffectRecord {
+  return recordEffect(vm, {
+    tick,
+    thread,
+    name: "vm.diagnostic",
+    kind: "diagnostic",
+    args: [code, file, line, message],
+    out: {},
+    result: null,
+    patch: null,
+    wait: null,
+    request: null,
+  });
 }
 
 /**

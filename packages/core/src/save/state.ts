@@ -48,7 +48,7 @@ export const SCHEMA_VERSIONS = {
   party: 1,
   inventory: 1,
   triggers: 1,
-  vm: 3,
+  vm: 4,
   battle: 1,
   menu: 1,
   input: 1,

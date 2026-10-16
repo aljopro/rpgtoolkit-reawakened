@@ -1,8 +1,9 @@
-// The vm section's migration chain (AD-7, AD-23; ticket 3.21). Bumping
-// `SCHEMA_VERSIONS.vm` to 3 needs a save fixture from the previous version
-// (`fixtures/save/v2-vm.json`, schema.vm 2, no effect log) and a restore test
-// over it: the migration adds `effects: []` and `effectSeq: 0` and moves the
-// section version to the current one.
+// The vm section's migration chain (AD-7, AD-23; tickets 3.21 and 3.9). Each
+// bump of `SCHEMA_VERSIONS.vm` needs a save fixture from the previous version
+// and a restore test over it. v2 (`fixtures/save/v2-vm.json`, no effect log)
+// gains `effects: []` and `effectSeq: 0`; v3 (`fixtures/save/v3-vm.json`, a
+// sleeping thread with the old wait shape) gains the thread, wait and request
+// fields of ticket 3.9. Both end at the current section version.
 import { deepEqual, equal } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -35,11 +36,29 @@ function fixtureText(name: string): string {
 test("a v2 save (no effect log) restores cleanly as the current vm schema", () => {
   const restored = restoreGameState(fixtureText("v2-vm.json"));
 
-  equal(SCHEMA_VERSIONS.vm, 3);
+  equal(SCHEMA_VERSIONS.vm, 4);
   equal(restored.schema.vm, SCHEMA_VERSIONS.vm);
   deepEqual(restored.vm.effects, []);
   equal(restored.vm.effectSeq, 0);
+  equal(restored.vm.block, null);
+  equal(restored.vm.requestSeq, 0);
   // The migrated state is a valid GameState: it canonicalises and round-trips.
+  equal(canon(restoreGameState(snapshot(restored))), canon(restored));
+});
+
+test("a v3 save restores with its thread and sleep wait migrated to the v4 shape", () => {
+  const restored = restoreGameState(fixtureText("v3-vm.json"));
+
+  equal(restored.schema.vm, SCHEMA_VERSIONS.vm);
+  equal(restored.vm.block, null);
+  equal(restored.vm.requestSeq, 0);
+  const thread = restored.vm.threads[0]!;
+  deepEqual(thread.queue, []);
+  equal(thread.pending, null);
+  deepEqual(thread.detached, []);
+  equal(thread.collect, null);
+  // The v3 sleep was the blocking `sleep(ticks)` command: global, and it resumes its call.
+  deepEqual(thread.wait, { kind: "sleep", until: 5, global: true, resumesCall: true });
   equal(canon(restoreGameState(snapshot(restored))), canon(restored));
 });
 

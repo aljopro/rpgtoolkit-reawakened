@@ -2,7 +2,7 @@
 // decisions 2 and 6): layer order with `next`, the override and no-next
 // warnings, the one rejection, the four tiers, by-ref write-back through a
 // program and a restored snapshot, purity, the stamped effect log and the
-// refusal of a `request` before entry 9.
+// request handling (entry 9: the VM parks the thread and records the request).
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -23,9 +23,11 @@ import {
   type Logger,
   type PluginDefinition,
   type ResolvedCommand,
+  type ResolvedPlugin,
   type ScriptError,
   type TierLookup,
 } from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
 import { createScriptServices } from "./script-test-services.ts";
 
 /** A view that draws nothing, so a test can prove a command used no port. */
@@ -60,6 +62,12 @@ function thrownMessage(run: () => unknown): string {
 function collectingLogger(): { logger: Logger; records: LogRecord[] } {
   const records: LogRecord[] = [];
   const logger: Logger = {
+    debug(record) {
+      records.push(record);
+    },
+    info(record) {
+      records.push(record);
+    },
     warn(record) {
       records.push(record);
     },
@@ -70,7 +78,7 @@ function collectingLogger(): { logger: Logger; records: LogRecord[] } {
   return { logger, records };
 }
 
-function pack(id: string, commands: readonly BuiltinSpec[]): { definition: PluginDefinition } {
+function pack(id: string, commands: readonly BuiltinSpec[]): ResolvedPlugin {
   return { definition: { id, version: "1.0.0", commands } };
 }
 
@@ -297,7 +305,7 @@ test("the VM stamps a command's effects into the vm section's effect log", () =>
   equal(canon(state).includes("shout"), true);
 });
 
-test("a request is accepted by the registry unmodified and refused by the VM until entry 9", () => {
+test("a request is accepted by the registry unmodified and parked by the VM", () => {
   const ask: BuiltinSpec = {
     name: "ask",
     aliases: [],
@@ -317,21 +325,32 @@ test("a request is accepted by the registry unmodified and refused by the VM unt
   deepEqual(result.then, { command: "ask.done", args: ["a.txt"] });
 
   const state = makeState("ask()\n");
-  equal(
-    errorOf(() => advanceScriptTick(state, createScriptServices(state, plugins))).code,
-    "command.request-unsupported",
-  );
+  advanceScriptTick(state, createScriptServices(state, plugins));
+  const thread = state.vm.threads[0]!;
+  equal(thread.status, "waiting");
+  equal(thread.wait?.kind, "request");
+  equal(state.vm.requestSeq, 1);
+  deepEqual(state.vm.effects[0]!.request, {
+    kind: "asset",
+    key: { area: "files", path: "a.txt" },
+    reqId: 1,
+  });
 });
 
 test("a name no tier resolves is still unknown.command, and core stays the default pack", () => {
   const unknown = makeState("nope()\n");
   equal(
-    errorOf(() => advanceScriptTick(unknown, createScriptServices(unknown))).code,
+    errorOf(() => advanceOrFail(unknown, createScriptServices(unknown))).code,
     "unknown.command",
   );
 
   const tracer = makeState("count = 2\nsleep(count)\nend()\n");
   advanceScriptTick(tracer, createScriptServices(tracer));
   equal(tracer.vm.threads[0]!.status, "waiting");
-  deepEqual(tracer.vm.threads[0]!.wait, { kind: "sleep", until: 2 });
+  deepEqual(tracer.vm.threads[0]!.wait, {
+    kind: "sleep",
+    global: true,
+    until: 2,
+    resumesCall: true,
+  });
 });

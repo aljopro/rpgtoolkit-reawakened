@@ -25,6 +25,7 @@ import {
   type Thread,
   type WaitPoll,
 } from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
 import { createScriptServices } from "./script-test-services.ts";
 
 function errorOf(run: () => unknown): { code: string; message: string } {
@@ -62,7 +63,11 @@ function waitingThread(id: number, until: number): Thread {
       },
     ],
     status: "waiting",
-    wait: { kind: "sleep", until },
+    wait: { kind: "sleep", global: false, until, resumesCall: true },
+    queue: [],
+    pending: null,
+    detached: [],
+    collect: null,
   };
 }
 
@@ -85,6 +90,10 @@ function readyThread(id: number, text: string): Thread {
     ],
     status: "ready",
     wait: null,
+    queue: [],
+    pending: null,
+    detached: [],
+    collect: null,
   };
 }
 
@@ -166,7 +175,7 @@ test("writes a by-ref out back into the caller's variable inside the hash", () =
   const broken = makeState("bad(z)\n");
   equal(
     errorOf(() =>
-      advanceScriptTick(broken, createScriptServices(broken, [
+      advanceOrFail(broken, createScriptServices(broken, [
         { id: "test.bad", version: "1.0.0", commands: [badOut] },
       ])),
     ).code,
@@ -190,19 +199,19 @@ test("writes a by-ref out back into the caller's variable inside the hash", () =
 test("throws unknown.command and arity.mismatch", () => {
   const unknown = makeState("nope()\n");
   equal(
-    errorOf(() => advanceScriptTick(unknown, createScriptServices(unknown))).code,
+    errorOf(() => advanceOrFail(unknown, createScriptServices(unknown))).code,
     "unknown.command",
   );
 
   const tooMany = makeState("sleep(1, 2)\n");
   equal(
-    errorOf(() => advanceScriptTick(tooMany, createScriptServices(tooMany))).code,
+    errorOf(() => advanceOrFail(tooMany, createScriptServices(tooMany))).code,
     "arity.mismatch",
   );
 
   const tooFew = makeState("sleep()\n");
   equal(
-    errorOf(() => advanceScriptTick(tooFew, createScriptServices(tooFew))).code,
+    errorOf(() => advanceOrFail(tooFew, createScriptServices(tooFew))).code,
     "arity.mismatch",
   );
 });
@@ -213,7 +222,7 @@ test("sleep leaves the thread waiting with ip past the call", () => {
 
   const thread = state.vm.threads[0]!;
   equal(thread.status, "waiting");
-  deepEqual(thread.wait, { kind: "sleep", until: 2 });
+  deepEqual(thread.wait, { kind: "sleep", global: true, until: 2, resumesCall: true });
   equal(thread.frames[0]!.ip, 10);
   equal(thread.frames[0]!.operands.length, 0);
   equal(state.time.tick, 1);
@@ -224,9 +233,9 @@ test("the waits phase wakes exactly at until and polls in ascending id order", (
   // Pushed as ids 3, 1, 2 so array order (3, 1, 2) differs from id order.
   vm.threads.push(waitingThread(3, 10), waitingThread(1, 4), waitingThread(2, 7));
 
-  const polled: number[] = [];
+  const polled: Array<number | null> = [];
   const spy: WaitPoll = (view, wait) => {
-    polled.push(wait.until);
+    polled.push(wait.kind === "sleep" ? wait.until : null);
     return pollSleep(view, wait);
   };
 
@@ -327,13 +336,13 @@ test("the step budget preempts a long program with ip advanced by exactly the bu
 test("sleep rejects zero, fractional and negative counts", () => {
   const zero = makeState("sleep(0)\n");
   equal(
-    errorOf(() => advanceScriptTick(zero, createScriptServices(zero))).code,
+    errorOf(() => advanceOrFail(zero, createScriptServices(zero))).code,
     "builtin.bad-arg",
   );
 
   const fractional = makeState("sleep(1.5)\n");
   equal(
-    errorOf(() => advanceScriptTick(fractional, createScriptServices(fractional))).code,
+    errorOf(() => advanceOrFail(fractional, createScriptServices(fractional))).code,
     "builtin.bad-arg",
   );
 
@@ -348,7 +357,7 @@ test("sleep rejects zero, fractional and negative counts", () => {
   ];
   const negative = makeState("setnegative(n)\nsleep(n)\n");
   equal(
-    errorOf(() => advanceScriptTick(negative, createScriptServices(negative, plugins))).code,
+    errorOf(() => advanceOrFail(negative, createScriptServices(negative, plugins))).code,
     "builtin.bad-arg",
   );
 });

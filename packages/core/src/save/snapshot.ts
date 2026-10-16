@@ -15,9 +15,9 @@
  *
  * **Migration (AD-7's migration chain).** A save whose `schema.vm` is behind
  * `SCHEMA_VERSIONS.vm` is migrated forward before it is returned: v2 → v3 adds
- * the effect log (`effects: []`, `effectSeq: 0`) that ticket 3.21 introduced,
- * then the section version is set to the current one. The chain is keyed by the
- * per-section numbers (AD-23).
+ * the effect log that ticket 3.21 introduced, v3 → v4 the thread, wait and
+ * request fields of ticket 3.9, then the section version is set to the current
+ * one. The chain is keyed by the per-section numbers (AD-23).
  *
  * AD-10 (the state tree) and AD-11 (the canonical form); docs/spec/formats/save-game.md#layout-minor-4 (the
  * saved game).
@@ -35,9 +35,16 @@ export function snapshot(state: GameState): string {
 
 /**
  * Migrate a snapshot's `vm` section forward to `SCHEMA_VERSIONS.vm` (AD-7's
- * migration chain). Only the effect log has a migration so far: v2 → v3 adds
- * `effects` and `effectSeq`. A save already at the current version is left
- * untouched.
+ * migration chain), one version at a time:
+ *
+ * - v2 → v3 adds the effect log (`effects`, `effectSeq`).
+ * - v3 → v4 adds the thread and wait fields of ticket 3.9: `block: null` and
+ *   `requestSeq: 0` on the section; `queue`, `pending`, `detached` and
+ *   `collect` on every thread; and `global` and `resumesCall` on a `sleep`
+ *   wait. A v3 sleep came from the blocking `sleep(ticks)` command, so it
+ *   becomes a global wait that resumes its call (R-32).
+ *
+ * A save already at the current version is left untouched.
  */
 function migrateVm(record: Record<string, unknown>, schema: Record<string, unknown>): void {
   const version = schema.vm;
@@ -51,8 +58,35 @@ function migrateVm(record: Record<string, unknown>, schema: Record<string, unkno
     throw new ScriptError("restore.shape", "the snapshot's `vm` section is not an object");
   }
   const vmRecord = vm as Record<string, unknown>;
-  if (!Array.isArray(vmRecord.effects)) vmRecord.effects = [];
-  if (typeof vmRecord.effectSeq !== "number") vmRecord.effectSeq = 0;
+  if (version < 3) {
+    if (!Array.isArray(vmRecord.effects)) vmRecord.effects = [];
+    if (typeof vmRecord.effectSeq !== "number") vmRecord.effectSeq = 0;
+  }
+  if (version < 4) {
+    if (!Array.isArray(vmRecord.threads)) {
+      throw new ScriptError("restore.shape", "the snapshot's `vm.threads` is not an array");
+    }
+    for (const entry of vmRecord.threads as unknown[]) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+        throw new ScriptError("restore.shape", "a thread in the snapshot is not an object");
+      }
+      const thread = entry as Record<string, unknown>;
+      thread.queue = [];
+      thread.pending = null;
+      thread.detached = [];
+      thread.collect = null;
+      const wait = thread.wait;
+      if (typeof wait === "object" && wait !== null && !Array.isArray(wait)) {
+        const waitRecord = wait as Record<string, unknown>;
+        if (waitRecord.kind === "sleep") {
+          waitRecord.global = true;
+          waitRecord.resumesCall = true;
+        }
+      }
+    }
+    vmRecord.block = null;
+    vmRecord.requestSeq = 0;
+  }
   schema.vm = SCHEMA_VERSIONS.vm;
 }
 

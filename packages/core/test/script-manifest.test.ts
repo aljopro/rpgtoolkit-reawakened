@@ -9,7 +9,7 @@ import {
   type Logger,
 } from "../src/index.ts";
 
-const logger: Logger = { warn: () => {}, error: () => {} };
+const logger: Logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
 function command(name: string, call: BuiltinSpec["call"]): BuiltinSpec {
   return { name, aliases: [], params: [], call };

@@ -6,9 +6,10 @@
  * logic and no world. `advance` runs one whole `advanceScriptTick` per
  * requested tick (clamped by `maxTicks` exactly as the test double is) and
  * reports the state hash; `drawList` is `{ tick, 320×240, commands: [] }`,
- * `surfacePixels` is `null`, and the report's `consumed`/`requests`/
- * `diagnostics`/`audioCues` are empty with `loading: false`, `paused: null`, so
- * the golden `runLog` driver accepts it. Epic 4's `createEngine` supersedes it
+ * `surfacePixels` is `null`, and the report's `consumed`/`requests`/`audioCues`
+ * are empty with `loading: false`, `paused: null`. `diagnostics` carries the
+ * located runtime failures the VM collected during the batch (AD-24), so the
+ * golden `runLog` driver accepts it. Epic 4's `createEngine` supersedes it
  * by calling the same phase handlers with the registry from entry 3.
  */
 
@@ -18,7 +19,9 @@ import {
   parsePluginManifest,
   COMPILER_VERSION,
   createGameState,
+  createLogger,
   createScriptServices,
+  drainDiagnostics,
   ENGINE_DEFAULT_MANIFEST,
   hashState,
   restoreGameState,
@@ -30,6 +33,7 @@ import {
   type DrawList,
   type Engine,
   type GameState,
+  type LogSink,
   type PluginDefinition,
   type PluginManifest,
   type PluginManifestDiagnostic,
@@ -42,31 +46,6 @@ import {
 } from "@tk-reawakened/core";
 import { CATALOGUE_STUBS_PLUGIN, CORE_PLUGIN } from "@tk-reawakened/core";
 import { resolvePluginManifest } from "./script-plugin-resolver.ts";
-
-/** How to build a fresh host: the inline program, the seed and the plugin layers. */
-export type ScriptHostInit = {
-  readonly program: string;
-  readonly seed: number;
-  /** Optional game manifest; omitted means the engine default manifest. */
-  readonly manifest?: PluginManifest;
-  readonly patch?: PluginManifestPatch;
-  /** Host-side definitions available to the manifest resolver. */
-  readonly plugins?: readonly PluginDefinition[];
-};
-
-/** How to rebuild a host from a snapshot: the registry is code, not state. */
-export type ScriptHostRestore = {
-  readonly manifest?: PluginManifest;
-  readonly patch?: PluginManifestPatch;
-  readonly plugins?: readonly PluginDefinition[];
-};
-
-/** The tracer's test host: the engine API plus state access for tests. */
-export type ScriptHost = Engine & {
-  snapshot(): string;
-  stateHash(): string;
-  state(): GameState;
-};
 
 type HostResolution = {
   readonly plugins: readonly ResolvedPlugin[];
@@ -115,13 +94,42 @@ function resolveHostPlugins(
     diagnostics: toRuntimeDiagnostics([...patched.diagnostics, ...resolved.diagnostics]),
   };
 }
+/** How to build a fresh host: the inline program, seed, manifest and plugin layers. */
+export type ScriptHostInit = {
+  readonly program: string;
+  readonly seed: number;
+  /** Optional game manifest; omitted means the engine default manifest. */
+  readonly manifest?: PluginManifest;
+  readonly patch?: PluginManifestPatch;
+  /** Host-side definitions available to the manifest resolver. */
+  readonly plugins?: readonly PluginDefinition[];
+  /** Where the VM's Logger records go, in order; none means they are dropped. */
+  readonly sinks?: readonly LogSink[];
+};
+
+/** How to rebuild a host from a snapshot: the registry is code, not state. */
+export type ScriptHostRestore = {
+  readonly manifest?: PluginManifest;
+  readonly patch?: PluginManifestPatch;
+  readonly plugins?: readonly PluginDefinition[];
+  /** Where the VM's Logger records go, in order; none means they are dropped. */
+  readonly sinks?: readonly LogSink[];
+};
+
+/** The tracer's test host: the engine API plus state access for tests. */
+export type ScriptHost = Engine & {
+  snapshot(): string;
+  stateHash(): string;
+  state(): GameState;
+};
 
 function createHost(
   gameState: GameState,
   services: ScriptServices,
-  diagnostics: readonly Diagnostic[],
+  initialDiagnostics: readonly Diagnostic[] = [],
 ): ScriptHost {
   let breakpoints: readonly Breakpoint[] = [];
+  let pendingDiagnostics = [...initialDiagnostics];
 
   return {
     advance(ticks: number, _inputs, maxTicks?: number): TickReport {
@@ -129,6 +137,8 @@ function createHost(
       for (let index = 0; index < actualTicks; index++) {
         advanceScriptTick(gameState, services, STEP_BUDGET);
       }
+      const diagnostics = [...pendingDiagnostics, ...drainDiagnostics(services)];
+      pendingDiagnostics = [];
       return {
         ticksRun: actualTicks,
         tickAfter: gameState.time.tick,
@@ -173,7 +183,11 @@ function createHost(
 export function createScriptHost(init: ScriptHostInit): ScriptHost {
   const gameState = createGameState({ seed: init.seed });
   const resolution = resolveHostPlugins(init.manifest, init.patch, init.plugins);
-  const services = createScriptServices(gameState, resolution.plugins);
+  const services = createScriptServices(
+    gameState,
+    resolution.plugins,
+    createLogger(init.sinks ?? []),
+  );
   startProgram(gameState.vm, {
     kind: "inline",
     text: init.program,
@@ -186,6 +200,10 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
 export function restoreScriptHost(json: string, init: ScriptHostRestore): ScriptHost {
   const gameState = restoreGameState(json);
   const resolution = resolveHostPlugins(init.manifest, init.patch, init.plugins);
-  const services = createScriptServices(gameState, resolution.plugins);
+  const services = createScriptServices(
+    gameState,
+    resolution.plugins,
+    createLogger(init.sinks ?? []),
+  );
   return createHost(gameState, services, resolution.diagnostics);
 }

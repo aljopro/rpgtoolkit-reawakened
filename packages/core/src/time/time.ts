@@ -8,11 +8,10 @@
  * tick counter supplied through `advance`").
  *
  * `core/time` is the sole owner of seconds↔ticks conversion (AD-2):
- * `secondsToTicks`, `fpsToTicks` and `frameAt` arrive with the entries that use
- * them. Q8 gives the seconds-to-ticks formula `max(1, floor(seconds * 60 +
- * 0.5))`(docs/spec/engine/rpgcode-runtime.md THR-1) to `threadSleep` (entry 9); entry 13's `delay` only uses
- * it, and the provisional `sleep(ticks)` built-in takes whole ticks, so no
- * conversion is needed yet.
+ * `secondsToTicks` (THR-1's `max(1, floor(seconds * 60 + 0.5))`, used by
+ * `threadSleep`; entry 13's `delay` reuses it) lives here, and `fpsToTicks` and
+ * `frameAt` arrive with the entries that use them. The blocking `sleep(ticks)`
+ * built-in takes whole ticks, so it needs no conversion.
  */
 
 import type { ClockPort } from "../ports/time.ts";
@@ -37,4 +36,24 @@ export function runTimePhase(state: TimeState): void {
 /** Bind the injected clock to the live counter (AD-2, G3.1). */
 export function createClockPort(state: TimeState): ClockPort {
   return { tick: () => state.tick };
+}
+
+/** The largest tick count a tick or an end tick may hold: the exact-integer limit of a double. */
+export const MAX_TICK = 9007199254740991;
+
+/** The fixed simulation rate (AD-2): 60 ticks a second. */
+export const TICKS_PER_SECOND = 60;
+
+/**
+ * THR-1's seconds-to-ticks conversion: `max(1, floor(seconds * 60 + 0.5))`,
+ * using a double multiply and `Math.floor`/`Math.max` only. A duration of
+ * exactly `0` (or `-0`) is the indefinite sleep and gives `0`. A negative or
+ * non-finite duration, or a tick count above `MAX_TICK`, gives `null` and the
+ * caller raises the catchable error.
+ */
+export function secondsToTicks(seconds: number): number | null {
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  if (seconds === 0) return 0;
+  const ticks = Math.max(1, Math.floor(seconds * TICKS_PER_SECOND + 0.5));
+  return ticks > MAX_TICK ? null : ticks;
 }

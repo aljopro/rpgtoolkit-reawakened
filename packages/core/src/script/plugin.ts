@@ -25,10 +25,13 @@
  * - `effects` are plain-data records the VM stamps with `{ seq, tick, thread,
  *   name, … }` and stores in the `vm` section's effect log; the section owners
  *   drain them and apply the change (AD-10; decision U1; entry 21).
- * - `wait` parks only the calling thread (AD-9).
+ * - `wait` parks the calling thread; a blocking command's wait is `global`
+ *   (R-32) and freezes every other script thread (AD-9).
  * - `request` with `then` asks the host for something (ADR 0004 decision 7).
- *   Entry 3 accepts it in the contract and returns it unmodified; the VM
- *   refuses it until entry 9 implements the handling (decision U3).
+ *   The VM parks the calling thread in a `request` wait, records the request
+ *   (stamped with a `reqId`) in the effect log, and on the reply runs the named
+ *   continuation with the reply prepended (`ok` as `1`/`0`, then the value)
+ *   to `then.args`. `timeoutTicks` bounds the wait in ticks (AD-5).
  *
  * docs/adr/0004 (decisions 2 and 6); AD-8, AD-10.
  */
@@ -55,6 +58,8 @@ export type CommandView = {
   readonly state?: GameState;
   /** Manifest options for the layer currently handling this command. */
   readonly options?: PlainData;
+  /** The id of the thread whose call is running; the VM sets it before every call. */
+  thread?: number;
 };
 
 /**
@@ -85,9 +90,9 @@ export type CommandContinuation = {
 };
 
 /**
- * A host request a command wants performed (AD-5, AD-17). Entry 3 accepts it as
- * plain data and does not interpret it; entry 9 wires the handling and may
- * narrow it to the published request union.
+ * A host request a command wants performed (AD-5, AD-17). The VM treats it as
+ * plain data: it stamps a `reqId`, records it in the effect log for the host,
+ * and parks the calling thread until the reply (or the tick deadline).
  */
 export type CommandRequest = {
   readonly kind: string;
@@ -105,6 +110,7 @@ export type CommandResult = {
   readonly wait?: Wait;
   readonly request?: CommandRequest;
   readonly then?: CommandContinuation;
+  readonly timeoutTicks?: number;
 };
 
 /**
