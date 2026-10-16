@@ -3,7 +3,7 @@ title: 'Migrate section 9 into docs/spec/engine and rule the RPGCode conflicts'
 type: 'chore'
 ticket: '27'
 created: '2026-10-15'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: '4843c435566ed7110cdd0cd8e019b95865455a2a'
 route: 'full'
 route_source: 'auto'
@@ -85,7 +85,7 @@ Rulings the plan carries. "Owner" means Jensen's 2026-10-15 ruling that `docs/sp
 - **Ruled — U5 (Jensen, 2026-10-15): reading past the end of a file returns an empty string with no error and stays at the end.** Any diagnostic goes to a debug log, not a script error. The paragraph below holds the legacy facts (round 5, Q11) and the rule as proposed.
 - **U5 — reading past the end of a file: answered (round 5, Q11, `docs/provenance/facts-round-5.md`); the rule is proposed, not yet ruled.** Legacy facts, read from logic, with one Windows end-of-file detail from memory and unchecked: `FileInput` past the end returns an empty string with no error, the position does not move, and a blank line looks the same as the end; `FileEOF` is true once the position reaches the file's size, so after the last line (line ending included) it is already true and a `while (!FileEOF(...))` loop never reads past the end; `FileInput` on a file that is not open silently does nothing and sets no return value. Proposed Reawakened rule (the answerer's recommendation): reading past the end returns an empty string with no error and leaves the position at the end; any diagnostic goes to a debug log, not a script error, because 3.1 games may read past the end routinely. A tiny hang risk exists only if Windows reports end of file as a successful zero-byte read, which does not apply to a rebuild. <!-- OWNER: U5 — confirm the proposed rule at the checkpoint. -->
 - **Ruled — U4 (Jensen, 2026-10-15): warn.** A script method named like a built-in is never called at compile-bound sites, as in 3.1, and the rule block requires a warning at the definition, in line with the owner's 2026-10-11 rule that every override warns.
-- **Conflict with the entry's `verify`.** The entry says every §9 subsection has "a row in the section map for entry 28". ADR 0007 decision 5 (accepted after the entry was written) keeps no citation map and has 3.28 re-point by hand. This plan follows the ADR: the section map in the Code Map is working evidence, not a maintained document. <!-- OWNER: map — the entry's wording is superseded by ADR 0007; confirm. -->
+- **Ruled — the entry's map clause (Jensen, 2026-10-15): no section map.** The entry's `verify` asked for a row per §9 subsection in a map for entry 28. ADR 0007 decision 5 keeps no citation map, and 3.28 re-points by hand, so building one here would be work 3.28 repeats. The section map in the Code Map is working evidence for the builder, not a deliverable, and the entry's `verify` was amended to match.
 - **Size.** The migration adds roughly 500 lines to a 90-line page. The builder may split it into more pages under `docs/spec/engine/` if one page becomes unreadable; the entry names two pages, so splitting is a plan change, not a free choice.
 - **Why risk is high.** Nine source and test files under `packages/core` cite these rule ids (`lex.ts`, `errors.ts`, `vm.ts` and the script tests among them), and R-32 reverses a landed design (AD-9's per-thread waits). The doc commit changes no code, but 3.9 and 3.22 must build to it.
 - **What this does not settle.** R-50 to R-61 (movement, battle, audio, editor, plugin contract) belong to their epics; R-33's number is 3.9's.
@@ -96,6 +96,7 @@ Rulings the plan carries. "Owner" means Jensen's 2026-10-15 ruling that `docs/sp
 - 2026-10-15 — owner ruled R-38b: read lines correctly, as a named departure from 3.1 (the plan had provisionally reproduced the drop; U3 is closed). A new open point U5 (reading past the end of a file) was added because the detail was cut off. Corrected a wrong baseline hash and a miscount of test files in the first draft. Open points now: U1, U2, U4, U5 and the entry's map clause.
 - 2026-10-15 — owner ruled U1 (always wait the whole game; no setting, a possible future enhancement), U2 (keep the R-37 extras) and U4 (warn on a script method shadowed by a built-in). The U5 answer arrived the same day (round 5, Q11, reviewed and logged); it is recorded as legacy facts plus a proposed rule. Still open: confirmation of the U5 rule and the entry's section-map clause.
 - 2026-10-15 — owner confirmed the U5 rule (empty string, no error, position stays at the end). Only the entry's section-map clause is still open.
+- 2026-10-15 — owner ruled the map clause: no section map (ADR 0007 decision 5), and the entry's `verify` was amended. All open points are closed; plan is `ready-for-dev`.
 
 
 ## Design Notes
