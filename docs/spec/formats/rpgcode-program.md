@@ -27,6 +27,8 @@ Type flags: 1 unset, 2 number, 4 literal string, 8 identifier, 16 function, 32 `
 
 A reimplementation does not need to read this form unless real games turn up that use it.
 
+**Compiled programs and the dump — Reawakened rule (R-12).** A file whose **first byte is `00`** is a compiled program, not source text. The headless dump must report such a file as **compiled** rather than as text; the code that decides this is `packages/runner-headless/src/dump/formats.ts:79-82`, corrected to match in entry 2.24. The language that the loaded instructions run is ruled in [../engine/rpgcode-language.md](../engine/rpgcode-language.md), not here.
+
 ## Test runs from the editor
 
 The editor's "Run program" writes the open program to `Prg\sys_test.prg`, prefixed with lines that apply the editor's test settings, for example:

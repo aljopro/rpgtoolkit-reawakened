@@ -63,8 +63,8 @@ const UNRECOGNISED = skip(
  * Extension (lowercase, no dot) → why `dump` skips it.
  *
  * A file with no extension, or one not listed, is skipped as unrecognised. The
- * `.prg`, `.gph`, `.tan`, `.tbm`, `.sav`, `.bmp` and `.gif` rows are skipped
- * *by design*: §9 programs are text for a later epic, and §3.2/§3.5/§3.6/§11
+ * `.prg`, `.gph`, `.tan`, `.sav`, `.bmp` and `.gif` rows are skipped
+ * *by design*: §9 programs are text for a later epic, and §3.2/§3.5/§11
  * plus §10's BMP and GIF have no core decoder yet, so reporting them as
  * failures would fail every game that ships one.
  */
@@ -83,7 +83,6 @@ const SKIP_TABLE: Readonly<Record<string, SkipFormatClass>> = {
   // Formats the spec describes but no `core` reader implements yet — skipped, not failed.
   gph: skip("single-column tile text file (format-spec §3.2): no reader in core yet"),
   tan: skip("animated tile (format-spec §3.5): no reader in core yet"),
-  tbm: skip("tile bitmap (format-spec §3.6): no reader in core yet"),
   sav: skip("saved game (format-spec §11): out of scope for this epic"),
   // §10 — media this tool does not decode.
   mid: skip("MIDI music (format-spec §10): audio, not a data format"),
