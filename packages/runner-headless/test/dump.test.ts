@@ -324,6 +324,18 @@ function onePixelBmp(red: number, green: number, blue: number): Uint8Array {
 
 const PIXEL_BMP = onePixelBmp(200, 100, 50);
 
+function onePixelGif(red: number, green: number, blue: number): Uint8Array {
+  return new Uint8Array([
+    0x47, 0x49, 0x46, 0x38, 0x37, 0x61, // GIF87a
+    1, 0, 1, 0, 0x80, 0, 0, // 1×1 screen, 2-entry GCT
+    red, green, blue, 0, 0, 0, // GCT
+    0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0, // 1×1 image descriptor
+    2, 2, 0x44, 0x01, 0, // LZW data
+    0x3b, // trailer
+  ]);
+}
+
+const PIXEL_GIF = onePixelGif(200, 100, 50);
 /** A board file truncated just after its magic, so `readBoard` reports a located EOF. */
 const TRUNCATED_BOARD = asciiBytes("RPGTLKIT BOARD\0");
 
@@ -474,8 +486,8 @@ test("classify is case-insensitive, so the legacy uppercase names land on the sa
   }
 });
 
-test("classify parses .bmp and still skips .gif", () => {
-  for (const path of ["Bitmap/old.bmp", "Bitmap/OLD.BMP"]) {
+test("classify parses .bmp and .gif", () => {
+  for (const path of ["Bitmap/old.bmp", "Bitmap/OLD.BMP", "Bitmap/anim.gif", "Bitmap/ANIM.GIF"]) {
     const cls = classify(path);
     equal(cls.kind, "data", path);
     if (cls.kind === "data") {
@@ -483,26 +495,31 @@ test("classify parses .bmp and still skips .gif", () => {
       equal(cls.section, "format-spec §10", path);
     }
   }
-  for (const path of ["Bitmap/anim.gif", "Bitmap/ANIM.GIF"]) {
-    const cls = classify(path);
-    equal(cls.kind, "skip", path);
-    if (cls.kind === "skip") {
-      ok(cls.reason.includes("format-spec §10"), cls.reason);
-    }
-  }
-  // A bitmap in a project is parsed and digested, and a truncated one is a
+  // A bitmap or GIF in a project is parsed and digested, and a truncated one is a
   // failure, not a skip (§10.4 refuses rather than approximating).
-  const parsed = buildReport([{ path: "Bitmap/mwin.bmp", bytes: PIXEL_BMP }]);
-  deepEqual(parsed.counts, { parsed: 1, skipped: 0, failed: 0 });
-  const entry = parsed.files[0];
-  ok(entry !== undefined && entry.status === "parsed");
-  if (entry?.status === "parsed") {
-    equal(entry.format, "image");
-    equal(entry.digest, digestRgba(PIXEL_RGBA));
-    ok(entry.summary.includes("image bmp 1×1"), entry.summary);
+  const parsed = buildReport([
+    { path: "Bitmap/mwin.bmp", bytes: PIXEL_BMP },
+    { path: "Bitmap/mwin.gif", bytes: PIXEL_GIF },
+  ]);
+  deepEqual(parsed.counts, { parsed: 2, skipped: 0, failed: 0 });
+  const bmpEntry = parsed.files[0];
+  ok(bmpEntry !== undefined && bmpEntry.status === "parsed");
+  if (bmpEntry?.status === "parsed") {
+    equal(bmpEntry.format, "image");
+    equal(bmpEntry.digest, digestRgba(PIXEL_RGBA));
+    ok(bmpEntry.summary.includes("image bmp 1×1"), bmpEntry.summary);
   }
-  const truncated = buildReport([{ path: "Bitmap/mwin.bmp", bytes: new Uint8Array([0x42, 0x4d]) }]);
-  deepEqual(truncated.counts, { parsed: 0, skipped: 0, failed: 1 });
+  const gifEntry = parsed.files[1];
+  ok(gifEntry !== undefined && gifEntry.status === "parsed");
+  if (gifEntry?.status === "parsed") {
+    equal(gifEntry.format, "image");
+    equal(gifEntry.digest, digestRgba(PIXEL_RGBA));
+    ok(gifEntry.summary.includes("image gif 1×1"), gifEntry.summary);
+  }
+  const truncatedBmp = buildReport([{ path: "Bitmap/mwin.bmp", bytes: new Uint8Array([0x42, 0x4d]) }]);
+  deepEqual(truncatedBmp.counts, { parsed: 0, skipped: 0, failed: 1 });
+  const truncatedGif = buildReport([{ path: "Bitmap/mwin.gif", bytes: new Uint8Array([0x47, 0x49, 0x46, 0x38]) }]);
+  deepEqual(truncatedGif.counts, { parsed: 0, skipped: 0, failed: 1 });
 });
 
 test("classify skips the non-format, media and plugin files with a reason", () => {

@@ -29,8 +29,9 @@ corpus cannot supply them (ticket 2.22):
 - `authored/` — bytes written straight from the byte layouts in
   [docs/spec/formats/](docs/spec/formats/README.md) by `tools/fixtures/author/generate.mjs`:
   detail 4/5/6 tilesets, an isometric `.iso`, three Windows bitmaps (24-bit,
-  1-bit and RLE8), a `.tpk` and a deflated copy of it,
-  a Setup ZIP, a backslash-entry ZIP, a `CMP1` standalone EXE and two negative
+  1-bit and RLE8), four GIFs (still, animated, interlaced and full-table),
+  a `.tpk` and a deflated copy of it, a Setup ZIP, a backslash-entry ZIP,
+  a `CMP1` standalone EXE and two negative
   EXE stubs. The tool imports no `core` reader or writer, so a fixture cannot
   "pass by sharing the writer primitives". `pnpm fixtures:author:check` re-runs it
   and fails if the committed bytes drift; `pnpm fixtures:author` rewrites them and

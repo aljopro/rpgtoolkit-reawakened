@@ -3,7 +3,7 @@ title: 'GIF decoder, still and animated'
 type: 'feature'
 ticket: 12
 created: '2026-10-15'
-status: 'ready-for-dev'
+status: built
 baseline_revision: '43189ac35038e110f4265fd4e8e93342b575dedf'
 route: 'full'
 route_source: 'auto'

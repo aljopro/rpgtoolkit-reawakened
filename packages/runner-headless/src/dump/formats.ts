@@ -63,17 +63,12 @@ const UNRECOGNISED = skip(
  * Extension (lowercase, no dot) → why `dump` skips it.
  *
  * A file with no extension, or one not listed, is skipped as unrecognised. The
- * `.prg`, `.gph`, `.tan`, `.sav` and `.gif` rows are skipped
- * *by design*: a later epic parses §9 programs (the `.prg` row still reports
- * whether the file is source text or §9's compiled form), and §3.2/§3.5/§11
- * plus §10's GIF have no core decoder yet, so reporting them as
- * failures would fail every game that ships one.
+ * `.prg`, `.gph`, `.tan` and `.sav` rows are skipped *by design*: a later epic
+ * parses §9 programs (the `.prg` row still reports whether the file is source
+ * text or §9's compiled form), and §3.2/§3.5/§11 have no core decoder yet, so
+ * reporting them as failures would fail every game that ships one.
  */
 const SKIP_TABLE: Readonly<Record<string, SkipFormatClass>> = {
-  // §10 also lists GIF, but `core` has no decoder for it yet, so GIF is skipped
-  // like the other formats with no reader — never a failure.
-  gif: skip("GIF image (format-spec §10): no decoder in core yet"),
-
   // §9 — RPGCode programs are source text, or a compiled binary whose **first
   // byte is `00`** (docs/spec/formats/rpgcode-program.md#compiled-form, R-12).
   // A later epic parses either form; here the size and line count — or the fact
