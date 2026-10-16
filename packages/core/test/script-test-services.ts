@@ -1,4 +1,5 @@
 import {
+  CATALOGUE_RESPONDERS_PLUGIN,
   CATALOGUE_STUBS_PLUGIN,
   CORE_PLUGIN,
   createScriptServices as createResolvedScriptServices,
@@ -13,6 +14,7 @@ import {
 const DEFAULT_RESOLVED: readonly ResolvedPlugin[] = [
   { definition: CORE_PLUGIN },
   { definition: CATALOGUE_STUBS_PLUGIN },
+  { definition: CATALOGUE_RESPONDERS_PLUGIN },
 ];
 
 type TestPlugin = PluginDefinition | ResolvedPlugin;

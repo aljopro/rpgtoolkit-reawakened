@@ -98,5 +98,7 @@ export function describeWait(wait: Wait): string {
       return `movement(${wait.moves.length} move(s))`;
     case "request":
       return `request(reqId ${wait.reqId})`;
+    default:
+      return `${wait.kind}(${wait.id})`;
   }
 }

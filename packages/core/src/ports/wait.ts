@@ -50,8 +50,21 @@ export type SleepWait = {
   resumesCall: boolean;
 };
 
+/** A named plugin-owned wait. Its payload and output references are saveable data. */
+export type NamedWaitKind = "render.msgbox" | "input.mouse" | "menu.screen" | "audio.sfx" | "video";
+
+export type NamedWait = {
+  kind: NamedWaitKind;
+  global: boolean;
+  /** Stable command name, useful to a resolver and to replay diagnostics. */
+  id: string;
+  payload: PlainData[];
+  /** References receive the resolver's returned value, in declaration order. */
+  resumeRefs: string[];
+};
+
 /** A wait for a key; `key` is `null` until the input owner supplies it. */
-export type InputKeyWait = { kind: "input.key"; global: boolean; key: string | null };
+export type InputKeyWait = { kind: "input.key"; global: boolean; key: string | null; resumeRefs?: string[] };
 
 /** A wait for coupled sprite movement (`multiRun`, E-33). */
 export type MovementWait = { kind: "movement"; global: boolean; moves: WaitMove[] };
@@ -69,7 +82,7 @@ export type RequestWait = {
 };
 
 /** Every wait kind the VM registry knows (AD-9). */
-export type Wait = SleepWait | InputKeyWait | MovementWait | RequestWait;
+export type Wait = SleepWait | InputKeyWait | MovementWait | RequestWait | NamedWait;
 
 /** The wait kind names, namespaced where an owner part owns the kind. */
 export type WaitKind = Wait["kind"];

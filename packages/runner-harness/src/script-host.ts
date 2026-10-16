@@ -17,15 +17,17 @@ import {
   advanceScriptTick,
   applyPluginManifestPatch,
   parsePluginManifest,
-  COMPILER_VERSION,
-  createGameState,
+  CORE_PLUGIN,
+  CATALOGUE_PLUGIN,
   createLogger,
   createScriptServices,
+  createGameState,
   drainDiagnostics,
   ENGINE_DEFAULT_MANIFEST,
   hashState,
   restoreGameState,
   snapshot,
+  COMPILER_VERSION,
   startProgram,
   STEP_BUDGET,
   type Breakpoint,
@@ -44,7 +46,6 @@ import {
   type SurfacePixels,
   type TickReport,
 } from "@tk-reawakened/core";
-import { CATALOGUE_STUBS_PLUGIN, CORE_PLUGIN } from "@tk-reawakened/core";
 import { resolvePluginManifest } from "./script-plugin-resolver.ts";
 
 type HostResolution = {
@@ -70,7 +71,7 @@ function resolveHostPlugins(
 ): HostResolution {
   const table: Record<string, PluginDefinition> = {
     core: CORE_PLUGIN,
-    catalogue: CATALOGUE_STUBS_PLUGIN,
+    catalogue: CATALOGUE_PLUGIN,
   };
   if (definitions !== undefined) {
     for (const definition of definitions) {
