@@ -201,6 +201,10 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
     frame.operands.push({ value: result.ok ? result.value : 0, ref: null });
     return;
   }
+  if ("resumeRefs" in wait && wait.resumeRefs !== undefined) {
+    const topIndex = thread.frames.length - 1;
+    for (const ref of wait.resumeRefs) writeRef(vm, thread, topIndex, ref as RefId, result.value);
+  }
   if (wait.kind === "sleep" && !wait.resumesCall) return;
   frame.operands.push({ value: result.value, ref: null });
 }
@@ -277,8 +281,9 @@ export function advanceScriptTick(
   state: GameState,
   services: ScriptServices,
   budget: number = STEP_BUDGET,
+  poll: WaitPoll = defaultWaitPoll,
 ): ScriptStatus {
-  runWaitsPhase(state.vm, state.time);
+  runWaitsPhase(state.vm, state.time, poll);
   runThreadsPhase(state.vm, services, budget);
   assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
@@ -1125,6 +1130,21 @@ function performCall(
 
   if (controlApplied) return "continue";
   if (parked) return "yield";
+
+  if (result.wait !== undefined) {
+    recordEffect(vm, {
+      tick,
+      thread: thread.id,
+      name,
+      kind: "wait",
+      args: argValues(args),
+      out: {},
+      result: result.value,
+      patch: null,
+      wait: result.wait,
+      request: null,
+    });
+  }
 
   if (result.request !== undefined) {
     const timeout = result.timeoutTicks;
