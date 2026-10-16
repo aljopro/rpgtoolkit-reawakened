@@ -405,6 +405,12 @@ export interface Enemy {
   readonly customStances: readonly ActorStance[];
   /** Trailing bytes the §6.3 layout did not cover, kept verbatim (AD-18). */
   readonly residue: Uint8Array;
+  /** Width in tiles (text enemy, minor 0; format-spec legacy). */
+  readonly width?: number | undefined;
+  /** Height in tiles (text enemy, minor 0; format-spec legacy). */
+  readonly height?: number | undefined;
+  /** Fixed 19×7 tile grid names (text enemy, minor 0; R-20). */
+  readonly tileGrid?: readonly string[] | undefined;
 }
 
 // --- Shared reader/writer helpers (format-spec §1.2, §6) --------------------

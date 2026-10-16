@@ -3,7 +3,7 @@ title: 'TK2 text readers: .ene, .anm, .spc, .ste, .bkg'
 type: 'feature'
 ticket: 5
 created: '2026-10-16'
-status: in-progress
+status: built
 baseline_revision: '8f2e5b623a43f36c60991c2ca498c9bc9fae6ce7'
 route: 'full'
 route_source: 'auto'
