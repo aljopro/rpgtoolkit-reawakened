@@ -62,6 +62,7 @@ export {
 export type {
   CollectedMove,
   ErrorHandler,
+  FileHandle,
   Frame,
   GlobalBlock,
   LocalSlot,
@@ -87,6 +88,7 @@ export {
 } from "./values.ts";
 export { CORE_PLUGIN } from "./builtins.ts";
 export type { Arg, BuiltinSpec, ParamSpec } from "./builtins.ts";
+export { CATALOGUE_PLUGIN, CATALOGUE_RESPONDERS_PLUGIN } from "./catalogue-responders.ts";
 export { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 export { drainEffects, EFFECT_LOG_CAP, recordDiagnostic, recordEffect } from "./effects.ts";
 export type {
@@ -164,5 +166,6 @@ export { STRING_SPECS } from "./builtins/strings.ts";
 export { CONVERSION_SPECS } from "./builtins/conversions.ts";
 export { SCOPE_SPECS } from "./builtins/scope.ts";
 export { THREAD_SPECS } from "./builtins/threads.ts";
+export { FILE_SPECS } from "./builtins/files.ts";
 export { ERROR_SPECS } from "./builtins/errors.ts";
 export { createCollectingSink, createLogger, LOG_LEVELS, NULL_LOGGER } from "./logging.ts";

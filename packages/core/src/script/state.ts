@@ -100,6 +100,17 @@ export type QueuedInline = { text: string; file: string; line: number };
  */
 export type PendingCall = { command: string; args: PlainData[]; file: string; line: number };
 
+/** A sandboxed RPGCode file handle. Bytes are hex so VM state remains PlainData (AD-17). */
+export type FileHandle = {
+  id: string;
+  mode: "input" | "output" | "append" | "binary";
+  area: "saves" | "files";
+  path: string;
+  data: string;
+  position: number;
+  loaded: boolean;
+};
+
 /** One sprite move collected by `multiRun` before the one `movement` wait is entered (E-33). */
 export type CollectedMove = { sprite: string; until: number };
 
@@ -136,6 +147,7 @@ export type VmState = {
   globals: { [name: string]: Value };
   objects: ObjectRecord[];
   redirects: Array<[string, string]>;
+  files: FileHandle[];
   effects: EffectRecord[];
   effectSeq: number;
   block: GlobalBlock | null;
@@ -154,6 +166,7 @@ export function createVmState(): VmState {
     globals: {},
     objects: [],
     redirects: [],
+    files: [],
     effects: [],
     effectSeq: 0,
     block: null,

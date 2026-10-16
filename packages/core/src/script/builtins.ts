@@ -28,10 +28,10 @@ import { ScriptError } from "./errors.ts";
 import type { CommandHandler, PluginDefinition } from "./plugin.ts";
 import { CONVERSION_SPECS } from "./builtins/conversions.ts";
 import { ERROR_SPECS } from "./builtins/errors.ts";
+import { FILE_SPECS } from "./builtins/files.ts";
 import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
 import { THREAD_SPECS } from "./builtins/threads.ts";
-/** One declared parameter of a built-in (AD-8). */
 export type ParamSpec = {
   readonly name: string;
   readonly optional: boolean;
@@ -98,5 +98,6 @@ export const CORE_PLUGIN: PluginDefinition = {
     ...SCOPE_SPECS,
     ...THREAD_SPECS,
     ...ERROR_SPECS,
+    ...FILE_SPECS,
   ],
 };
