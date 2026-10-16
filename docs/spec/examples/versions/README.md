@@ -50,6 +50,7 @@ One example file per version of each game-asset format, as fixtures for an impor
 | single-tile | version 2, uncompressed | [tile_v2_uncompressed.gph](single-tile/tile_v2_uncompressed.gph) | [listing](single-tile/tile_v2_uncompressed.gph.txt) | yes | one value per pixel |
 | single-tile | version 2, 16x16 (detail 2) | [tile_v2_detail2.gph](single-tile/tile_v2_detail2.gph) | [listing](single-tile/tile_v2_detail2.gph.txt) | yes | 16x16, drawn doubled |
 | single-tile | version 1 (Toolkit 1) | [tile_v1.gph](single-tile/tile_v1.gph) | [listing](single-tile/tile_v1.gph.txt) | yes | 16 rows of 16 characters, palette indices |
+| font | version 2 | [base.fnt](font/base.fnt) | [listing](font/base.fnt.txt) | yes | only version: 2051 lines, 2048 8x8 glyph row values |
 | main | Toolkit 2 text | [main_tk2_text.gam](main/main_tk2_text.gam) | [listing](main/main_tk2_text.gam.txt) | yes | header written as RPGTLKIT MAIN; the 3.1 editor expects RPGTLKIT mainForm (see legacy notes) |
 | main | Toolkit 1 | [main_tk1.gam](main/main_tk1.gam) | [listing](main/main_tk1.gam.txt) | yes | plus a separate fight file |
 | main | Toolkit 1 fight file | [fight.dat](main/fight.dat) | [listing](main/fight.dat.txt) | yes | 251 enemy/skill pairs |
@@ -77,6 +78,7 @@ One example file per version of each game-asset format, as fixtures for an impor
 | enemy, fight background | text: build the REST tile bitmap and animation / background tile bitmap ([conversion.md](../../formats/legacy/conversion.md#enemies)) |
 | status effect, special move, animation | text: same fields, re-write as binary |
 | tileset | details 2-6: decode (doubling 16x16, palette lookup) and re-write as detail 1 if a single depth is wanted |
-| single tile | any `.gph`: decode pixels and add to a tileset |
+| single-tile | any `.gph`: decode pixels and add to a tileset |
+| font | Toolkit 2 text: read 2051 lines, 2048 8x8 glyph row values ([legacy/text-formats.md](../../formats/legacy/text-formats.md#font-toolkit-2-text)) |
 
 Tileset renders: ![detail 1](tileset/tileset_detail1.png) ![detail 2](tileset/tileset_detail2.png) ![detail 3](tileset/tileset_detail3.png) ![detail 4](tileset/tileset_detail4.png) ![detail 5](tileset/tileset_detail5.png) ![detail 6](tileset/tileset_detail6.png) ![iso](tileset/tileset_iso.png)

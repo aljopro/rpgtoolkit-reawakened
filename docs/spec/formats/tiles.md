@@ -97,10 +97,9 @@ Detail 3-6 tiles and `.gph` detail 3/5 values index a fixed 256-colour palette t
 
 **Palette source of truth — Reawakened rule.** The table in [dos-palette.json](dos-palette.json) is normative: a reader must ship exactly it, rather than build a palette from the public VGA default (the values are close but not identical). *Legacy fact:* details **5 and 6** use only the **first sixteen** entries (the EGA set, the first 16 colours of the 13h VGA palette), while details 3 and 4 use all 256. This 16-entry restriction is stated in the official 2.0 specification, *Tileset (TST) File Format Specification*, © 2000 Christopher B. Matthews (held in the archive at `wayback/rpgtoolkit.com/dev_repo/docs/tst.html`), whose header is `WORD version`, `WORD tileCount`, `WORD detail` with version `20` meaning 2.0 and `21` meaning 2.1 (only version 20 was ever produced); `format-spec §15.13` carries the full detail table. The code reads the table in `packages/core/src/formats/tileset/vga-palette.ts:26-96` (imported at `tileset.ts:22`).
 
-## Readers not yet built
+## Reader status
 
-The `.tst`/`.iso` tileset reader and writer exist (`packages/core/src/formats/tileset/`). The animated-tile (`.tan`) reader stays with entry 16.7, and the tile-bitmap (`.tbm`) reader and writer with entry 2.25, so `.tan` and `.tbm` files are documented here but not yet parsed.
-
+The `.tst`/`.iso` tileset reader and writer exist (`packages/core/src/formats/tileset/`), the tile-bitmap (`.tbm`) reader and writer exist (`packages/core/src/formats/tile-bitmap/`), and the animated-tile (`.tan`) and single-tile (`.gph` v2) readers exist (`packages/core/src/formats/tile-animation/` and `packages/core/src/formats/single-tile/`).
 ## Examples
 
 - [../examples/listings/village.tst.txt](../examples/listings/village.tst.txt) and [../examples/renders/village_tst.png](../examples/renders/village_tst.png) — a detail-1 tileset drawn for the examples

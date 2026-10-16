@@ -25,7 +25,7 @@ import {
   writeEnemy,
   writeItem,
 } from "../src/index.ts";
-import type { ActorBase, ActorStance, Result } from "../src/index.ts";
+import type { ActorBase, ActorStance, LegacyCharacterGraphics, Result } from "../src/index.ts";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(testDir, "..", "..", "..");
@@ -115,6 +115,7 @@ interface CharacterSpec {
   readonly hasSpecialMoves?: number;
   readonly levelUpType?: number;
   readonly sizeType?: number;
+  readonly legacyGraphics?: LegacyCharacterGraphics;
 }
 
 /** Build a character buffer in the exact §6.1 field order. */
@@ -160,6 +161,35 @@ function buildCharacter(spec: CharacterSpec = {}): Uint8Array {
   w.str(""); // level-up program
   w.i8(spec.levelUpType ?? 0); // level-up type
   w.i8(spec.sizeType ?? 1); // size type
+  if (minor < 5) {
+    if (spec.legacyGraphics !== undefined) {
+      for (const frame of spec.legacyGraphics.walkFrames) {
+        w.str(frame.top);
+        w.str(frame.bottom);
+      }
+      putStrings(w, spec.legacyGraphics.battleTiles);
+      putStrings(w, spec.legacyGraphics.restTiles);
+      for (const frame of spec.legacyGraphics.customFrames) {
+        w.str(frame.top);
+        w.str(frame.bottom);
+      }
+    } else {
+      for (let i = 0; i < 16; i += 1) {
+        w.str(`walk_${i}_top`);
+        w.str(`walk_${i}_bottom`);
+      }
+      for (let i = 0; i < 64; i += 1) {
+        w.str(`battle_${i}`);
+      }
+      for (let i = 0; i < 4; i += 1) {
+        w.str(`rest_${i}`);
+      }
+      for (let i = 0; i < 10; i += 1) {
+        w.str(`custom_${i}_top`);
+        w.str(`custom_${i}_bottom`);
+      }
+    }
+  }
   if (minor >= 5) {
     putStrings(w, spec.movement ?? BLANK8);
     putStrings(w, spec.battleStances ?? ["", "", "", "", "", ""]);
@@ -559,7 +589,35 @@ test("character: the version-conditional rows at minor 3 and minor 4 round-trip"
     equal(character.battleSounds?.length, 4, `minor ${minor}: battle sounds`);
     equal(character.firstLevelExp, 90, `minor ${minor}: first-level exp`);
     equal(character.movementAnimations, undefined, `minor ${minor}: no movement animations`);
+    equal(character.legacyGraphics?.walkFrames.length, 16, `minor ${minor}: 16 walk frames`);
+    equal(character.legacyGraphics?.battleTiles.length, 64, `minor ${minor}: 64 battle tiles`);
+    equal(character.legacyGraphics?.restTiles.length, 4, `minor ${minor}: 4 rest tiles`);
+    equal(character.legacyGraphics?.customFrames.length, 10, `minor ${minor}: 10 custom frames`);
+    const firstWalk = character.legacyGraphics?.walkFrames[0];
+    equal(firstWalk?.top, "walk_0_top");
+    equal(firstWalk?.bottom, "walk_0_bottom");
+    equal(character.legacyGraphics?.battleTiles[0], "battle_0");
+    equal(character.legacyGraphics?.restTiles[0], "rest_0");
+    const firstCustom = character.legacyGraphics?.customFrames[0];
+    equal(firstCustom?.top, "custom_0_top");
+    equal(firstCustom?.bottom, "custom_0_bottom");
     deepEqual(unwrap(writeCharacter(character)), bytes, `minor ${minor}: byte-identical round-trip`);
+  }
+});
+
+test("character: the writer refuses minor < 5 characters with missing or invalid legacy graphics", () => {
+  const char = unwrap(readCharacter(new BinaryReader(buildCharacter({ minor: 4 }))));
+  equal(writeCharacter({ ...char, legacyGraphics: undefined }).ok, false);
+  const lg = char.legacyGraphics;
+  if (lg !== undefined) {
+    const badWalk = { ...lg, walkFrames: lg.walkFrames.slice(0, 15) };
+    equal(writeCharacter({ ...char, legacyGraphics: badWalk }).ok, false);
+    const badBattle = { ...lg, battleTiles: lg.battleTiles.slice(0, 63) };
+    equal(writeCharacter({ ...char, legacyGraphics: badBattle }).ok, false);
+    const badRest = { ...lg, restTiles: lg.restTiles.slice(0, 3) };
+    equal(writeCharacter({ ...char, legacyGraphics: badRest }).ok, false);
+    const badCustom = { ...lg, customFrames: lg.customFrames.slice(0, 9) };
+    equal(writeCharacter({ ...char, legacyGraphics: badCustom }).ok, false);
   }
 });
 
@@ -725,17 +783,17 @@ test("a negative minor is refused at its own byte in each actor format (§1.4)",
   }
 });
 
-test("a 2.x text file is a located error at the detection byte", () => {
+test("a 2.x text file is parsed or reports located error at invalid line", () => {
   const tem = readError(ascii("RPGTLKIT CHAR\r\nname=Frap\r\n"), readCharacter);
-  equal(tem.offset, 13);
+  equal(tem.offset, 15);
   equal(tem.section, CHARACTER_SECTION);
 
   const itm = readError(ascii("RPGTLKIT ITEM\r\nname=man\r\n"), readItem);
-  equal(itm.offset, 13);
+  equal(itm.offset, 15);
   equal(itm.section, ITEM_SECTION);
 
   const ene = readError(ascii("RPGTLKIT ENEMY\r\nname=Pirate\r\n"), readEnemy);
-  equal(ene.offset, 14);
+  equal(ene.offset, 16);
   equal(ene.section, ENEMY_SECTION);
 });
 
@@ -881,3 +939,27 @@ test(
     equal(enemy.stances[5], "", "slot 5 is unused");
   },
 );
+
+test("the committed character version examples parse with zero trailing bytes and round-trip", () => {
+  for (const minor of [3, 4, 5, 6, 7, 8]) {
+    const file = join(repoRoot, "docs", "spec", "examples", "versions", "character", `character_minor${minor}.tem`);
+    const bytes = new Uint8Array(readFileSync(file));
+    const reader = new BinaryReader(bytes, file);
+    const character = unwrap(readCharacter(reader));
+    equal(reader.remaining, 0, `minor ${minor}: trailing bytes`);
+    equal(character.residue.length, 0, `minor ${minor}: residue bytes`);
+    equal(character.minor, minor, `minor ${minor}: expected minor`);
+    if (minor < 5) {
+      equal(character.legacyGraphics !== undefined, true, `minor ${minor}: legacy graphics present`);
+      equal(character.legacyGraphics?.walkFrames.length, 16, `minor ${minor}: 16 walk frames`);
+      equal(character.legacyGraphics?.battleTiles.length, 64, `minor ${minor}: 64 battle tiles`);
+      equal(character.legacyGraphics?.restTiles.length, 4, `minor ${minor}: 4 rest tiles`);
+      equal(character.legacyGraphics?.customFrames.length, 10, `minor ${minor}: 10 custom frames`);
+      equal(character.battleSounds?.length, 4, `minor ${minor}: 4 battle sounds`);
+      equal(character.firstLevelExp, 50, `minor ${minor}: first-level exp`);
+    } else {
+      equal(character.legacyGraphics, undefined, `minor ${minor}: no legacy graphics`);
+    }
+    deepEqual(unwrap(writeCharacter(character)), bytes, `minor ${minor}: byte-identical round-trip`);
+  }
+});

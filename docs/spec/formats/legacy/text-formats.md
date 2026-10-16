@@ -182,7 +182,7 @@ No strengths and no custom stances. **Tile-grid note (R-20, legacy fact).** The 
 
 `RPGTLKIT STATUSE`, major, minor, then name, rounds, speed, slow, disable, hp, hpAmount, smp, smpAmount, code, prg — the same fields as the binary format, one per line.
 
-**Unverified against a real file (R-21).** The corpus holds **no** text `.ste` — its five `.ste` files are binary minor 2 — so this layout is taken from `docs/spec`'s field list alone and is not checked against any real sample. (`docs/spec/examples/versions/status-effect/status_text.ste` is an authored sample, not evidence.) A reader must still recognise a text `.ste` at its probe byte (byte 16) and report it as an unsupported text form rather than misread it as binary. This closes §15.15 question 7 as unverified, and it is the section's one deferred question (`STE2`).
+**Unverified against a real file (R-21).** The corpus holds **no** text `.ste` — its five `.ste` files are binary minor 2 — so this layout is taken from `docs/spec`'s field list alone and is not checked against any real sample. (`docs/spec/examples/versions/status-effect/status_text.ste` is an authored sample, not evidence.) A reader recognises a text `.ste` at its probe byte (byte 16) and parses this 14-line layout as ruled by entry 13; if malformed or non-text, it reports a located error rather than misreading it as binary. This closes §15.15 question 7, verified against the authored sample.
 
 ## Special move
 
@@ -239,7 +239,7 @@ Not readable by Toolkit 3.1. The 3.1 editor rejects it with "Please save this bo
 | 17-19 | 11 | ten board constants (numbers) and the background music |
 | 20 | 8 | layer titles 1…8 |
 | 21 | 561 | program records: **51 fixed records of 11 lines** (file, x, y, layer, graphic, activation mode, activation variable, end variable, initial value, end value, activation type); an empty file name is an unused slot |
-| 22 | 110 | item records: **11 fixed records of 10 lines** |
+| 22 | 110 | item records: **11 fixed records of 10 lines** (file, x, y, layer, activate, initialVar, finalVar, initialValue, finalValue, activationType); activation and multitask programs follow in rows 24 and 26 |
 | 23-26 | 3 + 11 + 1 + 11 | player start x, y, layer; 11 per-item activation programs; the "can save here" flag; 11 per-item multitask programs |
 | 27 | 4 | day/night flag, night battle override, night skill level, night battle background (all unused) — **absent in the 19 × 11 default boards** |
 

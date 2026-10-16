@@ -63,8 +63,8 @@ interface Built {
 }
 
 const MAGIC = "RPGTLKIT MAIN";
-const PARALLAX = new Uint8Array([0x11, 0x22, 0x33, 0x44]);
-const MENU_FALLBACK = new Uint8Array([0x51, 0x52, 0x53, 0x54]);
+const PARALLAX = new Uint8Array([0x11, 0x22]);
+const MENU_FALLBACK = new Uint8Array([0x51, 0x52]);
 const MULTITASK = new Uint8Array([0x61, 0x62, 0x63, 0x64, 0x65, 0x66]);
 const FIGHT_STYLE = new Uint8Array([0x71, 0x72]);
 const SCAN_CODES = [30, 31, 32, 33, 34, 35, 36, 37];
@@ -579,11 +579,11 @@ test("the writer refuses a scan-code row that is not eight codes", () => {
 });
 
 test("the writer refuses a reserved run of the wrong width for the minor", () => {
-  // A pre-3 minor carries a 4-byte parallax row.
+  // A pre-3 minor carries a 2-byte parallax row (R-18).
   const pre3 = readBuilt(buildGam(2));
   const short = writeMainFile({
     ...pre3,
-    reservedRuns: { ...pre3.reservedRuns, parallax: new Uint8Array(3) },
+    reservedRuns: { ...pre3.reservedRuns, parallax: new Uint8Array(1) },
   });
   equal(short.ok, false);
   if (!short.ok) {
@@ -838,3 +838,20 @@ test(
     }
   },
 );
+
+test("the committed main-file version examples parse with zero trailing bytes and round-trip", () => {
+  for (let minor = 1; minor <= 9; minor++) {
+    const file = join(repoRoot, "docs", "spec", "examples", "versions", "main", `main_minor${minor}.gam`);
+    const bytes = new Uint8Array(readFileSync(file));
+    const reader = new BinaryReader(bytes, file);
+    const model = unwrap(readMainFile(reader));
+    equal(reader.remaining, 0, `minor ${minor}: trailing bytes`);
+    equal(model.residue.length, 0, `minor ${minor}: residue bytes`);
+    equal(model.minor, minor, `minor ${minor}: expected minor`);
+    if (minor < 3) {
+      equal(model.reservedRuns.parallax.length, 2, `minor ${minor}: 2-byte parallax (R-18)`);
+      equal(model.reservedRuns.menuPluginFallback.length, 2, `minor ${minor}: 2-byte menuPluginFallback (R-18)`);
+    }
+    deepEqual(unwrap(writeMainFile(model)), bytes, `minor ${minor}: byte-identical round-trip`);
+  }
+});
