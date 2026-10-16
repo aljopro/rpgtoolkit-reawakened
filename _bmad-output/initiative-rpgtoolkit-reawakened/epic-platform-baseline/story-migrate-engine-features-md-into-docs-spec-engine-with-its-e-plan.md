@@ -3,7 +3,7 @@ title: 'Migrate engine-features.md into docs/spec/engine with its E-xx IDs'
 type: 'chore'
 ticket: '14'
 created: '2026-10-15'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: '3509ec22bc67524ceaf142724245cf7e254f14db'
 route: 'full'
 route_source: 'auto'
@@ -121,6 +121,7 @@ Section map for the three legacy-ness sections: §1.1 `:13-38` (the legacy proce
 
 ## Implementation Notes
 
+- **Ruled (Jensen, 2026-10-15): OPEN-1 to OPEN-6 are approved as proposed, and OPEN-7 stands as sequencing.** Where the rows below and the paragraphs say "Proposed (needs owner)", read "Ruled". In short: OPEN-1 the entry's `verify` is amended to the 99 E-ids that exist (done in `tickets.toml`); OPEN-2 every E-xx anchor stays on an engine page, with a cross-reference to the formats page for E-120 to E-123 and E-131; OPEN-3 a new `docs/spec/engine/parity-checklist.md` and one row in `docs/spec/README.md` (this widens the stated paths by that one row); OPEN-4 E-81 and E-82 land in `docs/spec/engine/plugins-and-battle.md#menu-plugin`, linking to `docs/spec/formats/item.md`; OPEN-5 record §1.2's blocking sentence as a pointer to 3.27's R-32 and change nothing else; OPEN-6 keep the E-112 anchor and mark joystick and gamepad as a Reawakened addition for the movement-triggers epic. OPEN-7: ticket 3.27 landed first (PR 62), so 1.14 adds only the E-33, E-93 and E-95 anchors and capability sentences and writes none of the §9 prose.
 - **OPEN-1 — the entry's `verify` wording is wrong, and the owner must amend it.** `tickets.toml:169` says "Every E-01 to E-132 ID appears exactly once in `docs/spec/engine/`". Only 99 of those numbers exist; the 33 gaps are not omissions to be filled. Proposed replacement: "**every E-id that exists in `docs/engine-features.md` (99 of them) appears exactly once in `docs/spec/engine/`**, each R-50 to R-61 conflict is recorded with its owner epic, and the commit touches only `docs/`". Alternative: leave it — but then the acceptance test can never pass as written. This is a ticket-text change, so it needs the owner, not the builder.
 - **OPEN-2 — where the format-heavy E-ids' anchors live.** `tickets.toml:168` says "onto the `docs/spec/engine/` page that covers it" and ADR 0007 decision 4 (`docs/adr/0007-…md:25`) says the anchors are carried "on the `docs/spec/engine/` pages". But E-120…E-123 describe the save file (documented at `docs/spec/formats/save-game.md`) and E-131 the package (`docs/spec/formats/packaging-and-paths.md`). Proposed answer: keep every anchor on an engine page (E-120/E-121/E-122 beside start-up in `main-loop-and-startup.md`, E-123 in `plugins-and-battle.md#menu-plugin`, E-131 in `main-loop-and-startup.md#command-line`), each with an explicit cross-reference to the format page, so the ADR and the entry both hold. Alternative: amend ADR 0007 decision 4 to permit anchors on format pages — a decision this entry cannot make. All format-heavy ids are E-10, E-11, E-12, E-13, E-18, E-54, E-120, E-121, E-122, E-123, E-131 (`docs/engine-features.md:93,95,97,99,112,205,345,347,349,351,358`).
 - **OPEN-3 — the parity checklist's home.** Nothing in `docs/spec/` holds §14 (`docs/engine-features.md:363-377`), yet `docs/guardrails.md:99` leans on it. Proposed answer: a new `docs/spec/engine/parity-checklist.md` holding the table verbatim as legacy parity requirements, linked from `docs/spec/README.md:13-19`. Alternative: append it to `docs/spec/engine/main-loop-and-startup.md` — fewer files, but the checklist is a whole-document summary, not a loop fact. The README row is `docs/spec/README.md` — outside the "only `docs/spec/engine/`" boundary the ticket states, so the owner should confirm it. If declined, 3.28 (or the README owner) adds the row.
@@ -135,6 +136,7 @@ Section map for the three legacy-ness sections: §1.1 `:13-38` (the legacy proce
 ## Plan Change Log
 
 - 2026-10-15 — initial plan, drafted from ticket 14 (`tickets.toml:165-169`), ADR 0007, the reconciliation note section D, `docs/guardrails.md` G5, a full read of `docs/engine-features.md`, the seven `docs/spec/engine/` page headings and a repo-wide E-id census. Verified independently: 99 E-ids present, 33 gaps, 78 ids cited in 64 files, guardrails G5 at `:99`, the R-50…R-61 `docs/spec` line numbers (the evidence sheet's line numbers were off and were corrected), and the twelve Reawakened-guidance lines. Six open points (OPEN-1…OPEN-6) and the 3.27 boundary (OPEN-7) are recorded; plan is `draft` because the ticket is `hitl = true` and OPEN-1…OPEN-4 need the owner.
+- 2026-10-15 — owner approved the plan and ruled OPEN-1 to OPEN-6 as proposed; OPEN-7 is unblocked because 3.27 merged (PR 62). The entry's `verify` was amended to the 99 existing E-ids. The plan is `ready-for-dev`.
 
 ## Design Notes
 
