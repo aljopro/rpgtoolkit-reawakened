@@ -10,11 +10,15 @@
  */
 
 import type {
+  AccessLevel,
   Ast,
   Block,
+  ClassDef,
   Expr,
   FunctionDef,
   IfBranch,
+  MemberDef,
+  MethodDef,
   Param,
   Statement,
   SwitchCase,
@@ -270,23 +274,40 @@ export function parse(tokens: readonly Token[]): Ast {
     while (true) {
       const token = peek();
 
-      // Function call: expr(args)
+      // Function or method call.
       if (isOp(token, "(")) {
-        if (expr.kind !== "variable") {
-          throw new ScriptError(
-            "syntax.error",
-            "only named functions can be called",
-            { file: "", line: token.line },
-          );
+        if (expr.kind === "variable") {
+          consume();
+          const args = parseArgs();
+          expr = { kind: "call", name: expr.name, args, line: expr.line };
+          continue;
         }
-        consume(); // consume '('
-        const args = parseArgs();
-        expr = {
-          kind: "call",
-          name: expr.name,
-          args,
-          line: expr.line,
-        };
+        if (expr.kind === "member") {
+          consume();
+          const args = parseArgs();
+          expr = { kind: "methodCall", receiver: expr.receiver, name: expr.name, args, line: expr.line };
+          continue;
+        }
+        throw new ScriptError(
+          "syntax.error",
+          "only named functions or object methods can be called",
+          { file: "", line: token.line },
+        );
+      }
+
+      // Object member access (`->` is canonical; `.` is accepted in authored
+      // class programs as equivalent spelling).
+      if (isOp(token, "->") || isOp(token, ".")) {
+        consume();
+        const member = peek();
+        if (member.kind !== "identifier") {
+          throw new ScriptError("syntax.error", "expected member name after object access", {
+            file: "",
+            line: member.line,
+          });
+        }
+        consume();
+        expr = { kind: "member", receiver: expr, name: member.name, line: member.line };
         continue;
       }
 
@@ -501,8 +522,173 @@ export function parse(tokens: readonly Token[]): Ast {
     expectOp(")", "at end of parameter list");
     return params;
   }
+  function parseMethod(owner: string, access: AccessLevel, allowPrototype: boolean): MethodDef {
+    const methodToken = consume(); // method
+    const nameToken = peek();
+    let name: string;
+    if (nameToken.kind === "identifier") {
+      consume();
+      name = nameToken.name;
+      const operatorCandidate = peek();
+      if (name === "operator" && operatorCandidate.kind === "op") {
+        const operatorToken = consume();
+        if (operatorToken.kind !== "op") throw new ScriptError("syntax.error", "expected operator name", { file: "", line: operatorToken.line });
+        name += operatorToken.text;
+        if (operatorToken.text === "[") {
+          expectOp("]", "at end of operator[] name");
+          name += "]";
+        }
+      }
+    } else if (nameToken.kind === "op" && nameToken.text === "~") {
+      consume();
+      const classToken = peek();
+      if (classToken.kind !== "identifier") throw new ScriptError("syntax.error", "expected destructor name", { file: "", line: classToken.line });
+      consume();
+      name = `~${classToken.name}`;
+    } else {
+      throw new ScriptError("syntax.error", "expected method name", { file: "", line: nameToken.line });
+    }
+    const params = parseParams();
+    skipEnds();
+    let isPure = false;
+    let body: Block | null;
+    if (isOp(peek(), "=")) {
+      if (!allowPrototype) {
+        throw new ScriptError("syntax.error", "pure methods are only declarations", {
+          file: "",
+          line: peek().line,
+        });
+      }
+      consume();
+      const zero = peek();
+      if (zero.kind !== "number" || zero.value !== 0) {
+        throw new ScriptError("syntax.error", "pure method must use `= 0`", {
+          file: "",
+          line: zero.line,
+        });
+      }
+      consume();
+      expectStatementEnd();
+      isPure = true;
+      body = null;
+    } else if (isOp(peek(), "{")) {
+      body = expectBlock(`in method \`${name}\``);
+    } else if (allowPrototype) {
+      body = null;
+    } else {
+      body = expectBlock(`in method \`${name}\``);
+    }
+    return {
+      name,
+      params,
+      body,
+      isPure,
+      access,
+      owner,
+      line: methodToken.line,
+    };
+  }
+
+  function parseClass(isStruct: boolean): ClassDef {
+    const classToken = consume();
+    const nameToken = peek();
+    if (nameToken.kind !== "identifier") {
+      throw new ScriptError("syntax.error", "expected class name", { file: "", line: nameToken.line });
+    }
+    consume();
+    const bases: string[] = [];
+    if (isOp(peek(), ":")) {
+      consume();
+      while (true) {
+        const base = peek();
+        if (base.kind !== "identifier") {
+          throw new ScriptError("syntax.error", "expected base class name", { file: "", line: base.line });
+        }
+        bases.push(base.name);
+        consume();
+        if (!isOp(peek(), ",")) break;
+        consume();
+      }
+    }
+    const members: MemberDef[] = [];
+    const methods: MethodDef[] = [];
+    let access: AccessLevel = isStruct ? "public" : "private";
+    skipEnds();
+    expectOp("{", "to start class body");
+    skipEnds();
+    while (!isOp(peek(), "}") && peek().kind !== "eof") {
+      const token = peek();
+      if (isIdent(token, "public") || isIdent(token, "private")) {
+        access = token.name as AccessLevel;
+        consume();
+        expectOp(":", "after access label");
+        skipEnds();
+        continue;
+      }
+      if (isIdent(token, "protected")) {
+        throw new ScriptError("syntax.unsupported", "`protected` is not a language access level", {
+          file: "",
+          line: token.line,
+        });
+      }
+      if (isIdent(token, "method")) {
+        methods.push(parseMethod(nameToken.name, access, true));
+        skipEnds();
+        continue;
+      }
+      if (isIdent(token, "var") || token.kind === "identifier") {
+        if (isIdent(token, "var")) consume();
+        const member = peek();
+        if (member.kind !== "identifier") {
+          throw new ScriptError("syntax.error", "expected member name", { file: "", line: member.line });
+        }
+        consume();
+        let arraySize: number | null = null;
+        if (isOp(peek(), "[")) {
+          consume();
+          const size = peek();
+          if (size.kind === "number") {
+            arraySize = size.value;
+            consume();
+          }
+          expectOp("]", "after member array");
+        }
+        expectStatementEnd();
+        members.push({ name: member.name, arraySize, access, line: member.line });
+        skipEnds();
+        continue;
+      }
+      throw new ScriptError("syntax.error", "unexpected token in class body", {
+        file: "",
+        line: token.line,
+      });
+    }
+    expectOp("}", "to close class body");
+    return {
+      name: nameToken.name,
+      bases,
+      members,
+      methods,
+      isStruct,
+      line: classToken.line,
+    };
+  }
 
   // --- Statements ---
+  function parseOutOfClassMethod(): MethodDef {
+    consume(); // method
+    const owner = peek();
+    if (owner.kind !== "identifier") throw new ScriptError("syntax.error", "expected class name", { file: "", line: owner.line });
+    consume();
+    expectOp("::", "between class and method name");
+    const name = peek();
+    if (name.kind !== "identifier") throw new ScriptError("syntax.error", "expected method name", { file: "", line: name.line });
+    consume();
+    const params = parseParams();
+    const body = expectBlock(`in method \`${name.name}\``);
+    return { name: name.name, params, body, isPure: false, access: "public", owner: owner.name, line: name.line };
+  }
+  const classes: ClassDef[] = [];
 
   function parseFunction(isInline: boolean): FunctionDef {
     const fnToken = consume(); // 'function' or 'method'
@@ -766,7 +952,13 @@ export function parse(tokens: readonly Token[]): Ast {
       }
     }
 
-    // Function or method definition
+    // Class and struct declarations are hoisted metadata, not executable statements.
+    if (isIdent(token, "class") || isIdent(token, "struct")) {
+      if (inBlock) throw new ScriptError("syntax.error", "class declarations cannot appear inside blocks", { file: "", line: token.line });
+      classes.push(parseClass(token.name === "struct"));
+      return { kind: "expr", expr: { kind: "literal", value: 0, line: token.line }, line: token.line };
+    }
+    // Function or out-of-class method definition.
     if (isIdent(token, "function") || isIdent(token, "method")) {
       if (inBlock) {
         throw new ScriptError(
@@ -775,8 +967,19 @@ export function parse(tokens: readonly Token[]): Ast {
           { file: "", line: token.line },
         );
       }
-      const fn = parseFunction(false);
-      functions.push(fn);
+      if (isIdent(token, "method") && isOp(tokens[index + 2] ?? eof, "::")) {
+        const method = parseOutOfClassMethod();
+        const owner = classes.find((item) => item.name === method.owner);
+        if (owner === undefined) {
+          throw new ScriptError("compile.unknown-class", `class \`${method.owner}\` is not defined`, {
+            file: "",
+            line: method.line,
+          });
+        }
+        owner.methods = [...owner.methods, method];
+      } else {
+        functions.push(parseFunction(false));
+      }
       return {
         kind: "expr",
         expr: { kind: "literal", value: 0, line: token.line },
@@ -831,7 +1034,6 @@ export function parse(tokens: readonly Token[]): Ast {
 
   const statements: Statement[] = [];
   const functions: FunctionDef[] = [];
-
   skipEnds();
   while (peek().kind !== "eof") {
     const stmt = parseStatement(false);
@@ -851,5 +1053,5 @@ export function parse(tokens: readonly Token[]): Ast {
     skipEnds();
   }
 
-  return { statements, functions };
+  return { statements, functions, classes };
 }

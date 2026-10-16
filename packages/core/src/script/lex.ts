@@ -49,7 +49,7 @@ function lexical(message: string, line: number): never {
 }
 
 /** Refuse an identifier the spec or scope excludes, by name and entry. */
-function rejectKeyword(name: string, line: number): void {
+function rejectKeyword(name: string, line: number, allowObjects: boolean): void {
   switch (name) {
     case "break":
     case "continue":
@@ -63,9 +63,12 @@ function rejectKeyword(name: string, line: number): void {
     case "var":
     case "public":
     case "private":
-    case "protected":
     case "this":
     case "new":
+      if (allowObjects) return;
+      unsupported(`the \`${name}\` class construct`, "entry 6", line);
+      break;
+    case "protected":
       unsupported(`the \`${name}\` class construct`, "entry 6", line);
       break;
     case "include":
@@ -143,10 +146,18 @@ const SINGLE_CHAR_OPS = [
   ">",
 ];
 
-/**
- * Tokenize `text` (docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands). The last line need not end in a newline;
- * an empty source yields only the `eof` token.
- */
+let allowObjects = false;
+
+/** Tokenize in the object-enabled dialect used by class-bearing programs. */
+export function tokenizeObjects(text: string): Token[] {
+  allowObjects = true;
+  try {
+    return tokenize(text);
+  } finally {
+    allowObjects = false;
+  }
+}
+
 export function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   const length = text.length;
@@ -314,7 +325,7 @@ export function tokenize(text: string): Token[] {
         firstNonBlankOnLine = false; // continued line is not start of line (so * is multiply)
         continue;
       } else {
-        rejectKeyword(name, line);
+        rejectKeyword(name, line, allowObjects);
         tokens.push({ kind: "identifier", name, line });
       }
 
@@ -334,11 +345,14 @@ export function tokenize(text: string): Token[] {
 
     const sub2 = text.slice(index, index + 2);
     if (TWO_CHAR_OPS.includes(sub2)) {
-      if (sub2 === "->") {
-        unsupported("the `->` member access operator", "entry 6", line);
-      }
-      if (sub2 === "::") {
-        unsupported("the `::` class scope operator", "entry 6", line);
+      if (sub2 === "->" || sub2 === "::") {
+        if (!allowObjects) {
+          unsupported(
+            sub2 === "->" ? "the `->` member access operator" : "the `::` class scope operator",
+            "entry 6",
+            line,
+          );
+        }
       }
       tokens.push({ kind: "op", text: sub2, line });
       index += 2;
@@ -355,6 +369,12 @@ export function tokenize(text: string): Token[] {
 
     // Unsupported single-character constructs
     if (ch === ".") {
+      if (allowObjects) {
+        tokens.push({ kind: "op", text: ".", line });
+        index += 1;
+        firstNonBlankOnLine = false;
+        continue;
+      }
       unsupported("a `.` (implicit-include or member syntax)", "entry 8", line);
     }
     if (ch === "@") {

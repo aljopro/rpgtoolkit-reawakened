@@ -40,6 +40,15 @@ export type ThreadOwner = "script" | "world";
 export type ThreadStatus = "ready" | "waiting" | "finished";
 
 /** One local variable storage slot in a call frame (AD-7). */
+/** One active object in the deterministic handle table (OOP-3/OOP-5). */
+export type ObjectRecord = {
+  handle: number;
+  className: string;
+  program: ProgramRef;
+  members: { [name: string]: Value };
+};
+
+/** One local variable storage slot in a call frame (AD-7). */
 export type LocalSlot = {
   value: Value;
   ref: RefId;
@@ -53,6 +62,13 @@ export type Frame = {
   operands: Arg[];
   errorHandler: null;
   autoLocal: boolean;
+  /** Receiver context for a class method; absent on legacy frames. */
+  objectHandle?: number;
+  objectClass?: string;
+  /** Value supplied by a construction frame when it returns. */
+  returnValue?: Value;
+  /** Object freed after a destructor frame returns. */
+  releaseHandle?: number;
 };
 
 /**
@@ -102,7 +118,7 @@ export type GlobalBlock = { thread: number; kind: string; since: number };
 export type VmState = {
   threads: Thread[];
   globals: { [name: string]: Value };
-  objects: never[];
+  objects: ObjectRecord[];
   redirects: Array<[string, string]>;
   effects: EffectRecord[];
   effectSeq: number;
