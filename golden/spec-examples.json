@@ -39,29 +39,39 @@
     },
     "versions": {
       "counts": {
-        "failed": 14,
-        "parsed": 42,
-        "skipped": 65
+        "failed": 1,
+        "parsed": 55,
+        "skipped": 67
       },
       "digests": {
         "animation/animation_minor3.anm": "aaa17203c4a80d78",
+        "animation/animation_text.anm": "e9111bf3fa79a49f",
         "board/board_minor2.brd": "f741baba365662fd",
         "board/board_minor3.brd": "942e4c58b50dd0b1",
         "board/board_minor4.brd": "a87e27be741e9907",
-        "character/character_minor3.tem": "caca62eef2b7d91a",
-        "character/character_minor4.tem": "0f3e9287e0cc414d",
+        "character/character_minor3.tem": "a8f72d498b82975a",
+        "character/character_minor4.tem": "5c1100c2955cd2fd",
         "character/character_minor5.tem": "af3129edafc9e363",
         "character/character_minor6.tem": "d53c7f7db83d27be",
         "character/character_minor7.tem": "c5d6b5b48ce06585",
         "character/character_minor8.tem": "f15b669c94e0bc6b",
+        "character/character_text_minor0.tem": "323109ddaf655b33",
+        "character/character_text_minor1.tem": "9ccc8e06f2c6bff9",
+        "character/character_text_minor2.tem": "39115b7447c820cc",
         "enemy/enemy_minor1.ene": "ee544931ce881d9b",
+        "enemy/enemy_text.ene": "6e1ab835340a620b",
         "fight-background/background_minor3.bkg": "40ec33bfa540386f",
+        "fight-background/background_text.bkg": "56cc45e12fe61872",
         "item/item_minor2.itm": "6e0b8a43b291f83c",
         "item/item_minor3.itm": "1c83d7120310c6bb",
         "item/item_minor4.itm": "0b5c7fee2f124993",
         "item/item_minor5.itm": "dd6ce60c8720f03d",
         "item/item_minor6.itm": "4d9c440ec5200b68",
         "item/item_minor7.itm": "243fef72aa38c202",
+        "item/item_text_minor0.itm": "64282363452ff981",
+        "item/item_text_minor1.itm": "15044923c528922c",
+        "main/main_minor1.gam": "808f5b8d1fbb0a76",
+        "main/main_minor2.gam": "5c76cb515f6be3d1",
         "main/main_minor3.gam": "4dc6368b7336dbe5",
         "main/main_minor4.gam": "a166f0e18269e18d",
         "main/main_minor5.gam": "9cc2f90490d23e9d",
@@ -69,8 +79,11 @@
         "main/main_minor7.gam": "b1ced5a7fb5b1ade",
         "main/main_minor8.gam": "720b056ae9b2a7b9",
         "main/main_minor9.gam": "299169586a38da61",
+        "main/main_tk2_text.gam": "d7a5c9da8d8c2257",
         "special-move/special_minor2.spc": "ddd4f5c779a06b6d",
+        "special-move/special_text.spc": "efb20442a36eb762",
         "status-effect/status_minor2.ste": "da4250ee29f6d16c",
+        "status-effect/status_text.ste": "c034de6d062c815e",
         "tile-bitmap/tilebitmap.tbm": "96cdc0cf28b52f15",
         "tileset/tileset_detail1.png": "ae194a0fde089c89",
         "tileset/tileset_detail1.tst": "c70a03d31f1b3801",
@@ -88,24 +101,7 @@
         "tileset/tileset_iso.png": "6fa020b29c3d9125"
       },
       "expectedFailures": {
-        "animation/animation_text.anm": "16.5",
-        "character/character_text_minor0.tem": "16.4",
-        "character/character_text_minor1.tem": "16.4",
-        "character/character_text_minor2.tem": "16.4",
-        "enemy/enemy_text.ene": "16.5",
-        "fight-background/background_text.bkg": "16.5",
-        "item/item_text_minor0.itm": "16.4",
-        "item/item_text_minor1.itm": "16.4",
-        "main/main_minor1.gam": "16.6",
-        "main/main_minor2.gam": "16.6",
-        "main/main_tk1.gam": "16.4",
-        "main/main_tk2_text.gam": "16.4",
-        "special-move/special_text.spc": "16.5",
-        "status-effect/status_text.ste": "16.5"
-      },
-      "expectedResidue": {
-        "character/character_minor3.tem": "16.6",
-        "character/character_minor4.tem": "16.6"
+        "main/main_tk1.gam": "16.4"
       }
     }
   },

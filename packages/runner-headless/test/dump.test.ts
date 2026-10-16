@@ -966,7 +966,7 @@ test("the committed spec-examples dump expectation matches docs/spec/examples", 
   equal(checked.status, 0, checked.stderr);
   equal(checked.stdout.includes("files: 0 parsed, 3 skipped, 0 failed, 0 digests match"), true);
   equal(checked.stdout.includes("game: 19 parsed, 7 skipped, 0 failed, 19 digests match"), true);
-  equal(checked.stdout.includes("versions: 42 parsed, 65 skipped, 14 expected failure(s), 42 digests match"), true);
+  equal(checked.stdout.includes("versions: 55 parsed, 67 skipped, 1 expected failure(s), 55 digests match"), true);
 });
 
 // ------------------------------------------------------------------ the CLI
@@ -1149,6 +1149,42 @@ test("dump --record then --check round-trips, and a drifted digest fails naming 
     rmSync(games, { recursive: true, force: true });
   }
 });
+test("dump --record prunes cleared expectedFailures while preserving active ones", () => {
+  const games = mkdtempSync(join(tmpdir(), "rpg-dump-games-"));
+  const game = join(games, "alpha");
+  try {
+    mkdirSync(join(game, "Boards"), { recursive: true });
+    writeFileSync(join(game, "walk.anm"), ANIMATION_BYTES);
+    writeFileSync(join(game, "Boards/broken.brd"), TRUNCATED_BOARD);
+
+    const expectationPath = join(games, "expectation.json");
+    const initial = buildExpectation({
+      alpha: {
+        counts: { parsed: 0, skipped: 0, failed: 2 },
+        digests: {},
+        expectedFailures: {
+          "walk.anm": "ticket-cleared",
+          "Boards/broken.brd": "ticket-still-failing",
+        },
+      },
+    });
+    writeFileSync(expectationPath, serializeExpectation(initial), "utf8");
+
+    const recorded = runCli(["dump", "--record", expectationPath, games]);
+    equal(recorded.status, 0, recorded.stderr);
+
+    const parsed = parseExpectation(readFileSync(expectationPath, "utf8"), expectationPath);
+    equal(parsed.games["alpha"]?.expectedFailures?.["walk.anm"], undefined);
+    equal(parsed.games["alpha"]?.expectedFailures?.["Boards/broken.brd"], "ticket-still-failing");
+    ok(parsed.games["alpha"]?.digests["walk.anm"] !== undefined);
+
+    const checked = runCli(["dump", "--check", expectationPath, games]);
+    equal(checked.status, 0, checked.stderr);
+  } finally {
+    rmSync(games, { recursive: true, force: true });
+  }
+});
+
 
 test("dump --check fails naming a game folder the expectation does not name", () => {
   const games = mkdtempSync(join(tmpdir(), "rpg-dump-games-"));

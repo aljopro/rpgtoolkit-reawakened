@@ -25,6 +25,7 @@ import {
   buildExpectation,
   compareGame,
   driftLines,
+  hasResidue,
   parseExpectation,
   serializeExpectation,
   toExpectationGame,
@@ -158,7 +159,27 @@ function recordCorpus(expectationPath: string, gamesDir: string): number {
       }
       return 1;
     }
-    const game = toExpectationGame(result.report, expectedFailures, expectedResidue);
+    const failedPaths = new Set(
+      result.report.files.filter((entry) => entry.status === "failed").map((entry) => entry.path),
+    );
+    const activeFailures =
+      expectedFailures === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(expectedFailures).filter(([path]) => failedPaths.has(path)),
+          );
+    const residuePaths = new Set(
+      result.report.files
+        .filter((entry) => entry.status === "parsed" && hasResidue(entry))
+        .map((entry) => entry.path),
+    );
+    const activeResidue =
+      expectedResidue === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(expectedResidue).filter(([path]) => residuePaths.has(path)),
+          );
+    const game = toExpectationGame(result.report, activeFailures, activeResidue);
     games[name] = game;
     digestCount += Object.keys(game.digests).length;
   }
