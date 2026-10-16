@@ -3,7 +3,7 @@ title: 'Modules: includes, implicit includes, redirects, hoisting, program cache
 type: 'feature'
 ticket: 8
 created: '2026-10-16'
-status: 'draft'
+status: ready-for-dev
 baseline_revision: 'c90dc52bc32cc12481b894cc8cbd0349e8443c50'
 route: 'full'
 route_source: 'pinned'
