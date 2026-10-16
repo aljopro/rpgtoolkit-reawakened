@@ -96,7 +96,7 @@ Read only (the 3.x editor upgrades and re-saves as minor 4). Fields after the ve
 | 7 | no collision or activation polygons (defaults apply, see [../character.md](../character.md#defaults-and-fall-backs)) |
 | 6 | also no idle time and speed (defaults 3.0 s and 0.05 s) |
 | 5 | also no idle animations |
-| 3 | `levelType` is one byte instead of an int (only reachable through the editor's conversion) |
+| 3 | the level-up experience field is **one byte** instead of an `int` — the name "level type" the older docs gave it is misleading; it is the experience needed for the first level-up (only reachable through the editor's conversion) |
 | < 5 | Toolkit 2 binary layout, below. **The original engine refuses these**; the editor converts them. |
 
 **Minor < 5 layout.** Identical to the current layout up to and including `levelSm`, then:
@@ -112,6 +112,8 @@ Read only (the 3.x editor upgrades and re-saves as minor 4). Fields after the ve
 | custom: 10 × (upper, lower) | 20 × string |
 
 Nothing follows. The tile names are tile references; conversion turns them into tile bitmaps and animations ([conversion.md](conversion.md#characters)).
+
+**Residual bytes after the tile names (Q8, open question).** The reader always reads the 120 names regardless of the `sizeType` byte's value, and neither program reads anything after them. **14 of the 16** binary minor-3/4 files in the corpus close exactly; FinalDestiny's `Bill.tem` (minor 4) leaves 13 bytes and FinalDestiny's `start.tem` (minor 3) leaves 96. The `sizeType` byte reads `99` on Caoquest's `red.tem` where its neighbour reads `1`. The extra bytes are harmless and their origin is unknown; whether the name block has a different length for some writers is not settled by the corpus.
 
 ## Item before minor 7
 

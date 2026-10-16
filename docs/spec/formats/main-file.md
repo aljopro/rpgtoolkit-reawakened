@@ -20,7 +20,7 @@ Types and conventions are defined in [README.md](README.md#primitive-encoding). 
 | 8 | mainScreenType | short | always | historic display API choice; new projects store 1; **ignored** by the engine |
 | 9 | extendToFullScreen | short | always | 0 windowed, 1 full screen |
 | 10 | mainResolution | short | always | 0 = 640×480, 1 = 800×600, 2 = 1024×768, any other value (the editor writes 4) = custom `resX`×`resY` |
-| 11 | (unused) | int | minor < 3 | discarded |
+| 11 | (unused) | short | minor < 3 | discarded. See the R-18 note below. |
 | 12 | mainDisableProtectReg | short | always | legacy; ignored |
 | 13 | language file | string | always | editor UI language, e.g. `0english.lng`; ignored by the engine |
 | 14 | startupPrg | string | always | program in `Prg\` run at start |
@@ -34,7 +34,7 @@ Types and conventions are defined in [README.md](README.md#primitive-encoding). 
 | 22 | × (UB+1): key, program | short, string | always | extra run-time keys (ASCII) and their programs; entries with an empty program are ignored |
 | 23 | menuPlugin | string | minor ≥ 3 | menu plugin DLL in `Plugin\` |
 | 24 | fightPlugin | string | minor ≥ 3 | battle plugin DLL in `Plugin\` |
-| 23′ | (unused) | int | minor < 3 | discarded; plugins default to `tk3menu.dll` and `tk3fight.dll` |
+| 23′ | (unused) | short | minor < 3 | discarded; plugins default to `tk3menu.dll` and `tk3fight.dll`. See the R-18 note below. |
 | 25 | (unused) | int, short | minor ≤ 2 | discarded |
 | 26 | fightGameYn | short | always | **0 = random battles enabled, 1 = disabled** (the name is inverted) |
 | 27 | enemy list UB | short | always | the editor writes 500 |
@@ -76,10 +76,11 @@ Types and conventions are defined in [README.md](README.md#primitive-encoding). 
 
 The file ends after the last field present.
 
-**Version-dependent fields (legacy fact).** Twelve logical rows are conditional, and the "Present when" column above is the whole of it: the unused `int` at row 11 (`minor < 3`); the menu/fight plugins at rows 23-24 against the reserved `int` at row 23′; rows 25 and 33 (`minor ≤ 2`); the plugin-slot form at rows 38a/38b (`minor ≤ 2` uses `enabled` flags named `tkplug<i>.dll`, `minor ≥ 3` uses names); and, in order, rows 42-46 (`minor ≥ 3`), 47-48 (`≥ 4`), 49 (`= 5`), 50-53 (`≥ 6`), 54-55 (`≥ 7`), 56 (`≥ 8`) and 57-61 (`≥ 9`). Every row carries a unique number 1-61 in storage order across the file's lifetime, so it can be cited. The minor history is in [legacy/older-binary-versions.md](legacy/older-binary-versions.md#main-file-minor-history).
+**Version-dependent fields (legacy fact).** Twelve logical rows are conditional, and the "Present when" column above is the whole of it: the unused `short` at row 11 (`minor < 3`); the menu/fight plugins at rows 23-24 against the reserved `short` at row 23′; rows 25 and 33 (`minor ≤ 2`); the plugin-slot form at rows 38a/38b (`minor ≤ 2` uses `enabled` flags named `tkplug<i>.dll`, `minor ≥ 3` uses names); and, in order, rows 42-46 (`minor ≥ 3`), 47-48 (`≥ 4`), 49 (`= 5`), 50-53 (`≥ 6`), 54-55 (`≥ 7`), 56 (`≥ 8`) and 57-61 (`≥ 9`). Every row carries a unique number 1-61 in storage order across the file's lifetime, so it can be cited. The minor history is in [legacy/older-binary-versions.md](legacy/older-binary-versions.md#main-file-minor-history).
 
 ## Compatibility notes
 
+- **Rows 11 and 23′ are `short`, not `int` (R-18, legacy fact with corpus evidence).** Both `minor < 3` reserved fields are 2 bytes. Read as `short`, all **15** binary minor-2 `.gam` files in the corpus read to the last byte (FinalDestiny 2, LittleMan 1, BusDriver 10, School2Demo 1, ChimeranEmpire 1); read as `int`, BusDriver's ten files leave 1506 bytes unread and FinalDestiny's two run off the end. The original 3.1 engine reads 4 bytes at both places, so it misreads every minor-2 file; the editor reads 2 and is correct. This is the reading a new reader takes (round 5 `Q2`). The regeneration of the version-example files that used the old width, and the tool change that produces them, are out of this page's scope.
 - **Alignment accident in fields 4-5.** The editor writes a 2-byte `registered` and then the string `NOCODE`. The original engine reads a 4-byte int and then a string, so it sees `CODE`. Both are discarded and the total length is the same, so the following field lines up either way. A new reader should read *short + string*.
 - **Game speed.** The byte is `speed + 128`; the decoded speed is `byte − 128` (the editor offers −4..+4). Files with minor < 8 stored the signed value directly and are re-biased on load (`stored + 128`). The decoded value is used as a per-frame step offset (see [../engine/movement-and-collision.md](../engine/movement-and-collision.md#speed)).
 - **Keys** in fields 18-22 are ASCII character codes; the engine converts them to keyboard scan codes with the current keyboard layout when loading. Movement keys (field 61) are already scan codes.
