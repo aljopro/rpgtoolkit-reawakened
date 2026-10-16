@@ -3,7 +3,7 @@ title: 'Readers for .tan, .gph v2 and .fnt'
 type: 'feature'
 ticket: 7
 created: '2026-10-16'
-status: in-progress
+status: built
 baseline_revision: '8f2e5b62'
 route: 'full'
 route_source: 'auto'
