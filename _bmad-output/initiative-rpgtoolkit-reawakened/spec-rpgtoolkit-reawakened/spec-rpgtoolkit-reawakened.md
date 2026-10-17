@@ -77,6 +77,10 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
   - **intent:** All editor features are available in the VS Code extension and in the standalone editor (PWA first, then desktop shell) from the same `editor-ui` components through a platform-services interface, including per-platform file association (T-82).
   - **success:** The same editor-ui build opens and saves a project in VS Code (incl. a `vscode.dev` web build) and in the PWA; neither host imports the other, and no feature exists in only one host.
 
+- **CAP-19**
+  - **intent:** People who have never seen the project can find out what it is, install or open it on every shipped host, and learn to play, make, import, debug, package and share a game from versioned user documentation and a public website that match the released product; contributors and extension authors get developer documentation. The normative spec (`docs/spec/`) stays the separate engine and format contract and is linked, never restated.
+  - **success:** A reader who did not write the documentation completes each flagship task (install or open on each shipped host, build a first game, import a legacy game, debug a script, package and share a game) from the published site against the release build; every command name, menu label, file name, format name and code sample in the user documentation is checked against the built product or the normative spec by a gate or a recorded walkthrough; link, accessibility and build checks pass for every published version.
+
 ## Constraints
 
 - G1: the RPGCode VM is an explicit step machine; all VM state is plain JSON data; no generators, async/await, Promises, workers or timers for script threads; blocking built-ins yield a status.
@@ -114,6 +118,7 @@ The headless runner plays the legacy `demo` and `Basic` sample games end to end 
 - The architecture spine's `[ASSUMPTION]` tags (60 Hz tick, ASCII-only case fold, `fflate`, a pure-TypeScript TrueType rasteriser, editor-model in the VS Code extension host, restart-on-compiler-mismatch, FNV-1a, xoshiro128**, semver and PWA update policy) stand until corrected.
 - `docs/spec/engine/parity-checklist.md` "nice-to-have" items are outside the must-have contract. Legacy-syntax conversion ships as LSP quick fixes (CAP-14).
 - The non-goals T-71 (separate Pak compiler) and T-73 (2.x file-system upgrade) are my inference: editor-features calls T-71 superseded by the EXE route and T-73 serves only 2.x projects. T-72 setup builder stays in CAP-17. Overturn either if wrong.
+- CAP-19 was added on 2026-10-17 as a draft for the documentation-and-website epic (epic 17). It is not part of the success signal below, which stays about the product. Its wording, and the choice of a new capability rather than extending CAP-12, are the owner's to confirm.
 
 ## Open Questions
 
