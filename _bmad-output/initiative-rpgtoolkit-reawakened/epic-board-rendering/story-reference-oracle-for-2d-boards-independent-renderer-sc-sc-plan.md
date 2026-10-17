@@ -3,7 +3,7 @@ title: "Reference oracle for 2D boards: independent renderer, scene schema, auth
 type: feature
 ticket: 4
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: '458c68e9'
 route: full
 route_source: pinned
