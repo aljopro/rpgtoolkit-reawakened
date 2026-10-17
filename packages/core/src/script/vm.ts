@@ -1813,7 +1813,8 @@ export function stepThread(
             if (divisor === 0) {
               throw new ScriptError("vm.modulo-by-zero", "modulo by zero", op.pos);
             }
-            resultValue = toInt32(lVal) % divisor;
+            const rem = toInt32(lVal) % divisor;
+            resultValue = Object.is(rem, -0) ? 0 : rem;
             break;
           }
           case "^":

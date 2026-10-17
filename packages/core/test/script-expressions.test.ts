@@ -154,8 +154,16 @@ test("&&, || and ?: evaluate every operand", () => {
   deepEqual(called, ["fa", "fb"]);
 });
 
-test("% by zero throws the ERR-2 class error", () => {
+test("% by zero throws the ERR-2 class error and converts operands first", () => {
   equal(errorOf(() => runScript("x = 7 % 0\n")).code, "vm.modulo-by-zero");
+  // Remainder converts both operands first so divisor in (-1, 1) counts as zero
+  equal(errorOf(() => runScript("x = 7 % 0.5\n")).code, "vm.modulo-by-zero");
+  equal(errorOf(() => runScript("x = 7 % -0.5\n")).code, "vm.modulo-by-zero");
+  // -2147483648 % -1 cannot yield -0 in our VM (normalised to 0)
+  const normalZero = runScript("x = -2147483648 % -1\n");
+  equal(normalZero.vm.globals.x, 0);
+  equal(Object.is(normalZero.vm.globals.x, 0), true);
+  equal(Object.is(normalZero.vm.globals.x, -0), false);
 });
 
 test("a null operand behaves as the unset value", () => {

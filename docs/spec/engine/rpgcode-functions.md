@@ -11,6 +11,8 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
   **Reawakened rule.** A script method whose name matches a built-in is never called where the compiler binds the built-in — that is 3.1 behaviour, kept for parity — and the definition raises a **required warning** naming the built-in it shadows. The warning follows the owner's standing rule that every override warns (2026-10-11). This binding order is the reverse of the one the architecture spine's AD-8 described; the change is recorded here and applied by entry 3.8.
 * **Obsolete commands (R-36).** A command marked *obsolete: raises an error* is a catchable runtime error, and its statement is skipped; a command marked *obsolete: warning* stays callable and shows a warning when warnings are on. Both kinds are handled the same way by an error handler. The eight names `empty`, `fbranch`, `mbox`, `newplyr` (`newplayer` is its alias), `restorearrayscreen`, `underarrow`, `itemwalkspeed` and `shopcolors` are part of the 282-name catalogue, and the command-effect catalogue JSON lists all 282 names.
+* **`random(max)` edge cases and departures (Ruling 3).** *Legacy fact:* 3.1 drew from the C runtime generator (0..32767), took remainder by `max`, and added 1 (facts-round-6, Q6). `max` was truncated to an integer first. `max` 0 returned 1; negative `max` gave 1..|`max`|; NaN `max` gave 1..32768. Because the CRT draw ranged 0..32767, results never exceeded 32768, and the generator was seeded from the system clock at startup. **Reawakened rule:** MATCH the 3.1 edge cases: truncate `max` to an integer first (`Math.trunc`); `max` 0 returns 1; negative `max` gives 1..|`max`|; NaN `max` gives 1..32768. Deliberate departures: ranges above 32768 are NOT capped at 32768, and the draw comes from the injected deterministic RNG `1 + draw % max` rather than the system clock. Non-positive, non-integer and NaN arguments no longer raise `builtin.bad-arg`.
+* **`getTickCount()` time source and departure (Ruling 5).** *Legacy fact:* 3.1 returned the Windows system uptime in milliseconds since the computer started, wrapping after ~49.7 days in 10–16 ms steps (facts-round-6, Q7). **Reawakened rule — deliberate departure:** `getTickCount()` returns the elapsed milliseconds since game startup based on the injected fixed 60 Hz simulation tick (`floor((tick * 1000) / 60)`), ensuring deterministic replays across platforms while preserving interval timing semantics.
 
 
 ## Message window, text & fonts (30)
@@ -419,3 +421,18 @@ and the catalogue together. -->
 ## Not callable by name
 
 The interpreter also has internal entries for operators, `if`/`else`/`elseif`/`while`/`until`/`for`, method and class definitions, and plugin calls. Scripts reach them only through the language syntax.
+
+## Reawakened additions (not part of the 282 legacy catalogue)
+
+The following functions are Reawakened built-in additions provided in the pure built-in pack (`pure.ts`). They are not part of the 282 legacy 3.1 command catalogue.
+
+| Command | Signature | Purpose | Notes |
+|---|---|---|---|
+| `isNaN` | `int isNaN(variant &value, [int &ret])` | Returns 1 if `value` is numeric and NaN, 0 otherwise. | Reawakened addition; takes first arg byRef |
+| `isInfinity` | `int isInfinity(variant &value, [int &ret])` | Returns 1 if `value` is numeric and +Infinity or -Infinity, 0 otherwise. | Reawakened addition; takes first arg byRef |
+| `isFinite` | `int isFinite(variant &value, [int &ret])` | Returns 1 if `value` is numeric and a finite number (not NaN, not ±Infinity), 0 otherwise. | Reawakened addition; takes first arg byRef |
+
+* **Parameter by reference.** Each function declares its first parameter `byRef: true` (`&value`). This is necessary because reading a variable by name in RPGCode truncates numbers to 32-bit integers (SEM-3), which would convert NaN or Infinity to 0 before the function sees it. Passing by reference ensures the function inspects the stored full value directly. Computed temporaries (for example `isNaN(0/0)` or `isInfinity(1/0)`) pass their temporary value and work identically.
+* **String handling.** Strings (both non-numeric strings like `"abc"` and numeric strings like `"123"`) return 0 for all three functions, because a string is not a number.
+* **Numeric invariant.** For any numeric input, exactly one of `isNaN`, `isInfinity` and `isFinite` returns 1, and the other two return 0 (`isFinite == 1` iff `isNaN == 0 && isInfinity == 0`).
+* **Corpus check (R-35).** None of these functions existed in 3.1. Verified that no legacy corpus or fixture script defines `isNaN`, `isInfinity` or `isFinite`.

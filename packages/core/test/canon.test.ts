@@ -15,6 +15,8 @@ import {
   fnv1a64,
   hashDrawList,
   hashState,
+  reviveNonFinite,
+  tagNonFinite,
   utf8Encode,
 } from "../src/index.ts";
 import type { DrawList, PlainData, PortData, SurfaceId } from "../src/index.ts";
@@ -186,6 +188,18 @@ test("canon formats numbers per RFC 8785 Appendix B table and preserves hand-wri
   equal(canon(1e30), "1e+30");
   equal(canon(2e-3), "0.002");
   equal(canon(1e-27), "1e-27");
+});
+
+test("tagNonFinite and reviveNonFinite preserve non-finite numbers through canonical JSON", () => {
+  equal(canon(tagNonFinite(NaN) as never), '{"t":"nan"}');
+  equal(canon(tagNonFinite(Infinity) as never), '{"t":"inf"}');
+  equal(canon(tagNonFinite(-Infinity) as never), '{"t":"-inf"}');
+  equal(canon(tagNonFinite({ x: NaN }) as never), '{"x":{"t":"nan"}}');
+  equal(canon(tagNonFinite({ pos: Infinity, neg: -Infinity }) as never), '{"neg":{"t":"-inf"},"pos":{"t":"inf"}}');
+  equal(Number.isNaN(reviveNonFinite({ t: "nan" })), true);
+  equal(reviveNonFinite({ t: "inf" }), Infinity);
+  equal(reviveNonFinite({ t: "-inf" }), -Infinity);
+  equal(reviveNonFinite(42), 42);
 });
 
 test("canon reproduces the RFC 8785 sample byte for byte", () => {

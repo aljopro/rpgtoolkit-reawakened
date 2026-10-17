@@ -32,6 +32,25 @@ function unaryMath(name: string, operation: (value: number) => number): BuiltinS
   };
 }
 
+function numberClassification(
+  name: string,
+  predicate: (value: number) => boolean,
+): BuiltinSpec {
+  return {
+    name,
+    aliases: [],
+    params: [
+      { name: "value", optional: false, byRef: true, variadic: false },
+      { name: "dest", optional: true, byRef: true, variadic: false },
+    ],
+    call: (_view, args) => {
+      const raw = args[0]?.value;
+      const value = typeof raw === "number" && predicate(raw) ? 1 : 0;
+      return args.length > 1 ? { value, out: [[1, value]] } : { value };
+    },
+  };
+}
+
 const MATH_SPECS: readonly BuiltinSpec[] = [
   unaryMath("sin", sin),
   unaryMath("cos", cos),
@@ -46,13 +65,22 @@ const MATH_SPECS: readonly BuiltinSpec[] = [
       { name: "dest", optional: true, byRef: true, variadic: false },
     ],
     call: (view, args) => {
-      const max = toNumberValue(args[0]?.value ?? 0);
-      if (!Number.isFinite(max) || !Number.isInteger(max) || max < 1) {
-        throw new ScriptError("builtin.bad-arg", "random: max must be a positive whole number");
+      if (args.length < 1) {
+        throw new ScriptError("builtin.bad-arg", "random requires max argument");
       }
-      // The single injected generator is the only source of randomness. A
-      // fixed modulo mapping keeps the draw order part of the tick contract.
-      const value = 1 + (view.rng.nextUint32() % max);
+      const raw = toNumberValue(args[0]?.value ?? 0);
+      let value: number;
+      if (Number.isNaN(raw)) {
+        value = 1 + (view.rng.nextUint32() % 32768);
+      } else {
+        const truncated = Math.trunc(raw);
+        if (truncated === 0) {
+          value = 1;
+        } else {
+          const range = Math.abs(truncated);
+          value = 1 + (view.rng.nextUint32() % range);
+        }
+      }
       return args.length > 1 ? { value, out: [[1, value]] } : { value };
     },
   },
@@ -75,6 +103,9 @@ const MATH_SPECS: readonly BuiltinSpec[] = [
       return args.length > 0 ? { value, out: [[0, value]] } : { value };
     },
   },
+  numberClassification("isnan", (v) => Number.isNaN(v)),
+  numberClassification("isinfinity", (v) => v === Infinity || v === -Infinity),
+  numberClassification("isfinite", (v) => Number.isFinite(v)),
 ];
 
 function control(args: readonly Arg[], action: "run" | "jump"): CommandEffect {

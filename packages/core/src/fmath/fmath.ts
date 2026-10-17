@@ -64,10 +64,13 @@ export const TAN_PI_8 = 0.41421356237309515;
  */
 export const TRIG_ARG_MAX = 137438953472;
 
+/** Canonical positive NaN used across `fmath` and `core` (ADR 0002). */
+export const CANONICAL_NAN = NaN;
+
 /** Deterministic square root wrapper; domain errors use canonical positive NaN. */
 export function sqrt(x: number): number {
   const result = Math.sqrt(x);
-  return Number.isNaN(result) ? NaN : result;
+  return Number.isNaN(result) ? CANONICAL_NAN : result;
 }
 
 // ── pi / 2 split (five doubles) ──────────────────────────────────────────────

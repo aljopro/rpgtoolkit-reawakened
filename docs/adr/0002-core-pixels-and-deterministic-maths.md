@@ -49,6 +49,7 @@ The project's binding rules (G1–G7) and the architecture comparison were writt
    * In `core`, `Math` is an allowlist: `abs`, `ceil`, `floor`, `round`, `trunc`, `sign`, `min`, `max`, `fround`, `imul`, `clz32`, `sqrt`. These are exactly specified by the language standard. *Reason: every other `Math` function may round differently between engines.*
    * Every other `Math` member and the operators `**` and `**=` are banned in `core`. *Reason: `**` is implementation-approximated just like `Math.pow`.*
    * `core/fmath` supplies `sin`, `cos`, `tan`, `atan2`, `exp`, `log`, `pow` and the rest using only `+ − × ÷` and `sqrt`. `pow` with an integer exponent is exact by repeated multiplication. RPGCode's `^` operator calls `fmath.pow`. *Reason: these operations are exactly specified, so the results match on every engine.*
+   * `core/fmath` square root and any NaN source in `core` returns one canonical positive NaN (exported as `CANONICAL_NAN`), ensuring identical bitwise representation across JavaScript engines.
    * This adds to G3's enforcement; G3's rules themselves are unchanged.
 
 3. **Dev-only tools that are never shipped or linked sit outside G6's shipped tree.**

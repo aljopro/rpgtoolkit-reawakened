@@ -25,14 +25,14 @@
  * saved game).
  */
 
-import { canon } from "../canon/canon.ts";
+import { canon, reviveNonFinite, tagNonFinite } from "../canon/index.ts";
 import { ScriptError } from "../script/errors.ts";
 import { COMPILER_VERSION } from "../script/program.ts";
 import { SCHEMA_VERSIONS, type GameState } from "./state.ts";
 
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
-  return canon(state);
+  return canon(tagNonFinite(state) as never);
 }
 
 /**
@@ -214,7 +214,7 @@ function validateShape(record: Record<string, unknown>): void {
 export function restoreGameState(json: string): GameState {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(json);
+    parsed = reviveNonFinite(JSON.parse(json));
   } catch {
     throw new ScriptError("restore.shape", "a snapshot must be valid JSON");
   }
