@@ -40,6 +40,7 @@ import type { SourcePos, StepOp } from "./ops.ts";
 import type { CommandResult, CommandView, ResolvedPlugin } from "./plugin.ts";
 import {
   COMPILER_VERSION,
+  fileProgramRef,
   withRedirects,
   type ProgramLoader,
   type FunctionInfo,
@@ -1291,6 +1292,68 @@ function continuationArg(value: PlainData, pos: SourcePos): Arg {
   throw new ScriptError("request.bad-reply", "a request continuation argument must be a number, a string or null", pos);
 }
 
+function mismatchCode(error: unknown): "restore.source-changed" | "restore.compiler-mismatch" | null {
+  if (!(error instanceof ScriptError)) return null;
+  return error.code === "restore.source-changed" || error.code === "restore.compiler-mismatch" ? error.code : null;
+}
+
+function restartThreadFromSource(thread: Thread, vm: VmState, services: ScriptServices): void {
+  const stale = thread.frames[0]?.program;
+  if (stale === undefined) throw new ScriptError("restore.shape", `thread ${thread.id} has no program frame`);
+  let ref: ProgramRef;
+  if (stale.kind === "file") {
+    if (services.loader === undefined) {
+      throw new ScriptError("program.file-unsupported", `cannot restart "${stale.path}" without a source loader`);
+    }
+    const fresh = fileProgramRef(services.loader, stale.path, stale.redirects ?? vm.redirects);
+    ref = {
+      ...fresh,
+      ...(stale.includes === undefined ? {} : { includes: [...stale.includes] }),
+      ...(stale.dialect === undefined ? {} : { dialect: stale.dialect }),
+    };
+  } else {
+    ref = {
+      ...stale,
+      compiler: COMPILER_VERSION,
+      ...(stale.includes === undefined ? {} : { includes: [...stale.includes] }),
+      ...(stale.dialect === undefined ? {} : { dialect: stale.dialect }),
+    };
+  }
+  services.programs.get(ref);
+  thread.frames = [
+    {
+      program: ref,
+      ip: 0,
+      locals: {},
+      operands: [],
+      errorHandler: null,
+      autoLocal: false,
+    },
+  ];
+  thread.status = "ready";
+  thread.wait = null;
+  thread.pending = null;
+  thread.detached = [];
+  thread.collect = null;
+}
+
+function ensureCurrentProgram(thread: Thread, vm: VmState, services: ScriptServices): void {
+  const frame = thread.frames[thread.frames.length - 1];
+  if (frame === undefined) return;
+  try {
+    if (frame.program.compiler !== COMPILER_VERSION) {
+      throw new ScriptError(
+        "restore.compiler-mismatch",
+        `thread ${thread.id} was compiled by ${frame.program.compiler}, not ${COMPILER_VERSION}`,
+      );
+    }
+    services.programs.get(frame.program);
+  } catch (error) {
+    if (mismatchCode(error) === null) throw error;
+    restartThreadFromSource(thread, vm, services);
+  }
+}
+
 /**
  * Run one thread for at most `budget` VM steps and return the steps it ran
  * (THR-3). The thread keeps its whole state between calls, so a thread
@@ -1312,6 +1375,11 @@ export function stepThread(
   };
   services.view.thread = thread.id;
   while (thread.status === "ready" && steps < budget) {
+    const frameBeforeRestore = thread.frames[thread.frames.length - 1];
+    if (frameBeforeRestore !== undefined) {
+      ensureCurrentProgram(thread, vm, services);
+      if (thread.frames[thread.frames.length - 1] !== frameBeforeRestore) continue;
+    }
     if (thread.pending !== null) {
       const pending = thread.pending;
       thread.pending = null;

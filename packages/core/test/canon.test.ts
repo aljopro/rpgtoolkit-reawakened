@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { TextEncoder } from "node:util";
 import {
+  CANON_MAX_DEPTH,
   canon,
   decodeLog,
   encodeLog,
@@ -277,6 +278,17 @@ test("canon rejects non-plain data with TypeError", () => {
   const circArr: unknown[] = [];
   circArr.push(circArr);
   throws(() => canon(circArr as PlainData), TypeError, "circular array");
+});
+
+test("canon rejects nesting beyond the deterministic depth bound", () => {
+  let value: PlainData = 0;
+  for (let depth = 0; depth <= CANON_MAX_DEPTH; depth++) value = { value };
+  throws(
+    () => canon(value),
+    (error: unknown) =>
+      error instanceof TypeError &&
+      error.message === `canon: maximum nesting depth ${CANON_MAX_DEPTH} exceeded`,
+  );
 });
 
 test("canon leaves DEL and line/paragraph separators unescaped", () => {
