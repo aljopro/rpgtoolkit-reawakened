@@ -95,6 +95,8 @@ Formats: anything the platform can play (the samples use MIDI and WAV; MP3 and O
 
 <a id="e-16"></a>
 **E-16 Background music per board.** Board music starts on entry and changes when the player is sent to another board or crosses an edge; the file is kept playing when the next board names the same one. **Reawakened rule (OWNER; effect handoff).** Board music and per-frame `.anm` sounds post `audio` effect records through `postEffect`; audio-synth registers the applier and later creates `AudioCue`s. Board rendering owns neither `GameState.audio` nor `cueId`.
+<a id="reawakened-audio-effect-records"></a>
+**Reawakened rule (OWNER; unverified default).** Board-rendering emits plain `audio` effect records through `postEffect`: board `bkgMusic` on board entry or change uses `{ kind: "music.play", asset, loop: true, volume, source, tick }`, and each `.anm` frame sound when that frame becomes visible uses `{ kind: "sfx.play", asset, loop: false, volume, source, tick }`. Records have no `cueId`; the board and animation phases order them by phase order and frame index. Repeating board entry with the same music asset emits no replacement record; a different asset emits one replacement. Audio-synth registers the applier, assigns monotonic cue IDs in `GameState.audio`, creates `AudioCue`s and handles `audio.ended`. Until it registers, records remain in the bounded per-section pending queue.
 
 <a id="e-100"></a>
 **E-100 Background music.** One looping track at a time. MIDI is by far the most common (the bundled music pack is MIDI); MP3, OGG, WAV and tracker modules are also used. It changes per board, on battle start and end, and through `MediaPlay()` / `MediaStop()`. MP3 can be paused.

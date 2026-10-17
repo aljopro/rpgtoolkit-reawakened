@@ -3,7 +3,7 @@ title: 'Presentation, lifecycle and audio-cue rulings'
 type: 'feature'
 ticket: 29
 created: '2026-10-17'
-status: draft
+status: built
 baseline_revision: 'cf04834d'
 route: full
 route_source: pinned
