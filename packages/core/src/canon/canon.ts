@@ -2,20 +2,22 @@
  * RFC 8785 (JCS) canonical JSON and the core's two hashes (AD-11).
  *
  * `canon` serialises plain data with no whitespace: keys sorted by UTF-16 code
- * unit, numbers per ECMAScript `Number::toString` with `-0` normalised to
- * `"0"`, minimal string escaping. It rejects anything outside `PlainData`
- * (G1, AD-7) with `TypeError`. `hashState` and `hashDrawList` are FNV-1a
- * 64-bit over the canonical form's UTF-8 bytes, so equal data hashes equal and
- * a differing surface `rev` hashes differently.
+ * unit, numbers per ECMAScript `Number::toString`, minimal escaping. It rejects
+ * anything outside `PlainData` (G1, AD-7) with `TypeError`. `hashState` and
+ * `hashDrawList` are FNV-1a 64-bit over the canonical form's UTF-8 bytes, so
+ * equal data hashes equal and a differing surface `rev` hashes differently.
  */
 
 import type { DrawList } from "../ports/draw.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 import { fnv1a64 } from "./fnv1a.ts";
 
+/** Maximum container nesting accepted by canonical state serialization. */
+export const CANON_MAX_DEPTH = 256;
+
 /** The canonical form of `value` (RFC 8785). */
 export function canon(value: PlainData): string {
-  return serialize(value, new Set<object>());
+  return serialize(value, new Set<object>(), 0);
 }
 
 /** FNV-1a 64-bit of a state's canonical form (AD-11). */
@@ -31,12 +33,15 @@ export function hashDrawList(drawList: DrawList): string {
   return fnv1a64(canon(drawList));
 }
 
-function serialize(value: unknown, seen: Set<object>): string {
+function serialize(value: unknown, seen: Set<object>, depth: number): string {
+  if (depth > CANON_MAX_DEPTH) {
+    throw new TypeError(`canon: maximum nesting depth ${CANON_MAX_DEPTH} exceeded`);
+  }
   switch (typeof value) {
     case "object":
       if (value === null) return "null";
-      if (Array.isArray(value)) return serializeArray(value, seen);
-      return serializeObject(value, seen);
+      if (Array.isArray(value)) return serializeArray(value, seen, depth + 1);
+      return serializeObject(value, seen, depth + 1);
     case "boolean":
       return value ? "true" : "false";
     case "number":
@@ -93,7 +98,7 @@ function serializeString(value: string): string {
   return out + '"';
 }
 
-function serializeArray(items: readonly unknown[], seen: Set<object>): string {
+function serializeArray(items: readonly unknown[], seen: Set<object>, depth: number): string {
   const prototype = Object.getPrototypeOf(items);
   if (prototype !== Array.prototype) {
     throw new TypeError("canon: only plain arrays are plain data");
@@ -101,22 +106,28 @@ function serializeArray(items: readonly unknown[], seen: Set<object>): string {
   if (seen.has(items)) {
     throw new TypeError("canon: circular reference");
   }
-  // A dense array has exactly one own key per index; a hole or an extra
-  // property makes the counts differ.
-  if (Object.keys(items).length !== items.length) {
-    throw new TypeError("canon: sparse arrays and array properties are not plain data");
+  // Check density without allocating an array of all indices. Enumerable
+  // non-index properties are rejected; the indexed pass catches holes.
+  for (const key in items) {
+    if (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= items.length) {
+      throw new TypeError("canon: sparse arrays and array properties are not plain data");
+    }
   }
   seen.add(items);
   let out = "[";
   for (let i = 0; i < items.length; i++) {
+    if (!Object.hasOwn(items, i)) {
+      throw new TypeError("canon: sparse arrays and array properties are not plain data");
+    }
     if (i > 0) out += ",";
-    out += serialize(items[i], seen);
+    out += serialize(items[i], seen, depth);
   }
   seen.delete(items);
   return out + "]";
 }
 
-function serializeObject(record: object, seen: Set<object>): string {
+function serializeObject(record: object, seen: Set<object>, depth: number): string {
+
   const prototype = Object.getPrototypeOf(record);
   if (prototype !== null && prototype !== Object.prototype) {
     throw new TypeError("canon: only plain objects are plain data");
@@ -138,7 +149,7 @@ function serializeObject(record: object, seen: Set<object>): string {
       throw new TypeError("canon: accessor properties are not plain data");
     }
     if (i > 0) out += ",";
-    out += serializeString(key) + ":" + serialize(descriptor.value, seen);
+    out += serializeString(key) + ":" + serialize(descriptor.value, seen, depth);
   }
   seen.delete(record);
   return out + "}";
