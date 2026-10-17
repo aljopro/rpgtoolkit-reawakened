@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "description": "AD-3 raster vectors; expected bytes are straight RGBA in row-major order.",
+  "vectors": [
+    {
+      "id": "tint-extremes",
+      "width": 1,
+      "height": 1,
+      "texture": { "asset": "test/vector", "w": 1, "h": 1, "rgba": "ff0064ff" },
+      "commands": [
+        { "kind": "blit", "source": { "asset": "test/vector", "tile": null }, "src": { "x": 0, "y": 0, "w": 1, "h": 1 }, "dst": { "x": 0, "y": 0, "w": 1, "h": 1 }, "key": null, "tint": { "r": -1020, "g": 1020, "b": 1020 }, "alpha": 255, "blend": "normal", "iso2d": false }
+      ],
+      "rgba": "00ffffff"
+    },
+    {
+      "id": "translucent-127",
+      "width": 1,
+      "height": 1,
+      "texture": { "asset": "test/vector", "w": 1, "h": 1, "rgba": "5aa0c8ff" },
+      "commands": [
+        { "kind": "fill", "rgb": { "r": 10, "g": 20, "b": 30 } },
+        { "kind": "blit", "source": { "asset": "test/vector", "tile": null }, "src": { "x": 0, "y": 0, "w": 1, "h": 1 }, "dst": { "x": 0, "y": 0, "w": 1, "h": 1 }, "key": null, "tint": { "r": 0, "g": 0, "b": 0 }, "alpha": 127, "blend": "translucent", "iso2d": false }
+      ],
+      "rgba": "325a73ff"
+    },
+    {
+      "id": "additive-128",
+      "width": 1,
+      "height": 1,
+      "texture": { "asset": "test/vector", "w": 1, "h": 1, "rgba": "5aa0c8ff" },
+      "commands": [
+        { "kind": "fill", "rgb": { "r": 10, "g": 20, "b": 30 } },
+        { "kind": "blit", "source": { "asset": "test/vector", "tile": null }, "src": { "x": 0, "y": 0, "w": 1, "h": 1 }, "dst": { "x": 0, "y": 0, "w": 1, "h": 1 }, "key": null, "tint": { "r": 0, "g": 0, "b": 0 }, "alpha": 128, "blend": "additive", "iso2d": false }
+      ],
+      "rgba": "376482ff"
+    }
+  ]
+}
