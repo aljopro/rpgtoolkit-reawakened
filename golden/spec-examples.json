@@ -45,7 +45,7 @@
       "counts": {
         "failed": 2,
         "parsed": 60,
-        "skipped": 61
+        "skipped": 62
       },
       "digests": {
         "animation/animation_minor3.anm": "aaa17203c4a80d78",

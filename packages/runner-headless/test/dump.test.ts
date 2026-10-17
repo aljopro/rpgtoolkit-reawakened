@@ -994,7 +994,7 @@ test("the committed spec-examples dump expectation matches docs/spec/examples", 
   equal(checked.status, 0, checked.stderr);
   equal(checked.stdout.includes("files: 1 parsed, 2 skipped, 0 failed, 1 digests match"), true);
   equal(checked.stdout.includes("game: 21 parsed, 5 skipped, 0 failed, 21 digests match"), true);
-  equal(checked.stdout.includes("versions: 60 parsed, 61 skipped, 2 expected failure(s), 60 digests match"), true);
+  equal(checked.stdout.includes("versions: 60 parsed, 62 skipped, 2 expected failure(s), 60 digests match"), true);
 });
 
 // ------------------------------------------------------------------ the CLI
