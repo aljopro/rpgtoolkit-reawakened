@@ -6,10 +6,12 @@ test("runner-harness public surface matches the pinned export list with no doubl
   const actualExports = Object.keys(harness).sort();
   const pinnedExports = [
     "buildCorpus",
+    "buildFetchedCorpus",
     "checkSnapshotRestore",
     "checkVectors",
     "compareGolden",
     "compareScriptsGolden",
+    "createMemoryLoader",
     "createNullAudio",
     "createScriptHost",
     "formatGolden",
@@ -22,6 +24,7 @@ test("runner-harness public surface matches the pinned export list with no doubl
     "restoreScriptHost",
     "runAllCorpusPrograms",
     "runCorpusProgram",
+    "runFetchedCorpus",
     "runLog",
     "verifyCatalogueCompleteness",
   ].sort();

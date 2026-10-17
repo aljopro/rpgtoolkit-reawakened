@@ -48,6 +48,7 @@ import {
   type ProgramRef,
   type StatementRange,
 } from "./program.ts";
+import { resolveProgram } from "./loader.ts";
 import {
   assembleCommands,
   createCommandLookup,
@@ -973,7 +974,17 @@ function performCall(
         return "yield";
       }
       if (action === "run") {
-        const newRef = withRedirects(effect.args?.[1] as ProgramRef, vm.redirects);
+        const rawTarget = effect.args?.[1] as ProgramRef;
+        let newRef: ProgramRef;
+        if (
+          rawTarget.kind === "inline" &&
+          services.loader !== undefined &&
+          resolveProgram(services.loader, rawTarget.text) !== undefined
+        ) {
+          newRef = fileProgramRef(services.loader, rawTarget.text, vm.redirects);
+        } else {
+          newRef = withRedirects(rawTarget, vm.redirects);
+        }
         thread.frames = [
           {
             program: newRef,

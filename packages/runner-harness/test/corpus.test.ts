@@ -1,5 +1,5 @@
 import { equal, throws } from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -18,11 +18,14 @@ import {
 import { TK2_COMPAT_PLUGIN } from "@tk-reawakened/plugin-tk2-compat";
 import {
   buildCorpus,
+  buildFetchedCorpus,
   compareScriptsGolden,
   formatScriptsGolden,
   runAllCorpusPrograms,
   runCorpusProgram,
+  runFetchedCorpus,
   verifyCatalogueCompleteness,
+  type FetchedGameFiles,
 } from "../src/corpus.ts";
 import { checkSnapshotRestore } from "../src/restore-check.ts";
 import { createScriptHost, restoreScriptHost } from "../src/script-host.ts";
@@ -93,12 +96,12 @@ test("verifyCatalogueCompleteness: missing mapped TK2 command throws with diagno
   );
 });
 
-test("corpus: all 14 programs run to completion and pass random-step snapshot restore", () => {
+test("corpus: all 20 programs run to completion and pass random-step snapshot restore", () => {
   const programs = buildCorpus();
-  equal(programs.length, 14);
+  equal(programs.length, 20);
 
   const results = runAllCorpusPrograms(42);
-  equal(results.length, 14);
+  equal(results.length, 20);
 
   for (const result of results) {
     equal(typeof result.stateHash === "string" && result.stateHash.length === 16, true);
@@ -119,6 +122,90 @@ test("corpus: start.prg runs headlessly to completion in 3 ticks with scripted i
   equal(host.state().vm.threads[0]?.status, "waiting"); // after intro() wait
   host.advance(1, demoStart.inputsForTick ? demoStart.inputsForTick(2) : []);
   equal(host.state().vm.threads[0]?.status, "finished"); // after end()
+});
+
+test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 programs headlessly with scripted inputs", () => {
+  const fixturesRoot = join(REPO_ROOT, "fixtures", "legacy");
+  if (!existsSync(fixturesRoot)) return; // skip only if fixtures not fetched locally
+
+  const demoPrg = join(fixturesRoot, "demo", "Prg");
+  const basicPrg = join(fixturesRoot, "Basic", "Prg");
+  const demoFiles: Record<string, Uint8Array> = {};
+  for (const f of readdirSync(demoPrg).sort()) {
+    if (f.endsWith(".prg")) demoFiles[f] = readFileSync(join(demoPrg, f));
+  }
+  const basicFiles: Record<string, Uint8Array> = {};
+  for (const f of readdirSync(basicPrg).sort()) {
+    if (f.endsWith(".prg")) basicFiles[f] = readFileSync(join(basicPrg, f));
+  }
+
+  const fetchedCorpus: FetchedGameFiles = { demo: demoFiles, basic: basicFiles };
+  const results = runFetchedCorpus(fetchedCorpus, 0);
+  equal(results.length, 10);
+
+  const expectedHashes: Record<string, string> = {
+    "sample-start-demo": "65ea083cf35ae0a0",
+    "sample-system-demo": "77ea790a87e7819d",
+    "sample-sys-test-demo": "77ea790a87e7819d",
+    "sample-win-demo": "4e036c0c50414d2b",
+    "sample-oldman-demo": "f1521276019371da",
+    "sample-man-demo": "4592a1b263387977",
+    "sample-man-wander-demo": "81a9b1dcf6cefe3a",
+    "sample-start-basic": "1c2f95ec937f51db",
+    "sample-system-basic": "77ea790a87e7819d",
+    "sample-wander-basic": "21bdb6f1b785d878",
+  };
+
+  for (const res of results) {
+    equal(res.stateHash, expectedHashes[res.id], `hash mismatch for ${res.id}`);
+  }
+});
+
+test("corpus: defined finish line for programs that never end (Basic/Prg/wander.prg)", () => {
+  const programs = buildCorpus();
+  const wander = programs.find((p) => p.id === "sample-wander-basic");
+  if (!wander) throw new Error("sample-wander-basic missing");
+
+  equal(wander.ticks, 5);
+  const host1 = wander.createHost(0);
+  for (let i = 0; i < 5; i++) host1.advance(1, []);
+  const hash1 = host1.stateHash();
+
+  const host2 = wander.createHost(0);
+  for (let i = 0; i < 5; i++) host2.advance(1, []);
+  const hash2 = host2.stateHash();
+
+  equal(hash1, hash2);
+  equal(hash1, "21bdb6f1b785d878");
+
+  for (let split = 0; split <= 5; split++) {
+    const fresh = wander.createHost(0);
+    for (let t = 0; t < split; t++) fresh.advance(1, []);
+    const snap = fresh.snapshot();
+    const restored = wander.restoreHost(snap);
+    checkSnapshotRestore({ fresh, fromSnapshot: restored }, { ticks: 5 - split, split });
+    equal(fresh.stateHash(), hash1);
+    equal(restored.stateHash(), hash1);
+  }
+});
+
+test("corpus: man_wander.prg transfers control to man.prg via run() and completes headlessly", () => {
+  const programs = buildCorpus();
+  const manWander = programs.find((p) => p.id === "sample-man-wander-demo");
+  if (!manWander) throw new Error("sample-man-wander-demo missing");
+
+  const host = manWander.createHost(0);
+  equal(host.state().vm.threads[0]?.status, "ready");
+  host.advance(1, []); // tick 0 -> itemPath movement wait
+  equal(host.state().vm.threads[0]?.wait?.kind, "movement");
+  host.advance(1, []); // tick 1 -> intercept, run("man.prg") yields
+  equal(host.state().vm.threads[0]?.status, "ready");
+  const prog = host.state().vm.threads[0]?.frames[0]?.program;
+  equal(prog?.kind === "file" ? prog.path : undefined, "man.prg");
+  host.advance(1, []); // tick 2 -> man.prg runs, waits on input.key
+  equal(host.state().vm.threads[0]?.wait?.kind, "input.key");
+  host.advance(1, manWander.inputsForTick ? manWander.inputsForTick(3) : []); // tick 3 -> ENTER completes wait() and program
+  equal(host.state().vm.threads[0]?.status, "finished");
 });
 
 test("corpus: synthetic-9-mismatch restarts thread from updated source with fresh frame", () => {

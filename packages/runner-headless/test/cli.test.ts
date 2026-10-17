@@ -304,3 +304,20 @@ test("main function direct call behaves identically", () => {
     temp.cleanup();
   }
 });
+
+test("corpus: runs successfully over fetched fixtures", () => {
+  const result = runCli(["corpus"]);
+  equal(result.status, 0);
+  ok(result.stdout.includes("corpus: 10/10 fetched programs passed"));
+});
+
+test("corpus: reports error when fixtures directory is missing", () => {
+  const temp = createTempGoldenRoot();
+  try {
+    const result = runCli(["corpus", join(temp.root, "nonexistent")]);
+    equal(result.status, 1);
+    ok(result.stderr.includes("fixtures directory not found"));
+  } finally {
+    temp.cleanup();
+  }
+});

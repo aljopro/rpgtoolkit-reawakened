@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { goldenJob } from "@tk-reawakened/runner-harness";
+import { goldenJob, runFetchedCorpus } from "@tk-reawakened/runner-harness";
 import { runDump } from "./dump/cli.ts";
 
 function readFileOrUndefined(filePath: string): string | undefined {
@@ -94,6 +94,49 @@ function runGolden(argv: string[]): number {
   }
 }
 
+/** `corpus [<fixtures-dir>]`: runs the whole fetched corpus across both sample games headlessly. */
+function runCorpus(argv: string[]): number {
+  try {
+    const root = argv[0] ?? join(process.cwd(), "fixtures", "legacy");
+    const demoPrg = join(root, "demo", "Prg");
+    const basicPrg = join(root, "Basic", "Prg");
+
+    if (!existsSync(demoPrg) || !existsSync(basicPrg)) {
+      console.error(
+        `corpus: fixtures directory not found at '${root}'. Run 'pnpm fixtures:fetch' first.`,
+      );
+      return 1;
+    }
+
+    const demoFiles: Record<string, Uint8Array> = {};
+    for (const name of readdirSync(demoPrg).sort()) {
+      if (name.endsWith(".prg")) {
+        demoFiles[name] = readFileSync(join(demoPrg, name));
+      }
+    }
+
+    const basicFiles: Record<string, Uint8Array> = {};
+    for (const name of readdirSync(basicPrg).sort()) {
+      if (name.endsWith(".prg")) {
+        basicFiles[name] = readFileSync(join(basicPrg, name));
+      }
+    }
+
+    const results = runFetchedCorpus({ demo: demoFiles, basic: basicFiles });
+    for (const res of results) {
+      console.log(`${res.id}: ${res.ticks} ticks ok (hash ${res.stateHash})`);
+    }
+    console.log(
+      `corpus: ${results.length}/${results.length} fetched programs passed (both games, snapshot/restore verified)`,
+    );
+    return 0;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`corpus: error: ${message}`);
+    return 1;
+  }
+}
+
 /** The headless shell: `golden` replays the G5 suite, `dump` walks a legacy project. */
 export function main(argv: string[]): number {
   const subcommand = argv[0];
@@ -105,6 +148,9 @@ export function main(argv: string[]): number {
 
   if (subcommand === "golden") {
     return runGolden(argv.slice(1));
+  }
+  if (subcommand === "corpus") {
+    return runCorpus(argv.slice(1));
   }
 
   if (subcommand === "dump") {
