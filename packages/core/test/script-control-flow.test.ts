@@ -276,3 +276,52 @@ f()
 `;
   equal(errorOf(() => runScript(badJump, plugins)).code, "vm.unknown-label");
 });
+
+test("fbranch is an alias of branch: jumps without returning to caller and survives mid-run snapshot/restore", () => {
+  const script = `
+x = 1
+fbranch(:jump_dest)
+x = 99
+:jump_dest
+x = x + 10
+sleep(1)
+x = x + 100
+end()
+`;
+  const state = createGameState({ seed: 0 });
+  startProgram(state.vm, { kind: "inline", text: script, compiler: "2" });
+  const services = createScriptServices(state);
+
+  advanceOrFail(state, services);
+  equal(state.vm.globals.x, 11);
+  equal(state.vm.threads[0]?.status, "waiting");
+
+  const snap = snapshot(state);
+  const restored = restoreGameState(snap);
+  const restoredServices = createScriptServices(restored);
+
+  state.time.tick += 1;
+  restored.time.tick += 1;
+  advanceOrFail(state, services);
+  advanceOrFail(restored, restoredServices);
+
+  equal(state.vm.globals.x, 111);
+  equal(restored.vm.globals.x, 111);
+  equal(state.vm.threads[0]?.status, "finished");
+  equal(restored.vm.threads[0]?.status, "finished");
+  equal(hashState(state), hashState(restored));
+
+  const fnScript = `
+function worker() {
+  val = 5
+  fbranch(:skip_me)
+  val = 999
+  :skip_me
+  val = val + 20
+  return val
+}
+res = worker()
+`;
+  const fnState = runScript(fnScript);
+  equal(fnState.vm.globals.res, 25);
+});
