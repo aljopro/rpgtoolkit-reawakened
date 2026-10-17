@@ -71,12 +71,12 @@ function loadMappedTk2Commands(): readonly { name: string; mapsTo?: string }[] {
   return result;
 }
 
-test("verifyCatalogueCompleteness: all 282 catalogue names resolve", () => {
+test("verifyCatalogueCompleteness: all legacy and Reawakened catalogue names resolve", () => {
   const names = loadCatalogueNames();
-  equal(names.length, 282);
+  equal(names.length, 283);
   const mapped = loadMappedTk2Commands();
   const summary = verifyCatalogueCompleteness(names, mapped);
-  equal(summary.catalogueCount, 282);
+  equal(summary.catalogueCount, 283);
   equal(summary.mappedCount, mapped.length);
 });
 

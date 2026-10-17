@@ -63,6 +63,8 @@ The editor's "Test game" runs `engine <file.gam>` without saving open editors fi
 8. If no player exists at this point the game stops with "an initial character must be defined".
 9. Load `initBoard` (skipped if the start-up program loaded a saved game with `Load()`, which is how title screens offer "continue"), place the player at the board's start position, start the board's background music and run the board's `enterPrg`.
 10. Enter the main loop.
+<a id="reawakened-startup-ports"></a>
+**Reawakened rule (OWNER; startup ports).** Startup calls data-only ports rather than host APIs: `InitialPlayerPort.createFromInitChar(initChar: AssetKey): PlayerId` creates the first player at step 6; `PlayerPresencePort.hasPlayer(): boolean` performs the step-8 no-player check and emits the specified diagnostic; and `SavedGamePort.load(path: SavePath): LoadResult` owns the step-9 saved-game branch. A successful load skips `initBoard`; a miss or failure returns to the ordinary `initBoard` path according to its result. `Load()` and `dirSav` remain menu-and-save responsibilities.
 
 ### Board loading and layers
 
@@ -172,6 +174,28 @@ Ambient light (board ambient colour plus script changes) is applied as a gamma r
 
 <a id="e-06"></a>
 **E-06 Shutdown & reset.** `reset()` — also used after a lost battle with no game-over program — clears globals, redirects, plugins and threads and then reruns the start-up sequence. Quit tears down plugins first, then everything else.
+<a id="reawakened-reset-sections"></a>
+**Reawakened rule (OWNER; reset write set).** An author can restart the documented startup path with `reset()`; the command clears the following sections, then reruns startup at E-02 step 3. It does not write `rng` or `time`.
+
+| Section | Reset action |
+|---|---|
+| `engine` | Enter reset/startup control state, clear pending lifecycle and quit state, then install plugins and run startup. |
+| `world` | Drop active board/runtime objects and reload the main-file project/board during startup. |
+| `sprites` | Clear players/items and recreate the first player from `initChar`; startup additions then apply. |
+| `party`, `inventory` | Clear to new-game defaults; startup/menu may add members, stats and items. |
+| `triggers` | Clear armed, repeat and gone state and rebuild it with the board. |
+| `vm` | Clear globals, redirects, running threads and plugin command state; run startup anew. |
+| `battle`, `menu` | Close active battle/menu and discard transient screens. |
+| `ui` | Hide/clear mwin/msgBox, cursor maps and buttons; restore project/default font and colour settings. |
+| `camera` | Reset follow target and transform to AD-33 defaults; board startup selects the first player. |
+| `fx` | Cancel fades, wipes, zoom, animations and pending screen effects. |
+| `audio` | Stop one-shot effects and clear board-music ownership; startup/board entry emits new board music. |
+| `surfaces` | Clear script canvases and screen captures; no old pixels persist. |
+| `input` | Drop queued/held transient input and pointer/button state before startup. |
+| `rng` | Preserve seed/state; reset does not create a new engine seed. |
+| `time` | Preserve elapsed tick/play-time counters. |
+
+`gone()` writes only `triggers`: it marks the current board program's trigger instance suppressed until the active board is left. Leaving the board clears that suppression during normal trigger reload. It does not delete the source program, change sprites or end unrelated threads. `quitGame()` posts one `quit` request; `dos()` and `windows()` are legacy aliases, and host window/session behaviour is outside core.
 
 ## Reawakened architecture
 
