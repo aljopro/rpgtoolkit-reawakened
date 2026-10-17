@@ -3,7 +3,7 @@ title: 'Command documentation in code: a doc on every plugin command'
 type: 'feature'
 ticket: 29
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: 'cf04834d'
 route: 'full'
 route_source: 'pinned'
