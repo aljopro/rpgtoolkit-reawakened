@@ -2,7 +2,7 @@
 title: 'Refactor sweep'
 type: 'chore'
 ticket: 18
-status: 'built'
+status: done
 baseline_revision: '0be8869dd64238044a6c0eff4a6ea03e98672063'
 route: 'full'
 route_source: 'pinned'
