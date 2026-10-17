@@ -52,6 +52,13 @@ export type PluginManifestParseResult = {
 export const ENGINE_DEFAULT_MANIFEST: PluginManifest = [
   { id: "core" },
   { id: "catalogue" },
+  { id: "gsmisc" },
+  { id: "triuken" },
+  { id: "filereadwrite" },
+  { id: "proplug" },
+  { id: "xfmwin" },
+  { id: "kaimu" },
+  { id: "twbutton" },
 ];
 
 /** Descriptive alias for callers that want the default explicitly. */

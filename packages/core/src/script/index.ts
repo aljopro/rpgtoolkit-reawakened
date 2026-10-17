@@ -153,6 +153,24 @@ export {
   TIER_ORDER,
 } from "./registry.ts";
 export type {
+  LegacyPluginEntry,
+  LegacyPluginStatus,
+} from "./legacy-plugins.ts";
+export {
+  FILEREADWRITE_PLUGIN,
+  getDeclinedPluginDiagnostic,
+  GSMISC_PLUGIN,
+  KAIMU_PLUGIN,
+  LEGACY_PLUGIN_TABLE,
+  lookupLegacyPlugin,
+  NATIVE_PACK_TABLE,
+  NATIVE_PACKS,
+  PROPLUG_PLUGIN,
+  TRIUKEN_PLUGIN,
+  TWBUTTON_PLUGIN,
+  XFMWIN_PLUGIN,
+} from "./legacy-plugins.ts";
+export type {
   CallResolution,
   CommandLookup,
   CommandRegistry,

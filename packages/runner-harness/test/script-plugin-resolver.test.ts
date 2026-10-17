@@ -22,8 +22,9 @@ test("host resolver maps ids to definitions and preserves manifest order and opt
 });
 
 test("disabled and unresolved ids do not stop the remaining layers", () => {
+  const base = [{ id: "core" }, { id: "catalogue" }] as const;
   const result = resolvePluginManifest([
-    ...ENGINE_DEFAULT_MANIFEST,
+    ...base,
     { id: "disabled", enabled: false },
     { id: "missing" },
     { id: "game" },
