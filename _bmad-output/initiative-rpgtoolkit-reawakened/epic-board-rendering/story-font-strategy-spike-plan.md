@@ -3,7 +3,7 @@ title: 'Font strategy spike: pure core font library and bundled font assets'
 type: 'feature'
 ticket: 3
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: 'cf04834d'
 route: 'full'
 route_source: 'pinned'

@@ -3,7 +3,7 @@ title: 'Tracer bullet: createEngine, a 2D board, composeBoard and the rasteriser
 type: feature
 ticket: 5
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: 'c149f128'
 route: full
 route_source: pinned
