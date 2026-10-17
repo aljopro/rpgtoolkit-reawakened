@@ -29,6 +29,38 @@ test("check accepts documented synthetic commands", () => {
   equal(result.documentation[0].name, "hello");
 });
 
+test("check projects independent tags, alias tags and runner support", () => {
+  const result = check({
+    plugins: [plugin("fixture", [({
+      ...command("hello", {
+        summary: "Say hello.",
+        behaviour: "Writes one line and does not wait.",
+        tags: ["legacy", "deprecated"],
+        support: { headless: { level: "full" } },
+      }),
+      aliases: ["hi"],
+    })])],
+    rows: [{ name: "hello", purpose: "Say hello." }],
+    allowlist: [],
+  });
+  deepEqual(result.diagnostics, []);
+  deepEqual(result.documentation.map((entry) => entry.tags), [["legacy", "deprecated"], ["legacy", "deprecated", "alias"]]);
+  deepEqual(result.documentation[0].support, { headless: { level: "full" } });
+});
+
+test("check reports missing support notes", () => {
+  const result = check({
+    plugins: [plugin("fixture", [command("hello", {
+      summary: "Say hello.",
+      behaviour: "Writes one line and does not wait.",
+      support: { headless: { level: "partial" } },
+    })])],
+    rows: [{ name: "hello", purpose: "Say hello." }],
+    allowlist: [],
+  });
+  equal(result.diagnostics.some((item) => item.code === "support.note"), true);
+});
+
 test("check reports missing docs and native summary mismatch", () => {
   const result = check({
     plugins: [plugin("fixture", [command("missing"), command("hello", { summary: "Wrong.", behaviour: "No wait." })])],

@@ -33,13 +33,28 @@ import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
 import { THREAD_SPECS } from "./builtins/threads.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
-export type CommandDocStatus = "current" | "legacy-alias" | "obsolete";
+export type DocTag = "legacy" | "alias" | "deprecated" | "obsolete";
+
+export type RunnerSupport = {
+  readonly [runnerId: string]: {
+    readonly level: "full" | "partial" | "none";
+    readonly note?: string;
+  };
+};
+
+export type ParamDoc = {
+  readonly summary: string;
+  readonly unit?: string;
+  readonly tags?: readonly DocTag[];
+  readonly support?: RunnerSupport;
+};
 
 export type BuiltinDoc = {
   readonly summary: string;
   readonly behaviour: string;
   readonly examples?: readonly string[];
-  readonly status?: CommandDocStatus;
+  readonly tags?: readonly DocTag[];
+  readonly support?: RunnerSupport;
 };
 
 export type ParamSpec = {
@@ -47,8 +62,7 @@ export type ParamSpec = {
   readonly optional: boolean;
   readonly byRef: boolean;
   readonly variadic: boolean;
-  readonly unit?: string;
-  readonly doc?: string;
+  readonly doc?: ParamDoc;
 };
 
 /**

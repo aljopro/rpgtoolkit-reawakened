@@ -21,16 +21,29 @@ function resolved(definition: PluginDefinition) {
   return [{ definition }];
 }
 
-test("projection copies docs, parameters and aliases as deterministic plain data", () => {
+test("projection copies tags, support, parameters and aliases as plain data", () => {
   const definition = plugin({
     name: "measure",
     aliases: ["m"],
-    params: [{ name: "distance", optional: false, byRef: false, variadic: false, unit: "pixels", doc: "Distance to measure." }],
+    params: [{
+      name: "distance",
+      optional: false,
+      byRef: false,
+      variadic: false,
+      doc: {
+        summary: "Distance to measure.",
+        unit: "pixels",
+        tags: ["legacy"],
+        support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
+      },
+    }],
     call,
     doc: {
       summary: "Measure a distance.",
       behaviour: "Returns the distance in pixels without waiting.",
       examples: ["x = measure(4)"],
+      tags: ["legacy", "deprecated"],
+      support: { headless: { level: "full" }, renderer: { level: "none", note: "Rendering is not implemented." } },
     },
   });
   deepEqual(commandDocumentation(resolved(definition)), [
@@ -40,11 +53,21 @@ test("projection copies docs, parameters and aliases as deterministic plain data
       canonicalName: "measure",
       name: "measure",
       aliases: ["m"],
-      params: [{ name: "distance", optional: false, byRef: false, variadic: false, unit: "pixels", doc: "Distance to measure." }],
+      params: [{
+        name: "distance",
+        optional: false,
+        byRef: false,
+        variadic: false,
+        summary: "Distance to measure.",
+        unit: "pixels",
+        tags: ["legacy"],
+        support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
+      }],
       summary: "Measure a distance.",
       behaviour: "Returns the distance in pixels without waiting.",
       examples: ["x = measure(4)"],
-      status: "current",
+      tags: ["legacy", "deprecated"],
+      support: { headless: { level: "full" }, renderer: { level: "none", note: "Rendering is not implemented." } },
     },
     {
       pluginId: "fixture.docs",
@@ -52,11 +75,21 @@ test("projection copies docs, parameters and aliases as deterministic plain data
       canonicalName: "measure",
       name: "m",
       aliases: ["m"],
-      params: [{ name: "distance", optional: false, byRef: false, variadic: false, unit: "pixels", doc: "Distance to measure." }],
+      params: [{
+        name: "distance",
+        optional: false,
+        byRef: false,
+        variadic: false,
+        summary: "Distance to measure.",
+        unit: "pixels",
+        tags: ["legacy"],
+        support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
+      }],
       summary: "Measure a distance.",
       behaviour: "Returns the distance in pixels without waiting.",
       examples: ["x = measure(4)"],
-      status: "legacy-alias",
+      tags: ["legacy", "deprecated", "alias"],
+      support: { headless: { level: "full" }, renderer: { level: "none", note: "Rendering is not implemented." } },
     },
   ]);
 });
@@ -66,25 +99,29 @@ test("missing transitional documentation is explicit null output and allowlist-e
   const entries = commandDocumentation(resolved(definition));
   equal(entries[0]?.summary, null);
   equal(entries[0]?.behaviour, null);
-  equal(entries[0]?.status, null);
+  deepEqual(entries[0]?.tags, []);
+  equal(entries[0]?.support, null);
   equal(validateCommandDocumentation(resolved(definition), [], ["fixture.docs/oldcommand"]).length, 0);
   equal(validateCommandDocumentation(resolved(definition), [], []).some((item) => item.code === "doc.required"), true);
 });
 
-test("validator reports partial docs, native summary drift and obsolete status", () => {
+test("validator reports tag, support-note, native summary and obsolete failures", () => {
   const definition = plugin({
     name: "obsolete",
     aliases: ["old"],
-    params: [],
+    params: [{ name: "value", optional: false, byRef: false, variadic: false, doc: { summary: "Value", tags: ["alias"], support: { headless: { level: "none" } } } }],
     call,
-    doc: { summary: "Wrong", behaviour: "It does something." },
+    doc: { summary: "Wrong", behaviour: "It does something.", tags: ["alias"] },
   });
   const diagnostics = validateCommandDocumentation(resolved(definition), [
     { name: "obsolete", purpose: "Obsolete.", obsolete: true, section: "Test" },
     { name: "old", purpose: "Obsolete.", aliasOf: "obsolete", obsolete: true, section: "Test" },
   ], []);
   equal(diagnostics.some((item) => item.code === "native.summary-mismatch"), true);
-  equal(diagnostics.some((item) => item.code === "native.status"), true);
+  equal(diagnostics.some((item) => item.code === "native.obsolete-tag"), true);
+  equal(diagnostics.some((item) => item.code === "doc.alias-tag"), true);
+  equal(diagnostics.some((item) => item.code === "param.alias-tag"), true);
+  equal(diagnostics.some((item) => item.code === "support.note"), true);
 });
 
 test("projection preserves plugin and declaration order including overridden layers", () => {
@@ -103,7 +140,7 @@ test("documentation metadata never enters the state hash", () => {
     aliases: [],
     params: [],
     call,
-    doc: { summary: "Run a documented command.", behaviour: "Returns no value and does not wait." },
+    doc: { summary: "Run a documented command.", behaviour: "Returns no value and does not wait.", tags: ["deprecated"], support: { headless: { level: "full" } } },
   });
   const run = (definition: PluginDefinition) => {
     const state = createGameState({ seed: 4 });
