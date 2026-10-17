@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "name": "S-01c",
+  "boardFiles": [
+    "docs/spec/examples/game/Game/Example/Boards/village.brd",
+    "docs/spec/examples/game/Game/Example/Tiles/village.tst",
+    "docs/spec/examples/game/Game/Example/Tiles/water.tan",
+    "docs/spec/examples/game/Game/Example/Bitmap/house.tbm"
+  ],
+  "sprites": [
+    {
+      "id": "player",
+      "key": "player",
+      "layer": 1,
+      "x": 208,
+      "y": 191,
+      "drawId": 1,
+      "under": [
+        1,
+        2,
+        4
+      ],
+      "prev": [
+        208,
+        191
+      ]
+    },
+    {
+      "id": "item-chest",
+      "key": "chest",
+      "layer": 1,
+      "x": 304,
+      "y": 191,
+      "drawId": 2,
+      "under": [
+        1,
+        2,
+        4
+      ]
+    }
+  ],
+  "ambient": [
+    0,
+    0,
+    0
+  ],
+  "view": {
+    "viewport": [
+      512,
+      384
+    ],
+    "camera": [
+      0,
+      0
+    ],
+    "include": {
+      "shading": true,
+      "images": true,
+      "sprites": true
+    }
+  },
+  "tick": 0
+}

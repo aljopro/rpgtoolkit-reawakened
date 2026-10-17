@@ -587,12 +587,89 @@ export function authoredFixtures() {
   ];
 }
 
-/** Write every authored fixture under `out`, creating the folder. */
+const defaultSceneOut = join(repoRoot, "golden", "scenes");
+
+const ORACLE_SCENES = {
+  "S-01.json": {
+    schema: 1,
+    name: "S-01",
+    boardFiles: ["docs/spec/examples/game/Game/Example/Boards/village.brd", "docs/spec/examples/game/Game/Example/Tiles/village.tst", "docs/spec/examples/game/Game/Example/Tiles/water.tan"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: { viewport: [512, 384], camera: [0, 0], include: { shading: false, images: false, sprites: false } },
+    tick: 0,
+  },
+  "S-01b.json": {
+    schema: 1,
+    name: "S-01b",
+    boardFiles: ["docs/spec/examples/game/Game/Example/Boards/village.brd", "docs/spec/examples/game/Game/Example/Tiles/village.tst", "docs/spec/examples/game/Game/Example/Tiles/water.tan", "docs/spec/examples/game/Game/Example/Bitmap/house.tbm"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: {
+      viewport: [512, 384],
+      camera: [0, 0],
+      include: { shading: true, images: true, sprites: false },
+      layerImages: [
+        { type: "normal", file: "house.tbm", x: 448, y: 288, layer: 1 },
+        { type: "parallax", file: "house.tbm", x: 0, y: 0, layer: 1 },
+        { type: "stretch", file: "house.tbm", x: 0, y: 0, layer: 2 },
+      ],
+      blits: [
+        { mode: "translucent", rect: [16, 16, 32, 16], alpha: 128 },
+        { mode: "additive", rect: [48, 16, 32, 16], alpha: 96 },
+      ],
+    },
+    tick: 0,
+  },
+  "S-01c.json": {
+    schema: 1,
+    name: "S-01c",
+    boardFiles: ["docs/spec/examples/game/Game/Example/Boards/village.brd", "docs/spec/examples/game/Game/Example/Tiles/village.tst", "docs/spec/examples/game/Game/Example/Tiles/water.tan", "docs/spec/examples/game/Game/Example/Bitmap/house.tbm"],
+    sprites: [
+      { id: "player", key: "player", layer: 1, x: 208, y: 191, drawId: 1, under: [1, 2, 4], prev: [208, 191] },
+      { id: "item-chest", key: "chest", layer: 1, x: 304, y: 191, drawId: 2, under: [1, 2, 4] },
+    ],
+    ambient: [0, 0, 0],
+    view: { viewport: [512, 384], camera: [0, 0], include: { shading: true, images: true, sprites: true } },
+    tick: 0,
+  },
+  "S-01d.json": {
+    schema: 1,
+    name: "S-01d",
+    boardFiles: ["docs/spec/examples/game/Game/Example/Boards/village.brd", "docs/spec/examples/game/Game/Example/Tiles/village.tst", "docs/spec/examples/game/Game/Example/Tiles/water.tan", "docs/spec/examples/game/Game/Example/Bitmap/house.tbm"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: { viewport: [640, 480], camera: [0, 0], include: { shading: true, images: true, sprites: false }, smallBoard: "center-if-small" },
+    tick: 0,
+  },
+};
+
+function oracleSceneFiles() {
+  return Object.entries(ORACLE_SCENES).map(([name, scene]) => [name, Buffer.from(`${JSON.stringify(scene, null, 2)}\n`)]);
+}
+
+function writeOracleScenes(out = defaultSceneOut) {
+  mkdirSync(out, { recursive: true });
+  for (const [name, bytes] of oracleSceneFiles()) writeFileSync(join(out, name), bytes);
+}
+
+function checkOracleScenes(out = defaultSceneOut) {
+  const problems = [];
+  for (const [name, expected] of oracleSceneFiles()) {
+    let actual;
+    try { actual = readFileSync(join(out, name)); } catch { problems.push(`${name}: missing`); continue; }
+    if (!actual.equals(expected)) problems.push(`${name}: differs from a fresh run`);
+  }
+  return problems;
+}
+
+/** Write every authored fixture and oracle scene under their canonical output paths. */
 export function generate(out = defaultOut) {
   mkdirSync(out, { recursive: true });
   for (const [name, bytes] of authoredFixtures()) {
     writeFileSync(join(out, name), bytes);
   }
+  if (out === defaultOut) writeOracleScenes();
   return out;
 }
 
@@ -618,6 +695,7 @@ export function check(out = defaultOut) {
       problems.push(`${name}: bytes differ from a fresh run`);
     }
   }
+  if (out === defaultOut) problems.push(...checkOracleScenes());
   return problems;
 }
 

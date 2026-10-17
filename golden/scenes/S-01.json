@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "name": "S-01",
+  "boardFiles": [
+    "docs/spec/examples/game/Game/Example/Boards/village.brd",
+    "docs/spec/examples/game/Game/Example/Tiles/village.tst",
+    "docs/spec/examples/game/Game/Example/Tiles/water.tan"
+  ],
+  "sprites": [],
+  "ambient": [
+    0,
+    0,
+    0
+  ],
+  "view": {
+    "viewport": [
+      512,
+      384
+    ],
+    "camera": [
+      0,
+      0
+    ],
+    "include": {
+      "shading": false,
+      "images": false,
+      "sprites": false
+    }
+  },
+  "tick": 0
+}
