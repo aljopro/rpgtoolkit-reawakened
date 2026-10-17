@@ -33,7 +33,7 @@ import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
 import { THREAD_SPECS } from "./builtins/threads.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
-export type DocTag = "legacy" | "alias" | "deprecated" | "obsolete";
+export type DocTag = "legacy" | "alias" | "deprecated" | "obsolete" | "experimental";
 
 export type RunnerSupport = {
   readonly [runnerId: string]: {
@@ -42,17 +42,60 @@ export type RunnerSupport = {
   };
 };
 
+export type DocExample = string | {
+  readonly code: string;
+  readonly caption?: string;
+  readonly result?: string;
+};
+
+export type DocReturns = {
+  readonly summary: string;
+  readonly unit?: string;
+};
+
+export type DocThrow = {
+  readonly code: string;
+  readonly when: string;
+};
+
+export type DocWait = {
+  readonly kind: "never" | "ticks" | "until-input" | "until-event" | "other";
+  readonly summary: string;
+};
+
+export type ParamDocValue = {
+  readonly value: string;
+  readonly summary: string;
+};
+
 export type ParamDoc = {
   readonly summary: string;
   readonly unit?: string;
   readonly tags?: readonly DocTag[];
   readonly support?: RunnerSupport;
+  readonly default?: string;
+  readonly values?: readonly ParamDocValue[];
+  readonly type?: string;
+  readonly since?: string;
 };
 
 export type BuiltinDoc = {
   readonly summary: string;
   readonly behaviour: string;
-  readonly examples?: readonly string[];
+  readonly examples?: readonly DocExample[];
+  readonly groups?: readonly string[];
+  readonly returns?: DocReturns;
+  readonly throws?: readonly DocThrow[];
+  readonly see?: readonly string[];
+  readonly since?: string;
+  readonly replacedBy?: string;
+  readonly reason?: string;
+  readonly access?: "public" | "internal";
+  readonly waits?: DocWait;
+  readonly effects?: readonly string[];
+  readonly todo?: readonly string[];
+  readonly author?: string;
+  readonly license?: string;
   readonly tags?: readonly DocTag[];
   readonly support?: RunnerSupport;
 };

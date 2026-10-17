@@ -129,11 +129,19 @@ export type CommandHandler = (
   next: CommandHandler,
 ) => CommandResult;
 
+export type PluginDoc = {
+  readonly summary: string;
+  readonly groups?: readonly { readonly id: string; readonly name: string; readonly summary: string }[];
+  readonly requires?: readonly string[];
+};
+
 /** One plugin: an ordered command and asset pack (ADR 0004 decisions 2 and 6). */
 export type PluginDefinition = {
   readonly id: string;
   readonly version: string;
   readonly commands: readonly BuiltinSpec[];
+  /** Optional plain-data package documentation, excluded from VM state. */
+  readonly doc?: PluginDoc;
   /** Optional format contributions layered after the core decoder set (AD-31). */
   readonly decoders?: readonly AssetDecoder[];
 };

@@ -13,15 +13,15 @@ import {
 } from "../src/index.ts";
 const call = () => ({ value: null });
 
-function plugin(command: BuiltinSpec): PluginDefinition {
-  return { id: "fixture.docs", version: "1.0.0", commands: [command] };
+function plugin(command: BuiltinSpec, doc?: PluginDefinition["doc"]): PluginDefinition {
+  return { id: "fixture.docs", version: "1.0.0", commands: [command], ...(doc === undefined ? {} : { doc }) };
 }
 
 function resolved(definition: PluginDefinition) {
   return [{ definition }];
 }
 
-test("projection copies tags, support, parameters and aliases as plain data", () => {
+test("projection copies extended docs, params and aliases as plain data", () => {
   const definition = plugin({
     name: "measure",
     aliases: ["m"],
@@ -35,63 +35,58 @@ test("projection copies tags, support, parameters and aliases as plain data", ()
         unit: "pixels",
         tags: ["legacy"],
         support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
+        default: "Zero pixels when omitted.",
+        values: [{ value: "0", summary: "No distance." }],
+        type: "number",
+        since: "1.0",
       },
     }],
     call,
     doc: {
       summary: "Measure a distance.",
       behaviour: "Returns the distance in pixels without waiting.",
-      examples: ["x = measure(4)"],
+      examples: [{ code: "x = measure(4)", caption: "Measure four pixels.", result: "4" }],
+      groups: ["fixtures", "measurement"],
+      returns: { summary: "The measured distance.", unit: "pixels" },
+      throws: [{ code: "bad-arg", when: "The distance is not numeric." }],
+      see: ["measure", "docs/spec/engine/rpgcode-functions.md#fixtures"],
+      since: "1.0",
+      waits: { kind: "never", summary: "Never waits." },
+      effects: ["ui"],
+      todo: ["Add a fractional example."],
+      author: "Fixture Author",
+      license: "MIT",
       tags: ["legacy", "deprecated"],
+      replacedBy: "measure",
+      reason: "Use the newer measurement spelling.",
       support: { headless: { level: "full" }, renderer: { level: "none", note: "Rendering is not implemented." } },
     },
   });
-  deepEqual(commandDocumentation(resolved(definition)), [
-    {
-      pluginId: "fixture.docs",
-      pluginVersion: "1.0.0",
-      canonicalName: "measure",
-      name: "measure",
-      aliases: ["m"],
-      params: [{
-        name: "distance",
-        optional: false,
-        byRef: false,
-        variadic: false,
-        summary: "Distance to measure.",
-        unit: "pixels",
-        tags: ["legacy"],
-        support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
-      }],
-      summary: "Measure a distance.",
-      behaviour: "Returns the distance in pixels without waiting.",
-      examples: ["x = measure(4)"],
-      tags: ["legacy", "deprecated"],
-      support: { headless: { level: "full" }, renderer: { level: "none", note: "Rendering is not implemented." } },
-    },
-    {
-      pluginId: "fixture.docs",
-      pluginVersion: "1.0.0",
-      canonicalName: "measure",
-      name: "m",
-      aliases: ["m"],
-      params: [{
-        name: "distance",
-        optional: false,
-        byRef: false,
-        variadic: false,
-        summary: "Distance to measure.",
-        unit: "pixels",
-        tags: ["legacy"],
-        support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
-      }],
-      summary: "Measure a distance.",
-      behaviour: "Returns the distance in pixels without waiting.",
-      examples: ["x = measure(4)"],
-      tags: ["legacy", "deprecated", "alias"],
-      support: { headless: { level: "full" }, renderer: { level: "none", note: "Rendering is not implemented." } },
-    },
-  ]);
+  const entries = commandDocumentation(resolved(definition));
+  deepEqual(entries.map((entry) => `${entry.name}:${entry.tags.join(",")}`), ["measure:legacy,deprecated", "m:legacy,deprecated,alias"]);
+  equal(entries[0]?.plugin, null);
+  deepEqual(entries[0]?.groups, ["fixtures", "measurement"]);
+  deepEqual(entries[0]?.examples, [{ code: "x = measure(4)", caption: "Measure four pixels.", result: "4" }]);
+  deepEqual(entries[0]?.returns, { summary: "The measured distance.", unit: "pixels" });
+  deepEqual(entries[0]?.params[0], {
+    name: "distance", optional: false, byRef: false, variadic: false,
+    summary: "Distance to measure.", unit: "pixels", tags: ["legacy"],
+    support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
+    default: "Zero pixels when omitted.", values: [{ value: "0", summary: "No distance." }], type: "number", since: "1.0",
+  });
+  equal("call" in (entries[0] as object), false);
+  equal(JSON.parse(JSON.stringify(entries[0])).name, "measure");
+});
+
+test("projection copies plugin documentation and internal access", () => {
+  const definition = plugin({ name: "hidden", aliases: [], params: [], call, doc: { summary: "Hidden command.", behaviour: "Does not wait.", access: "internal" } }, {
+    summary: "Fixture plugin.",
+    groups: [{ id: "fixtures", name: "Fixtures", summary: "Fixture commands." }],
+    requires: ["fixture.docs"],
+  });
+  const entry = commandDocumentation(resolved(definition))[0]!;
+  equal(entry.access, "internal");
+  deepEqual(entry.plugin, { summary: "Fixture plugin.", groups: [{ id: "fixtures", name: "Fixtures", summary: "Fixture commands." }], requires: ["fixture.docs"] });
 });
 
 test("missing transitional documentation is explicit null output and allowlist-exempt", () => {
@@ -105,23 +100,36 @@ test("missing transitional documentation is explicit null output and allowlist-e
   equal(validateCommandDocumentation(resolved(definition), [], []).some((item) => item.code === "doc.required"), true);
 });
 
-test("validator reports tag, support-note, native summary and obsolete failures", () => {
+test("validator reports replacement, conflict, see, waits and parameter failures", () => {
   const definition = plugin({
     name: "obsolete",
     aliases: ["old"],
-    params: [{ name: "value", optional: false, byRef: false, variadic: false, doc: { summary: "Value", tags: ["alias"], support: { headless: { level: "none" } } } }],
+    params: [{ name: "value", optional: false, byRef: false, variadic: false, doc: { summary: "Value", tags: ["alias"], support: { headless: { level: "none" } }, values: [{ value: "", summary: "" }], type: "" } }],
     call,
-    doc: { summary: "Wrong", behaviour: "It does something.", tags: ["alias"] },
+    doc: { summary: "Obsolete.", behaviour: "It does something.", tags: ["obsolete", "experimental"], see: ["missing"], waits: { kind: "ticks", summary: "Waits briefly." } },
   });
   const diagnostics = validateCommandDocumentation(resolved(definition), [
     { name: "obsolete", purpose: "Obsolete.", obsolete: true, section: "Test" },
     { name: "old", purpose: "Obsolete.", aliasOf: "obsolete", obsolete: true, section: "Test" },
   ], []);
-  equal(diagnostics.some((item) => item.code === "native.summary-mismatch"), true);
-  equal(diagnostics.some((item) => item.code === "native.obsolete-tag"), true);
-  equal(diagnostics.some((item) => item.code === "doc.alias-tag"), true);
-  equal(diagnostics.some((item) => item.code === "param.alias-tag"), true);
+  equal(diagnostics.some((item) => item.code === "doc.tag-conflict"), true);
+  equal(diagnostics.some((item) => item.code === "doc.replacement"), true);
+  equal(diagnostics.some((item) => item.code === "doc.see"), true);
+  equal(diagnostics.some((item) => item.code === "doc.waits"), true);
+  equal(diagnostics.some((item) => item.code === "param.tag" || item.code === "doc.tag"), true);
   equal(diagnostics.some((item) => item.code === "support.note"), true);
+  equal(diagnostics.some((item) => item.code === "param.value"), true);
+  equal(diagnostics.some((item) => item.code === "param.type"), true);
+});
+
+test("validator enforces native and plugin-owned groups", () => {
+  const definition = plugin({ name: "grouped", aliases: [], params: [], call, doc: { summary: "Grouped.", behaviour: "Does not wait.", groups: ["wrong"] } }, {
+    summary: "Fixture plugin.",
+    groups: [{ id: "declared", name: "Declared", summary: "Owned group." }],
+  });
+  const diagnostics = validateCommandDocumentation(resolved(definition), [{ name: "grouped", purpose: "Grouped.", section: "Test Section" }], []);
+  equal(diagnostics.some((item) => item.code === "doc.group-unknown"), true);
+  equal(diagnostics.some((item) => item.code === "native.group"), true);
 });
 
 test("projection preserves plugin and declaration order including overridden layers", () => {
@@ -140,7 +148,7 @@ test("documentation metadata never enters the state hash", () => {
     aliases: [],
     params: [],
     call,
-    doc: { summary: "Run a documented command.", behaviour: "Returns no value and does not wait.", tags: ["deprecated"], support: { headless: { level: "full" } } },
+    doc: { summary: "Run a documented command.", behaviour: "Returns no value and does not wait.", tags: ["deprecated"], replacedBy: "doccommand", reason: "Fixture replacement.", support: { headless: { level: "full" } } },
   });
   const run = (definition: PluginDefinition) => {
     const state = createGameState({ seed: 4 });

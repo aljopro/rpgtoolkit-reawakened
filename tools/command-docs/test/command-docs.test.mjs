@@ -36,6 +36,8 @@ test("check projects independent tags, alias tags and runner support", () => {
         summary: "Say hello.",
         behaviour: "Writes one line and does not wait.",
         tags: ["legacy", "deprecated"],
+        replacedBy: "hello",
+        reason: "Use the maintained spelling.",
         support: { headless: { level: "full" } },
       }),
       aliases: ["hi"],
