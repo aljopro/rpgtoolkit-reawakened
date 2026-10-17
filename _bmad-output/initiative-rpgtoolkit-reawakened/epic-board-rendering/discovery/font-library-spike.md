@@ -72,7 +72,7 @@ The census command scanned every packed `.js`, `.mjs`, `.cjs` and `.ts` file, no
 
 Representative `opentype.js` locations are `dist/opentype.mjs:241,304` (`Math.pow` bounding-box); `:810` (`document` SVG path); `:1232` (`Math.log` write/index); `:3663-3664` (`Math.pow`/`Math.log` table generation); `:5678-5679` (`document`/canvas colour path); `:6007` (`Math.PI`); `:9202,9212` (`Math.log`/`Math.pow` checksum); `:10741,10751` (`TextDecoder` decompression); `:10793-10799` (`document` SVG helper); `:12995` (`Math.pow` hinting delta); and `:16297` (deprecated `require` message). The wrapper never calls those helpers, and the dynamic trap in §6 confirms no host read.
 
-The selected wrapper is therefore not permission to expose the whole package to arbitrary inputs: it is a bounded `glyf` parser seam. If entry 4.9 cannot preserve the input gate and static proof, this recommendation falls back to an audited vendored subset or the hand-written parser; it must not waive an unapproved reachable path.
+The temporary gate was exercised with `node /tmp/tkr-font-spike-4-3/gated-opentype.mjs` and `bun /tmp/tkr-font-spike-4-3/gated-opentype.mjs`: all three faces were accepted with the same `unitsPerEm`/`hhea` values and empty/WOFF/zero-byte probes were rejected as `unsupported font signature`. This is the reachability boundary used by the dynamic result.
 
 ## 6. Dynamic sandbox evidence
 
