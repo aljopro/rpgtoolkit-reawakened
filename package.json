@@ -24,6 +24,8 @@
     "fixtures:author": "node tools/fixtures/author/generate.mjs",
     "fixtures:author:check": "node tools/fixtures/author/generate.mjs --check",
     "fixtures:test": "node --test tools/fixtures/test/fixtures.test.mjs",
+    "font:generate": "node tools/fonts/generate.mjs",
+    "font:check": "node tools/fonts/generate.mjs --check",
     "catalogue:generate": "node tools/catalogue/generate.mjs",
     "catalogue:check": "node tools/catalogue/generate.mjs --check",
     "command-docs:check": "pnpm build && node tools/command-docs/check.mjs",

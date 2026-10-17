@@ -1,0 +1,13 @@
+TKR-8x8 bitmap font
+
+Copyright (c) 2026 Jensen (project author)
+Licence: MIT, under the repository LICENSE.
+Authoring date: 2026-10-17.
+
+This is original work, no third-party glyph data. The glyphs were drawn from
+scratch for TK Reawakened and are not traced or derived from any existing font,
+game, screenshot, or fetched legacy BASE.FNT fixture.
+
+The accompanying .fnt file is generated from tkr-8x8.txt by
+ tools/fonts/generate.mjs. The replacement glyph is stored at byte code 255
+because the TK2 format indexes 256 glyphs directly by byte.
