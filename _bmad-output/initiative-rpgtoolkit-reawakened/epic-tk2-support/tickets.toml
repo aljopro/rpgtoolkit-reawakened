@@ -144,7 +144,6 @@ covers = ["CAP-1"]
 after = [8, "2.14", "2.26"]
 hitl = false
 risk = "medium"
-unknown = "Where the six TK2 games are fetched from and their pinned hashes."
 [[entry]]
 id = 10
 type = "story"

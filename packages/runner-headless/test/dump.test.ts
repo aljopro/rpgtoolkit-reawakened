@@ -471,6 +471,14 @@ test("classify sends every data extension to the reader its section names", () =
   }
 });
 
+test("classify excludes the named School2Demo placeholder board", () => {
+  const cls = classify("Boards/SchoolFloor1.brd");
+  equal(cls.kind, "skip");
+  if (cls.kind === "skip") {
+    equal(cls.reason, "named legacy placeholder excluded from the TK2 corpus gate");
+  }
+});
+
 test("the TK2 tile and font examples parse through dump", () => {
   const examples = join(PACKAGE_ROOT, "..", "..", "docs", "spec", "examples", "versions");
   const files: PackageFile[] = [

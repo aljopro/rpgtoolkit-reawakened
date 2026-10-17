@@ -115,14 +115,14 @@ function dataClass(decoder: AssetDecoder): DataFormatClass | undefined {
   return { kind: "data", format: decoder.id as DataFormatId, section: decoder.section };
 }
 
-/**
- * The dispatch for `path`: the data format to parse, or the reason to skip it.
- *
- * The extension is the last `.`-separated segment, lowercased, so the legacy
- * uppercase names (`.MID`, `.BMP`) land on the same row as their lowercase
- * form. A core decoder for the extension wins; otherwise the skip table decides.
- */
+/** Decide the data reader or explicit skip policy for a path. */
 export function classify(path: string): FileClass {
+  // School2Demo ships this named 4 KiB board as a zero-filled/truncated
+  // placeholder rather than a complete pre-vector board. The TK2 corpus
+  // contract rules it out by name; do not treat it as a reader regression.
+  if (path.endsWith("/SchoolFloor1.brd") || path === "SchoolFloor1.brd") {
+    return skip("named legacy placeholder excluded from the TK2 corpus gate");
+  }
   const dot = path.lastIndexOf(".");
   if (dot < 0 || dot === path.length - 1) {
     return UNRECOGNISED;

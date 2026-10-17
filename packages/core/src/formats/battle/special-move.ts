@@ -25,6 +25,26 @@ import {
   unsupportedTextForm,
 } from "./model.ts";
 
+/** An empty placeholder special move for zero-byte files (Z-1). */
+export function createEmptySpecialMove(): SpecialMove {
+  return {
+    magic: SPECIAL_MOVE_MAGIC,
+    major: 2,
+    minor: 2,
+    name: "",
+    damage: 0,
+    smpCost: 0,
+    program: "",
+    targetSmpDrain: 0,
+    usableInBattle: 0,
+    usableFromMenu: 0,
+    statusEffect: "",
+    animation: "",
+    description: "",
+    residue: new Uint8Array(0),
+  };
+}
+
 /**
  * Read a special move from `reader` (`docs/spec/formats/battle-data.md#special-move-spc`).
  *

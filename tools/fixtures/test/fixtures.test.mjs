@@ -893,18 +893,23 @@ test("matrix: every defect in a pin is named, not only the first", () => {
   for (const field of ["url: ", "rev: ", "gamesPath: ", "games[0]: "]) ok(result.stderr.includes(field), result.stderr);
 });
 
-test("the committed pin is valid and names demo and Basic", () => {
-  const pin = loadSources(committedPin);
-  ok(pin.games.includes("demo") && pin.games.includes("Basic"), pin.games.join(", "));
-  match(pin.rev, /^[0-9a-f]{40}$/);
-  match(pin.url, /^https:\/\//);
-  ok(!pin.gamesPath.startsWith("/") && !pin.gamesPath.split("/").includes(".."));
-  equal(pin.mainPath, "build/main");
-  deepEqual(pin.mainFiles, ["demo.gam"]);
-  equal(
-    JSON.stringify(Object.keys(JSON.parse(readFileSync(committedPin, "utf8")))),
-    '["url","rev","gamesPath","games","mainPath","mainFiles"]',
-  );
+test("the committed source manifest is valid and names both fixture corpora", () => {
+  const sources = loadSources(committedPin);
+  equal(Array.isArray(sources), true);
+  equal(sources.length, 2);
+  deepEqual(sources[0].games, [
+    "FinalDestiny",
+    "LittleMan",
+    "BusDriver",
+    "Caoquest",
+    "School2Demo",
+    "ChimeranEmpire",
+  ]);
+  deepEqual(sources[1].games, ["demo", "Basic"]);
+  match(sources[0].rev, /^[0-9a-f]{40}$/);
+  match(sources[0].url, /^https:\/\//);
+  ok(!sources[0].gamesPath.startsWith("/") && !sources[0].gamesPath.split("/").includes(".."));
+  equal(JSON.parse(readFileSync(committedPin, "utf8")).sources.length, 2);
 });
 
 // ================================================================ matrix: bad CLI use

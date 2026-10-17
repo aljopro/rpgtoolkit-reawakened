@@ -117,12 +117,28 @@ Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `c
 
 `pnpm dump --json <path>` prints the same report as JSON, with a per-file digest: `core`'s FNV-1a over the canonical JSON of the parsed model (AD-11), or over the decoded RGBA for an image. The report is deterministic — files sorted by path, fixed key order, nothing machine-specific — so a reader or decoder that drifts changes a digest.
 
-That is epic 2's Done-when 1 as a **CI gate**, not a local habit: the required `golden` job (which already runs `pnpm fixtures:fetch`) runs `pnpm dump:check`, which compares:
-1. The JSON report over `fixtures/legacy/demo` and `fixtures/legacy/Basic` against the committed `golden/legacy-corpus.json`.
-2. The JSON report over the committed `docs/spec/examples` folders (`game`, `files`, `versions`) against `golden/spec-examples.json`. Current formats must parse with 0 failures and 0 residue; historical Toolkit 1/2 text formats and TK2 binary minors are tracked as `expectedFailures` and `expectedResidue` naming the `tk2-support` ticket that clears each (16.4, 16.5, 16.6). If an expected failure or residue clears without updating the expectation, the gate fails.
+That is epic 2's Done-when 1 as a **CI gate**, not a local habit: the required
+`golden` job (which already runs `pnpm fixtures:fetch`) runs `pnpm dump:check`,
+which compares:
+1. The six TK2 games pinned from ludotheque (`FinalDestiny`, `LittleMan`,
+   `BusDriver`, `Caoquest`, `School2Demo` and `ChimeranEmpire`), plus the
+   existing `demo` and `Basic` sample games retained for the headless corpus
+   tests, in `fixtures/legacy` against the committed `golden/legacy-corpus.json`.
+2. The JSON report over the committed `docs/spec/examples` folders (`game`,
+   `files`, `versions`) against `golden/spec-examples.json`. Current formats
+   must parse with 0 failures and 0 residue; unsupported historical formats
+   remain tracked as `expectedFailures` or `expectedResidue` rows naming the
+   ticket that clears each. If an expected failure or residue clears without
+   updating the expectation, the gate fails.
 
-A changed digest or unexpected failure fails the job and names the file, so parser and decoder drift cannot pass silently. Sibling scripts `pnpm dump:check:examples` and `pnpm dump:record:examples` check or re-record the spec examples expectation alone.
+A changed digest or unexpected failure fails the job and names the file, so
+parser and decoder drift cannot pass silently. Sibling scripts
+`pnpm dump:check:examples` and `pnpm dump:record:examples` check or re-record
+the spec examples expectation alone.
 
-The fetch also copies the shipped demo's main file (`build/main/demo.gam`) into `fixtures/legacy/demo/`, named by the pin's `mainPath` and `mainFiles`. The corpus then holds each game's main file with its folder, so this gate and the format tests cover the `.gam` reader against a real file.
+The fixture fetch uses the pinned ludotheque revision and the existing demo
+source recorded in `tools/fixtures/sources.json`; each listed game is fetched
+atomically at test time and the resulting files remain ignored rather than
+committed.
 
 `pnpm dump:record` rewrites `golden/legacy-corpus.json` and `pnpm dump:record:examples` rewrites `golden/spec-examples.json`. Regenerating either is a **deliberate act**, exactly like `pnpm golden:record` (G5): never run it in CI, never let it run as a side effect, and explain in the pull request why the digests changed. If a digest moved because a reader was fixed, the fix belongs in the same pull request as the regenerated expectation.

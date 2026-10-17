@@ -809,14 +809,15 @@ test("a leading type-folder prefix is stripped, case-insensitively", () => {
 
 // --- Sample fixtures (guard-rail G5 rule 4: fetched, never committed) --------
 
-/** Every `.gam` under `root`, recursively; empty when the folder is absent. */
+/** Every binary `.gam` under `root`, recursively; text TK2 mains are covered by the text-reader tests. */
 function collectGam(root: string): string[] {
   if (!existsSync(root)) {
     return [];
   }
   return readdirSync(root, { recursive: true })
     .filter((name) => name.toLowerCase().endsWith(".gam"))
-    .map((name) => join(root, name));
+    .map((name) => join(root, name))
+    .filter((file) => readFileSync(file)[13] === 0);
 }
 
 // The fixture fetch copies only `Build/game/<game>`, so the corpus normally
