@@ -3,7 +3,7 @@
 // the empty Engine contract that keeps the golden job green.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import type { BuiltinSpec, Diagnostic, LogRecord, PluginDefinition, SurfaceId } from "@tk-reawakened/core";
+import { hashState, snapshot, type BuiltinSpec, type Diagnostic, type LogRecord, type PluginDefinition, type SurfaceId } from "@tk-reawakened/core";
 import { createNullAudio, createScriptHost, restoreScriptHost, runLog, type Run } from "../src/index.ts";
 
 const TRACER = 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n';
@@ -18,6 +18,40 @@ test("selects the TK2 dialect and compatibility manifest entry", () => {
   host.advance(1, []);
   equal(host.state().vm.globals.score, 2);
   equal(host.state().vm.threads[0]!.status, "finished");
+});
+
+test("TK2 #FBranch is an alias of #Branch: jumps without returning to caller and survives mid-run snapshot/restore", () => {
+  const program = "#x! = 1\n#FBranch(:target)\n#x! = 99\n:target\n#x! = x + 10\n#sleep(1)\n#x! = x + 100\n#end\n";
+  const host = createScriptHost({
+    program,
+    seed: 0,
+    dialect: "tk2",
+  });
+
+  host.advance(1, []);
+  equal(host.state().vm.globals.x, 11);
+  equal(host.state().vm.threads[0]!.status, "waiting");
+
+  const snap = snapshot(host.state());
+  const restored = restoreScriptHost(snap, { dialect: "tk2" });
+
+  host.advance(1, []);
+  restored.advance(1, []);
+
+  equal(host.state().vm.globals.x, 111);
+  equal(restored.state().vm.globals.x, 111);
+  equal(host.state().vm.threads[0]!.status, "finished");
+  equal(restored.state().vm.threads[0]!.status, "finished");
+  equal(hashState(host.state()), hashState(restored.state()));
+
+  const methodProgram = "#Method Worker() {\n  #val! = 20\n  #FBranch(:skip_label)\n  #val! = 888\n  :skip_label\n  #ReturnMethod(val + 5)\n}\n#result! = Worker()\n#end\n";
+  const methodHost = createScriptHost({
+    program: methodProgram,
+    seed: 0,
+    dialect: "tk2",
+  });
+  methodHost.advance(1, []);
+  equal(methodHost.state().vm.globals.result, 25);
 });
 
 function tracerHost(seed = 0) {
