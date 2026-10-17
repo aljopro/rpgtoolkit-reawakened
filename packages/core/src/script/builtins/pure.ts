@@ -68,7 +68,7 @@ const MATH_SPECS: readonly BuiltinSpec[] = [
         optional: false,
         byRef: false,
         variadic: false,
-        doc: { summary: "Largest possible result.", type: "integer", values: [{ value: "1+", summary: "Positive maximum; zero and negative values follow the documented edge rules." }] },
+        doc: { summary: "Largest possible result after integer truncation.", type: "integer" },
       },
       {
         name: "dest",
