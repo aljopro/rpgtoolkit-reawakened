@@ -119,37 +119,46 @@ test("committed text item version examples parse cleanly and populate legacyWalk
   }
 });
 
-test("all fetched-corpus text .tem files parse cleanly to end of file", () => {
-  const files = findTextCorpusFiles(".tem");
-  equal(files.length >= 2, true, `expected at least 2 text .tem files, found ${files.length}`);
+test(
+  "all fetched-corpus text .tem files parse cleanly to end of file",
+  { skip: !existsSync(join(repoRoot, "fixtures", "legacy")) ? "legacy fixtures are not fetched" : false },
+  () => {
+    const files = findTextCorpusFiles(".tem");
+    equal(files.length >= 2, true, `expected at least 2 text .tem files, found ${files.length}`);
 
-  for (const p of files) {
-    const bytes = readFileSync(p);
-    const res = readCharacter(new BinaryReader(bytes, p));
-    equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
-    if (res.ok) {
-      equal(res.value.magic, "RPGTLKIT CHAR");
-      equal(res.value.specialMoves.length, 201);
-      equal(res.value.residue.length, 0);
+    for (const p of files) {
+      const bytes = readFileSync(p);
+      const res = readCharacter(new BinaryReader(bytes, p));
+      equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
+      if (res.ok) {
+        equal(res.value.magic, "RPGTLKIT CHAR");
+        equal(res.value.specialMoves.length, 201);
+        equal(res.value.residue.length, 0);
+      }
     }
-  }
-});
+  },
+);
 
-test("all fetched-corpus text .itm files parse cleanly to end of file", () => {
-  const files = findTextCorpusFiles(".itm");
-  equal(files.length >= 16, true, `expected at least 16 text .itm files, found ${files.length}`);
+test(
+  "all fetched-corpus text .itm files parse cleanly to end of file",
+  { skip: !existsSync(join(repoRoot, "fixtures", "legacy")) ? "legacy fixtures are not fetched" : false },
+  () => {
+    const files = findTextCorpusFiles(".itm");
+    equal(files.length >= 16, true, `expected at least 16 text .itm files, found ${files.length}`);
 
-  for (const p of files) {
-    const bytes = readFileSync(p);
-    const res = readItem(new BinaryReader(bytes, p));
-    equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
-    if (res.ok) {
-      equal(res.value.magic, "RPGTLKIT ITEM");
-      equal(res.value.allowedCharacters.length, 51);
-      equal(res.value.residue.length, 0);
+    for (const p of files) {
+      const bytes = readFileSync(p);
+      const res = readItem(new BinaryReader(bytes, p));
+      equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
+      if (res.ok) {
+        equal(res.value.magic, "RPGTLKIT ITEM");
+        equal(res.value.allowedCharacters.length, 51);
+        equal(res.value.residue.length, 0);
+      }
     }
-  }
-});
+  },
+);
+
 
 /** The text-form (non-NUL byte 13) files with `suffix` under the fetched `fixtures/legacy`. */
 function findTextCorpusFiles(suffix: string): string[] {

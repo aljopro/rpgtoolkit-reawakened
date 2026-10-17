@@ -64,7 +64,7 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/_bmad-output/init
 ## Implementation Notes
 
 - 2026-10-16 — Removed the unused text-form error helper/imports and stale rejection comments; reused speed and font layout constants; made the committed TAN fixture mandatory; migrated four scratch corpus checks to fetched fixtures. The implementation agent initially omitted the worktree plan copy; the plan is now present here. Typecheck exposed unsupported `encoding` options on recursive `readdirSync`; those options were removed.
-- 2026-10-16 — Full required gate chain passed: strict suite 943/943 with 0 skipped; golden, graph, licence, provenance, catalogue, and dump checks passed without golden changes. Headless FinalDestiny dump smoke run parsed 67 files with 0 failures. Quick pinned review found no findings; nothing deferred.
+- 2026-10-16 — Follow-up: unit tests now use the repository's standard skip-option guard when fetched fixtures are absent; unfetched `pnpm test` passed with 15 expected skips, and fetched `pnpm test:strict` passed 943/943 with 0 skips.
 
 ## Plan Change Log
 
@@ -76,4 +76,4 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/_bmad-output/init
 
 **Commands:**
 - `pnpm typecheck && pnpm lint && pnpm fixtures:fetch && pnpm test:strict && pnpm golden && pnpm graph && pnpm licence && pnpm provenance && pnpm catalogue:check && pnpm dump:check` -- expected: all commands succeed with no skipped tests and unchanged goldens.
-- `node packages/runner-headless/dist/cli.js dump fixtures/legacy/FinalDestiny` -- expected: representative TK2 text, binary, tile, font, image, registry, and dump paths parse successfully with zero failures (observed: 67 parsed, 94 skipped, 0 failed).
+- `pnpm test` with `fixtures/legacy` temporarily absent -- expected: unit suite passes with fixture-dependent tests skipped; observed 928 passed, 0 failed, 15 skipped.

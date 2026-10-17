@@ -53,30 +53,30 @@ test("committed main_tk2_text.gam example parses cleanly to end of file", () => 
   equal(reader.remaining, 0);
 });
 
-test("all fetched-corpus text .gam files parse cleanly to end of file", () => {
-  const corpusDir = join(repoRoot, "fixtures", "legacy");
-  if (!existsSync(corpusDir)) {
-    throw new Error("fixtures/legacy is missing; run `pnpm fixtures:fetch`");
-  }
+test(
+  "all fetched-corpus text .gam files parse cleanly to end of file",
+  { skip: !existsSync(join(repoRoot, "fixtures", "legacy")) ? "legacy fixtures are not fetched" : false },
+  () => {
+    const corpusDir = join(repoRoot, "fixtures", "legacy");
+    const files = readdirSync(corpusDir, { recursive: true })
+      .filter((f) => f.toLowerCase().endsWith(".gam"))
+      .map((f) => join(corpusDir, f))
+      .filter((p) => {
+        const b = readFileSync(p);
+        return b.length > 13 && b[13] !== 0;
+      });
+    equal(files.length >= 2, true, `expected at least 2 text .gam files, found ${files.length}`);
 
-  const files = readdirSync(corpusDir, { recursive: true })
-    .filter((f) => f.toLowerCase().endsWith(".gam"))
-    .map((f) => join(corpusDir, f))
-    .filter((p) => {
-      const b = readFileSync(p);
-      return b.length > 13 && b[13] !== 0;
-    });
-  equal(files.length >= 2, true, `expected at least 2 text .gam files, found ${files.length}`);
-
-  for (const p of files) {
-    const bytes = readFileSync(p);
-    const res = readMainFile(new BinaryReader(bytes, p));
-    equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
-    if (res.ok) {
-      equal(res.value.magic, "RPGTLKIT MAIN");
-      equal(res.value.enemies.length, 501);
-      equal(res.value.extKeys.length, 51);
-      equal(res.value.residue.length, 0);
+    for (const p of files) {
+      const bytes = readFileSync(p);
+      const res = readMainFile(new BinaryReader(bytes, p));
+      equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
+      if (res.ok) {
+        equal(res.value.magic, "RPGTLKIT MAIN");
+        equal(res.value.enemies.length, 501);
+        equal(res.value.extKeys.length, 51);
+        equal(res.value.residue.length, 0);
+      }
     }
-  }
-});
+  },
+);
