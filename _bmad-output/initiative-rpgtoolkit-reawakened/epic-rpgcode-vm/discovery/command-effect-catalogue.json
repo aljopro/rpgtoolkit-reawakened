@@ -4638,13 +4638,14 @@
    "group": "Game state",
    "params": "",
    "paramsSource": "9.11",
-   "owner": 8,
-   "ownerEpic": "menu-party-save",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
    "sectionsRead": [
     "engine",
     "world"
    ],
    "sectionsWrite": [
+    "engine",
     "world",
     "sprites",
     "party",
@@ -4658,8 +4659,7 @@
     "fx",
     "audio",
     "surfaces",
-    "rng",
-    "time"
+    "input"
    ],
    "effectKind": "flow-control",
    "waitKind": null,
@@ -4667,7 +4667,7 @@
    "legacyAlias": false,
    "obsolete": false,
    "confidence": "stated",
-   "note": ""
+   "note": "clears the listed sections, preserves rng/time, then reruns startup at E-02 step 3"
   },
   {
    "name": "start",
@@ -4680,25 +4680,22 @@
     "vm",
     "engine"
    ],
-   "sectionsWrite": [
-    "vm",
-    "engine"
-   ],
+   "sectionsWrite": [],
    "effectKind": "flow-control",
    "waitKind": null,
    "byRefOut": false,
    "legacyAlias": false,
-   "obsolete": false,
+   "obsolete": true,
    "confidence": "stated",
-   "note": ""
+   "note": "obsolete: raises an error; shell-open is unavailable in Reawakened"
   },
   {
    "name": "mainFile",
    "group": "Game state",
    "params": "gam",
    "paramsSource": "9.11",
-   "owner": 8,
-   "ownerEpic": "menu-party-save",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
    "sectionsRead": [
     "world",
     "engine"
@@ -4712,15 +4709,15 @@
    "legacyAlias": false,
    "obsolete": false,
    "confidence": "stated",
-   "note": "starts the game named by a .gam"
+   "note": "requests loading a new main file"
   },
   {
    "name": "win",
    "group": "Game state",
    "params": "",
    "paramsSource": "9.11",
-   "owner": 8,
-   "ownerEpic": "menu-party-save",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
    "sectionsRead": [
     "engine"
    ],
@@ -4731,24 +4728,23 @@
    "waitKind": null,
    "byRefOut": false,
    "legacyAlias": false,
-   "obsolete": false,
+   "obsolete": true,
    "confidence": "stated",
-   "note": ""
+   "note": "obsolete: raises an error"
   },
   {
    "name": "gone",
    "group": "Game state",
    "params": "",
    "paramsSource": "9.11",
-   "owner": 8,
-   "ownerEpic": "menu-party-save",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
    "sectionsRead": [
-    "sprites",
+    "triggers",
     "engine"
    ],
    "sectionsWrite": [
-    "sprites",
-    "engine"
+    "triggers"
    ],
    "effectKind": "flow-control",
    "waitKind": null,
@@ -4756,15 +4752,15 @@
    "legacyAlias": false,
    "obsolete": false,
    "confidence": "stated",
-   "note": "removes this program from the board"
+   "note": "suppresses the current board trigger until board leave"
   },
   {
    "name": "over",
    "group": "Game state",
    "params": "",
    "paramsSource": "9.11",
-   "owner": 8,
-   "ownerEpic": "menu-party-save",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
    "sectionsRead": [
     "engine"
    ],
@@ -4777,36 +4773,34 @@
    "legacyAlias": false,
    "obsolete": false,
    "confidence": "stated",
-   "note": "game-over message"
+   "note": "requests the game-over flow"
   },
   {
    "name": "godos",
    "group": "Game state",
    "params": "command",
    "paramsSource": "9.11",
-   "owner": 8,
-   "ownerEpic": "menu-party-save",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
    "sectionsRead": [
     "engine"
    ],
-   "sectionsWrite": [
-    "engine"
-   ],
+   "sectionsWrite": [],
    "effectKind": "flow-control",
    "waitKind": null,
    "byRefOut": false,
-   "legacyAlias": true,
+   "legacyAlias": false,
    "obsolete": true,
    "confidence": "stated",
-   "note": "9.11 marks godos/dos/windows obsolete"
+   "note": "obsolete: raises an error; arbitrary shell commands are unavailable"
   },
   {
    "name": "dos",
    "group": "Game state",
    "params": "",
    "paramsSource": "9.11",
-   "owner": 8,
-   "ownerEpic": "menu-party-save",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
    "sectionsRead": [
     "engine"
    ],
@@ -4817,17 +4811,17 @@
    "waitKind": null,
    "byRefOut": false,
    "legacyAlias": true,
-   "obsolete": true,
+   "obsolete": false,
    "confidence": "stated",
-   "note": ""
+   "note": "alias of quitGame; emits one quit request"
   },
   {
    "name": "windows",
    "group": "Game state",
    "params": "",
    "paramsSource": "9.11",
-   "owner": 8,
-   "ownerEpic": "menu-party-save",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
    "sectionsRead": [
     "engine"
    ],
@@ -4838,9 +4832,30 @@
    "waitKind": null,
    "byRefOut": false,
    "legacyAlias": true,
-   "obsolete": true,
+   "obsolete": false,
    "confidence": "stated",
-   "note": ""
+   "note": "alias of quitGame; emits one quit request"
+  },
+  {
+   "name": "quitGame",
+   "group": "Game state",
+   "params": "",
+   "paramsSource": "Reawakened",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": [
+    "engine"
+   ],
+   "sectionsWrite": [
+    "engine"
+   ],
+   "effectKind": "request",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "Reawakened addition; emits one AD-17 quit request"
   },
   {
    "name": "len",

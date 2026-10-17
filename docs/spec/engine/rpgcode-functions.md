@@ -19,10 +19,10 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
-| `mwin` | `void mwin(string str)` | Show the message window. |  |
+| `mwin` | `void mwin(string str)` | Show the message window. | Uses the logical-resolution message surface; the default geometry, colours and reveal speed are defined below. |
 | `wait` | `string wait([string &ret])` | Wait for a key to be pressed, and return the key that was. |  |
 | `mwincls` | `void mwincls()` | Clear and hide the message window. |  |
-| `text` | `void text(double x, double y, string str, [canvas cnv])` | Displays text on the screen. |  |
+| `text` | `void text(double x, double y, string str, [canvas cnv])` | Displays text on the screen. | Uses fixed 8×16 logical-pixel cells; non-integer cell coordinates are truncated. |
 | `pixeltext` | `void pixeltext(int x, int y, string str, [canvas cnv])` | Displays text on the screen using pixel coordinates. |  |
 | `mbox` | `void mbox(string str)` | Show the message window. | alias of `mwin` |
 | `font` | `void font(string font)` | Load a true type font. TK2 fonts are not supported. |  |
@@ -40,18 +40,21 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `show` | `void show(string str)` | Show the message window. | alias of `mwin` |
 | `print` | `void print(string text)` | Write the specified string one line down from the last call to text(). |  |
 | `clearbuffer` | `void clearbuffer()` | Clear the keyboard buffer. |  |
-| `textspeed` | `void textspeed(int speed)` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `textspeed` | `void textspeed(int speed)` | Set the message-window text speed. | `speed` is revealed glyphs per second; zero reveals immediately; the call does not wait. |
 | `mwinsize` | `mwinsize(int percent)` | Obsolete. | obsolete: raises an error and the statement is skipped |
 | `getcolor` | `void getcolor(int &r, int &g, int &b)` | Get the current colour. |  |
 | `getfontsize` | `int getfontsize([int &ret])` | Get the current font size. |  |
 | `statictext` | `void statictext()` | obsolete. | obsolete: raises an error and the statement is skipped |
-| `msgbox` | `int msgbox(string text [,string title [, int style [, int textColor [, int backColor [, string bitmap]]]]])` | Display a message box containing one or two buttons, handled using a cursor map (keyboard input only). |  |
+| `msgbox` | `int msgbox(string text [,string title [, int style [, int textColor [, int backColor [, string bitmap]]]]])` | Display a message box containing one or two buttons, handled using a cursor map (keyboard input only). | Uses the deterministic centred panel and button order defined below, then waits for the cursor-map selection. |
 | `gettextwidth` | `int gettextwidth(string text)` | Get the width of a string of text in pixels, relative to the current font and size. |  |
 | `gettextheight` | `int gettextheight(string text)` | Get the height of a string of text in pixels, relative to the current font and size. |  |
 | `setmwintranslucency` | `void setmwintranslucency(int percent)` | Set the translucency of the message window. 0% is invisible; 100% is opaque. |  |
 
 <a id="e-55"></a>
 **E-55 Message window ("mwin").** A dialogue box along the top of the screen, with a background colour or image, a size (per cent of the screen), translucency, a font, a size, bold/italic/underline and a colour. `Mwin(text)` appends a line and `MwinCls` hides and clears it; the text supports variable splicing (`<var>`), and the text speed is configurable.
+
+<a id="reawakened-message-window-defaults"></a>
+**Reawakened rule (OWNER; unverified default).** An author can show dialogue with `mwin(text)` and clear it with `mwincls()`; the message surface is deterministic and uses logical screen pixels. Its default rectangle is x = 10% of logical width, y = 4% of logical height, width = 80% and height = 24%, each rounded with `floor(value + 0.5)`. The inner margin is 8 logical pixels on every side, clamped to a non-negative rectangle. The default background is opaque DOS colour 0 and the default text is DOS colour 15; image, colour and translucency settings replace only their corresponding defaults. The default reveal rate is 60 glyphs per second, converted to whole fixed-60-Hz ticks. `textspeed(0)` reveals immediately; a negative value other than zero raises `builtin.bad-arg`; positive values update the rate and do not block.
 
 <a id="message-window-text-and-fonts"></a>
 **Reawakened rule (OWNER; FontRef-facing font semantics).** `font(name)` resolves a project asset by case-insensitive family name. If none resolves, `Arial`/sans-serif uses Liberation Sans, `Times New Roman`/serif uses Liberation Serif, and `Courier New`/monospace uses Liberation Mono, followed by the documented fallback family. A `.fnt` is selected when the name resolves to one or when the project is TK2; other names use family substitution. The draw-list `FontRef` carries `{ asset, size, bold, italic }`; underline remains a separate `line` command. Entry 4.3 owns the library and bundled assets.
@@ -63,16 +66,16 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `branch` | `void branch(label lbl)` | Jump to a label. |  |
 | `change` | `void change(string program)` | Change this program so that next time it is triggered, a different program runs instead. Change() is active only while the player remains on the board (i.e., leaving... |  |
 | `done` | `void done()` | End the program. |  |
-| `dos` | `void dos()` | Exit to windows. |  |
-| `windows` | `void windows()` | Exit to windows. | alias of `dos` |
+| `dos` | `void dos()` | Quit the game. | Legacy alias of `quitGame`; emits one `quit` request and does not wait. |
+| `windows` | `void windows()` | Quit the game. | Legacy alias of `dos` and `quitGame`; emits one `quit` request and does not wait. |
 | `end` | `void end()` | End the program. |  |
 | `fbranch` | `void fbranch(label lbl)` | Jump to a label. | alias of `branch` |
-| `gone` | `void gone()` | Remove the currently running program from the board until the board has been left. |  |
-| `over` | `void over()` | Displays a game over message and resets the game. Because you can (and should) set a game over program, this function is pointless. |  |
-| `reset` | `void reset()` | Reset the game. |  |
+| `gone` | `void gone()` | Suppress the currently running board trigger until the board is left. | Writes only the `triggers` section and does not remove the source program or unrelated threads. |
+| `over` | `void over()` | Show the game-over flow. | Requests the game-over flow owned by board-rendering; it does not choose host window behaviour. |
+| `reset` | `void reset()` | Reset the game. | Clears the sections listed below, preserves `rng` and `time`, then reruns startup from E-02 step 3; the call does not wait. |
 | `run` | `void run(string program)` | Transfer control to a different program. |  |
 | `delay` | `void delay(double time)` | Delay for a certain number of seconds. |  |
-| `godos` | `void godos(string command)` | Obsolete. | obsolete: raises an error and the statement is skipped |
+| `godos` | `void godos(string command)` | Obsolete. | Obsolete: raises a catchable error and skips the statement; shell commands are unavailable. |
 | `debug` | `void debug(bool enable)` | Toggle whether to show debug messages. |  |
 | `rpgcode` | `void rpgcode(string line)` | Independently run a line of RPGCode. |  |
 | `autocommand` | `void autocommand()` | Obsolete. | obsolete: shows a warning (when warnings are on) and still runs |
@@ -139,17 +142,17 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
 | `send` | `void send(string file, int x, int y, [int z = 1])` | Send the player to a new board. |  |
-| `fade` | `void fade(int type)` | Perform a fade using the current colour. There are several different types of fades. |  |
+| `fade` | `void fade(int type)` | Perform a fade using the current colour. There are several different types of fades. | Types 1–4 use a 30-tick blocking transition; invalid types raise `builtin.bad-arg`. |
 | `viewbrd` | `void viewbrd(string filename [, int x, int y [, canvas cnv]])` | Draw a board to the screen or to a canvas, starting at co-ordinates topX, topY. |  |
 | `move` | `void move(int x, int y, [int z = 1])` | Move this board program to a new location on the board. The effect lasts until the board has been left. |  |
 | `prg` | `void prg(string program. int x, int y, [int z = 1])` | Move a program on the current board to a new location. This stays in effect until the board is left. |  |
 | `put` | `void put(int x, int y, string tile)` | Puts a tile at the specified location on the board. The tile persists only until the program ends. Use LayerPut() to place a tile for the duration the user is on the... |  |
 | `tiletype` | `void tiletype(int x, int y, string type, [int z = 1])` | Change a tile's type. Valid types for the string parameter are "NORMAL", "SOLID", "UNDER", "NS", "EW", "STAIRS#". |  |
-| `mainfile` | `void mainfile(string gam)` | Load a new main file. |  |
+| `mainfile` | `void mainfile(string gam)` | Load a new main file. | Requests the board-rendering lifecycle to switch the project; the call does not wait. |
 | `scan` | `void scan(int x, int y, int pos)` | Save the tile specified to a buffer identified by pos. There is no particular number to pick for pos; any will do. | deprecated, still works |
 | `mem` | `void mem(int x, int y, int pos)` | Lay a scanned tile on the screen at the specified position. | deprecated, still works |
 <a id="reawakened-camera-built-ins"></a>
-| `zoom` | `zoom(int percent)` | Zoom into the centre of the board by the specified percent. |  |
+| `zoom` | `zoom(int percent)` | Zoom into the centre of the board by the specified percent. | 1–400 is the target scale percentage, 100 is one-to-one, and the transform applies immediately without waiting. |
 | `earthquake` | `earthquake(int intensity)` | Make the screen jump more strongly as intensity rises, from 1 (barely noticeable) to 10 (strongest). The command waits until the shaking ends. | **Technical (OWNER):** clamp `intensity` to 1..10, then run `i` consecutive `shake(amplitudeForIntensity(p), 4)` calls for `p = 1..i`; each pass is four ticks, so the command blocks for `4*i` ticks. `amplitudeForIntensity(p) = p * PX_PER_INTENSITY`, with `PX_PER_INTENSITY = 1` logical pixel. Pass/corner facts are owner-relayed legacy facts logged by entry 2, never source-derived here. |
 | `getcorner` | `void getcorner(int &topX, int &topY)` | Get the corner of the currently shown portion of the board. |  |
 | `cameraPanTo` | `void cameraPanTo(double x, double y, double duration, string easing)` | Pan the camera to a point. | Reawakened addition; duration is seconds; easing is `linear`, `smoothstep`, `easeIn`, `easeOut` or `easeInOut`; non-blocking. |
@@ -161,7 +164,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `boardgettile` | `string boardgettile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. | alias of `getboardtile` |
 | `getboardtiletype` | `string getboardtiletype(int x, int y, int z[, string &ret])` | Get the type of a tile. |  |
 | `forceredraw` | `void forceredraw()` | Force a redrawing of the screen. |  |
-| `wipe` | `wipe(string file, int effect [, int speed])` | 'Wipe' a graphic to the screen. file: filename of the image to wipe to. effect: numeric value between 1 and 12. The valid types are: |  |
+| `wipe` | `wipe(string file, int effect [, int speed])` | 'Wipe' a graphic to the screen. file: filename of the image to wipe to. effect: numeric value between 1 and 12. The valid types are: | Effects 1–12 use integer percentage progress; omitted speed is 4 points per fixed tick and the call blocks until completion. |
 | `parallax` | `parallax(int setting)` | obsolete. | obsolete: raises an error and the statement is skipped |
 | `animatedtiles` | `void animatedtiles()` | Toggle animated tiles. | obsolete: raises an error and the statement is skipped |
 | `smartstep` | `void smartstep()` | Toggle "smart" stepping. | obsolete: raises an error and the statement is skipped |
@@ -181,6 +184,14 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 <a id="e-59"></a>
 **E-59 Transitions and effects.** Fades of several types, wipes with an image (several effects and speeds), zoom, earthquake shake, and the border colour.
+<a id="reawakened-fade-types"></a>
+**Reawakened rule (OWNER; unverified default).** An author can fade the current frame or transition to the next frame with `fade(type)`. Types 1–4 mean: fade out to the current border colour; fade in from that colour; fade out then in using one captured frame; and crossfade from the captured frame to the next composed frame. The default duration is 30 fixed-60-Hz ticks with linear integer alpha. The command records a blocking `fx.fade` effect and resumes after the final tick. Type 0 and values outside 1–4 raise `builtin.bad-arg`.
+
+<a id="reawakened-wipe-effects-and-speed"></a>
+**Reawakened rule (OWNER; unverified default).** An author can wipe to an image with `wipe(file,effect,speed)`. Effects 1–12 are left-to-right, right-to-left, top-to-bottom, bottom-to-top, horizontal centre-out, horizontal edges-in, vertical centre-out, vertical edges-in, top-left diagonal, top-right diagonal, bottom-left diagonal and bottom-right diagonal. Progress is an integer percentage from 0 to 100, advanced by `speed` points per fixed tick; omitted speed is 4, so the default lasts 25 ticks. Speed 0 completes in one tick; negative or greater-than-100 speeds raise `builtin.bad-arg`. The final frame is exactly the resolved image, and the call blocks until it is shown.
+
+<a id="reawakened-zoom"></a>
+**Reawakened rule (OWNER; unverified default).** An author can zoom the board with `zoom(percent)`; 100 means one-to-one, 1–400 are valid target scales, and other values raise `builtin.bad-arg`. The camera stays centred on its current logical centre, nearest-neighbour sampling is used, and the transform applies to the next draw list immediately. A new call replaces the prior zoom target, `zoom(100)` clears it, and the command does not wait or alter world coordinates.
 
 <a id="reawakened-earthquake"></a>
 **Reawakened rule (OWNER; `earthquake` and `cameraShake` help).** An author can use `earthquake` when the whole game should jump in increasingly strong four-tick bursts and the script must wait for the effect; use `cameraShake` when the camera should wobble without stopping the script. Intensity is clamped to 1–10 for `earthquake`; amplitude is measured in logical-viewport pixels for `cameraShake`.
@@ -296,7 +307,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `internalmenu` | `void internalmenu(int menu)` | Show a menu using the menu plugin. |  |
 | `applystatus` | `void applystatus(string target, string file)` | Apply a status effect to a fighter. |  |
 | `removestatus` | `void removestatus(string target, string file)` | Remove a status effect from a fighter. |  |
-| `drawenemy` | `void drawenemy(string file, int x, int y, [canvas cnv])` | Draw an enemy. |  |
+| `drawenemy` | `void drawenemy(string file, int x, int y, [canvas cnv])` | Draw an enemy. | Draws battle asset frame 0 at logical pixel coordinates without changing battle state or consuming RNG. |
 | `giveexp` | `void giveexp(string handle, int amount)` | Give experience to a player. |  |
 
 <a id="e-83"></a>
@@ -344,8 +355,10 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `canvasdrawpart` | `void canvasdrawpart(int cnv, int x, int y, int xSrc, int ySrc, int width, int height[, canvas cnvDest])` | Draw part of a canvas. |  |
 | `canvasgetscreen` | `void canvasgetscreen(canvas cnvDest)` | Copy the screen onto a canvas. |  |
 
-<a id="e-56"></a>
 **E-56 Text and primitives.** Text at tile-cell or pixel coordinates; lines, rectangles and circles, filled or outlined; pixel get and set; images drawn normally, colour-keyed, translucent (50 %) or additive (per cent). All of them work on the screen or on an **off-screen canvas**, and a canvas can be created, drawn whole or in part, colour-keyed and captured from the screen.
+
+<a id="reawakened-text-cell-size"></a>
+**Reawakened rule (OWNER; unverified default).** An author can place text with `text(x,y,...)` in stable character cells or use `pixeltext` for exact pixels. `text` truncates each coordinate toward zero and maps `(x,y)` to logical pixels `(x*8,y*16)`; its cell remains 8×16 even when the current font changes. Newlines advance one 16-pixel row, and out-of-range text clips to the target surface. `pixeltext` keeps pixel coordinates. Both use the current `FontRef` metrics for glyph layout.
 
 <a id="e-58"></a>
 **E-58 Screen save and restore.** Save the screen to numbered slots and restore it, whole or as partial rectangles.
@@ -363,11 +376,16 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `killcursormap` | `void killcursormap(cursor_map map)` | Kill a cursor map. |  |
 | `cursormapadd` | `void cursormapadd(int x, int y, cursor_map map)` | Add a point to a cursor map. |  |
 | `cursormaprun` | `int cursormaprun(cursor_map map, [int &ret])` | Run a cursor map. |  |
-| `cursormaphand` | `void cursormaphand(string cursor[, bool stretch = true])` | Change the cursor used everywhere cursors are used (e.g. cursor maps, the menu, the battle system), optionally not stretching it to 32 by 32 pixels. |  |
-| `mousecursor` | `void mousecursor(string file, int x, int y, int red, int green. int blue)` | Change the mouse cursor. "TK DEFAULT" or "" restores the default cursor. |  |
+| `cursormaphand` | `void cursormaphand(string cursor[, bool stretch = true])` | Change the cursor used everywhere cursors are used (e.g. cursor maps, the menu, the battle system), optionally not stretching it to 32 by 32 pixels. | The default hand is a bundled 16×16 asset; `stretch=true` scales it to 32×32 with nearest-neighbour sampling. |
+| `mousecursor` | `void mousecursor(string file, int x, int y, int red, int green. int blue)` | Change the mouse cursor. "TK DEFAULT" or "" restores the default cursor. | `TK DEFAULT` and empty file restore the bundled 16×16 arrow with hot spot (0,0); custom assets retain the supplied hot spot and transparent colour. |
 
 <a id="e-60"></a>
 **E-60 Modal UI primitives.** A message box with OK or Yes/No buttons (keyboard or mouse), a text prompt, **cursor maps** (a list of hotspots navigated with the arrow keys or the mouse, returning the chosen index, with a custom cursor image), on-screen clickable **buttons** (slots with images), and a save-file picker (`DirSav`).
+<a id="reawakened-msgbox-layout"></a>
+**Reawakened rule (OWNER; unverified default).** An author can ask a player a question with `msgbox(text,title,style,...)`; the panel is centred on the logical surface at 60% width and 22% height with an 8-pixel inner margin. The title occupies the top inner row and the body wraps below using current font metrics. Style 0 displays one centred `OK` button; style 1 displays `YES` then `NO` left-to-right. Buttons are 16 pixels high with 8-pixel gaps, index 0 is selected, and the command yields `render.msgbox` until the cursor-map key selects a button. Explicit colours or a bitmap replace only their defaults. Invalid style values raise `builtin.bad-arg`.
+
+<a id="reawakened-default-cursors"></a>
+**Reawakened rule (OWNER; unverified default).** An author can restore a deterministic cursor with `mousecursor("TK DEFAULT",...)` or an empty file, rather than using a host cursor. The bundled arrow is 16×16 with transparent background and hot spot (0,0). The bundled cursor-map hand is 16×16 with hot spot (1,1); `cursormaphand(...,true)` scales it to 32×32 with nearest-neighbour sampling and `false` keeps 16×16. Asset keys, dimensions and hot spots are part of UI state.
 
 ## Audio (12)
 
@@ -393,7 +411,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
-| `start` | `void start(string file)` | Open a file with the shell. |  |
+| `start` | `void start(string file)` | Obsolete. | Obsolete: raises a catchable error and skips the statement because shell-open is unavailable in Reawakened. |
 | `dirsav` | `string dirsav(string title, bool allowNewFile, int textColor, int backColor, string image)` | Allow the user to choose a *.sav file from the "Saved" directory. For historical reasons, returns "CANCEL" if no file is chosen, not "". |  |
 | `save` | `void save(string file)` | Save the current game state to a file. |  |
 | `load` | `void load(string file)` | Load the game state from a file. |  |
@@ -422,9 +440,9 @@ The catalogue above groups names by capability, not by which part of the engine 
 * **Cursor maps and the mouse cursor** (`createCursorMap`, `cursorMapAdd`, `cursorMapRun`, `killCursorMap`, `cursorMapHand`, `mouseCursor`) belong to **board-rendering**, even though the catalogue above files them under mouse, buttons and cursor maps: they draw onto the `ui` surface, so the section owner decides.
 * **`wait`** is the input part's built-in and its `input.key` wait kind is the VM's — a split name, both parts stated.
 * **`dirSav`** (the save/load picker) belongs to **menu-and-save**, which owns the save list and the `menu.screen` wait; board-rendering supplies the surface it draws on — a split name.
-* **Game lifecycle** (`reset`, `start`, `mainFile`, `win`, `gone`, `over`) belongs to **board-rendering**, which owns boot, reset and quit. The "Game state" group above does not imply the menu part. <!-- OWNER: §9.13 game lifecycle — alternatives: leave these with menu-and-save (where the catalogue guessed) or move them to board-rendering (the proposal). Decided: board-rendering, to match the boot/reset/quit owner. -->
+* **Game lifecycle** (`reset`, `mainFile`, `win`, `gone`, `over`, `quitGame`, `boot` and `quit`) belongs to **board-rendering**, which owns boot, reset and quit. The "Game state" group above does not imply the menu part. <!-- OWNER: §9.13 game lifecycle — alternatives: leave these with menu-and-save (where the catalogue guessed) or move them to board-rendering (the proposal). Decided: board-rendering, to match the boot/reset/quit owner. -->
+* **Lifecycle aliases and obsolete names.** `dos()` and `windows()` are live aliases of `quitGame()` and emit one AD-17 `quit` request. `start(file)` and `godos(command)` are obsolete errors: shell-open and arbitrary shell commands are unavailable. `done()`, `end()` and `stop()` remain VM program-flow controls.
 * **`menuGraphic`** belongs to **menu-and-save**, not battle, even though the catalogue above lists `menuGraphic` under battle; `internalMenu` and `fightMenuGraphic` stay with menu-and-save and battle respectively.
-* **`godos`, `dos` and `windows` are obsolete and dropped**: no owner registers them, and no game needs them to resolve.
 * The remaining names the catalogue's ownership table flags as ambiguous (`itemCount`, `giveExp`, `sourceHandle`, `targetHandle`, `sourceLocation`, `targetLocation`, and the party/player movement names) are owned as that table says: movement-and-input for the sprite and player movement names, battle for the fight stat writes, the VM for the source/target handle reads.
 
 <!-- OWNER: §9.13 — the owner should confirm the game-lifecycle move (to board-rendering) and the two split names (`wait`,
@@ -441,6 +459,7 @@ The following functions are Reawakened built-in additions provided in the pure b
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
+| `quitGame` | `void quitGame()` | Quit the game. | Reawakened addition; board-rendering posts one AD-17 `quit` request without choosing host window behaviour and the call does not wait. `dos()` and `windows()` are legacy aliases. |
 | `isNaN` | `int isNaN(variant &value, [int &ret])` | Returns 1 if `value` is numeric and NaN, 0 otherwise. | Reawakened addition; takes first arg byRef |
 | `isInfinity` | `int isInfinity(variant &value, [int &ret])` | Returns 1 if `value` is numeric and +Infinity or -Infinity, 0 otherwise. | Reawakened addition; takes first arg byRef |
 | `isFinite` | `int isFinite(variant &value, [int &ret])` | Returns 1 if `value` is numeric and a finite number (not NaN, not ±Infinity), 0 otherwise. | Reawakened addition; takes first arg byRef |
