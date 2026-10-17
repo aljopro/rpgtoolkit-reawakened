@@ -611,7 +611,10 @@ test("E-92 virtual variables read engine state sections", () => {
   const state = createGameState({ seed: 0 });
   // Set mock engine state on sections
   (state.audio as { music?: string }).music = "town.mid";
-  (state.world as { board?: { background?: string; skill?: number; constants?: Record<number, number> } }).board = {
+  type LegacyWorldSection = { board?: { background?: string; skill?: number; constants?: Record<number, number> } };
+  // This test exercises the legacy virtual-variable shape, not the tracer board state.
+  const legacyWorld = state.world as unknown as LegacyWorldSection;
+  legacyWorld.board = {
     background: "forest.png",
     skill: 5,
     constants: { 0: 42, 1: 100 },

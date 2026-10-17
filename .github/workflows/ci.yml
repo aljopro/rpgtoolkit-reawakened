@@ -111,8 +111,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm graph:test
       - run: pnpm graph
+  golden-bun:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm golden:bun
   gate:
-    needs: [typecheck, lint, unit, golden, licence, provenance, graph]
+    needs: [typecheck, lint, unit, golden, golden-bun, licence, provenance, graph]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

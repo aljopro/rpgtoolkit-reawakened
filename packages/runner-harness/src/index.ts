@@ -1,37 +1,14 @@
 export { createNullAudio, type AudioSink, type NullAudio } from "./audio.ts";
 export { runLog, type ReportObservation, type ReportObserver } from "./driver.ts";
-export {
-  compareGolden,
-  formatGolden,
-  parseGolden,
-  parseRun,
-  type Golden,
-  type Run,
-  type TickRecord,
-} from "./golden.ts";
+export { compareGolden, formatGolden, parseGolden, parseRun, type Golden, type Run, type TickRecord } from "./golden.ts";
 export { checkVectors } from "./vectors.ts";
 export { createScriptHost, restoreScriptHost } from "./script-host.ts";
 export type { ScriptHost, ScriptHostBlobs, ScriptHostInit, ScriptHostRestore } from "./script-host.ts";
 export { resolvePluginManifest, type PluginDefinitionTable, type PluginManifestResolution } from "./script-plugin-resolver.ts";
 export { checkSnapshotRestore, randomSplit } from "./restore-check.ts";
 export type { SnapshotHost } from "./restore-check.ts";
-export {
-  goldenJob,
-  type GoldenOutcome,
-  type GoldenTexts,
-} from "./job.ts";
-export {
-  buildCorpus,
-  buildFetchedCorpus,
-  compareScriptsGolden,
-  createMemoryLoader,
-  formatScriptsGolden,
-  runAllCorpusPrograms,
-  runCorpusProgram,
-  runFetchedCorpus,
-  verifyCatalogueCompleteness,
-  type CorpusProgram,
-  type FetchedGameFiles,
-  type ProgramResult,
-  type ScriptsGolden,
-} from "./corpus.ts";
+export { goldenJob, type GoldenOutcome, type GoldenTexts } from "./job.ts";
+export { buildCorpus, buildFetchedCorpus, compareScriptsGolden, createMemoryLoader, formatScriptsGolden, runAllCorpusPrograms, runCorpusProgram, runFetchedCorpus, verifyCatalogueCompleteness, type CorpusProgram, type FetchedGameFiles, type ProgramResult, type ScriptsGolden } from "./corpus.ts";
+export { encodeRgbaPng, comparePngPixels, type PixelComparison } from "./png.ts";
+export { runTracerScene, type TracerScene, type TracerResult } from "./tracer.ts";
+export { checkSceneGolden, type SceneGoldenInput, type SceneGoldenOutcome } from "./scene-golden.ts";
