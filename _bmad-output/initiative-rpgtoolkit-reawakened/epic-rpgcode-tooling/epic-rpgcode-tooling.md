@@ -42,3 +42,4 @@ Script authors get modern tooling in any LSP or DAP client; the CAP-14 success c
 - Decision: epic set approved by the user, 2026-10-10.
 - Waits on rpgcode-vm because: the parser and the VM.
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
+- Handoff (epic board-rendering inception, 2026-10-16): epic 4 entry 4.30 builds `setBreakpoints`, the `paused { thread, frame, line }` stop, the open-tick cursor and the resume modes `continue` and a one-instruction `step`. Step over, step in and step out are this epic's, built from `step` and the frame depth; watches and the call stack read state through the engine's read-only views. The initiative file now lists epic 4 in this epic's `after`.
