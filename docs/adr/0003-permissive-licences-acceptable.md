@@ -27,11 +27,15 @@ One check against the list: every name on the old G6 list is Bronze or better (M
 
 ## Decision
 
-1. **G6 uses the Blue Oak list as its test.** Shipped artefacts contain only dependencies whose licence is rated Bronze or better on the Blue Oak Council licence list, at a version pinned in the repo, and which is not on the repo's exception list. The exception list starts with MS-PL. For data and assets: CC0-1.0, which is Bronze, or any other licence that passes the same test. *Reason: the rule protects a property, and a maintained list is the most objective statement of it.*
-2. **Blocked stays blocked.** Copyleft of any strength, restricted licences, and unknown or missing licences cannot be used in shipped artefacts. A licence rated Lead, or not on the list, needs an ADR exception. *Reason: those are the cases where a lawyer has to look.*
+1. **G6 uses the Blue Oak list as its test.** Shipped artefacts contain only dependencies whose licence is rated Bronze or better on the Blue Oak Council licence list, at a version pinned in the repo, and which is not on the repo's exception list. For data and assets: CC0-1.0, which is Bronze, or an explicitly approved asset exception recorded below. *Reason: the rule protects a property, and a maintained list is the most objective statement of it.*
+2. **Blocked stays blocked.** Copyleft of any strength, restricted licences, and unknown or missing licences cannot be used in shipped software or unapproved assets. A licence rated Lead, or not on the list, needs an ADR exception. *Reason: those are the cases where a lawyer has to look.*
 3. **The check stays automatic.** The licence job compares each dependency's SPDX identifier with the pinned list and the exception list and fails on any that does not pass. The list version only moves in a pull request that says so. Adding an identifier to the exception list is an ordinary pull request that states why. *Reason: a rule with no automatic check is not a guard-rail, and "unknown, so it fails until someone looks" is the safe default.*
 4. **Dev-only tools keep ADR 0002's carve-out.** A dev-only tool that is never shipped, bundled or linked may use a licence that does not pass the test if an ADR names it (today only `ovsx`, EPL-2.0). The same job lists dev-only dependency licences and fails on any that neither pass the test nor are named in an ADR.
 5. **Notices.** Shipped packages are listed in `THIRD_PARTY_NOTICES` with their licence text, as G6 rule 3 already requires.
+
+### Bundled font assets (2026-10-17 amendment)
+
+6. **Bundled font assets.** By owner decision on 2026-10-17, OFL-1.1 is admitted only for the unmodified upstream **Liberation Sans, Liberation Serif and Liberation Mono** font files that this project itself bundles as data. Their upstream licence text, release/hash and Reserved Font Name `Liberation` terms must be included in `THIRD_PARTY_NOTICES`; the files must remain unmodified. This is an asset-only exception: it does not admit OFL-1.1 software dependencies, does not change the Bronze-or-better rule for code, and does not apply to fonts supplied by users. Any other font licence is judged case by case under Decision 2; if it is not on the pinned Blue Oak list, it needs its own explicitly approved ADR exception. Fonts are data and are never linked into executable code.
 
 ## Consequences
 
@@ -45,6 +49,8 @@ One check against the list: every name on the old G6 list is Bronze or better (M
 * *Bronze licences carry small extra obligations (for example BSD-3-Clause's no-endorsement clause).* **Mitigation:** these are notice-and-attribution duties already covered by `THIRD_PARTY_NOTICES`.
 * *Notice duty grows with the number of licences.* **Mitigation:** the licence job fails if a shipped package is missing from `THIRD_PARTY_NOTICES`.
 * *The list could be updated to rate a licence higher than we would.* **Mitigation:** pinning plus the exception list.
+* *The asset exception could be mistaken for a software exception.* **Mitigation:** it names three exact unmodified Liberation paths, requires the OFL text and hashes in `THIRD_PARTY_NOTICES`, and leaves OFL software dependencies and user-supplied fonts blocked.
+
 
 ## Alternatives considered
 
@@ -56,7 +62,8 @@ One check against the list: every name on the old G6 list is Bronze or better (M
 
 ## Guard-rail changes
 
-This ADR amends [guardrails.md](../guardrails.md) G6 rules 1 and 2 and its Enforcement paragraph as described above. Everything not listed stays as it was. The G6 summary in `CLAUDE.md`, the G6 item in the pull-request template and the licence sentence in [architecture-options.md](../architecture-options.md) §7 item 2 are updated to match. Entry 1.5 (the licence gate) implements the pinned list, the exception list and the check, and chooses whether to read the list from `@blueoak/list` (after checking that package's own licence) or from a committed copy.
+This ADR amends [guardrails.md](../guardrails.md) G6 rules 1 and 2 and its Enforcement paragraph as described above. Everything not listed stays as it was. The G6 summary in `CLAUDE.md`, the G6 item in the pull-request template and the licence sentence in [architecture-options.md](../architecture-options.md) §7 item 2 are updated to match. Entry 1.5 (the licence gate) implements the pinned list, the exception list and the check; entry 4.9 adds a path-scoped check for the three approved Liberation font assets and their notices, without adding OFL-1.1 to the software list or Blue Oak data.
+
 
 ## References
 
@@ -64,3 +71,4 @@ This ADR amends [guardrails.md](../guardrails.md) G6 rules 1 and 2 and its Enfor
 * Architecture spine (`_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md`): Stack rows for ESLint and typescript-eslint.
 * [guardrails.md](../guardrails.md): G6.
 * [ADR 0002](0002-core-pixels-and-deterministic-maths.md): Decision 3 (dev-only tools).
+* Font-library spike evidence: [discovery/font-library-spike.md](../../_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/discovery/font-library-spike.md).
