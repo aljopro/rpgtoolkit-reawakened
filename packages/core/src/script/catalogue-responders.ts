@@ -10,7 +10,7 @@
 import type { PlainData } from "../ports/plain-data.ts";
 import type { NamedWaitKind, Wait } from "../ports/wait.ts";
 import { MAX_TICK, secondsToTicks } from "../time/time.ts";
-import type { BuiltinSpec, ParamSpec } from "./builtins.ts";
+import type { BuiltinDoc, BuiltinSpec, ParamSpec } from "./builtins.ts";
 import { ScriptError } from "./errors.ts";
 import { COMPILER_VERSION } from "./program.ts";
 import type { CommandEffect, PluginDefinition } from "./plugin.ts";
@@ -18,6 +18,160 @@ import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
 import type { SectionKey } from "../save/state.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
+
+const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
+  mwin: {
+    summary: "Show the message window.",
+    behaviour: "Shows the logical-resolution message surface using the fixed default geometry and colours; it does not wait.",
+    groups: ["message-window-text-fonts-30"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-message-window-defaults"],
+  },
+  text: {
+    summary: "Displays text on the screen.",
+    behaviour: "Draws text using fixed 8x16 logical-pixel cells, truncating at the surface edge and clipping to the target surface; it does not wait.",
+    groups: ["message-window-text-fonts-30"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-text-cell-size"],
+  },
+  textspeed: {
+    summary: "Set the message-window text speed.",
+    behaviour: "Sets the deterministic message reveal rate in glyphs per second; zero reveals immediately, positive values do not wait, and negative nonzero values raise a catchable bad-argument error.",
+    groups: ["message-window-text-fonts-30"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-message-window-defaults"],
+  },
+  msgbox: {
+    summary: "Display a message box containing one or two buttons, handled using a cursor map (keyboard input only).",
+    behaviour: "Renders the deterministic message-box layout and yields the calling thread until a cursor-map key selects a button, then returns the selected button index.",
+    groups: ["message-window-text-fonts-30"],
+    waits: { kind: "until-input", summary: "Yields until a cursor-map key selects a button." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-msgbox-layout"],
+  },
+  fade: {
+    summary: "Perform a fade using the current colour. There are several different types of fades.",
+    behaviour: "Runs the selected 30-tick transition at the fixed tick rate; types 1 through 4 select the documented fade direction, and invalid types raise a catchable bad-argument error.",
+    groups: ["board-tiles-vectors-screen-effects-33"],
+    waits: { kind: "ticks", summary: "Blocks for the fixed 30-tick transition." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-fade-types"],
+  },
+  wipe: {
+    summary: "'Wipe' a graphic to the screen. file: filename of the image to wipe to. effect: numeric value between 1 and 12. The valid types are:",
+    behaviour: "Wipes the named image with the selected deterministic effect and speed, blocking until the transition completes; omitted speed uses the documented default.",
+    groups: ["board-tiles-vectors-screen-effects-33"],
+    waits: { kind: "ticks", summary: "Blocks for the fixed-tick wipe transition." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-wipe-effects-and-speed"],
+  },
+  zoom: {
+    summary: "Zoom into the centre of the board by the specified percent.",
+    behaviour: "Sets the board camera scale from 1 through 400 percent, with 100 percent one-to-one; the call is an immediate no-op at the current scale and does not wait.",
+    groups: ["board-tiles-vectors-screen-effects-33"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-zoom"],
+  },
+  cursormaphand: {
+    summary: "Set the cursor hand image for the current cursor map.",
+    behaviour: "Uses the bundled 16x16 hand cursor with the documented hotspot and stretch policy; the call does not wait.",
+    groups: ["mouse-buttons-cursor-maps-11"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-default-cursors"],
+  },
+  mousecursor: {
+    summary: "Set the mouse cursor image.",
+    behaviour: "Uses the bundled 16x16 arrow cursor with the documented hotspot and stretch policy; the call does not wait.",
+    groups: ["mouse-buttons-cursor-maps-11"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-default-cursors"],
+  },
+  drawenemy: {
+    summary: "Draw an enemy.",
+    behaviour: "Draws battle asset frame 0 at logical-pixel coordinates without mutating battle state or consuming randomness; the call does not wait.",
+    groups: ["battle-stats-menus-29"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#reawakened-draw-enemy"],
+  },
+  reset: {
+    summary: "Reset the game.",
+    behaviour: "Clears the documented engine sections, preserves the injected RNG and fixed clock, then reruns startup from the reset entry point without waiting.",
+    groups: ["program-flow-errors-debugging-25"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/main-loop-and-startup.md#reawakened-reset-sections"],
+  },
+  start: {
+    summary: "Obsolete.",
+    behaviour: "Raises the catchable obsolete-command error and skips the statement; opening a game is a host lifecycle operation.",
+    groups: ["program-flow-errors-debugging-25"],
+    tags: ["obsolete"],
+    replacedBy: { kind: "syntax", text: "Use the host lifecycle operation for loading a game." },
+    reason: "The Reawakened host owns game loading instead of shell-open commands.",
+    see: ["docs/spec/engine/main-loop-and-startup.md#reawakened-startup-ports"],
+  },
+  mainfile: {
+    summary: "Load a new main file.",
+    behaviour: "Requests a board-rendering lifecycle switch to the named project and returns immediately; the host performs the actual load.",
+    groups: ["files-saves-os-15"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/main-loop-and-startup.md#e-06"],
+  },
+  win: {
+    summary: "Obsolete.",
+    behaviour: "Raises the catchable obsolete-command error and skips the statement; use the configured game-over flow instead.",
+    groups: ["program-flow-errors-debugging-25"],
+    tags: ["obsolete"],
+    replacedBy: { kind: "syntax", text: "Use the configured game-over flow." },
+    reason: "Game-over presentation is owned by the board-rendering lifecycle.",
+    see: ["docs/spec/engine/rpgcode-functions.md#e-55"],
+  },
+  gone: {
+    summary: "Suppress the currently running board trigger until the board is left.",
+    behaviour: "Writes only trigger suppression for the currently running board-trigger instance; it does not delete source or sprites and does not wait.",
+    groups: ["program-flow-errors-debugging-25"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/movement-and-collision.md#reawakened-gone-trigger-suppression"],
+  },
+  over: {
+    summary: "Show the game-over flow.",
+    behaviour: "Requests the deterministic game-over flow in the board-rendering lifecycle and returns immediately.",
+    groups: ["program-flow-errors-debugging-25"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#e-55"],
+  },
+  godos: {
+    summary: "Obsolete.",
+    behaviour: "Raises the catchable obsolete-command error and skips the statement; arbitrary shell execution is unavailable.",
+    groups: ["program-flow-errors-debugging-25"],
+    tags: ["obsolete"],
+    replacedBy: { kind: "syntax", text: "Use an explicitly configured host platform service." },
+    reason: "The Reawakened host does not expose arbitrary shell execution to scripts.",
+    see: ["docs/spec/engine/rpgcode-functions.md#e-55"],
+  },
+  dos: {
+    summary: "Quit the game.",
+    behaviour: "Emits one deterministic quit request through the host lifecycle seam and returns immediately.",
+    groups: ["program-flow-errors-debugging-25"],
+    see: ["docs/spec/engine/rpgcode-functions.md#e-55"],
+  },
+  windows: {
+    summary: "Quit the game.",
+    behaviour: "Acts as the legacy alias of dos and emits one deterministic quit request through the host lifecycle seam; it returns immediately.",
+    groups: ["program-flow-errors-debugging-25"],
+    waits: { kind: "never", summary: "Does not wait." },
+  },
+  quitgame: {
+    summary: "Quit the game.",
+    behaviour: "Emits one deterministic quit request through the host lifecycle seam and returns immediately.",
+    groups: ["reawakened-additions-not-part-of-the-282-legacy-catalogue"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/rpgcode-functions.md#e-56"],
+  },
+};
+
+function documentCommands(commands: readonly BuiltinSpec[]): readonly BuiltinSpec[] {
+  return commands.map((command) => {
+    const doc = TICKET_4_29_DOCS[command.name];
+    return doc === undefined ? command : { ...command, doc };
+  });
+}
 type Row = {
   readonly name: string;
   readonly kind: "mixed" | "wait" | "request" | "spawn-thread" | "flow-control";
@@ -108,15 +262,16 @@ const ROWS: readonly Row[] = [
   { name: "save", kind: "mixed", params: "file", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
   { name: "load", kind: "mixed", params: "file", sections: ["world","sprites","party","inventory","triggers","vm","battle","menu","ui","camera","fx","audio","surfaces","rng","time"], wait: null, obsolete: false, byRefOut: false },
   { name: "dirsav", kind: "mixed", params: "...", sections: ["menu"], wait: "menu.screen", obsolete: false, byRefOut: false },
-  { name: "reset", kind: "flow-control", params: "", sections: ["world","sprites","party","inventory","triggers","vm","battle","menu","ui","camera","fx","audio","surfaces","rng","time"], wait: null, obsolete: false, byRefOut: false },
-  { name: "start", kind: "flow-control", params: "file", sections: ["vm","engine"], wait: null, obsolete: false, byRefOut: false },
+  { name: "reset", kind: "flow-control", params: "", sections: ["engine","world","sprites","party","inventory","triggers","vm","battle","menu","ui","camera","fx","audio","surfaces","input"], wait: null, obsolete: false, byRefOut: false },
+  { name: "start", kind: "flow-control", params: "file", sections: [], wait: null, obsolete: true, byRefOut: false },
   { name: "mainfile", kind: "flow-control", params: "gam", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
-  { name: "win", kind: "flow-control", params: "", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
-  { name: "gone", kind: "flow-control", params: "", sections: ["sprites","engine"], wait: null, obsolete: false, byRefOut: false },
+  { name: "win", kind: "flow-control", params: "", sections: ["engine"], wait: null, obsolete: true, byRefOut: false },
+  { name: "gone", kind: "flow-control", params: "", sections: ["triggers"], wait: null, obsolete: false, byRefOut: false },
   { name: "over", kind: "flow-control", params: "", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
-  { name: "godos", kind: "flow-control", params: "command", sections: ["engine"], wait: null, obsolete: true, byRefOut: false },
-  { name: "dos", kind: "flow-control", params: "", sections: ["engine"], wait: null, obsolete: true, byRefOut: false },
-  { name: "windows", kind: "flow-control", params: "", sections: ["engine"], wait: null, obsolete: true, byRefOut: false },
+  { name: "godos", kind: "flow-control", params: "command", sections: [], wait: null, obsolete: true, byRefOut: false },
+  { name: "dos", kind: "flow-control", params: "", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
+  { name: "windows", kind: "flow-control", params: "", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
+  { name: "quitgame", kind: "flow-control", params: "", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
   { name: "openfileinput", kind: "request", params: "file,folder", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
   { name: "openfileoutput", kind: "request", params: "file,folder", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
   { name: "openfileappend", kind: "request", params: "file,folder", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
@@ -213,7 +368,7 @@ function makeResponder(row: Row): BuiltinSpec {
 export const CATALOGUE_RESPONDERS_PLUGIN: PluginDefinition = {
   id: "catalogue-responders",
   version: "1.0.0",
-  commands: ROWS.map(makeResponder),
+  commands: documentCommands(ROWS.map(makeResponder)),
 };
 
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
@@ -225,7 +380,7 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
   commands: [
-    ...CATALOGUE_STUBS_PLUGIN.commands,
+    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands),
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
       (command) => !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
     ),

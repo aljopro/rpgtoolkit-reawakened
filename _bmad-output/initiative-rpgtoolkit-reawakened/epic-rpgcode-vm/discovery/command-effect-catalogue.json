@@ -4840,7 +4840,7 @@
    "name": "quitGame",
    "group": "Game state",
    "params": "",
-   "paramsSource": "Reawakened",
+   "paramsSource": "inferred",
    "owner": 4,
    "ownerEpic": "board-rendering",
    "sectionsRead": [

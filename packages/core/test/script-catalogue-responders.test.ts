@@ -57,13 +57,13 @@ const pluginWaitPoll = createWaitPoll([
 ]);
 
 test("all non-core catalogue responders have a lower-case command and a recorded response", () => {
-  equal(COMMANDS.length, 96);
+  equal(COMMANDS.length, 97);
   equal(new Set(COMMANDS.map((spec) => spec.name)).size, COMMANDS.length);
   for (const spec of COMMANDS) {
     equal(spec.name, spec.name.toLowerCase());
     const state = createGameState({ seed: 0 });
     startProgram(state.vm, { kind: "inline", text: callText(spec), compiler: "2" });
-    if (["godos", "dos", "windows"].includes(spec.name)) {
+    if (["godos", "start", "win"].includes(spec.name)) {
       throws(() => advanceOrFail(state, createScriptServices(state, [CATALOGUE_RESPONDERS_PLUGIN])), /obsolete/);
       equal(state.vm.effects.length, 0);
       continue;
