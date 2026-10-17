@@ -306,6 +306,8 @@ test("main function direct call behaves identically", () => {
 });
 
 test("corpus: runs successfully over fetched fixtures", () => {
+  const fixturesRoot = join(process.cwd(), "fixtures", "legacy", "demo", "Prg");
+  if (!existsSync(fixturesRoot)) return;
   const result = runCli(["corpus"]);
   equal(result.status, 0);
   ok(result.stdout.includes("corpus: 10/10 fetched programs passed"));
