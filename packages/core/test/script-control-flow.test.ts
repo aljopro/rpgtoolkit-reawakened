@@ -199,6 +199,15 @@ result = "done"
   equal(state.vm.globals.result, undefined);
 });
 
+test("done and stop share end's full unwind semantics", () => {
+  for (const command of ["done", "stop"]) {
+    const state = runScript(`function deep() {\n  ${command}()\n}\ndeep()\nafter = 1\n`);
+    equal(state.vm.threads[0]?.status, "finished");
+    equal(state.vm.threads[0]?.frames.length, 0);
+    equal(state.vm.globals.after, undefined);
+  }
+});
+
 test("run abandons its caller and starts the replacement program", () => {
   const state = createGameState({ seed: 0 });
   startProgram(state.vm, { kind: "inline", text: 'before = 1\nrun("child = 2")\nafter = 3\n', compiler: "2" });
