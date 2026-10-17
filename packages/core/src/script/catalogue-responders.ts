@@ -50,6 +50,7 @@ const ROWS: readonly Row[] = [
   { name: "send", kind: "mixed", params: "board,x,y[,layer]", sections: ["world","camera","sprites","vm","engine"], wait: null, obsolete: false, byRefOut: false },
   { name: "addplayer", kind: "mixed", params: "file", sections: ["party","inventory"], wait: null, obsolete: false, byRefOut: false },
   { name: "newplayer", kind: "mixed", params: "file", sections: ["party","sprites"], wait: null, obsolete: false, byRefOut: false },
+  { name: "newplyr", kind: "mixed", params: "file", sections: ["party","sprites"], wait: null, obsolete: false, byRefOut: false },
   { name: "activeplayer", kind: "mixed", params: "[handle]", sections: ["party"], wait: null, obsolete: false, byRefOut: false },
   { name: "restoreplayer", kind: "mixed", params: "file", sections: ["party","sprites"], wait: null, obsolete: false, byRefOut: false },
   { name: "playerdirection", kind: "mixed", params: "[h,]dir", sections: ["sprites"], wait: null, obsolete: false, byRefOut: false },
@@ -102,6 +103,7 @@ const ROWS: readonly Row[] = [
   { name: "done", kind: "flow-control", params: "", sections: ["vm"], wait: null, obsolete: false, byRefOut: false },
   { name: "stop", kind: "flow-control", params: "", sections: ["vm"], wait: null, obsolete: false, byRefOut: false },
   { name: "branch", kind: "flow-control", params: ":label", sections: ["vm"], wait: null, obsolete: false, byRefOut: false },
+  { name: "fbranch", kind: "flow-control", params: ":label", sections: ["vm"], wait: null, obsolete: false, byRefOut: false },
   { name: "autocommand", kind: "flow-control", params: "...", sections: ["vm"], wait: null, obsolete: false, byRefOut: false },
   { name: "save", kind: "mixed", params: "file", sections: ["engine"], wait: null, obsolete: false, byRefOut: false },
   { name: "load", kind: "mixed", params: "file", sections: ["world","sprites","party","inventory","triggers","vm","battle","menu","ui","camera","fx","audio","surfaces","rng","time"], wait: null, obsolete: false, byRefOut: false },
@@ -180,7 +182,7 @@ function makeWait(row: Row, args: readonly { readonly value: unknown; readonly r
 function controlFor(row: Row, args: readonly { readonly value: unknown }[], thread: number | undefined): CommandEffect | null {
   if (row.name === "run") return { kind: "vm.control", args: ["run", { kind: "inline", text: toStringValue(args[0]?.value as never ?? ""), compiler: COMPILER_VERSION }] };
   if (row.name === "rpgcode" && thread !== undefined) return { kind: "vm.control", args: ["threadTell", thread, toStringValue(args[0]?.value as never ?? "")] };
-  if (row.name === "branch") return { kind: "vm.control", args: ["jump", toStringValue(args[0]?.value as never ?? "")] };
+  if (row.name === "branch" || row.name === "fbranch") return { kind: "vm.control", args: ["jump", toStringValue(args[0]?.value as never ?? "")] };
   if (row.name === "end" || row.name === "done" || row.name === "stop") return { kind: "vm.control", args: ["end"] };
   return null;
 }

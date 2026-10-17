@@ -21,7 +21,7 @@ import { createScriptServices } from "./script-test-services.ts";
 const COMMANDS: readonly BuiltinSpec[] = CATALOGUE_RESPONDERS_PLUGIN.commands;
 
 function callText(spec: BuiltinSpec): string {
-  if (spec.name === "branch") return "branch(:target)\n:target\n";
+  if (spec.name === "branch" || spec.name === "fbranch") return `${spec.name}(:target)\n:target\n`;
   const count = spec.params.some((param) => param.variadic) ? spec.params.length + 1 : spec.params.length;
   const declarations: string[] = [];
   const args: string[] = [];
@@ -57,7 +57,7 @@ const pluginWaitPoll = createWaitPoll([
 ]);
 
 test("all non-core catalogue responders have a lower-case command and a recorded response", () => {
-  equal(COMMANDS.length, 94);
+  equal(COMMANDS.length, 96);
   equal(new Set(COMMANDS.map((spec) => spec.name)).size, COMMANDS.length);
   for (const spec of COMMANDS) {
     equal(spec.name, spec.name.toLowerCase());

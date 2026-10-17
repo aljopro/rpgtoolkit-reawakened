@@ -48,8 +48,10 @@ function runGolden(argv: string[]): number {
     const vectors = readFileOrUndefined(join(root, "golden/hash-vectors.json"));
     const run = readFileOrUndefined(join(root, "golden/test-double/run.json"));
     const golden = readFileOrUndefined(join(root, "golden/test-double/golden.json"));
+    const scriptsGolden =
+      readFileOrUndefined(join(root, "golden/scripts/golden.json")) ?? (record ? "" : undefined);
 
-    const result = goldenJob({ vectors, run, golden }, record);
+    const result = goldenJob({ vectors, run, golden, scriptsGolden }, record);
 
     if (!result.ok) {
       const completed = result.lines.slice(0, -1);
@@ -73,6 +75,14 @@ function runGolden(argv: string[]): number {
       mkdirSync(targetDir, { recursive: true });
       const tmpPath = join(targetDir, `golden.json.tmp.${process.pid}`);
       writeFileSync(tmpPath, result.golden, "utf8");
+      renameSync(tmpPath, targetPath);
+    }
+    if (record && result.scriptsGolden !== undefined) {
+      const targetPath = join(root, "golden/scripts/golden.json");
+      const targetDir = dirname(targetPath);
+      mkdirSync(targetDir, { recursive: true });
+      const tmpPath = join(targetDir, `golden.json.tmp.${process.pid}`);
+      writeFileSync(tmpPath, result.scriptsGolden, "utf8");
       renameSync(tmpPath, targetPath);
     }
 
