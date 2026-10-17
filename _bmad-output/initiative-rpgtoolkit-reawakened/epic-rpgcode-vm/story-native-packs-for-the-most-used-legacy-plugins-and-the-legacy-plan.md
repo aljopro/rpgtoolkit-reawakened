@@ -3,7 +3,7 @@ title: 'Native packs for the most-used legacy plugins and the legacy-name table'
 type: 'feature'
 ticket: 24
 created: '2026-10-16'
-status: built
+status: done
 baseline_revision: '0429a753'
 route: 'full'
 risk: 'medium'

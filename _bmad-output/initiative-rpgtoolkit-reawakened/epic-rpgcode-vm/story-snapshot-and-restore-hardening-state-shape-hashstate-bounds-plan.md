@@ -3,7 +3,7 @@ title: 'Snapshot and restore hardening: state shape, hashState, bounds, mismatch
 type: 'feature'
 ticket: 11
 created: '2026-10-16'
-status: 'built'
+status: done
 baseline_revision: '536f33051b503ed5da72c2ce1a55ef8ab0402ce2'
 route: 'full'
 route_source: 'pinned'

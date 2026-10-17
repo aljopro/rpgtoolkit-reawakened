@@ -3,7 +3,7 @@ title: 'End-to-end corpus suite'
 type: 'feature'
 ticket: 19
 created: '2026-10-16'
-status: 'built'
+status: done
 baseline_revision: '71097e95b8141a24d2b95e58303fab58afd5bbad'
 route: 'full'
 risk: 'low'
