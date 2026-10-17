@@ -76,6 +76,14 @@ context: ['docs/guardrails.md', 'docs/spec/formats/save-game.md', 'docs/spec/eng
 
 A restart keeps the saved thread's `id`, `kind`, `owner`, `source`, `target`, queues and wait metadata, but replaces stale execution frames with one fresh root frame compiled from the current `ProgramRef`; this matches the saved-game specification's allowance to restart saved threads when serialized instruction positions cannot be mapped.
 
+**Proposed ruling (pending owner review):** canonical state values are limited to
+`CANON_MAX_DEPTH = 256` container levels, with a deterministic `TypeError` before
+host recursion can overflow. This keeps the bound far below the approximately
+3,900-level stack failure observed in the ticket context and applies equally to
+`snapshot`, `hashState` and draw-list hashing through `canon`. The rejected
+alternative is an unbounded serializer, which leaves runner behaviour dependent
+on JavaScript engine stack limits.
+
 ## Verification
 
 **Commands:**
