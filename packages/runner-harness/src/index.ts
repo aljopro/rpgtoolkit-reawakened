@@ -20,3 +20,14 @@ export {
   type GoldenOutcome,
   type GoldenTexts,
 } from "./job.ts";
+export {
+  buildCorpus,
+  compareScriptsGolden,
+  formatScriptsGolden,
+  runAllCorpusPrograms,
+  runCorpusProgram,
+  verifyCatalogueCompleteness,
+  type CorpusProgram,
+  type ProgramResult,
+  type ScriptsGolden,
+} from "./corpus.ts";

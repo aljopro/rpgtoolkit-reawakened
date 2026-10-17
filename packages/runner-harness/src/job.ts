@@ -10,15 +10,26 @@ import {
   type TickRecord,
 } from "./golden.ts";
 import { checkVectors } from "./vectors.ts";
+import {
+  compareScriptsGolden,
+  formatScriptsGolden,
+  runAllCorpusPrograms,
+} from "./corpus.ts";
 
 export type GoldenTexts = {
   readonly vectors?: string | undefined;
   readonly run?: string | undefined;
   readonly golden?: string | undefined;
+  readonly scriptsGolden?: string | null | undefined;
 };
 
 export type GoldenOutcome =
-  | { readonly ok: true; readonly lines: string[]; readonly golden?: string | undefined }
+  | {
+      readonly ok: true;
+      readonly lines: string[];
+      readonly golden?: string | undefined;
+      readonly scriptsGolden?: string | undefined;
+    }
   | { readonly ok: false; readonly lines: string[] };
 
 export function goldenJob(
@@ -81,27 +92,52 @@ export function goldenJob(
     lines.push("batching: 1,3,S ok");
 
     // Stage 4: golden
+    let formattedGolden: string | undefined;
     if (record) {
-      const formatted = formatGolden(records1);
+      formattedGolden = formatGolden(records1);
       lines.push(`golden: ${run.ticks} recorded`);
-      return { ok: true, lines, golden: formatted };
+    } else {
+      if (texts.golden === undefined) {
+        throw new Error("golden.json is absent");
+      }
+      const golden = parseGolden(texts.golden);
+      if (golden.records.length === 0) {
+        throw new Error("golden.json: records is empty");
+      }
+
+      const cmp = compareGolden(records1, golden.records);
+      if (!cmp.ok) {
+        throw new Error(cmp.message);
+      }
+
+      lines.push(`golden: ${run.ticks} compared`);
     }
 
-    if (texts.golden === undefined) {
-      throw new Error("golden.json is absent");
-    }
-    const golden = parseGolden(texts.golden);
-    if (golden.records.length === 0) {
-      throw new Error("golden.json: records is empty");
+    // Stage 5: script corpus & snapshot restore
+    let formattedScriptsGolden: string | undefined;
+    if (texts.scriptsGolden !== undefined) {
+      const results = runAllCorpusPrograms(0);
+      if (record) {
+        formattedScriptsGolden = formatScriptsGolden(results);
+        lines.push(`scripts: ${results.length} programs ok (snapshot/restore verified)`);
+      } else {
+        if (!texts.scriptsGolden) {
+          throw new Error("golden/scripts/golden.json is absent");
+        }
+        const cmpScripts = compareScriptsGolden(results, texts.scriptsGolden);
+        if (!cmpScripts.ok) {
+          throw new Error(cmpScripts.message);
+        }
+        lines.push(`scripts: ${results.length} programs ok (snapshot/restore verified)`);
+      }
     }
 
-    const cmp = compareGolden(records1, golden.records);
-    if (!cmp.ok) {
-      throw new Error(cmp.message);
-    }
-
-    lines.push(`golden: ${run.ticks} compared`);
-    return { ok: true, lines };
+    return {
+      ok: true,
+      lines,
+      ...(formattedGolden !== undefined ? { golden: formattedGolden } : {}),
+      ...(formattedScriptsGolden !== undefined ? { scriptsGolden: formattedScriptsGolden } : {}),
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     lines.push(message);

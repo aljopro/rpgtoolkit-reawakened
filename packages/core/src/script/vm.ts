@@ -1226,6 +1226,9 @@ function performCall(
   if (parked) return "yield";
 
   if (result.wait !== undefined) {
+    const waitEffect = result.wait.kind === "movement"
+      ? { ...result.wait, moves: result.wait.moves.map((move) => ({ ...move })) }
+      : { ...result.wait };
     recordEffect(vm, {
       tick,
       thread: thread.id,
@@ -1235,7 +1238,7 @@ function performCall(
       out: {},
       result: result.value,
       patch: null,
-      wait: result.wait,
+      wait: waitEffect,
       request: null,
     });
   }

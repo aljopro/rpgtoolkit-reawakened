@@ -195,3 +195,59 @@ test("goldenJob detects batching disagreement without throwing", () => {
     equal(outcome.lines[2], "batching: tick 3: n=1 and n=3 mismatch");
   }
 });
+test("goldenJob records and compares scriptsGolden", () => {
+  const recordOutcome = goldenJob(
+    { vectors: VALID_VECTORS, run: VALID_RUN, scriptsGolden: "" },
+    true,
+  );
+  equal(recordOutcome.ok, true);
+  if (!recordOutcome.ok) return;
+
+  equal(typeof recordOutcome.scriptsGolden, "string");
+  equal(recordOutcome.lines.some((l) => l.includes("scripts: 14 programs ok")), true);
+
+  const compareOutcome = goldenJob({
+    vectors: VALID_VECTORS,
+    run: VALID_RUN,
+    golden: recordOutcome.golden,
+    scriptsGolden: recordOutcome.scriptsGolden,
+  });
+  equal(compareOutcome.ok, true);
+  if (!compareOutcome.ok) return;
+  equal(compareOutcome.lines.some((l) => l.includes("scripts: 14 programs ok")), true);
+});
+
+test("goldenJob fails when scriptsGolden differs or is missing", () => {
+  const recordOutcome = goldenJob(
+    { vectors: VALID_VECTORS, run: VALID_RUN, scriptsGolden: "" },
+    true,
+  );
+  if (!recordOutcome.ok || !recordOutcome.scriptsGolden) throw new Error("record failed");
+
+  const mutated = recordOutcome.scriptsGolden.replace(
+    /"hash":\s*"[0-9a-f]{16}"/,
+    '"hash": "0000000000000000"',
+  );
+
+  const mismatchOutcome = goldenJob({
+    vectors: VALID_VECTORS,
+    run: VALID_RUN,
+    golden: recordOutcome.golden,
+    scriptsGolden: mutated,
+  });
+  equal(mismatchOutcome.ok, false);
+  if (!mismatchOutcome.ok) {
+    equal(mismatchOutcome.lines.some((l) => l.includes("hash mismatch")), true);
+  }
+
+  const missingOutcome = goldenJob({
+    vectors: VALID_VECTORS,
+    run: VALID_RUN,
+    golden: recordOutcome.golden,
+    scriptsGolden: "",
+  });
+  equal(missingOutcome.ok, false);
+  if (!missingOutcome.ok) {
+    equal(missingOutcome.lines.some((l) => l.includes("golden/scripts/golden.json is absent")), true);
+  }
+});

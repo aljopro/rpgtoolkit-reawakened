@@ -38,11 +38,14 @@ import {
   type DrawList,
   type Engine,
   type GameState,
+  type InputRecord,
   type LogSink,
   type PluginDefinition,
   type PluginManifest,
   type PluginManifestDiagnostic,
   type PluginManifestPatch,
+  type ProgramLoader,
+  type ProgramRef,
   type ResolvedPlugin,
   type RunnerRequest,
   type ScriptServices,
@@ -135,7 +138,7 @@ function resolveHostPlugins(
 }
 /** How to build a fresh host: the inline program, seed, manifest and plugin layers. */
 export type ScriptHostInit = {
-  readonly program: string;
+  readonly program: string | ProgramRef;
   readonly seed: number;
   /** Selects the pure TK2 frontend; default is the TK3 frontend. */
   readonly dialect?: "tk2" | "tk3";
@@ -144,6 +147,7 @@ export type ScriptHostInit = {
   readonly patch?: PluginManifestPatch;
   readonly gameId?: string;
   readonly blobs?: ScriptHostBlobs;
+  readonly loader?: ProgramLoader;
   /** Host-side definitions available to the manifest resolver. */
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
@@ -153,9 +157,11 @@ export type ScriptHostInit = {
 /** How to rebuild a host from a snapshot: the registry is code, not state. */
 export type ScriptHostRestore = {
   readonly manifest?: PluginManifest;
+  readonly dialect?: "tk2" | "tk3";
   readonly gameId?: string;
   readonly blobs?: ScriptHostBlobs;
   readonly patch?: PluginManifestPatch;
+  readonly loader?: ProgramLoader;
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
   readonly sinks?: readonly LogSink[];
@@ -214,13 +220,34 @@ function createHost(
 ): ScriptHost {
   let breakpoints: readonly Breakpoint[] = [];
   let pendingDiagnostics = [...initialDiagnostics];
-  let effectIndex = 0;
+  let effectIndex = gameState.vm.effects.length;
   const requests: RunnerRequest[] = [];
 
   return {
-    advance(ticks: number, _inputs, maxTicks?: number): TickReport {
+    advance(ticks: number, inputs: readonly InputRecord[] = [], maxTicks?: number): TickReport {
       const actualTicks = maxTicks !== undefined && maxTicks < ticks ? maxTicks : ticks;
+      const consumed: InputRecord[] = [];
+      let inputIndex = 0;
       for (let index = 0; index < actualTicks; index++) {
+        while (inputIndex < inputs.length) {
+          const record = inputs[inputIndex]!;
+          if (record.event.kind === "key" && record.event.down) {
+            let matched = false;
+            for (const thread of gameState.vm.threads) {
+              if (thread.wait?.kind === "input.key" && thread.wait.key === null) {
+                thread.wait.key = record.event.name;
+                consumed.push(record);
+                matched = true;
+                break;
+              }
+            }
+            if (matched) {
+              inputIndex++;
+              continue;
+            }
+          }
+          break;
+        }
         advanceScriptTick(gameState, services, STEP_BUDGET);
         effectIndex = serviceBlobRequests(gameState, blobs, effectIndex, requests);
       }
@@ -230,7 +257,7 @@ function createHost(
       return {
         ticksRun: actualTicks,
         tickAfter: gameState.time.tick,
-        consumed: [],
+        consumed,
         audioCues: [],
         requests: emittedRequests,
         diagnostics,
@@ -274,31 +301,49 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
     init.manifest ??
     (init.dialect === "tk2" ? [...ENGINE_DEFAULT_MANIFEST, { id: "tk2" }] : undefined);
   const resolution = resolveHostPlugins(manifest, init.patch, init.plugins);
+  const programRef: ProgramRef = typeof init.program === "string"
+    ? {
+        kind: "inline",
+        text: init.program,
+        compiler: COMPILER_VERSION,
+        dialect: init.dialect ?? "tk3",
+      }
+    : init.program;
+  const gameId =
+    init.gameId ??
+    (typeof init.program === "string"
+      ? fnv1a64(init.program)
+      : init.program.kind === "file"
+        ? init.program.path
+        : fnv1a64(init.program.text));
   const services = createScriptServices(
     gameState,
     resolution.plugins,
     createLogger(init.sinks ?? []),
     undefined,
-    init.gameId ?? fnv1a64(init.program),
+    init.loader,
+    gameId,
   );
-  startProgram(gameState.vm, {
-    kind: "inline",
-    text: init.program,
-    compiler: COMPILER_VERSION,
-    dialect: init.dialect ?? "tk3",
-  });
+  startProgram(gameState.vm, programRef);
   return createHost(gameState, services, resolution.diagnostics, init.blobs);
 }
 
 /** Restore a host from a snapshot, rebinding the same effective manifest. */
 export function restoreScriptHost(json: string, init: ScriptHostRestore): ScriptHost {
   const gameState = restoreGameState(json);
-  const resolution = resolveHostPlugins(init.manifest, init.patch, init.plugins);
+  const isTk2 =
+    init.dialect === "tk2" ||
+    gameState.vm.threads.some((t) => t.frames.some((f) => f.program.dialect === "tk2"));
+  const manifest =
+    init.manifest ??
+    (isTk2 ? [...ENGINE_DEFAULT_MANIFEST, { id: "tk2" }] : undefined);
+  const resolution = resolveHostPlugins(manifest, init.patch, init.plugins);
   const services = createScriptServices(
     gameState,
     resolution.plugins,
     createLogger(init.sinks ?? []),
     undefined,
+    init.loader,
     init.gameId ?? "default",
   );
   return createHost(gameState, services, resolution.diagnostics, init.blobs);
