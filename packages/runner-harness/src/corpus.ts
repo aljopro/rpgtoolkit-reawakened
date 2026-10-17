@@ -18,7 +18,6 @@ import {
   type AssetKey,
   type InputRecord,
   type ProgramLoader,
-  type ProgramRef,
 } from "@tk-reawakened/core";
 import { TK2_COMPAT_PLUGIN } from "@tk-reawakened/plugin-tk2-compat";
 import { checkSnapshotRestore, randomSplit } from "./restore-check.ts";
@@ -237,10 +236,6 @@ end()
 const SYNTHETIC_9_V1 = `x = 1
 sleep(1)
 y = 2
-end()
-`;
-const SYNTHETIC_9_V2 = `x = 10
-y = 20
 end()
 `;
 

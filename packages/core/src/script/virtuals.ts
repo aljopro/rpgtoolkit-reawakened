@@ -8,6 +8,7 @@
 
 import type { Value } from "../ports/value.ts";
 import type { GameState } from "../save/state.ts";
+import { TICKS_PER_SECOND } from "../time/time.ts";
 
 export type VirtualVariablePort = {
   read(name: string): Value | undefined;
@@ -24,7 +25,7 @@ export function createDefaultVirtuals(state: GameState): VirtualVariablePort {
     read(rawName: string): Value | undefined {
       const name = rawName.toLowerCase();
       if (name === "gametime") {
-        return Math.floor(state.time.tick / 60);
+        return Math.floor(state.time.tick / TICKS_PER_SECOND);
       }
 
       const audio = asRecord(state.audio);

@@ -14,7 +14,7 @@
 
 import type { Ast, Block, ClassDef, Expr, FunctionDef, MethodDef, Statement } from "./ast.ts";
 import { ScriptError } from "./errors.ts";
-import type { BinaryOp, SourcePos, StepOp } from "./ops.ts";
+import type { SourcePos, StepOp } from "./ops.ts";
 
 /** Parameter info retained on a compiled function for call resolution. */
 export type ParamInfo = {

@@ -11,10 +11,10 @@
 import { encodeCp1252 } from "../formats/binary/cp1252.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 import type { Value } from "../ports/value.ts";
-import type { Arg, BuiltinSpec, ParamSpec } from "./builtins.ts";
+import type { Arg } from "./builtins.ts";
 import { ScriptError } from "./errors.ts";
 import type { PluginManifestDiagnostic } from "./manifest.ts";
-import type { CommandEffect, CommandHandler, CommandRequest, CommandResult, CommandView, PluginDefinition } from "./plugin.ts";
+import type { CommandEffect, CommandRequest, CommandResult, CommandView, PluginDefinition } from "./plugin.ts";
 import { toStringValue } from "./values.ts";
 
 /** Status classification for legacy plugins. */

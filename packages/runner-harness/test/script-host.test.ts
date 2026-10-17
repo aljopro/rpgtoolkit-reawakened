@@ -279,3 +279,14 @@ test("writes only through the sandbox blob port", () => {
   host.advance(12, []);
   deepEqual([...(blobs.blobs["saves:game/saved/output.txt"] ?? [])], [111, 107, 13, 10]);
 });
+test("writes binary bytes with filePut through the sandbox blob port", () => {
+  const blobs: { blobs: Record<string, Uint8Array>; assets: Record<string, Uint8Array> } = { blobs: {}, assets: {} };
+  const host = createScriptHost({
+    program: 'openFileOutput("binary.dat", "Saved")\nfilePut("binary.dat", 65)\nfilePut("binary.dat", 66)\nend()\n',
+    seed: 0,
+    gameId: "game",
+    blobs,
+  });
+  host.advance(12, []);
+  deepEqual([...(blobs.blobs["saves:game/saved/binary.dat"] ?? [])], [65, 66]);
+});

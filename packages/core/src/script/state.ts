@@ -39,7 +39,6 @@ export type ThreadOwner = "script" | "world";
 /** A thread's scheduling state (AD-7). */
 export type ThreadStatus = "ready" | "waiting" | "finished";
 
-/** One local variable storage slot in a call frame (AD-7). */
 /** One active object in the deterministic handle table (OOP-3/OOP-5). */
 export type ObjectRecord = {
   handle: number;
