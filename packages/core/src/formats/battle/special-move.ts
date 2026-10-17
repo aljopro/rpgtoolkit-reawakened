@@ -22,7 +22,6 @@ import {
   SPECIAL_MOVE_SECTION,
   type SpecialMove,
   unsupportedBattleMinor,
-  unsupportedTextForm,
 } from "./model.ts";
 
 /** An empty placeholder special move for zero-byte files (Z-1). */
@@ -50,7 +49,7 @@ export function createEmptySpecialMove(): SpecialMove {
  *
  * The header is read first and the detection byte at offset 16 (`docs/spec/formats/README.md#header-and-version`,
  * `docs/spec/formats/battle-data.md#special-move-spc`) probed without moving the cursor: a non-NUL byte means the 2.x text form,
- * which is refused with a located `FormatError` rather than parsed as binary.
+ * which is read by `readTextSpecialMove` rather than parsed as binary.
  * A file too short to carry the detection byte is not an error here — the
  * header's own error is reported instead. Otherwise the `minor`-range check and
  * the field list are read in order; bytes after the description are kept as

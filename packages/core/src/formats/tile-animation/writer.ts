@@ -7,6 +7,7 @@
 import { err, ok, type Result } from "../result.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import {
+  TILE_ANIMATION_MIN_SPEED,
   TILE_ANIMATION_SECTION,
   type TileAnimation,
 } from "./model.ts";
@@ -28,11 +29,11 @@ export function writeTileAnimation(model: TileAnimation): Result<Uint8Array> {
     });
   }
 
-  if (!Number.isInteger(model.speed) || model.speed <= 0 || model.speed > I32_MAX) {
+  if (!Number.isInteger(model.speed) || model.speed < TILE_ANIMATION_MIN_SPEED || model.speed > I32_MAX) {
     return err({
       offset: writer.toBytes().length,
       section: TILE_ANIMATION_SECTION,
-      message: `speed ${model.speed} must be a positive integer 1..${I32_MAX} (docs/spec/formats/tiles.md#animated-tile-tan)`,
+      message: `speed ${model.speed} must be a positive integer ${TILE_ANIMATION_MIN_SPEED}..${I32_MAX} (docs/spec/formats/tiles.md#animated-tile-tan)`,
     });
   }
 

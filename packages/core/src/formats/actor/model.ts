@@ -393,7 +393,7 @@ export interface Item {
 /**
  * A whole enemy (docs/spec/formats/enemy.md#layout).
  *
- * Only the binary minor 1 form is represented; the 2.0 text form is rejected.
+ * Both the binary minor 1 form and the 2.0 text form (minor 0) are represented.
  * The stance list keeps its six slots so the indices stay stable: slot 0 REST,
  * 1 FIGHT/ATTACK, 2 DEFEND, 3 SPECIAL MOVE, 4 DIE, 5 unused padding.
  */

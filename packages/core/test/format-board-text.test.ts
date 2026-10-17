@@ -2,6 +2,8 @@
 import { test } from "node:test";
 import { equal } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   BinaryReader,
   readBoard,
@@ -53,31 +55,22 @@ test("throws no uncaught error on truncated text board", () => {
   equal(res.ok, false);
 });
 
-test("all corpus text .brd files parse cleanly to end of file when scratch corpus is present", () => {
-  const corpusDir = "/tmp/tk2-163";
-  if (!existsSync(corpusDir)) return;
+const testDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(testDir, "..", "..", "..");
 
-  function findTextBrds(dir: string): string[] {
-    let res: string[] = [];
-    for (const f of readdirSync(dir)) {
-      const p = `${dir}/${f}`;
-      try {
-        const b = readFileSync(p);
-        if (f.toLowerCase().endsWith(".brd") && b.length > 14 && b[14] !== 0) {
-          res.push(p);
-        }
-      } catch {
-        try {
-          res = res.concat(findTextBrds(p));
-        } catch {
-          // ignore
-        }
-      }
-    }
-    return res;
+test("all fetched-corpus text .brd files parse cleanly to end of file", () => {
+  const corpusDir = join(repoRoot, "fixtures", "legacy");
+  if (!existsSync(corpusDir)) {
+    throw new Error("fixtures/legacy is missing; run `pnpm fixtures:fetch`");
   }
 
-  const files = findTextBrds(corpusDir);
+  const files = readdirSync(corpusDir, { recursive: true })
+    .filter((f) => f.toLowerCase().endsWith(".brd"))
+    .map((f) => join(corpusDir, f))
+    .filter((p) => {
+      const b = readFileSync(p);
+      return b.length > 14 && b[14] !== 0;
+    });
   equal(files.length >= 17, true, `expected at least 17 text .brd files, found ${files.length}`);
 
   for (const p of files) {

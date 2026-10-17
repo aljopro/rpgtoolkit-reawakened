@@ -13,6 +13,7 @@ import {
   glyphToRgba,
   FONT_MAGIC,
   FONT_SECTION,
+  FONT_TOTAL_LINES,
   FONT_TOTAL_VALUES,
   type LegacyFont,
   type Result,
@@ -42,7 +43,7 @@ test("reads a valid 2051-line font file and round-trips exactly", () => {
 
   const text = writeLegacyFont(font);
   const lines = text.trimEnd().split(/\r\n|\r|\n/);
-  equal(lines.length, 2051);
+  equal(lines.length, FONT_TOTAL_LINES);
 
   const res = readLegacyFont(text);
   equal(res.ok, true);

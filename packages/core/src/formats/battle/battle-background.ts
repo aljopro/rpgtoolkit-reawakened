@@ -21,7 +21,6 @@ import {
   type BattleBackground,
   type BattleBackgroundTint,
   unsupportedBattleMinor,
-  unsupportedTextForm,
 } from "./model.ts";
 
 /**
@@ -32,8 +31,8 @@ import {
  * before any header error — a text file has no NUL-terminated magic to read,
  * and a file too short to carry the detection byte reports the header's own
  * short read rather than the probe's out-of-range error. A non-NUL detection
- * byte means the 2.x text form, which is refused with a located `FormatError`
- * rather than parsed as binary. Otherwise the magic, the `minor`-range check
+ * byte means the 2.x text form, which is read by `readTextBattleBackground`.
+ * Otherwise the magic, the `minor`-range check
  * and the six `str` fields are read in order; bytes after the last sound
  * are kept as `residue` (`docs/spec/formats/README.md#bytes-after-the-last-documented-field`).
  */

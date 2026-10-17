@@ -1,8 +1,8 @@
 /**
  * Reading and writing an enemy (docs/spec/formats/enemy.md#layout, magic `RPGTLKIT ENEMY`).
  *
- * Pure (G2). Only the binary 2.1 form, minor 1, is represented; minor 0 is the
- * 2.0 line-oriented text form, which the reader reports rather than converts.
+ * Pure (G2). `readEnemy` dispatches on the minor: the binary 2.1 form, minor 1,
+ * and the 2.0 line-oriented text form, minor 0 (`readTextEnemy`).
  * The reader never throws (AD-18) and the writer reproduces the bytes
  * `readEnemy` consumed exactly, including the unused stance slot 5 and the
  * empty files of the bounded lists.

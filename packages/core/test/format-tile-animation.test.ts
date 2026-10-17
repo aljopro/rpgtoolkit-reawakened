@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -86,9 +86,6 @@ test("reads water.tan sample file with exact fields and zero residue", () => {
 
 test("reads real fixture animatedTile.tan with zero residue", () => {
   const path = join(repoRoot, "packages", "core", "test", "fixtures", "real", "animatedTile.tan");
-  if (!existsSync(path)) {
-    return;
-  }
   const bytes = new Uint8Array(readFileSync(path));
   const res = readTileAnimation(new BinaryReader(bytes, path));
   equal(res.ok, true);

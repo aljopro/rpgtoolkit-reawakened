@@ -53,31 +53,19 @@ test("committed main_tk2_text.gam example parses cleanly to end of file", () => 
   equal(reader.remaining, 0);
 });
 
-test("all corpus text .gam files parse cleanly to end of file when scratch corpus is present", () => {
-  const corpusDir = "/tmp/tk2-163";
-  if (!existsSync(corpusDir)) return;
-
-  function findTextGams(dir: string): string[] {
-    let res: string[] = [];
-    for (const f of readdirSync(dir)) {
-      const p = `${dir}/${f}`;
-      try {
-        const b = readFileSync(p);
-        if (f.toLowerCase().endsWith(".gam") && b.length > 13 && b[13] !== 0) {
-          res.push(p);
-        }
-      } catch {
-        try {
-          res = res.concat(findTextGams(p));
-        } catch {
-          // ignore
-        }
-      }
-    }
-    return res;
+test("all fetched-corpus text .gam files parse cleanly to end of file", () => {
+  const corpusDir = join(repoRoot, "fixtures", "legacy");
+  if (!existsSync(corpusDir)) {
+    throw new Error("fixtures/legacy is missing; run `pnpm fixtures:fetch`");
   }
 
-  const files = findTextGams(corpusDir);
+  const files = readdirSync(corpusDir, { recursive: true })
+    .filter((f) => f.toLowerCase().endsWith(".gam"))
+    .map((f) => join(corpusDir, f))
+    .filter((p) => {
+      const b = readFileSync(p);
+      return b.length > 13 && b[13] !== 0;
+    });
   equal(files.length >= 2, true, `expected at least 2 text .gam files, found ${files.length}`);
 
   for (const p of files) {
