@@ -15,6 +15,7 @@ import { ScriptError } from "./errors.ts";
 import { COMPILER_VERSION } from "./program.ts";
 import type { CommandEffect, PluginDefinition } from "./plugin.ts";
 import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
+import { PURE_SPECS } from "./builtins/pure.ts";
 import type { SectionKey } from "../save/state.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
 type Row = {
@@ -216,9 +217,15 @@ export const CATALOGUE_RESPONDERS_PLUGIN: PluginDefinition = {
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
 const CORE_FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
 
-/** The default catalogue layer combines the safe stubs and these responders. */
+/** The default catalogue layer combines safe stubs and responders not owned by CORE_PLUGIN. */
+const CORE_PURE_COMMANDS = new Set(PURE_SPECS.flatMap((command) => [command.name, ...command.aliases]));
 export const CATALOGUE_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
-  commands: [...CATALOGUE_STUBS_PLUGIN.commands, ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter((command) => !CORE_FILE_COMMANDS.has(command.name))],
+  commands: [
+    ...CATALOGUE_STUBS_PLUGIN.commands,
+    ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
+      (command) => !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
+    ),
+  ],
 };

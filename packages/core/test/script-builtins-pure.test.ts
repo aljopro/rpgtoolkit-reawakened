@@ -33,6 +33,63 @@ function errorOf(fn: () => unknown): { code: string; message: string } {
 }
 
 // ---------------------------------------------------------------------------
+// Math, random, and conditional built-ins
+// ---------------------------------------------------------------------------
+
+test("math built-ins use deterministic fmath operations and by-reference outputs", () => {
+  const state = run(`
+    s = sin(0)
+    c = cos(0)
+    t = tan(0)
+    q = sqrt(9)
+    l = log(1)
+    i = iif(1, 7, 8)
+    chosen = iif(0, 7, 8)
+    gettickcount(milliseconds)
+  `);
+  equal(state.vm.globals.s, 0);
+  equal(state.vm.globals.c, 1);
+  equal(state.vm.globals.t, 0);
+  equal(state.vm.globals.q, 3);
+  equal(state.vm.globals.l, 0);
+  equal(state.vm.globals.i, 7);
+  equal(state.vm.globals.chosen, 8);
+  equal(state.vm.globals.milliseconds, 0);
+});
+
+test("random uses the seeded stream and enforces a positive integer bound", () => {
+  const first = run("a = random(10)\nb = random(10)\nc = random(10)\n", 1234);
+  const second = run("a = random(10)\nb = random(10)\nc = random(10)\n", 1234);
+  deepEqual(
+    [first.vm.globals.a, first.vm.globals.b, first.vm.globals.c],
+    [second.vm.globals.a, second.vm.globals.b, second.vm.globals.c],
+  );
+  for (const value of [first.vm.globals.a, first.vm.globals.b, first.vm.globals.c]) {
+    if (typeof value !== "number") throw new Error("random returned a non-number");
+    equal(value >= 1 && value <= 10, true);
+  }
+  equal(errorOf(() => run("random(0)\n")).code, "builtin.bad-arg");
+  equal(errorOf(() => run("random(1.5)\n")).code, "builtin.bad-arg");
+});
+
+test("random stream snapshots round-trip while a program is waiting", () => {
+  const state = createGameState({ seed: 1234 });
+  startProgram(state.vm, {
+    kind: "inline",
+    text: "first = random(100)\nsleep(1)\nsecond = random(100)\nend()\n",
+    compiler: "2",
+  });
+  const services = createScriptServices(state);
+  advanceScriptTick(state, services);
+  equal(state.vm.threads[0]?.status, "waiting");
+  const restored = restoreGameState(snapshot(state));
+  advanceScriptTick(state, services);
+  advanceScriptTick(restored, createScriptServices(restored));
+  equal(hashState(restored), hashState(state));
+  equal(restored.vm.globals.second, state.vm.globals.second);
+});
+
+// ---------------------------------------------------------------------------
 // String Built-Ins
 // ---------------------------------------------------------------------------
 

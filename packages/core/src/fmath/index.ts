@@ -32,6 +32,7 @@ export {
   log,
   log2,
   log10,
+  sqrt,
   pow,
   cbrt,
   hypot,

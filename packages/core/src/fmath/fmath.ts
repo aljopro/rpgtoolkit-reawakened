@@ -64,6 +64,12 @@ export const TAN_PI_8 = 0.41421356237309515;
  */
 export const TRIG_ARG_MAX = 137438953472;
 
+/** Deterministic square root wrapper; domain errors use canonical positive NaN. */
+export function sqrt(x: number): number {
+  const result = Math.sqrt(x);
+  return Number.isNaN(result) ? NaN : result;
+}
+
 // ── pi / 2 split (five doubles) ──────────────────────────────────────────────
 //
 // PIO2_A..PIO2_D carry 16 significant bits each, so for `|k| < 2^37` every
@@ -408,7 +414,6 @@ function exponentOf(x: number): number {
   scratch.setUint32(0, (hi & 0xfffff) | 0x3ff00000, false);
   return scratch.getFloat64(0, false) > SQRT2 ? e + 1 : e;
 }
-
 /** `log(m)` for a mantissa `m` in `(0.7071, 1.4142)`, via `2 * atanh((m-1)/(m+1))`. */
 function logSeries(m: number): number {
   const s = (m - 1) / (m + 1);

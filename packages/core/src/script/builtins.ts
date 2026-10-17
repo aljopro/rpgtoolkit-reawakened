@@ -32,6 +32,7 @@ import { FILE_SPECS } from "./builtins/files.ts";
 import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
 import { THREAD_SPECS } from "./builtins/threads.ts";
+import { PURE_SPECS } from "./builtins/pure.ts";
 export type ParamSpec = {
   readonly name: string;
   readonly optional: boolean;
@@ -64,12 +65,7 @@ export const CORE_PLUGIN: PluginDefinition = {
   id: "core",
   version: "1.0.0",
   commands: [
-    {
-      name: "end",
-      aliases: [],
-      params: NO_PARAMS,
-      call: () => ({ value: null, effects: [{ kind: "vm.control", args: ["end"] }] }),
-    },
+    ...PURE_SPECS,
     {
       name: "sleep",
       aliases: [],
