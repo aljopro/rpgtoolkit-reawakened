@@ -9,11 +9,11 @@
  */
 
 import { ScriptError } from "./errors.ts";
+import { compileTk2 } from "./tk2.ts";
 import { tokenizeObjects } from "./lex.ts";
 import { lower, type CompiledClass, type FunctionInfo, type StatementRange } from "./lower.ts";
 import type { StepOp } from "./ops.ts";
 import { parse } from "./parse.ts";
-
 export type { CompiledClass, FunctionInfo, StatementRange } from "./lower.ts";
 
 
@@ -23,6 +23,8 @@ export type { CompiledClass, FunctionInfo, StatementRange } from "./lower.ts";
  */
 export const COMPILER_VERSION = "2";
 
+export type ScriptDialect = "tk3" | "tk2";
+
 /** How a program was supplied (AD-7). */
 export type ProgramRef =
   | {
@@ -30,9 +32,14 @@ export type ProgramRef =
       readonly path: string;
       readonly sourceHash: string;
       readonly compiler: string;
+      readonly dialect?: ScriptDialect;
     }
-  | { readonly kind: "inline"; readonly text: string; readonly compiler: string };
-
+  | {
+      readonly kind: "inline";
+      readonly text: string;
+      readonly compiler: string;
+      readonly dialect?: ScriptDialect;
+    };
 /** A compiled program: its reference, Step IR, functions, classes and labels. */
 export type Program = {
   readonly ref: ProgramRef;
@@ -44,8 +51,9 @@ export type Program = {
   readonly statements: readonly StatementRange[];
 };
 
-/** Compile inline source text (docs/spec/engine/rpgcode-language.md#threads, a thread given text instead of a file). */
-export function compileInline(text: string, file = "<inline>"): Program {
+/** Compile inline source text using the selected dialect. */
+export function compileInline(text: string, file = "<inline>", dialect: ScriptDialect = "tk3"): Program {
+  if (dialect === "tk2") return compileTk2(text, file);
   const ast = parse(tokenizeObjects(text));
   const result = lower(ast, file);
   return {
@@ -65,5 +73,5 @@ export function compileProgram(ref: ProgramRef): Program {
       "a file program needs the loader; entry 8 loads `.prg` files",
     );
   }
-  return compileInline(ref.text, "<inline>");
+  return compileInline(ref.text, ref.dialect === "tk2" ? "<tk2>" : "<inline>", ref.dialect ?? "tk3");
 }

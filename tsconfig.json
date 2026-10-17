@@ -4,6 +4,7 @@
     { "path": "packages/core" },
     { "path": "packages/synth" },
     { "path": "packages/runner-harness" },
-    { "path": "packages/runner-headless" }
+    { "path": "packages/runner-headless" },
+    { "path": "packages/plugin-tk2-compat" }
   ]
 }

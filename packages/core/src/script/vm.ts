@@ -106,9 +106,10 @@ export function drainDiagnostics(services: ScriptServices): Diagnostic[] {
 }
 
 function programMemoKey(ref: ProgramRef): string {
+  const dialect = ref.dialect ?? "tk3";
   return ref.kind === "inline"
-    ? `inline\u0000${ref.compiler}\u0000${ref.text}`
-    : `file\u0000${ref.path}\u0000${ref.sourceHash}\u0000${ref.compiler}`;
+    ? `inline\u0000${dialect}\u0000${ref.compiler}\u0000${ref.text}`
+    : `file\u0000${dialect}\u0000${ref.path}\u0000${ref.sourceHash}\u0000${ref.compiler}`;
 }
 
 export function createScriptServices(
@@ -965,6 +966,26 @@ function performCall(
           );
         }
         frame.ip = targetIp;
+        controlApplied = true;
+      }
+      if (action === "fbranch") {
+        const labelName = effect.args?.[1] as string;
+        const targetIp = lookupLabel(program, frame.ip, labelName);
+        if (targetIp === undefined) {
+          throw new ScriptError(
+            "vm.unknown-label",
+            `label \`:${labelName}\` not found in current function scope`,
+            pos,
+          );
+        }
+        thread.frames.push({
+          program: frame.program,
+          ip: targetIp,
+          locals: {},
+          operands: [],
+          errorHandler: null,
+          autoLocal: frame.autoLocal,
+        });
         controlApplied = true;
       }
       if (action === "setErrorHandler") {
