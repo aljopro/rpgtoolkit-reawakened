@@ -56,6 +56,30 @@
     {
       "id": "sample-system-basic",
       "hash": "77ea790a87e7819d"
+    },
+    {
+      "id": "sample-sys-test-demo",
+      "hash": "77ea790a87e7819d"
+    },
+    {
+      "id": "sample-win-demo",
+      "hash": "4e036c0c50414d2b"
+    },
+    {
+      "id": "sample-oldman-demo",
+      "hash": "f1521276019371da"
+    },
+    {
+      "id": "sample-man-demo",
+      "hash": "4592a1b263387977"
+    },
+    {
+      "id": "sample-man-wander-demo",
+      "hash": "81a9b1dcf6cefe3a"
+    },
+    {
+      "id": "sample-wander-basic",
+      "hash": "21bdb6f1b785d878"
     }
   ]
 }
