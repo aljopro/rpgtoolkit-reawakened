@@ -130,13 +130,27 @@ references = [
 ]
 
 [[entry]]
+id = 32
+type = "story"
+title = "Authored default bitmap font: a project-owned .fnt"
+description = "Authors the project's deterministic 8x8 bitmap fallback in the TK2 .fnt layout that entry 16.7 reads: a small plain-text glyph source and reproducible generator are committed, with ASCII code points 32 through 126 plus an explicit replacement glyph. The design brief is a generic retro 8-bit game font with a loose stylised, classic small-screen console feel, upper/lower case and 1px strokes, similar in spirit to legacy BASE.FNT for readable small-screen game text but not identical to it. The glyphs are original work drawn from scratch under the project's MIT licence, never traced or derived from any existing font, game or game screenshot. A provenance notice records the author, date and 'original work, no third-party glyph data'. The fallback serves missing-glyph and no-TrueType cases and gives entry 4.8 a project-owned font; it does not replace fetched TK2 BASE.FNT fixtures."
+verify = "The committed generator reproduces the committed .fnt bytes from the plain-text source; the 16.7 reader loads the file and renders ASCII 32-126 plus the replacement glyph; a deterministic rasterised pangram golden is stable across the supported lanes; licence and provenance gates pass; and when a fetched legacy BASE.FNT fixture is present, a test proves the authored glyph data is not byte-identical to it. The owner reviews glyph design quality as a taste call."
+covers = ["CAP-6"]
+after = [3, "16.7"]
+hitl = false
+risk = "medium"
+references = [
+  "reference - docs/spec/formats/legacy/text-formats.md#font-toolkit-2-text",
+  "constraint - docs/guardrails.md, sections G3, G6 and G7",
+]
+[[entry]]
 id = 8
 type = "story"
 title = "Text layout, bitmap fonts and the text command"
-description = "Delivers core-owned text (AD-15) without a vector font: the `FontRef` with size and style as entry 1 amends it, a font service resolving a name to a font asset (project `Font\\` assets, entry 1's substitution by family, the fallback entry 3 settles), line breaking and word wrap, per-glyph advances, `getTextWidth` and `getTextHeight` metrics, synthetic bold and italic, underline as a `line` command, `text` emission and its replay in `core/raster`, the bundled bitmap fallback and test font from entry 3, and the Toolkit 2 `.fnt` reader of 16.7 as a second glyph source so TK2 games' `Font\\BASE.FNT` draws. It exports text vectors into entry 6's conformance directory. The glyph-source seam is what entry 9 fills with TrueType outlines."
-verify = "A fixed string lays out to committed line breaks and advances at three sizes with the bitmap font, `text` replays through the rasteriser to committed pixels (class regression-baseline) and the text vectors sit in the conformance directory, a `BASE.FNT` from the fetched TK2 corpus renders all 256 glyphs, and layout results are identical on Node and under the Bun lane."
+description = "Delivers core-owned text (AD-15) without a vector font: the `FontRef` with size and style as entry 1 amends it, a font service resolving a name to a font asset (project `Font\\` assets, entry 1's substitution by family, the fallback entry 3 settles), line breaking and word wrap, per-glyph advances, `getTextWidth` and `getTextHeight` metrics, synthetic bold and italic, underline as a `line` command, `text` emission and its replay in `core/raster`, the project-owned bitmap fallback from entry 4.32 and test font from entry 3, and the Toolkit 2 `.fnt` reader of 16.7 as a second glyph source so TK2 games' `Font\\BASE.FNT` draws. It exports text vectors into entry 6's conformance directory. The glyph-source seam is what entry 9 fills with TrueType outlines."
+verify = "A fixed string lays out to committed line breaks and advances at three sizes with the project-owned bitmap font, `text` replays through the rasteriser to committed pixels (class regression-baseline) and the text vectors sit in the conformance directory, a `BASE.FNT` from the fetched TK2 corpus renders all 256 glyphs, and layout results are identical on Node and under the Bun lane."
 covers = ["CAP-6"]
-after = [1, 3, 6, 7, "16.7"]
+after = [1, 3, 6, 7, "16.7", 32]
 hitl = false
 risk = "medium"
 references = [
