@@ -310,6 +310,9 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `drawenemy` | `void drawenemy(string file, int x, int y, [canvas cnv])` | Draw an enemy. | Draws battle asset frame 0 at logical pixel coordinates without changing battle state or consuming RNG. |
 | `giveexp` | `void giveexp(string handle, int amount)` | Give experience to a player. |  |
 
+<a id="reawakened-draw-enemy"></a>
+**Reawakened rule (OWNER; unverified default).** `drawenemy(file,x,y,canvas)` draws frame 0 of the named battle asset at logical-pixel coordinates on the selected canvas. It emits a draw command only: it does not mutate battle state, advance a battle turn or consume RNG, and it does not wait. Invalid asset or canvas references are reported through the normal deterministic asset diagnostic.
+
 <a id="e-83"></a>
 **E-83 Shop.** `CallShop(item, …)` opens a buy/sell screen that uses each item's buy and sell prices and the party's gold; its colours are configurable.
 
