@@ -70,14 +70,14 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
     see: ["docs/spec/engine/rpgcode-functions.md#reawakened-zoom"],
   },
   cursormaphand: {
-    summary: "Set the cursor hand image for the current cursor map.",
+    summary: "Change the cursor used everywhere cursors are used (e.g. cursor maps, the menu, the battle system), optionally not stretching it to 32 by 32 pixels.",
     behaviour: "Uses the bundled 16x16 hand cursor with the documented hotspot and stretch policy; the call does not wait.",
     groups: ["mouse-buttons-cursor-maps-11"],
     waits: { kind: "never", summary: "Does not wait." },
     see: ["docs/spec/engine/rpgcode-functions.md#reawakened-default-cursors"],
   },
   mousecursor: {
-    summary: "Set the mouse cursor image.",
+    summary: "Change the mouse cursor. \"TK DEFAULT\" or \"\" restores the default cursor.",
     behaviour: "Uses the bundled 16x16 arrow cursor with the documented hotspot and stretch policy; the call does not wait.",
     groups: ["mouse-buttons-cursor-maps-11"],
     waits: { kind: "never", summary: "Does not wait." },
@@ -100,7 +100,7 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
   start: {
     summary: "Obsolete.",
     behaviour: "Raises the catchable obsolete-command error and skips the statement; opening a game is a host lifecycle operation.",
-    groups: ["program-flow-errors-debugging-25"],
+    groups: ["program-flow-errors-debugging-25", "files-saves-os-15"],
     tags: ["obsolete"],
     replacedBy: { kind: "syntax", text: "Use the host lifecycle operation for loading a game." },
     reason: "The Reawakened host owns game loading instead of shell-open commands.",
@@ -109,14 +109,14 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
   mainfile: {
     summary: "Load a new main file.",
     behaviour: "Requests a board-rendering lifecycle switch to the named project and returns immediately; the host performs the actual load.",
-    groups: ["files-saves-os-15"],
+    groups: ["files-saves-os-15", "board-tiles-vectors-screen-effects-33"],
     waits: { kind: "never", summary: "Does not wait." },
     see: ["docs/spec/engine/main-loop-and-startup.md#e-06"],
   },
   win: {
     summary: "Obsolete.",
     behaviour: "Raises the catchable obsolete-command error and skips the statement; use the configured game-over flow instead.",
-    groups: ["program-flow-errors-debugging-25"],
+    groups: ["program-flow-errors-debugging-25", "battle-stats-menus-29"],
     tags: ["obsolete"],
     replacedBy: { kind: "syntax", text: "Use the configured game-over flow." },
     reason: "Game-over presentation is owned by the board-rendering lifecycle.",
@@ -148,7 +148,7 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
   dos: {
     summary: "Quit the game.",
     behaviour: "Emits one deterministic quit request through the host lifecycle seam and returns immediately.",
-    groups: ["program-flow-errors-debugging-25"],
+    groups: ["program-flow-errors-debugging-25", "reawakened-additions-not-part-of-the-282-legacy-catalogue"],
     see: ["docs/spec/engine/rpgcode-functions.md#e-55"],
   },
   windows: {
@@ -162,7 +162,7 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
     behaviour: "Emits one deterministic quit request through the host lifecycle seam and returns immediately.",
     groups: ["reawakened-additions-not-part-of-the-282-legacy-catalogue"],
     waits: { kind: "never", summary: "Does not wait." },
-    see: ["docs/spec/engine/rpgcode-functions.md#e-56"],
+    see: ["docs/spec/engine/rpgcode-functions.md#e-94"],
   },
 };
 
