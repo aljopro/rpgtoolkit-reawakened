@@ -1,6 +1,6 @@
 ---
 title: 'Font strategy spike: pure core font library and bundled font assets'
-type: 'spike'
+type: 'feature'
 ticket: 3
 created: '2026-10-17'
 status: draft
