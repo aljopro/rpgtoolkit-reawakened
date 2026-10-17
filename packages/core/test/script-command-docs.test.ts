@@ -36,6 +36,8 @@ test("projection copies extended docs, params and aliases as plain data", () => 
         tags: ["legacy"],
         support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
         default: "Zero pixels when omitted.",
+        ifOmitted: "No by-reference write occurs when omitted.",
+        range: { min: 0, max: 100, note: "Fixture measurement range." },
         values: [{ value: "0", summary: "No distance." }],
         type: "number",
         since: "1.0",
@@ -57,7 +59,7 @@ test("projection copies extended docs, params and aliases as plain data", () => 
       author: "Fixture Author",
       license: "MIT",
       tags: ["legacy", "deprecated"],
-      replacedBy: "measure",
+      replacedBy: { kind: "command", name: "measure" },
       reason: "Use the newer measurement spelling.",
       support: { headless: { level: "full" }, renderer: { level: "none", note: "Rendering is not implemented." } },
     },
@@ -66,13 +68,16 @@ test("projection copies extended docs, params and aliases as plain data", () => 
   deepEqual(entries.map((entry) => `${entry.name}:${entry.tags.join(",")}`), ["measure:legacy,deprecated", "m:legacy,deprecated,alias"]);
   equal(entries[0]?.plugin, null);
   deepEqual(entries[0]?.groups, ["fixtures", "measurement"]);
+  deepEqual(entries[0]?.replacedBy, { kind: "command", name: "measure" });
   deepEqual(entries[0]?.examples, [{ code: "x = measure(4)", caption: "Measure four pixels.", result: "4" }]);
   deepEqual(entries[0]?.returns, { summary: "The measured distance.", unit: "pixels" });
   deepEqual(entries[0]?.params[0], {
     name: "distance", optional: false, byRef: false, variadic: false,
     summary: "Distance to measure.", unit: "pixels", tags: ["legacy"],
     support: { headless: { level: "full" }, harness: { level: "partial", note: "Uses the harness clock." } },
-    default: "Zero pixels when omitted.", values: [{ value: "0", summary: "No distance." }], type: "number", since: "1.0",
+    default: "Zero pixels when omitted.", ifOmitted: "No by-reference write occurs when omitted.",
+    range: { min: 0, max: 100, note: "Fixture measurement range." },
+    values: [{ value: "0", summary: "No distance." }], type: "number", since: "1.0",
   });
   equal("call" in (entries[0] as object), false);
   equal(JSON.parse(JSON.stringify(entries[0])).name, "measure");
@@ -104,7 +109,7 @@ test("validator reports replacement, conflict, see, waits and parameter failures
   const definition = plugin({
     name: "obsolete",
     aliases: ["old"],
-    params: [{ name: "value", optional: false, byRef: false, variadic: false, doc: { summary: "Value", tags: ["alias"], support: { headless: { level: "none" } }, values: [{ value: "", summary: "" }], type: "" } }],
+    params: [{ name: "value", optional: false, byRef: false, variadic: false, doc: { summary: "Value", tags: ["alias"], support: { headless: { level: "none" } }, range: { min: 2, max: 1 }, values: [{ value: "", summary: "" }], type: "" } }],
     call,
     doc: { summary: "Obsolete.", behaviour: "It does something.", tags: ["obsolete", "experimental"], see: ["missing"], waits: { kind: "ticks", summary: "Waits briefly." } },
   });
@@ -116,10 +121,31 @@ test("validator reports replacement, conflict, see, waits and parameter failures
   equal(diagnostics.some((item) => item.code === "doc.replacement"), true);
   equal(diagnostics.some((item) => item.code === "doc.see"), true);
   equal(diagnostics.some((item) => item.code === "doc.waits"), true);
+  equal(diagnostics.some((item) => item.code === "param.range"), true);
   equal(diagnostics.some((item) => item.code === "param.tag" || item.code === "doc.tag"), true);
   equal(diagnostics.some((item) => item.code === "support.note"), true);
   equal(diagnostics.some((item) => item.code === "param.value"), true);
   equal(diagnostics.some((item) => item.code === "param.type"), true);
+});
+
+test("projection preserves host-request waits and syntax replacement targets", () => {
+  const definition = plugin({
+    name: "continuation",
+    aliases: [],
+    params: [],
+    call,
+    doc: {
+      summary: "Continue a host request.",
+      behaviour: "Resume after the host replies; this command waits for the host request.",
+      waits: { kind: "host-request", summary: "Resumes only after the host asset request replies." },
+      tags: ["obsolete"],
+      replacedBy: { kind: "syntax", text: "host continuation syntax" },
+      reason: "Fixture replacement syntax.",
+    },
+  });
+  const entry = commandDocumentation(resolved(definition))[0]!;
+  deepEqual(entry.waits, { kind: "host-request", summary: "Resumes only after the host asset request replies." });
+  deepEqual(entry.replacedBy, { kind: "syntax", text: "host continuation syntax" });
 });
 
 test("validator enforces native and plugin-owned groups", () => {
@@ -148,7 +174,7 @@ test("documentation metadata never enters the state hash", () => {
     aliases: [],
     params: [],
     call,
-    doc: { summary: "Run a documented command.", behaviour: "Returns no value and does not wait.", tags: ["deprecated"], replacedBy: "doccommand", reason: "Fixture replacement.", support: { headless: { level: "full" } } },
+    doc: { summary: "Run a documented command.", behaviour: "Returns no value and does not wait.", tags: ["deprecated"], replacedBy: { kind: "command", name: "doccommand" }, reason: "Fixture replacement.", support: { headless: { level: "full" } } },
   });
   const run = (definition: PluginDefinition) => {
     const state = createGameState({ seed: 4 });

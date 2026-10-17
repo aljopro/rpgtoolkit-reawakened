@@ -31,6 +31,8 @@ export type CommandParamDocumentation = {
   readonly tags: readonly DocTag[];
   readonly support: RunnerSupport | null;
   readonly default: string | null;
+  readonly ifOmitted: string | null;
+  readonly range: { readonly min?: number; readonly max?: number; readonly note?: string } | null;
   readonly values: readonly ParamDocValue[];
   readonly type: string | null;
   readonly since: string | null;
@@ -60,7 +62,7 @@ export type CommandDocumentation = {
   readonly throws: readonly DocThrow[];
   readonly see: readonly string[];
   readonly since: string | null;
-  readonly replacedBy: string | null;
+  readonly replacedBy: { readonly kind: "command"; readonly name: string } | { readonly kind: "syntax"; readonly text: string } | null;
   readonly reason: string | null;
   readonly access: "public" | "internal";
   readonly waits: DocWait | null;
@@ -139,6 +141,8 @@ function paramDocumentation(param: ParamSpec): CommandParamDocumentation {
     tags: copyTags(doc?.tags),
     support: copySupport(doc?.support),
     default: doc?.default ?? null,
+    ifOmitted: doc?.ifOmitted ?? null,
+    range: doc?.range === undefined ? null : { ...doc.range },
     values: doc?.values === undefined ? [] : doc.values.map((value) => ({ value: value.value, summary: value.summary })),
     type: doc?.type ?? null,
     since: doc?.since ?? null,
@@ -170,7 +174,7 @@ function entry(
     throws: doc?.throws === undefined ? [] : doc.throws.map((item) => ({ code: item.code, when: item.when })),
     see: doc?.see === undefined ? [] : [...doc.see],
     since: doc?.since ?? null,
-    replacedBy: doc?.replacedBy ?? null,
+    replacedBy: doc?.replacedBy === undefined ? null : { ...doc.replacedBy },
     reason: doc?.reason ?? null,
     access: doc?.access ?? "public",
     waits: doc?.waits === undefined ? null : { ...doc.waits },
@@ -224,7 +228,7 @@ const PARAM_TAGS = new Set<DocTag>(["legacy", "deprecated", "obsolete", "experim
 const RUNNER_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const GROUP_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SUPPORT_LEVELS = new Set(["full", "partial", "none"]);
-const WAIT_KINDS = new Set(["never", "ticks", "until-input", "until-event", "other"]);
+const WAIT_KINDS = new Set(["never", "ticks", "until-input", "until-event", "host-request", "other"]);
 
 function derivedGroup(section: string): string {
   return section.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -272,6 +276,13 @@ function validateParamDoc(
   if (!hasText(doc.summary)) diagnostics.push({ code: "param.summary", key: location, message: `${location} has an empty parameter doc.summary` });
   if (doc.unit !== undefined && !hasText(doc.unit)) diagnostics.push({ code: "param.unit", key: location, message: `${location} has an empty parameter doc.unit` });
   if (doc.default !== undefined && !hasText(doc.default)) diagnostics.push({ code: "param.default", key: location, message: `${location} has an empty parameter doc.default` });
+  if (doc.ifOmitted !== undefined && !hasText(doc.ifOmitted)) diagnostics.push({ code: "param.ifOmitted", key: location, message: `${location} has an empty parameter doc.ifOmitted` });
+  if (doc.range !== undefined) {
+    if (doc.range.min !== undefined && !Number.isFinite(doc.range.min)) diagnostics.push({ code: "param.range", key: location, message: `${location} has a non-finite range.min` });
+    if (doc.range.max !== undefined && !Number.isFinite(doc.range.max)) diagnostics.push({ code: "param.range", key: location, message: `${location} has a non-finite range.max` });
+    if (doc.range.min !== undefined && doc.range.max !== undefined && doc.range.min > doc.range.max) diagnostics.push({ code: "param.range", key: location, message: `${location} has range.min greater than range.max` });
+    if (doc.range.note !== undefined && !hasText(doc.range.note)) diagnostics.push({ code: "param.range", key: location, message: `${location} has an empty range.note` });
+  }
   if (doc.type !== undefined && !hasText(doc.type)) diagnostics.push({ code: "param.type", key: location, message: `${location} has an empty parameter doc.type` });
   validateTags(doc.tags, location, diagnostics, true);
   if (doc.values !== undefined) {
@@ -296,10 +307,19 @@ function validateCommandDoc(
   if (doc === undefined) return;
   validateTags(doc.tags, key, diagnostics, false);
   validateSupport(doc.support, key, diagnostics);
-  if ((doc.tags?.includes("deprecated") === true || doc.tags?.includes("obsolete") === true) && (!hasText(doc.replacedBy) || !hasText(doc.reason))) {
+  const hasReplacement = doc.replacedBy !== undefined &&
+    ((doc.replacedBy.kind === "command" && hasText(doc.replacedBy.name)) ||
+      (doc.replacedBy.kind === "syntax" && hasText(doc.replacedBy.text)));
+  if ((doc.tags?.includes("deprecated") === true || doc.tags?.includes("obsolete") === true) && (!hasReplacement || !hasText(doc.reason))) {
     diagnostics.push({ code: "doc.replacement", key, message: `${key} requires replacedBy and reason for deprecated or obsolete documentation` });
   }
-  if (doc.replacedBy !== undefined && !commandNames.has(fold(doc.replacedBy)) && !/^\?:\s+operator$/.test(doc.replacedBy)) diagnostics.push({ code: "doc.replacedBy", key, message: `${key} replacedBy ${doc.replacedBy} does not resolve to a registered command or documented operator` });
+  if (doc.replacedBy !== undefined) {
+    if (doc.replacedBy.kind === "command") {
+      if (!commandNames.has(fold(doc.replacedBy.name))) diagnostics.push({ code: "doc.replacedBy", key, message: `${key} replacedBy command ${doc.replacedBy.name} does not resolve to a registered command` });
+    } else if (doc.replacedBy.kind !== "syntax" || !hasText(doc.replacedBy.text)) {
+      diagnostics.push({ code: "doc.replacedBy", key, message: `${key} has an invalid syntax replacement target` });
+    }
+  }
   if (doc.returns !== undefined && !hasText(doc.returns.summary)) diagnostics.push({ code: "doc.returns", key, message: `${key} has an empty returns.summary` });
   if (doc.throws !== undefined) for (const item of doc.throws) if (!hasText(item.code) || !hasText(item.when)) diagnostics.push({ code: "doc.throws", key, message: `${key} has a throw entry with empty code or when` });
   if (doc.see !== undefined) {

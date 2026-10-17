@@ -69,10 +69,10 @@ export type BuiltinDoc = {
   readonly throws?: readonly { readonly code: string; readonly when: string }[];
   readonly see?: readonly string[];
   readonly since?: string;
-  readonly replacedBy?: string;
+  readonly replacedBy?: { readonly kind: "command"; readonly name: string } | { readonly kind: "syntax"; readonly text: string };
   readonly reason?: string;
   readonly access?: "public" | "internal";
-  readonly waits?: { readonly kind: "never" | "ticks" | "until-input" | "until-event" | "other"; readonly summary: string };
+  readonly waits?: { readonly kind: "never" | "ticks" | "until-input" | "until-event" | "host-request" | "other"; readonly summary: string };
   readonly effects?: readonly string[];
   readonly todo?: readonly string[];
   readonly author?: string;
@@ -87,6 +87,8 @@ export type ParamDoc = {
   readonly tags?: readonly DocTag[];
   readonly support?: RunnerSupport;
   readonly default?: string;
+  readonly ifOmitted?: string;
+  readonly range?: { readonly min?: number; readonly max?: number; readonly note?: string };
   readonly values?: readonly { readonly value: string; readonly summary: string }[];
   readonly type?: string;
   readonly since?: string;
@@ -116,11 +118,11 @@ export type PluginDoc = {
 
 `doc` is optional in the transitional type because the baseline catalogue is migrated by allowlist, not by hand-writing 282 entries in this ticket. A non-allowlisted command is nevertheless required to have it by the checker. `summary` and `behaviour` are required whenever `doc` is present; no empty string is accepted. `summary` follows the owner help-text standard: simple terms first for a game author. `behaviour` follows it with deterministic units, ticks or seconds, ordering, outputs and whether the calling script/thread waits. `examples` are complete RPGCode snippets or structured examples with captions/results, not pseudocode. `tags` are independent: `legacy`, `alias`, `deprecated`, `obsolete` and `experimental`; aliases gain `alias` only in projection, and `experimental` cannot combine with `obsolete` or `deprecated`.
 
-Optional fields map to the corresponding JSDoc/TSDoc concepts: multi-valued lowercase-kebab `groups`, returns, throws, see links, since, replacement/reason, access, waits, effects, todo and third-party author/license. Deprecated or obsolete docs require `replacedBy` and `reason`; replacement and see command links resolve against registration. `access` defaults to public; internal commands remain projected but are hidden from help consumers. Native commands default to a group derived from their normative table section; explicit groups must include that group, and extra groups must be declared by the plugin or be spec-derived.
+Optional fields map to the corresponding JSDoc/TSDoc concepts: multi-valued lowercase-kebab `groups`, returns, throws, see links, since, structured replacement targets/reason, access, waits, effects, todo and third-party author/license. Deprecated or obsolete docs require `replacedBy` and `reason`; command replacement targets resolve against registration while syntax targets name a documented replacement expression. `access` defaults to public; internal commands remain projected but are hidden from help consumers. Native commands default to a group derived from their normative table section; explicit groups must include that group, and extra groups must be declared by the plugin or be spec-derived. A `host-request` wait describes an internal continuation parked until an external request replies.
 
 `support` is absent when every runner supports the command. Its open-string runner ids must be non-empty lowercase kebab-case; `partial` and `none` levels require a non-empty note describing the difference in plain words. The checker validates these constraints, while absence means support is expected everywhere.
 
-`ParamSpec.doc` has a required summary and optional unit, tags (never `alias`), support, default, enum values, type and since. Enum values have non-empty value and summary strings; `type` is non-empty when present. Neither metadata changes arity, coercion or by-reference binding. Do not put handlers, closures, logger values, effects, waits, state paths or host handles in documentation objects.
+`ParamSpec.doc` has a required summary and optional unit, tags (never `alias`), support, prose `default`, `ifOmitted`, numeric `range`, enum values, type and since. Range bounds are plain numbers with `min <= max`; enum values have non-empty value and summary strings; `type` is non-empty when present. Neither metadata changes arity, coercion or by-reference binding. Do not put handlers, closures, logger values, effects, waits, state paths or host handles in documentation objects.
 
 ### Generated command-documentation output
 
@@ -137,6 +139,8 @@ export type CommandParamDocumentation = {
   readonly tags: readonly DocTag[];
   readonly support: RunnerSupport | null;
   readonly default: string | null;
+  readonly ifOmitted: string | null;
+  readonly range: { readonly min?: number; readonly max?: number; readonly note?: string } | null;
   readonly values: readonly { readonly value: string; readonly summary: string }[];
   readonly type: string | null;
   readonly since: string | null;
@@ -166,10 +170,10 @@ export type CommandDocumentation = {
   readonly throws: readonly { readonly code: string; readonly when: string }[];
   readonly see: readonly string[];
   readonly since: string | null;
-  readonly replacedBy: string | null;
+  readonly replacedBy: { readonly kind: "command"; readonly name: string } | { readonly kind: "syntax"; readonly text: string } | null;
   readonly reason: string | null;
   readonly access: "public" | "internal";
-  readonly waits: { readonly kind: "never" | "ticks" | "until-input" | "until-event" | "other"; readonly summary: string } | null;
+  readonly waits: { readonly kind: "never" | "ticks" | "until-input" | "until-event" | "host-request" | "other"; readonly summary: string } | null;
   readonly effects: readonly string[];
   readonly todo: readonly string[];
   readonly author: string | null;

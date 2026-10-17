@@ -209,7 +209,7 @@ const FILE_COMMANDS: BuiltinSpec[] = [
       behaviour: "Resolve the host reply in command order, emit the file-open effect on success, or request the asset and continue with the internal asset continuation; never callable by game-authored RPGCode.",
       groups: ["internal"],
       access: "internal",
-      waits: { kind: "until-event", summary: "Resumes only after the host asset request replies." },
+      waits: { kind: "host-request", summary: "Resumes only after the host asset request replies." },
     },
     call: (_view, args) => {
       const ok = truthy(args[0]?.value ?? 0); const file = toStringValue(args[2]?.value ?? ""); const path = toStringValue(args[3]?.value ?? ""); const mode = toStringValue(args[4]?.value ?? "input") as FileMode; const area = toStringValue(args[5]?.value ?? "saves") as "saves" | "files";

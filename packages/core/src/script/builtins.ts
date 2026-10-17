@@ -59,7 +59,7 @@ export type DocThrow = {
 };
 
 export type DocWait = {
-  readonly kind: "never" | "ticks" | "until-input" | "until-event" | "other";
+  readonly kind: "never" | "ticks" | "until-input" | "until-event" | "host-request" | "other";
   readonly summary: string;
 };
 
@@ -73,7 +73,11 @@ export type ParamDoc = {
   readonly unit?: string;
   readonly tags?: readonly DocTag[];
   readonly support?: RunnerSupport;
+  /** Prose description of the value used when the argument is omitted. */
   readonly default?: string;
+  /** Prose description of what omission means for an optional/output argument. */
+  readonly ifOmitted?: string;
+  readonly range?: { readonly min?: number; readonly max?: number; readonly note?: string };
   readonly values?: readonly ParamDocValue[];
   readonly type?: string;
   readonly since?: string;
@@ -88,7 +92,7 @@ export type BuiltinDoc = {
   readonly throws?: readonly DocThrow[];
   readonly see?: readonly string[];
   readonly since?: string;
-  readonly replacedBy?: string;
+  readonly replacedBy?: { readonly kind: "command"; readonly name: string } | { readonly kind: "syntax"; readonly text: string };
   readonly reason?: string;
   readonly access?: "public" | "internal";
   readonly waits?: DocWait;
