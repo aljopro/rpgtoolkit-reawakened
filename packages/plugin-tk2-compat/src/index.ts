@@ -38,7 +38,7 @@ function empty(): CommandResult {
 function fbranch(_view: Parameters<CommandHandler>[0], args: readonly Arg[]): CommandResult {
   const label = args[0]?.value;
   if (typeof label !== "string") throw new ScriptError("builtin.bad-arg", "fbranch requires a label argument");
-  return { value: null, effects: [{ kind: "vm.control", args: ["fbranch", label] }] };
+  return { value: null, effects: [{ kind: "vm.control", args: ["jump", label] }] };
 }
 
 function speed(args: readonly Arg[]): number {

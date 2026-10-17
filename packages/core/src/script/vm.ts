@@ -1003,26 +1003,6 @@ function performCall(
         frame.ip = targetIp;
         controlApplied = true;
       }
-      if (action === "fbranch") {
-        const labelName = effect.args?.[1] as string;
-        const targetIp = lookupLabel(program, frame.ip, labelName);
-        if (targetIp === undefined) {
-          throw new ScriptError(
-            "vm.unknown-label",
-            `label \`:${labelName}\` not found in current function scope`,
-            pos,
-          );
-        }
-        thread.frames.push({
-          program: frame.program,
-          ip: targetIp,
-          locals: {},
-          operands: [],
-          errorHandler: null,
-          autoLocal: frame.autoLocal,
-        });
-        controlApplied = true;
-      }
       if (action === "setErrorHandler") {
         installHandler(program, frame, frameIndex, frame.ip, pos, effect.args?.[1] as string);
       }

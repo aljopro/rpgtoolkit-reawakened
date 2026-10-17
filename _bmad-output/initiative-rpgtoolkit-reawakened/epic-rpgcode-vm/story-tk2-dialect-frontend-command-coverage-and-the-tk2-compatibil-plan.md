@@ -48,7 +48,7 @@ Add a non-destructive Toolkit 2.x frontend that produces the existing Unified AS
 
 ## Proposed ruling (pending owner review)
 
-TK2 `#FBranch(:label)` is represented as the existing `branch` command with a compatibility effect carrying `call` semantics; the compat plugin cannot mutate VM instruction pointers directly. This preserves G1 and avoids a new VM opcode. Alternative rejected: frontend-only jump lowering, because it would bypass the plugin registry and make `FBranch` unavailable to manifest composition.
+TK2 `#FBranch(:label)` is represented as the existing `branch` command with jump semantics (no return to caller), ratified by docs/provenance/facts-round-6.md Q8: legacy `FBranch` is an exact alias of `Branch`. The earlier proposed call semantics and synthetic label frame in VM control are retired; `fbranch` emits `vm.control` `jump`.
 
 ## Verification
 
@@ -61,7 +61,7 @@ Initial plan derived from ticket 3.15, dialect specification, ADR 0004 decisions
 ## Plan Change Log
 
 - 2026-10-16 — initial plan and proposed FBranch effect ruling.
-
+- 2026-10-16 — FBranch ruling amended per docs/provenance/facts-round-6.md Q8: legacy FBranch is an exact alias of Branch with jump semantics (no return to caller); synthetic label-call frame control effect removed.
 ## Design Notes
 
 The existing TK3 parser is intentionally not made legacy-aware. TK2 gets a separate frontend seam, but its output is the same AST and lowering path. The raw-argument binding layer is command metadata, not heuristics in the VM, so domain packs can override a command without changing the dialect parser.

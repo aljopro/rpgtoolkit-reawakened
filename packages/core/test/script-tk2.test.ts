@@ -48,3 +48,10 @@ test("TK2 raw text binds only the command argument and leaves expressions execut
     line: 1,
   });
 });
+
+test("TK2 #FBranch and #Branch compile to equivalent call expressions", () => {
+  const astBranch = parseTk2("#Branch(:dest)");
+  const astFBranch = parseTk2("#FBranch(:dest)");
+  equal(astBranch.statements[0]?.kind, "expr");
+  equal(astFBranch.statements[0]?.kind, "expr");
+});

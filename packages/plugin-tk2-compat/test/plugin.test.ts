@@ -32,3 +32,11 @@ test("unmapped plugin commands fail safely without host I/O", () => {
   if (command === undefined) throw new Error("httpread command missing");
   throws(() => command.call({} as never, [], () => ({ value: null })), /no native implementation/);
 });
+
+test("fbranch emits jump control effect with target label", () => {
+  const fbranch = TK2_COMPAT_PLUGIN.commands.find((command) => command.name === "fbranch");
+  if (fbranch === undefined) throw new Error("fbranch command missing");
+  const result = fbranch.call({} as never, [{ value: "my_label", ref: null }], () => ({ value: null }));
+  deepEqual(result.effects, [{ kind: "vm.control", args: ["jump", "my_label"] }]);
+  throws(() => fbranch.call({} as never, [{ value: 123, ref: null }], () => ({ value: null })), /fbranch requires a label argument/);
+});
