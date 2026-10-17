@@ -55,8 +55,6 @@ export type BuiltinSpec = {
   readonly call: CommandHandler;
 };
 
-const NO_PARAMS: readonly ParamSpec[] = [];
-
 /**
  * The built-in `core` pack (ADR 0004 decision 6). Names are already ASCII
  * case-folded by the frontend, so lookup keys are folded too.

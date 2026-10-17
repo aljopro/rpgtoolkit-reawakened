@@ -208,4 +208,6 @@ export { CONVERSION_SPECS } from "./builtins/conversions.ts";
 export { SCOPE_SPECS } from "./builtins/scope.ts";
 export { THREAD_SPECS } from "./builtins/threads.ts";
 export { ERROR_SPECS } from "./builtins/errors.ts";
+export { FILE_SPECS } from "./builtins/files.ts";
+export { PURE_SPECS } from "./builtins/pure.ts";
 export { createCollectingSink, createLogger, LOG_LEVELS, NULL_LOGGER } from "./logging.ts";

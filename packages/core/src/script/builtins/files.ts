@@ -116,7 +116,7 @@ const FILE_COMMANDS: BuiltinSpec[] = [
   {
     name: "closefile", aliases: [],
     params: [{ name: "handle", optional: false, byRef: false, variadic: false }],
-    call: (view, args) => ({ value: null, effects: [handleEffect("close", toStringValue(args[0]?.value ?? ""))] }),
+    call: (_view, args) => ({ value: null, effects: [handleEffect("close", toStringValue(args[0]?.value ?? ""))] }),
   },
   {
     name: "fileinput", aliases: [],
@@ -186,7 +186,7 @@ const FILE_COMMANDS: BuiltinSpec[] = [
       const position = file.position;
       const next = position === bytes.length ? new Uint8Array([...bytes, value]) : bytes.slice();
       if (position < next.length) next[position] = value;
-      return { value: null, request: { kind: "saveBlob", blob: { area: file.area, path: file.path }, hex: encodeHex(next) }, then: { command: `${INTERNAL}.save.done`, args: [file.id, encodeHex(next), position + 1] } };
+      return { value: null, request: { kind: "saveBlob", blob: { area: file.area, path: file.path }, hex: encodeHex(next) }, then: { command: `${INTERNAL}save_done`, args: [file.id, encodeHex(next), position + 1] } };
     },
   },
   {
@@ -204,7 +204,7 @@ const FILE_COMMANDS: BuiltinSpec[] = [
       { name: "ok", optional: false, byRef: false, variadic: false }, { name: "value", optional: false, byRef: false, variadic: false },
       { name: "file", optional: false, byRef: false, variadic: false }, { name: "path", optional: false, byRef: false, variadic: false }, { name: "mode", optional: false, byRef: false, variadic: false }, { name: "area", optional: false, byRef: false, variadic: false },
     ],
-    call: (view, args) => {
+    call: (_view, args) => {
       const ok = truthy(args[0]?.value ?? 0); const file = toStringValue(args[2]?.value ?? ""); const path = toStringValue(args[3]?.value ?? ""); const mode = toStringValue(args[4]?.value ?? "input") as FileMode; const area = toStringValue(args[5]?.value ?? "saves") as "saves" | "files";
       if (ok) return { value: null, effects: [handleEffect("open", file, mode, path, area, typeof args[1]?.value === "string" ? args[1].value : "")] };
       if (mode === "append") return { value: null, effects: [handleEffect("open", file, mode, path, area, "")] };
@@ -214,7 +214,7 @@ const FILE_COMMANDS: BuiltinSpec[] = [
   {
     name: `${INTERNAL}open_asset`, aliases: [],
     params: [{ name: "ok", optional: false, byRef: false, variadic: false }, { name: "value", optional: false, byRef: false, variadic: false }, { name: "file", optional: false, byRef: false, variadic: false }, { name: "path", optional: false, byRef: false, variadic: false }, { name: "mode", optional: false, byRef: false, variadic: false }],
-    call: (view, args) => ({ value: null, effects: [handleEffect("open", toStringValue(args[2]?.value ?? ""), toStringValue(args[4]?.value ?? "input"), toStringValue(args[3]?.value ?? ""), "files", truthy(args[0]?.value ?? 0) && typeof args[1]?.value === "string" ? args[1].value : "")] }),
+    call: (_view, args) => ({ value: null, effects: [handleEffect("open", toStringValue(args[2]?.value ?? ""), toStringValue(args[4]?.value ?? "input"), toStringValue(args[3]?.value ?? ""), "files", truthy(args[0]?.value ?? 0) && typeof args[1]?.value === "string" ? args[1].value : "")] }),
   },
   {
     name: `${INTERNAL}open_write`, aliases: [],

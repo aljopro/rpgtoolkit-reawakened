@@ -7,7 +7,6 @@ import {
   formatGolden,
   parseGolden,
   parseRun,
-  type TickRecord,
 } from "./golden.ts";
 import { checkVectors } from "./vectors.ts";
 import {
