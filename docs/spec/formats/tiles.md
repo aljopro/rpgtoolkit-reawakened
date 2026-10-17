@@ -38,9 +38,11 @@ The *i*-th pixel of the tile, in file order, goes into the *i*-th diamond cell w
 
 Ordinary `.tst` tiles placed on isometric boards are instead rotated and squashed into the same 64×32 diamond at draw time.
 
-### Shading
+<a id="reawakened-iso2d-projection"></a>
+**Reawakened rule (OWNER; non-parity 2D-on-iso projection).** Project an ordinary 32×32 source tile to the 64×32 diamond with a fixed nearest-neighbour affine map. Use integer floor/round rules beside the compositor formula and make pixels outside the exact diamond mask transparent. The resulting draw command sets `blit.iso2d: true`. This is a Reawakened default, not a legacy-parity claim.
 
-Board shading and ambient light add a signed (r, g, b) to every non-transparent pixel, clamped to 0..255. The original engine first replaces pure white with (245, 245, 245) and pure black with (10, 10, 10), so shading can still tint them. **Reawakened rule (R-15):** the pre-tint is adopted as written (white → (245, 245, 245), black → (10, 10, 10)) before the clamp; it is a render-time concern owned by board rendering.
+### Shading
+Board shading and ambient light add a signed (r, g, b) to every non-transparent pixel, clamped to 0..255. **Reawakened rule (OWNER; R-15).** When the blit's full pre-summed tint is non-zero, replace pure white with `(245,245,245)` and pure black with `(10,10,10)` before adding shade and ambient values; clamp exactly once after the complete sum. With zero tint, preserve source white and black exactly. This render-time rule applies to tiles and tile-built sprites.
 
 ### Editing model
 
@@ -95,7 +97,7 @@ Only cells 0..width−1 × 0..height−1 are drawn, always as a normal (non-isom
 
 Detail 3-6 tiles and `.gph` detail 3/5 values index a fixed 256-colour palette that both programs hard-code. It resembles the VGA default palette (16 CGA-style colours using 168 as full intensity, then greys and colour ramps), but its values are not exactly the standard ones. The full table is in [dos-palette.json](dos-palette.json) as `[R, G, B]` triples. Only very old tilesets use it; no shipped sample does.
 
-**Palette source of truth — Reawakened rule.** The table in [dos-palette.json](dos-palette.json) is normative: a reader must ship exactly it, rather than build a palette from the public VGA default (the values are close but not identical). *Legacy fact:* details **5 and 6** use only the **first sixteen** entries (the EGA set, the first 16 colours of the 13h VGA palette), while details 3 and 4 use all 256. This 16-entry restriction is stated in the official 2.0 specification, *Tileset (TST) File Format Specification*, © 2000 Christopher B. Matthews (held in the archive at `wayback/rpgtoolkit.com/dev_repo/docs/tst.html`), whose header is `WORD version`, `WORD tileCount`, `WORD detail` with version `20` meaning 2.0 and `21` meaning 2.1 (only version 20 was ever produced); [legacy text formats](legacy/text-formats.md) carries the full detail table. The code reads the table in `packages/core/src/formats/tileset/vga-palette.ts:26-96` (imported at `tileset.ts:22`).
+**Palette source of truth — Reawakened rule (OWNER; R-01).** The table in [dos-palette.json](dos-palette.json) is normative: a reader must ship exactly it, rather than build a palette from the public VGA default. Details **5 and 6** use only the first sixteen entries; details 3 and 4 use all 256.
 
 ## Reader status
 

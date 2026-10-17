@@ -14,6 +14,8 @@ Players and board items are both "sprites". This page describes how they move, w
 - Each sprite has a **collision polygon** and an **activation polygon**, relative to its reference point ([../formats/character.md](../formats/character.md#defaults-and-fall-backs)).
 - Each sprite is on one layer.
 
+**Reawakened rule (OWNER; presentation alpha).** `alpha` is presentation-only interpolation of the camera and optional prior sprite positions. It is never stored in simulation state and is excluded from state and draw-list hashes.
+
 ## Movement modes
 
 | Main-file `pixelMovement` | Behaviour |
@@ -89,11 +91,9 @@ Sprites' collision polygons are compared. When two collide, one freezes for 2 se
 **E-27 Collision — sprites.** All sprites are solid to each other through their collision bases. While following a path, a blocked sprite tries a **diversion** — a local path-find around the blocker and back onto its path — and can also **wait** for the blocker to move; if neither works it stops.
 
 <a id="e-29"></a>
-**E-29 Z-ordering.** The sprites on a board are kept sorted by vertical position, and only the moving sprite is re-inserted each step; rendering uses this order.
+**E-29 Z-ordering.** **Reawakened rule (OWNER; R-55).** Render sprites by the total key `(layer, screen-space y of the sprite reference point after projection, drawId)`. `drawId` is one stable integer: players precede items, and each category is ordered by its index. On isometric boards the y component is projected screen-space reference-point y, not raw board y. Re-inserting a moving sprite never changes this key.
 
-> **Open conflict R-51 — sprite-sprite collision outcome.** the legacy feature inventory (E-27) says a sprite blocked while following a path tries a "diversion … wait … stops"; this page, `docs/spec/engine/movement-and-collision.md:84`, says that of two colliding sprites one freezes for 2 seconds and names which one loses. Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
-
-> **Open conflict R-55 — z-ordering update.** the legacy feature inventory (E-29) says "Only the moving sprite is re-inserted each step"; this page, `docs/spec/engine/movement-and-collision.md:86`, says the original engine re-inserts the moving sprite at the end of the drawing list "(a bug)", so the most recently moved sprite tends to be drawn on top. Owner epic: **board-rendering**. Landed code: none. The owner settles it at inception; this page rules nothing.
+> **Open conflict R-51 — sprite-sprite collision outcome.** The legacy feature inventory (E-27) says a sprite blocked while following a path tries a "diversion … wait … stops"; this page, `docs/spec/engine/movement-and-collision.md:84`, says that of two colliding sprites one freezes for 2 seconds and names which one loses. Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
 
 ## Activation: programs and items
 
@@ -189,7 +189,9 @@ If the target is unreachable, get as close as possible. Results are cached per b
 The view scrolls to keep the player near the centre. It does not scroll past the board edges; boards smaller than the screen are not scrolled.
 
 <a id="e-51"></a>
-**E-51 Camera.** Follows the selected player and stays clamped to the board; boards smaller than the screen are allowed; it re-aligns on a board change.
+**E-51 Camera.** **Reawakened rule (OWNER).** Follow the selected player by default. Deadzone and smoothing default to zero. Use `center-if-small` for scenes smaller than the viewport; otherwise clamp to scene bounds. `positionAt(alpha)` interpolates only for presentation.
+
+**Reawakened rule (OWNER; camera built-ins).** `cameraPanTo(x, y, duration, easing)`, `cameraFollow(entityId)`, `cameraReset()` and `cameraShake(duration, amplitude)` are Reawakened additions. Durations are seconds converted with `durationTicks = ceil(seconds × 60)`, with a minimum of one tick for positive values. `cameraShake` is non-blocking; `duration` is seconds and `amplitude` is logical-viewport pixels. `shake(amplitude, ticks)` cycles `(−a,−a)`, `(a,−a)`, `(−a,a)`, `(a,a)` per tick, never draws randomness and never stacks: a new shake replaces the active one. Non-finite arguments are errors, negatives clamp to zero, and zero is a no-op. Easing is one of `linear`, `smoothstep`, `easeIn`, `easeOut` and `easeInOut`, represented as plain JSON names and evaluated with deterministic fixed-point/injected-tick arithmetic. `earthquake(i)` remains a separate blocking primitive owned by entry 4.29; its owner-relayed legacy passes/corners are not read from source here.
 
 ## Player statistics and levels
 

@@ -25,7 +25,12 @@ The window title is the game title. Tiles are 32×32 pixels and are drawn at 1:1
 <a id="e-53"></a>
 **E-53 Isometric drawing.** Diamond tiles are composited with masks, and the draw order is correct for both the staggered and the rotated layouts ([../formats/tiles.md](../formats/tiles.md#isometric-tiles)).
 
-**Reawakened rule.** The rebuild renders at the game's **logical resolution** — 640×480, 800×600, 1024×768 or the main file's custom size — and scales that surface up to the window or display, so a larger window shows the same pixels, and the same draw list, as the original.
+<a id="reawakened-iso2d-projection"></a>
+**Reawakened rule (OWNER; non-parity 2D-on-iso projection).** An ordinary 32×32 source tile is projected to a 64×32 diamond by a fixed nearest-neighbour affine map. Source coordinates use integer floor/round rules defined by the compositor, and pixels outside the exact diamond mask are transparent; the resulting `blit` sets `iso2d: true`. This is a Reawakened rule, not a legacy-parity claim.
+
+**Reawakened rule (OWNER; projected sprite y).** For isometric sprite ordering, use the projected screen-space y of the sprite reference point, never raw board y.
+
+**Reawakened rule (OWNER; integer projection convention).** For destination diamond coordinates `(X,Y)` in the inclusive 64×32 raster, reject cells outside the exact mask described by [tiles.md](../formats/tiles.md#isometric-tiles), map accepted cells to source-square coordinates with the fixed affine map, and choose the nearest source pixel with integer half-up rounding. No floating-point edge test is permitted.
 
 **Transparency:** images and canvases use magenta `(255, 0, 255)` as the transparent colour; tiles use the tileset's own transparent value ([../formats/tiles.md](../formats/tiles.md)); animation frames and layer images carry their own transparent colour.
 
@@ -35,6 +40,11 @@ The window title is the game title. Tiles are 32×32 pixels and are drawn at 1:1
 
 <a id="e-17"></a>
 **E-17 Lighting.** Three parts. A **tile shading layer**: an additive per-tile RGB shade cast onto all tiles at or below a chosen layer. **Lights**: elliptical spotlight, linear gradient and clipped gradient, rasterised into the shading once at load and static. **Board ambient RGB**, added to a **global ambient level** scripts can change (`SetAmbientLevel()`), which affects tiles, images, the background and sprite frames and triggers a full redraw when it changes.
+
+<a id="reawakened-light-and-raster-arithmetic"></a>
+**Reawakened rule (OWNER; raster arithmetic).** Raster primitives use integer arithmetic. The ellipse light uses a midpoint ellipse over its inclusive integer bounding box: plot four-way symmetric points, update the integer decision term in the two standard regions, treat zero width or height as a point or line, and fill each produced scanline between paired extrema. Tie decisions are fixed integer decisions; no trigonometry or floating-point edge test is used.
+
+**Reawakened rule (OWNER; unverified light falloff).** Lights are baked into shading layer 0 at load, and the stored light layer is ignored. Ellipse falloff uses normalized elliptical radius with linear endpoint falloff (`1` at centre, `0` at the radius). A gradient uses clamped projection along its two nodes; a clipped gradient uses that projection only inside its polygon/clip shape. The two stored colours are interpolated in fixed-point integer steps and the resulting shade is clamped. This is a Reawakened default, not a legacy-parity claim, pending extraction answers.
 
 **Mouse cursor:** `TK DEFAULT` = the built-in arrow; otherwise an image from `Bitmap\` with the given hot spot and transparent colour.
 
@@ -84,7 +94,7 @@ Input is read only while the player is idle; during blocking scripts keys go to 
 Formats: anything the platform can play (the samples use MIDI and WAV; MP3 and OGG were supported). **Compatibility note:** the original engine's music code routed every file through its MIDI path because of a string-comparison bug; animation frame sounds bypassed PAK extraction, so they probably did not play from PAK games (inferred).
 
 <a id="e-16"></a>
-**E-16 Background music per board.** The board's music starts on entry and changes when the player is sent to another board or crosses an edge; the file is kept playing when the next board names the same one.
+**E-16 Background music per board.** Board music starts on entry and changes when the player is sent to another board or crosses an edge; the file is kept playing when the next board names the same one. **Reawakened rule (OWNER; effect handoff).** Board music and per-frame `.anm` sounds post `audio` effect records through `postEffect`; audio-synth registers the applier and later creates `AudioCue`s. Board rendering owns neither `GameState.audio` nor `cueId`.
 
 <a id="e-100"></a>
 **E-100 Background music.** One looping track at a time. MIDI is by far the most common (the bundled music pack is MIDI); MP3, OGG, WAV and tracker modules are also used. It changes per board, on battle start and end, and through `MediaPlay()` / `MediaStop()`. MP3 can be paused.
@@ -113,5 +123,9 @@ Scripts play video with `PlayAvi()` (full screen) and `PlayAviSmall()` (actual s
 
 All `*.ttf` files in the project's `Font\` folder are made available to the game while it runs. Scripts select fonts by name (`Font()`), size, bold, italic and underline. Toolkit 2 bitmap fonts are not supported by the 3.x engine.
 
-<a id="e-132"></a>
-**E-132 Private fonts.** The game's fonts are available to text rendering for the run only; nothing is installed into the operating system.
+<a id="reawakened-fontref-and-metrics"></a>
+**Reawakened rule (OWNER; FontRef).** A text draw command carries `FontRef = { asset, size, bold, italic }`; underline remains a separate `line` command and is not a FontRef field. Size and style are therefore visible in draw-list hashes and runner inputs.
+
+**Reawakened rule (OWNER; TrueType metrics).** For a font with `unitsPerEm`, scale each advance, kerning adjustment, ascent, descent and line gap by `size / unitsPerEm`. Round each non-negative scaled advance and kerning adjustment with `floor(value + 0.5)`. Read ascent, descent and line gap from `hhea` only, never `OS/2` or Windows metrics. Compute `ascentPx = floor(ascent * size / unitsPerEm + 0.5)`, `descentPx = floor(-descent * size / unitsPerEm + 0.5)` and `lineGapPx = floor(lineGap * size / unitsPerEm + 0.5)` (the hhea descent is negative), then `lineHeight = ascentPx + descentPx + lineGapPx`.
+
+**Reawakened rule (OWNER; family substitution).** Resolve a project font asset by case-insensitive family name. Otherwise substitute `Arial`/sans-serif with Liberation Sans, `Times New Roman`/serif with Liberation Serif, and `Courier New`/monospace with Liberation Mono, then use the documented fallback family. A `.fnt` is selected when the name resolves to one or when the project is TK2; other names use family substitution. Entry 4.3 owns the library, bundled assets and bitmap fallback.

@@ -53,6 +53,9 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 <a id="e-55"></a>
 **E-55 Message window ("mwin").** A dialogue box along the top of the screen, with a background colour or image, a size (per cent of the screen), translucency, a font, a size, bold/italic/underline and a colour. `Mwin(text)` appends a line and `MwinCls` hides and clears it; the text supports variable splicing (`<var>`), and the text speed is configurable.
 
+<a id="message-window-text-and-fonts"></a>
+**Reawakened rule (OWNER; FontRef-facing font semantics).** `font(name)` resolves a project asset by case-insensitive family name. If none resolves, `Arial`/sans-serif uses Liberation Sans, `Times New Roman`/serif uses Liberation Serif, and `Courier New`/monospace uses Liberation Mono, followed by the documented fallback family. A `.fnt` is selected when the name resolves to one or when the project is TK2; other names use family substitution. The draw-list `FontRef` carries `{ asset, size, bold, italic }`; underline remains a separate `line` command. Entry 4.3 owns the library and bundled assets.
+
 ## Program flow, errors & debugging (25)
 
 | Command | Signature | Purpose | Notes |
@@ -130,6 +133,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `threadwake` | `void threadwake(thread id)` | Wake up a thread. |  |
 | `threadsleepremaining` | `double threadsleepremaining(thread id, [double &ret])` | Check how much sleep remains for a thread. |  |
 
+<a id="board-tiles-vectors-and-screen-effects"></a>
 ## Board, tiles, vectors & screen effects (33)
 
 | Command | Signature | Purpose | Notes |
@@ -144,10 +148,14 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `mainfile` | `void mainfile(string gam)` | Load a new main file. |  |
 | `scan` | `void scan(int x, int y, int pos)` | Save the tile specified to a buffer identified by pos. There is no particular number to pick for pos; any will do. | deprecated, still works |
 | `mem` | `void mem(int x, int y, int pos)` | Lay a scanned tile on the screen at the specified position. | deprecated, still works |
+<a id="reawakened-camera-built-ins"></a>
 | `zoom` | `zoom(int percent)` | Zoom into the centre of the board by the specified percent. |  |
-| `earthquake` | `earthquake(int intensity)` | Shake the screen. |  |
+| `earthquake` | `earthquake(int intensity)` | Shake the screen. | Entry 4.29 owns presentation defaults; owner-relayed passes/corners are not source-derived here. |
 | `getcorner` | `void getcorner(int &topX, int &topY)` | Get the corner of the currently shown portion of the board. |  |
-| `underarrow` | `void underarrow()` | Toggle the under arrow. | obsolete: raises an error and the statement is skipped |
+| `cameraPanTo` | `void cameraPanTo(double x, double y, double duration, string easing)` | Pan the camera to a point. | Reawakened addition; duration is seconds; easing is `linear`, `smoothstep`, `easeIn`, `easeOut` or `easeInOut`; non-blocking. |
+| `cameraFollow` | `void cameraFollow(int entityId)` | Follow an entity with the camera. | Reawakened addition. |
+| `cameraReset` | `void cameraReset()` | Restore default player-follow camera behaviour. | Reawakened addition. |
+| `cameraShake` | `void cameraShake(double duration, double amplitude)` | Shake the camera. | Reawakened addition; duration is seconds, amplitude is logical-viewport pixels; non-blocking. |
 | `layerput` | `void layerput(int x, int y, int layer, string tile)` | Place a tile on the board for the duration the player is on the board. |  |
 | `getboardtile` | `string getboardtile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. |  |
 | `boardgettile` | `string boardgettile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. | alias of `getboardtile` |

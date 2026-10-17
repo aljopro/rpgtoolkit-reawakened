@@ -79,4 +79,10 @@ Terms used below: a **value** is either a number (a double) or a string; the **u
 
   **Reawakened rule.** Reading past the end returns an empty string and leaves the position at the end, matching 3.1 in every case that matters (owner ruling U5, 2026-10-15). If a diagnostic is wanted, it goes to a debug log and never to a script error, because 3.1 games may read past the end routinely.
 
+<a id="effects"></a>
+## Effects
+
+<a id="reawakened-effect-dispatch"></a>
+**Reawakened rule (OWNER; effect dispatch).** `postEffect(section, effect)` is the only route to a section owner. VM built-in effects reach it through a hook immediately after recording; phases post directly. A registered applier runs synchronously in post order, so same-turn reads observe writes. `vm.effects` is only a bounded audit log. Unowned effects enter a bounded pending queue per section in `engine`, drain in order when the owner registers, and report drops diagnostically. The queue cap is 256 records per section, with FIFO eviction of the oldest pending record and a monotonic dropped counter. Effects are plain data and never mutate sections directly.
+
 **References.** R2-Q12, R2-Q13, R2-Q14, R2-Q15 (`docs/provenance/facts-round-2.md`); `docs/provenance/facts-round-5.md` Q6, Q11; `docs/provenance/facts-round-6.md` Q1, Q2, Remainder by zero; the values-and-variables rules in [rpgcode-language.md](rpgcode-language.md); AD-7 (globals and frame locals in state), AD-8 (`byRef` on a `ParamSpec`) and AD-10 (one owner per state section) in the architecture spine.
