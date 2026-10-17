@@ -17,8 +17,11 @@
 //     anywhere**: they are **authored from spec, unverified against a real
 //     file**. The detail-4 set holds two tiles, so the per-tile offset stays
 //     covered without the sample games.
-//   * an isometric `.iso`(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso, docs/spec/formats/tiles.md#shading — no real `.iso` (version 30, detail 150)
-//     exists in the archive.
+//   * a self-contained iso-oracle project with minor-4 stacked and rotated boards
+//     plus `.iso` and ordinary `.tst` tiles, because no fetched game has an
+//     isometric board (docs/spec/formats/board.md#coordinates).
+//   * an isometric `.iso`(docs/spec/formats/tiles.md#isometric-tiles, version 30,
+//     detail 150) because the oracle needs an authored diamond tile.
 //   * a `.tpk` and a `CMP1` standalone EXE(docs/spec/formats/packaging-and-paths.md#loose-folder) — no real `.tpk` or
 //     standalone EXE sample has these forms (`Setup` ZIP installers did ship,
 //     and `Game/<project>/` archives do, but no `.tpk` and no `CMP1` trailer was
@@ -438,15 +441,101 @@ const palettePixel = (k, tile) => (k + tile * 64) & 0xff;
 /** A 24-bit pixel that never hits the transparent key R=0, G=1, B=2(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso). */
 const rgbPixel = (k) => [k & 0xff, (k >> 8) & 0xff, 7];
 
+const zstr = (value) => concat([ascii(value), new Uint8Array([0])]);
+const i16 = (value) => le16(value);
+const i32 = (value) => le32(value);
+
+/**
+ * A minor-4 board writer assembled directly from docs/spec/formats/board.md.
+ * The parser's strings are NUL-terminated CP1252 and all numeric fields are
+ * little-endian signed values.
+ */
+function authoredBoard({ sizeX, sizeY, sizeL, coordType, lut, cells, shades, start = [1, 1, 1] }) {
+  const grid = (coordType & 3) === 2 ? sizeX + sizeY : sizeX;
+  const gridHeight = (coordType & 3) === 2 ? grid : sizeY;
+  const total = grid * gridHeight * sizeL;
+  const matrix = new Array(total).fill(0);
+  for (const [index, tile] of cells) matrix[index] = tile;
+  const stream = [];
+  for (let index = 0; index < matrix.length;) {
+    let end = index + 1;
+    while (end < matrix.length && matrix[end] === matrix[index]) end += 1;
+    const count = end - index;
+    if (count > 1) stream.push(i16(-count), i16(matrix[index]));
+    else stream.push(i16(matrix[index]));
+    index = end;
+  }
+  const out = [
+    zstr("RPGTLKIT BOARD"), i16(3), i16(4),
+    i16(sizeX), i16(sizeY), i16(sizeL), i16(coordType),
+    i16(lut.length - 1), ...lut.map(zstr), ...stream,
+    i16(shades.length - 1),
+  ];
+  for (const shade of shades) {
+    out.push(i32(shade.layer));
+    for (const [count, r, g, b] of shade.runs) out.push(i16(count), i16(r), i16(g), i16(b));
+  }
+  out.push(
+    i16(-1), // lights
+    i16(-1), // vectors
+    i16(-1), // programs
+    i16(-1), // sprites
+    i16(-1), // images
+    i16(-1), // threads
+    i16(-1), // constants
+    ...Array.from({ length: sizeL + 1 }, (_, layer) => zstr(`layer-${layer + 1}`)),
+    zstr(""), zstr(""), zstr(""), zstr(""), // N/S/E/W links
+    zstr(""), i32(0), i32(0), // background image/type/colour
+    zstr(""), zstr(""), zstr(""), // music, enter program, battle background
+    i16(-1), i16(0), i16(0), // battle skill/allow battles/disable saving
+    i16(0), i16(0), i16(0), // board ambient
+    i16(start[0]), i16(start[1]), i16(start[2]),
+  );
+  return concat(out);
+}
+
+const ISO_ORACLE_ISO = tileset(30, 150, 32, 3, rgbPixel);
+const ISO_ORACLE_TST = tileset(20, 1, 32, 3, rgbPixel);
+const STACKED_BOARD = authoredBoard({
+  sizeX: 3,
+  sizeY: 5,
+  sizeL: 2,
+  coordType: 1,
+  lut: ["", "iso-oracle-grass.iso1", "iso-oracle-ordinary.tst1"],
+  cells: [
+    [0, 1], [1, 2], [2, 1], [5, 2], [7, 1], [10, 1], [12, 2],
+    [15, 2], [16, 1], [17, 2], [23, 1], [26, 1],
+  ],
+  shades: [{ layer: 0, runs: [[1, 18, -12, 4], [14, 0, 0, 0]] }],
+  start: [2, 3, 1],
+});
+const ROTATED_BOARD = authoredBoard({
+  sizeX: 3,
+  sizeY: 2,
+  sizeL: 2,
+  coordType: 2,
+  lut: ["", "iso-oracle-grass.iso1", "iso-oracle-ordinary.tst1"],
+  cells: [
+    [2, 1], [8, 2], [12, 1], [18, 2], [22, 1],
+    [25, 2], [31, 1], [37, 2], [42, 1], [48, 2],
+  ],
+  shades: [{ layer: 0, runs: [[3, -8, 12, 0], [22, 0, 0, 0]] }],
+  start: [2, 1, 1],
+});
+
 const AUTHORED = {
   // Authored from spec, unverified against a real file (no detail-4 sample
   // exists in the archive). Two tiles pin the per-tile offset(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso).
   "detail4.tst": tileset(20, 4, 16, 1, palettePixel, 2),
   // Authored from spec, unverified against a real file (no detail-5 sample).
   "detail5.tst": tileset(20, 5, 32, 1, palettePixel),
-  // Authored from spec, unverified against a real file (no detail-6 sample).
-  "detail6.tst": tileset(20, 6, 16, 1, palettePixel),
-  "iso.iso": tileset(30, 150, 32, 3, rgbPixel),
+  "iso.iso": ISO_ORACLE_ISO,
+  // The iso oracle project is generated from the board and tile layouts in the
+  // normative spec; its two boards exercise both effective grid conventions.
+  "iso-oracle-grass.iso": ISO_ORACLE_ISO,
+  "iso-oracle-ordinary.tst": ISO_ORACLE_TST,
+  "iso-oracle-stacked.brd": STACKED_BOARD,
+  "iso-oracle-rotated.brd": ROTATED_BOARD,
 
   // The image decoders' fixtures (docs/spec/formats/images.md). A 24-bit
   // bitmap whose 3-pixel rows pad to 12 bytes, stored bottom-up; a 1-bit
@@ -642,6 +731,48 @@ const ORACLE_SCENES = {
     view: { viewport: [640, 480], camera: [0, 0], include: { shading: true, images: true, sprites: false }, smallBoard: "center-if-small" },
     tick: 0,
   },
+  "S-ISO-STACKED.json": {
+    schema: 1,
+    name: "S-ISO-STACKED",
+    layout: "iso-stacked",
+    boardFiles: [
+      "packages/core/test/fixtures/authored/iso-oracle-stacked.brd",
+      "packages/core/test/fixtures/authored/iso-oracle-grass.iso",
+      "packages/core/test/fixtures/authored/iso-oracle-ordinary.tst",
+    ],
+    sprites: [
+      { id: "player", key: "player", layer: 1, x: 64, y: 32, drawId: 1, under: [1, 2, 4] },
+      { id: "item", key: "item", layer: 1, x: 96, y: 40, drawId: 2, under: [1, 2, 4] },
+    ],
+    ambient: [12, -5, 0],
+    view: {
+      viewport: [128, 64],
+      camera: [999, 999],
+      include: { shading: true, images: false, sprites: true },
+    },
+    tick: 0,
+  },
+  "S-ISO-ROTATED.json": {
+    schema: 1,
+    name: "S-ISO-ROTATED",
+    layout: "iso-rotated",
+    boardFiles: [
+      "packages/core/test/fixtures/authored/iso-oracle-rotated.brd",
+      "packages/core/test/fixtures/authored/iso-oracle-grass.iso",
+      "packages/core/test/fixtures/authored/iso-oracle-ordinary.tst",
+    ],
+    sprites: [
+      { id: "player", key: "player", layer: 1, x: 64, y: 24, drawId: 1, under: [1, 2, 4] },
+      { id: "item", key: "item", layer: 1, x: 96, y: 40, drawId: 2, under: [1, 2, 4] },
+    ],
+    ambient: [-4, 8, 2],
+    view: {
+      viewport: [128, 64],
+      camera: [999, 999],
+      include: { shading: true, images: false, sprites: true },
+    },
+    tick: 0,
+  },
 };
 
 function oracleSceneFiles() {
@@ -667,7 +798,9 @@ function checkOracleScenes(out = defaultSceneOut) {
 export function generate(out = defaultOut) {
   mkdirSync(out, { recursive: true });
   for (const [name, bytes] of authoredFixtures()) {
-    writeFileSync(join(out, name), bytes);
+    const destination = join(out, name);
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, bytes);
   }
   if (out === defaultOut) writeOracleScenes();
   return out;
