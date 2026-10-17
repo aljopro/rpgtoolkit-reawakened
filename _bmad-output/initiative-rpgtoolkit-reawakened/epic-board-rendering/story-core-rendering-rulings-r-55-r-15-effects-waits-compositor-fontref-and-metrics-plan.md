@@ -3,7 +3,7 @@ title: 'Core rendering rulings: R-55, R-15, effects, waits, compositor, FontRef 
 type: 'feature'
 ticket: 1
 created: '2026-10-17'
-status: ready-for-dev
+status: built
 baseline_revision: '19d52630'
 route: 'full'
 route_source: 'pinned'

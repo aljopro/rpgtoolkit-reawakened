@@ -66,16 +66,16 @@ Per-tile RGB tint, used for shadows and colour effects.
 | 9a | layer | **int** | the top board layer the shading is cast onto |
 | 9b | cells | groups of 4 shorts | `count, r, g, b`, covering the effective grid with y outermost and x fastest (no layers). `count` ≤ 1 is one cell; `count` > 1 is a run of that many cells (runs wrap rows). r, g, b are added to the tile colour, range −255..255. The group always starts with `count`, because r, g, b can be negative. |
 
-**Shading arithmetic — legacy fact.** Shades and ambient values are signed additive RGB offsets in the range −255..+255. A drawn tile pixel's colour is `clamp(src + shadeLayer + boardAmbient + globalAmbient, 0, 255)` per channel; transparent pixels are left alone. Shading applies to board tiles and tile-built sprites, and the ambient level also applies to images and sprite frames. The pure-white/pure-black pre-tint that makes them shadable is stated in [tiles.md](tiles.md#shading). The clamp is a render-time concern; the pre-vector conversion produces each shade layer from the tint of the highest layer whose tile is shaded (see [legacy/older-binary-versions.md](legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector)).
+**Shading arithmetic — legacy fact, with Reawakened R-15 scope (OWNER).** Shades and ambient values are signed additive RGB offsets in the range −255..+255. A drawn tile pixel's colour is `clamp(src + shadeLayer + boardAmbient + globalAmbient, 0, 255)` per channel; transparent pixels are left alone. Before this sum, replace pure white with `(245,245,245)` and pure black with `(10,10,10)` **only when the blit's full pre-summed tint is non-zero**; zero-tint art retains exact source colours. Clamp once after the complete sum. Shading applies to board tiles and tile-built sprites, and the ambient level also applies to images and sprite frames.
 
 ### Lights
 
-Light sources are editable objects. The engine bakes them into the shading at load time and does not keep them.
+Light sources are editable objects. The engine bakes them into shading layer 0 at load time and does not keep them. **Reawakened rule (OWNER; unverified default).** Ellipse falloff is a normalized elliptical radius with linear endpoint falloff (`1` at centre, `0` at the radius); gradient falloff is a clamped projection along its two nodes; clipped gradient uses the same projection only inside its polygon/clip shape. Interpolate the two stored colours in fixed-point integer steps and clamp the shade. The stored light layer is ignored. This is a Reawakened default pending extraction answers.
 
 | # | Field | Type | Meaning |
 |---|---|---|---|
 | 10 | light UB | short | −1 = none |
-| 11 | × (UB+1): layer | int | layer the light belongs to. **The original engine ignores it and always paints shading layer 0.** |
+| 11 | × (UB+1): layer | int | layer the light belongs to; ignored at runtime, which paints shading layer 0 |
 | 12 | type | int | 0 ellipse (3 nodes: centre and two radii points), 1 gradient (2 nodes), 2 gradient clipped to the shape |
 | 13 | nodes UB | short | |
 | 14 | × (UB+1) node | int x, int y | board pixels |
@@ -94,6 +94,9 @@ Light sources are editable objects. The engine bakes them into the shading at lo
 
 * **Layer order:** background colour, then background image, then layer 1 tiles, then layer 1 images, then layer 2, and so on. Within a layer, images draw over tiles; sprites draw on their own layer, z-ordered by y.
 * **Animated tiles** cycle at their own frame rate; the first frame stands in for the tile when static.
+
+* **Sprite order (OWNER; R-55):** render by `(layer, projected screen-space y of the sprite reference point, drawId)`. `drawId` is stable, with players before items and each category ordered by index; moving a sprite never changes its key. On isometric boards use projected reference-point y, not raw board y.
+* **Under-vector redraw (OWNER; A-8):** flags 1, 2 and 4 mean respectively background, all lower layers and frame-intersection trigger. For each affected row, compute polygon intersections and redraw contiguous covered spans of promoted tile/image content over the sprite, without a new draw command or alpha clip.
 * **Parallax image** (type 1) scrolls so the image's extent matches the board's extent relative to the screen, `scroll = (imageSize − screenSize) / (boardPixelSize − screenSize)` per axis; an image exactly the board's pixel size is drawn as normal. **Stretch image** (type 2) is scaled to the board's pixel size.
 * **"Run once" programs** are not a separate flag: the editor writes a unique GUID name into both `initialVar` and `finalVar`, sets `initialValue = ""` and `finalValue = "_guid"`, and the behaviour falls out of the conditional-activation rule.
 
@@ -149,9 +152,7 @@ Polygons or polylines that give a layer its collision and special areas.
 | 48 | x, y, layer | short × 3 | **pixel** position of the item's reference point (bottom-centre of a 2-D sprite), and layer |
 | 49 | (reserved) | short | the editor writes −1; ignored |
 
-**Compatibility note:** the original engine skips entries whose file name is empty *without keeping their slot*, so later items shift down one index (unlike programs). Scripts that address board items by index see the shifted numbering.
-
-**Empty slots — Reawakened rule (R-05, R-06).** Our **reader keeps every stored slot**, in both the program list and the item list, empty ones included, so a board round-trips byte for byte (see [README.md](README.md#bytes-after-the-last-documented-field)). The **pre-vector converter** compacts both lists (drops empty slots), matching the 3.1.0 editor's conversion. At run time, program indices are kept on minor 4 and compacted on minors 2-3, and item indices are always compacted — so a reader of a pre-vector board must not assume the stored item indices survive the upgrade.
+**R-06 item numbering (OWNER).** The reader preserves every stored item slot, including empty file names, so the raw board model round-trips and retains stable storage indices. Runtime hydration compacts empty item slots into consecutive script-visible item numbers. The pre-vector converter may compact both programs and items as part of its documented upgrade; it must not be confused with the raw reader's preservation.
 
 ### Layer images
 

@@ -133,9 +133,15 @@ Movement speed is **tied to the measured frame rate**, not to wall-clock time:
 
 A modern engine should use a fixed time step and convert the stored speeds to time directly; the result is equivalent at the frame rates the original ran at.
 
-**Reawakened rule.** The rebuild runs a **fixed simulation tick** of real elapsed time and drops the frame-rate-dependent quirks above (the unsigned-budget wrap, the per-resolution saved estimate, the uncapped loop), while keeping the *perceived* speeds: the stored seconds-per-step values convert to ticks through the tick length, not through a measured frame rate.
+**Reawakened rule (OWNER; R-56).** The rebuild advances simulation at a fixed 60 Hz tick. Runners convert elapsed time into whole ticks; there is no observable frame-rate cap in simulation, and presentation may interpolate between completed ticks. Stored seconds-per-step values convert through the fixed tick length, never a measured frame rate. The old frame-count quirks (unsigned budget wrap, saved per-resolution estimate and uncapped loop) are not simulation inputs.
 
-> **Open conflict R-56 — the frame-loop cap.** the legacy feature inventory (E-04) says the frame rate is "uncapped up to about 120 fps"; this page, `docs/spec/engine/main-loop-and-startup.md:104`, says "There is **no frame-rate cap** in the original engine … A 120 fps cap was defined but disabled." Owner epic: **board-rendering**. Landed code: the fixed tick (AD-2) makes the difference unobservable, so nothing depends on it. The owner settles it at inception; this page rules nothing.
+<a id="reawakened-breakpoint-cursor"></a>
+**Reawakened rule (OWNER; breakpoint cursor).** While breakpoints are installed, the engine executes `stepThread` with a budget of one instruction and stores a plain-data open-tick cursor containing the ready-thread-list snapshot, current thread and steps used. A breakpoint returns `paused { thread, frame, line }`. `continue` finishes that open tick before later ticks; `step` executes exactly one instruction and pauses again. A snapshot at the stop resumes to the uninterrupted state and draw-list hash. `ticksRun` counts completed simulation ticks only: a breakpoint before the open tick completes reports zero for that call, and the resume call reports one when it completes. Debug hooks read state and never write it.
+
+<a id="reawakened-presentation-alpha"></a>
+**Reawakened rule (OWNER; presentation alpha).** A draw-list `alpha` is presentation-only interpolation of the camera and, when available, prior sprite positions. It is never stored in simulation state and is excluded from state and draw hashes.
+
+> **Open conflict R-56 — the frame-loop cap.** The legacy feature inventory (E-04) says the frame rate is "uncapped up to about 120 fps"; the fixed-tick rule above makes that difference unobservable to simulation. The owner ruling is recorded by the fixed-tick rule; this page no longer leaves the simulation timing open.
 
 ## Drawing a frame
 
@@ -148,6 +154,12 @@ Ambient light (board ambient colour plus script changes) is applied as a gamma r
 
 <a id="e-52"></a>
 **E-52 Board compositing.** The full order is: background colour → background image (normal, stretched, or parallax with a computed scroll factor) → for each layer: tiles (shaded), then that layer's images (with colour-key transparency) → the sprites on that layer in z-order → higher-layer content that overlaps a sprite → under-vector promotions → animations → the overlay. The original engine kept a **scroll cache**: a pre-rendered region larger than the screen, re-rendered only when the camera left it or after a forced redraw, with animated tiles patched into it each frame.
+
+**Reawakened rule (OWNER; compositor inputs).** `composeBoard` consumes a read-only world view containing run-time board edits, sprites, the current tick and `alpha`, plus a view containing the camera, viewport size and include flags. `Engine.drawList`, `viewBrd`, the editor canvas and image export call this same pure compositor; it does not read mutable engine state directly.
+
+**Reawakened rule (OWNER; under-vector spans).** Under-vector flags 1, 2 and 4 mean respectively background, all lower layers and frame-intersection trigger. For each affected row, the compositor computes polygon intersections and redraws contiguous covered spans of the promoted tile/image content over the sprite, without a new draw command or alpha clip.
+
+**Reawakened rule (OWNER; audio effect handoff).** Board music and per-frame `.anm` sounds are posted as `audio` effects through `postEffect`. The audio-synth owner registers the applier and creates `AudioCue` records later; board rendering does not own `GameState.audio` or `cueId`.
 
 <a id="e-57"></a>
 **E-57 Render-now overlay.** A script-owned canvas, composited over the game every frame while it is enabled — the mechanism behind script-drawn HUDs and custom screens ([rpgcode-language.md](rpgcode-language.md#virtual-variables)).

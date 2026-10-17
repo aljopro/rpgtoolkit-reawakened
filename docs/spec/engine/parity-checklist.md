@@ -23,3 +23,14 @@ The table is migrated verbatim from the legacy inventory's own summary (the §14
 Conflicts between the legacy inventory's wording and this spec are recorded on the page that owns the behaviour, each naming the epic that rules it, and none is ruled here; the twelve the migration found are R-50 to R-61.
 
 > **Open conflict R-58 — the golden-image oracle.** the legacy feature inventory makes "exact scroll-cache behaviour" a nice-to-have and names no reference images; this spec, `docs/spec/engine/parity-checklist.md:15`, keeps that same row a nice-to-have, while `docs/spec/examples/renders/` holds three renders produced by an independent renderer (`docs/spec/tools/render.py`) rather than by the original engine. Owner epic: **board-rendering**. Landed code: none. The owner settles what the goldens may be compared against at inception; this page rules nothing.
+
+<a id="golden-image-oracle"></a>
+## Golden-image oracle (OWNER)
+
+The ledger classifies every PNG as exactly one of `independent-reference`, `legacy-screenshot` or `regression-baseline`. It records the PNG path, class, gating flag and producer; the ledger is the sole authority for whether a golden gates CI. `independent-reference` scenes are authored from this specification by the independent renderer; `regression-baseline` scenes lock a Reawakened result; `legacy-screenshot` images are decoded and reported but never gate.
+
+Each scene is plain data containing its board files, sprite records and every `SpriteDraw` field, global ambient, `view` (logical viewport size, camera and include flags) and tick. The compositor and raster oracle consume this schema rather than infer inputs from fixture code or PNG bytes.
+
+**Legacy screenshot metric (OWNER).** Report decoded RGBA drift as both the per-pixel maximum absolute channel error and the mean absolute channel error. This is reporting only: exact screenshot bytes and either metric never create a pass/fail gate.
+
+**Ellipse oracle rule (OWNER).** Independent-reference scenes use the integer midpoint ellipse and scanline fill defined at [display-input-audio.md#reawakened-light-and-raster-arithmetic](display-input-audio.md#reawakened-light-and-raster-arithmetic), not a floating-point edge test.

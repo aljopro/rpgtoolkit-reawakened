@@ -7329,11 +7329,15 @@
   ],
   "stubSafeCount": 176,
   "needsOwnerCodeCount": 106,
-  "reawakenedAdditionsCount": 3,
+  "reawakenedAdditionsCount": 7,
   "reawakenedAdditions": [
    "isNaN",
    "isInfinity",
-   "isFinite"
+   "isFinite",
+   "cameraPanTo",
+   "cameraFollow",
+   "cameraReset",
+   "cameraShake"
   ]
  },
  "reawakenedAdditions": [
@@ -7387,6 +7391,74 @@
    "obsolete": false,
    "confidence": "stated",
    "note": "Reawakened addition; returns 1 if value is numeric and finite (not NaN, not ±Infinity), 0 otherwise"
+  },
+  {
+   "name": "cameraPanTo",
+   "group": "Board, tiles, vectors & screen effects",
+   "params": "x,y,duration,easing",
+   "paramsSource": "Reawakened addition",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": ["camera", "world"],
+   "sectionsWrite": ["camera"],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "Reawakened addition; duration is seconds and easing is a closed deterministic name set"
+  },
+  {
+   "name": "cameraFollow",
+   "group": "Board, tiles, vectors & screen effects",
+   "params": "entityId",
+   "paramsSource": "Reawakened addition",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": ["world", "sprites"],
+   "sectionsWrite": ["camera"],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "Reawakened addition"
+  },
+  {
+   "name": "cameraReset",
+   "group": "Board, tiles, vectors & screen effects",
+   "params": "",
+   "paramsSource": "Reawakened addition",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": ["camera"],
+   "sectionsWrite": ["camera"],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "Reawakened addition"
+  },
+  {
+   "name": "cameraShake",
+   "group": "Board, tiles, vectors & screen effects",
+   "params": "duration,amplitude",
+   "paramsSource": "Reawakened addition",
+   "owner": 4,
+   "ownerEpic": "board-rendering",
+   "sectionsRead": ["camera", "world"],
+   "sectionsWrite": ["camera"],
+   "effectKind": "mixed",
+   "waitKind": null,
+   "byRefOut": false,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "Reawakened addition; non-blocking deterministic shake in logical-viewport pixels"
   }
  ]
 }
