@@ -32,7 +32,7 @@ id = 4
 slug = "epic-board-rendering"
 title = "Boards render through draw lists in 2D and both iso modes"
 covers = ["CAP-2", "CAP-6"]
-after = [{ epic = 1, needs = "the headless runner skeleton" }, { epic = 2, needs = "loaded boards, tiles and sprites" }, { epic = 3, needs = "the VM registration API and program execution for rendering built-ins" }]
+after = [{ epic = 1, needs = "the licence gate, contract types, the headless runner and golden job, and the fixture fetch (1.5, 1.7, 1.8, 1.9)" }, { epic = 2, needs = "loaded boards, the pre-vector converter, tilesets, texture decoders, animations, actors, tile bitmaps, the asset resolver, the registry and the examples dump gate (2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 2.10, 2.11, 2.13, 2.16, 2.22, 2.25, 2.26)" }, { epic = 3, needs = "the GameState shell, the plugin registry and default manifest, the catalogue responders, the wait registry, the TK2 dialect plugin, the tick rename and hashState in advance (3.2, 3.3, 3.9, 3.11, 3.15, 3.21, 3.22, 3.25, 3.26, 3.27)" }, { epic = 16, needs = "the TK2 text board reader, the animated-tile and bitmap font readers, the BMP and GIF decoders, the TK2 decoder registration and the TK2 corpus gate (16.4, 16.7, 16.8, 16.9, 16.11, 16.12)" }]
 
 [[epic]]
 id = 5
@@ -46,7 +46,7 @@ id = 6
 slug = "epic-audio-synth"
 title = "Music, effects and MIDI play through a shared synth"
 covers = ["CAP-7"]
-after = [{ epic = 1, needs = "the synth package scaffold and licence gate" }, { epic = 3, needs = "audio built-in registration" }]
+after = [{ epic = 1, needs = "the synth package scaffold and licence gate" }, { epic = 3, needs = "audio built-in registration" }, { epic = 4, needs = "the `audio` effect records for board music (4.20) and per-frame animation sounds (4.23), which this epic turns into cues" }]
 
 [[epic]]
 id = 7
@@ -74,7 +74,7 @@ id = 10
 slug = "epic-rpgcode-tooling"
 title = "RPGCode language server and debug adapter"
 covers = ["CAP-14"]
-after = [{ epic = 3, needs = "the parser and the VM" }]
+after = [{ epic = 3, needs = "the parser and the VM" }, { epic = 4, needs = "breakpoints, the open-tick cursor and the pause, resume and one-instruction step contract (4.30) for the debug adapter" }]
 
 [[epic]]
 id = 11
