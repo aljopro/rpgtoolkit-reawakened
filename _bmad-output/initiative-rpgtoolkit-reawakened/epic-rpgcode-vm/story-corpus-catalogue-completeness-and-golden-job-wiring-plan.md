@@ -3,7 +3,7 @@ title: 'Corpus, catalogue completeness and golden-job wiring'
 type: 'feature'
 ticket: 17
 created: '2026-10-16'
-status: 'built'
+status: done
 baseline_revision: '0429a7531877f6dc4cf409cf5d5ad17d07eb5032'
 route: 'full'
 risk: 'medium'

@@ -3,7 +3,7 @@ title: 'Waiting, requesting and mixed commands respond with recorded effects'
 type: 'feature'
 ticket: 22
 created: '2026-10-16'
-status: built
+status: done
 baseline_revision: 'a66b186c4825f1894dab5ced23465c5e49fd6e67'
 route: 'full'
 route_source: 'pinned'

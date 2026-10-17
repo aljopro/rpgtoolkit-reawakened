@@ -3,7 +3,7 @@ title: 'TK2 dialect frontend, command coverage and the TK2 compatibility plugin'
 type: 'feature'
 ticket: 15
 created: '2026-10-16'
-status: built
+status: done
 baseline_revision: 'a66b186c'
 route: 'full'
 risk: 'medium'
