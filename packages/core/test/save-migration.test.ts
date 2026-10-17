@@ -3,7 +3,8 @@
 // and a restore test over it. v2 (`fixtures/save/v2-vm.json`, no effect log)
 // gains `effects: []` and `effectSeq: 0`; v3 (`fixtures/save/v3-vm.json`, a
 // sleeping thread with the old wait shape) gains the thread, wait and request
-// fields of ticket 3.9. Both end at the current section version.
+// fields of ticket 3.9; v4 (`fixtures/save/v4-vm.json`) gains only the section
+// version for the module fields of ticket 3.8. All end at the current section version.
 import { deepEqual, equal } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -60,6 +61,19 @@ test("a v3 save restores with its thread and sleep wait migrated to the v4 shape
   equal(thread.collect, null);
   // The v3 sleep was the blocking `sleep(ticks)` command: global, and it resumes its call.
   deepEqual(thread.wait, { kind: "sleep", until: 5, global: true, resumesCall: true });
+  equal(canon(restoreGameState(snapshot(restored))), canon(restored));
+});
+
+test("a v4 save (no module fields) restores unchanged apart from the v5 section version", () => {
+  const restored = restoreGameState(fixtureText("v4-vm.json"));
+
+  equal(SCHEMA_VERSIONS.vm, 5);
+  equal(restored.schema.vm, SCHEMA_VERSIONS.vm);
+  const frame = restored.vm.threads[0]!.frames[0]!;
+  // The module fields are optional and stay absent: the ref is the v4 ref.
+  deepEqual(frame.program, { compiler: "2", kind: "inline", text: "sleep(5)\nend()\n" });
+  deepEqual(restored.vm.redirects, []);
+  deepEqual(restored.vm.threads[0]!.wait, { kind: "sleep", until: 5, global: true, resumesCall: true });
   equal(canon(restoreGameState(snapshot(restored))), canon(restored));
 });
 

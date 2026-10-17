@@ -11,10 +11,14 @@ export {
   HANDLER_NOT_HANDLING,
   HANDLER_TOP_LEVEL,
   HANDLER_UNKNOWN_LABEL,
+  INCLUDE_CYCLE,
+  INCLUDE_MISSING,
+  INCLUDE_REFUSED,
   locateError,
   OBJECT_ABSTRACT_CLASS,
   OBJECT_INACCESSIBLE_MEMBER,
   OBJECT_INVALID,
+  PROGRAM_COMPILED,
   ScriptError,
   toDiagnostic,
 } from "./errors.ts";
@@ -32,7 +36,8 @@ export type {
 } from "./ast.ts";
 export { foldAscii, tokenize } from "./lex.ts";
 export type { Token } from "./lex.ts";
-export { parse } from "./parse.ts";
+export { MODULE_COMMANDS, parse } from "./parse.ts";
+export type { ParseContext } from "./parse.ts";
 export { compileTk2, normaliseTk2, parseTk2 } from "./tk2.ts";
 export type { Tk2CommandLookup } from "./tk2.ts";
 export { lower } from "./lower.ts";
@@ -43,8 +48,27 @@ export type {
   ParamInfo,
   StatementRange,
 } from "./lower.ts";
-export { COMPILER_VERSION, compileInline, compileProgram } from "./program.ts";
-export type { Program, ProgramRef, ScriptDialect } from "./program.ts";
+export {
+  COMPILER_VERSION,
+  compileInline,
+  compileProgram,
+  fileProgramRef,
+  programKey,
+  withRedirects,
+} from "./program.ts";
+export type {
+  CompileContext,
+  Program,
+  ProgramNotice,
+  ProgramRef,
+  RedirectPairs,
+  ScriptDialect,
+} from "./program.ts";
+export { readProgram, resolveProgram } from "./loader.ts";
+export type { LoadedSource, ProgramLoader } from "./loader.ts";
+export { createProgramCache } from "./cache.ts";
+export type { ProgramCache } from "./cache.ts";
+export { killAllRedirects, killRedirect, setRedirect } from "./modules.ts";
 export {
   createVmState,
   endBoardThreads,
@@ -62,7 +86,6 @@ export {
 export type {
   CollectedMove,
   ErrorHandler,
-  FileHandle,
   Frame,
   GlobalBlock,
   LocalSlot,
@@ -166,6 +189,5 @@ export { STRING_SPECS } from "./builtins/strings.ts";
 export { CONVERSION_SPECS } from "./builtins/conversions.ts";
 export { SCOPE_SPECS } from "./builtins/scope.ts";
 export { THREAD_SPECS } from "./builtins/threads.ts";
-export { FILE_SPECS } from "./builtins/files.ts";
 export { ERROR_SPECS } from "./builtins/errors.ts";
 export { createCollectingSink, createLogger, LOG_LEVELS, NULL_LOGGER } from "./logging.ts";

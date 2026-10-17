@@ -1,0 +1,91 @@
+{
+  "audio": {},
+  "battle": {},
+  "camera": {},
+  "engine": {},
+  "fx": {},
+  "input": {},
+  "inventory": {},
+  "menu": {},
+  "party": {},
+  "rng": {
+    "s0": 1684164658,
+    "s1": 3653269916,
+    "s2": 2939563536,
+    "s3": 2141751570
+  },
+  "schema": {
+    "audio": 1,
+    "battle": 1,
+    "camera": 1,
+    "compiler": "2",
+    "engine": 1,
+    "fx": 1,
+    "input": 1,
+    "inventory": 1,
+    "menu": 1,
+    "party": 1,
+    "rng": 1,
+    "schema": 1,
+    "sprites": 1,
+    "surfaces": 1,
+    "time": 1,
+    "triggers": 1,
+    "ui": 1,
+    "vm": 4,
+    "world": 1
+  },
+  "sprites": {},
+  "surfaces": {},
+  "time": {
+    "tick": 3
+  },
+  "triggers": {},
+  "ui": {},
+  "vm": {
+    "block": null,
+    "effectSeq": 0,
+    "effects": [],
+    "globals": {
+      "count": 2
+    },
+    "objects": [],
+    "redirects": [],
+    "requestSeq": 0,
+    "threads": [
+      {
+        "collect": null,
+        "detached": [],
+        "frames": [
+          {
+            "autoLocal": false,
+            "errorHandler": null,
+            "ip": 2,
+            "locals": {},
+            "operands": [],
+            "program": {
+              "compiler": "2",
+              "kind": "inline",
+              "text": "sleep(5)\nend()\n"
+            }
+          }
+        ],
+        "id": 1,
+        "kind": "blocking",
+        "owner": "script",
+        "pending": null,
+        "queue": [],
+        "source": null,
+        "status": "waiting",
+        "target": null,
+        "wait": {
+          "global": true,
+          "kind": "sleep",
+          "resumesCall": true,
+          "until": 5
+        }
+      }
+    ]
+  },
+  "world": {}
+}

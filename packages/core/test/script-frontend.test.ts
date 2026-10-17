@@ -96,11 +96,6 @@ test("rejects the TK2, class, module and error-handling constructs by name and e
     ["new C()", "entry 6"],
     ["x->y", "entry 6"],
     ["method C::C() { }", "entry 6"],
-    ['#include "other.prg"', "entry 8"],
-    ['redirect("a", "b")', "entry 8"],
-    ['killredirect("a")', "entry 8"],
-    ["killallredirects()", "entry 8"],
-    ["a.b()", "entry 8"],
     ["@", "entry 15"],
   ];
 
@@ -217,7 +212,7 @@ test("lowers the tracer program to the exact op array", () => {
     { op: "return", pos: { file: "<inline>", line: 5 } },
   ]);
 
-  // A file reference is refused until entry 8 loads files.
+  // A file reference needs a source loader; without one it is refused.
   equal(
     errorOf(() =>
       compileProgram({ kind: "file", path: "a.prg", sourceHash: "0", compiler: "2" }),

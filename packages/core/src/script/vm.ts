@@ -26,16 +26,22 @@ import {
   HANDLER_NOT_HANDLING,
   HANDLER_TOP_LEVEL,
   HANDLER_UNKNOWN_LABEL,
+  INCLUDE_CYCLE,
   locateError,
   ScriptError,
   toDiagnostic,
 } from "./errors.ts";
 import { NULL_LOGGER } from "./logging.ts";
+import { ENGINE_DEFAULT_MANIFEST } from "./manifest.ts";
+import { createProgramCache, type ProgramCache } from "./cache.ts";
+import { runModuleCommand } from "./modules.ts";
+import { MODULE_COMMANDS } from "./parse.ts";
 import type { SourcePos, StepOp } from "./ops.ts";
 import type { CommandResult, CommandView, ResolvedPlugin } from "./plugin.ts";
 import {
   COMPILER_VERSION,
-  compileProgram,
+  withRedirects,
+  type ProgramLoader,
   type FunctionInfo,
   type Program,
   type ProgramRef,
@@ -81,9 +87,6 @@ export const STEP_BUDGET = 1000;
 /** What one tick left the script threads doing. */
 export type ScriptStatus = "running" | "waiting" | "finished";
 
-/** Compiled programs are rebuilt from their ref and memoised outside state. */
-type ProgramMemo = { get(ref: ProgramRef): Program };
-
 /**
  * Everything the script phases need that is not state. `logger` is the human
  * debug channel (AD-24); `diagnostics` collects the located host diagnostics
@@ -92,7 +95,9 @@ type ProgramMemo = { get(ref: ProgramRef): Program };
 export type ScriptServices = {
   readonly view: CommandView;
   readonly commands: CommandLookup;
-  readonly programs: ProgramMemo;
+  readonly programs: ProgramCache;
+  /** Where file programs and includes load from; absent when the host serves none (G2). */
+  readonly loader?: ProgramLoader;
   readonly virtuals: VirtualVariablePort;
   readonly logger: Logger;
   readonly diagnostics: Diagnostic[];
@@ -105,20 +110,17 @@ export function drainDiagnostics(services: ScriptServices): Diagnostic[] {
   return services.diagnostics.splice(0, services.diagnostics.length);
 }
 
-function programMemoKey(ref: ProgramRef): string {
-  const dialect = ref.dialect ?? "tk3";
-  return ref.kind === "inline"
-    ? `inline\u0000${dialect}\u0000${ref.compiler}\u0000${ref.text}`
-    : `file\u0000${dialect}\u0000${ref.path}\u0000${ref.sourceHash}\u0000${ref.compiler}`;
-}
-
+/** The cache key is owned by `programKey`, which includes dialect and module metadata. */
 export function createScriptServices(
   state: GameState,
   plugins: readonly ResolvedPlugin[] = [],
   logger: Logger = NULL_LOGGER,
   virtuals?: VirtualVariablePort,
-  gameId = "default",
+  loaderOrGameId?: ProgramLoader | string,
+  explicitGameId = "default",
 ): ScriptServices {
+  const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
+  const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
   const view: CommandView = {
     rng: createRngPort(state.rng),
     clock: createClockPort(state.time),
@@ -131,19 +133,50 @@ export function createScriptServices(
   for (const plugin of plugins) {
     if (plugin.options !== undefined) pluginOptions.set(plugin.definition.id, plugin.options);
   }
-  const commands = createCommandLookup({ builtin: (name) => registry.get(name) });
-  const cache = new Map<string, Program>();
-  const programs: ProgramMemo = {
-    get(ref) {
-      const key = programMemoKey(ref);
-      const hit = cache.get(key);
-      if (hit !== undefined) return hit;
-      const compiled = compileProgram(ref);
-      cache.set(key, compiled);
-      return compiled;
+  // The engine's own packs are the built-in tier (R-35); every other plugin is an extension.
+  const builtinPacks = new Set(ENGINE_DEFAULT_MANIFEST.map((entry) => entry.id));
+  const commands = createCommandLookup({
+    builtin: (name) =>
+      registry.layerPlugins(name).some((id) => builtinPacks.has(id)) ? registry.get(name) : undefined,
+    extension: (name) => registry.get(name),
+  });
+  const diagnostics: Diagnostic[] = [];
+  // Load-time notices (clashes, shadowed built-ins, include cycles) are raised once, when a program
+  // compiles: each is a located warn record, and a cycle is also a located host diagnostic (MOD-3).
+  const programs = createProgramCache(
+    {
+      ...(loader === undefined ? {} : { loader }),
+      isBuiltin: (name) => commands.getTier("builtin", name) !== undefined,
     },
+    (notices) => {
+      for (const notice of notices) {
+        if (notice.code === INCLUDE_CYCLE) {
+          diagnostics.push({
+            code: notice.code,
+            file: notice.file,
+            line: notice.line,
+            message: notice.message,
+          });
+        }
+        logger.warn({
+          level: "warn",
+          code: notice.code,
+          message: notice.message,
+          data: { file: notice.file, line: notice.line, notice: notice.data },
+        });
+      }
+    },
+  );
+  return {
+    view,
+    commands,
+    programs,
+    virtuals: virt,
+    logger,
+    diagnostics,
+    pluginOptions,
+    ...(loader === undefined ? {} : { loader }),
   };
-  return { view, commands, programs, virtuals: virt, logger, diagnostics: [], pluginOptions };
 }
 
 /**
@@ -879,8 +912,9 @@ function performCall(
   args: Arg[],
   pos: SourcePos,
   advance: boolean,
+  file?: string,
 ): CallOutcome {
-  const resolved = resolveCall(name, args.length, program, services.commands);
+  const resolved = resolveCall(name, args.length, program, services.commands, file);
   if (resolved === undefined) {
     throw new ScriptError("unknown.command", `no built-in or function named "${name}"`, pos);
   }
@@ -938,7 +972,7 @@ function performCall(
         return "yield";
       }
       if (action === "run") {
-        const newRef = effect.args?.[1] as ProgramRef;
+        const newRef = withRedirects(effect.args?.[1] as ProgramRef, vm.redirects);
         thread.frames = [
           {
             program: newRef,
@@ -1309,7 +1343,10 @@ export function stepThread(
     if (queued !== undefined && thread.detached.length === 0) {
       thread.queue.shift();
       thread.frames.push({
-        program: { kind: "inline", text: queued.text, compiler: COMPILER_VERSION },
+        program: withRedirects(
+          { kind: "inline", text: queued.text, compiler: COMPILER_VERSION },
+          vm.redirects,
+        ),
         ip: 0,
         locals: {},
         operands: [],
@@ -1793,7 +1830,13 @@ export function stepThread(
 
       case "call": {
         const args = takeArgs(frame, op.argc, op.pos);
-        const resolved = resolveCall(op.name, op.argc, program, services.commands);
+        if (op.file === undefined && Object.hasOwn(MODULE_COMMANDS, op.name)) {
+          runModuleCommand(op.name, args, vm, services.loader, services.programs, program, op.pos);
+          frame.ip += 1;
+          frame.operands.push({ value: 0, ref: null });
+          break;
+        }
+        const resolved = resolveCall(op.name, op.argc, program, services.commands, op.file);
         if (resolved === undefined && frame.objectHandle !== undefined && frame.objectClass !== undefined) {
           const ownMethod = findMethod(program, frame.objectClass, op.name, op.argc);
           if (ownMethod !== undefined && ownMethod.entry >= 0) {
@@ -1807,7 +1850,7 @@ export function stepThread(
           }
         }
         if (
-          performCall(thread, vm, services, program, frame, frameIndex, op.name, args, op.pos, true) ===
+          performCall(thread, vm, services, program, frame, frameIndex, op.name, args, op.pos, true, op.file) ===
           "yield"
         ) {
           return finish();

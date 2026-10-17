@@ -31,9 +31,11 @@
 
 import type { Logger } from "../ports/logger.ts";
 import type { BuiltinSpec } from "./builtins.ts";
-import type { ParamInfo } from "./lower.ts";
+import type { FunctionInfo, ParamInfo } from "./lower.ts";
 import type { CommandHandler, CommandResult, ResolvedPlugin } from "./plugin.ts";
 import type { Program, ProgramRef } from "./program.ts";
+import { INCLUDE_MISSING, ScriptError } from "./errors.ts";
+
 /** One layer of one name: the plugin that contributed it and its spec. */
 type CommandLayer = {
   readonly plugin: string;
@@ -61,6 +63,8 @@ export type CommandRegistry = {
   get(name: string): ResolvedCommand | undefined;
   /** Every registered name and alias, in registration order (diagnostics/tests). */
   keys(): readonly string[];
+  /** The ids of the plugins that define `name`, bottom layer first (empty when none). */
+  layerPlugins(name: string): readonly string[];
 };
 
 /** A tier's resolver: a name in, a command out or `undefined` (AD-8). */
@@ -83,7 +87,12 @@ export const TIER_ORDER: readonly (keyof CommandTiers)[] = [
 ];
 
 /** The name/alias lookup over the four tiers (AD-8; the VM and the LSP share it). */
-export type CommandLookup = { get(name: string): ResolvedCommand | undefined };
+export type CommandLookup = {
+  /** The first tier that resolves `name`. */
+  get(name: string): ResolvedCommand | undefined;
+  /** What one tier alone resolves for `name` (R-35: built-ins bind ahead of script functions). */
+  getTier(tier: keyof CommandTiers, name: string): ResolvedCommand | undefined;
+};
 
 /**
  * Build the four-tier lookup (AD-8). Any tier left out is a stub that resolves
@@ -98,6 +107,9 @@ export function createCommandLookup(tiers: Partial<CommandTiers>): CommandLookup
         if (hit !== undefined) return hit;
       }
       return undefined;
+    },
+    getTier(tier, name) {
+      return (tiers[tier] ?? (() => undefined))(name);
     },
   };
 }
@@ -114,39 +126,63 @@ export type CallResolution =
   | { readonly kind: "function"; readonly target: FunctionTarget }
   | { readonly kind: "command"; readonly command: ResolvedCommand };
 
+/** The script-function target of the definition `fns` holds for `argc` parameters, if any (FUN-1). */
+function functionTarget(
+  fns: { readonly [name: string]: readonly FunctionInfo[] } | undefined,
+  name: string,
+  argc: number,
+  program: Program,
+): CallResolution | undefined {
+  if (fns === undefined || !Object.hasOwn(fns, name)) return undefined;
+  const match = fns[name]!.find((fn) => fn.params.length === argc && fn.entry >= 0);
+  if (match === undefined) return undefined;
+  return {
+    kind: "function",
+    target: { program: program.ref, entry: match.entry, params: match.params },
+  };
+}
+
 /**
- * Resolve a call in AD-8's order: redirect -> script function -> built-in -> extension.
- * A script function resolves by name and parameter count (FUN-1).
+ * Resolve a call (docs/spec/engine/rpgcode-modules-and-objects.md#modules MOD-1/MOD-2,
+ * docs/spec/engine/rpgcode-functions.md R-35). Redirects were applied where the
+ * call site was parsed, so the name here is already substituted. Then:
+ *
+ * 1. a `file.`-qualified call reaches that file's own definition of the name and
+ *    arity first, and raises `include.missing` when the file could not be loaded;
+ * 2. a built-in binds ahead of a script function of the same name (R-35);
+ * 3. the flat list of script functions, where the last definition added won (R-41);
+ * 4. the extension tier: a plugin command that no built-in or script function claims.
+ *
+ * A script function resolves by name and parameter count (FUN-1); a wrong count
+ * falls through to the next step.
  */
 export function resolveCall(
   name: string,
   argc: number,
   program: Program,
   commands: CommandLookup,
+  file?: string,
 ): CallResolution | undefined {
-  // 1. Script function tier
-  const fnList = program.functions[name];
-  if (fnList) {
-    const match = fnList.find((fn) => fn.params.length === argc);
-    if (match) {
-      return {
-        kind: "function",
-        target: {
-          program: program.ref,
-          entry: match.entry,
-          params: match.params,
-        },
-      };
+  if (file !== undefined) {
+    const path = `${file}.prg`;
+    const key = Object.hasOwn(program.fileKeys, path) ? program.fileKeys[path]! : undefined;
+    if (key === undefined) {
+      throw new ScriptError(INCLUDE_MISSING, `the file "${path}" could not be loaded for \`${file}.${name}\``);
     }
+    const own = functionTarget(program.files[key], name, argc, program);
+    if (own !== undefined) return own;
   }
 
-  // 2. Builtin / Extension tier
-  const command = commands.get(name);
-  if (command !== undefined) {
-    return { kind: "command", command };
-  }
+  // R-35: a built-in binds ahead of a script function of the same name.
+  const builtin = commands.getTier("builtin", name);
+  if (builtin !== undefined) return { kind: "command", command: builtin };
 
-  return undefined;
+  const script = functionTarget(program.functions, name, argc, program);
+  if (script !== undefined) return script;
+
+  // A plugin's own command is reached only after the script functions (docs/spec OOP-6 call order).
+  const extension = commands.getTier("extension", name);
+  return extension === undefined ? undefined : { kind: "command", command: extension };
 }
 
 /**
@@ -240,6 +276,9 @@ export function assembleCommands(
     },
     keys() {
       return [...layers.keys()];
+    },
+    layerPlugins(name) {
+      return (layers.get(name) ?? []).map((layer) => layer.plugin);
     },
   };
 }

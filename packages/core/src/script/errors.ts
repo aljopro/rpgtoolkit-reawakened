@@ -39,6 +39,15 @@ export const HANDLER_TOP_LEVEL = "handler.top-level";
 export const HANDLER_UNKNOWN_LABEL = "handler.unknown-label";
 export const HANDLER_NOT_HANDLING = "handler.not-handling";
 
+/** A run-time include or a `file.`-qualified call names a file the asset index does not hold (MOD-2, R2-Q21). */
+export const INCLUDE_MISSING = "include.missing";
+/** A compiled `.prg` (first byte `0x00`) is refused: re-save the source (docs/spec/formats/rpgcode-program.md §9.1). */
+export const PROGRAM_COMPILED = "program.compiled";
+/** An include whose file is already being parsed: reported, and the file counts as included (MOD-3). */
+export const INCLUDE_CYCLE = "include.cycle";
+/** A run-time `include()` names a file that is indexed but cannot be read or compiled (compiled `.prg`, syntax error). */
+export const INCLUDE_REFUSED = "include.refused";
+
 /**
  * The family of a catchable runtime failure (ERR-2's failure table).
  * `internal` marks a fault in the host/plugin contract rather than in the
@@ -73,6 +82,8 @@ const CATCHABLE: { readonly [code: string]: FailureClass } = {
   [HANDLER_TOP_LEVEL]: "handler",
   [HANDLER_UNKNOWN_LABEL]: "handler",
   [HANDLER_NOT_HANDLING]: "handler",
+  [INCLUDE_MISSING]: "call",
+  [INCLUDE_REFUSED]: "call",
 };
 
 /** Code prefixes that are load-time or restore failures: reported once, never caught. */

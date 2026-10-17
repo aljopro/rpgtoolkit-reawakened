@@ -155,10 +155,13 @@ export function normaliseTk2(text: string, lookup?: Tk2CommandLookup): string {
 }
 
 function rewriteNamespaces(expr: Expr): Expr {
+  if (expr.kind === "call" && expr.file === "system") {
+    const { file: _file, ...call } = expr;
+    return { ...call, name: `system.${expr.name}`, args: expr.args.map(rewriteNamespaces) };
+  }
   if (expr.kind === "methodCall" && expr.receiver.kind === "variable") {
     return { kind: "call", name: `${expr.receiver.name}.${expr.name}`, args: expr.args.map(rewriteNamespaces), line: expr.line };
   }
-  if (expr.kind === "call") return { ...expr, args: expr.args.map(rewriteNamespaces) };
   if (expr.kind === "binary") return { ...expr, left: rewriteNamespaces(expr.left), right: rewriteNamespaces(expr.right) };
   if (expr.kind === "unary" || expr.kind === "postfix") return { ...expr, operand: rewriteNamespaces(expr.operand) };
   if (expr.kind === "assign") return { ...expr, target: rewriteNamespaces(expr.target), value: rewriteNamespaces(expr.value) };
@@ -181,12 +184,13 @@ function rewriteAst(ast: Ast): Ast {
     statements: ast.statements.map(rewriteStatement),
     functions: ast.functions.map((fn) => ({ ...fn, body: fn.body.map(rewriteStatement) })),
     classes: ast.classes,
+    includes: ast.includes,
   };
 }
 
 /** Parse TK2 into the same Unified AST used by the TK3 frontend. */
 export function parseTk2(text: string, lookup?: Tk2CommandLookup): Ast {
-  return rewriteAst(parse(tokenizeObjects(normaliseTk2(text, lookup))));
+  return rewriteAst(parse(tokenizeObjects(normaliseTk2(text, lookup)), { redirects: new Map(), preserveSystemNamespace: true }));
 }
 
 /** Compile TK2 source into the shared flat Step IR without modifying its input. */
@@ -199,5 +203,8 @@ export function compileTk2(text: string, file = "<tk2>", lookup?: Tk2CommandLook
     classes: result.classes,
     labels: result.labels,
     statements: result.statements,
+    files: {},
+    fileKeys: {},
+    notices: [],
   };
 }
