@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "name": "S-01b",
+  "boardFiles": [
+    "docs/spec/examples/game/Game/Example/Boards/village.brd",
+    "docs/spec/examples/game/Game/Example/Tiles/village.tst",
+    "docs/spec/examples/game/Game/Example/Tiles/water.tan",
+    "docs/spec/examples/game/Game/Example/Bitmap/house.tbm"
+  ],
+  "sprites": [],
+  "ambient": [
+    0,
+    0,
+    0
+  ],
+  "view": {
+    "viewport": [
+      512,
+      384
+    ],
+    "camera": [
+      0,
+      0
+    ],
+    "include": {
+      "shading": true,
+      "images": true,
+      "sprites": false
+    },
+    "layerImages": [
+      {
+        "type": "normal",
+        "file": "house.tbm",
+        "x": 448,
+        "y": 288,
+        "layer": 1
+      },
+      {
+        "type": "parallax",
+        "file": "house.tbm",
+        "x": 0,
+        "y": 0,
+        "layer": 1
+      },
+      {
+        "type": "stretch",
+        "file": "house.tbm",
+        "x": 0,
+        "y": 0,
+        "layer": 2
+      }
+    ],
+    "blits": [
+      {
+        "mode": "translucent",
+        "rect": [
+          16,
+          16,
+          32,
+          16
+        ],
+        "alpha": 128
+      },
+      {
+        "mode": "additive",
+        "rect": [
+          48,
+          16,
+          32,
+          16
+        ],
+        "alpha": 96
+      }
+    ]
+  },
+  "tick": 0
+}

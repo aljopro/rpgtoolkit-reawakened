@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "goldens": [
+    { "path": "golden/reference/S-01.png", "scene": "S-01", "class": "independent-reference", "gating": true, "producer": "4.4" },
+    { "path": "golden/reference/S-01b.png", "scene": "S-01b", "class": "independent-reference", "gating": true, "producer": "4.4" },
+    { "path": "golden/reference/S-01c.png", "scene": "S-01c", "class": "independent-reference", "gating": true, "producer": "4.4" },
+    { "path": "golden/reference/S-01d.png", "scene": "S-01d", "class": "independent-reference", "gating": true, "producer": "4.4" }
+  ]
+}
