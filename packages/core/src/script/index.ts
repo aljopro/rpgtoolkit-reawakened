@@ -11,10 +11,14 @@ export {
   HANDLER_NOT_HANDLING,
   HANDLER_TOP_LEVEL,
   HANDLER_UNKNOWN_LABEL,
+  INCLUDE_CYCLE,
+  INCLUDE_MISSING,
+  INCLUDE_REFUSED,
   locateError,
   OBJECT_ABSTRACT_CLASS,
   OBJECT_INACCESSIBLE_MEMBER,
   OBJECT_INVALID,
+  PROGRAM_COMPILED,
   ScriptError,
   toDiagnostic,
 } from "./errors.ts";
@@ -32,7 +36,8 @@ export type {
 } from "./ast.ts";
 export { foldAscii, tokenize } from "./lex.ts";
 export type { Token } from "./lex.ts";
-export { parse } from "./parse.ts";
+export { MODULE_COMMANDS, parse } from "./parse.ts";
+export type { ParseContext } from "./parse.ts";
 export { lower } from "./lower.ts";
 export type {
   CompiledClass,
@@ -41,8 +46,26 @@ export type {
   ParamInfo,
   StatementRange,
 } from "./lower.ts";
-export { COMPILER_VERSION, compileInline, compileProgram } from "./program.ts";
-export type { Program, ProgramRef } from "./program.ts";
+export {
+  COMPILER_VERSION,
+  compileInline,
+  compileProgram,
+  fileProgramRef,
+  programKey,
+  withRedirects,
+} from "./program.ts";
+export type {
+  CompileContext,
+  Program,
+  ProgramNotice,
+  ProgramRef,
+  RedirectPairs,
+} from "./program.ts";
+export { readProgram, resolveProgram } from "./loader.ts";
+export type { LoadedSource, ProgramLoader } from "./loader.ts";
+export { createProgramCache } from "./cache.ts";
+export type { ProgramCache } from "./cache.ts";
+export { killAllRedirects, killRedirect, setRedirect } from "./modules.ts";
 export {
   createVmState,
   endBoardThreads,

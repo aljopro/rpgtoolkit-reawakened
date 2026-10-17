@@ -3,14 +3,14 @@ title: 'Modules: includes, implicit includes, redirects, hoisting, program cache
 type: 'feature'
 ticket: 8
 created: '2026-10-16'
-status: ready-for-dev
+status: built
 baseline_revision: 'c90dc52bc32cc12481b894cc8cbd0349e8443c50'
 route: 'full'
 route_source: 'pinned'
 risk: 'medium'
-review: ''
-review_source: ''
-lenses_ran: []
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 review_loop_iteration: 0
 context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/spec/engine/rpgcode-modules-and-objects.md', '{project-root}/docs/spec/engine/rpgcode-functions.md', '{project-root}/docs/spec/engine/rpgcode-language.md', '{project-root}/docs/spec/formats/rpgcode-program.md', '{project-root}/packages/core/src/formats/resolver/resolver.ts', '{project-root}/packages/core/src/formats/resolver/model.ts']
 ---
@@ -72,6 +72,18 @@ context: ['{project-root}/docs/guardrails.md', '{project-root}/docs/spec/engine/
 ## Implementation Notes
 
 ## Plan Change Log
+
+## Review Triage Log
+
+- `medium` — `parse.ts`/`registry.ts`: dotted `system.func` calls are routed through file loading with no PRG-1 exception, so `system.pause()` can fail as `include.missing`; verified against the parser's dotted-call AST metadata and the resolver's unconditional file path branch. Route: patch.
+- `medium` — `program.ts`: an ordinary self-qualified call can be mistaken for an include cycle because the current file remains on the parse stack; verified from the stack check and MOD-2's self-file binding rule. Route: patch.
+- `high` — `modules.ts`/`program.ts`: runtime `include()` mutates saved references before reading/compiling bytes, allowing compiled, syntax-invalid, or unreadable files to poison state or silently succeed; verified from `runModuleCommand`, `readProgram`, and the uncaught cache lookup in `stepThread`. Route: patch.
+- `high` — `program.ts`: a changed file can be compiled under an old `sourceHash`, allowing restored instruction pointers to resume against different code; verified because the hash is only used by `programKey`. Route: patch.
+- `medium` — `vm.ts`: `tellThread` creates an inline `ProgramRef` without the current redirect table, so redirected names are lost in queued text; verified against the other redirect-stamped program creation paths. Route: patch.
+- `medium` — `registry.ts`/`vm.ts`: the single command lookup includes plugins in the built-in tier, causing plugins to beat script functions and produce false shadow warnings; verified against `createCommandLookup({ builtin: registry.get })` and OOP-6 lookup order. Route: patch.
+- `medium` — `program.ts`: the main unit is merged before literal includes, making an included same-arity function override the main definition contrary to MOD-1's add-at-parse-end ordering; verified from unit construction and flat last-wins insertion. Route: patch.
+- `high` — `ops.ts`/`program.ts`/save fixtures: persisted `StepOp` and `ProgramRef` shapes changed without the required compiler/schema bump and prior-version restore coverage; verified against save schema policy and unchanged version constants. Route: patch.
+- `medium` — `program.ts`: duplicate classes overwrite silently while same-name functions warn, so class dispatch can change without the required override notice; verified from the class merge loop and MOD-1 override rule. Route: patch.
 
 ## Design Notes
 

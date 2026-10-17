@@ -8,6 +8,7 @@
  * docs/spec/engine/rpgcode-language.md#lexical-rules
  */
 
+import type { IncludeRequest } from "./ast.ts";
 import { ScriptError } from "./errors.ts";
 import { foldAscii } from "./values.ts";
 
@@ -70,12 +71,6 @@ function rejectKeyword(name: string, line: number, allowObjects: boolean): void 
       break;
     case "protected":
       unsupported(`the \`${name}\` class construct`, "entry 6", line);
-      break;
-    case "include":
-    case "redirect":
-    case "killredirect":
-    case "killallredirects":
-      unsupported(`\`${name}\``, "entry 8", line);
       break;
     default:
       break;
@@ -147,18 +142,36 @@ const SINGLE_CHAR_OPS = [
 ];
 
 let allowObjects = false;
+let includes: IncludeRequest[] = [];
 
 /** Tokenize in the object-enabled dialect used by class-bearing programs. */
 export function tokenizeObjects(text: string): Token[] {
-  allowObjects = true;
-  try {
-    return tokenize(text);
-  } finally {
-    allowObjects = false;
-  }
+  return scan(text, true).tokens;
 }
 
 export function tokenize(text: string): Token[] {
+  return scan(text, false).tokens;
+}
+
+/**
+ * Tokenize `text` and collect its literal `#include` lines, wherever they
+ * appear (docs/spec/engine/rpgcode-modules-and-objects.md#includes).
+ */
+export function scan(
+  text: string,
+  objects: boolean,
+): { readonly tokens: Token[]; readonly includes: IncludeRequest[] } {
+  allowObjects = objects;
+  includes = [];
+  try {
+    return { tokens: run(text), includes };
+  } finally {
+    allowObjects = false;
+    includes = [];
+  }
+}
+
+function run(text: string): Token[] {
   const tokens: Token[] = [];
   const length = text.length;
   let index = 0;
@@ -229,7 +242,11 @@ export function tokenize(text: string): Token[] {
       while (lineEnd < length && text[lineEnd] !== "\n") lineEnd++;
       const lineText = text.slice(index, lineEnd);
       if (/^#\s*include\b/i.test(lineText)) {
-        unsupported("`#include`", "entry 8", line);
+        const named = /^#\s*include\s+"([^"\r]*)"/i.exec(lineText);
+        if (named === null) {
+          lexical('`#include` needs a quoted file name, as in `#include "file.prg"` (MOD-1)', line);
+        }
+        includes.push({ path: named[1]!, line, implicit: false });
       }
       index = lineEnd;
       continue;
@@ -367,15 +384,12 @@ export function tokenize(text: string): Token[] {
       continue;
     }
 
-    // Unsupported single-character constructs
+    // `.` joins a file name to a function (MOD-2) or spells object access (OOP-3).
     if (ch === ".") {
-      if (allowObjects) {
-        tokens.push({ kind: "op", text: ".", line });
-        index += 1;
-        firstNonBlankOnLine = false;
-        continue;
-      }
-      unsupported("a `.` (implicit-include or member syntax)", "entry 8", line);
+      tokens.push({ kind: "op", text: ".", line });
+      index += 1;
+      firstNonBlankOnLine = false;
+      continue;
     }
     if (ch === "@") {
       unsupported("the Toolkit 2.x `@` line", "entry 15", line);

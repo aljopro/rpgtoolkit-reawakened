@@ -78,6 +78,8 @@ export type Expr =
       readonly kind: "call";
       readonly name: string;
       readonly args: readonly Expr[];
+      /** The folded file name of a `file.func(...)` call; the call binds to that file first (MOD-2). */
+      readonly file?: string;
       readonly line: number;
     }
   | {
@@ -205,9 +207,21 @@ export type Statement =
       readonly line: number;
     };
 
-/** A parsed program: statements, hoisted functions and class declarations. */
+/**
+ * One file a program asks to include: a literal `#include` or an implicit
+ * `file.func` include (MOD-2), collected wherever it appears and applied when
+ * the file's parse ends (docs/spec/engine/rpgcode-modules-and-objects.md#includes).
+ */
+export type IncludeRequest = {
+  readonly path: string;
+  readonly line: number;
+  readonly implicit: boolean;
+};
+
+/** A parsed program: statements, hoisted functions, class declarations and the files it includes. */
 export type Ast = {
   readonly statements: Block;
   readonly functions: readonly FunctionDef[];
   readonly classes: readonly ClassDef[];
+  readonly includes: readonly IncludeRequest[];
 };

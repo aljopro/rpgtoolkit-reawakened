@@ -82,6 +82,8 @@ export type StepOp =
       readonly op: "call";
       readonly name: string;
       readonly argc: number;
+      /** The folded file name of a `file.func(...)` call site (MOD-2); a restore reproduces the binding from it. */
+      readonly file?: string;
       readonly pos: SourcePos;
     }
   | { readonly op: "return"; readonly pos: SourcePos };

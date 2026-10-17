@@ -4,8 +4,8 @@
  * `VmState` is AD-10's `vm` section: `threads`, `globals`, `objects`,
  * `redirects`, the effect log (`effects` and `effectSeq`, ticket 3.21), the
  * global-block status (`block`, R-32) and the request counter (`requestSeq`,
- * AD-5). `objects` is entry 6's and `redirects` entry 8's, so both are
- * empty now. `Thread` and `Frame` carry AD-7's minimum fields with the values
+ * AD-5). `objects` is entry 6's; `redirects` is the one run-wide redirect table
+ * of entry 8 (R-42), ordered `[folded old, folded new]` pairs. `Thread` and `Frame` carry AD-7's minimum fields with the values
  * this entry fixes: `ThreadKind`/`ThreadOwner` are AD-26's, `source`/`target`
  * are THR-2's per-thread pair and `null` for a plain thread, and `errorHandler`
  * is `null` until entry 7. `Frame.operands` holds bound `Arg`s so a
@@ -28,7 +28,7 @@ import type { Wait } from "../ports/wait.ts";
 import type { Arg } from "./builtins.ts";
 import type { EffectRecord } from "./effects.ts";
 import { ScriptError } from "./errors.ts";
-import type { ProgramRef } from "./program.ts";
+import { withRedirects, type ProgramRef } from "./program.ts";
 
 /** Why a thread exists (AD-26). */
 export type ThreadKind = "blocking" | "board" | "persistent" | "item";
@@ -229,7 +229,15 @@ export function startThread(state: VmState, init: ThreadInit): Thread {
     source: init.source ?? null,
     target: init.target ?? null,
     frames: [
-      { program: init.ref, ip: 0, locals: {}, operands: [], errorHandler: null, autoLocal: false },
+      {
+        // The redirect table in force when a program starts is recorded in its ref (R-42).
+        program: withRedirects(init.ref, state.redirects),
+        ip: 0,
+        locals: {},
+        operands: [],
+        errorHandler: null,
+        autoLocal: false,
+      },
     ],
     status: "ready",
     wait: null,

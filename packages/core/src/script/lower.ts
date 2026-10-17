@@ -45,6 +45,9 @@ export type CompiledClass = {
 /** The op range `[start, end)` of one statement, its trailing `pop` included (ERR-1 `resumeNext`). */
 export type StatementRange = { readonly start: number; readonly end: number };
 
+/** Where one function definition sits: its name, parameter count and line. */
+export type FunctionDefInfo = { readonly name: string; readonly argc: number; readonly line: number };
+
 /** Lowering result: instructions, hoisted function/class tables, top-level labels and statement ranges. */
 export type LowerResult = {
   readonly ops: StepOp[];
@@ -52,11 +55,14 @@ export type LowerResult = {
   readonly classes: { readonly [name: string]: CompiledClass };
   readonly labels: { readonly [name: string]: number };
   readonly statements: readonly StatementRange[];
+  /** Each function definition in source order, for clash warnings (MOD-1). */
+  readonly defs: readonly FunctionDefInfo[];
 };
 
 /** Lower an AST to the flat Step IR array and function tables. */
-export function lower(ast: Ast, file = "<inline>"): LowerResult {
-  const classNames = new Set(ast.classes.map((item) => item.name));
+export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<string>): LowerResult {
+  const classNames = new Set([...(knownClasses ?? []), ...ast.classes.map((item) => item.name)]);
+  const defs: FunctionDefInfo[] = [];
   const ops: StepOp[] = [];
   const posCache = new Map<number, SourcePos>();
   const statements: StatementRange[] = [];
@@ -147,7 +153,9 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
         break;
       case "call":
         for (const arg of expr.args) lowerExpr(arg);
-        if (classNames.has(expr.name)) {
+        if (expr.file !== undefined) {
+          ops.push({ op: "call", name: expr.name, argc: expr.args.length, file: expr.file, pos: getPos(expr.line) });
+        } else if (classNames.has(expr.name)) {
           ops.push({ op: "construct", className: expr.name, argc: expr.args.length, pos: getPos(expr.line) });
         } else {
           ops.push({ op: "call", name: expr.name, argc: expr.args.length, pos: getPos(expr.line) });
@@ -414,6 +422,7 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
     }
     const info = infoFor(fn);
     functions[fn.name] = [...list, info];
+    defs.push({ name: fn.name, argc: fn.params.length, line: fn.line });
   }
 
   for (const cls of ast.classes) {
@@ -433,5 +442,5 @@ export function lower(ast: Ast, file = "<inline>"): LowerResult {
     classes[cls.name] = { name: cls.name, bases: cls.bases, members: cls.members, methods, constructor, destructor, abstract };
   }
 
-  return { ops, functions, classes, labels: topLabels, statements };
+  return { ops, functions, classes, labels: topLabels, statements, defs };
 }

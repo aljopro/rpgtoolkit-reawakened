@@ -5,6 +5,7 @@ import {
   type GameState,
   type Logger,
   type PluginDefinition,
+  type ProgramLoader,
   type ResolvedPlugin,
   type ScriptServices,
   type VirtualVariablePort,
@@ -22,9 +23,16 @@ export function createScriptServices(
   plugins: readonly TestPlugin[] = [],
   logger?: Logger,
   virtuals?: VirtualVariablePort,
+  loader?: ProgramLoader,
 ): ScriptServices {
   const resolved = plugins.map((plugin) =>
     "definition" in plugin ? plugin : { definition: plugin },
   );
-  return createResolvedScriptServices(state, [...DEFAULT_RESOLVED, ...resolved], logger, virtuals);
+  return createResolvedScriptServices(
+    state,
+    [...DEFAULT_RESOLVED, ...resolved],
+    logger,
+    virtuals,
+    loader,
+  );
 }

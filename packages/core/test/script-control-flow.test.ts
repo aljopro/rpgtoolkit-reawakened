@@ -183,10 +183,10 @@ function deep() {
   end()
   return "unreachable"
 }
-function mid() {
+function middle() {
   return deep()
 }
-mid()
+middle()
 result = "done"
 `;
   const state = runScript(script);

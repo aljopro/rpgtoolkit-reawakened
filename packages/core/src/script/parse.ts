@@ -12,6 +12,7 @@
 import type {
   AccessLevel,
   Ast,
+  IncludeRequest,
   Block,
   ClassDef,
   Expr,
@@ -24,7 +25,7 @@ import type {
   SwitchCase,
 } from "./ast.ts";
 import { ScriptError } from "./errors.ts";
-import type { Token } from "./lex.ts";
+import { foldAscii, type Token } from "./lex.ts";
 import type { BinaryOp, UnaryOp } from "./ops.ts";
 
 function isOp(token: Token, text: string): token is Token & { kind: "op" } {
@@ -98,13 +99,73 @@ function binaryBindingPower(opText: string): number | undefined {
   return undefined;
 }
 
+/** What a parse shares with the files parsed before and after it: the one redirect table (R-42). */
+export type ParseContext = { readonly redirects: Map<string, string> };
+
+/** The call names that edit the module state rather than reach a built-in (MOD-3, R-42). */
+export const MODULE_COMMANDS: { readonly [name: string]: true } = {
+  include: true,
+  redirect: true,
+  killredirect: true,
+  killallredirects: true,
+};
+
 /** Parse a token list into the full Unified AST. */
-export function parse(tokens: readonly Token[]): Ast {
+export function parse(tokens: readonly Token[], context: ParseContext = { redirects: new Map() }): Ast {
   const eof: Token = {
     kind: "eof",
     line: tokens[tokens.length - 1]?.line ?? 1,
   };
   let index = 0;
+  const redirects = context.redirects;
+  const implicit: IncludeRequest[] = [];
+
+  /**
+   * Build a call site. Redirects apply here, at parse time, in textual order and
+   * one hop only (docs/spec/engine/rpgcode-modules-and-objects.md#redirects R-42..R-44);
+   * a `file.func` target or an explicit `file.func` call queues the file (MOD-2).
+   */
+  function makeCall(name: string, args: readonly Expr[], line: number, file?: string): Expr {
+    let callName = name;
+    let callFile = file;
+    if (callFile === undefined) {
+      if (Object.hasOwn(MODULE_COMMANDS, name)) {
+        applyRedirectCommand(name, args);
+      } else {
+        const target = redirects.get(name);
+        if (target !== undefined) {
+          const dot = target.indexOf(".");
+          if (dot < 0) {
+            callName = target;
+          } else {
+            callFile = target.slice(0, dot);
+            callName = target.slice(dot + 1);
+          }
+        }
+      }
+    }
+    // `system.func` is the engine's own namespace, not a file (PRG-1): it is the plain call `func`.
+    if (callFile === "system") callFile = undefined;
+    if (callFile === undefined) return { kind: "call", name: callName, args, line };
+    implicit.push({ path: `${callFile}.prg`, line, implicit: true });
+    return { kind: "call", name: callName, args, file: callFile, line };
+  }
+
+  /** A literal `redirect`/`killRedirect`/`killAllRedirects` changes the table for text parsed after it. */
+  function applyRedirectCommand(name: string, args: readonly Expr[]): void {
+    const literal = (arg: Expr | undefined): string | undefined =>
+      arg?.kind === "literal" && typeof arg.value === "string" ? foldAscii(arg.value) : undefined;
+    if (name === "redirect") {
+      const from = literal(args[0]);
+      const to = literal(args[1]);
+      if (from !== undefined && to !== undefined) redirects.set(from, to);
+    } else if (name === "killredirect") {
+      const from = literal(args[0]);
+      if (from !== undefined) redirects.delete(from);
+    } else if (name === "killallredirects") {
+      redirects.clear();
+    }
+  }
 
   function peek(): Token {
     return tokens[index] ?? eof;
@@ -279,7 +340,7 @@ export function parse(tokens: readonly Token[]): Ast {
         if (expr.kind === "variable") {
           consume();
           const args = parseArgs();
-          expr = { kind: "call", name: expr.name, args, line: expr.line };
+          expr = makeCall(expr.name, args, expr.line);
           continue;
         }
         if (expr.kind === "member") {
@@ -293,6 +354,21 @@ export function parse(tokens: readonly Token[]): Ast {
           "only named functions or object methods can be called",
           { file: "", line: token.line },
         );
+      }
+
+      // `file.func(args)`: a call bound to that file first, which queues the file (MOD-2).
+      // `this` is never a file name.
+      if (isOp(token, ".") && expr.kind === "variable" && expr.scope === null && expr.name !== "this") {
+        const nameToken = tokens[index + 1];
+        const open = tokens[index + 2];
+        if (nameToken?.kind === "identifier" && open !== undefined && isOp(open, "(")) {
+          consume();
+          consume();
+          consume();
+          const args = parseArgs();
+          expr = makeCall(nameToken.name, args, expr.line, expr.name);
+          continue;
+        }
       }
 
       // Object member access (`->` is canonical; `.` is accepted in authored
@@ -1079,7 +1155,7 @@ export function parse(tokens: readonly Token[]): Ast {
         expectStatementEnd();
         return {
           kind: "expr",
-          expr: { kind: "call", name: token.name, args: [], line: token.line },
+          expr: makeCall(token.name, [], token.line),
           line: token.line,
         };
       }
@@ -1112,5 +1188,5 @@ export function parse(tokens: readonly Token[]): Ast {
     skipEnds();
   }
 
-  return { statements, functions, classes };
+  return { statements, functions, classes, includes: implicit };
 }
