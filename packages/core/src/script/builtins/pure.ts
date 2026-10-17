@@ -80,7 +80,7 @@ const MATH_SPECS: readonly BuiltinSpec[] = [
     ],
     doc: {
       summary: "Generate a random number from one to the supplied maximum, inclusive.",
-      behaviour: "Truncate max to an integer, then use the injected deterministic RNG; return a value from 1 through max and optionally write dest. This command does not wait.",
+      behaviour: "Truncate max to an integer; max 0 returns 1, a nonzero finite max draws from 1 through abs(max), and NaN draws from 1 through 32768. Use the injected deterministic RNG and optionally write dest. This command does not wait.",
       groups: ["variables-strings-math-30", "core-runtime"],
       returns: { summary: "The generated integer, also written to dest when supplied." },
       since: "3.1",
@@ -199,7 +199,7 @@ const FLOW_SPECS: readonly BuiltinSpec[] = [
     params: [{ name: "seconds", optional: false, byRef: false, variadic: false }],
     doc: {
       summary: "Delay for a certain number of seconds.",
-      behaviour: "Convert seconds to a positive whole wait duration using the fixed 60 Hz tick rule, then block the whole game until the wait ends.",
+      behaviour: "Convert seconds with max(1, floor(seconds × 60 + 0.5)), then block the whole game until the resulting absolute end tick.",
       groups: ["program-flow-errors-debugging-25", "core-runtime"],
       waits: { kind: "ticks", summary: "Blocks for the converted number of simulation ticks." },
     },
