@@ -33,11 +33,83 @@ import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
 import { THREAD_SPECS } from "./builtins/threads.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
+export type DocTag = "legacy" | "alias" | "deprecated" | "obsolete" | "experimental";
+
+export type RunnerSupport = {
+  readonly [runnerId: string]: {
+    readonly level: "full" | "partial" | "none";
+    readonly note?: string;
+  };
+};
+
+export type DocExample = string | {
+  readonly code: string;
+  readonly caption?: string;
+  readonly result?: string;
+};
+
+export type DocReturns = {
+  readonly summary: string;
+  readonly unit?: string;
+};
+
+export type DocThrow = {
+  readonly code: string;
+  readonly when: string;
+};
+
+export type DocWait = {
+  readonly kind: "never" | "ticks" | "until-input" | "until-event" | "host-request" | "other";
+  readonly summary: string;
+};
+
+export type ParamDocValue = {
+  readonly value: string;
+  readonly summary: string;
+};
+
+export type ParamDoc = {
+  readonly summary: string;
+  readonly unit?: string;
+  readonly tags?: readonly DocTag[];
+  readonly support?: RunnerSupport;
+  /** Prose description of the value used when the argument is omitted. */
+  readonly default?: string;
+  /** Prose description of what omission means for an optional/output argument. */
+  readonly ifOmitted?: string;
+  readonly range?: { readonly min?: number; readonly max?: number; readonly note?: string };
+  readonly values?: readonly ParamDocValue[];
+  readonly type?: string;
+  readonly since?: string;
+};
+
+export type BuiltinDoc = {
+  readonly summary: string;
+  readonly behaviour: string;
+  readonly examples?: readonly DocExample[];
+  readonly groups?: readonly string[];
+  readonly returns?: DocReturns;
+  readonly throws?: readonly DocThrow[];
+  readonly see?: readonly string[];
+  readonly since?: string;
+  readonly replacedBy?: { readonly kind: "command"; readonly name: string } | { readonly kind: "syntax"; readonly text: string };
+  readonly reason?: string;
+  readonly access?: "public" | "internal";
+  readonly waits?: DocWait;
+  readonly effects?: readonly string[];
+  readonly todo?: readonly string[];
+  readonly author?: string;
+  readonly license?: string;
+  readonly tags?: readonly DocTag[];
+  readonly support?: RunnerSupport;
+};
+
 export type ParamSpec = {
   readonly name: string;
   readonly optional: boolean;
   readonly byRef: boolean;
   readonly variadic: boolean;
+  readonly doc?: ParamDoc;
 };
 
 /**
@@ -53,7 +125,10 @@ export type BuiltinSpec = {
   readonly aliases: readonly string[];
   readonly params: readonly ParamSpec[];
   readonly call: CommandHandler;
+  /** Author-facing registration metadata; never passed to the handler or VM state. */
+  readonly doc?: BuiltinDoc;
 };
+
 
 /**
  * The built-in `core` pack (ADR 0004 decision 6). Names are already ASCII
@@ -62,12 +137,25 @@ export type BuiltinSpec = {
 export const CORE_PLUGIN: PluginDefinition = {
   id: "core",
   version: "1.0.0",
+  doc: {
+    summary: "The deterministic core commands that every runner can execute.",
+    groups: [
+      { id: "core-runtime", name: "Core runtime", summary: "Deterministic timing, values and control available in every runner." },
+      { id: "internal", name: "Internal", summary: "Continuation commands used by the core file service." },
+    ],
+  },
   commands: [
     ...PURE_SPECS,
     {
       name: "sleep",
       aliases: [],
       params: [{ name: "ticks", optional: false, byRef: false, variadic: false }],
+      doc: {
+        summary: "Pause the running game for a number of simulation ticks.",
+        behaviour: "Require a positive whole-number tick count, then block the whole game until the absolute end tick is reached; the calling program resumes on the next tick.",
+        groups: ["core-runtime"],
+        waits: { kind: "ticks", summary: "Blocks for the requested number of simulation ticks." },
+      },
       call: (view, args) => {
         const ticks = args[0]?.value;
         if (typeof ticks !== "number" || !Number.isInteger(ticks) || ticks <= 0) {

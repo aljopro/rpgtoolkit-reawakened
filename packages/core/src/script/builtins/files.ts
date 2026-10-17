@@ -204,6 +204,13 @@ const FILE_COMMANDS: BuiltinSpec[] = [
       { name: "ok", optional: false, byRef: false, variadic: false }, { name: "value", optional: false, byRef: false, variadic: false },
       { name: "file", optional: false, byRef: false, variadic: false }, { name: "path", optional: false, byRef: false, variadic: false }, { name: "mode", optional: false, byRef: false, variadic: false }, { name: "area", optional: false, byRef: false, variadic: false },
     ],
+    doc: {
+      summary: "Internal continuation for opening a file through the host service.",
+      behaviour: "Resolve the host reply in command order, emit the file-open effect on success, or request the asset and continue with the internal asset continuation; never callable by game-authored RPGCode.",
+      groups: ["internal"],
+      access: "internal",
+      waits: { kind: "host-request", summary: "Resumes only after the host asset request replies." },
+    },
     call: (_view, args) => {
       const ok = truthy(args[0]?.value ?? 0); const file = toStringValue(args[2]?.value ?? ""); const path = toStringValue(args[3]?.value ?? ""); const mode = toStringValue(args[4]?.value ?? "input") as FileMode; const area = toStringValue(args[5]?.value ?? "saves") as "saves" | "files";
       if (ok) return { value: null, effects: [handleEffect("open", file, mode, path, area, typeof args[1]?.value === "string" ? args[1].value : "")] };

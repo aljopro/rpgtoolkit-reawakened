@@ -110,7 +110,18 @@ export {
   truthy,
 } from "./values.ts";
 export { CORE_PLUGIN } from "./builtins.ts";
-export type { Arg, BuiltinSpec, ParamSpec } from "./builtins.ts";
+export type { Arg, BuiltinDoc, BuiltinSpec, DocExample, DocReturns, DocTag, DocThrow, DocWait, ParamDoc, ParamDocValue, ParamSpec, RunnerSupport } from "./builtins.ts";
+export {
+  commandDocumentation,
+  validateCommandDocumentation,
+} from "./command-docs.ts";
+export type {
+  CommandDocumentation,
+  CommandDocumentationDiagnostic,
+  CommandParamDocumentation,
+  NativeCommandRow,
+  PluginDocumentation,
+} from "./command-docs.ts";
 export { CATALOGUE_PLUGIN, CATALOGUE_RESPONDERS_PLUGIN } from "./catalogue-responders.ts";
 export { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 export { drainEffects, EFFECT_LOG_CAP, recordDiagnostic, recordEffect } from "./effects.ts";
@@ -128,6 +139,7 @@ export type {
   CommandResult,
   CommandView,
   PluginDefinition,
+  PluginDoc,
   ResolvedPlugin,
 } from "./plugin.ts";
 export type {

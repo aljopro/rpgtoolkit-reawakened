@@ -41,7 +41,19 @@ export const ERROR_SPECS: readonly BuiltinSpec[] = [
   {
     name: "debug",
     aliases: [],
-    params: [{ name: "state", optional: false, byRef: false, variadic: false }],
+    params: [{
+      name: "state",
+      optional: false,
+      byRef: false,
+      variadic: false,
+      doc: { summary: "Debug switch.", values: [{ value: "0", summary: "Disable debug messages." }, { value: "1", summary: "Enable debug messages." }] },
+    }],
+    doc: {
+      summary: "Toggle whether to show debug messages.",
+      behaviour: "Treat state as off for 0 and on for any truthy value, then emit the debug control effect; this command does not wait.",
+      groups: ["program-flow-errors-debugging-25", "core-runtime"],
+      waits: { kind: "never", summary: "Never waits." },
+    },
     call: (_view, args) => ({
       value: null,
       effects: [{ kind: "vm.control", args: ["debug", truthy(args[0]?.value ?? 0)] }],

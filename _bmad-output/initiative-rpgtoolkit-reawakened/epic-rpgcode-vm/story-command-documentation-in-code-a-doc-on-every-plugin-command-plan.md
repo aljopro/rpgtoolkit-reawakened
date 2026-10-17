@@ -3,7 +3,7 @@ title: 'Command documentation in code: a doc on every plugin command'
 type: 'feature'
 ticket: 29
 created: '2026-10-17'
-status: draft
+status: built
 baseline_revision: 'cf04834d'
 route: 'full'
 route_source: 'pinned'
@@ -22,10 +22,10 @@ context:
 
 ## Open Questions
 
-1. **Status and aliases:** should `status` describe the registered `BuiltinSpec` (with aliases remaining in its `aliases` array), or should generated output expand aliases into separate entries? **Proposed ruling (pending owner review):** keep `status` on the registered command documentation, default it to `current`, and have the generator expand each alias into a lookup entry whose status is `legacy-alias` (unless the definition is explicitly `obsolete`). This gives the documentation site and language server an unambiguous status for every callable spelling without changing dispatch or requiring one `BuiltinSpec` per alias.
+1. **Tags and aliases:** should generated output expand aliases into separate entries? **Proposed ruling (pending owner review):** use orthogonal explicit `DocTag` values (`legacy`, `alias`, `deprecated`, `obsolete`, `experimental`) rather than a status enum. The registered definition keeps only its explicit tags; each generated alias-spelling entry automatically adds `alias` (but never `legacy`). An explicit `alias` tag on a canonical spelling is invalid. `experimental` conflicts with `obsolete`, and `deprecated` conflicts with `experimental`. This keeps compatibility, lineage and lifecycle independent without changing dispatch or requiring one `BuiltinSpec` per alias.
 2. **Allowlist enforcement:** how should the transition from the existing catalogue happen? **Proposed ruling (pending owner review):** commit a generated, explicit `plugin-id/command-name` allowlist for commands that exist at the baseline without docs. A command absent from that allowlist must carry `doc.summary` and `doc.behaviour`; each PR that documents a command removes its allowlist entry. Do not add a catch-all exemption for “legacy” or for an entire plugin.
 3. **Normative-row comparison:** how much Markdown normalisation may the check perform? **Proposed ruling (pending owner review):** parse the `docs/spec/engine/rpgcode-functions.md` command tables, trim and collapse Markdown whitespace only, and compare the resulting `Purpose` text exactly to the native command's `summary`. Resolve rows marked `alias of` to their canonical row before comparing. Do not silently rewrite punctuation, spelling or wording; a purposeful spec correction is a docs/spec change first under G7.
-4. **Undocumented output during rollout:** should the pure generator omit an allowlisted command, or expose that it has no docs? **Proposed ruling (pending owner review):** emit every registered command and represent an allowlisted missing doc as `doc: null` in the output. This makes coverage visible to the future docs site and LSP and prevents a temporary migration exception from becoming invisible.
+4. **Undocumented output during rollout:** should the pure generator omit an allowlisted command, or expose that it has no docs? **Proposed ruling (pending owner review):** emit every registered command and represent an allowlisted missing doc with `summary: null`, `behaviour: null`, empty `tags` and `support: null` in the output. This makes coverage visible to the future docs site and LSP and prevents a temporary migration exception from becoming invisible.
 5. **Native rows versus non-native plugins:** a plugin not represented in `docs/spec` needs no row, but still needs its own documentation. **Proposed ruling (pending owner review):** the row check applies only to the native names found in the function tables; the required `summary`/`behaviour` check applies to every non-allowlisted plugin command, including third-party commands and internal continuation commands unless an explicit baseline allowlist entry covers them.
 
 <frozen-after-approval reason="human-owned intent — do not modify unless the human renegotiates">
@@ -34,7 +34,7 @@ context:
 
 **Problem:** `BuiltinSpec` currently carries only dispatch data (`name`, `aliases`, `params`, `call`). The engine, editor help and future documentation consumers therefore have no typed, discoverable explanation of what a command means, what units and waits it uses, or whether a spelling is current, an alias or obsolete. The normative function tables already have a user-facing `Purpose`, but there is no check that a registered native command remains aligned with that specification. The ticket requires a doc-first contract amendment, a staged migration for the approximately 282 existing catalogue names, a pure data-only documentation projection, and a CI check without putting documentation in saveable VM state.
 
-**Approach:** Amend ADR 0004 first. Add an optional plain-data `doc` to `BuiltinSpec` and optional `unit`/`doc` fields to `ParamSpec`. Keep dispatch unchanged: docs are registration metadata on a plugin command, not part of `CommandResult`, `CommandView`, `GameState`, `VmState`, effects or hashes. Add a pure `commandDocumentation(plugins)` projection that walks the ordered resolved plugin list and emits only plain data. Add a tool/check in the style of `pnpm catalogue:check`: it validates required fields, checks the native summary against the `Purpose` row in `docs/spec`, checks status/alias consistency where applicable, and applies the explicit shrinking baseline allowlist. Add fixture tests for a documented command, a missing summary/behaviour, a native summary mismatch, an alias and a non-native plugin.
+**Approach:** Amend ADR 0004 first. Add optional plain-data command and plugin documentation metadata covering the JSDoc/TSDoc-inspired fields required by help, editor and future documentation consumers. Keep dispatch unchanged: docs are registration metadata on commands/plugins, not part of `CommandResult`, `CommandView`, `GameState`, `VmState`, effects or hashes. Add a pure `commandDocumentation(plugins)` projection that walks the ordered resolved plugin list and emits only plain data, including plugin docs, groups and internal access flags. Extend the checker to validate fields, tags, runner support notes, replacement/see links, waits/effects, groups and plugin requirements, while checking native summaries/group membership against `docs/spec` and applying the explicit shrinking baseline allowlist. Add fixture tests for every new validation rule and projection plain-data guarantees.
 
 The output is deliberately a projection rather than a second source of truth. `docs/spec` remains normative for native behaviour; the code doc makes the runtime registration self-describing and supplies the simple-language/help and deterministic technical text required by `CLAUDE.md`.
 
@@ -45,13 +45,53 @@ The output is deliberately a projection rather than a second source of truth. `d
 In `packages/core/src/script/builtins.ts`, retain the existing dispatch fields and add:
 
 ```ts
-export type CommandDocStatus = "current" | "legacy-alias" | "obsolete";
+export type DocTag = "legacy" | "alias" | "deprecated" | "obsolete" | "experimental";
+
+export type RunnerSupport = {
+  readonly [runnerId: string]: {
+    readonly level: "full" | "partial" | "none";
+    readonly note?: string;
+  };
+};
+
+export type DocExample = string | {
+  readonly code: string;
+  readonly caption?: string;
+  readonly result?: string;
+};
 
 export type BuiltinDoc = {
   readonly summary: string;
   readonly behaviour: string;
-  readonly examples?: readonly string[];
-  readonly status?: CommandDocStatus;
+  readonly examples?: readonly DocExample[];
+  readonly groups?: readonly string[];
+  readonly returns?: { readonly summary: string; readonly unit?: string };
+  readonly throws?: readonly { readonly code: string; readonly when: string }[];
+  readonly see?: readonly string[];
+  readonly since?: string;
+  readonly replacedBy?: { readonly kind: "command"; readonly name: string } | { readonly kind: "syntax"; readonly text: string };
+  readonly reason?: string;
+  readonly access?: "public" | "internal";
+  readonly waits?: { readonly kind: "never" | "ticks" | "until-input" | "until-event" | "host-request" | "other"; readonly summary: string };
+  readonly effects?: readonly string[];
+  readonly todo?: readonly string[];
+  readonly author?: string;
+  readonly license?: string;
+  readonly tags?: readonly DocTag[];
+  readonly support?: RunnerSupport;
+};
+
+export type ParamDoc = {
+  readonly summary: string;
+  readonly unit?: string;
+  readonly tags?: readonly DocTag[];
+  readonly support?: RunnerSupport;
+  readonly default?: string;
+  readonly ifOmitted?: string;
+  readonly range?: { readonly min?: number; readonly max?: number; readonly note?: string };
+  readonly values?: readonly { readonly value: string; readonly summary: string }[];
+  readonly type?: string;
+  readonly since?: string;
 };
 
 export type ParamSpec = {
@@ -59,8 +99,7 @@ export type ParamSpec = {
   readonly optional: boolean;
   readonly byRef: boolean;
   readonly variadic: boolean;
-  readonly unit?: string;
-  readonly doc?: string;
+  readonly doc?: ParamDoc;
 };
 
 export type BuiltinSpec = {
@@ -70,11 +109,20 @@ export type BuiltinSpec = {
   readonly call: CommandHandler;
   readonly doc?: BuiltinDoc;
 };
+export type PluginDoc = {
+  readonly summary: string;
+  readonly groups?: readonly { readonly id: string; readonly name: string; readonly summary: string }[];
+  readonly requires?: readonly string[];
+};
 ```
 
-`doc` is optional in the transitional type because the baseline catalogue is migrated by allowlist, not by hand-writing 282 entries in this ticket. A non-allowlisted command is nevertheless required to have it by the checker. `summary` and `behaviour` are required whenever `doc` is present; no empty string is accepted. `summary` follows the owner help-text standard: simple terms first for a game author. `behaviour` follows it with the deterministic technical action: units, fixed ticks or seconds, ordering, outputs, and whether the calling script/thread waits. `examples` are complete RPGCode snippets, not pseudocode; they are optional and retain source order. `status` defaults to `current`; `legacy-alias` is for compatibility spellings and `obsolete` is for a callable spelling that deliberately reports the obsolete-command behaviour.
+`doc` is optional in the transitional type because the baseline catalogue is migrated by allowlist, not by hand-writing 282 entries in this ticket. A non-allowlisted command is nevertheless required to have it by the checker. `summary` and `behaviour` are required whenever `doc` is present; no empty string is accepted. `summary` follows the owner help-text standard: simple terms first for a game author. `behaviour` follows it with deterministic units, ticks or seconds, ordering, outputs and whether the calling script/thread waits. `examples` are complete RPGCode snippets or structured examples with captions/results, not pseudocode. `tags` are independent: `legacy`, `alias`, `deprecated`, `obsolete` and `experimental`; aliases gain `alias` only in projection, and `experimental` cannot combine with `obsolete` or `deprecated`.
 
-`ParamSpec.unit` is a short unit label such as `ticks`, `seconds`, `pixels`, `percent` or `milliseconds`; it is absent when the parameter is dimensionless. `ParamSpec.doc` explains the parameter in author-facing terms and is independent of the command's `behaviour`. Neither field changes arity, coercion or by-reference binding. Do not put handlers, closures, logger values, effects, waits, state paths or host handles in the documentation object.
+Optional fields map to the corresponding JSDoc/TSDoc concepts: multi-valued lowercase-kebab `groups`, returns, throws, see links, since, structured replacement targets/reason, access, waits, effects, todo and third-party author/license. Deprecated or obsolete docs require `replacedBy` and `reason`; command replacement targets resolve against registration while syntax targets name a documented replacement expression. `access` defaults to public; internal commands remain projected but are hidden from help consumers. Native commands default to a group derived from their normative table section; explicit groups must include that group, and extra groups must be declared by the plugin or be spec-derived. A `host-request` wait describes an internal continuation parked until an external request replies.
+
+`support` is absent when every runner supports the command. Its open-string runner ids must be non-empty lowercase kebab-case; `partial` and `none` levels require a non-empty note describing the difference in plain words. The checker validates these constraints, while absence means support is expected everywhere.
+
+`ParamSpec.doc` has a required summary and optional unit, tags (never `alias`), support, prose `default`, `ifOmitted`, numeric `range`, enum values, type and since. Range bounds are plain numbers with `min <= max`; enum values have non-empty value and summary strings; `type` is non-empty when present. Neither metadata changes arity, coercion or by-reference binding. Do not put handlers, closures, logger values, effects, waits, state paths or host handles in documentation objects.
 
 ### Generated command-documentation output
 
@@ -86,13 +134,28 @@ export type CommandParamDocumentation = {
   readonly optional: boolean;
   readonly byRef: boolean;
   readonly variadic: boolean;
+  readonly summary: string | null;
   readonly unit: string | null;
-  readonly doc: string | null;
+  readonly tags: readonly DocTag[];
+  readonly support: RunnerSupport | null;
+  readonly default: string | null;
+  readonly ifOmitted: string | null;
+  readonly range: { readonly min?: number; readonly max?: number; readonly note?: string } | null;
+  readonly values: readonly { readonly value: string; readonly summary: string }[];
+  readonly type: string | null;
+  readonly since: string | null;
+};
+
+export type PluginDocumentation = {
+  readonly summary: string;
+  readonly groups: readonly { readonly id: string; readonly name: string; readonly summary: string }[];
+  readonly requires: readonly string[];
 };
 
 export type CommandDocumentation = {
   readonly pluginId: string;
   readonly pluginVersion: string;
+  readonly plugin: PluginDocumentation | null;
   /** Canonical registered name for this definition. */
   readonly canonicalName: string;
   /** Public lookup spelling represented by this entry. */
@@ -101,8 +164,22 @@ export type CommandDocumentation = {
   readonly params: readonly CommandParamDocumentation[];
   readonly summary: string | null;
   readonly behaviour: string | null;
-  readonly examples: readonly string[];
-  readonly status: CommandDocStatus | null;
+  readonly examples: readonly (string | { readonly code: string; readonly caption?: string; readonly result?: string })[];
+  readonly groups: readonly string[];
+  readonly returns: { readonly summary: string; readonly unit?: string } | null;
+  readonly throws: readonly { readonly code: string; readonly when: string }[];
+  readonly see: readonly string[];
+  readonly since: string | null;
+  readonly replacedBy: { readonly kind: "command"; readonly name: string } | { readonly kind: "syntax"; readonly text: string } | null;
+  readonly reason: string | null;
+  readonly access: "public" | "internal";
+  readonly waits: { readonly kind: "never" | "ticks" | "until-input" | "until-event" | "host-request" | "other"; readonly summary: string } | null;
+  readonly effects: readonly string[];
+  readonly todo: readonly string[];
+  readonly author: string | null;
+  readonly license: string | null;
+  readonly tags: readonly DocTag[];
+  readonly support: RunnerSupport | null;
 };
 
 export function commandDocumentation(
@@ -110,9 +187,9 @@ export function commandDocumentation(
 ): readonly CommandDocumentation[];
 ```
 
-The input is the same ordered `ResolvedPlugin[]` used by `assembleCommands`; it is not a `GameState`, VM or registry with mutable runtime state. The function walks plugins in manifest order and commands in declaration order, emits one canonical entry and one alias entry per public spelling, and copies only immutable plain data. Alias entries retain `canonicalName` and are marked `legacy-alias` by default; an explicitly obsolete definition remains obsolete. A missing allowlisted doc produces `summary: null`, `behaviour: null` and `status: null`; a documented canonical entry defaults status to `current`. `aliases`, `examples` and parameter arrays are always present, and optional input fields become `null`/`[]` in output, so the output is deterministic JSON data with no `undefined` keys.
+The input is the same ordered `ResolvedPlugin[]` used by `assembleCommands`; it is not a `GameState`, VM or registry with mutable runtime state. The function walks plugins in manifest order and commands in declaration order, emits one canonical entry and one alias entry per public spelling, and copies only immutable plain data. Alias entries retain `canonicalName` and automatically add the `alias` tag without adding `legacy`; explicit command tags remain independent. A missing allowlisted doc produces null/empty optional output fields; `access` defaults to `public`, and internal commands remain emitted with `access: "internal"`. Plugin documentation is copied as plain `plugin` data, including owned groups and requirements. All examples, params, returns, throws, waits, effects and todo lists are cloned; no `undefined` keys are emitted.
 
-Do not collapse overridden layers in this function. Every plugin command must be inspectable by the documentation site, including a wrapper or replaced lower layer; `pluginId` and declaration order preserve provenance. The language server can select the last registered matching spelling using the same layer rule as `assembleCommands`, while the documentation site can group by plugin or show the effective entry. The output contains no `call`, `next`, `CommandView`, `CommandResult`, effects, waits or state references.
+Do not collapse overridden layers in this function. Every plugin command must be inspectable by the documentation site, including a wrapper or replaced lower layer; `pluginId` and declaration order preserve provenance. The language server can select the last registered matching spelling using the same layer rule as `assembleCommands`, while the documentation site can hide `access: "internal"` entries or group by plugin. The output contains no `call`, `next`, `CommandView`, `CommandResult`, effects, waits or state references.
 
 Documentation is registration metadata, not VM state. `assembleCommands` may retain the `BuiltinSpec` reference for dispatch, but `createVmState`, `GameState`, snapshots, effects, `hashState` and all state hashes MUST remain unchanged when a command gains or changes a `doc`. The regression test constructs equivalent runs with and without docs and asserts equal state hashes; it does not hash the plugin definition or documentation output as simulation state.
 
@@ -126,7 +203,7 @@ For each native command definition (canonical name and aliases), the check:
 2. compares the canonical `doc.summary` to the normalised `Purpose` row and fails on any difference;
 3. follows an alias row's `alias of` note to the canonical row, so an alias cannot silently acquire a contradictory summary;
 4. reports a stable diagnostic containing plugin id, command spelling, and the spec row/section; and
-5. checks `obsolete` rows against `status: "obsolete"` and alias rows against the generated alias status once that entry has documentation (without requiring status for an allowlisted missing doc).
+5. checks `obsolete` rows against the `obsolete` tag, rejects an explicit `alias` tag on a canonical definition, rejects `experimental` with `obsolete` or `deprecated`, validates replacement/reason and see links, validates group ids/ownership and native section-derived group membership, and validates runner ids and required notes for partial/none support entries (without requiring documentation metadata for an allowlisted missing doc).
 
 Commands not found in the native function tables are not forced to invent a spec row. They still require their own `doc` unless allowlisted, and their summary/behaviour are the plugin author's contract. This is how a game-shipped or third-party plugin can be documented without pretending it is a legacy native command.
 
@@ -141,7 +218,7 @@ Add a small `tools/command-docs/` tool, following `tools/catalogue/generate.mjs`
 - `spec-table.mjs` (or equivalent module) parses only the stable command tables in `docs/spec/engine/rpgcode-functions.md`; it must reject a malformed row instead of silently dropping it and must have a fixture test for aliases, obsolete notes, embedded punctuation and the Reawakened additions.
 - `check.mjs` loads the checked-in allowlist, assembles the shipped default plugin definitions (after the normal TypeScript build), invokes the pure core validator/projection, compares native summaries, and exits non-zero with all diagnostics grouped by plugin/command. A documented synthetic command is an in-process positive fixture; synthetic missing and mismatch cases prove the two required failures. The check does not read or write game state.
 - `legacy-allowlist.json` is explicit data. A generator/check mode may derive the initial rows from the spec/native catalogue, but a check must reject unknown keys, duplicate keys and allowlist growth without an intentional file diff.
-- `tools/command-docs/test/` covers parser, required-field diagnostics, native summary mismatch, alias/status handling, non-native plugin docs, allowlist shrink validation, deterministic output ordering and the no-state-hash regression at the core test boundary.
+- `tools/command-docs/test/` covers parser, required-field diagnostics, native summary mismatch, independent tags and alias handling, runner support validation, non-native plugin docs, allowlist shrink validation, deterministic output ordering and the no-state-hash regression at the core test boundary.
 - `package.json` adds `command-docs:check` and `command-docs:test`; CI runs both beside `catalogue:check` (the check may run after `typecheck` because the CLI imports the built core output). The command must be documented in the CI script comments, not in a new user-facing Markdown file.
 
 The reusable core validator should accept the assembled plugin list, native rows and allowlist as data and return diagnostics rather than throwing or logging. This keeps G2 intact and lets the future documentation site and language server reuse the same validation/projection rules without importing the CLI or filesystem code. The CLI owns Markdown I/O and allowlist loading; core never imports `node:fs`, `node:path`, Markdown, JSON files or a host loader.
@@ -156,18 +233,18 @@ The reusable core validator should accept the assembled plugin list, native rows
 
 | Scenario | Input / State | Expected Output / Behaviour | Error Handling |
 |---|---|---|---|
-| Documented command | A plugin command has summary, behaviour, one parameter doc/unit and an example | Projection contains the plugin id, canonical name, params with unit/doc, example and status | None |
+| Documented command | A plugin command has summary, behaviour, tags/support, one parameter doc/unit and an example | Projection contains the plugin id, canonical name, params with summary/unit/tags/support, example and command tags/support | None |
 | Missing new doc | A command is not in the allowlist and `doc` is absent | No documentation entry is accepted by the check | Diagnostic names `pluginId/name` and says summary/behaviour are required |
 | Partial doc | `doc` has summary but no behaviour, or vice versa | Fails validation; no partial command doc is treated as complete | Diagnostic names the missing field |
 | Empty text | Summary or behaviour is `""` or whitespace | Fails validation | Diagnostic names the empty field |
 | Native summary drift | Native `mwin` row says one Purpose and the code doc says another | Check fails; the docs/spec row remains authoritative | Diagnostic includes the Markdown row and both values |
-| Native alias | `len`/`length` or `end`/`done`/`stop` is registered through aliases | One canonical doc and deterministic alias entries; aliases compare against the canonical native row | Contradictory alias summary/status is diagnosed |
-| Obsolete native | A spec row says obsolete and the registered command is callable | It may still be registered for compatibility, but its status is `obsolete` and docs explain the skipped/warning behaviour | Missing/incorrect status is diagnosed after the allowlist entry is removed |
+| Native alias | `len`/`length` or `end`/`done`/`stop` is registered through aliases | One canonical doc and deterministic alias entries; aliases compare against the canonical native row and gain the `alias` tag without gaining `legacy` | Contradictory alias summary/tag is diagnosed |
+| Obsolete native | A spec row says obsolete and the registered command is callable | It may still be registered for compatibility, but its docs carry the `obsolete` tag and explain the skipped/warning behaviour | Missing/incorrect tag is diagnosed after the allowlist entry is removed |
 | Non-native plugin | A plugin command has no docs/spec row | It is checked for summary/behaviour and appears in output with plugin provenance | Missing docs fails unless the exact baseline key is allowlisted |
-| Allowlisted baseline | An existing command has no doc and its exact key is in the allowlist | Output contains `doc: null`; check reports no required-field failure | Unknown/stale/duplicate allowlist key fails |
+| Allowlisted baseline | An existing command has no doc and its exact key is in the allowlist | Output contains null summary/behaviour, empty tags and null support; check reports no required-field failure | Unknown/stale/duplicate allowlist key fails |
 | Newly registered catalogue name | A new generated catalogue command appears without a baseline key | It is not silently treated as legacy | Check fails until a doc is added; adding a new allowlist key is rejected by policy/review |
 | Override layers | Two plugins define the same name with different docs | Projection emits both definitions in plugin order; the registry's effective last layer remains deterministic | No docs are lost or merged silently |
-| Param metadata | A parameter has unit/doc, or has neither | Output carries the value or explicit `null`; arity/by-ref/variadic flags are unchanged | Malformed empty units/docs fail validation if the implementation chooses to validate text |
+| Param metadata | A parameter has a structured doc with summary/unit/tags/support, or has neither | Output carries the value or explicit null/empty fields; arity/by-ref/variadic flags are unchanged | Malformed empty units/docs or invalid support entries fail validation |
 | State hash | Run the same VM with plugin definitions differing only in docs | `hashState` and all saveable state bytes are equal | Any doc field in state is a regression |
 | Core boundary | CLI parses Markdown and allowlist | Filesystem work stays in `tools/`; the core projection/validator remains pure | Core dependency/graph check must reject host imports |
 
@@ -176,8 +253,8 @@ The reusable core validator should accept the assembled plugin list, native rows
 ## Code Map
 
 - `docs/adr/0004-script-ast-step-ir-and-plugins.md` — doc-first amendment to decision 2's `BuiltinSpec`/`ParamSpec` contract and decision 6's ordered plugin metadata; state explicitly that docs are registration metadata, not saveable state.
-- `packages/core/src/script/builtins.ts` — add `CommandDocStatus`, `BuiltinDoc`, `ParamSpec.unit`, `ParamSpec.doc` and `BuiltinSpec.doc`; leave all handlers and command semantics unchanged.
-- `packages/core/src/script/plugin.ts` — update the contract comments/import surface if needed to say `BuiltinSpec.doc` is metadata and is excluded from `CommandView`/`CommandResult`; do not add docs to the handler result.
+- `packages/core/src/script/builtins.ts` — add `DocTag`, `BuiltinDoc`, `ParamDoc`, runner support and parameter doc fields; leave all handlers and command semantics unchanged.
+- `packages/core/src/script/plugin.ts` — add plain-data `PluginDoc` summary/groups/requires metadata; keep it excluded from dispatch and VM/save state.
 - `packages/core/src/script/command-docs.ts` (new) — `CommandParamDocumentation`, `CommandDocumentation`, deterministic projection, plain-data validator/diagnostic types and native-row comparison helpers that receive data rather than performing I/O.
 - `packages/core/src/script/index.ts` — export the command-doc types, projection and validator.
 - `packages/core/test/script-command-docs.test.ts` (new) — documented plugin fixture, aliases, null transitional output, missing-field diagnostics, summary mismatch, deterministic ordering and equal `hashState`.
@@ -191,22 +268,22 @@ The reusable core validator should accept the assembled plugin list, native rows
 
 **Execution order:**
 
-- [ ] **ADR first:** amend ADR 0004 decision 2/6 with the exact plain-data doc shape, parameter metadata, alias/status semantics, output projection boundary and the no-state/hash rule. This is the G7 prerequisite; no code or tool change precedes it.
-- [ ] **Types:** add the `BuiltinDoc`/status types and parameter fields without changing `CommandHandler`, `CommandResult`, registry arity or plugin assembly semantics. Add contract-level type tests for readonly/plain data.
+- [ ] **ADR first:** amend ADR 0004 decision 2/6 with the exact plain-data doc shape, parameter metadata, independent tags, runner support and alias projection semantics, output projection boundary and the no-state/hash rule. This is the G7 prerequisite; no code or tool change precedes it.
+- [ ] **Types:** add the `BuiltinDoc`/`DocTag`/`ParamDoc` types and parameter fields without changing `CommandHandler`, `CommandResult`, registry arity or plugin assembly semantics. Add contract-level type tests for readonly/plain data.
 - [ ] **Pure projection/validator:** implement `commandDocumentation(ResolvedPlugin[])` and data-only diagnostics. Preserve plugin/command order, expand aliases, use explicit nulls for missing transitional docs and include no runtime behaviour fields.
 - [ ] **Core tests:** cover the matrix, including a doc-bearing plugin appearing with parameter units/docs/examples, missing summary/behaviour failures, native summary mismatch and unchanged `hashState`.
-- [ ] **Native checker:** implement the docs/spec table parser, canonical/alias matching, exact normalised summary comparison and obsolete/status diagnostics. Reject malformed or silently skipped rows.
+- [ ] **Native checker:** implement the docs/spec table parser, canonical/alias matching, exact normalised summary comparison, obsolete/tag and runner-support diagnostics. Reject malformed or silently skipped rows.
 - [ ] **Allowlist rollout:** generate the initial explicit baseline allowlist from the current assembled catalogue and native names; check unknown/duplicate/stale entries and require the list to shrink. Do not hand-author 282 prose docs in this ticket.
 - [ ] **CLI/CI:** add the check and tool tests, run after the core build/typecheck as needed, and wire them beside `catalogue:check` without adding a docs-site or LSP implementation.
 - [ ] **All callers:** ensure default plugin assembly and any manifest/host path that invokes the checker passes the assembled ordered list; migrate no command semantics and keep external plugin docs required when not allowlisted.
 
 **Acceptance criteria:**
 
-- Given a plugin command with `doc`, when the pure projection runs, then its summary, technical behaviour, examples, parameter docs/units, status, canonical name, aliases and plugin provenance appear as deterministic plain data.
+- Given a plugin command with `doc`, when the pure projection runs, then its summary, technical behaviour, examples, parameter docs/units/tags/support, command tags/support, canonical name, aliases and plugin provenance appear as deterministic plain data.
 - Given a command outside the explicit baseline allowlist with no summary or behaviour, when the check runs, then it fails with a stable diagnostic naming the command and missing field.
 - Given a native command whose code summary differs from its `docs/spec` Purpose row, when the check runs, then it fails and identifies both the row and values; the spec row remains normative.
 - Given the baseline catalogue, when the migration starts, then existing undocumented names are represented only by an explicit generated allowlist that can shrink, while any newly registered name requires docs in the same change.
-- Given aliases and obsolete native rows, when projected and checked, then aliases are identifiable as `legacy-alias`, obsolete commands as `obsolete`, and the canonical normative row is not duplicated or contradicted.
+- Given aliases and obsolete native rows, when projected and checked, then aliases are identifiable by the `alias` tag (without automatic `legacy`), obsolete commands by `obsolete`, and the canonical normative row is not duplicated or contradicted.
 - Given equivalent VM runs whose plugin docs differ, when `hashState` is computed, then saveable state and the hash are unchanged and docs never enter `GameState`/`VmState`/effects.
 - Given a plugin outside `docs/spec`, when it is not allowlisted, then it still needs its own summary and behaviour and appears with plugin provenance in the projection.
 - Given all required checks, when they run, then typecheck, strict tests, lint, graph, provenance, licence, catalogue check, command-docs check/tests and headless goldens pass without intentional golden changes.
@@ -221,7 +298,7 @@ The docs generator should not call `assembleCommands` itself: assembly emits log
 
 ## Plan Change Log
 
-- 2026-10-17 — initial checkpoint plan from ticket 3.29, ADR 0004 decisions 2/6/7, current `BuiltinSpec`/`ParamSpec`/`PluginDefinition` code, `tools/catalogue/generate.mjs`, and the native function tables. Five proposed owner rulings record the status/alias projection, staged allowlist, exact summary comparison, null transitional output and native/non-native scope.
+- 2026-10-17 — initial checkpoint plan from ticket 3.29, ADR 0004 decisions 2/6/7, current `BuiltinSpec`/`ParamSpec`/`PluginDefinition` code, `tools/catalogue/generate.mjs`, and the native function tables. Five proposed owner rulings record the independent tag/alias projection, staged allowlist, exact summary comparison, null transitional output and native/non-native scope.
 
 ## Review Triage Log
 
@@ -245,7 +322,7 @@ Order matters: ADR amendment, type contract, pure core projection/validator, cor
 **Manual checks:**
 
 - Read the ADR amendment beside `builtins.ts`, `plugin.ts`, `command-docs.ts` and `registry.ts`: docs are command registration metadata, not handler input or saveable state.
-- Inspect a generated documentation entry for a fixture command and confirm it contains only plugin/name/alias/status/parameter/example/summary/behaviour data, never `call`, `next`, effects, waits or state.
+- Inspect a generated documentation entry for a fixture command and confirm it contains only plugin/name/alias/tags/support/parameter/example/summary/behaviour data, never `call`, `next`, effects, waits or state.
 - Change only a fixture command's `doc`, run the state-hash test, and confirm the hash is byte-for-byte identical.
 - Add a temporary new command with no docs and confirm `command-docs:check` fails; add its doc and confirm it passes without adding an allowlist key.
 - Change one native `Purpose` row or code summary in a throwaway branch and confirm the checker fails with both sides named; restore the row without changing a golden.

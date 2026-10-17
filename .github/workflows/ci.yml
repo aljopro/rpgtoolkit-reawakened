@@ -40,8 +40,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm fixtures:test
-      - run: pnpm catalogue:test
       - run: pnpm catalogue:check
+      # Command metadata is checked after the TypeScript build; docs remain outside VM state.
+      - run: pnpm command-docs:test
+      - run: pnpm command-docs:check
       - run: pnpm no-skips:test
       - run: pnpm icons:test
   golden:
