@@ -18,9 +18,10 @@ This is the dialect most surviving games use.
   keyword is case- and spacing-insensitive: `#if(cond)`, `#If (cond)` and `#IF` are the same.
 * **Blocks are `{ }`.** A block may be written on the header line (`#If (c) { … }`) or with its brace on the next line.
 * **`#For(init; cond; step)`** uses `;` between its three parts, like the 3.1 `for`; the parts may be empty.
-* **Labels and flow.** `:label` defines a label; `#Branch(:label)` jumps to it (goto); `#FBranch(:label)` calls a labelled
-  *section* as a subroutine and returns at the end of that section. `#FBranch` has no 3.1 twin — it and `#Empty` are the
-  only two Toolkit 2.x commands with no 3.1 name, and both live in the Toolkit 2.x compatibility plugin.
+* **Labels and flow.** `:label` defines a label; `#Branch(:label)` and `#FBranch(:label)` jump to it (goto, with no
+  return). `#FBranch` is an exact alias of `#Branch` (and `fbranch` in 3.1 is an alias of `branch`;
+  [facts-round-6.md](../../provenance/facts-round-6.md) Q8). `#Empty` and `#FBranch` are provided by the Toolkit 2.x
+  compatibility plugin.
 * **User commands.** `#Method name(params)` … `#ReturnMethod(v)` defines a command and returns a value. `#Method` is the
   Toolkit 2.x keyword and is the same keyword as 3.1's `function` — neither is legacy. `#ReturnMethod(v)` is the Toolkit 2.x
   return and maps to 3.1 `return v`; there is no `returnMethod` in 3.1, so that one spelling is pre-3.1 only.

@@ -131,7 +131,7 @@ const FLOW_SPECS: readonly BuiltinSpec[] = [
   },
   {
     name: "branch",
-    aliases: [],
+    aliases: ["fbranch"],
     params: [{ name: "label", optional: false, byRef: false, variadic: false }],
     call: (_view, args) => ({ value: null, effects: [control(args, "jump")] }),
   },
