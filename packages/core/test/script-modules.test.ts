@@ -109,6 +109,16 @@ test("an include inside a never-run branch is still applied when the file's pars
   equal(run.state.vm.globals.r, 3);
 });
 
+test("end in an included function unwinds the including program", () => {
+  const run = runMain({
+    "main.prg": '#include "lib.prg"\nstopHere()\nafter = 1\n',
+    "lib.prg": "function stopHere() { end() }\n",
+  });
+  equal(run.diagnostics.length, 0);
+  equal(run.state.vm.threads[0]?.status, "finished");
+  equal(run.state.vm.globals.after, undefined);
+});
+
 test("an include cycle ends with a located diagnostic instead of recursing", () => {
   const run = runMain({
     "main.prg": '#include "a.prg"\nr = fa()\n',

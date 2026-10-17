@@ -2,7 +2,11 @@
 import { equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
+  advanceScriptTick,
   createGameState,
+  hashState,
+  restoreGameState,
+  snapshot,
   startProgram,
   type BuiltinSpec,
   type GameState,
@@ -193,6 +197,36 @@ result = "done"
   equal(state.vm.threads[0]!.status, "finished");
   equal(state.vm.threads[0]!.frames.length, 0);
   equal(state.vm.globals.result, undefined);
+});
+
+test("run abandons its caller and starts the replacement program", () => {
+  const state = createGameState({ seed: 0 });
+  startProgram(state.vm, { kind: "inline", text: 'before = 1\nrun("child = 2")\nafter = 3\n', compiler: "2" });
+  const services = createScriptServices(state);
+  advanceScriptTick(state, services);
+  advanceScriptTick(state, services);
+  equal(state.vm.globals.before, 1);
+  equal(state.vm.globals.child, 2);
+  equal(state.vm.globals.after, undefined);
+  equal(state.vm.threads[0]?.status, "finished");
+  equal(state.vm.threads[0]?.frames.length, 0);
+});
+
+test("snapshot before end resumes identically after the final unwind", () => {
+  const state = createGameState({ seed: 7 });
+  startProgram(state.vm, {
+    kind: "inline",
+    text: "marker = 1\nsleep(1)\nend()\nafter = 2\n",
+    compiler: "2",
+  });
+  const services = createScriptServices(state);
+  advanceScriptTick(state, services);
+  const restored = restoreGameState(snapshot(state));
+  advanceScriptTick(state, services);
+  advanceScriptTick(restored, createScriptServices(restored));
+  equal(hashState(restored), hashState(state));
+  equal(restored.vm.threads[0]?.status, "finished");
+  equal(restored.vm.globals.after, undefined);
 });
 
 test("vm.control effects: run replaces program and jump jumps to label", () => {

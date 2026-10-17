@@ -39,7 +39,7 @@ function callText(spec: BuiltinSpec): string {
 function run(text: string): GameState {
   const state = createGameState({ seed: 0 });
   startProgram(state.vm, { kind: "inline", text, compiler: "2" });
-  advanceOrFail(state, createScriptServices(state));
+  advanceOrFail(state, createScriptServices(state, [CATALOGUE_RESPONDERS_PLUGIN]));
   return state;
 }
 
@@ -64,11 +64,11 @@ test("all non-core catalogue responders have a lower-case command and a recorded
     const state = createGameState({ seed: 0 });
     startProgram(state.vm, { kind: "inline", text: callText(spec), compiler: "2" });
     if (["godos", "dos", "windows"].includes(spec.name)) {
-      throws(() => advanceOrFail(state, createScriptServices(state)), /obsolete/);
+      throws(() => advanceOrFail(state, createScriptServices(state, [CATALOGUE_RESPONDERS_PLUGIN])), /obsolete/);
       equal(state.vm.effects.length, 0);
       continue;
     }
-    advanceOrFail(state, createScriptServices(state));
+    advanceOrFail(state, createScriptServices(state, [CATALOGUE_RESPONDERS_PLUGIN]));
     equal(state.vm.effects.length > 0, true, `${spec.name} did not record an effect`);
   }
 });
@@ -76,7 +76,7 @@ test("all non-core catalogue responders have a lower-case command and a recorded
 test("a named wait is global, records its wait, and resumes by-reference outputs", () => {
   const state = createGameState({ seed: 0 });
   startProgram(state.vm, { kind: "inline", text: 'prompt("Question", answer)\n', compiler: "2" });
-  advanceOrFail(state, createScriptServices(state));
+  advanceOrFail(state, createScriptServices(state, [CATALOGUE_RESPONDERS_PLUGIN]));
 
   const thread = state.vm.threads[0]!;
   equal(thread.status, "waiting");
@@ -86,7 +86,7 @@ test("a named wait is global, records its wait, and resumes by-reference outputs
   const restored = restoreGameState(snapshot(state));
   equal(hashState(state), hashState(restored));
 
-  advanceScriptTick(state, createScriptServices(state), undefined, pluginWaitPoll);
+  advanceScriptTick(state, createScriptServices(state, [CATALOGUE_RESPONDERS_PLUGIN]), undefined, pluginWaitPoll);
   equal(state.vm.globals.answer, "render.msgbox");
   equal(state.vm.threads[0]?.status, "finished");
 });
@@ -98,7 +98,7 @@ test("file responders emit host requests and resume with the reply", () => {
   equal(state.vm.threads[0]?.wait?.kind, "request");
   const reqId = state.vm.threads[0]?.wait?.kind === "request" ? state.vm.threads[0].wait.reqId : 0;
   replyToRequest(state.vm, reqId, { ok: true, value: 7 });
-  advanceScriptTick(state, createScriptServices(state));
+  advanceScriptTick(state, createScriptServices(state, [CATALOGUE_RESPONDERS_PLUGIN]));
   equal(state.vm.globals.result, 7);
   equal(state.vm.effects.some((effect) => effect.kind === "request"), true);
 });

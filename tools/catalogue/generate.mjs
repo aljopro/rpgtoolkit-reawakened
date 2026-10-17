@@ -237,6 +237,7 @@ const HEADER = `/**
  */
 
 import type { BuiltinSpec, ParamSpec } from "./builtins.ts";
+import { PURE_SPECS } from "./builtins/pure.ts";
 import { ScriptError } from "./errors.ts";
 import type { CommandEffect, PluginDefinition } from "./plugin.ts";
 import type { SectionKey } from "../save/state.ts";
@@ -284,11 +285,13 @@ const STUBS: readonly CatalogueStub[] = [
 
 const FOOTER = `];
 
+const IMPLEMENTED = new Map(PURE_SPECS.map((spec) => [spec.name, spec] as const));
+
 /** The catalogue stub layer: registered between \`CORE_PLUGIN\` and caller plugins. */
 export const CATALOGUE_STUBS_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
-  commands: STUBS.map(makeStub),
+  commands: STUBS.filter((stub) => !IMPLEMENTED.has(stub.name)).map(makeStub),
 };
 `;
 

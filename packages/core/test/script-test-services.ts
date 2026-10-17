@@ -20,7 +20,6 @@ const TEST_CORE_PLUGIN: PluginDefinition = {
 const DEFAULT_RESOLVED: readonly ResolvedPlugin[] = [
   { definition: TEST_CORE_PLUGIN },
   { definition: CATALOGUE_STUBS_PLUGIN },
-  { definition: CATALOGUE_RESPONDERS_PLUGIN },
 ];
 
 type TestPlugin = PluginDefinition | ResolvedPlugin;

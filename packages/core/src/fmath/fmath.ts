@@ -64,6 +64,11 @@ export const TAN_PI_8 = 0.41421356237309515;
  */
 export const TRIG_ARG_MAX = 137438953472;
 
+/** Deterministic square root, exposed so script maths stays behind `core/fmath`. */
+export function sqrt(x: number): number {
+  return Math.sqrt(x);
+}
+
 // ── pi / 2 split (five doubles) ──────────────────────────────────────────────
 //
 // PIO2_A..PIO2_D carry 16 significant bits each, so for `|k| < 2^37` every
