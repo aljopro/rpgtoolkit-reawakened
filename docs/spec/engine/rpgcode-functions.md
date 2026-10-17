@@ -53,6 +53,9 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 <a id="e-55"></a>
 **E-55 Message window ("mwin").** A dialogue box along the top of the screen, with a background colour or image, a size (per cent of the screen), translucency, a font, a size, bold/italic/underline and a colour. `Mwin(text)` appends a line and `MwinCls` hides and clears it; the text supports variable splicing (`<var>`), and the text speed is configurable.
 
+<a id="message-window-text-and-fonts"></a>
+**Reawakened rule (OWNER; FontRef-facing font semantics).** `font(name)` resolves a project asset by case-insensitive family name. If none resolves, `Arial`/sans-serif uses Liberation Sans, `Times New Roman`/serif uses Liberation Serif, and `Courier New`/monospace uses Liberation Mono, followed by the documented fallback family. A `.fnt` is selected when the name resolves to one or when the project is TK2; other names use family substitution. The draw-list `FontRef` carries `{ asset, size, bold, italic }`; underline remains a separate `line` command. Entry 4.3 owns the library and bundled assets.
+
 ## Program flow, errors & debugging (25)
 
 | Command | Signature | Purpose | Notes |
@@ -130,6 +133,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `threadwake` | `void threadwake(thread id)` | Wake up a thread. |  |
 | `threadsleepremaining` | `double threadsleepremaining(thread id, [double &ret])` | Check how much sleep remains for a thread. |  |
 
+<a id="board-tiles-vectors-and-screen-effects"></a>
 ## Board, tiles, vectors & screen effects (33)
 
 | Command | Signature | Purpose | Notes |
@@ -144,10 +148,14 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `mainfile` | `void mainfile(string gam)` | Load a new main file. |  |
 | `scan` | `void scan(int x, int y, int pos)` | Save the tile specified to a buffer identified by pos. There is no particular number to pick for pos; any will do. | deprecated, still works |
 | `mem` | `void mem(int x, int y, int pos)` | Lay a scanned tile on the screen at the specified position. | deprecated, still works |
+<a id="reawakened-camera-built-ins"></a>
 | `zoom` | `zoom(int percent)` | Zoom into the centre of the board by the specified percent. |  |
-| `earthquake` | `earthquake(int intensity)` | Shake the screen. |  |
+| `earthquake` | `earthquake(int intensity)` | Make the screen jump more strongly as intensity rises, from 1 (barely noticeable) to 10 (strongest). The command waits until the shaking ends. | **Technical (OWNER):** clamp `intensity` to 1..10, then run `i` consecutive `shake(amplitudeForIntensity(p), 4)` calls for `p = 1..i`; each pass is four ticks, so the command blocks for `4*i` ticks. `amplitudeForIntensity(p) = p * PX_PER_INTENSITY`, with `PX_PER_INTENSITY = 1` logical pixel. Pass/corner facts are owner-relayed legacy facts logged by entry 2, never source-derived here. |
 | `getcorner` | `void getcorner(int &topX, int &topY)` | Get the corner of the currently shown portion of the board. |  |
-| `underarrow` | `void underarrow()` | Toggle the under arrow. | obsolete: raises an error and the statement is skipped |
+| `cameraPanTo` | `void cameraPanTo(double x, double y, double duration, string easing)` | Pan the camera to a point. | Reawakened addition; duration is seconds; easing is `linear`, `smoothstep`, `easeIn`, `easeOut` or `easeInOut`; non-blocking. |
+| `cameraFollow` | `void cameraFollow(int entityId)` | Follow an entity with the camera. | Reawakened addition. |
+| `cameraReset` | `void cameraReset()` | Restore default player-follow camera behaviour. | Reawakened addition. |
+| `cameraShake` | `void cameraShake(double duration, double amplitude)` | Make the camera wobble for a while; a larger amplitude feels stronger, and the command does not hold up the script. | **Technical (OWNER):** duration is seconds and amplitude is logical-viewport pixels; `durationTicks = ceil(duration × 60)`, minimum one tick for positive duration; use the shared deterministic `shake(amplitude, ticks)` primitive, non-blocking, with a new shake replacing the active one and no RNG draw. |
 | `layerput` | `void layerput(int x, int y, int layer, string tile)` | Place a tile on the board for the duration the player is on the board. |  |
 | `getboardtile` | `string getboardtile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. |  |
 | `boardgettile` | `string boardgettile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. | alias of `getboardtile` |
@@ -173,6 +181,11 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 <a id="e-59"></a>
 **E-59 Transitions and effects.** Fades of several types, wipes with an image (several effects and speeds), zoom, earthquake shake, and the border colour.
+
+<a id="reawakened-earthquake"></a>
+**Reawakened rule (OWNER; `earthquake` and `cameraShake` help).** An author can use `earthquake` when the whole game should jump in increasingly strong four-tick bursts and the script must wait for the effect; use `cameraShake` when the camera should wobble without stopping the script. Intensity is clamped to 1–10 for `earthquake`; amplitude is measured in logical-viewport pixels for `cameraShake`.
+
+**Technical rule (OWNER).** `earthquake(intensity)` clamps `i` to 1..10 and runs `i` consecutive `shake(amplitudeForIntensity(p), 4)` calls for `p = 1..i`, blocking through the sleep wait until the final call ends. This is `4*i` ticks. `cameraShake(duration, amplitude)` converts positive seconds to `ceil(duration × 60)` ticks (minimum one), uses the same shared primitive and is non-blocking; a new shake replaces the active one. The shared primitive, corner cycle and `amplitudeForIntensity` constant are defined at [movement-and-collision.md#e-51](movement-and-collision.md#e-51). Pass/corner/5 ms details are owner-relayed legacy facts logged by entry 2 as round 7, never presented as read from source. Evidence includes the owner-relayed report and the authored corpus fixtures `fixtures/legacy/Caoquest/Prg/earthquake.prg` and `fixtures/legacy/ChimeranEmpire/Prg/Fire Bomb.prg`.
 
 <a id="e-63"></a>
 **E-63 Board preview.** `ViewBrd` renders a board, or part of one, to the screen or to a canvas without entering it.

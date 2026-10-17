@@ -89,4 +89,10 @@ Every row above except the modulo row is legacy behaviour (R2-Q11). The modulo r
 
 **Reawakened rule — a deliberate departure from our own earlier design.** This project's earlier per-thread wait model — a blocking command blocking only the thread that ran it, while other threads and the world kept running — is **withdrawn**. A blocking command now waits the whole game, always, matching 3.1. There is no per-project setting to restore the old behaviour; a setting for new games (with imported games defaulting to off) is a possible future enhancement, and nothing is built or reserved for it. *Reason:* the legacy freeze is what existing games were written against, and a save cannot contain a half-pumped main loop. (Owner ruling U1, 2026-10-15.) The VM's wait registry and the wait kinds it yields (`input.key`, `sleep`, `menu.screen`, `movement`, …) are unchanged; what changes is that a blocked program blocks the world, not just itself.
 
+<a id="waits"></a>
+## Waits
+
+<a id="wait-view-and-key-claims"></a>
+**Reawakened rule (OWNER; WaitView and key claims).** `WaitView` is a read-only view of `input` and `ui` state. An `input.key` waiter stores the input sequence at park; polling returns the lowest unclaimed key at or after that sequence. The engine claims the key in `engine`, making the claim visible to the rest of the same waits phase without writing it to `input` or `vm`; the input owner prunes claimed keys. `get` and `clearBuffer` use this same protocol. Thus two waiters deterministically consume two keys in sequence, and a key is never delivered twice.
+
 **References.** R2-Q23, R2-Q24, `docs/provenance/facts-round-5.md` Q4; `docs/provenance/facts-round-6.md` Q9; the engine-provided variables and the thread operations in [rpgcode-language.md](rpgcode-language.md) and [rpgcode-functions.md](rpgcode-functions.md); AD-2 (fixed tick), AD-7 (`Thread.source`/`target` in state), AD-9 (one wait contract, ascending-id polling) and AD-26 (phase list and the per-tick budget) in the architecture spine.
