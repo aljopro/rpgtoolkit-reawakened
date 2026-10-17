@@ -54,7 +54,7 @@ export type ScriptsGolden = {
   readonly programs: readonly { readonly id: string; readonly hash: string }[];
 };
 
-function createMemoryLoader(files: Record<string, string | Uint8Array>): ProgramLoader {
+export function createMemoryLoader(files: Record<string, string | Uint8Array>): ProgramLoader {
   const paths = Object.keys(files).map((name) => `Prg/${name}`);
   const bytes = new Map<AssetKey, Uint8Array>();
   for (const [name, content] of Object.entries(files)) {
@@ -438,6 +438,218 @@ method max(double n1, double n2) {
 	return n2;
 }
 `;
+const SAMPLE_DEMO_SYS_TEST_SOURCE = "";
+
+const SAMPLE_DEMO_WIN_SOURCE = `mwin("Arr, ye beat me!");
+wait();
+mwincls();
+eraseItem("source");
+`;
+
+const SAMPLE_DEMO_OLDMAN_SOURCE = `mwin("Welcome to the demo!");
+mwin("This game provides a short demonstration of some of the Toolkit's new features.");
+mwin("Press Enter to access the default menu system.");
+mwin("Go outside to fight in the default battle system.");
+wait();
+`;
+
+const SAMPLE_DEMO_MAN_SOURCE = `mwin("Arr, prepare to fight!");
+wait();
+mwincls();
+fightEnemy("pirate.ene", "bkg.bkg");
+`;
+
+const SAMPLE_DEMO_MAN_WANDER_SOURCE = `method abs(x)
+{
+	return (x < 0 ? -x : x);
+}
+range = 256;
+intercept = 96;
+while(true)
+{
+	playerLocation("frap", px, py, z);
+	itemLocation("source", ix, iy, z);
+	if ((abs(px - ix) < intercept) && (abs(py - iy) < intercept))
+	{
+		itemPath("source", tkMV_PAUSE_THREAD | tkMV_PATHFIND, px, py);
+		playerLocation("frap", x, y, z);
+		if ((x == px) && (y == py))
+		{
+			run("man.prg");
+			end();
+		}
+	}
+	else
+	{
+		x = random(range * 2) - range;
+		y = random(range * 2) - range;
+		itemPath("source", tkMV_PAUSE_THREAD | tkMV_PATHFIND, ix + x, iy + y);
+	}
+	threadSleep(getThreadId(), 0.5);
+}
+`;
+
+const SAMPLE_BASIC_WANDER_SOURCE = `//------------------------------------------------------------------
+// Item wandering thread
+//------------------------------------------------------------------
+// Set this program is the program to run while on board for an item
+// and they will wander around the board.
+//------------------------------------------------------------------
+
+// Infinite loop.
+while (true)
+{
+	// Cause the target (this item) to wander.
+	wander("target");
+}
+
+`;
+
+export type FetchedGameFiles = {
+  readonly demo: Record<string, string | Uint8Array>;
+  readonly basic: Record<string, string | Uint8Array>;
+};
+
+export function buildFetchedCorpus(files: FetchedGameFiles): readonly CorpusProgram[] {
+  const demoLoader = createMemoryLoader(files.demo);
+  const basicLoader = createMemoryLoader(files.basic);
+
+  return [
+    {
+      id: "sample-start-demo",
+      name: "demo/start.prg",
+      description: "The shipped demo startup program, driven headlessly with scripted key inputs",
+      ticks: 3,
+      createHost: (seed) => {
+        const ref = fileProgramRef(demoLoader, "start.prg");
+        return createScriptHost({ program: ref, loader: demoLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: demoLoader }),
+      inputsForTick: (tick) => {
+        if (tick === 1) return [{ tick: 1, event: { kind: "key", name: "0", code: "0", char: "0", down: true } }];
+        if (tick === 2) return [{ tick: 2, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }];
+        return [];
+      },
+    },
+    {
+      id: "sample-system-demo",
+      name: "demo/system.prg",
+      description: "The shipped demo system library containing CArray, math methods and helpers",
+      ticks: 1,
+      createHost: (seed) => {
+        const ref = fileProgramRef(demoLoader, "system.prg");
+        return createScriptHost({ program: ref, loader: demoLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: demoLoader }),
+    },
+    {
+      id: "sample-sys-test-demo",
+      name: "demo/sys_test.prg",
+      description: "The 0-byte sample program in demo, completes immediately in 1 tick",
+      ticks: 1,
+      createHost: (seed) => {
+        const ref = fileProgramRef(demoLoader, "sys_test.prg");
+        return createScriptHost({ program: ref, loader: demoLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: demoLoader }),
+    },
+    {
+      id: "sample-win-demo",
+      name: "demo/win.prg",
+      description: "The defeated pirate event program, completes headlessly in 2 ticks with scripted input",
+      ticks: 2,
+      createHost: (seed) => {
+        const ref = fileProgramRef(demoLoader, "win.prg");
+        return createScriptHost({ program: ref, loader: demoLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: demoLoader }),
+      inputsForTick: (t) => t === 1 ? [{ tick: 1, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }] : [],
+    },
+    {
+      id: "sample-oldman-demo",
+      name: "demo/oldman.prg",
+      description: "The introduction NPC dialogue program, completes headlessly in 2 ticks with scripted input",
+      ticks: 2,
+      createHost: (seed) => {
+        const ref = fileProgramRef(demoLoader, "oldman.prg");
+        return createScriptHost({ program: ref, loader: demoLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: demoLoader }),
+      inputsForTick: (t) => t === 1 ? [{ tick: 1, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }] : [],
+    },
+    {
+      id: "sample-man-demo",
+      name: "demo/man.prg",
+      description: "The intercept battle challenge program, completes headlessly in 2 ticks with scripted input",
+      ticks: 2,
+      createHost: (seed) => {
+        const ref = fileProgramRef(demoLoader, "man.prg");
+        return createScriptHost({ program: ref, loader: demoLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: demoLoader }),
+      inputsForTick: (t) => t === 1 ? [{ tick: 1, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }] : [],
+    },
+    {
+      id: "sample-man-wander-demo",
+      name: "demo/man_wander.prg",
+      description: "The wandering and intercept thread program with run(\"man.prg\"), completes headlessly in 4 ticks",
+      ticks: 4,
+      createHost: (seed) => {
+        const ref = fileProgramRef(demoLoader, "man_wander.prg");
+        return createScriptHost({ program: ref, loader: demoLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: demoLoader }),
+      inputsForTick: (t) => t === 3 ? [{ tick: 3, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }] : [],
+    },
+    {
+      id: "sample-start-basic",
+      name: "Basic/start.prg",
+      description: "The shipped Basic startup program with #include system.prg, driven with scripted inputs",
+      ticks: 3,
+      createHost: (seed) => {
+        const ref = fileProgramRef(basicLoader, "start.prg");
+        return createScriptHost({ program: ref, loader: basicLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: basicLoader }),
+      inputsForTick: (tick) => {
+        if (tick === 1) return [{ tick: 1, event: { kind: "key", name: "0", code: "0", char: "0", down: true } }];
+        if (tick === 2) return [{ tick: 2, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }];
+        return [];
+      },
+    },
+    {
+      id: "sample-system-basic",
+      name: "Basic/system.prg",
+      description: "The shipped Basic system library containing CArray and helper methods",
+      ticks: 1,
+      createHost: (seed) => {
+        const ref = fileProgramRef(basicLoader, "system.prg");
+        return createScriptHost({ program: ref, loader: basicLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: basicLoader }),
+    },
+    {
+      id: "sample-wander-basic",
+      name: "Basic/wander.prg",
+      description: "The infinite wandering loop program, verified under defined finish line of 5 ticks",
+      ticks: 5,
+      createHost: (seed) => {
+        const ref = fileProgramRef(basicLoader, "wander.prg");
+        return createScriptHost({ program: ref, loader: basicLoader, seed });
+      },
+      restoreHost: (json) => restoreScriptHost(json, { loader: basicLoader }),
+    },
+  ];
+}
+
+export function runFetchedCorpus(files: FetchedGameFiles, seed = 0): readonly ProgramResult[] {
+  const programs = buildFetchedCorpus(files);
+  const results: ProgramResult[] = [];
+  for (const program of programs) {
+    results.push(runCorpusProgram(program, seed));
+  }
+  return results;
+}
 
 // -------------------------------------------------------------------
 // Assembled Corpus Program Definitions
@@ -626,6 +838,78 @@ export function buildCorpus(): readonly CorpusProgram[] {
       createHost: (seed) => createScriptHost({ program: SAMPLE_SYSTEM_SOURCE, seed }),
       restoreHost: (json) => restoreScriptHost(json, {}),
     },
+    {
+      id: "sample-sys-test-demo",
+      name: "demo/sys_test.prg",
+      description: "The 0-byte sample program in demo, completes immediately in 1 tick",
+      ticks: 1,
+      createHost: (seed) => createScriptHost({ program: SAMPLE_DEMO_SYS_TEST_SOURCE, seed }),
+      restoreHost: (json) => restoreScriptHost(json, {}),
+    },
+    {
+      id: "sample-win-demo",
+      name: "demo/win.prg",
+      description: "The defeated pirate event program, completes headlessly in 2 ticks with scripted input",
+      ticks: 2,
+      createHost: (seed) => createScriptHost({ program: SAMPLE_DEMO_WIN_SOURCE, seed }),
+      restoreHost: (json) => restoreScriptHost(json, {}),
+      inputsForTick: (t) => t === 1 ? [{ tick: 1, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }] : [],
+    },
+    {
+      id: "sample-oldman-demo",
+      name: "demo/oldman.prg",
+      description: "The introduction NPC dialogue program, completes headlessly in 2 ticks with scripted input",
+      ticks: 2,
+      createHost: (seed) => createScriptHost({ program: SAMPLE_DEMO_OLDMAN_SOURCE, seed }),
+      restoreHost: (json) => restoreScriptHost(json, {}),
+      inputsForTick: (t) => t === 1 ? [{ tick: 1, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }] : [],
+    },
+    {
+      id: "sample-man-demo",
+      name: "demo/man.prg",
+      description: "The intercept battle challenge program, completes headlessly in 2 ticks with scripted input",
+      ticks: 2,
+      createHost: (seed) => createScriptHost({ program: SAMPLE_DEMO_MAN_SOURCE, seed }),
+      restoreHost: (json) => restoreScriptHost(json, {}),
+      inputsForTick: (t) => t === 1 ? [{ tick: 1, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }] : [],
+    },
+    {
+      id: "sample-man-wander-demo",
+      name: "demo/man_wander.prg",
+      description: "The wandering and intercept thread program with run(\"man.prg\"), completes headlessly in 4 ticks",
+      ticks: 4,
+      createHost: (seed) => {
+        const loader = createMemoryLoader({
+          "man_wander.prg": SAMPLE_DEMO_MAN_WANDER_SOURCE,
+          "man.prg": SAMPLE_DEMO_MAN_SOURCE,
+        });
+        const ref = fileProgramRef(loader, "man_wander.prg");
+        return createScriptHost({ program: ref, loader, seed });
+      },
+      restoreHost: (json) => {
+        const loader = createMemoryLoader({
+          "man_wander.prg": SAMPLE_DEMO_MAN_WANDER_SOURCE,
+          "man.prg": SAMPLE_DEMO_MAN_SOURCE,
+        });
+        return restoreScriptHost(json, { loader });
+      },
+      inputsForTick: (t) => t === 3 ? [{ tick: 3, event: { kind: "key", name: "ENTER", code: "ENTER", char: null, down: true } }] : [],
+    },
+    {
+      id: "sample-wander-basic",
+      name: "Basic/wander.prg",
+      description: "The infinite wandering loop program, verified under defined finish line of 5 ticks",
+      ticks: 5,
+      createHost: (seed) => {
+        const loader = createMemoryLoader({ "wander.prg": SAMPLE_BASIC_WANDER_SOURCE });
+        const ref = fileProgramRef(loader, "wander.prg");
+        return createScriptHost({ program: ref, loader, seed });
+      },
+      restoreHost: (json) => {
+        const loader = createMemoryLoader({ "wander.prg": SAMPLE_BASIC_WANDER_SOURCE });
+        return restoreScriptHost(json, { loader });
+      },
+    },
   ];
 
   return programs;
@@ -728,7 +1012,7 @@ export function runCorpusProgram(program: CorpusProgram, seed = 0): ProgramResul
   // Check state hash matches at every step from split to ticks
   checkSnapshotRestore(
     { fresh: freshHost, fromSnapshot: restoredHost },
-    { ticks: program.ticks - split, split },
+    { ticks: program.ticks - split, split, inputsForTick: program.inputsForTick },
   );
 
   return {

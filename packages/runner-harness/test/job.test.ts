@@ -204,7 +204,7 @@ test("goldenJob records and compares scriptsGolden", () => {
   if (!recordOutcome.ok) return;
 
   equal(typeof recordOutcome.scriptsGolden, "string");
-  equal(recordOutcome.lines.some((l) => l.includes("scripts: 14 programs ok")), true);
+  equal(recordOutcome.lines.some((l) => l.includes("scripts: 20 programs ok")), true);
 
   const compareOutcome = goldenJob({
     vectors: VALID_VECTORS,
@@ -214,7 +214,7 @@ test("goldenJob records and compares scriptsGolden", () => {
   });
   equal(compareOutcome.ok, true);
   if (!compareOutcome.ok) return;
-  equal(compareOutcome.lines.some((l) => l.includes("scripts: 14 programs ok")), true);
+  equal(compareOutcome.lines.some((l) => l.includes("scripts: 20 programs ok")), true);
 });
 
 test("goldenJob fails when scriptsGolden differs or is missing", () => {

@@ -30,9 +30,15 @@ export type SnapshotHost = {
  * naming the first tick where they differ. Both hosts must already be at tick
  * `options.split` (the snapshot point), or the start check throws.
  */
+export type CheckSnapshotRestoreOptions = {
+  readonly ticks: number;
+  readonly split: number;
+  readonly inputsForTick?: ((tick: number) => readonly InputRecord[]) | undefined;
+};
+
 export function checkSnapshotRestore(
   pair: { readonly fresh: SnapshotHost; readonly fromSnapshot: SnapshotHost },
-  options: { readonly ticks: number; readonly split: number },
+  options: CheckSnapshotRestoreOptions,
 ): void {
   // A zero-tick advance reports each host's current tick without advancing it,
   // so the start check runs even when `ticks` is 0.
@@ -46,8 +52,10 @@ export function checkSnapshotRestore(
   }
 
   for (let step = 0; step < options.ticks; step++) {
-    const fresh = pair.fresh.advance(1, []);
-    const restored = pair.fromSnapshot.advance(1, []);
+    const tickNumber = options.split + step;
+    const inputs = options.inputsForTick ? options.inputsForTick(tickNumber) : [];
+    const fresh = pair.fresh.advance(1, inputs);
+    const restored = pair.fromSnapshot.advance(1, inputs);
     if (fresh.stateHash !== restored.stateHash) {
       throw new Error(
         `checkSnapshotRestore: state diverged at tick ${fresh.tickAfter} ` +

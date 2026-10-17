@@ -22,12 +22,16 @@ export {
 } from "./job.ts";
 export {
   buildCorpus,
+  buildFetchedCorpus,
   compareScriptsGolden,
+  createMemoryLoader,
   formatScriptsGolden,
   runAllCorpusPrograms,
   runCorpusProgram,
+  runFetchedCorpus,
   verifyCatalogueCompleteness,
   type CorpusProgram,
+  type FetchedGameFiles,
   type ProgramResult,
   type ScriptsGolden,
 } from "./corpus.ts";
