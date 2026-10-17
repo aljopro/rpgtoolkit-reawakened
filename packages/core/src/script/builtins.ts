@@ -33,11 +33,22 @@ import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
 import { THREAD_SPECS } from "./builtins/threads.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
+export type CommandDocStatus = "current" | "legacy-alias" | "obsolete";
+
+export type BuiltinDoc = {
+  readonly summary: string;
+  readonly behaviour: string;
+  readonly examples?: readonly string[];
+  readonly status?: CommandDocStatus;
+};
+
 export type ParamSpec = {
   readonly name: string;
   readonly optional: boolean;
   readonly byRef: boolean;
   readonly variadic: boolean;
+  readonly unit?: string;
+  readonly doc?: string;
 };
 
 /**
@@ -53,7 +64,10 @@ export type BuiltinSpec = {
   readonly aliases: readonly string[];
   readonly params: readonly ParamSpec[];
   readonly call: CommandHandler;
+  /** Author-facing registration metadata; never passed to the handler or VM state. */
+  readonly doc?: BuiltinDoc;
 };
+
 
 /**
  * The built-in `core` pack (ADR 0004 decision 6). Names are already ASCII
