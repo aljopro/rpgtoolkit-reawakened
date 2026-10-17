@@ -150,12 +150,12 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `mem` | `void mem(int x, int y, int pos)` | Lay a scanned tile on the screen at the specified position. | deprecated, still works |
 <a id="reawakened-camera-built-ins"></a>
 | `zoom` | `zoom(int percent)` | Zoom into the centre of the board by the specified percent. |  |
-| `earthquake` | `earthquake(int intensity)` | Shake the screen. | Entry 4.29 owns presentation defaults; owner-relayed passes/corners are not source-derived here. |
+| `earthquake` | `earthquake(int intensity)` | Make the screen jump more strongly as intensity rises, from 1 (barely noticeable) to 10 (strongest). The command waits until the shaking ends. | **Technical (OWNER):** clamp `intensity` to 1..10, then run `i` consecutive `shake(amplitudeForIntensity(p), 4)` calls for `p = 1..i`; each pass is four ticks, so the command blocks for `4*i` ticks. `amplitudeForIntensity(p) = p * PX_PER_INTENSITY`, with `PX_PER_INTENSITY = 1` logical pixel. Pass/corner facts are owner-relayed legacy facts logged by entry 2, never source-derived here. |
 | `getcorner` | `void getcorner(int &topX, int &topY)` | Get the corner of the currently shown portion of the board. |  |
 | `cameraPanTo` | `void cameraPanTo(double x, double y, double duration, string easing)` | Pan the camera to a point. | Reawakened addition; duration is seconds; easing is `linear`, `smoothstep`, `easeIn`, `easeOut` or `easeInOut`; non-blocking. |
 | `cameraFollow` | `void cameraFollow(int entityId)` | Follow an entity with the camera. | Reawakened addition. |
 | `cameraReset` | `void cameraReset()` | Restore default player-follow camera behaviour. | Reawakened addition. |
-| `cameraShake` | `void cameraShake(double duration, double amplitude)` | Shake the camera. | Reawakened addition; duration is seconds, amplitude is logical-viewport pixels; non-blocking. |
+| `cameraShake` | `void cameraShake(double duration, double amplitude)` | Make the camera wobble for a while; a larger amplitude feels stronger, and the command does not hold up the script. | **Technical (OWNER):** duration is seconds and amplitude is logical-viewport pixels; `durationTicks = ceil(duration × 60)`, minimum one tick for positive duration; use the shared deterministic `shake(amplitude, ticks)` primitive, non-blocking, with a new shake replacing the active one and no RNG draw. |
 | `layerput` | `void layerput(int x, int y, int layer, string tile)` | Place a tile on the board for the duration the player is on the board. |  |
 | `getboardtile` | `string getboardtile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. |  |
 | `boardgettile` | `string boardgettile(int x, int y, int z, [string &ret])` | Get the file name of the tile at x, y, z. | alias of `getboardtile` |
@@ -181,6 +181,11 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 <a id="e-59"></a>
 **E-59 Transitions and effects.** Fades of several types, wipes with an image (several effects and speeds), zoom, earthquake shake, and the border colour.
+
+<a id="reawakened-earthquake"></a>
+**Reawakened rule (OWNER; `earthquake` and `cameraShake` help).** An author can use `earthquake` when the whole game should jump in increasingly strong four-tick bursts and the script must wait for the effect; use `cameraShake` when the camera should wobble without stopping the script. Intensity is clamped to 1–10 for `earthquake`; amplitude is measured in logical-viewport pixels for `cameraShake`.
+
+**Technical rule (OWNER).** `earthquake(intensity)` clamps `i` to 1..10 and runs `i` consecutive `shake(amplitudeForIntensity(p), 4)` calls for `p = 1..i`, blocking through the sleep wait until the final call ends. This is `4*i` ticks. `cameraShake(duration, amplitude)` converts positive seconds to `ceil(duration × 60)` ticks (minimum one), uses the same shared primitive and is non-blocking; a new shake replaces the active one. The shared primitive, corner cycle and `amplitudeForIntensity` constant are defined at [movement-and-collision.md#e-51](movement-and-collision.md#e-51). Pass/corner/5 ms details are owner-relayed legacy facts logged by entry 2 as round 7, never presented as read from source. Evidence includes the owner-relayed report and the authored corpus fixtures `fixtures/legacy/Caoquest/Prg/earthquake.prg` and `fixtures/legacy/ChimeranEmpire/Prg/Fire Bomb.prg`.
 
 <a id="e-63"></a>
 **E-63 Board preview.** `ViewBrd` renders a board, or part of one, to the screen or to a canvas without entering it.
