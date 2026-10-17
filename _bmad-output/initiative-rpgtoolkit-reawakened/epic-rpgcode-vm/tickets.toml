@@ -427,3 +427,21 @@ references = [
   "epic - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/epic-rpgcode-vm.md, Done when 1 to 4",
   "reference - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-vm/discovery/language-readiness.md, 'How weak the corpus is for the snapshot and restore test'",
 ]
+
+[[entry]]
+id = 29
+type = "story"
+title = "Command documentation in code: a `doc` on every plugin command"
+description = "Doc-first, then code. First an ADR 0004 amendment that adds an optional plain-data `doc` to `BuiltinSpec`: `summary` (what the command does, in simple terms, for someone writing a game), `behaviour` (the action described technically and deterministically: units, ticks, order, whether the script waits), an optional `unit` and `doc` string on each `ParamSpec`, optional `examples` (RPGCode snippets) and `status` (`current`, `legacy-alias` or `obsolete`); it follows the owner's help-text standard (CLAUDE.md, 2026-10-17). The plan decides how `docs/spec` and `doc` relate for native commands (recommended: the spec row stays normative and a check fails when a native command's `summary` differs from its row; plugins outside the spec carry their own `doc`) and which commands must carry one. Then adds the field to `core/script`, a pure function that turns an assembled plugin list into plain-data command documentation (no I/O, G2), and a check in the style of `pnpm catalogue:check` that fails on a command with no `summary` or `behaviour`. The documentation site (epic 17) and the language server (epic rpgcode-tooling) consume the output; neither is built here."
+verify = "The ADR amendment lands before any code; a plugin command with a `doc` appears in the generated documentation with its parameters and units; the check fails on a command missing `summary` or `behaviour` and on a native command whose `summary` differs from its `docs/spec` row; `doc` never reaches `GameState` or any hash (a state hash is unchanged by adding docs); all required checks pass."
+covers = ["CAP-5"]
+after = [3, 25]
+hitl = true
+plan_checkpoint = true
+risk = "medium"
+references = [
+  "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md (PluginDefinition and the command contract), amended first",
+  "code - packages/core/src/script/builtins.ts (BuiltinSpec, ParamSpec) and script/plugin.ts (PluginDefinition)",
+  "rule - CLAUDE.md working notes, help-text standard",
+]
+notes = ["Added 2026-10-17 at the owner's request, as its own ticket. Epic board-rendering entry 11 now waits on it so the render and world packs write their `doc` as they register commands; epic documentation-website and epic rpgcode-tooling are its consumers."]
