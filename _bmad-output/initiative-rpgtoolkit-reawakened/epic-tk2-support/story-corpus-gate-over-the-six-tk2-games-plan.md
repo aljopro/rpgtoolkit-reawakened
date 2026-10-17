@@ -3,7 +3,7 @@ title: 'Corpus gate over the six TK2 games'
 type: 'feature'
 ticket: '9'
 created: '2026-10-16'
-status: 'in-progress'
+status: done
 baseline_revision: '99aeef4b1ae64ef55c5fb9658e34961eba8e35f9'
 route: 'full'
 route_source: 'auto'
