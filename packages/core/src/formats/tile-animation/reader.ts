@@ -12,6 +12,7 @@ import {
   TILE_ANIMATION_MAJOR,
   TILE_ANIMATION_MINOR,
   TILE_ANIMATION_MAX_SPEED,
+  TILE_ANIMATION_MIN_SPEED,
   TILE_ANIMATION_SECTION,
   type TileAnimation,
 } from "./model.ts";
@@ -44,7 +45,7 @@ export function readTileAnimation(reader: BinaryReader): Result<TileAnimation> {
   if (!speed.ok) {
     return speed;
   }
-  if (speed.value <= 0) {
+  if (speed.value < TILE_ANIMATION_MIN_SPEED) {
     return err({
       ...(reader.path === undefined ? {} : { path: reader.path }),
       offset: speedAt,

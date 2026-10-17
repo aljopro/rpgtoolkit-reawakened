@@ -2,6 +2,8 @@
 import { test } from "node:test";
 import { equal } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   BinaryReader,
   readBoard,
@@ -53,42 +55,33 @@ test("throws no uncaught error on truncated text board", () => {
   equal(res.ok, false);
 });
 
-test("all corpus text .brd files parse cleanly to end of file when scratch corpus is present", () => {
-  const corpusDir = "/tmp/tk2-163";
-  if (!existsSync(corpusDir)) return;
+const testDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(testDir, "..", "..", "..");
 
-  function findTextBrds(dir: string): string[] {
-    let res: string[] = [];
-    for (const f of readdirSync(dir)) {
-      const p = `${dir}/${f}`;
-      try {
+test(
+  "all fetched-corpus text .brd files parse cleanly to end of file",
+  { skip: !existsSync(join(repoRoot, "fixtures", "legacy")) ? "legacy fixtures are not fetched" : false },
+  () => {
+    const corpusDir = join(repoRoot, "fixtures", "legacy");
+    const files = readdirSync(corpusDir, { recursive: true })
+      .filter((f) => f.toLowerCase().endsWith(".brd"))
+      .map((f) => join(corpusDir, f))
+      .filter((p) => {
         const b = readFileSync(p);
-        if (f.toLowerCase().endsWith(".brd") && b.length > 14 && b[14] !== 0) {
-          res.push(p);
-        }
-      } catch {
-        try {
-          res = res.concat(findTextBrds(p));
-        } catch {
-          // ignore
-        }
+        return b.length > 14 && b[14] !== 0;
+      });
+    equal(files.length >= 17, true, `expected at least 17 text .brd files, found ${files.length}`);
+
+    for (const p of files) {
+      const bytes = readFileSync(p);
+      const res = readBoard(new BinaryReader(bytes, p));
+      equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
+      if (res.ok) {
+        equal(res.value.magic, "RPGTLKIT BOARD");
+        equal(res.value.sizeX > 0, true);
+        equal(res.value.sizeY > 0, true);
+        equal(res.value.residue.length, 0);
       }
     }
-    return res;
-  }
-
-  const files = findTextBrds(corpusDir);
-  equal(files.length >= 17, true, `expected at least 17 text .brd files, found ${files.length}`);
-
-  for (const p of files) {
-    const bytes = readFileSync(p);
-    const res = readBoard(new BinaryReader(bytes, p));
-    equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
-    if (res.ok) {
-      equal(res.value.magic, "RPGTLKIT BOARD");
-      equal(res.value.sizeX > 0, true);
-      equal(res.value.sizeY > 0, true);
-      equal(res.value.residue.length, 0);
-    }
-  }
-});
+  },
+);

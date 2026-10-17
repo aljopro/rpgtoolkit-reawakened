@@ -119,80 +119,58 @@ test("committed text item version examples parse cleanly and populate legacyWalk
   }
 });
 
-test("all corpus text .tem files parse cleanly to end of file when scratch corpus is present", () => {
-  const corpusDir = "/tmp/tk2-163";
-  if (!existsSync(corpusDir)) return;
+test(
+  "all fetched-corpus text .tem files parse cleanly to end of file",
+  { skip: !existsSync(join(repoRoot, "fixtures", "legacy")) ? "legacy fixtures are not fetched" : false },
+  () => {
+    const files = findTextCorpusFiles(".tem");
+    equal(files.length >= 2, true, `expected at least 2 text .tem files, found ${files.length}`);
 
-  function findTextTems(dir: string): string[] {
-    let res: string[] = [];
-    for (const f of readdirSync(dir)) {
-      const p = `${dir}/${f}`;
-      try {
-        const b = readFileSync(p);
-        if (f.toLowerCase().endsWith(".tem") && b.length > 13 && b[13] !== 0) {
-          res.push(p);
-        }
-      } catch {
-        try {
-          res = res.concat(findTextTems(p));
-        } catch {
-          // ignore
-        }
+    for (const p of files) {
+      const bytes = readFileSync(p);
+      const res = readCharacter(new BinaryReader(bytes, p));
+      equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
+      if (res.ok) {
+        equal(res.value.magic, "RPGTLKIT CHAR");
+        equal(res.value.specialMoves.length, 201);
+        equal(res.value.residue.length, 0);
       }
     }
-    return res;
-  }
+  },
+);
 
-  const files = findTextTems(corpusDir);
-  equal(files.length >= 2, true, `expected at least 2 text .tem files, found ${files.length}`);
+test(
+  "all fetched-corpus text .itm files parse cleanly to end of file",
+  { skip: !existsSync(join(repoRoot, "fixtures", "legacy")) ? "legacy fixtures are not fetched" : false },
+  () => {
+    const files = findTextCorpusFiles(".itm");
+    equal(files.length >= 16, true, `expected at least 16 text .itm files, found ${files.length}`);
 
-  for (const p of files) {
-    const bytes = readFileSync(p);
-    const res = readCharacter(new BinaryReader(bytes, p));
-    equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
-    if (res.ok) {
-      equal(res.value.magic, "RPGTLKIT CHAR");
-      equal(res.value.specialMoves.length, 201);
-      equal(res.value.residue.length, 0);
-    }
-  }
-});
-
-test("all corpus text .itm files parse cleanly to end of file when scratch corpus is present", () => {
-  const corpusDir = "/tmp/tk2-163";
-  if (!existsSync(corpusDir)) return;
-
-  function findTextItms(dir: string): string[] {
-    let res: string[] = [];
-    for (const f of readdirSync(dir)) {
-      const p = `${dir}/${f}`;
-      try {
-        const b = readFileSync(p);
-        if (f.toLowerCase().endsWith(".itm") && b.length > 13 && b[13] !== 0) {
-          res.push(p);
-        }
-      } catch {
-        try {
-          res = res.concat(findTextItms(p));
-        } catch {
-          // ignore
-        }
+    for (const p of files) {
+      const bytes = readFileSync(p);
+      const res = readItem(new BinaryReader(bytes, p));
+      equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
+      if (res.ok) {
+        equal(res.value.magic, "RPGTLKIT ITEM");
+        equal(res.value.allowedCharacters.length, 51);
+        equal(res.value.residue.length, 0);
       }
     }
-    return res;
-  }
+  },
+);
 
-  const files = findTextItms(corpusDir);
-  equal(files.length >= 16, true, `expected at least 16 text .itm files, found ${files.length}`);
 
-  for (const p of files) {
-    const bytes = readFileSync(p);
-    const res = readItem(new BinaryReader(bytes, p));
-    equal(res.ok, true, `failed to parse ${p}: ${!res.ok ? res.error.message : ""}`);
-    if (res.ok) {
-      equal(res.value.magic, "RPGTLKIT ITEM");
-      equal(res.value.allowedCharacters.length, 51);
-      equal(res.value.residue.length, 0);
-    }
+/** The text-form (non-NUL byte 13) files with `suffix` under the fetched `fixtures/legacy`. */
+function findTextCorpusFiles(suffix: string): string[] {
+  const corpusDir = join(repoRoot, "fixtures", "legacy");
+  if (!existsSync(corpusDir)) {
+    throw new Error("fixtures/legacy is missing; run `pnpm fixtures:fetch`");
   }
-});
+  return readdirSync(corpusDir, { recursive: true })
+    .filter((f) => f.toLowerCase().endsWith(suffix))
+    .map((f) => join(corpusDir, f))
+    .filter((p) => {
+      const b = readFileSync(p);
+      return b.length > 13 && b[13] !== 0;
+    });
+}

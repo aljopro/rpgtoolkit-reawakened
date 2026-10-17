@@ -9,8 +9,8 @@
  *
  * Each format also has a 2.x-era line-oriented text form. Its presence is
  * detected by the byte at a documented offset — `0x00` means binary, a CR/LF
- * means text (`docs/spec/formats/README.md#header-and-version`, `docs/spec/formats/battle-data.md#special-move-spc`, `docs/spec/formats/battle-data.md#status-effect-ste`, `docs/spec/formats/battle-data.md#fight-background-bkg`). This ticket implements the binary layout only;
- * the readers refuse the text form rather than mis-parsing it.
+ * means text (`docs/spec/formats/README.md#header-and-version`, `docs/spec/formats/battle-data.md#special-move-spc`, `docs/spec/formats/battle-data.md#status-effect-ste`, `docs/spec/formats/battle-data.md#fight-background-bkg`). Each reader
+ * dispatches on that byte to the binary layout or the text layout.
  */
 
 import type { BinaryReader } from "../binary/reader.ts";
@@ -175,25 +175,6 @@ export interface BattleBackground {
   readonly tiles?: readonly string[] | undefined;
   /** Fixed 19×11 tint values (Toolkit 2 text background, minor 0). */
   readonly tints?: readonly BattleBackgroundTint[] | undefined;
-}
-
-/**
- * `offset` and the detection byte meaning the 2.x line-oriented text form (`docs/spec/formats/README.md#header-and-version`,
- * `docs/spec/formats/battle-data.md#special-move-spc`, `docs/spec/formats/battle-data.md#status-effect-ste`, `docs/spec/formats/battle-data.md#fight-background-bkg`). The error names the form as unsupported so the caller never
- * mis-parses text as binary (AD-18).
- */
-export function unsupportedTextForm(
-  reader: BinaryReader,
-  offset: number,
-  section: string,
-  magic: string,
-): FormatError {
-  return {
-    ...(reader.path === undefined ? {} : { path: reader.path }),
-    offset,
-    section,
-    message: `${magic}: unsupported 2.x line-oriented text form (byte at offset ${offset} is non-NUL); only the binary 3.x layout is implemented`,
-  };
 }
 
 /**
