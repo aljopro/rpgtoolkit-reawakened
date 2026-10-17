@@ -57,7 +57,7 @@ test("math built-ins use deterministic fmath operations and by-reference outputs
   equal(state.vm.globals.milliseconds, 0);
 });
 
-test("random uses the seeded stream and enforces a positive integer bound", () => {
+test("random uses the seeded stream and matches legacy 3.1 edge cases", () => {
   const first = run("a = random(10)\nb = random(10)\nc = random(10)\n", 1234);
   const second = run("a = random(10)\nb = random(10)\nc = random(10)\n", 1234);
   deepEqual(
@@ -68,8 +68,181 @@ test("random uses the seeded stream and enforces a positive integer bound", () =
     if (typeof value !== "number") throw new Error("random returned a non-number");
     equal(value >= 1 && value <= 10, true);
   }
-  equal(errorOf(() => run("random(0)\n")).code, "builtin.bad-arg");
-  equal(errorOf(() => run("random(1.5)\n")).code, "builtin.bad-arg");
+  // Truncates max to whole number first
+  const floatCase = run("x = random(1.5)\n", 1234);
+  equal(floatCase.vm.globals.x, 1);
+  // max 0 returns 1
+  const zeroCase = run("x = random(0)\n", 1234);
+  equal(zeroCase.vm.globals.x, 1);
+  // negative max gives 1..|max|
+  const negCase = run("x = random(-5)\n", 1234);
+  const negVal = negCase.vm.globals.x;
+  equal(typeof negVal === "number" && negVal >= 1 && negVal <= 5, true);
+  // NaN max gives 1..32768
+  const nanCase = run("x = random(0/0)\n", 1234);
+  const nanVal = nanCase.vm.globals.x;
+  equal(typeof nanVal === "number" && nanVal >= 1 && nanVal <= 32768, true);
+  // Optional trailing destination parameter
+  const destCase = run("res = random(10, out)\n", 1234);
+  equal(destCase.vm.globals.res, destCase.vm.globals.out);
+});
+
+test("isNaN classifies NaN from 0/0 and sqrt(-1) both in temporaries and byRef variables", () => {
+  const state = run(`
+    x = 0 / 0
+    t1 = isNaN(x)
+    t2 = isNaN(0 / 0)
+    t3 = isNaN(sqrt(-1))
+    t4 = isNaN(42)
+    t5 = isNaN(0)
+    t6 = isNaN(1 / 0)
+    t7 = isNaN(-1 / 0)
+    t8 = isNaN("NaN")
+    t9 = isNaN("123")
+    t10 = isNaN("hello")
+    isNaN(x, destOut)
+  `);
+  equal(state.vm.globals.t1, 1);
+  equal(state.vm.globals.t2, 1);
+  equal(state.vm.globals.t3, 1);
+  equal(state.vm.globals.t4, 0);
+  equal(state.vm.globals.t5, 0);
+  equal(state.vm.globals.t6, 0);
+  equal(state.vm.globals.t7, 0);
+  equal(state.vm.globals.t8, 0);
+  equal(state.vm.globals.t9, 0);
+  equal(state.vm.globals.t10, 0);
+  equal(state.vm.globals.destout, 1);
+});
+
+test("isInfinity classifies positive and negative infinity both in temporaries and byRef variables", () => {
+  const state = run(`
+    posInf = 1 / 0
+    negInf = -1 / 0
+    t1 = isInfinity(posInf)
+    t2 = isInfinity(negInf)
+    t3 = isInfinity(1 / 0)
+    t4 = isInfinity(-1 / 0)
+    t5 = isInfinity(0 / 0)
+    t6 = isInfinity(42)
+    t7 = isInfinity(0)
+    t8 = isInfinity("Infinity")
+    t9 = isInfinity("-Infinity")
+    t10 = isInfinity("123")
+    isInfinity(posInf, destOut)
+  `);
+  equal(state.vm.globals.t1, 1);
+  equal(state.vm.globals.t2, 1);
+  equal(state.vm.globals.t3, 1);
+  equal(state.vm.globals.t4, 1);
+  equal(state.vm.globals.t5, 0);
+  equal(state.vm.globals.t6, 0);
+  equal(state.vm.globals.t7, 0);
+  equal(state.vm.globals.t8, 0);
+  equal(state.vm.globals.t9, 0);
+  equal(state.vm.globals.t10, 0);
+  equal(state.vm.globals.destout, 1);
+});
+
+test("isFinite classifies finite numbers and rejects non-numbers, NaN and infinities", () => {
+  const state = run(`
+    f1 = 42
+    f2 = -5.5
+    f3 = 0
+    t1 = isFinite(f1)
+    t2 = isFinite(f2)
+    t3 = isFinite(f3)
+    t4 = isFinite(100)
+    t5 = isFinite(0 / 0)
+    t6 = isFinite(1 / 0)
+    t7 = isFinite(-1 / 0)
+    t8 = isFinite("42")
+    t9 = isFinite("hello")
+    t10 = isFinite("")
+    isFinite(f1, destOut)
+  `);
+  equal(state.vm.globals.t1, 1);
+  equal(state.vm.globals.t2, 1);
+  equal(state.vm.globals.t3, 1);
+  equal(state.vm.globals.t4, 1);
+  equal(state.vm.globals.t5, 0);
+  equal(state.vm.globals.t6, 0);
+  equal(state.vm.globals.t7, 0);
+  equal(state.vm.globals.t8, 0);
+  equal(state.vm.globals.t9, 0);
+  equal(state.vm.globals.t10, 0);
+  equal(state.vm.globals.destout, 1);
+});
+
+test("number classification invariant: exactly one of isNaN, isInfinity, isFinite returns 1 for any number", () => {
+  const state = run(`
+    numNan = 0 / 0
+    numPosInf = 1 / 0
+    numNegInf = -1 / 0
+    numZero = 0
+    numInt = 12345
+    numFloat = -98.765
+    nan_nan = isNaN(numNan)
+    nan_inf = isInfinity(numNan)
+    nan_fin = isFinite(numNan)
+    pos_nan = isNaN(numPosInf)
+    pos_inf = isInfinity(numPosInf)
+    pos_fin = isFinite(numPosInf)
+    neg_nan = isNaN(numNegInf)
+    neg_inf = isInfinity(numNegInf)
+    neg_fin = isFinite(numNegInf)
+    zero_nan = isNaN(numZero)
+    zero_inf = isInfinity(numZero)
+    zero_fin = isFinite(numZero)
+    int_nan = isNaN(numInt)
+    int_inf = isInfinity(numInt)
+    int_fin = isFinite(numInt)
+    float_nan = isNaN(numFloat)
+    float_inf = isInfinity(numFloat)
+    float_fin = isFinite(numFloat)
+  `);
+  const g = state.vm.globals;
+  for (const prefix of ["nan", "pos", "neg", "zero", "int", "float"]) {
+    const isN = g[`${prefix}_nan`];
+    const isI = g[`${prefix}_inf`];
+    const isF = g[`${prefix}_fin`];
+    equal((isN as number) + (isI as number) + (isF as number), 1, `sum for ${prefix}`);
+    equal(isF === 1, isN === 0 && isI === 0, `iff for ${prefix}`);
+  }
+});
+
+test("snapshot and restore round-trips programs holding NaN, +Infinity and -Infinity with identical hash", () => {
+  const state = run(`
+    nanVar = 0 / 0
+    posInfVar = 1 / 0
+    negInfVar = -1 / 0
+    finiteVar = 42
+  `);
+  const initialHash = hashState(state);
+  const snap = snapshot(state);
+  const restored = restoreGameState(snap);
+  const restoredHash = hashState(restored);
+
+  equal(restoredHash, initialHash);
+  equal(Number.isNaN(restored.vm.globals.nanvar), true);
+  equal(restored.vm.globals.posinfvar, Infinity);
+  equal(restored.vm.globals.neginfvar, -Infinity);
+  equal(restored.vm.globals.finitevar, 42);
+
+  // Resume and verify isNaN, isInfinity and isFinite on restored state
+  const stateWithContinuation = createGameState({ seed: 0 });
+  stateWithContinuation.vm = restored.vm;
+  startProgram(stateWithContinuation.vm, {
+    kind: "inline",
+    text: "checkNan = isNaN(nanVar)\ncheckPosInf = isInfinity(posInfVar)\ncheckNegInf = isInfinity(negInfVar)\ncheckFinite = isFinite(finiteVar)\nend()\n",
+    compiler: "2",
+  });
+  const services = createScriptServices(stateWithContinuation);
+  advanceScriptTick(stateWithContinuation, services);
+  equal(stateWithContinuation.vm.globals.checknan, 1);
+  equal(stateWithContinuation.vm.globals.checkposinf, 1);
+  equal(stateWithContinuation.vm.globals.checkneginf, 1);
+  equal(stateWithContinuation.vm.globals.checkfinite, 1);
 });
 
 test("random stream snapshots round-trip while a program is waiting", () => {

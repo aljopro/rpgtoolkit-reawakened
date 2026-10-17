@@ -37,6 +37,7 @@ const VECTORS: readonly Vector[] = [
   { name: "RAD_TO_DEG", args: [], bits: "0x404ca5dc1a63c1f8" },
   { name: "TAN_PI_8", args: [], bits: "0x3fda827999fcef34" },
   { name: "TRIG_ARG_MAX", args: [], bits: "0x4240000000000000" },
+  { name: "CANONICAL_NAN", args: [], bits: "0x7ff8000000000000" },
   { name: "sin", args: [0], bits: "0x0000000000000000" },
   { name: "sin", args: [-0], bits: "0x8000000000000000" },
   { name: "sin", args: [0.5], bits: "0x3fdeaee8744b05f0" },

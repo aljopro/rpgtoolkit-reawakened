@@ -7328,6 +7328,65 @@
    ]
   ],
   "stubSafeCount": 176,
-  "needsOwnerCodeCount": 106
- }
+  "needsOwnerCodeCount": 106,
+  "reawakenedAdditionsCount": 3,
+  "reawakenedAdditions": [
+   "isNaN",
+   "isInfinity",
+   "isFinite"
+  ]
+ },
+ "reawakenedAdditions": [
+  {
+   "name": "isNaN",
+   "group": "Variables, strings & math",
+   "params": "&value, [&ret]",
+   "paramsSource": "Reawakened addition",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "Reawakened addition; returns 1 if value is numeric and NaN, 0 otherwise"
+  },
+  {
+   "name": "isInfinity",
+   "group": "Variables, strings & math",
+   "params": "&value, [&ret]",
+   "paramsSource": "Reawakened addition",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "Reawakened addition; returns 1 if value is numeric and +Infinity or -Infinity, 0 otherwise"
+  },
+  {
+   "name": "isFinite",
+   "group": "Variables, strings & math",
+   "params": "&value, [&ret]",
+   "paramsSource": "Reawakened addition",
+   "owner": 3,
+   "ownerEpic": "rpgcode-vm",
+   "sectionsRead": [],
+   "sectionsWrite": [],
+   "effectKind": "pure",
+   "waitKind": null,
+   "byRefOut": true,
+   "legacyAlias": false,
+   "obsolete": false,
+   "confidence": "stated",
+   "note": "Reawakened addition; returns 1 if value is numeric and finite (not NaN, not ±Infinity), 0 otherwise"
+  }
+ ]
 }

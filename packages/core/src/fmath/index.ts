@@ -21,6 +21,7 @@ export {
   RAD_TO_DEG,
   TAN_PI_8,
   TRIG_ARG_MAX,
+  CANONICAL_NAN,
   sin,
   cos,
   tan,

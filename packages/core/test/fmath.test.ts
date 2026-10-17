@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  CANONICAL_NAN,
   HALF_PI,
   PI,
   QUARTER_PI,
@@ -28,6 +29,7 @@ import {
   log2,
   pow,
   sin,
+  sqrt,
   tan,
   toDegrees,
   toRadians,
@@ -274,6 +276,15 @@ test("cbrt stays within 16 ULP and hypot within 4 ULP", () => {
   const hypotWorst = worstUlp(hypot, Math.hypot, hypotCases);
   ok(cbrtWorst.ulp <= 16, `cbrt worst ${cbrtWorst.ulp} at ${cbrtWorst.at}`);
   ok(hypotWorst.ulp <= 4, `hypot worst ${hypotWorst.ulp} at ${hypotWorst.at}`);
+});
+
+test("sqrt returns CANONICAL_NAN for negative domain errors", () => {
+  ok(Number.isNaN(CANONICAL_NAN), "CANONICAL_NAN must be NaN");
+  const nanResult = sqrt(-1);
+  ok(Number.isNaN(nanResult), "sqrt(-1) must return NaN");
+  equal(Object.is(nanResult, CANONICAL_NAN), true);
+  equal(sqrt(4), 2);
+  equal(sqrt(0), 0);
 });
 
 test("pow with an integer exponent is exactly repeated multiplication", () => {

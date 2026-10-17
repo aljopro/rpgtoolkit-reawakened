@@ -20,9 +20,61 @@ export function canon(value: PlainData): string {
   return serialize(value, new Set<object>(), 0);
 }
 
+/** Tags non-finite numbers ({ t: 'nan' | 'inf' | '-inf' }) for PlainData state (AD-7, AD-11). */
+export function tagNonFinite(value: unknown): unknown {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      if (Number.isNaN(value)) return { t: "nan" };
+      return value > 0 ? { t: "inf" } : { t: "-inf" };
+    }
+    return value;
+  }
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    let changed = false;
+    const mapped = value.map((item) => {
+      const next = tagNonFinite(item);
+      if (next !== item) changed = true;
+      return next;
+    });
+    return changed ? mapped : value;
+  }
+  const record = value as Record<string, unknown>;
+  let changed = false;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(record)) {
+    const next = tagNonFinite(v);
+    if (next !== v) changed = true;
+    out[k] = next;
+  }
+  return changed ? out : value;
+}
+
+/** Revives tagged non-finite numbers ({ t: 'nan' | 'inf' | '-inf' }) to numbers. */
+export function reviveNonFinite(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      value[i] = reviveNonFinite(value[i]);
+    }
+    return value;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (keys.length === 1 && keys[0] === "t") {
+    if (record.t === "nan") return NaN;
+    if (record.t === "inf") return Infinity;
+    if (record.t === "-inf") return -Infinity;
+  }
+  for (const key of keys) {
+    record[key] = reviveNonFinite(record[key]);
+  }
+  return record;
+}
+
 /** FNV-1a 64-bit of a state's canonical form (AD-11). */
 export function hashState(state: PlainData): string {
-  return fnv1a64(canon(state));
+  return fnv1a64(canon(tagNonFinite(state) as PlainData));
 }
 
 /**
