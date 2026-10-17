@@ -124,7 +124,7 @@ export function stubParams(row) {
   return params;
 }
 
-/** Names implemented in CORE_PLUGIN (ticket 3.12 pure built-ins, ticket 3.9 thread reads); excluded from stubs. */
+/** Names implemented in CORE_PLUGIN (ticket 3.12 pure built-ins, ticket 3.9 thread reads and ticket 3.16 file I/O); excluded from stubs. */
 const IMPLEMENTED_COMMANDS = new Set([
   "len",
   "length",
@@ -155,6 +155,17 @@ const IMPLEMENTED_COMMANDS = new Set([
   "targethandle",
   "debug",
   "debugger",
+  "openfileinput",
+  "openfileoutput",
+  "openfileappend",
+  "openfilebinary",
+  "closefile",
+  "fileinput",
+  "fileprint",
+  "fileget",
+  "fileput",
+  "fileeof",
+  "apppath",
 ]);
 
 /** The stub-safe rows of the catalogue, in catalogue order. */

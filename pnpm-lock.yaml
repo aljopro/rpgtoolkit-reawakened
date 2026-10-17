@@ -188,11 +188,20 @@ importers:
         specifier: 0.8.3
         version: 0.8.3
 
+  packages/plugin-tk2-compat:
+    dependencies:
+      '@tk-reawakened/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/runner-harness:
     dependencies:
       '@tk-reawakened/core':
         specifier: workspace:*
         version: link:../core
+      '@tk-reawakened/plugin-tk2-compat':
+        specifier: workspace:*
+        version: link:../plugin-tk2-compat
 
   packages/runner-headless:
     dependencies:

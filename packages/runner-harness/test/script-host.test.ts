@@ -8,6 +8,18 @@ import { createNullAudio, createScriptHost, restoreScriptHost, runLog, type Run 
 
 const TRACER = 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n';
 
+test("selects the TK2 dialect and compatibility manifest entry", () => {
+  const host = createScriptHost({
+    program: "#score! = 2\n#Mwin(Hello)\n#end\n",
+    seed: 0,
+    dialect: "tk2",
+    manifest: [{ id: "tk2" }],
+  });
+  host.advance(1, []);
+  equal(host.state().vm.globals.score, 2);
+  equal(host.state().vm.threads[0]!.status, "finished");
+});
+
 function tracerHost(seed = 0) {
   return createScriptHost({ program: TRACER, seed });
 }
@@ -193,4 +205,43 @@ test("a runtime failure reaches the report as a located diagnostic and runLog ob
   );
   // Draining is per advance: a later batch with no failure reports none.
   deepEqual(host.advance(1, []).diagnostics, []);
+});
+test("services sandboxed file blobs and preserves R-38b line endings", () => {
+  const blobs = {
+    blobs: {
+      "saves:game/saved/input.txt": new Uint8Array([65, 13, 10, 66, 10, 67]),
+    },
+    assets: {},
+  };
+  const host = createScriptHost({
+    program: [
+      'openFileInput("input.txt", "Saved")',
+      'fileInput("input.txt", first)',
+      'fileInput("input.txt", second)',
+      'fileInput("input.txt", third)',
+      'fileInput("input.txt", fourth)',
+      "end()",
+    ].join("\n"),
+    seed: 0,
+    gameId: "game",
+    blobs,
+  });
+  host.advance(12, []);
+  equal(host.state().vm.globals.first, "A");
+  equal(host.state().vm.globals.second, "B");
+  equal(host.state().vm.globals.third, "C");
+  equal(host.state().vm.globals.fourth, "");
+  equal(host.state().vm.files.length, 1);
+});
+
+test("writes only through the sandbox blob port", () => {
+  const blobs: { blobs: Record<string, Uint8Array>; assets: Record<string, Uint8Array> } = { blobs: {}, assets: {} };
+  const host = createScriptHost({
+    program: 'openFileOutput("output.txt", "Saved")\nfilePrint("output.txt", "ok")\nend()\n',
+    seed: 0,
+    gameId: "game",
+    blobs,
+  });
+  host.advance(12, []);
+  deepEqual([...(blobs.blobs["saves:game/saved/output.txt"] ?? [])], [111, 107, 13, 10]);
 });

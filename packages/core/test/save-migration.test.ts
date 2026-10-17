@@ -41,6 +41,7 @@ test("a v2 save (no effect log) restores cleanly as the current vm schema", () =
   equal(restored.schema.vm, SCHEMA_VERSIONS.vm);
   deepEqual(restored.vm.effects, []);
   equal(restored.vm.effectSeq, 0);
+  deepEqual(restored.vm.files, []);
   equal(restored.vm.block, null);
   equal(restored.vm.requestSeq, 0);
   // The migrated state is a valid GameState: it canonicalises and round-trips.

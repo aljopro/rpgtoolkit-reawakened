@@ -14,18 +14,21 @@
     "editor-ui",
     "host-vscode",
     "host-web",
-    "host-desktop"
+    "host-desktop",
+    "plugin-tk2-compat"
   ],
   "edges": [
     ["core", "synth"],
     ["core", "render-webgl2"],
     ["core", "runner-harness"],
-    ["core", "runner-headless"],
+    ["core", "plugin-tk2-compat"],
+    ["plugin-tk2-compat", "runner-harness"],
     ["core", "lsp"],
     ["core", "editor-model"],
     ["synth", "runner-harness"],
     ["synth", "runner-web"],
     ["render-webgl2", "runner-web"],
+    ["core", "runner-headless"],
     ["runner-harness", "runner-headless"],
     ["runner-harness", "dap"],
     ["runner-web", "runner-desktop"],

@@ -35,6 +35,7 @@ import {
 } from "./lower.ts";
 import type { StepOp } from "./ops.ts";
 import { parse } from "./parse.ts";
+import { parseTk2 } from "./tk2.ts";
 
 export type { CompiledClass, FunctionInfo, StatementRange } from "./lower.ts";
 export type { ProgramLoader } from "./loader.ts";
@@ -48,11 +49,14 @@ export const COMPILER_VERSION = "2";
 /** A redirect table as saved: ordered `[folded old name, folded new name]` pairs (R-42). */
 export type RedirectPairs = Array<[string, string]>;
 
+/** The source dialect carried by a program reference (docs/spec/engine/rpgcode-dialects.md). */
+export type ScriptDialect = "tk3" | "tk2";
+
 /**
  * How a program was supplied (AD-7). `includes` lists, in order, the folded
  * references of the files `include()` added at run time (MOD-3); `redirects` is
- * the redirect table in force when the program was compiled (R-42). Both are
- * folded into the cache key and omitted when empty.
+ * the redirect table in force when it was compiled (R-42). Both are absent
+ * when empty and `dialect` defaults to TK3.
  */
 export type ProgramRef =
   | {
@@ -62,6 +66,7 @@ export type ProgramRef =
       readonly compiler: string;
       readonly includes?: string[];
       readonly redirects?: RedirectPairs;
+      readonly dialect?: ScriptDialect;
     }
   | {
       readonly kind: "inline";
@@ -69,6 +74,7 @@ export type ProgramRef =
       readonly compiler: string;
       readonly includes?: string[];
       readonly redirects?: RedirectPairs;
+      readonly dialect?: ScriptDialect;
     };
 
 /** A located note the loader raises while compiling: a clash, a shadowed built-in or an include cycle. */
@@ -105,14 +111,15 @@ export type CompileContext = {
   readonly isBuiltin?: (name: string) => boolean;
 };
 
-/** The program-cache identity of `ref`: source, compiler, run-time includes and redirect table (MOD-3, R-42). */
+/** The program-cache identity of `ref`: dialect, source, compiler, includes and redirects (MOD-3, R-42). */
 export function programKey(ref: ProgramRef): string {
+  const dialect = ref.dialect ?? "tk3";
   const includes = (ref.includes ?? []).join("\u0001");
   const redirects = (ref.redirects ?? []).map(([from, to]) => `${from}\u0002${to}`).join("\u0001");
   const source =
     ref.kind === "inline"
-      ? `inline\u0000${ref.compiler}\u0000${ref.text}`
-      : `file\u0000${foldPath(ref.path)}\u0000${ref.sourceHash}\u0000${ref.compiler}`;
+      ? `inline\u0000${dialect}\u0000${ref.compiler}\u0000${ref.text}`
+      : `file\u0000${dialect}\u0000${foldPath(ref.path)}\u0000${ref.sourceHash}\u0000${ref.compiler}`;
   return `${source}\u0000${includes}\u0000${redirects}`;
 }
 
@@ -154,9 +161,13 @@ type Unit = {
 
 const INLINE_KEY = "<inline>";
 
-/** Compile inline source text (docs/spec/engine/rpgcode-language.md#threads, a thread given text instead of a file). */
-export function compileInline(text: string, file = "<inline>"): Program {
-  return build({ kind: "inline", text, compiler: COMPILER_VERSION }, {}, file);
+/** Compile inline source text in the selected dialect (TK2 normalises into the shared AST). */
+export function compileInline(text: string, file = "<inline>", dialect: ScriptDialect = "tk3"): Program {
+  const ref: ProgramRef =
+    dialect === "tk3"
+      ? { kind: "inline", text, compiler: COMPILER_VERSION }
+      : { kind: "inline", text, compiler: COMPILER_VERSION, dialect };
+  return build(ref, {}, file);
 }
 
 /**
@@ -185,8 +196,8 @@ function build(ref: ProgramRef, context: CompileContext, inlineName: string): Pr
 
   function parseUnit(text: string, name: string, key: string, located: boolean): Unit {
     try {
-      const scanned = scan(text, true);
-      const ast = parse(scanned.tokens, { redirects });
+      const scanned = ref.dialect === "tk2" ? { tokens: [], includes: [] } : scan(text, true);
+      const ast = ref.dialect === "tk2" ? parseTk2(text) : parse(scanned.tokens, { redirects });
       const requests = [...scanned.includes, ...ast.includes].sort((a, b) => a.line - b.line);
       return { name, key, ast, requests };
     } catch (error) {

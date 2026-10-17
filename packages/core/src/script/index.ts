@@ -38,6 +38,8 @@ export { foldAscii, tokenize } from "./lex.ts";
 export type { Token } from "./lex.ts";
 export { MODULE_COMMANDS, parse } from "./parse.ts";
 export type { ParseContext } from "./parse.ts";
+export { compileTk2, normaliseTk2, parseTk2 } from "./tk2.ts";
+export type { Tk2CommandLookup } from "./tk2.ts";
 export { lower } from "./lower.ts";
 export type {
   CompiledClass,
@@ -60,6 +62,7 @@ export type {
   ProgramNotice,
   ProgramRef,
   RedirectPairs,
+  ScriptDialect,
 } from "./program.ts";
 export { readProgram, resolveProgram } from "./loader.ts";
 export type { LoadedSource, ProgramLoader } from "./loader.ts";
@@ -108,6 +111,7 @@ export {
 } from "./values.ts";
 export { CORE_PLUGIN } from "./builtins.ts";
 export type { Arg, BuiltinSpec, ParamSpec } from "./builtins.ts";
+export { CATALOGUE_PLUGIN, CATALOGUE_RESPONDERS_PLUGIN } from "./catalogue-responders.ts";
 export { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 export { drainEffects, EFFECT_LOG_CAP, recordDiagnostic, recordEffect } from "./effects.ts";
 export type {

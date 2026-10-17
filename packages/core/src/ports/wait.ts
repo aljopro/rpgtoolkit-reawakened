@@ -14,10 +14,13 @@
  *   `key`, and the poll then resolves.
  * - `movement` waits for the coupled movement of several sprites: one wait
  *   holds every move that `multiRun` collected, each with its absolute end tick.
- * - `request` waits for a host reply (AD-5). The host stores the reply into
- *   `reply`; a tick `deadline` bounds the wait inside the deterministic tick
- *   clock (a wall-clock timeout stays the host's). `then` is the named
- *   continuation that runs with the reply prepended (ADR 0004 decision 7).
+- `request` waits for a host reply (AD-5). The host stores the reply into
+  `reply`; a tick `deadline` bounds the wait inside the deterministic tick
+  clock (a wall-clock timeout stays the host's). `then` is the named
+  continuation that runs with the reply prepended (ADR 0004 decision 7).
+- `blob` is the file-I/O-owned request wait (AD-9/AD-17). It has the same
+  reply shape as `request`, but is separately registered so file operations can
+  be extended without claiming the generic request kind.
  *
  * `global` marks a blocking command (R-32): while one waits, every other
  * script thread, movement and frame update stands still. A cooperative wait
@@ -50,8 +53,21 @@ export type SleepWait = {
   resumesCall: boolean;
 };
 
+/** A named plugin-owned wait. Its payload and output references are saveable data. */
+export type NamedWaitKind = "render.msgbox" | "input.mouse" | "menu.screen" | "audio.sfx" | "video";
+
+export type NamedWait = {
+  kind: NamedWaitKind;
+  global: boolean;
+  /** Stable command name, useful to a resolver and to replay diagnostics. */
+  id: string;
+  payload: PlainData[];
+  /** References receive the resolver's returned value, in declaration order. */
+  resumeRefs: string[];
+};
+
 /** A wait for a key; `key` is `null` until the input owner supplies it. */
-export type InputKeyWait = { kind: "input.key"; global: boolean; key: string | null };
+export type InputKeyWait = { kind: "input.key"; global: boolean; key: string | null; resumeRefs?: string[] };
 
 /** A wait for coupled sprite movement (`multiRun`, E-33). */
 export type MovementWait = { kind: "movement"; global: boolean; moves: WaitMove[] };
@@ -68,8 +84,20 @@ export type RequestWait = {
   line: number;
 };
 
+/** A sandboxed file/blob request wait (AD-9, AD-17). */
+export type BlobWait = {
+  kind: "blob";
+  global: boolean;
+  reqId: number;
+  deadline: number | null;
+  reply: WaitReply | null;
+  then: WaitContinuation | null;
+  file: string;
+  line: number;
+};
+
 /** Every wait kind the VM registry knows (AD-9). */
-export type Wait = SleepWait | InputKeyWait | MovementWait | RequestWait;
+export type Wait = SleepWait | InputKeyWait | MovementWait | RequestWait | BlobWait | NamedWait;
 
 /** The wait kind names, namespaced where an owner part owns the kind. */
 export type WaitKind = Wait["kind"];

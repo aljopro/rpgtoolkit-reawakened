@@ -16,9 +16,10 @@
  * **Migration (AD-7's migration chain).** A save whose `schema.vm` is behind
  * `SCHEMA_VERSIONS.vm` is migrated forward before it is returned: v2 → v3 adds
  * the effect log that ticket 3.21 introduced, v3 → v4 the thread, wait and
- * request fields of ticket 3.9, v4 → v5 the module fields of ticket 3.8, then
- * the section version is set to the current
- * one. The chain is keyed by the per-section numbers (AD-23).
+ * request fields of ticket 3.9, v4 → v5 advances both ticket 3.8 module
+ * metadata and ticket 3.16's sandboxed file-handle table, then the section
+ * version is set to the current one. The chain is keyed by the per-section
+ * numbers (AD-23).
  *
  * AD-10 (the state tree) and AD-11 (the canonical form); docs/spec/formats/save-game.md#layout-minor-4 (the
  * saved game).
@@ -44,11 +45,11 @@ export function snapshot(state: GameState): string {
  *   `collect` on every thread; and `global` and `resumesCall` on a `sleep`
  *   wait. A v3 sleep came from the blocking `sleep(ticks)` command, so it
  *   becomes a global wait that resumes its call (R-32).
- * - v4 → v5 (ticket 3.8) adds the optional `includes` and `redirects` fields of a
- *   program reference and the optional `file` of a call instruction. Both are
- *   absent when empty, so a v4 save needs no field rewritten: only the section
- *   version moves. A v4 program reference carries no redirect table, which is
- *   the table of a program compiled before any `redirect` ran.
+ * - v4 → v5 advances both ticket 3.8's optional module fields (`includes` and
+ *   `redirects` on program references, and `file` on call instructions) and
+ *   ticket 3.16's empty sandboxed file-handle table. Module fields are absent
+ *   when empty, so only the section version moves for those fields; `files` is
+ *   initialized as an empty table.
  *
  * A save already at the current version is left untouched.
  */
@@ -92,6 +93,9 @@ function migrateVm(record: Record<string, unknown>, schema: Record<string, unkno
     }
     vmRecord.block = null;
     vmRecord.requestSeq = 0;
+  }
+  if (version < 5) {
+    if (!Array.isArray(vmRecord.files)) vmRecord.files = [];
   }
   schema.vm = SCHEMA_VERSIONS.vm;
 }

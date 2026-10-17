@@ -1,0 +1,120 @@
+import { deepEqual, equal, throws } from "node:assert/strict";
+import { test } from "node:test";
+import {
+  advanceScriptTick,
+  CATALOGUE_RESPONDERS_PLUGIN,
+  createGameState,
+  createWaitPoll,
+  hashState,
+  replyToRequest,
+  restoreGameState,
+  snapshot,
+  startProgram,
+  WAIT_KIND_RESOLVERS,
+  type BuiltinSpec,
+  type GameState,
+  type WaitKindResolver,
+} from "../src/index.ts";
+import { advanceOrFail } from "./script-failures.ts";
+import { createScriptServices } from "./script-test-services.ts";
+
+const COMMANDS: readonly BuiltinSpec[] = CATALOGUE_RESPONDERS_PLUGIN.commands;
+
+function callText(spec: BuiltinSpec): string {
+  if (spec.name === "branch") return "branch(:target)\n:target\n";
+  const count = spec.params.some((param) => param.variadic) ? spec.params.length + 1 : spec.params.length;
+  const declarations: string[] = [];
+  const args: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    if (spec.params[index]?.byRef === true) {
+      declarations.push(`v${index} = 5`);
+      args.push(`v${index}`);
+    } else {
+      args.push("1");
+    }
+  }
+  return `${declarations.length > 0 ? `${declarations.join("\n")}\n` : ""}${spec.name}(${args.join(", ")})\n`;
+}
+
+function run(text: string): GameState {
+  const state = createGameState({ seed: 0 });
+  startProgram(state.vm, { kind: "inline", text, compiler: "2" });
+  advanceOrFail(state, createScriptServices(state));
+  return state;
+}
+
+function resolver(kind: string): WaitKindResolver {
+  return { kind, poll: (_view, wait) => ({ value: wait.kind, ok: true }) };
+}
+
+const pluginWaitPoll = createWaitPoll([
+  ...WAIT_KIND_RESOLVERS,
+  resolver("render.msgbox"),
+  resolver("input.mouse"),
+  resolver("menu.screen"),
+  resolver("audio.sfx"),
+  resolver("video"),
+]);
+
+test("all non-core catalogue responders have a lower-case command and a recorded response", () => {
+  equal(COMMANDS.length, 94);
+  equal(new Set(COMMANDS.map((spec) => spec.name)).size, COMMANDS.length);
+  for (const spec of COMMANDS) {
+    equal(spec.name, spec.name.toLowerCase());
+    const state = createGameState({ seed: 0 });
+    startProgram(state.vm, { kind: "inline", text: callText(spec), compiler: "2" });
+    if (["godos", "dos", "windows"].includes(spec.name)) {
+      throws(() => advanceOrFail(state, createScriptServices(state)), /obsolete/);
+      equal(state.vm.effects.length, 0);
+      continue;
+    }
+    advanceOrFail(state, createScriptServices(state));
+    equal(state.vm.effects.length > 0, true, `${spec.name} did not record an effect`);
+  }
+});
+
+test("a named wait is global, records its wait, and resumes by-reference outputs", () => {
+  const state = createGameState({ seed: 0 });
+  startProgram(state.vm, { kind: "inline", text: 'prompt("Question", answer)\n', compiler: "2" });
+  advanceOrFail(state, createScriptServices(state));
+
+  const thread = state.vm.threads[0]!;
+  equal(thread.status, "waiting");
+  equal(thread.wait?.kind, "render.msgbox");
+  equal(thread.wait?.global, true);
+  equal(state.vm.effects.some((effect) => effect.wait?.kind === "render.msgbox"), true);
+  const restored = restoreGameState(snapshot(state));
+  equal(hashState(state), hashState(restored));
+
+  advanceScriptTick(state, createScriptServices(state), undefined, pluginWaitPoll);
+  equal(state.vm.globals.answer, "render.msgbox");
+  equal(state.vm.threads[0]?.status, "finished");
+});
+
+test("file responders emit host requests and resume with the reply", () => {
+  const state = run('result = openFileInput("save.dat", "games")\n');
+  const request = state.vm.effects.find((effect) => effect.request !== null);
+  equal(request?.request?.kind, "asset");
+  equal(state.vm.threads[0]?.wait?.kind, "request");
+  const reqId = state.vm.threads[0]?.wait?.kind === "request" ? state.vm.threads[0].wait.reqId : 0;
+  replyToRequest(state.vm, reqId, { ok: true, value: 7 });
+  advanceScriptTick(state, createScriptServices(state));
+  equal(state.vm.globals.result, 7);
+  equal(state.vm.effects.some((effect) => effect.kind === "request"), true);
+});
+
+test("mixed movement commands record their effect before waiting", () => {
+  const state = run("playerStep(1, 2, 3)\n");
+  equal(state.vm.threads[0]?.wait?.kind, "movement");
+  equal(state.vm.effects.some((effect) => effect.kind === "mixed"), true);
+  equal(state.vm.effects.some((effect) => effect.wait?.kind === "movement"), true);
+});
+
+test("responder snapshots remain deterministic while a wait is pending", () => {
+  const state = run('msgbox("hello")\n');
+  const first = hashState(state);
+  const replay = snapshot(state);
+  deepEqual(snapshot(state), replay);
+  equal(hashState(state), first);
+  equal(hashState(restoreGameState(replay)), first);
+});

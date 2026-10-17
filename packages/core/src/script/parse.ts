@@ -100,7 +100,11 @@ function binaryBindingPower(opText: string): number | undefined {
 }
 
 /** What a parse shares with the files parsed before and after it: the one redirect table (R-42). */
-export type ParseContext = { readonly redirects: Map<string, string> };
+export type ParseContext = {
+  readonly redirects: Map<string, string>;
+  /** TK2 keeps `system.func` as a namespace token until its compatibility rewrite. */
+  readonly preserveSystemNamespace?: boolean;
+};
 
 /** The call names that edit the module state rather than reach a built-in (MOD-3, R-42). */
 export const MODULE_COMMANDS: { readonly [name: string]: true } = {
@@ -145,7 +149,7 @@ export function parse(tokens: readonly Token[], context: ParseContext = { redire
       }
     }
     // `system.func` is the engine's own namespace, not a file (PRG-1): it is the plain call `func`.
-    if (callFile === "system") callFile = undefined;
+    if (callFile === "system" && context.preserveSystemNamespace !== true) callFile = undefined;
     if (callFile === undefined) return { kind: "call", name: callName, args, line };
     implicit.push({ path: `${callFile}.prg`, line, implicit: true });
     return { kind: "call", name: callName, args, file: callFile, line };

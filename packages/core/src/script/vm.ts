@@ -110,17 +110,22 @@ export function drainDiagnostics(services: ScriptServices): Diagnostic[] {
   return services.diagnostics.splice(0, services.diagnostics.length);
 }
 
+/** The cache key is owned by `programKey`, which includes dialect and module metadata. */
 export function createScriptServices(
   state: GameState,
   plugins: readonly ResolvedPlugin[] = [],
   logger: Logger = NULL_LOGGER,
   virtuals?: VirtualVariablePort,
-  loader?: ProgramLoader,
+  loaderOrGameId?: ProgramLoader | string,
+  explicitGameId = "default",
 ): ScriptServices {
+  const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
+  const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
   const view: CommandView = {
     rng: createRngPort(state.rng),
     clock: createClockPort(state.time),
     state,
+    gameId,
   };
   const virt = virtuals ?? createDefaultVirtuals(state);
   const registry = assembleCommands(plugins, logger);
@@ -216,7 +221,7 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
     thread.status = "finished";
     return;
   }
-  if (wait.kind === "request") {
+  if (wait.kind === "request" || wait.kind === "blob") {
     if (!result.ok) {
       recordDiagnostic(vm, view.tick, thread.id, "request.failed", wait.file, wait.line, toStringValue(result.value));
     }
@@ -232,6 +237,10 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
     frame.operands.push({ value: result.ok ? result.value : 0, ref: null });
     return;
   }
+  if ("resumeRefs" in wait && wait.resumeRefs !== undefined) {
+    const topIndex = thread.frames.length - 1;
+    for (const ref of wait.resumeRefs) writeRef(vm, thread, topIndex, ref as RefId, result.value);
+  }
   if (wait.kind === "sleep" && !wait.resumesCall) return;
   frame.operands.push({ value: result.value, ref: null });
 }
@@ -245,7 +254,7 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
 export function replyToRequest(vm: VmState, reqId: number, reply: WaitReply): void {
   for (const thread of vm.threads) {
     const wait = thread.wait;
-    if (thread.status !== "waiting" || wait === null || wait.kind !== "request") continue;
+    if (thread.status !== "waiting" || wait === null || (wait.kind !== "request" && wait.kind !== "blob")) continue;
     if (wait.reqId !== reqId) continue;
     if (wait.reply !== null) {
       throw new ScriptError("request.duplicate-reply", `request ${reqId} already has a reply`);
@@ -308,8 +317,9 @@ export function advanceScriptTick(
   state: GameState,
   services: ScriptServices,
   budget: number = STEP_BUDGET,
+  poll: WaitPoll = defaultWaitPoll,
 ): ScriptStatus {
-  runWaitsPhase(state.vm, state.time);
+  runWaitsPhase(state.vm, state.time, poll);
   runThreadsPhase(state.vm, services, budget);
   assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
@@ -851,15 +861,17 @@ function argValues(args: readonly Arg[]): PlainData[] {
   return args.map((arg) => (typeof arg.value === "number" && arg.value === 0 ? 0 : arg.value));
 }
 
-/** A fresh `request` wait; each caller gets its own object, so the effect log never aliases a live wait. */
+/** A fresh host-request wait; file/blob requests use AD-9's dedicated `blob` kind. */
 function requestWait(
   reqId: number,
   deadline: number | null,
   then: CommandResult["then"],
   pos: SourcePos,
+  requestKind?: string,
 ): Wait {
+  const kind = requestKind === "loadBlob" || requestKind === "saveBlob" ? "blob" : "request";
   return {
-    kind: "request",
+    kind,
     global: true,
     reqId,
     deadline,
@@ -990,6 +1002,26 @@ function performCall(
         frame.ip = targetIp;
         controlApplied = true;
       }
+      if (action === "fbranch") {
+        const labelName = effect.args?.[1] as string;
+        const targetIp = lookupLabel(program, frame.ip, labelName);
+        if (targetIp === undefined) {
+          throw new ScriptError(
+            "vm.unknown-label",
+            `label \`:${labelName}\` not found in current function scope`,
+            pos,
+          );
+        }
+        thread.frames.push({
+          program: frame.program,
+          ip: targetIp,
+          locals: {},
+          operands: [],
+          errorHandler: null,
+          autoLocal: frame.autoLocal,
+        });
+        controlApplied = true;
+      }
       if (action === "setErrorHandler") {
         installHandler(program, frame, frameIndex, frame.ip, pos, effect.args?.[1] as string);
       }
@@ -1042,6 +1074,40 @@ function performCall(
         const varName = effect.args?.[1] as string;
         if (!Object.hasOwn(vm.globals, varName)) {
           setOwnValue(vm.globals, varName, 0);
+        }
+      }
+      if (action === "file") {
+        const fileAction = effect.args?.[1] as string;
+        const fileId = effect.args?.[2] as string;
+        if (fileAction === "open") {
+          const fileData = effect.args?.[6] as string;
+          const file = {
+            id: fileId,
+            mode: effect.args?.[3] as "input" | "output" | "append" | "binary",
+            path: effect.args?.[4] as string,
+            area: effect.args?.[5] as "saves" | "files",
+            data: fileData,
+            position: effect.args?.[3] === "append" ? fileData.length / 2 : 0,
+            loaded: true,
+          };
+          const existing = vm.files.findIndex((item) => item.id === fileId);
+          if (existing >= 0) vm.files.splice(existing, 1, file);
+          else vm.files.push(file);
+        }
+        if (fileAction === "close") {
+          const index = vm.files.findIndex((item) => item.id === fileId);
+          if (index >= 0) vm.files.splice(index, 1);
+        }
+        if (fileAction === "position") {
+          const file = vm.files.find((item) => item.id === fileId);
+          if (file !== undefined) file.position = effect.args?.[3] as number;
+        }
+        if (fileAction === "data") {
+          const file = vm.files.find((item) => item.id === fileId);
+          if (file !== undefined) {
+            file.data = effect.args?.[3] as string;
+            file.position = effect.args?.[4] as number;
+          }
         }
       }
       if (action === "thread") {
@@ -1158,6 +1224,21 @@ function performCall(
   if (controlApplied) return "continue";
   if (parked) return "yield";
 
+  if (result.wait !== undefined) {
+    recordEffect(vm, {
+      tick,
+      thread: thread.id,
+      name,
+      kind: "wait",
+      args: argValues(args),
+      out: {},
+      result: result.value,
+      patch: null,
+      wait: result.wait,
+      request: null,
+    });
+  }
+
   if (result.request !== undefined) {
     const timeout = result.timeoutTicks;
     let deadline: number | null = null;
@@ -1182,10 +1263,10 @@ function performCall(
       out: {},
       result: null,
       patch: null,
-      wait: requestWait(reqId, deadline, result.then, pos),
+      wait: requestWait(reqId, deadline, result.then, pos, result.request.kind),
       request: { ...result.request, reqId },
     });
-    thread.wait = requestWait(reqId, deadline, result.then, pos);
+    thread.wait = requestWait(reqId, deadline, result.then, pos, result.request.kind);
     thread.status = "waiting";
     return "yield";
   }
