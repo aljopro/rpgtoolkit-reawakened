@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -27,6 +27,11 @@ function unwrap<T>(result: Result<T>): T {
 }
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
+function findLegacyBaseFonts(directory: string): string[] {
+  return readdirSync(directory, { recursive: true })
+    .filter((path) => path.toLowerCase().endsWith("base.fnt"))
+    .map((path) => join(directory, path));
+}
 
 
 test("reads a valid 2051-line font file and round-trips exactly", () => {
@@ -143,5 +148,45 @@ test("refuses out-of-range value or non-numeric line", () => {
   equal(res.ok, false);
   if (!res.ok) {
     equal(res.error.section, FONT_SECTION);
+  }
+});
+
+test("loads the project-owned authored font and covers ASCII plus replacement", () => {
+  const path = join(repoRoot, "media", "fonts", "tkr-8x8.fnt");
+  const res = readLegacyFont(readFileSync(path), path);
+  equal(res.ok, true);
+  if (!res.ok) return;
+  equal(res.value.values.length, FONT_TOTAL_VALUES);
+  for (let code = 32; code <= 126; code += 1) {
+    const rows = res.value.values.slice(code * 8, code * 8 + 8);
+    equal(rows.some((value) => value !== 0), code === 32 ? false : true, `glyph U+${code.toString(16)}`);
+  }
+  const replacement = res.value.values.slice(255 * 8, 256 * 8);
+  equal(replacement[0], 0);
+  equal(replacement[1], 0x3e);
+  const rgba = glyphToRgba(res.value, 255);
+  equal(rgba[1 * 8 * 4 + 2 * 4 + 3], 255);
+});
+
+test("authored glyph data is distinct from fetched legacy BASE.FNT when present", () => {
+  const authoredBytes = new Uint8Array(readFileSync(join(repoRoot, "media", "fonts", "tkr-8x8.fnt")));
+  const authored = unwrap(readLegacyFont(authoredBytes));
+  const fixtureRoot = join(repoRoot, "fixtures", "legacy");
+  let paths: string[] = [];
+  try {
+    paths = findLegacyBaseFonts(fixtureRoot);
+  } catch {
+    return;
+  }
+  for (const path of paths) {
+    const legacyBytes = new Uint8Array(readFileSync(path));
+    if (authoredBytes.length === legacyBytes.length && authoredBytes.every((value, index) => value === legacyBytes[index])) {
+      throw new Error(`${path}: authored font is byte-identical to legacy BASE.FNT`);
+    }
+    const legacy = readLegacyFont(legacyBytes, path);
+    equal(legacy.ok, true);
+    if (legacy.ok && JSON.stringify([...authored.values]) === JSON.stringify([...legacy.value.values])) {
+      throw new Error(`${path}: authored glyph data matches legacy BASE.FNT`);
+    }
   }
 });
