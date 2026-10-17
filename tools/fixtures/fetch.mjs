@@ -251,9 +251,8 @@ function validatePin(value, problems) {
 }
 
 /**
- * Checks a parsed pin (`url`, `rev`, `gamesPath`, `games` and, when present,
- * `mainPath` and `mainFiles`) and returns a clean copy. Throws a SourcesError
- * naming every defect found.
+ * Checks a parsed pin and returns a clean copy. Throws a SourcesError naming
+ * every defect found.
  */
 function validateSources(value, path = "(pin)") {
   const problems = [];
@@ -263,9 +262,8 @@ function validateSources(value, path = "(pin)") {
 }
 
 /**
- * Reads and validates the pin file at `path` (default: the committed
- * `tools/fixtures/sources.json`). Throws a SourcesError naming every defect;
- * no git command runs here.
+ * Checks one pin or a manifest with a `sources` array and returns clean copies.
+ * A manifest is used when the fixture corpus combines independent repositories.
  */
 export function loadSources(path = defaultSourcesPath) {
   let text;
@@ -280,7 +278,29 @@ export function loadSources(path = defaultSourcesPath) {
   } catch (error) {
     throw new SourcesError(path, [`the pin file is not valid JSON: ${error.message}`]);
   }
+  if (isObject(value) && Array.isArray(value.sources)) {
+    const problems = [];
+    const sources = value.sources.map((source, index) => {
+      const sourceProblems = [];
+      const pin = validatePin(source, sourceProblems);
+      for (const problem of sourceProblems) problems.push(`sources[${index}]: ${problem}`);
+      return pin;
+    });
+    if (sources.length === 0) problems.push("sources: must be a non-empty array");
+    if (problems.length !== 0 || sources.some((source) => source === null)) {
+      throw new SourcesError(path, problems);
+    }
+    return sources;
+  }
   return validateSources(value, path);
+}
+
+function sourceList(value) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) throw new SourcesError("(sources)", ["sources: must be a non-empty array"]);
+    return value.map((source) => validateSources(source));
+  }
+  return [validateSources(value)];
 }
 
 // ----------------------------------------------------------------------- git
@@ -398,36 +418,42 @@ const gameFileCount = (base, game) => (isRealDirectory(join(base, game)) ? count
 
 const isCount = (value) => Number.isInteger(value) && value >= 1;
 
-// The recorded file count per game when `legacy` is a complete fetch of `pin`, else null.
-function cachedCounts(legacy, pin) {
+// The recorded file count per game when `legacy` is complete for every pin.
+function cachedCounts(legacy, pins) {
   let stamp;
   try {
     stamp = JSON.parse(readFileSync(join(legacy, STAMP_NAME), "utf8"));
   } catch {
     return null;
   }
-  if (!isObject(stamp) || stamp.url !== pin.url || stamp.rev !== pin.rev || stamp.gamesPath !== pin.gamesPath) {
-    return null;
-  }
-  // The main keys must match too, present in both or neither, so a pin that
-  // gained or lost them (or changed them) refetches.
-  if (pin.mainPath !== undefined) {
-    if (stamp.mainPath !== pin.mainPath) return null;
-    if (
-      !Array.isArray(stamp.mainFiles) ||
-      stamp.mainFiles.length !== pin.mainFiles.length ||
-      !stamp.mainFiles.every((file, index) => file === pin.mainFiles[index])
-    ) {
+  const multi = pins.length > 1;
+  if (multi) {
+    if (!Array.isArray(stamp.sources) || stamp.sources.length !== pins.length) return null;
+    for (const [index, pin] of pins.entries()) {
+      if (JSON.stringify(stamp.sources[index]) !== JSON.stringify(pin)) return null;
+    }
+  } else {
+    const [pin] = pins;
+    if (!isObject(stamp) || stamp.url !== pin.url || stamp.rev !== pin.rev || stamp.gamesPath !== pin.gamesPath) return null;
+    if (pin.mainPath !== undefined) {
+      if (stamp.mainPath !== pin.mainPath) return null;
+      if (
+        !Array.isArray(stamp.mainFiles) ||
+        stamp.mainFiles.length !== pin.mainFiles.length ||
+        !stamp.mainFiles.every((file, index) => file === pin.mainFiles[index])
+      ) {
+        return null;
+      }
+    } else if (stamp.mainPath !== undefined || stamp.mainFiles !== undefined) {
       return null;
     }
-  } else if (stamp.mainPath !== undefined || stamp.mainFiles !== undefined) {
-    return null;
   }
   if (!isObject(stamp.games)) return null;
+  const games = pins.flatMap((pin) => pin.games);
   const names = Object.keys(stamp.games);
-  if (names.length !== pin.games.length || !pin.games.every((game) => names.includes(game))) return null;
+  if (names.length !== games.length || !games.every((game) => names.includes(game))) return null;
   const counts = {};
-  for (const game of pin.games) {
+  for (const game of games) {
     const recorded = isObject(stamp.games[game]) ? stamp.games[game].files : undefined;
     if (!isCount(recorded) || gameFileCount(legacy, game) !== recorded) return null;
     counts[game] = recorded;
@@ -554,6 +580,41 @@ function stageGames(staging, pin, env) {
   return counts;
 }
 
+/** Build one combined fixture tree from independent pinned repositories. */
+function stageSources(staging, pins, env) {
+  const out = join(staging, "out");
+  mkdirSync(out);
+  const counts = {};
+  for (const [index, pin] of pins.entries()) {
+    const sourceStaging = join(staging, `source-${index}`);
+    mkdirSync(sourceStaging);
+    const sourceCounts = stageGames(sourceStaging, pin, env);
+    const sourceOut = join(sourceStaging, "out");
+    for (const game of pin.games) {
+      renameSync(join(sourceOut, game), join(out, game));
+      counts[game] = sourceCounts[game];
+    }
+  }
+  const games = pins.flatMap((pin) => pin.games);
+  const stamp =
+    pins.length === 1
+      ? {
+          url: pins[0].url,
+          rev: pins[0].rev,
+          gamesPath: pins[0].gamesPath,
+          games: Object.fromEntries(games.map((game) => [game, { files: counts[game] }])),
+          ...(pins[0].mainPath !== undefined
+            ? { mainPath: pins[0].mainPath, mainFiles: [...pins[0].mainFiles] }
+            : {}),
+        }
+      : {
+          sources: pins,
+          games: Object.fromEntries(games.map((game) => [game, { files: counts[game] }])),
+        };
+  writeFileSync(join(out, STAMP_NAME), `${JSON.stringify(stamp, null, 2)}\n`);
+  return counts;
+}
+
 const absentGames = (games, pin) =>
   new FixturesError(
     `game folder missing at ${pin.rev}: ${games
@@ -617,20 +678,28 @@ function install(staging, legacy) {
  * earlier good `fixtures/legacy` untouched.
  */
 export function fetchFixtures(root, sources, options = {}) {
-  const pin = validateSources(sources);
+  const pins = sourceList(sources);
+  const seenGames = new Set();
+  for (const pin of pins) {
+    for (const game of pin.games) {
+      const key = game.toLowerCase();
+      if (seenGames.has(key)) throw new SourcesError("(sources)", [`duplicate game ${JSON.stringify(game)}`]);
+      seenGames.add(key);
+    }
+  }
   const env = options.env ?? process.env;
   const rootPath = resolve(root);
   requireDirectory(rootPath);
   const fixtures = join(rootPath, "fixtures");
   const legacy = join(fixtures, "legacy");
+  const games = pins.flatMap((pin) => pin.games);
   const summary = (status, counts) => ({
     status,
-    url: pin.url,
-    rev: pin.rev,
-    games: pin.games.map((name) => ({ name, files: counts[name] })),
+    ...(pins.length === 1 ? { url: pins[0].url, rev: pins[0].rev } : {}),
+    games: games.map((name) => ({ name, files: counts[name] })),
   });
 
-  const cached = cachedCounts(legacy, pin);
+  const cached = cachedCounts(legacy, pins);
   if (cached !== null) return summary("cached", cached);
 
   removeLeftovers(fixtures);
@@ -640,7 +709,7 @@ export function fetchFixtures(root, sources, options = {}) {
   const staging = join(fixtures, `${STAGING_PREFIX}${process.pid}`);
   try {
     mkdirSync(staging);
-    const counts = stageGames(staging, pin, env);
+    const counts = pins.length === 1 ? stageGames(staging, pins[0], env) : stageSources(staging, pins, env);
     install(staging, legacy);
     return summary("fetched", counts);
   } finally {

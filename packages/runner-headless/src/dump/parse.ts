@@ -21,6 +21,7 @@ import {
   createAssetIndex,
   createEmptyBoard,
   createEmptyItem,
+  createEmptySpecialMove,
   PACKAGE_ROOT,
   type AssetResolver,
   type Board,
@@ -127,6 +128,14 @@ function parseData(cls: DataFormatClass, file: PackageFile, context: AssetResolv
     if (cls.format === "item") {
       const empty = createEmptyItem();
       return modelOutcome(empty, ["zero-byte placeholder file treated as empty document (Z-1)"], itemSummary(empty));
+    }
+    if (cls.format === "special-move") {
+      const empty = createEmptySpecialMove();
+      return modelOutcome(
+        empty,
+        ["zero-byte placeholder file treated as empty document (Z-1)"],
+        `special move "${empty.name}", damage ${empty.damage}, smp cost ${empty.smpCost}, program -`,
+      );
     }
   }
   switch (cls.format) {

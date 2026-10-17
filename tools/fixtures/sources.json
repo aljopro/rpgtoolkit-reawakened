@@ -1,8 +1,23 @@
 {
-  "url": "https://github.com/chrisbmatthews/rpgtoolkit",
-  "rev": "9191b9191c9bda0998c6faae16929b3331ed2ead",
-  "gamesPath": "build/game",
-  "games": ["demo", "Basic"],
-  "mainPath": "build/main",
-  "mainFiles": ["demo.gam"]
+  "sources": [
+    {
+      "url": "https://github.com/tk-reawakened/ludotheque",
+      "rev": "0489f5da225438f8fcd62d958711dc7bad7e8207",
+      "gamesPath": "games",
+      "games": [
+        "FinalDestiny",
+        "LittleMan",
+        "BusDriver",
+        "Caoquest",
+        "School2Demo",
+        "ChimeranEmpire"
+      ]
+    },
+    {
+      "url": "https://github.com/chrisbmatthews/rpgtoolkit",
+      "rev": "9191b9191c9bda0998c6faae16929b3331ed2ead",
+      "gamesPath": "build/game",
+      "games": ["demo", "Basic"]
+    }
+  ]
 }
