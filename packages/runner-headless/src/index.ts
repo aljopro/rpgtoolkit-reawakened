@@ -50,8 +50,20 @@ function runGolden(argv: string[]): number {
     const golden = readFileOrUndefined(join(root, "golden/test-double/golden.json"));
     const scriptsGolden =
       readFileOrUndefined(join(root, "golden/scripts/golden.json")) ?? (record ? "" : undefined);
-
-    const result = goldenJob({ vectors, run, golden, scriptsGolden }, record);
+    const sceneFile = join(root, "golden/scenes/S-01.json");
+    const sceneGolden = existsSync(sceneFile)
+      ? (() => {
+          const sceneText = readFileSync(sceneFile, "utf8");
+          const scene = JSON.parse(sceneText) as { readonly boardFiles: readonly string[] };
+          return {
+            sceneText,
+            assets: scene.boardFiles.map((path) => ({ path, bytes: new Uint8Array(readFileSync(join(root, path))) })),
+            referencePng: new Uint8Array(readFileSync(join(root, "golden/reference/S-01.png"))),
+            ledgerText: readFileSync(join(root, "golden/ledger.json"), "utf8"),
+          };
+        })()
+      : undefined;
+    const result = goldenJob({ vectors, run, golden, scriptsGolden, sceneGolden }, record);
 
     if (!result.ok) {
       const completed = result.lines.slice(0, -1);

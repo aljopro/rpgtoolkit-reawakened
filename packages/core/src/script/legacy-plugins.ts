@@ -702,7 +702,8 @@ export const GSMISC_PLUGIN: PluginDefinition = {
       aliases: [],
       params: [{ name: "dest", optional: true, byRef: true, variadic: false }],
       call: (view, args) => {
-        const name = view.state?.world.board ?? "";
+        const boardValue: unknown = view.state?.world.board;
+        const name = typeof boardValue === "string" ? boardValue : boardValue !== null && typeof boardValue === "object" && "key" in boardValue && typeof boardValue.key === "string" ? boardValue.key : "";
         const out = byRefOut(args, 0, name);
         return { value: name, out, effects: [{ kind: "mixed", section: "world" }] };
       },

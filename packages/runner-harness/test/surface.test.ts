@@ -7,13 +7,16 @@ test("runner-harness public surface matches the pinned export list with no doubl
   const pinnedExports = [
     "buildCorpus",
     "buildFetchedCorpus",
+    "checkSceneGolden",
     "checkSnapshotRestore",
     "checkVectors",
     "compareGolden",
+    "comparePngPixels",
     "compareScriptsGolden",
     "createMemoryLoader",
     "createNullAudio",
     "createScriptHost",
+    "encodeRgbaPng",
     "formatGolden",
     "formatScriptsGolden",
     "goldenJob",
@@ -26,6 +29,7 @@ test("runner-harness public surface matches the pinned export list with no doubl
     "runCorpusProgram",
     "runFetchedCorpus",
     "runLog",
+    "runTracerScene",
     "verifyCatalogueCompleteness",
   ].sort();
 

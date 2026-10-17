@@ -3,14 +3,14 @@ title: 'Tracer bullet: createEngine, a 2D board, composeBoard and the rasteriser
 type: feature
 ticket: 5
 created: '2026-10-17'
-status: draft
+status: built
 baseline_revision: 'c149f128'
 route: full
 route_source: pinned
 risk: high
 review: quick
 review_source: pinned
-lenses_ran: []
+lenses_ran: [quick]
 review_loop_iteration: 0
 context:
   - 'CLAUDE.md'
@@ -164,3 +164,12 @@ All other choices are ratified by the ticket, AD-1/3/4/5/10/11/14/26/28/29, the 
 The plan checkpoint itself does not run typecheck, unit, golden, fixture, licence, Bun or implementation checks. Those run after owner approval and code implementation. No fixture, golden, docs/spec or generated catalogue file is changed by this plan.
 
 </frozen-after-approval>
+
+## Review Triage Log
+
+- quick-1 — patch — `packages/core/src/engine/engine.ts`: the review correctly identified that non-asset inputs were discarded and asset replies ignored their consuming tick; the implementation now retains deferred records and consumes only records stamped for the current tick.
+- quick-2 — false — `packages/core/src/engine/engine.ts`: an empty draw list while loading cannot contain a partial board, and the public draw-list contract has no loading variant; `drawList()` therefore returns the only valid no-partial result.
+- quick-3 — false — `packages/core/src/world/hydrate.ts`: animation bytes are requested first, then the selected frame reference is resolved and added to the dependency set before hydration succeeds; the implementation now also uses the normative `frameAt(0, tick, ticksPerFrame, count, true)` helper.
+- quick-4 — false — `packages/core/src/render/compose.ts`: this tracer board contains no image or sprite collections and intentionally implements no shading; the include flags therefore omit unsupported content without introducing commands, while S-01 passes all flags false.
+- quick-5 — false — `packages/core/src/raster/raster.ts`: AD-3 defines normal blend as the tinted source colour, not source-over interpolation; the tracer rejects translucent/additive modes and copies straight source RGBA for normal blits.
+- quick-6 — low rejected — `packages/runner-harness/src/png.ts`: the fixed-store encoder is host-neutral and passes the bounded 512×384 S-01 lane; changing its straightforward buffers would add complexity without affecting the ticket's observable behavior.

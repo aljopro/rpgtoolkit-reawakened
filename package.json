@@ -33,6 +33,7 @@
     "no-skips:test": "node --test tools/no-skips/test/no-skips.test.mjs",
     "golden": "tsc -b && node packages/runner-headless/dist/cli.js golden",
     "golden:record": "tsc -b && node packages/runner-headless/dist/cli.js golden --record",
+    "golden:bun": "pnpm build && node packages/runner-headless/dist/cli.js golden > /tmp/tkr-golden-node.log && bun packages/runner-headless/dist/cli.js golden > /tmp/tkr-golden-bun.log && diff -u /tmp/tkr-golden-node.log /tmp/tkr-golden-bun.log",
     "corpus": "tsc -b && node packages/runner-headless/dist/cli.js corpus",
     "dump": "tsc -b && node packages/runner-headless/dist/cli.js dump",
     "dump:check": "tsc -b && node packages/runner-headless/dist/cli.js dump --check golden/legacy-corpus.json fixtures/legacy && node packages/runner-headless/dist/cli.js dump --check golden/spec-examples.json docs/spec/examples",

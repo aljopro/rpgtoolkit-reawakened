@@ -57,3 +57,11 @@ export function secondsToTicks(seconds: number): number | null {
   const ticks = Math.max(1, Math.floor(seconds * TICKS_PER_SECOND + 0.5));
   return ticks > MAX_TICK ? null : ticks;
 }
+
+/** Select the frame at a fixed tick; looping wraps and one-shot animation holds its last frame. */
+export function frameAt(originTick: number, tick: number, ticksPerFrame: number, count: number, loop: boolean): number {
+  if (count <= 0) return -1;
+  const elapsed = Math.max(0, tick - originTick);
+  const frame = Math.floor(elapsed / Math.max(1, ticksPerFrame));
+  return loop ? frame % count : Math.min(frame, count - 1);
+}
