@@ -15,12 +15,23 @@ function command(name: string, call: BuiltinSpec["call"]): BuiltinSpec {
   return { name, aliases: [], params: [], call };
 }
 
-test("the default manifest is core at the bottom followed by catalogue", () => {
-  deepEqual(ENGINE_DEFAULT_MANIFEST, [{ id: "core" }, { id: "catalogue" }]);
+test("the default manifest is core at the bottom followed by catalogue and native packs", () => {
+  deepEqual(ENGINE_DEFAULT_MANIFEST.map((entry) => entry.id), [
+    "core",
+    "catalogue",
+    "gsmisc",
+    "triuken",
+    "filereadwrite",
+    "proplug",
+    "xfmwin",
+    "kaimu",
+    "twbutton",
+  ]);
 });
 
 test("manifest patch applies append, disable, replace and remove by id", () => {
-  const result = applyPluginManifestPatch(ENGINE_DEFAULT_MANIFEST, [
+  const base = [{ id: "core" }, { id: "catalogue" }] as const;
+  const result = applyPluginManifestPatch(base, [
     { op: "append", entry: { id: "game", options: { timeout: 3 } } },
     { op: "replace", id: "game", entry: { id: "game.v2", enabled: true } },
     { op: "disable", id: "catalogue" },
@@ -31,15 +42,16 @@ test("manifest patch applies append, disable, replace and remove by id", () => {
 });
 
 test("reorder must retain every id and cannot move the pinned core layer", () => {
-  const valid = applyPluginManifestPatch(ENGINE_DEFAULT_MANIFEST, [
+  const base = [{ id: "core" }, { id: "catalogue" }] as const;
+  const valid = applyPluginManifestPatch(base, [
     { op: "append", entry: { id: "game" } },
     { op: "reorder", ids: ["core", "game", "catalogue"] },
   ]);
   deepEqual(valid.manifest.map((entry) => entry.id), ["core", "game", "catalogue"]);
-  const invalid = applyPluginManifestPatch(ENGINE_DEFAULT_MANIFEST, [
+  const invalid = applyPluginManifestPatch(base, [
     { op: "reorder", ids: ["catalogue", "core"] },
   ], "main/plugins");
-  deepEqual(invalid.manifest, ENGINE_DEFAULT_MANIFEST);
+  deepEqual(invalid.manifest, base);
   equal(invalid.diagnostics[0]?.code, "manifest.core-pinned");
   equal(invalid.diagnostics[0]?.path, "main/plugins");
   equal(invalid.diagnostics[0]?.index, 0);

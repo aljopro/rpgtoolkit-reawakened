@@ -200,7 +200,7 @@ test("a runtime failure reaches the report as a located diagnostic and runLog ob
   ]);
   equal(host.state().vm.globals.b, 2);
   deepEqual(
-    records.map((record) => record.code),
+    records.filter((record) => record.code !== "command.overridden").map((record) => record.code),
     ["unknown.command"],
   );
   // Draining is per advance: a later batch with no failure reports none.
