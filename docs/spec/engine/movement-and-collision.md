@@ -118,6 +118,8 @@ Conditional triggers fire only when their variable condition holds. The program 
 
 <a id="e-41"></a>
 **E-41 Board program region, key-press.** The player is inside the region and presses the activation key.
+<a id="reawakened-gone-trigger-suppression"></a>
+**Reawakened rule (OWNER; `gone`).** `gone()` suppresses only the currently running board trigger instance by writing the `triggers` section. The source program remains on the board, sprites and unrelated threads are unchanged, and the suppression lasts until the active board is left. Normal trigger reload on board leave clears the marker.
 
 <a id="e-42"></a>
 **E-42 Board program region, repeat.** Fires again every `distanceRepeat` px walked inside the region; the counter resets on leaving.
