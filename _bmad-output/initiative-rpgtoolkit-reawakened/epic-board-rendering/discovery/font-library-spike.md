@@ -74,6 +74,8 @@ Representative `opentype.js` locations are `dist/opentype.mjs:241,304` (`Math.po
 
 The temporary gate was exercised with `node /tmp/tkr-font-spike-4-3/gated-opentype.mjs` and `bun /tmp/tkr-font-spike-4-3/gated-opentype.mjs`: all three faces were accepted with the same `unitsPerEm`/`hhea` values and empty/WOFF/zero-byte probes were rejected as `unsupported font signature`. This is the reachability boundary used by the dynamic result.
 
+The selected wrapper is therefore not permission to expose the whole package to arbitrary inputs: it is a bounded `glyf` parser seam. If entry 4.9 cannot preserve the input gate and static proof, this recommendation falls back to an audited vendored subset or the hand-written parser; it must not waive an unapproved reachable path.
+
 ## 6. Dynamic sandbox evidence
 
 The exact wrapper was run after installing trapping getters for `window`, `document`, `navigator`, `fetch`, `localStorage`, `requestAnimationFrame`, `Buffer`, `require`, timers, `TextDecoder`, `TextEncoder`, `XMLHttpRequest`, `ImageData` and `OffscreenCanvas`, and a `Math` proxy that logged every member read. Wrapper-owned Node helpers were captured before the traps; the candidate received only supplied bytes.
