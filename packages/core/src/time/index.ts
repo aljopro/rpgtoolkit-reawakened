@@ -9,5 +9,6 @@ export {
   runTimePhase,
   secondsToTicks,
   TICKS_PER_SECOND,
+  frameAt,
 } from "./time.ts";
 export type { TimeState } from "./time.ts";

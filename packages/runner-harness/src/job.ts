@@ -14,12 +14,14 @@ import {
   formatScriptsGolden,
   runAllCorpusPrograms,
 } from "./corpus.ts";
+import { checkSceneGolden, type SceneGoldenInput } from "./scene-golden.ts";
 
 export type GoldenTexts = {
   readonly vectors?: string | undefined;
   readonly run?: string | undefined;
   readonly golden?: string | undefined;
   readonly scriptsGolden?: string | null | undefined;
+  readonly sceneGolden?: SceneGoldenInput | undefined;
 };
 
 export type GoldenOutcome =
@@ -129,6 +131,12 @@ export function goldenJob(
         }
         lines.push(`scripts: ${results.length} programs ok (snapshot/restore verified)`);
       }
+    }
+    // Stage 6: real-engine independent scene oracle (headless supplies the required S-01 input).
+    if (texts.sceneGolden !== undefined) {
+      const scene = checkSceneGolden(texts.sceneGolden);
+      if (!scene.ok) throw new Error(scene.message);
+      lines.push(`scene-golden: ${scene.message}; draw=${scene.drawHash}; state=${scene.stateHash}`);
     }
 
     return {
