@@ -35,6 +35,7 @@ function unaryMath(name: string, operation: (value: number) => number): BuiltinS
 function numberClassification(
   name: string,
   predicate: (value: number) => boolean,
+  doc?: BuiltinSpec["doc"],
 ): BuiltinSpec {
   return {
     name,
@@ -43,6 +44,7 @@ function numberClassification(
       { name: "value", optional: false, byRef: true, variadic: false },
       { name: "dest", optional: true, byRef: true, variadic: false },
     ],
+    ...(doc === undefined ? {} : { doc }),
     call: (_view, args) => {
       const raw = args[0]?.value;
       const value = typeof raw === "number" && predicate(raw) ? 1 : 0;
@@ -61,9 +63,29 @@ const MATH_SPECS: readonly BuiltinSpec[] = [
     name: "random",
     aliases: [],
     params: [
-      { name: "max", optional: false, byRef: false, variadic: false },
-      { name: "dest", optional: true, byRef: true, variadic: false },
+      {
+        name: "max",
+        optional: false,
+        byRef: false,
+        variadic: false,
+        doc: { summary: "Largest possible result.", type: "integer", values: [{ value: "1+", summary: "Positive maximum; zero and negative values follow the documented edge rules." }] },
+      },
+      {
+        name: "dest",
+        optional: true,
+        byRef: true,
+        variadic: false,
+        doc: { summary: "Optional output variable receiving the generated number.", type: "integer", default: "omitted; use the returned value" },
+      },
     ],
+    doc: {
+      summary: "Generate a random number from one to the supplied maximum, inclusive.",
+      behaviour: "Truncate max to an integer, then use the injected deterministic RNG; return a value from 1 through max and optionally write dest. This command does not wait.",
+      groups: ["variables-strings-math-30", "core-runtime"],
+      returns: { summary: "The generated integer, also written to dest when supplied." },
+      since: "3.1",
+      waits: { kind: "never", summary: "Never waits; random draws are deterministic under the injected RNG." },
+    },
     call: (view, args) => {
       if (args.length < 1) {
         throw new ScriptError("builtin.bad-arg", "random requires max argument");
@@ -92,12 +114,34 @@ const MATH_SPECS: readonly BuiltinSpec[] = [
       { name: "whenTrue", optional: false, byRef: false, variadic: false },
       { name: "whenFalse", optional: false, byRef: false, variadic: false },
     ],
+    doc: {
+      summary: "Obsolete. Use the tertiary operator result = (expression ? true part : false part)",
+      behaviour: "Evaluate condition and return whenTrue when it is on, otherwise whenFalse; this obsolete command does not wait.",
+      groups: ["program-flow-errors-debugging-25", "core-runtime"],
+      tags: ["obsolete"],
+      replacedBy: "?: operator",
+      reason: "The specification directs new programs to use the ?: operator.",
+      waits: { kind: "never", summary: "Never waits." },
+    },
     call: (_view, args) => ({ value: truthy(args[0]?.value ?? 0) ? (args[1]?.value ?? 0) : (args[2]?.value ?? 0) }),
   },
   {
     name: "gettickcount",
     aliases: [],
-    params: [{ name: "milliseconds", optional: true, byRef: true, variadic: false }],
+    params: [{
+      name: "milliseconds",
+      optional: true,
+      byRef: true,
+      variadic: false,
+      doc: { summary: "Optional output variable receiving elapsed milliseconds.", type: "integer", default: "omitted; use the returned value" },
+    }],
+    doc: {
+      summary: "Get the number of milliseconds since Windows started.",
+      behaviour: "Return floor(tick × 1000 / 60) milliseconds from the injected fixed 60 Hz simulation tick, and write the same value to milliseconds when supplied. This command does not wait.",
+      groups: ["program-flow-errors-debugging-25", "core-runtime"],
+      returns: { summary: "Elapsed deterministic simulation milliseconds." },
+      waits: { kind: "never", summary: "Never waits." },
+    },
     call: (view, args) => {
       const value = Math.floor((view.clock.tick() * 1000) / TICKS_PER_SECOND);
       return args.length > 0 ? { value, out: [[0, value]] } : { value };
@@ -105,7 +149,13 @@ const MATH_SPECS: readonly BuiltinSpec[] = [
   },
   numberClassification("isnan", (v) => Number.isNaN(v)),
   numberClassification("isinfinity", (v) => v === Infinity || v === -Infinity),
-  numberClassification("isfinite", (v) => Number.isFinite(v)),
+  numberClassification("isfinite", (v) => Number.isFinite(v), {
+    summary: "Returns 1 if `value` is numeric and a finite number (not NaN, not ±Infinity), 0 otherwise.",
+    behaviour: "Return 1 exactly when value is a finite number; otherwise return 0 and optionally write that result to dest. This command does not wait.",
+    groups: ["reawakened-additions-not-part-of-the-282-legacy-catalogue"],
+    tags: ["experimental"],
+    waits: { kind: "never", summary: "Never waits." },
+  }),
 ];
 
 function control(args: readonly Arg[], action: "run" | "jump"): CommandEffect {
@@ -147,6 +197,12 @@ const FLOW_SPECS: readonly BuiltinSpec[] = [
     name: "delay",
     aliases: [],
     params: [{ name: "seconds", optional: false, byRef: false, variadic: false }],
+    doc: {
+      summary: "Delay for a certain number of seconds.",
+      behaviour: "Convert seconds to a positive whole wait duration using the fixed 60 Hz tick rule, then block the whole game until the wait ends.",
+      groups: ["program-flow-errors-debugging-25", "core-runtime"],
+      waits: { kind: "ticks", summary: "Blocks for the converted number of simulation ticks." },
+    },
     call: (view, args) => {
       const seconds = toNumberValue(args[0]?.value ?? 0);
       const ticks = secondsToTicks(seconds);
@@ -158,6 +214,12 @@ const FLOW_SPECS: readonly BuiltinSpec[] = [
     name: "end",
     aliases: ["done", "stop"],
     params: [],
+    doc: {
+      summary: "End the program.",
+      behaviour: "Unwind every pending frame of the running program immediately; aliases done and stop perform the same control effect and the call does not wait.",
+      groups: ["program-flow-errors-debugging-25", "core-runtime"],
+      waits: { kind: "never", summary: "Never waits." },
+    },
     call: () => ({ value: null, effects: [{ kind: "vm.control", args: ["end"] }] }),
   },
   {

@@ -299,7 +299,7 @@ function validateCommandDoc(
   if ((doc.tags?.includes("deprecated") === true || doc.tags?.includes("obsolete") === true) && (!hasText(doc.replacedBy) || !hasText(doc.reason))) {
     diagnostics.push({ code: "doc.replacement", key, message: `${key} requires replacedBy and reason for deprecated or obsolete documentation` });
   }
-  if (doc.replacedBy !== undefined && !commandNames.has(fold(doc.replacedBy))) diagnostics.push({ code: "doc.replacedBy", key, message: `${key} replacedBy ${doc.replacedBy} does not resolve to a registered command` });
+  if (doc.replacedBy !== undefined && !commandNames.has(fold(doc.replacedBy)) && !/^\?:\s+operator$/.test(doc.replacedBy)) diagnostics.push({ code: "doc.replacedBy", key, message: `${key} replacedBy ${doc.replacedBy} does not resolve to a registered command or documented operator` });
   if (doc.returns !== undefined && !hasText(doc.returns.summary)) diagnostics.push({ code: "doc.returns", key, message: `${key} has an empty returns.summary` });
   if (doc.throws !== undefined) for (const item of doc.throws) if (!hasText(item.code) || !hasText(item.when)) diagnostics.push({ code: "doc.throws", key, message: `${key} has a throw entry with empty code or when` });
   if (doc.see !== undefined) {
@@ -314,6 +314,7 @@ function validateCommandDoc(
   }
   for (const list of [doc.effects, doc.todo]) if (list !== undefined) for (const value of list) if (!hasText(value)) diagnostics.push({ code: "doc.list", key, message: `${key} has an empty metadata list entry` });
   const row = canonicalNativeRow(rows.get(fold(command.name)), rows);
+  const groups = doc.groups ?? [];
   if (doc.groups !== undefined) {
     const seenGroups = new Set<string>();
     for (const group of doc.groups) {
@@ -322,8 +323,8 @@ function validateCommandDoc(
       seenGroups.add(group);
       if (!pluginGroups.has(group) && !specGroups.has(group)) diagnostics.push({ code: "doc.group-unknown", key, message: `${key} group ${group} is not declared by its plugin or the native spec` });
     }
-    if (row?.section !== undefined && !doc.groups.includes(derivedGroup(row.section))) diagnostics.push({ code: "native.group", key, row: row.name, message: `${key} groups must include native spec group ${derivedGroup(row.section)}` });
   }
+  if (row?.section !== undefined && !groups.includes(derivedGroup(row.section))) diagnostics.push({ code: "native.group", key, row: row.name, message: `${key} groups must include native spec group ${derivedGroup(row.section)}` });
 }
 
 function validatePluginDoc(

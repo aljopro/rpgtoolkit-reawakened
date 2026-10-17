@@ -133,12 +133,25 @@ export type BuiltinSpec = {
 export const CORE_PLUGIN: PluginDefinition = {
   id: "core",
   version: "1.0.0",
+  doc: {
+    summary: "The deterministic core commands that every runner can execute.",
+    groups: [
+      { id: "core-runtime", name: "Core runtime", summary: "Deterministic timing, values and control available in every runner." },
+      { id: "internal", name: "Internal", summary: "Continuation commands used by the core file service." },
+    ],
+  },
   commands: [
     ...PURE_SPECS,
     {
       name: "sleep",
       aliases: [],
       params: [{ name: "ticks", optional: false, byRef: false, variadic: false }],
+      doc: {
+        summary: "Pause the running game for a number of simulation ticks.",
+        behaviour: "Require a positive whole-number tick count, then block the whole game until the absolute end tick is reached; the calling program resumes on the next tick.",
+        groups: ["core-runtime"],
+        waits: { kind: "ticks", summary: "Blocks for the requested number of simulation ticks." },
+      },
       call: (view, args) => {
         const ticks = args[0]?.value;
         if (typeof ticks !== "number" || !Number.isInteger(ticks) || ticks <= 0) {
