@@ -19,6 +19,7 @@ import {
   parsePluginManifest,
   CORE_PLUGIN,
   CATALOGUE_PLUGIN,
+  NATIVE_PACK_TABLE,
   createLogger,
   createScriptServices,
   createGameState,
@@ -111,6 +112,7 @@ function resolveHostPlugins(
     core: CORE_PLUGIN,
     catalogue: CATALOGUE_PLUGIN,
     tk2: TK2_COMPAT_PLUGIN,
+    ...NATIVE_PACK_TABLE,
   };
   if (definitions !== undefined) {
     for (const definition of definitions) {

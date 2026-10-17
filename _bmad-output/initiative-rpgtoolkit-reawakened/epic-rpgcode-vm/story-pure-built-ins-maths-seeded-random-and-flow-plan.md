@@ -3,7 +3,7 @@ title: 'Pure built-ins: maths, seeded random and flow'
 type: 'feature'
 ticket: 13
 created: '2026-10-16'
-status: 'built'
+status: done
 baseline_revision: '536f33051b503ed5da72c2ce1a55ef8ab0402ce2'
 route: 'full'
 route_source: 'pinned'

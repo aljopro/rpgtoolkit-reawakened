@@ -70,11 +70,9 @@ function stub(name: string): BuiltinSpec {
 }
 
 const pluginCommandNames = [
-  "addplyr", "cntrtext", "fileread", "fontproperties", "ftpclose", "ftpconnect", "ftpfileclose",
-  "ftpopen", "ftpwrite", "getdirection", "getitemstats", "getplayercoords", "givedp", "givefp",
-  "httpread", "ksniloc_email_send", "litlen", "litncpy", "menu", "mlib", "nlib", "npc_talk",
-  "queue", "queues", "sell", "stack", "stacks", "system", "twcheckbutton", "twdelbutton",
-  "twsetbutton",
+  "addplyr", "cntrtext", "ftpclose", "ftpconnect", "ftpfileclose",
+  "ftpopen", "ftpwrite", "httpread", "ksniloc_email_send", "menu", "mlib",
+  "nlib", "npc_talk", "queue", "queues", "sell", "stack", "stacks", "system",
 ] as const;
 
 const SET_IMAGE: BuiltinSpec = {
