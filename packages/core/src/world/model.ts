@@ -4,12 +4,17 @@
  * decoded pixels stay outside GameState.
  */
 import type { AssetKey } from "../ports/keys.ts";
+import type { Tint } from "../ports/draw.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 
 type DataRecord = { readonly [key: string]: PlainData };
 export type WorldRgb = DataRecord & { readonly r: number; readonly g: number; readonly b: number };
 export type WorldPoint = DataRecord & { readonly x: number; readonly y: number };
 
+export type WorldAnimatedTile = DataRecord & {
+  readonly ticksPerFrame: number;
+  readonly frames: WorldTile[];
+};
 export type WorldTile = DataRecord & {
   readonly asset: AssetKey;
   readonly tile: number;
@@ -17,6 +22,8 @@ export type WorldTile = DataRecord & {
   readonly nativeHeight?: number;
   readonly width?: number;
   readonly height?: number;
+  readonly tint?: Tint;
+  readonly animation?: WorldAnimatedTile;
 };
 export type WorldLayer = DataRecord & { readonly tiles: (WorldTile | null)[] };
 export type WorldShadeRecord = DataRecord & { readonly runCount: number; readonly r: number; readonly g: number; readonly b: number };
@@ -56,6 +63,12 @@ export type WorldItem = DataRecord & {
   readonly layer: number;
   readonly reserved: number;
 };
+export type WorldImageCell = DataRecord & {
+  readonly x: number;
+  readonly y: number;
+  readonly tile: WorldTile | null;
+  readonly tint?: Tint;
+};
 export type WorldImage = DataRecord & {
   readonly file: string;
   readonly left: number;
@@ -64,6 +77,10 @@ export type WorldImage = DataRecord & {
   readonly drawType: number;
   readonly transparent: WorldRgb;
   readonly reserved: number;
+  readonly asset?: AssetKey;
+  readonly width?: number;
+  readonly height?: number;
+  readonly cells?: WorldImageCell[];
 };
 export type WorldTileset = DataRecord & {
   readonly asset: AssetKey;
