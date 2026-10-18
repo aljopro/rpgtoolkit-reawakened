@@ -25,3 +25,59 @@ test("rasterize fills RGBA and leaves keyed source pixels transparent", () => {
   equal(result.error, null);
   deepEqual(Array.from(result.rgba), [4, 5, 6, 255]);
 });
+
+test("composeBoard emits background, tile, then layer images with viewport culling", () => {
+  const imageKey = assetKey("bitmap/house.png");
+  const imageBoard: WorldBoard = {
+    ...board,
+    images: [{ file: "house.png", left: 32, top: 0, layer: 1, drawType: 0, transparent: { r: 7, g: 8, b: 9 }, reserved: 100 }],
+  };
+  const list = composeBoard({
+    board: imageBoard,
+    tick: 0,
+    camera: { x: 0, y: 0 },
+    viewport: { width: 64, height: 32 },
+    alpha: 0,
+    include: { shading: false, images: true, sprites: false },
+    assets: new Map([[imageKey, { w: 16, h: 16, rgba: new Uint8Array(16 * 16 * 4) }]]),
+  });
+  equal(list.commands.length, 4);
+  const image = list.commands[3];
+  if (image?.kind !== "blit") throw new Error("expected image blit");
+  deepEqual(image.source, { asset: imageKey, tile: null });
+  deepEqual(image.dst, { x: 32, y: 0, w: 16, h: 16 });
+  deepEqual(image.key, { r: 7, g: 8, b: 9 });
+});
+
+test("composeBoard selects animated tile frames from the fixed tick", () => {
+  const first = assetKey("tiles/first.tst");
+  const second = assetKey("tiles/second.tst");
+  const animated: WorldBoard = {
+    ...board,
+    sizeX: 1,
+    width: 32,
+    layers: [{
+      tiles: [{
+        asset: first,
+        tile: 1,
+        animation: { ticksPerFrame: 7, frames: [{ asset: first, tile: 1 }, { asset: second, tile: 2 }] },
+      }],
+    }],
+  };
+  const atZero = composeBoard({ board: animated, tick: 0, camera: { x: 0, y: 0 }, viewport: { width: 32, height: 32 }, alpha: 0, include: { shading: false, images: false, sprites: false } });
+  const atSeven = composeBoard({ board: animated, tick: 7, camera: { x: 0, y: 0 }, viewport: { width: 32, height: 32 }, alpha: 0, include: { shading: false, images: false, sprites: false } });
+  if (atZero.commands[1]?.kind !== "blit" || atSeven.commands[1]?.kind !== "blit") throw new Error("expected animated tile blits");
+  deepEqual(atZero.commands[1].source, { asset: first, tile: 1 });
+  deepEqual(atSeven.commands[1].source, { asset: second, tile: 2 });
+});
+
+test("composeBoard accepts the AD-29 board/assets/view form", () => {
+  const list = composeBoard(board, new Map(), {
+    tick: 0,
+    camera: { x: 0, y: 0 },
+    viewport: { width: 32, height: 32 },
+    alpha: 0,
+    include: { shading: false, images: false, sprites: false },
+  });
+  equal(list.commands.length, 2);
+});
