@@ -6,6 +6,7 @@ import { BinaryReader } from "../formats/binary/reader.ts";
 import { frameAt, secondsToTicks } from "../time/time.ts";
 import type { AssetKey } from "../ports/keys.ts";
 import type { DrawCommand, Rect, Rgb } from "../ports/draw.ts";
+import { createSurface } from "../raster/surfaces.ts";
 import type { AnimationFrameState, AnimationState, FxSection } from "../save/sections/fx.ts";
 import type { GameState } from "../save/state.ts";
 
@@ -15,7 +16,12 @@ function frameColor(color: { readonly r: number; readonly g: number; readonly b:
   return { r: color.r, g: color.g, b: color.b };
 }
 
-function animationFrames(bytes: Uint8Array, path: string, sourceAsset: AssetKey, resolver: ImageResolver): { width: number; height: number; delayTicks: number; frames: AnimationFrameState[] } | null {
+function animationFrames(
+  bytes: Uint8Array,
+  path: string,
+  sourceAsset: AssetKey,
+  resolver: ImageResolver,
+): { width: number; height: number; delayTicks: number; frames: AnimationFrameState[]; gifPixels?: readonly Uint8Array[] } | null {
   if (path.toLowerCase().endsWith(".gif")) {
     const gif = decodeGif(bytes, path);
     if (!gif.ok || gif.value.frames.length === 0) return null;
@@ -24,6 +30,7 @@ function animationFrames(bytes: Uint8Array, path: string, sourceAsset: AssetKey,
       width: gif.value.w,
       height: gif.value.h,
       delayTicks,
+      gifPixels: gif.value.frames.map((frame) => frame.rgba),
       frames: gif.value.frames.map((_frame) => ({
         image: path,
         asset: sourceAsset,
@@ -74,6 +81,13 @@ export function loadAnimation(state: GameState, animation: AnimationState, bytes
   animation.height = animation.height > 0 ? animation.height : loaded.height;
   animation.delayTicks = loaded.delayTicks;
   animation.frames = loaded.frames;
+  if (loaded.gifPixels !== undefined && state.surfaces.entries !== undefined && state.surfaces.nextId !== undefined) {
+    animation.frames = loaded.frames.map((frame, index) => {
+      const pixels = loaded.gifPixels?.[index];
+      if (pixels === undefined) return frame;
+      return { ...frame, surface: createSurface(state.surfaces, loaded.width, loaded.height, pixels) };
+    });
+  }
   animation.frame = 0;
   animation.originTick = state.time.tick;
   animation.soundFrame = -1;
@@ -121,10 +135,13 @@ export function animationBlits(fx: FxSection): DrawCommand[] {
   for (const animation of fx.animations) {
     if (!animation.loaded || animation.finished || animation.frames.length === 0) continue;
     const frame = animation.frames[animation.frame];
-    if (frame === undefined || frame.asset === null) continue;
+    if (frame === undefined || (frame.surface === undefined && frame.asset === null)) continue;
+    const source = frame.surface === undefined
+      ? { asset: frame.asset!, tile: frame.tile }
+      : { surface: frame.surface, rev: 0 };
     commands.push({
       kind: "blit",
-      source: { asset: frame.asset, tile: frame.tile },
+      source,
       src: { x: 0, y: 0, w: frame.srcWidth, h: frame.srcHeight },
       dst: rect(animation, frame),
       key: frameColor(frame.transparent),

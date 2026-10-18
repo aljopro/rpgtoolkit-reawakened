@@ -47,6 +47,16 @@ test("message-window effects splice globals and use deterministic defaults", () 
   equal(composeUi(state.ui, 800, 600).some((entry) => entry.kind === "rect"), true);
 });
 
+test("engine-backed message windows use the default translucent colour surface", () => {
+  const state = createGameState({ seed: 0 });
+  state.surfaces = { nextId: 1, entries: { "0": { id: 0, rev: 0, bitmap: { t: "rgba", w: 2, h: 2, b64: "AAAAAAAA" } } }, slots: {}, colours: {} };
+  const effect = firstEffect(command("mwin", state, [arg("Hello")]));
+  applyUiEffect(state, "mwin", effect.args ?? []);
+  equal(state.ui.message.translucency, 50);
+  equal(state.ui.backgroundSurface, 1);
+  equal(composeUi(state.ui, 800, 600)[0]?.kind, "blit");
+});
+
 test("text and pixelText record draws and text metrics", () => {
   const state = createGameState({ seed: 0 });
   for (const [name, args] of [["text", [arg(2), arg(3), arg("A\\nB")]], ["pixeltext", [arg(10), arg(20), arg("C")]]] as const) {
