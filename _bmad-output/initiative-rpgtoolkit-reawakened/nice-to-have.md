@@ -38,3 +38,12 @@ Add one entry per idea: what it is, who raised it and when, what it depends on, 
 - **Depends on:** the standard media command family and per-format asset loading in epic audio-synth.
 - **Settle first:** which formats (ID3 for MP3, Vorbis comments for OGG, MIDI text chunks) and keys are supported; what a missing tag returns (`""`); tags are asset bytes, so reads stay deterministic.
 - **Status:** logged as an idea.
+
+## Editor warning for obsolete audio commands
+
+- **Raised by:** owner, 2026-10-18.
+- **Idea:** when an author writes an obsolete audio command (`midiplay`, `playmidi`, `mediaplay` single-argument, `midirest`, `mediarest`, `wav`, `mp3`, `mp3pause`) in new code, the editor shows a warning pointing at the standard `media*` command. Running games never warn.
+- **Today:** the old commands are documented as obsolete in the audio spec (epic-audio-synth 6.1) and keep working silently.
+- **Depends on:** the standard media command family (epic audio-synth) and the language tooling and diagnostics (epic rpgcode-tooling, editor-ui).
+- **Settle first:** whether the warning is a diagnostic severity the author can turn off; whether it offers a quick-fix to the standard command.
+- **Status:** logged as an idea.
