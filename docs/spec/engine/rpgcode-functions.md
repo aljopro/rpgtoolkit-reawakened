@@ -141,7 +141,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
-| `send` | `void send(string file, int x, int y, [int z = 1])` | Send the player to a new board. |  |
+| `send` | `void send(string file, int x, int y, [int z = 1])` | Send the player to a new board. | Tile coordinates; the caller resumes on the next tick on the new board ([E-19](movement-and-collision.md#reawakened-send-board)). |
 | `fade` | `void fade(int type)` | Perform a fade using the current colour. There are several different types of fades. | Types 1–4 use a 30-tick blocking transition; invalid types raise `builtin.bad-arg`. |
 | `viewbrd` | `void viewbrd(string filename [, int x, int y [, canvas cnv]])` | Draw a board to the screen or to a canvas, starting at co-ordinates topX, topY. |  |
 | `move` | `void move(int x, int y, [int z = 1])` | Move this board program to a new location on the board. The effect lasts until the board has been left. |  |

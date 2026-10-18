@@ -153,6 +153,8 @@ Scripts can also move the player with `Send(board, x, y, layer)`.
 
 <a id="e-19"></a>
 **E-19 Board transitions.** `Send(board, x, y, layer)` loads a board, positions the player, re-aligns the camera, rebuilds the z-order, clears the path-finding caches, **deactivates any program the player arrives on top of** (so the destination does not fire immediately), switches the music and runs the enter program. Board threads of the old board are stopped; persistent threads survive.
+<a id="reawakened-send-board"></a>
+**Reawakened rule (OWNER; `send` timing, unverified default).** `send(board, x, y, [layer])` takes tile coordinates (one-based, as `put` does) and a one-based layer, where a layer below 1 means layer 1. The script cannot wait on a file, so the call records the request and parks the calling thread until the next tick; the engine then swaps the boards between ticks, freezing time while the board and its tiles load, and runs the board-entry rule of [main-loop-and-startup.md](main-loop-and-startup.md#reawakened-board-entry). The caller resumes at the start of the next tick on the new board, unless it was a `board` thread of the old board (it dies with the board). A second `send` posted in the same tick replaces the first. A board name that resolves to no asset is a located diagnostic and the request is dropped.
 
 <a id="e-28"></a>
 **E-28 Board edges.** If the selected player's base would leave the board: with **no link** the edge is solid; a **board link** test-loads that board and computes the arrival point on the opposite edge, refusing when the arrival point is off that board or solid; a **program link** runs the program. NPCs are not limited by edges unless they are path-finding.
