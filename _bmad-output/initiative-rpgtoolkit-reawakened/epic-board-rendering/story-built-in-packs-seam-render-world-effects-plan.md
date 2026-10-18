@@ -3,7 +3,7 @@ title: 'Built-in packs seam: render and world packs, same-statement effect appli
 type: feature
 ticket: 11
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: '42816c2a'
 route: full
 route_source: pinned

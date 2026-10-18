@@ -2,7 +2,7 @@
 title: "Reference oracle for isometric boards: stacked and rotated scenes"
 type: feature
 ticket: 17
-status: built
+status: done
 assignee: "T4x17IsoOracle"
 created: '2026-10-17'
 ---
