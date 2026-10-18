@@ -1,26 +1,69 @@
-/** Owner: core/input (AD-10/AD-14). */
+/** Owner: core/input (AD-10/AD-14; E-110..E-112). */
+
+export const INPUT_SCHEMA_VERSION = 2;
 
 export type InputKeyState = {
   readonly seq: number;
   readonly name: string;
   readonly code: string;
   readonly char: string | null;
+  readonly action?: string;
 };
 
-export type InputSection = {
-  nextSeq: number;
-  keys: InputKeyState[];
-  held: { [name: string]: boolean };
-  pointer: { x: number; y: number; buttons: number };
-  focused: boolean;
-  buttons?: InputButton[];
+export type InputButtonSlot = {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+  readonly action: string;
+  readonly enabled: boolean;
 };
 
-export type InputButton = {
+/** Legacy image-backed button retained for the already-shipped UI renderer. */
+export type InputImageButton = {
   readonly slot: number;
   readonly asset: string;
   readonly x: number;
   readonly y: number;
   readonly width: number;
   readonly height: number;
+};
+
+export type InputButton = InputButtonSlot | InputImageButton;
+
+export type InputBindings = {
+  readonly keys: { [key: string]: string };
+};
+
+export type InputGamepad = {
+  connected: boolean;
+  mask: number;
+};
+
+export type InputSection = {
+  version: number;
+  nextSeq: number;
+  keys: InputKeyState[];
+  held: { [name: string]: boolean };
+  pointer: { x: number; y: number; buttons: number };
+  focused: boolean;
+  buttons: InputButton[];
+  bindings: InputBindings;
+  allowDiagonals: boolean;
+  camera: { x: number; y: number };
+  playerId: string | null;
+  pathMode: 1 | 2 | 3;
+  gamepads: { [device: string]: InputGamepad };
+  keyboardActions: { [action: string]: boolean };
+  actions: { [action: string]: boolean };
+  directionOrder: string[];
+  pendingActions: string[];
+  pendingClicks: { x: number; y: number }[];
+  pendingGamepads: Array<{
+    device: number;
+    connected: boolean;
+    axes: { x: number; y: number };
+    buttons: number;
+  }>;
 };

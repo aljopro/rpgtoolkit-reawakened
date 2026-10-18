@@ -8,6 +8,7 @@ import {
   type TickRecord,
 } from "../src/golden.ts";
 
+const GAMEPAD = { kind: "gamepad", device: 0, connected: false, axes: { x: 0, y: 0 }, buttons: 0 } as const;
 test("parseRun parses valid run with all 11 event kinds including non-BMP char and bytes", () => {
   const runText = JSON.stringify({
     schema: 1,
@@ -23,7 +24,7 @@ test("parseRun parses valid run with all 11 event kinds including non-BMP char a
       },
       {
         tick: 2,
-        event: { kind: "gamepad" },
+        event: GAMEPAD,
       },
       {
         tick: 3,
@@ -115,24 +116,24 @@ test("parseRun rejects bad records naming record index and field", () => {
     {
       name: "stamps 3 then 2",
       record: [
-        { tick: 3, event: { kind: "gamepad" } },
-        { tick: 2, event: { kind: "gamepad" } },
+        { tick: 3, event: GAMEPAD },
+        { tick: 2, event: GAMEPAD },
       ],
       fieldSnippet: "violates non-decreasing order",
     },
     {
       name: "negative stamp",
-      record: [{ tick: -1, event: { kind: "gamepad" } }],
+      record: [{ tick: -1, event: GAMEPAD }],
       fieldSnippet: "tick must be a finite integer >= 0",
     },
     {
       name: "fractional stamp",
-      record: [{ tick: 1.5, event: { kind: "gamepad" } }],
+      record: [{ tick: 1.5, event: GAMEPAD }],
       fieldSnippet: "tick must be a finite integer >= 0",
     },
     {
       name: "stamp >= ticks",
-      record: [{ tick: 5, event: { kind: "gamepad" } }],
+      record: [{ tick: 5, event: GAMEPAD }],
       fieldSnippet: "tick 5 must be < ticks 5",
     },
     {
@@ -148,7 +149,7 @@ test("parseRun rejects bad records naming record index and field", () => {
     {
       name: "second record is bad",
       record: [
-        { tick: 0, event: { kind: "gamepad" } },
+        { tick: 0, event: GAMEPAD },
         { tick: 1, event: { kind: "unknown_kind" } },
       ],
       fieldSnippet: "record 1: kind",
@@ -182,12 +183,12 @@ test("parseRun rejects bad records naming record index and field", () => {
     },
     {
       name: "extra key in record",
-      record: [{ tick: 0, event: { kind: "gamepad" }, extra: 1 }],
+      record: [{ tick: 0, event: GAMEPAD, extra: 1 }],
       fieldSnippet: "unexpected extra field 'extra'",
     },
     {
       name: "extra key in event",
-      record: [{ tick: 0, event: { kind: "gamepad", extra: 1 } }],
+      record: [{ tick: 0, event: { ...GAMEPAD, extra: 1 } }],
       fieldSnippet: "extra: unexpected key",
     },
     {

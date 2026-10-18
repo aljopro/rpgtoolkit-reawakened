@@ -14,6 +14,7 @@ import { createTestEngine } from "../src/double/test-engine.ts";
 import { runLog } from "../src/driver.ts";
 import type { Run } from "../src/golden.ts";
 
+const GAMEPAD = { kind: "gamepad", device: 0, connected: false, axes: { x: 0, y: 0 }, buttons: 0 } as const;
 test("runLog partitions ticks into windows and passes maxTicks = n", () => {
   const calls: { ticks: number; inputs: readonly InputRecord[]; maxTicks?: number | undefined }[] = [];
 
@@ -46,9 +47,9 @@ test("runLog partitions ticks into windows and passes maxTicks = n", () => {
     schema: 1,
     ticks: 7,
     log: [
-      { tick: 0, event: { kind: "gamepad" } },
-      { tick: 3, event: { kind: "gamepad" } },
-      { tick: 6, event: { kind: "gamepad" } },
+      { tick: 0, event: GAMEPAD },
+      { tick: 3, event: GAMEPAD },
+      { tick: 6, event: GAMEPAD },
     ],
   };
 
@@ -101,7 +102,7 @@ test("runLog throws naming call and cause for engine violations", () => {
   const run: Run = {
     schema: 1,
     ticks: 5,
-    log: [{ tick: 0, event: { kind: "gamepad" } }],
+    log: [{ tick: 0, event: GAMEPAD }],
   };
 
   const createFaultyEngine = (modifyReport: (base: TickReport) => TickReport): Engine => ({

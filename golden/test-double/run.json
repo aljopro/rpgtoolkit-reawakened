@@ -4,7 +4,7 @@
   "log": [
     { "tick": 2, "event": { "kind": "pointer", "x": 32, "y": 64, "buttons": 1 } },
     { "tick": 3, "event": { "kind": "key", "name": "foo\"bar\\baz", "code": "KeyA", "char": "😀", "down": true } },
-    { "tick": 3, "event": { "kind": "gamepad" } },
+    { "tick": 3, "event": { "kind": "gamepad", "device": 0, "connected": false, "axes": { "x": 0, "y": 0 }, "buttons": 0 } },
     { "tick": 6, "event": { "kind": "key", "name": "foo\"bar\\baz", "code": "KeyA", "char": null, "down": false } },
     { "tick": 10, "event": { "kind": "asset", "reqId": 1, "bytes": { "t": "bytes", "hex": "00050f" } } },
     { "tick": 10, "event": { "kind": "audio.ended", "cueId": 1 } },

@@ -97,6 +97,7 @@ function drawModal(commands: DrawCommand[], ui: UiSection, width: number, height
 
 function drawButtons(commands: DrawCommand[], input: InputSection | undefined): void {
   for (const button of input?.buttons ?? []) {
+    if (!("asset" in button)) continue;
     commands.push({
       kind: "blit",
       source: { asset: assetKey(button.asset), tile: null },

@@ -9,20 +9,18 @@
 
 import type { Bytes, PortData } from "./bytes.ts";
 
-/**
- * A key press or release. `name` is the legacy logical name (`"ENTER"`,
- * `"LEFT"`, `"A"`); `code` is the physical scan code; `char` is the typed
- * character, or `null` when there is none (AD-14).
- */
+/** A key press or release (E-110). */
 export type KeyInput = {
   readonly kind: "key";
   readonly name: string;
   readonly code: string;
   readonly char: string | null;
   readonly down: boolean;
+  /** Host auto-repeat is deliberately not a new press edge. */
+  readonly repeat?: boolean;
 };
 
-/** A pointer event in logical integer pixels (AD-14). */
+/** A pointer event in logical integer pixels (E-111). */
 export type PointerInput = {
   readonly kind: "pointer";
   readonly x: number;
@@ -31,67 +29,65 @@ export type PointerInput = {
 };
 
 /**
- * A gamepad event (E-112). AD-14 fixes the event name only; the payload is
- * defined by the input epic (CAP-8).
+ * Normalized gamepad data (E-112). Hosts convert controller APIs to this
+ * integer payload before crossing the core boundary.
  */
 export type GamepadInput = {
   readonly kind: "gamepad";
+  readonly device: number;
+  readonly connected: boolean;
+  readonly axes: { readonly x: number; readonly y: number };
+  readonly buttons: number;
 };
 
-/**
- * The window gained or lost focus. The core owns the E-03 pause: after
- * `focus.lost` `advance` consumes no ticks until `focus.gained` (AD-14).
- */
+/** The window gained or lost focus. */
 export type FocusInput = {
   readonly kind: "focus";
   readonly state: "lost" | "gained";
 };
 
-/** The reply to an `asset` request: the bytes, or `null` when the key is missing (AD-5). */
+/** The reply to an `asset` request: the bytes, or `null` when missing. */
 export type AssetReply = {
   readonly kind: "asset";
   readonly reqId: number;
   readonly bytes: Bytes | null;
 };
 
-/** The reply to a `loadBlob` request: the bytes, or `null` when the blob is missing (AD-5). */
+/** The reply to a `loadBlob` request. */
 export type BlobLoaded = {
   readonly kind: "blob.loaded";
   readonly reqId: number;
   readonly bytes: Bytes | null;
 };
 
-/** The reply to a `saveBlob` request (AD-5). */
+/** The reply to a `saveBlob` request. */
 export type BlobSaved = {
   readonly kind: "blob.saved";
   readonly reqId: number;
   readonly ok: boolean;
 };
 
-/** The reply to a `listBlobs` request (AD-5). */
+/** The reply to a `listBlobs` request. */
 export type BlobListed = {
   readonly kind: "blob.listed";
   readonly reqId: number;
   readonly names: readonly string[];
 };
 
-/**
- * The reply to an `extension.call` request (AD-5). The E-99 API itself is
- * deferred, so the result stays `PortData`.
- */
+/** The reply to an `extension.call` request. */
 export type ExtensionResult = {
   readonly kind: "extension.result";
   readonly reqId: number;
   readonly result: PortData;
 };
 
-/** A stream audio cue finished; an unknown `cueId` is ignored (AD-16). */
+/** A stream audio cue finished. */
 export type AudioEnded = {
   readonly kind: "audio.ended";
   readonly cueId: number;
 };
 
-/** A stream video finished (AD-14). */
+/** A stream video finished. */
 export type VideoEnded = {
   readonly kind: "video.ended";
 };
@@ -110,7 +106,7 @@ export type InputEvent =
   | AudioEnded
   | VideoEnded;
 
-/** One external input, stamped with the tick that consumes it (AD-14). */
+/** One external input, stamped with the tick that consumes it. */
 export type InputRecord = {
   readonly tick: number;
   readonly event: InputEvent;

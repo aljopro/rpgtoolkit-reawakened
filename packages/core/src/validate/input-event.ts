@@ -47,9 +47,9 @@ type EventKind = (typeof KINDS)[number];
 
 /** The exact key set of each event kind, in check order. */
 const KEY_SETS: { readonly [kind in EventKind]: readonly string[] } = {
-  key: ["kind", "name", "code", "char", "down"],
+  key: ["kind", "name", "code", "char", "down", "repeat"],
   pointer: ["kind", "x", "y", "buttons"],
-  gamepad: ["kind"],
+  gamepad: ["kind", "device", "connected", "axes", "buttons"],
   focus: ["kind", "state"],
   asset: ["kind", "reqId", "bytes"],
   "blob.loaded": ["kind", "reqId", "bytes"],
@@ -127,6 +127,7 @@ function validateKey(record: UnknownRecord): InputEventValidation {
   const char = record["char"];
   if (!isChar(char)) return invalid("char", "expected null or a single code point");
   if (typeof record["down"] !== "boolean") return invalid("down", "expected a boolean");
+  if (record["repeat"] !== undefined && typeof record["repeat"] !== "boolean") return invalid("repeat", "expected a boolean");
   return accept(record);
 }
 
@@ -135,6 +136,19 @@ function validatePointer(record: UnknownRecord): InputEventValidation {
   if (!isInteger(record["y"])) return invalid("y", "expected an integer");
   if (!isNonNegativeInteger(record["buttons"]))
     return invalid("buttons", "expected a non-negative integer");
+  return accept(record);
+}
+
+function validateGamepad(record: UnknownRecord): InputEventValidation {
+  const device = record["device"];
+  if (!isInteger(device) || device < 0 || device > 3) return invalid("device", "expected an integer from 0 through 3");
+  if (typeof record["connected"] !== "boolean") return invalid("connected", "expected a boolean");
+  const axes = record["axes"];
+  if (typeof axes !== "object" || axes === null || Array.isArray(axes)) return invalid("axes", "expected an object");
+  const axisRecord = axes as UnknownRecord;
+  if (!isInteger(axisRecord["x"]) || axisRecord["x"] < -1000 || axisRecord["x"] > 1000) return invalid("axes.x", "expected an integer from -1000 through 1000");
+  if (!isInteger(axisRecord["y"]) || axisRecord["y"] < -1000 || axisRecord["y"] > 1000) return invalid("axes.y", "expected an integer from -1000 through 1000");
+  if (!isNonNegativeInteger(record["buttons"]) || record["buttons"] > 127) return invalid("buttons", "expected a 7-bit non-negative integer");
   return accept(record);
 }
 
@@ -210,6 +224,7 @@ export function validateInputEvent(raw: unknown): InputEventValidation {
       if (!keys.includes(key)) return invalid(key, "unexpected key");
     }
     for (const key of keys) {
+      if (kind === "key" && key === "repeat") continue;
       if (!Object.prototype.hasOwnProperty.call(record, key)) {
         return invalid(key, "missing required key");
       }
@@ -221,7 +236,7 @@ export function validateInputEvent(raw: unknown): InputEventValidation {
       case "pointer":
         return validatePointer(record);
       case "gamepad":
-        return accept(record);
+        return validateGamepad(record);
       case "focus":
         return validateFocus(record);
       case "asset":

@@ -1,60 +1,170 @@
-/**
- * Deterministic raw-input owner (AD-10/AD-14; docs/spec/engine/display-input-audio.md#e-110).
- * Movement bindings and buttons are layered on this state by the movement epic.
- */
+/** Deterministic input owner for keyboard, pointer and normalized gamepad data. */
+import type { InputEvent, GamepadInput, KeyInput, PointerInput } from "../ports/input.ts";
+import type { InputBindings, InputButton, InputButtonSlot, InputGamepad, InputKeyState, InputSection } from "../save/sections/input.ts";
 
-import type { InputEvent, KeyInput, PointerInput } from "../ports/input.ts";
-import type { InputSection } from "../save/sections/input.ts";
-
-export type InputKey = {
-  readonly seq: number;
-  readonly name: string;
-  readonly code: string;
-  readonly char: string | null;
-};
-export type InputView = {
-  readonly nextSeq: number;
-  readonly keys: readonly InputKey[];
-  readonly held: { readonly [name: string]: boolean };
-  readonly pointer: { readonly x: number; readonly y: number; readonly buttons: number };
-  readonly focused: boolean;
-  readonly buttons?: readonly { readonly slot: number; readonly asset: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number }[];
+export type InputKey = InputKeyState;
+export type InputAction = string;
+export type InputView = InputSection;
+export type InputConfig = {
+  readonly bindings?: InputBindings;
+  readonly allowDiagonals?: boolean;
+  readonly buttons?: readonly InputButton[];
+  readonly camera?: { readonly x: number; readonly y: number };
+  readonly playerId?: string | null;
+  readonly pathMode?: 1 | 2 | 3;
 };
 
-export function createInputSection(): InputSection {
-  return {
+const GAMEPAD_BITS: readonly string[] = ["up", "down", "left", "right", "confirm", "cancel", "menu"];
+const DIRECTIONS: Readonly<Record<string, true>> = { up: true, down: true, left: true, right: true };
+
+export function createInputSection(config: InputConfig = {}): InputSection {
+  const state: InputSection = {
+    version: 2,
     nextSeq: 1,
     keys: [],
     held: {},
     pointer: { x: 0, y: 0, buttons: 0 },
     focused: true,
+    buttons: [],
+    bindings: { keys: {} },
+    allowDiagonals: config.allowDiagonals ?? false,
+    camera: { x: 0, y: 0 },
+    playerId: config.playerId ?? null,
+    pathMode: config.pathMode ?? 1,
+    gamepads: {},
+    keyboardActions: {},
+    actions: {},
+    directionOrder: [],
+    pendingActions: [],
+    pendingClicks: [],
+    pendingGamepads: [],
   };
+  configureInput(state, config);
+  return state;
+}
+
+export function configureInput(state: InputSection, config: InputConfig): void {
+  if (config.bindings !== undefined) state.bindings = { keys: { ...config.bindings.keys } };
+  if (config.allowDiagonals !== undefined) state.allowDiagonals = config.allowDiagonals;
+  if (config.buttons !== undefined) state.buttons = config.buttons.map((button) => ({ ...button }));
+  if (config.camera !== undefined) state.camera = { x: config.camera.x, y: config.camera.y };
+  if (config.playerId !== undefined) state.playerId = config.playerId;
+  if (config.pathMode !== undefined) state.pathMode = config.pathMode;
 }
 
 export function inputView(state: InputSection): InputView {
   return state;
 }
 
+function mappedAction(state: InputSection, event: KeyInput): string | undefined {
+  return state.bindings.keys[event.code] ?? state.bindings.keys[event.name];
+}
+
+function appendKey(state: InputSection, name: string, code: string, char: string | null, action?: string): void {
+  const seq = state.nextSeq;
+  state.nextSeq += 1;
+  state.keys.push({ seq, name, code, char, ...(action === undefined ? {} : { action }) });
+}
+
+function boundActions(state: InputSection): Set<string> {
+  return new Set(Object.values(state.bindings.keys));
+}
+
+function maskForGamepad(event: Pick<GamepadInput, "axes" | "buttons">): number {
+  let mask = event.buttons & 0x7f;
+  if (Math.abs(event.axes.x) >= 250) mask |= event.axes.x < 0 ? 4 : 8;
+  if (Math.abs(event.axes.y) >= 250) mask |= event.axes.y < 0 ? 1 : 2;
+  return mask;
+}
+
+function actionHeldFromPads(state: InputSection, action: string): boolean {
+  const bit = GAMEPAD_BITS.indexOf(action);
+  if (bit < 0) return false;
+  for (const pad of Object.values(state.gamepads)) if (pad.connected && (pad.mask & (1 << bit)) !== 0) return true;
+  return false;
+}
+
+function setDirectionOrder(state: InputSection, action: string, pressed: boolean): void {
+  if (DIRECTIONS[action] !== true) return;
+  if (pressed) state.directionOrder = [...state.directionOrder.filter((value) => value !== action), action];
+  else state.directionOrder = state.directionOrder.filter((value) => value !== action);
+}
+
+function updateAction(state: InputSection, action: string, emitEdge: boolean, code: string): void {
+  if (!boundActions(state).has(action)) return;
+  const previous = state.actions[action] === true;
+  const current = state.keyboardActions[action] === true || actionHeldFromPads(state, action);
+  state.actions[action] = current;
+  if (current === previous) return;
+  setDirectionOrder(state, action, current);
+  if (current && emitEdge) {
+    appendKey(state, action, code, null, action);
+    state.pendingActions.push(action);
+  }
+}
+
+function updateAllActions(state: InputSection, emitEdges: boolean, code: string): void {
+  const actions = new Set(Object.values(state.bindings.keys));
+  for (const action of GAMEPAD_BITS) if (boundActions(state).has(action)) actions.add(action);
+  const ordered = [...actions].sort((left, right) => {
+    const leftBit = GAMEPAD_BITS.indexOf(left);
+    const rightBit = GAMEPAD_BITS.indexOf(right);
+    if (leftBit >= 0 && rightBit >= 0) return leftBit - rightBit;
+    if (leftBit >= 0) return -1;
+    if (rightBit >= 0) return 1;
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
+  for (const action of ordered) updateAction(state, action, emitEdges, code);
+}
+
+function applyKey(state: InputSection, event: KeyInput): void {
+  const priorRaw = state.held[event.name] === true;
+  state.held[event.name] = event.down;
+  if (event.code !== event.name) state.held[event.code] = event.down;
+  const action = mappedAction(state, event);
+  if (action === undefined) {
+    if (Object.keys(state.bindings.keys).length > 0) return;
+    if (event.down && !event.repeat && !priorRaw) appendKey(state, event.name, event.code, event.char);
+    return;
+  }
+  state.keyboardActions[action] = event.down;
+  if (event.down && event.repeat) return;
+  if (event.down && priorRaw) return;
+  updateAction(state, action, true, event.code);
+}
+
+function slotAt(state: InputSection, x: number, y: number): InputButtonSlot | undefined {
+  return state.buttons.find((button): button is InputButtonSlot => "id" in button && x >= button.x && x < button.x + button.w && y >= button.y && y < button.y + button.h);
+}
+
+function applyPointer(state: InputSection, event: PointerInput): void {
+  state.pointer = { x: event.x, y: event.y, buttons: event.buttons };
+  if ((event.buttons & 1) === 0) return;
+  const slot = slotAt(state, event.x, event.y);
+  if (slot !== undefined) {
+    if (slot.enabled) {
+      appendKey(state, slot.action, `button:${slot.id}`, null, `slot:${slot.id}`);
+      state.pendingActions.push(slot.action);
+    }
+    return;
+  }
+  state.pendingClicks.push({ x: event.x + state.camera.x, y: event.y + state.camera.y });
+}
+
+/** Apply one raw event. Gamepad events are staged for deterministic device ordering. */
 export function applyInputEvent(state: InputSection, event: InputEvent): void {
   switch (event.kind) {
-    case "key":
-      applyKey(state, event);
-      return;
-    case "pointer":
-      applyPointer(state, event);
-      return;
-    case "focus":
-      state.focused = event.state === "gained";
-      return;
-    case "gamepad":
+    case "key": applyKey(state, event); return;
+    case "pointer": applyPointer(state, event); return;
+    case "gamepad": state.pendingGamepads.push(event); return;
+    case "focus": state.focused = event.state === "gained"; return;
     case "asset":
     case "blob.loaded":
     case "blob.saved":
     case "blob.listed":
     case "extension.result":
     case "audio.ended":
-    case "video.ended":
-      return;
+    case "video.ended": return;
     default: {
       const neverEvent: never = event;
       return neverEvent;
@@ -62,16 +172,35 @@ export function applyInputEvent(state: InputSection, event: InputEvent): void {
   }
 }
 
-function applyKey(state: InputSection, event: KeyInput): void {
-  const seq = state.nextSeq;
-  state.nextSeq += 1;
-  state.keys.push({ seq, name: event.name, code: event.code, char: event.char });
-  state.held[event.name] = event.down;
-  if (event.code !== event.name) state.held[event.code] = event.down;
+/** Apply staged pads in device order and clear the per-tick staging area. */
+export function processGamepadEvents(state: InputSection): void {
+  const events = state.pendingGamepads.map((event, index) => ({ event, index })).sort((left, right) => left.event.device - right.event.device || left.index - right.index);
+  state.pendingGamepads = [];
+  for (const { event } of events) {
+    if (!Number.isInteger(event.device) || event.device < 0 || event.device > 3) continue;
+    if (!event.connected) {
+      const prior = state.gamepads[String(event.device)];
+      if (prior === undefined || !prior.connected) continue;
+      prior.connected = false;
+      prior.mask = 0;
+      updateAllActions(state, true, `gamepad:${event.device}`);
+      continue;
+    }
+    if (!Number.isInteger(event.axes.x) || !Number.isInteger(event.axes.y)) continue;
+    const prior: InputGamepad = state.gamepads[String(event.device)] ?? { connected: true, mask: 0 };
+    prior.connected = true;
+    prior.mask = maskForGamepad(event);
+    state.gamepads[String(event.device)] = prior;
+    updateAllActions(state, true, `gamepad:${event.device}`);
+  }
 }
 
-function applyPointer(state: InputSection, event: PointerInput): void {
-  state.pointer = { x: event.x, y: event.y, buttons: event.buttons };
+/** Consume pending action edges and click destinations; registration owns movement calls. */
+export function takeInputActions(state: InputSection): { actions: string[]; clicks: { x: number; y: number }[] } {
+  const result = { actions: state.pendingActions, clicks: state.pendingClicks };
+  state.pendingActions = [];
+  state.pendingClicks = [];
+  return result;
 }
 
 /** Remove only claims made by the engine; an unclaimed key remains for later waiters. */
@@ -80,5 +209,3 @@ export function pruneClaimed(state: InputSection, claimed: readonly number[]): v
   const used = new Set(claimed);
   state.keys = state.keys.filter((key) => !used.has(key.seq));
 }
-
-

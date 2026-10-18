@@ -3,83 +3,83 @@
   "programs": [
     {
       "id": "synthetic-1-expressions",
-      "hash": "de476e783d3eb158"
+      "hash": "576f0c9b6563cc41"
     },
     {
       "id": "synthetic-2-classes",
-      "hash": "a627ecf4335deb84"
+      "hash": "721c4af5e84aad01"
     },
     {
       "id": "synthetic-3-byref",
-      "hash": "38540c62355835a6"
+      "hash": "42b4e572c2e46eed"
     },
     {
       "id": "synthetic-4-errors",
-      "hash": "50d6b2c972ba70af"
+      "hash": "a1cdea57f6f0c572"
     },
     {
       "id": "synthetic-5-threads",
-      "hash": "ded1d6ba51a2ece8"
+      "hash": "6c185f0684814ed7"
     },
     {
       "id": "synthetic-6-modules",
-      "hash": "f2c9f32484dcec2d"
+      "hash": "e19df7451a675050"
     },
     {
       "id": "synthetic-7-numbers",
-      "hash": "caf6966b82292982"
+      "hash": "f8b44ba43979573b"
     },
     {
       "id": "synthetic-8-file-io",
-      "hash": "238fe62ff7a0510c"
+      "hash": "76ac84ecd72bdd31"
     },
     {
       "id": "synthetic-9-mismatch",
-      "hash": "57ceff5c3c129fc5"
+      "hash": "bc73c07212b9486e"
     },
     {
       "id": "synthetic-tk2",
-      "hash": "a6fd2afd1f2652e6"
+      "hash": "02c0b6a1c670d613"
     },
     {
       "id": "sample-start-demo",
-      "hash": "829f2b466a0a1702"
+      "hash": "7550d0d71d79bc35"
     },
     {
       "id": "sample-start-basic",
-      "hash": "27e68efb5a40b9ea"
+      "hash": "125c516d113533c1"
     },
     {
       "id": "sample-system-demo",
-      "hash": "eb052fe6c075db1b"
+      "hash": "f384e0cc29fdca78"
     },
     {
       "id": "sample-system-basic",
-      "hash": "eb052fe6c075db1b"
+      "hash": "f384e0cc29fdca78"
     },
     {
       "id": "sample-sys-test-demo",
-      "hash": "eb052fe6c075db1b"
+      "hash": "f384e0cc29fdca78"
     },
     {
       "id": "sample-win-demo",
-      "hash": "45e33bc729425505"
+      "hash": "3b1732084684c66e"
     },
     {
       "id": "sample-oldman-demo",
-      "hash": "2c804eb82048d23c"
+      "hash": "a51a83741d76d209"
     },
     {
       "id": "sample-man-demo",
-      "hash": "f7b97e50ee70d395"
+      "hash": "8db3589e8f557fca"
     },
     {
       "id": "sample-man-wander-demo",
-      "hash": "e39ebd7510995834"
+      "hash": "72cecfb9e0cca6b3"
     },
     {
       "id": "sample-wander-basic",
-      "hash": "8564ec78d5e68d72"
+      "hash": "6c07077b8ac4f38b"
     }
   ]
 }
