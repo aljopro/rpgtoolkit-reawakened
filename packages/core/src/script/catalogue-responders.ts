@@ -477,6 +477,7 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
       (command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name) && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
     ),
-    ...[...PACK_CATALOGUE_FALLBACKS, ...RENDER_PACK_FALLBACKS].filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
+    ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
+    ...documentCommands(RENDER_PACK_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name))),
   ],
 };

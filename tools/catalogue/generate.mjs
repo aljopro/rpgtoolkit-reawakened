@@ -286,17 +286,6 @@ function makeStub(stub: CatalogueStub): BuiltinSpec {
     name: stub.name,
     aliases: [],
     params: stub.params,
-    ...(stub.name === "endanimation"
-      ? {
-          doc: {
-            summary: "End a multitasking animation.",
-            behaviour: "Stops the animation with the supplied id. Technically, an unknown id is ignored and the call completes immediately.",
-            groups: ["graphics-canvases-animation-video-31"],
-            waits: { kind: "never", summary: "Does not wait." },
-            see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
-          },
-        }
-      : {}),
     call: (_view, args) => {
       if (stub.obsolete) {
         throw new ScriptError(
