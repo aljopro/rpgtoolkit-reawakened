@@ -394,18 +394,22 @@ A fun extra for music-player screens: read title, artist, album and similar tags
 | `mediastop`, `mediarest`, `midirest` | `mediaStop()` on `music` (`midirest` is a stop, not a pause, per the spec row and round-8 Q1) |
 | `wav`, `mp3` | `mediaPlay(file, "sfx")` |
 | `wavstop` | `mediaStop("sfx")` |
-| `mp3pause(file)` | `mediaPlay(file, "sfx")`; followed by `mediaWait("sfx")` if the 3.1.0 blocking behaviour is chosen (open item below) |
+| `mp3pause(file)` | `mediaPlay(file, "sfx", tkMD_ONCE \| tkMD_WAIT)`: plays the sound once and the script waits until it ends (3.1.0 behaviour; see open item 1) |
 | `setvolume` | unchanged; master volume over all tracks |
 
 **Corpus evidence (archive census, 2026-10-18).** Of 46,681 program files (43,087 unique) in the RPG Toolkit archive: `wav` 536 call sites, `midiplay` 214, `midirest` 77, `mediaplay` 73, `playmidi` 69, `mp3` 21, `wavstop` 19, `mediastop` 14, `setvolume` 13, `mediarest` 1, `mp3pause` 0. The only `mp3pause` source is the release note in `rpgtoolkit.com/history.txt` (`#Mp3Pause("filename.mp3")`, "plays an mp3 file, except it will pause the game completely while it plays"). The legacy names are common in real games, which is why they stay.
 
+**Legacy looping facts (owner-relayed, `docs/provenance/facts-round-9.md`).** Music always looped in both versions, with no way to play it once (M1); board and battle music loop too (M3); replaying the track that is already playing carries on rather than restarting (M2); `wav`, `mp3` and `mp3pause` never loop (M4). So the `music` default `tkMD_LOOP`, the `sfx` default `tkMD_ONCE` and the opt-in `tkMD_RESTART` all match legacy, and `tkMD_ONCE` on `music` is a Reawakened addition.
+
 ### Open items for 6.1
 
-1. `mp3pause` timing: 3.1.0 blocks until the sound ends; the final version does not (round-8 Q1). Recommended: non-blocking alias, with `mediaWait` for scripts that need to wait.
-2. Whether legacy `mediaplay` played MP3 as music (not established; add to the next owner extraction round).
+1. `mp3pause` timing (decided direction, owner 2026-10-18): follow 3.1.0, so `mp3pause(file)` is `mediaPlay(file, "sfx", tkMD_ONCE | tkMD_WAIT)`. Evidence: the spec baseline is Toolkit 3.1 (ADR 0007); the command's own release note says it pauses the game while the sound plays; the final version's non-waiting behaviour makes it identical to `mp3`, which reads as a regression; zero archive programs use it. Rejected alternative: the final version's non-blocking alias of `wav`.
+2. Answered by round 9 M1: 3.1.0 played MP3, OGG and tracker files as looping music; the final version plays only MIDI (also round 8 Q17). The format policy itself stays with §9's "MP3/OGG handling" decision.
 3. Track limits: how many named tracks, and what happens when a track is reused while playing (recommended: the new play replaces the track's current audio, matching the legacy single-slot rule).
 4. AD-16 amendment: cue kinds become per-track (`media.load`, `media.play`, `media.stop`, `media.pause`, `media.resume`, `media.seek`, `media.volume`, each with a `track` field) replacing the fixed `music.*` and `sfx.*` kinds, or the existing kinds gain a `track` field.
 5. §9's "SFX channels: one channel (parity)" default is superseded by tracks; legacy `wav` still uses the single `sfx` track, so parity holds for old games.
 6. Built-in tracks: confirm `ambience`, `voice` and `ui` alongside the required `music` and `sfx`.
 7. Ratify the `tkMD_` names and values, the state-versus-flags split, `mediaLoop`, and the waiting rules above.
 8. The AD-16 cue amendment also needs a loop-toggle cue and per-track volume, and `GameState.audio` must hold per-track state, flags and asset lengths.
+9. Version rule for the other 3.1.0-versus-final splits (round 8 Q7, Q12, Q17): follow 3.1.0 as the spec baseline unless the later behaviour is clearly a deliberate fix; then take the fix and record it as a Reawakened ruling with evidence; a later behaviour that looks like a regression is treated as a bug (as for `mp3pause`).
+10. Name clashes: the new names (`mediaPause`, `mediaResume`, `mediaSeek`, `mediaLoop`, `mediaWait`, `mediaState` and the other queries) could collide with an author's own method of the same name in an old game. Run an archive scan for method definitions with these names, and find or rule which wins when a user method and a built-in share a name.
