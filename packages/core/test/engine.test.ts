@@ -1,6 +1,12 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import { ENGINE_PHASES, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard } from "../src/index.ts";
+import { ENGINE_PHASES, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board } from "../src/index.ts";
+
+function boardBytes(board: Board): Uint8Array {
+  const encoded = writeBoard(board);
+  if (!encoded.ok) throw new Error(encoded.error.message);
+  return encoded.value;
+}
 
 test("createEngine exposes its initial board request at advance(0) and missing bytes unblock loading", () => {
   const engine = createEngine({ seed: 7, assetIndex: createAssetIndex(["Boards/start.brd"]), assetRoot: PACKAGE_ROOT, initialBoard: "start.brd", width: 512, height: 384, maxTicks: 8 });
@@ -227,4 +233,54 @@ test("missing image reply is located and leaves the screen unchanged", () => {
   if (surface === null) throw new Error("expected unchanged screen pixels");
   deepEqual(surface.rgba, new Uint8Array(4 * 2 * 4));
   equal(result.diagnostics.some((diagnostic) => diagnostic.code === "asset.missing" && diagnostic.file === "bitmap/pixel.bmp"), true);
+});
+
+test("engine classifies .tbm board-image dependencies as tile requests", () => {
+  const empty = createEmptyBoard();
+  const board: Board = {
+    ...empty,
+    images: [{
+      file: "tiles.tbm",
+      left: 0,
+      top: 0,
+      layer: 0,
+      drawType: 0,
+      transparent: { r: 255, g: 0, b: 255 },
+      reserved: 0,
+    }],
+  };
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd", "Bitmap/tiles.tbm"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 1,
+  });
+  const initial = engine.advance(0, []);
+  const boardRequest = initial.requests[0];
+  if (boardRequest?.kind !== "asset") throw new Error("expected board request");
+  const loaded = engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: boardRequest.reqId, bytes: boardBytes(board) } }]);
+  equal(loaded.requests[0]?.kind, "asset");
+  equal(loaded.requests[0]?.key, "bitmap/tiles.tbm");
+});
+
+test("engine classifies .tan tile-animation dependencies as tile requests", () => {
+  const board: Board = { ...createEmptyBoard(), lut: ["anim.tan"] };
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd", "Tiles/anim.tan"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 1,
+  });
+  const initial = engine.advance(0, []);
+  const boardRequest = initial.requests[0];
+  if (boardRequest?.kind !== "asset") throw new Error("expected board request");
+  const loaded = engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: boardRequest.reqId, bytes: boardBytes(board) } }]);
+  equal(loaded.requests[0]?.kind, "asset");
+  equal(loaded.requests[0]?.key, "tiles/anim.tan");
 });
