@@ -172,9 +172,8 @@ test("authored isometric boards hydrate with the documented grid and pixel dimen
   }
 });
 
-test("with no tracked sprite the camera centres on the start tile converted by the board's own layout", () => {
-  const big = board("stacked", () => null, { width: 2000, height: 2000, start: { x: 10, y: 11, layer: 1 } });
+test("with no tracked sprite the camera centres on the start position, stored in pixels (E-53)", () => {
+  const big = board("stacked", () => null, { width: 2000, height: 2000, start: { x: 700, y: 400, layer: 1 } });
   const camera = initCameraForBoard(createCameraSection(128, 64), big);
-  const centre = tileToPixel("iso-stacked", big.sizeX, 10, 11);
-  deepEqual({ x: camera.x, y: camera.y }, { x: centre.x - 64, y: centre.y - 32 });
+  deepEqual({ x: camera.x, y: camera.y }, { x: 700 - 64, y: 400 - 32 });
 });

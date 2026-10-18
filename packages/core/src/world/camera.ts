@@ -18,15 +18,11 @@ import type {
 } from "../save/sections/camera.ts";
 import type { WorldBoard } from "./model.ts";
 import { ScriptError } from "../script/errors.ts";
-import { coordLayout, tileToPixel } from "./coords.ts";
 
-/** Where the camera centres with no tracked sprite: the board's start tile, converted by the board's own layout (E-11). */
+/** Where the camera centres with no tracked sprite: the board's start position, which is stored in board pixels on every layout (E-53, board.md `startX`/`startY`). */
 function boardStartPoint(board: WorldBoard | null): CameraPoint | null {
   if (board?.start === undefined) return null;
-  const layout = coordLayout(board.coordType);
-  return layout === "2d"
-    ? { x: board.start.x * 32 + 16, y: board.start.y * 32 + 16 }
-    : tileToPixel(layout, board.sizeX, board.start.x, board.start.y);
+  return { x: board.start.x, y: board.start.y };
 }
 
 /** Supported easing function names for scripted pans (AD-33, E-51). */
