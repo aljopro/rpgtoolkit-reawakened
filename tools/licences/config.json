@@ -9,5 +9,30 @@
       "adr": "ADR-0002",
       "reason": "Publishing CLI for Open VSX; dev-only tool that is never shipped, bundled, or linked."
     }
+  },
+  "bundledAssets": {
+    "fonts": [
+      {
+        "path": "media/fonts/LiberationSans-Regular.ttf",
+        "license": "OFL-1.1",
+        "adr": "ADR-0003",
+        "release": "Liberation Fonts 2.1.5",
+        "sha256": "76d04c18ea243f426b7de1f3ad208e927008f961dc5945e5aad352d0dfde8ee8"
+      },
+      {
+        "path": "media/fonts/LiberationSerif-Regular.ttf",
+        "license": "OFL-1.1",
+        "adr": "ADR-0003",
+        "release": "Liberation Fonts 2.1.5",
+        "sha256": "058ea80864aef09a23f45cbec2bb5400bc3dfbdea01c3f10538a21fcb497fb74"
+      },
+      {
+        "path": "media/fonts/LiberationMono-Regular.ttf",
+        "license": "OFL-1.1",
+        "adr": "ADR-0003",
+        "release": "Liberation Fonts 2.1.5",
+        "sha256": "f2b83c763e8afd21709333370bed4774337fae82267937e2b5aea7e2fbd922c1"
+      }
+    ]
   }
 }
