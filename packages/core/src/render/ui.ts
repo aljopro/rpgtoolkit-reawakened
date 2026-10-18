@@ -111,12 +111,12 @@ function drawButtons(commands: DrawCommand[], input: InputSection | undefined): 
   }
 }
 
-function cursorMapPoint(ui: UiSection): { readonly x: number; readonly y: number } | null {
+function cursorMapPoint(ui: UiSection, selection?: number): { readonly x: number; readonly y: number } | null {
   const id = ui.activeCursorMap;
   if (id === undefined) return null;
   const map = ui.cursorMaps?.find((entry) => entry.id === id);
   if (map === undefined || map.points.length === 0) return null;
-  const index = Math.max(0, Math.min(map.points.length - 1, map.selected));
+  const index = Math.max(0, Math.min(map.points.length - 1, Math.trunc(selection ?? map.selected)));
   return map.points[index] ?? null;
 }
 
@@ -134,20 +134,20 @@ function cursorCommand(cursor: UiCursorImage, pointer: { readonly x: number; rea
   };
 }
 
-function drawCursor(commands: DrawCommand[], ui: UiSection, input: InputSection | undefined): void {
+function drawCursor(commands: DrawCommand[], ui: UiSection, input: InputSection | undefined, selection?: number): void {
   const pointer = input?.pointer ?? { x: 0, y: 0, buttons: 0 };
   if (ui.mouseCursor !== undefined && ui.mouseCursor !== null) {
     commands.push(cursorCommand(ui.mouseCursor, pointer));
     return;
   }
-  const point = cursorMapPoint(ui);
+  const point = cursorMapPoint(ui, selection);
   if (point === null) return;
   const hand = ui.cursorHand ?? { asset: "media/cursors/tkr-hand.png", stretch: true, width: 32, height: 32 };
   commands.push(cursorCommand({ asset: hand.asset, x: point.x - 40, y: point.y - 10, hotspotX: 0, hotspotY: 0, transparent: { r: 255, g: 0, b: 255 }, width: hand.width, height: hand.height }, { x: point.x - 40, y: point.y - 10 }));
 }
 
 /** Append the deterministic UI overlay after board composition (E-55/E-60). */
-export function composeUi(ui: UiSection, width: number, height: number, input?: InputSection, includeCursor = true): DrawCommand[] {
+export function composeUi(ui: UiSection, width: number, height: number, input?: InputSection, includeCursor = true, cursorSelection?: number): DrawCommand[] {
   const commands: DrawCommand[] = [];
   if (Array.isArray(ui.draws)) {
     for (const draw of ui.draws) {
@@ -157,14 +157,14 @@ export function composeUi(ui: UiSection, width: number, height: number, input?: 
   drawMessage(commands, ui, width);
   drawModal(commands, ui, width, height);
   drawButtons(commands, input);
-  if (includeCursor) drawCursor(commands, ui, input);
+  if (includeCursor) drawCursor(commands, ui, input, cursorSelection);
   return commands;
 }
 
 /** Compose only the cursor so the engine can append it after post-processing effects. */
-export function composeUiCursor(ui: UiSection, input?: InputSection): DrawCommand[] {
+export function composeUiCursor(ui: UiSection, input?: InputSection, cursorSelection?: number): DrawCommand[] {
   const commands: DrawCommand[] = [];
-  drawCursor(commands, ui, input);
+  drawCursor(commands, ui, input, cursorSelection);
   return commands;
 }
 

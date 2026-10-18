@@ -998,9 +998,14 @@ export function createEngine(init: EngineInit): Engine {
         assets: decodedAssets(),
         ...presentation,
       });
-    const withUi = { ...base, commands: [...base.commands, ...debugCommands(), ...composeUi(state.ui, init.width, init.height, state.input, false)] };
-    const withFx = applyFxDrawList(withUi, state.fx);
-    return { ...withFx, commands: [...withFx.commands, ...composeUiCursor(state.ui, state.input)] };
+    const cursorMap = state.ui.activeCursorMap;
+    const waitingCursor = cursorMap === undefined
+      ? undefined
+      : state.vm.threads.find((thread) => thread.wait?.kind === "input.key" && thread.wait.cursorMap === cursorMap);
+    const cursorSelection = waitingCursor?.wait?.kind === "input.key" ? waitingCursor.wait.cursorSelection : undefined;
+    const withFx = applyFxDrawList(base, state.fx);
+    const withUi = { ...withFx, commands: [...withFx.commands, ...debugCommands(), ...composeUi(state.ui, init.width, init.height, state.input, false, cursorSelection)] };
+    return { ...withUi, commands: [...withUi.commands, ...composeUiCursor(state.ui, state.input, cursorSelection)] };
   }
   function refreshFrame(): void {
     const list = currentDrawList(0);
