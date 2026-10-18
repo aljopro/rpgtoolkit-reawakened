@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "description": "AD-15 bitmap text vectors. Glyph rows are hexadecimal bytes in top-to-bottom order; omitted glyphs are transparent.",
+  "vectors": [
+    {
+      "id": "text-size-4-A",
+      "width": 4,
+      "height": 4,
+      "font": {
+        "asset": "test/tkr-8x8.fnt",
+        "glyphs": { "65": "f880808080808080" }
+      },
+      "commands": [
+        {
+          "kind": "text",
+          "x": 0,
+          "y": 0,
+          "text": "A",
+          "font": { "asset": "test/tkr-8x8.fnt", "size": 4, "bold": false, "italic": false },
+          "rgb": { "r": 255, "g": 255, "b": 255 },
+          "advances": [{ "glyph": 65, "advance": 4 }]
+        }
+      ],
+      "rgba": "ffffffffffffffffffffffff00000000ffffffff000000000000000000000000ffffffff000000000000000000000000ffffffff000000000000000000000000"
+    }
+  ]
+}
