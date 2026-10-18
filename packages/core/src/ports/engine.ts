@@ -38,6 +38,9 @@ export type Breakpoint = {
   readonly line: number;
 };
 
+/** How an `advance` call resumes an open breakpoint tick. */
+export type ResumeMode = "continue" | "step";
+
 /**
  * A persistent surface's pixels. Outputs never alias state: `rgba` owns its
  * whole buffer (`byteOffset` 0) and is a copy (AD-1, AD-27, AD-28).
@@ -77,12 +80,11 @@ export type DrawListInclude = {
 };
 export interface Engine {
   /**
-   * Run whole fixed ticks, consuming `inputs` in array order. `maxTicks` caps
-   * catch-up; when omitted the engine's configured cap applies. Inputs
-   * arriving while `loading` are queued in state and consumed at the next real
-   * tick.
+   * Run whole fixed ticks, consuming `inputs` in array order. When an open
+   * breakpoint tick exists, it is completed first. `maxTicks` caps catch-up;
+   * `resume` may request exactly one VM instruction and another pause.
    */
-  advance(ticks: number, inputs: readonly InputRecord[], maxTicks?: number): TickReport;
+  advance(ticks: number, inputs: readonly InputRecord[], maxTicks?: number, resume?: ResumeMode): TickReport;
 
   /** A pure function of current state; `alpha` is 0 in tests (AD-1). */
   drawList(alpha?: number, include?: DrawListInclude): DrawList;
