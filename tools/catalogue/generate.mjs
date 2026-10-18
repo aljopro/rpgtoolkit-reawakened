@@ -169,7 +169,7 @@ const IMPLEMENTED_COMMANDS = new Set([
 ]);
 /** Commands owned by first-party world/render packs; catalogue stubs must not shadow them. */
 const REAL_PACK_COMMANDS = new Set([
-  "camerapanto", "camerafollow", "camerareset", "camerashake",
+  "camerapanto", "camerafollow", "camerareset", "camerashake", "getcorner",
   "drawline", "drawrect", "fillrect", "text", "msgbox", "clear", "fade",
   "viewbrd", "put", "layerput", "getboardname", "getboardtile", "boardgettile",
   "getboardtiletype", "tiletype", "animatedtiles", "parallax", "setambientlevel",

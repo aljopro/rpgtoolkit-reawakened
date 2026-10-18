@@ -16,3 +16,4 @@ export type * from "./requests.ts";
 export type * from "./logger.ts";
 export type * from "./input.ts";
 export type * from "./engine.ts";
+export type * from "./camera.ts";
