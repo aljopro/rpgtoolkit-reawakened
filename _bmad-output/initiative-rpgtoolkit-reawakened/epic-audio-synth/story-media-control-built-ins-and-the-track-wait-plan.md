@@ -18,7 +18,7 @@ context:
 Give authors the control half of the standard media commands, with a wait that survives saves.
 
 ## Boundaries
-Owns the control pack module, the `mediaVolume` registration (both forms), the audio read view and the `audio.track` wait registration. Query commands and legacy mapping are entry 6.9; video is entry 6.10.
+Owns the control pack module, the `mediaplay` and `mediastop` rows (extended, with their alias relationships), the `mediaVolume` registration (both forms), the audio read view and the `audio.track` wait registration. Query commands and legacy mapping are entry 6.9; video is entry 6.10.
 
 ## Key Decisions
 Wait payload stores the absolute end tick and the track and voice; the wait ends on finish or stop; a pause suspends it (owner).

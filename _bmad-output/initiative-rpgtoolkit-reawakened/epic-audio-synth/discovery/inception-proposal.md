@@ -53,14 +53,14 @@ It does not own the Web Audio output, autoplay unlock, focus handling or the bro
 |---|---|---|---|---|---|
 | 1 | Core audio rulings: tracks, time, cues and waits | 3.9, 3.27, 4.29 | high | docs | OWNER-marked rules for P1, P2, P4, P5; AD-9, AD-14, AD-16 amended; person approves |
 | 2 | Media commands, voices, layered audio and legacy parity rulings | 1, 3.27, 3.29 | high | docs | command family, voice model, parity ledger, the `deprecated` marker; docs only, catalogue and Audio-table edits left to 8 and 9; person approves |
-| 3 | Platform rulings: SoundFont policy, sources, runner protocol and video | 1, 1.5, 3.14 | high | docs | R-59, formats, bank, protocol, video, Done-when items 2 and 3 assigned; person approves |
-| 4 | Independent audio timeline oracle and authored audio fixtures | 1, 2, 1.9 | medium | fixtures | 14 named scenes and authored WAV and MIDI with hand-worked lengths; check mode; no core imports |
+| 3 | Platform rulings: SoundFont policy, sources, runner protocol and video | 1, 2, 1.5, 3.14 | high | docs | R-59, formats, bank, protocol, video, Done-when items 1 to 3 assigned; person approves |
+| 4 | Independent audio timeline oracle and authored audio fixtures | 1, 2, 3, 1.9 | medium | fixtures | 15 named scenes and authored WAV and MIDI with hand-worked lengths; check mode; no core imports |
 | 5 | AudioInfo decoders for WAV and MIDI | 3, 4, 2.10, 3.14 | medium | core decoders | authored and corpus files decode to the oracle lengths |
 | 6 | Audio state section, track engine and cue emission | 1, 2, 4, 5, 3.11, 3.21, 4.11, 4.19, 4.20, 4.23, 4.31 | high | core audio (tracer) | board music boot to cue to oracle state, the board-music authority and `music` variable moved, `soundfont.set`, snapshot, settings kept |
 | 7 | Voices, voice stealing, fades and synced starts | 2, 4, 6 | high | core audio | four scenes per tick; stealing and fades deterministic |
 | 8 | Media control built-ins and the track wait | 2, 6, 7, 2.10, 3.3, 3.9, 3.22, 3.25, 3.29 | high | VM seam | control pack incl. both `mediaVolume` forms and the audio read view, `soundFont` commands, `audio.track` wait replacing the unresolved `audio.sfx` wait, diagnostics, help text |
 | 9 | Media query built-ins, legacy command mapping and catalogue sweep | 8, 3.17 | medium | VM seam | query pack on the audio view, legacy names routed, `deprecated` marker, parity scene, corpus equivalence |
-| 10 | Video built-ins and the video wait | 3, 6, 8, 3.22 | medium | VM seam | `playavi` wait resolves on `video.ended`; music restarts |
+| 10 | Video built-ins and the video wait | 3, 6, 8, 9, 3.22 | medium | VM seam | `playavi` and `playavismall` resolve on `video.ended` and no longer park on an unresolved wait; music restarts |
 | 11 | synth: MidiSynth, the Null backend and the AudioSource seam | 3, 1.9 | medium | synth | interfaces, Null backend, registry, voice state machine |
 | 12 | SpessaSynth backend, PCM sources, track buses and voice pool | 5, 7, 11, 1.5 | high | synth | sources agree with `AudioInfo`; buses match oracle ramps; licence gate |
 | 13 | SoundFont bundling gate and the Path B bank | 3, 1.5 | medium | licence | gate audits SoundFonts; bank provenance verified; person approves |
@@ -71,7 +71,7 @@ It does not own the Web Audio output, autoplay unlock, focus handling or the bro
 
 ### Lane and shared-seam ownership
 
-- **Rulings:** 1 then 2 and 3 (2 and 3 can run in parallel after 1).
+- **Rulings:** 1, then 2, then 3 (2 and 3 both extend `audio-media.md`, which entry 1 creates, so they run in order; 4 waits on all three because it authors scenes for the `soundFont` and battle rules from 3).
 - **Fixtures:** 4 is the sole producer; later entries cite its scene names.
 - **Core lane:** 5 then 6 (tracer bullet) then 7 then 8 then 9 then 10.
 - **Synth lane:** 11 then 12 (12 also needs 5 and 7).

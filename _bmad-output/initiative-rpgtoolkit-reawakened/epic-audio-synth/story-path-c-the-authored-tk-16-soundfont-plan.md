@@ -25,4 +25,4 @@ Default status is the owner's call after listening; until then Path B stays the 
 Provenance is complete and checked by the gate; the bank is tiny enough for lazy delivery (size ceiling from entry 6.13).
 
 ## Verification
-Gate, render test, and the owner's listening approval.
+The bundling gate and the owner's listening approval; entry 6.17 runs the offline render test against this bank.

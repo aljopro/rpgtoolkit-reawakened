@@ -1,10 +1,12 @@
 # tickets.toml — planned entries of epic-audio-synth, in build order. tickets.py reads it.
-# Table order is the build order; ids are stable names. Entries 1 to 3 are owner-approval docs checkpoints (pending).
+# Table order is the build order; ids are stable names. Entries 1 to 3 are owner-approval docs checkpoints (pending),
+# written in order because 2 and 3 both extend docs/spec/engine/audio-media.md, which entry 1 creates.
 # The audio timeline oracle is authored from docs/spec and rulings; it is not a legacy-parity claim and holds no hashes.
 # Shared-seam owners: 6 owns the `audio` section type and the `core/audio` barrel, 7 adds voice, fade and sync
-# behaviour without changing the type, 8 owns the control pack, `mediaVolume`, the audio read view and the `audio.track`
-# wait, 9 owns the query pack and legacy mapping, 10 owns the video pack, and 17 performs the final catalogue, barrel
-# and stub-removal reconciliation. The Audio table and catalogue rows are edited only by 8, 9 and 10, each for its names.
+# behaviour without changing the type, 8 owns the control pack, `mediaVolume`, the `mediaplay` and `mediastop` rows,
+# the audio read view and the `audio.track` wait, 9 owns the query pack and the legacy mapping, 10 owns the video
+# pack, and 17 performs the final catalogue, barrel and stub-removal reconciliation. The Audio table and the
+# catalogue rows are edited only by 8, 9 and 10, each for its names, in that order.
 
 [[entry]]
 id = 1
@@ -30,7 +32,7 @@ references = [
 id = 2
 type = "story"
 title = "Media commands, voices, layered audio and legacy parity rulings"
-description = "Doc-first (G7), docs only: extends `docs/spec/engine/audio-media.md` with the standard `media*` command family (control and query commands, `mediaTrack` creation, `tkMD_` constants, voice handles, errors, units and CLAUDE.md-style help text), the voice model (per-track voice counts, the 32-voice cap, the same-file rule, stealing order, the late-sound threshold in ticks), fades, synced starts and the ducking reservation, and the legacy parity ledger (every round-8 and round-9 fact once, the 3.1.0 version rule); it names the documentation-only marker for the old audio commands (the command-docs `deprecated` tag with `replacedBy`; never the catalogue `obsolete` field and never the word `obsolete` in a spec-table Notes cell, which the parsers turn into `builtin.obsolete` and a skipped statement). It does not edit the Audio table of `rpgcode-functions.md` or the catalogue; entries 6.8 and 6.9 own those edits for their names."
+description = "Doc-first (G7), docs only: extends `docs/spec/engine/audio-media.md` with the standard `media*` command family (`mediaPlay` and `mediaStop` are the existing `mediaplay` and `mediastop` names extended with optional arguments, not obsolete) (control and query commands, `mediaTrack` creation, `tkMD_` constants, voice handles, errors, units and CLAUDE.md-style help text), the voice model (per-track voice counts, the 32-voice cap, the same-file rule, stealing order, the late-sound threshold in ticks), fades, synced starts and the ducking reservation, and the legacy parity ledger (every round-8 and round-9 fact once, the 3.1.0 version rule); it names the documentation-only marker for the old audio commands (the command-docs `deprecated` tag with `replacedBy`; never the catalogue `obsolete` field and never the word `obsolete` in a spec-table Notes cell, which the parsers turn into `builtin.obsolete` and a skipped statement). It does not edit the Audio table of `rpgcode-functions.md` or the catalogue; entries 6.8 and 6.9 own those edits for their names."
 verify = "The commit changes only docs and the affected contract rows; each P3, P6, P7 and P8 rule has an OWNER marker, evidence, a rejected alternative and a deterministic rule; every legacy audio fact is a ledger row with its disposition; the deprecation marker is named and the catalogue and Audio-table edits are assigned to entries 6.8 and 6.9; provenance and link and anchor checks pass and `catalogue:check` and `command-docs:check` still pass unchanged; a person approves the checkpoint."
 covers = ["CAP-7"]
 after = [1, "3.27", "3.29"]
@@ -51,10 +53,10 @@ references = [
 id = 3
 type = "story"
 title = "Platform rulings: SoundFont policy, sources, runner protocol and video"
-description = "Doc-first (G7), docs only: extends `docs/spec/engine/audio-media.md` and rules R-59 (audio routing and frame audio), MP3/OGG handling (transcode on import) and the tracker/XM policy, the XG/GS missing-bank fallback, the Path B bank choice and its provenance bar, `soundFont` and `soundFontReset` with the `soundfont.set` cue, the SoundFont layers (runner, author, player), the `AssetDecoder<AudioInfo>` and `AudioSource` seams (an AD-31 amendment), the runner audio protocol messages and voice state machine, the audio-contract handoff to epic 9 (autoplay unlock, focus, late sounds, prefetch, SoundFont cache, the user `.sf2` contract, the browser playback test and the CSP note), and the AVI import and request policy; the owner confirms here that the envelope's Done-when item 2 (browser test) moves to epic 9 and that item 3 (user `.sf2`) is delivered by the epic 9 runner against this contract."
-verify = "The commit changes only docs and the affected spine and catalogue rows; each section 5 to 12 decision of the exploration and each inherited section 9 row (except music after load, ruled in entry 6.1) has an OWNER marker, evidence, a rejected alternative and a deterministic rule or an explicit owner deferral; the runner protocol lists every message and event with fixed keys; Done-when items 2 and 3 are explicitly assigned; a person approves the checkpoint."
+description = "Doc-first (G7), docs only: extends `docs/spec/engine/audio-media.md` and rules R-59 (audio routing and frame audio), MP3/OGG handling (transcode on import) and the tracker/XM policy, the XG/GS missing-bank fallback, the Path B bank choice and its provenance bar, `soundFont` and `soundFontReset` with the `soundfont.set` cue (the commands are ruled in `audio-media.md`; entry 6.8 adds their Audio-table and catalogue rows), the SoundFont layers (runner, author, player), the `AssetDecoder<AudioInfo>` and `AudioSource` seams (an AD-31 amendment), the runner audio protocol messages and voice state machine, the audio-contract handoff to epic 9 (autoplay unlock, focus, late sounds, prefetch, SoundFont cache, the user `.sf2` contract, the browser playback test and the CSP note), and the AVI import and request policy; the owner confirms here that the envelope's Done-when item 2 (browser test) moves to epic 9 and that item 3 (user `.sf2`) is delivered by the epic 9 runner against this contract."
+verify = "The commit changes only docs and the affected spine rows; `catalogue:check` and `command-docs:check` still pass unchanged; each section 5 to 12 decision of the exploration and each inherited section 9 row (except music after load, ruled in entry 6.1) has an OWNER marker, evidence, a rejected alternative and a deterministic rule or an explicit owner deferral; the runner protocol lists every message and event with fixed keys; Done-when items 1 to 3 are explicitly assigned; a person approves the checkpoint."
 covers = ["CAP-7"]
-after = [1, "1.5", "3.14"]
+after = [1, 2, "1.5", "3.14"]
 hitl = true
 risk = "high"
 plan_checkpoint = true
@@ -71,10 +73,10 @@ references = [
 id = 4
 type = "story"
 title = "Independent audio timeline oracle and authored audio fixtures"
-description = "Creates a docs/spec-derived, core-independent producer of named audio timeline scenes (`board-music-boot`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `voices-and-stealing`, `fades`, `synced-start`, `late-start-catch-up`, `media-wait-suspend`, `settings-versus-save`, `soundfont-setting`, `battle-music-handoff`, `legacy-parity-ledger`, `video-restarts-music`) with expected per-tick track states, cues and end events, plus authored tiny WAV (PCM, MS-ADPCM, IMA-ADPCM) and MIDI (type 0 and 1, tempo changes) files with hand-worked lengths."
+description = "Creates a docs/spec-derived, core-independent producer of named audio timeline scenes (`board-music-boot`, `animation-frame-sfx`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `voices-and-stealing`, `fades`, `synced-start`, `late-start-catch-up`, `media-wait-suspend`, `settings-versus-save`, `soundfont-setting`, `battle-music-handoff`, `legacy-parity-ledger`, `video-restarts-music`) with expected per-tick track states, cues and end events, plus authored tiny WAV (PCM, MS-ADPCM, IMA-ADPCM) and MIDI (type 0 and 1, tempo changes) files with hand-worked lengths."
 verify = "The generator has a check mode, imports no `packages/core` code, and produces every named scene and audio file above with committed expected facts (track state, cues, end ticks, no hashes) and hand-worked lengths; a static import scan and a byte-determinism test pass."
 covers = ["CAP-7"]
-after = [1, 2, "1.9"]
+after = [1, 2, 3, "1.9"]
 hitl = false
 risk = "medium"
 references = [
@@ -82,6 +84,7 @@ references = [
   "reference - docs/spec/engine/audio-media.md (written by entries 6.1 and 6.2)",
   "pattern - tools/fixtures/movement/index.mjs and tools/fixtures/test/movement.test.mjs, the Epic 5 oracle",
   "corpus - fixtures/legacy/.fetched.json, MIDI and WAV lengths pinned by SHA-256 and checked at test time only",
+  "reference - docs/spec/engine/audio-media.md platform rules written by entry 6.3 (`soundFont`, `soundfont.set`, the synthetic battle effect)",
 ]
 
 [[entry]]
@@ -107,7 +110,7 @@ id = 6
 type = "story"
 title = "Audio state section, track engine and cue emission"
 description = "Implements the tracer bullet: the `audio` section schema v2 per entry 6.1 (tracks, voices, fade fields, `cueId`, the current SoundFont setting, saved playback versus settings), the `audio` applier on the effect bus that maps Epic 4's `music.play` and `sfx.play` records onto the `music` and `sfx` tracks and drains the pending queue in order, the board-music path (the applier decides same-file and silence at board entry per Q5 to Q8, replacing the engine's own `musicAsset` check and the silent early returns in `postBoardMusic`), the `music` virtual variable read from the music track (Q19), end-tick and loop-pass computation on the fixed tick, play, stop, pause, resume, seek and loop semantics with the legacy rules (missing file, battle hand-off, a restart hook for later video end), generic per-track `AudioCue` emission including `soundfont.set` in `TickReport.audioCues`, save and restore re-emission, and registration into the reset seam."
-verify = "The oracle scenes `board-music-boot`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `settings-versus-save`, `soundfont-setting` and `battle-music-handoff` reproduce through the real core per tick (battle music is posted as a synthetic effect record with source `battle`); the `music` virtual variable shows the music track's file; a snapshot restored mid-track gives equal later cues and hash and re-emits `soundfont.set`; `reset()` and `load()` leave settings untouched; effects posted before the applier registered produce cues in post order."
+verify = "The oracle scenes `board-music-boot`, `animation-frame-sfx`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `settings-versus-save`, `soundfont-setting` and `battle-music-handoff` reproduce through the real core per tick (battle music is posted as a synthetic effect record with source `battle`; the per-frame `sfx.play` effect becomes an `sfx`-track cue); the `music` virtual variable shows the music track's file; a snapshot restored mid-track gives equal later cues and hash and re-emits `soundfont.set`; `reset()` and `load()` leave settings untouched; effects posted before the applier registered produce cues in post order."
 covers = ["CAP-7"]
 after = [1, 2, 4, 5, "3.11", "3.21", "4.11", "4.19", "4.20", "4.23", "4.31"]
 hitl = false
@@ -116,7 +119,7 @@ references = [
   "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-10, AD-16, AD-26",
   "code - packages/core/src/save/sections.ts, ports/audio.ts, engine/engine.ts (`postBoardMusic`, `musicAsset`), engine/effects.ts, script/virtuals.ts (`music`)",
   "handoff - epic-board-rendering.md, A-12 and the audio effect records of entries 4.20 and 4.23",
-  "fixture - entry 6.4 `board-music-boot`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `settings-versus-save`, `soundfont-setting`, `battle-music-handoff`",
+  "fixture - entry 6.4 `board-music-boot`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `settings-versus-save`, `soundfont-setting`, `battle-music-handoff`, `animation-frame-sfx`",
   "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, findings F-01 to F-04",
 ]
 
@@ -140,8 +143,8 @@ references = [
 id = 8
 type = "story"
 title = "Media control built-ins and the track wait"
-description = "Registers the media control pack through the VM registry: `mediaTrack`, `mediaLoad`, `mediaPlay` (flags, sync, priority, voice handle by reference), `mediaStop`, `mediaPause`, `mediaResume`, `mediaSeek`, `mediaLoop`, `mediaFade`, `mediaWait` and `mediaVolume` in both its set and read forms, a read-only audio view for built-ins that entry 6.9's queries reuse, the Reawakened `soundFont` and `soundFontReset` commands, the `tkMD_` constants, and the `audio.track` wait kind that replaces the unresolved `audio.sfx` wait the catalogue responder creates today, with the ruled diagnostics (`tkMD_LOOP | tkMD_WAIT`, unknown track, wait on a loop), help text in the CLAUDE.md style, and the Audio-table and catalogue rows for these names; commands act through recorded effects, never by writing the section directly."
-verify = "Script fixtures play then wait and resume on the exact end tick, suspend on pause and continue on resume, wake on stop or replace, restore mid-wait, and report each ruled diagnostic; `soundFont` and `soundFontReset` produce the `soundfont-setting` cues; the oracle scene `media-wait-suspend` reproduces per tick; a `wav` or `playavi` call no longer parks a thread on an unresolved wait kind; `catalogue:check` and `command-docs:check` pass for every new name."
+description = "Registers the media control pack through the VM registry: `mediaTrack`, `mediaLoad`, `mediaPlay` (the existing `mediaplay` extended with optional arguments, not deprecated; flags, sync, priority, voice handle by reference), `mediaStop` (likewise the existing `mediastop`), `mediaPause`, `mediaResume`, `mediaSeek`, `mediaLoop`, `mediaFade`, `mediaWait` and `mediaVolume` in both its set and read forms, a read-only audio view for built-ins that entry 6.9's queries reuse, the Reawakened `soundFont` and `soundFontReset` commands, the `tkMD_` constants, and the `audio.track` wait kind that replaces the unresolved `audio.sfx` wait the catalogue responder creates today, with the ruled diagnostics (`tkMD_LOOP | tkMD_WAIT`, unknown track, wait on a loop), help text in the CLAUDE.md style, and the Audio-table and catalogue rows for these names; commands act through recorded effects, never by writing the section directly."
+verify = "Script fixtures play then wait and resume on the exact end tick, suspend on pause and continue on resume, wake on stop or replace, restore mid-wait, and report each ruled diagnostic; `soundFont` and `soundFontReset` produce the `soundfont-setting` cues; the oracle scene `media-wait-suspend` reproduces per tick; a `wav` or `sound` call no longer parks a thread on an unresolved `audio.sfx` wait kind; `catalogue:check` and `command-docs:check` pass for every new name."
 covers = ["CAP-7"]
 after = [2, 6, 7, "2.10", "3.3", "3.9", "3.22", "3.25", "3.29"]
 hitl = false
@@ -157,7 +160,7 @@ references = [
 id = 9
 type = "story"
 title = "Media query built-ins, legacy command mapping and catalogue sweep"
-description = "Registers the media query pack (`mediaState`, `mediaFlags`, `mediaPlaying`, `mediaFile`, `mediaPosition`, `mediaLength`, `mediaTracks`, `getVolume`) on entry 6.8's audio view and routes every legacy audio name to its standard equivalent while keeping legacy behaviour (music always loops, sound effects never do, replace rules), including `mp3pause` as play-once-then-wait on `sfx`, `setvolume`, and the `fademidiin`, `fademidiout` and `setmidivolume` plugin commands (mapped, or recorded as not reproduced); reconciles the `wav` and `mp3pause` catalogue rows with the ruling, and rewrites the Audio table with the `deprecated` marker and `replacedBy` chosen in entry 6.2 and without touching any catalogue `obsolete` field."
+description = "Registers the media query pack (`mediaState`, `mediaFlags`, `mediaPlaying`, `mediaFile`, `mediaPosition`, `mediaLength`, `mediaTracks`, `getVolume`) on entry 6.8's audio view and routes the obsolete legacy names `midiplay`, `playmidi`, `mediarest`, `midirest`, `wav`, `mp3`, `wavstop` and `mp3pause` to their standard equivalents while keeping legacy behaviour (music always loops, sound effects never do, replace rules), tagging them `deprecated` with `replacedBy`; `mp3pause` is play-once-then-wait on `sfx`; `setvolume` stays the master volume and `sound` stays as the spec documents it; the `fademidiin`, `fademidiout` and `setmidivolume` plugin commands are mapped, or recorded as not reproduced; it reconciles the `wav` and `mp3pause` catalogue rows with the ruling and edits the Audio table only for these names, never touching a catalogue `obsolete` field. `mediaplay` and `mediastop` are entry 6.8's and are not deprecated."
 verify = "The oracle scene `legacy-parity-ledger` reproduces per tick through the legacy names; corpus programs that call legacy audio commands produce the same cue stream as their standard-command equivalents; every legacy audio name still responds and no catalogue row gains `obsolete: true`; `catalogue:check` and `command-docs:check` pass; the catalogue rows for `wav` and `mp3pause` agree with the ruled behaviour."
 covers = ["CAP-7"]
 after = [8, "3.17"]
@@ -175,9 +178,9 @@ id = 10
 type = "story"
 title = "Video built-ins and the video wait"
 description = "Registers `playavi` and `playavismall` with the `video` wait and the AD-5 request ruled in entry 6.3, stops music for the duration and restarts it from the beginning afterwards even if it had been stopped (Q16), makes the video unskippable, and resolves the wait on the `video.ended` input."
-verify = "A script plays a video request and the wait resolves only on `video.ended`; music stops during and restarts from the beginning after; the oracle scene `video-restarts-music` reproduces per tick; a snapshot restored mid-wait resumes; the headless runner replies after the declared duration."
+verify = "A script plays a video request and the wait resolves only on `video.ended`; `playavi` and `playavismall` no longer park a thread on an unresolved `video` wait kind; music stops during and restarts from the beginning after; the oracle scene `video-restarts-music` reproduces per tick; a snapshot restored mid-wait resumes; the headless runner replies after the declared duration."
 covers = ["CAP-7"]
-after = [3, 6, 8, "3.22"]
+after = [3, 6, 8, 9, "3.22"]
 hitl = false
 risk = "medium"
 references = [

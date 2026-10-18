@@ -8,7 +8,7 @@ status: exploration — nothing here is an owner ruling unless marked "Owner dir
 
 # Pre-inception exploration: audio ecosystem, SoundFonts and asset caching
 
-This records an owner conversation held before epic 6 (`epic-audio-synth`) was incepted. Items marked **Owner direction** are things the owner asked for. Everything else is a proposal, and inception entry 6.1 (rulings) has to confirm it or rule otherwise. Caching items that belong to other epics are also recorded in those epics' envelopes.
+This records an owner conversation held before epic 6 (`epic-audio-synth`) was incepted. Items marked **Owner direction** are things the owner asked for. Everything else is a proposal, and the inception rulings entries (6.1 core, 6.2 commands and behaviour, 6.3 platform; see `inception-proposal.md`, which supersedes the entry numbers used below) have to confirm it or rule otherwise. Caching items that belong to other epics are also recorded in those epics' envelopes.
 
 ## 1. Corpus facts (fetched legacy fixtures, measured 2026-10-18)
 
@@ -146,7 +146,7 @@ Ownership:
 | Epic 6 | audio's share of the plan, the late-SFX rule, the shared SoundFont cache contract |
 | Editor epics | stall reporting and unpredictable-reference warnings |
 
-## 8. Proposed breakdown (draft, before validation)
+## 8. Proposed breakdown (draft, superseded by `inception-proposal.md` section 3)
 
 | # | Entry |
 |---|---|
@@ -160,7 +160,7 @@ Ownership:
 | 6.8 | Browser/offline MIDI render test |
 | 6.9 | Refactor sweep |
 
-## 9. Open decisions for 6.1
+## 9. Open decisions (owed by entries 6.1 to 6.3: music after load is 6.1, the rest 6.3)
 
 | Decision | Conservative default if the owner delegates |
 |---|---|
@@ -357,7 +357,7 @@ Every write has a matching read, so an author can build a music player screen in
 
 **State versus flags.** `mediaState` and `mediaFlags` are deliberately separate: state is what is happening now (exactly one of stopped, playing, paused); flags are settings that hold in every state. A looping song that is paused reports `tkMD_PAUSED` and still has `tkMD_LOOP`, so it loops again after resume. Merging them would lose "paused, will loop" versus "paused, will stop at the end".
 
-### Constants (values illustrative until 6.1 rules them)
+### Constants (values illustrative until entry 6.2 rules them)
 
 Following the existing `tkMV_`/`tkVT_`/`tkPRG_` convention in `docs/spec/engine/rpgcode-language.md`:
 
@@ -391,8 +391,8 @@ A fun extra for music-player screens: read title, artist, album and similar tags
 
 | Legacy command | Standard equivalent |
 |---|---|
-| `midiplay`, `playmidi`, `mediaplay(file)` | `mediaPlay(file)` on `music` |
-| `mediastop`, `mediarest`, `midirest` | `mediaStop()` on `music` (`midirest` is a stop, not a pause, per the spec row and round-8 Q1) |
+| `midiplay`, `playmidi` | `mediaPlay(file)` on `music` (the standard command is the existing `mediaplay`, extended; it is not obsolete) |
+| `mediarest`, `midirest` | `mediaStop()` on `music` (the existing `mediastop`, extended and not obsolete; `midirest` is a stop, not a pause, per the spec row and round-8 Q1) |
 | `wav`, `mp3` | `mediaPlay(file, "sfx")` |
 | `wavstop` | `mediaStop("sfx")` |
 | `mp3pause(file)` | `mediaPlay(file, "sfx", tkMD_ONCE \| tkMD_WAIT)`: plays the sound once and the script waits until it ends (3.1.0 behaviour; see open item 1) |
@@ -402,14 +402,14 @@ A fun extra for music-player screens: read title, artist, album and similar tags
 
 **Legacy looping facts (owner-relayed, `docs/provenance/facts-round-9.md`).** Music always looped in both versions, with no way to play it once (M1); board and battle music loop too (M3); replaying the track that is already playing carries on rather than restarting (M2); `wav`, `mp3` and `mp3pause` never loop (M4). So the `music` default `tkMD_LOOP`, the `sfx` default `tkMD_ONCE` and the opt-in `tkMD_RESTART` all match legacy, and `tkMD_ONCE` on `music` is a Reawakened addition.
 
-### Open items for 6.1
+### Open items (for entries 6.1 to 6.3, per the inception proposal)
 
 1. `mp3pause` timing (decided direction, owner 2026-10-18): follow 3.1.0, so `mp3pause(file)` is `mediaPlay(file, "sfx", tkMD_ONCE | tkMD_WAIT)`. Evidence: the spec baseline is Toolkit 3.1 (ADR 0007); the command's own release note says it pauses the game while the sound plays; the final version's non-waiting behaviour makes it identical to `mp3`, which reads as a regression; zero archive programs use it. Rejected alternative: the final version's non-blocking alias of `wav`.
 2. Answered by round 9 M1: 3.1.0 played MP3, OGG and tracker files as looping music; the final version plays only MIDI (also round 8 Q17). The format policy itself stays with §9's "MP3/OGG handling" decision.
 3. Track reuse (accepted direction, owner 2026-10-18): a new play on a track replaces that track's audio (per voice, the legacy single-slot rule), except that replaying the file already playing carries on (round 9 M2) unless `tkMD_RESTART` is set. The maximum number of named tracks remains for 6.1 to set.
 4. AD-16 amendment (accepted direction, owner 2026-10-18): replace the fixed `music.*` and `sfx.*` cue kinds with generic per-track kinds (`media.load`, `media.play`, `media.stop`, `media.pause`, `media.resume`, `media.seek`, `media.volume`, `media.fade`, `media.flags`), each carrying a `track` field (and a voice index where a track has more than one voice); `music` and `sfx` become track names. Rejected alternative: keep the old kinds and add a `track` field, which makes the names misleading and needs two copies of every new feature. The cue format is internal (core to runner). **Correction (checked in code, 2026-10-18, refined at inception):** Epic 4's engine does not emit cues; it posts `music.play` (board music) and `sfx.play` (animation-frame sounds) as `audio` **effect records**, and Epic 6's applier turns them into cues (epic-board-rendering A-12, `engine.ts:699-700,1009-1010`). What the amendment migrates is the cue port type `AudioCueKind`, the `audio.ended` validator and the port fixtures that check cue kinds; the effect names stay as the Epic 4 to Epic 6 contract, and the applier maps `music.play` to the `music` track and `sfx.play` to the `sfx` track (work package P4).
 5. Channels (accepted direction, owner 2026-10-18): §9's "SFX channels: one channel (parity)" becomes "the `sfx` track has 1 voice". Old games behave the same; the voice count and the stealing rule are open item 11.
-6. Built-in tracks (accepted direction, owner 2026-10-18): `music`, `sfx`, `ambience`, `voice` and `ui`; 6.1 sets each one's default flags and voice count.
+6. Built-in tracks (accepted direction, owner 2026-10-18): `music`, `sfx`, `ambience`, `voice` and `ui`; entry 6.2 sets each one's default flags and voice count.
 7. Ratify the `tkMD_` names and values, the state-versus-flags split, `mediaLoop`, and the waiting rules above.
 8. The AD-16 cue amendment also needs a loop-toggle cue and per-track volume, and `GameState.audio` must hold per-track state, flags and asset lengths.
 9. Version rule for the other 3.1.0-versus-final splits (round 8 Q7, Q12, Q17): follow 3.1.0 as the spec baseline unless the later behaviour is clearly a deliberate fix; then take the fix and record it as a Reawakened ruling with evidence; a later behaviour that looks like a regression is treated as a bug (as for `mp3pause`).
