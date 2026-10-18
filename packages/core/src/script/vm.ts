@@ -197,29 +197,32 @@ export function runWaitsPhase(
   vm: VmState,
   view: WaitView,
   poll: WaitPoll = defaultWaitPoll,
+  claim?: (seq: number) => void,
 ): void {
   const waiting = vm.threads.filter((thread) => thread.status === "waiting" && thread.wait !== null);
   waiting.sort((left, right) => left.id - right.id);
   const blocker = findBlockingThread(vm);
   if (blocker !== null) {
-    resolveWait(vm, view, poll, blocker);
+    resolveWait(vm, view, poll, blocker, claim);
     if (blocker.status === "waiting") {
       refreshBlock(vm, view.tick);
       return;
     }
   }
   for (const thread of waiting) {
-    if (thread !== blocker) resolveWait(vm, view, poll, thread);
+    if (thread !== blocker) resolveWait(vm, view, poll, thread, claim);
   }
   refreshBlock(vm, view.tick);
 }
 
 /** Poll one thread's wait; on a result, make the thread ready and hand it the wake value. */
-function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread): void {
+function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread, claim?: (seq: number) => void): void {
   const wait = thread.wait;
   if (wait === null) return;
+  if (wait.kind === "input.key" && wait.parkSeq === undefined) wait.parkSeq = view.input?.nextSeq ?? 0;
   const result = poll(view, wait);
   if (result === null) return;
+  if (result.claim !== undefined) claim?.(result.claim);
   thread.status = "ready";
   thread.wait = null;
   const frame = thread.frames[thread.frames.length - 1];
@@ -250,6 +253,7 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
   if (wait.kind === "sleep" && !wait.resumesCall) return;
   frame.operands.push({ value: result.value, ref: null });
 }
+
 
 /**
  * Deliver a request's reply, or a recorded one on replay (AD-5). The reply is

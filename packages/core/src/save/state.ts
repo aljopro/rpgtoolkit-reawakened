@@ -150,7 +150,7 @@ export function createGameState(init: { seed: number }): GameState {
     vm: createVmState(),
     battle: {},
     menu: {},
-    input: {},
+    input: {} as InputSection,
     ui: {},
     camera: {},
     fx: {},
