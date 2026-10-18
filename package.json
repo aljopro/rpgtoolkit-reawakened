@@ -33,6 +33,7 @@
     "icons": "node tools/icons/build.mjs",
     "icons:test": "node --test tools/icons/test/icons.test.mjs",
     "no-skips:test": "node --test tools/no-skips/test/no-skips.test.mjs",
+    "oracle:check": "python3 tools/fixtures/reference/render.py --check && node tools/fixtures/author/generate.mjs --check",
     "golden": "tsc -b && node packages/runner-headless/dist/cli.js golden",
     "golden:record": "tsc -b && node packages/runner-headless/dist/cli.js golden --record",
     "golden:bun": "pnpm build && node packages/runner-headless/dist/cli.js golden > /tmp/tkr-golden-node.log && bun packages/runner-headless/dist/cli.js golden > /tmp/tkr-golden-bun.log && diff -u /tmp/tkr-golden-node.log /tmp/tkr-golden-bun.log",
