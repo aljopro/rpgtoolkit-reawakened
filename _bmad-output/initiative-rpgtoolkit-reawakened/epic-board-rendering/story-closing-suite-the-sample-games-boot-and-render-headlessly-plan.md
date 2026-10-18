@@ -1,7 +1,7 @@
 ---
 ticket: 28
 type: feature
-status: built
+status: done
 ---
 # Closing suite: the sample games boot and render headlessly
 
