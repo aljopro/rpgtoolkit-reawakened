@@ -1,0 +1,210 @@
+# tickets.toml — planned entries of epic-movement-triggers, in build order. tickets.py reads it.
+# Table order is the build order; ids are stable names. Entry 1 is an owner-approval docs checkpoint (pending).
+# The movement oracle is authored from docs/spec and recorded input; it is not a legacy pixel-parity claim.
+# Shared-seam owners: 3 owns sprites, 6 owns input extensions, 7 owns movement waits/built-in registration,
+# 8 owns triggers, and 12 performs the final phase/reset/catalogue/barrel reconciliation.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Movement, collision, trigger and gamepad rulings"
+description = "Doc-first (G7), docs only: amends the existing movement and input specification and affected architecture/catalogue rows to settle R-50 speed/game-speed conversion, R-51 sprite collision versus diversion, R-52 candidate precedence, R-53 edge-arrival alignment, R-54 wall-sliding thresholds, and the bounded E-112 gamepad addition; ratifies fixed-tick timing, actor geometry/fallbacks, key claims, trigger condition order, and the numeric VM-budget ownership boundary."
+verify = "The commit changes only docs and explicitly affected contract/catalogue files; each R-50 to R-54 and E-112 row has an OWNER marker, evidence, a rejected alternative and a deterministic rule; no later entry relies on an unruled movement observable; a person approves the checkpoint."
+covers = ["CAP-3", "CAP-4", "CAP-8"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-movement-triggers/discovery/movement-readiness.md, findings F-09 to F-18",
+  "reference - docs/spec/engine/ (E-20 to E-51 as anchored in movement-and-collision.md, rpgcode-functions.md, main-loop-and-startup.md, rpgcode-language.md and display-input-audio.md), R-50 to R-54",
+  "reference - docs/spec/engine/display-input-audio.md#e-110 to E-113",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-2, AD-7 to AD-10, AD-13, AD-14, AD-25, AD-26 and AD-32",
+]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Independent movement oracle and authored fixtures"
+description = "Creates a docs/spec-derived, core-independent fixture producer with stable named scenes: `movement-tile-pixel`, `collision-solid-stairs-under`, `collision-sprite-blocking`, `edges-board-link-program`, `board-entry-thread-lifecycle`, `triggers-precedence`, `actor-hydration-item-multitask`, `pathfinding-axial-diagonal-vector`, `input-replay-button-slots`, `movement-waits`, `animation-fallback-stance`, `random-encounter`, `demo-npc-pathfinding` and `demo-npc-battle-trigger`; it records expected per-tick outcome facts without claiming legacy pixel parity."
+verify = "The fixture generator has a check mode and imports no packages/core code; it produces every named scene above, including actor hydration/item multitask, board-entry thread lifecycle, input/button, animation/stance, movement-wait, random-encounter and demo battle-trigger cases; each recorded-input case has stable expected outcome facts per tick (positions, layers, fired triggers and events), while state/draw hashes remain owned by later consumers."
+covers = ["CAP-3", "CAP-4", "CAP-8"]
+after = [1, "2.5", "2.6", "2.16"]
+hitl = false
+risk = "medium"
+references = [
+  "audit - discovery/movement-readiness.md, findings F-19 to F-22",
+  "reference - docs/spec/engine/movement-and-collision.md#e-20 to E-49",
+  "corpus - fixtures/legacy/.fetched.json and fixtures/legacy/demo/Prg/man_wander.prg",
+]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Unified actor and sprite runtime state"
+description = "Implements the AD-32 Unified Actor runtime in core/sprites: player and item hydration, item multitask-thread start/stop ownership, transform/facing/visual state, collision and activation bases, movement queues and waypoint links, selected-player identity, compact runtime item handles, plain-data schema/migration, SpriteDraw production, CameraTarget and PlayerPresencePort."
+verify = "A loaded board creates deterministic player/item state from the existing world and actor models; item multitask threads start and stop with their owning items; state round-trips through snapshot/restore with equal hash; SpriteDraw preserves Epic 4's player-before-item drawId contract; CameraTarget and player presence return the authoritative actor data."
+covers = ["CAP-3", "CAP-8"]
+after = [1, 2, "2.5", "2.6", "2.9", "2.10", "2.13", "2.16", "2.25", "2.26", "3.2", "3.3", "3.11", "4.10", "4.12", "4.15", "4.16", "4.20", "4.31"]
+hitl = false
+risk = "high"
+references = [
+  "spine - architecture AD-10 and AD-32",
+  "reference - docs/spec/engine/movement-and-collision.md#e-20 and #e-21",
+  "handoff - epic-board-rendering.md, Epic 4 notes on SpriteDraw, CameraTarget and player presence",
+  "code - packages/core/src/save/sections.ts, world/model.ts, world/hydrate.ts, render/compose.ts",
+  "fixture - entry 5.2 `actor-hydration-item-multitask`",
+]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Movement stepping and board and sprite collision"
+description = "Registers the movement phase and implements tile/pixel queues, deterministic speed conversion, direct and waypoint movement, collision-base tests, solids, stairs, under behavior, wall sliding, direct sprite collision (winner/loser, frozen, wait/stop), frozen and stance transitions, and movement event records using the approved R-50, R-51 and R-54 rules. Path-following diversion around a blocking sprite is owned by entry 5."
+verify = "The authored movement scenes reproduce blocked, sliding, stair, under, direct-path and sprite-blocking outcomes at fixed ticks; movement completion state/events match the declared tick; equal collision cases use the documented total order; no wall-clock or host API is used."
+covers = ["CAP-3"]
+after = [2, 3, "2.16", "3.26", "4.19"]
+hitl = false
+risk = "high"
+references = [
+  "reference - docs/spec/engine/movement-and-collision.md#e-22 to #e-30",
+  "spine - architecture AD-2, AD-13, AD-25 and AD-26",
+  "fixture - entry 5.2 `movement-tile-pixel`, `collision-solid-stairs-under`, `collision-sprite-blocking`",
+]
+
+[[entry]]
+id = 5
+type = "story"
+title = "Axial, diagonal and vector pathfinding"
+description = "Implements axial A*, diagonal A* and vector visibility-graph search with the documented 1000-expansion cap, nearest-free blocked-goal fallback, actor-geometry checks, deterministic tie order, board/vector cache invalidation and no host-dependent geometry, plus path-following diversion around a blocking sprite per approved R-51 with entry 4's freeze/stop result as the fallback."
+verify = "All three authored pathfinding scenes reach or approach their target with the declared path and tie order; blocked goals, the expansion cap, actor geometry, board changes and vector edits are tested; the diversion case of `collision-sprite-blocking` diverts or falls back to freeze/stop as ruled; repeated runs and cache flushes have identical results."
+covers = ["CAP-3"]
+after = [2, 3, 4, "2.5", "2.16", "3.2", "4.12"]
+hitl = false
+risk = "high"
+references = [
+  "reference - docs/spec/engine/movement-and-collision.md#e-34",
+  "spine - architecture AD-13 and AD-25",
+  "fixture - entry 5.2 `pathfinding-axial-diagonal-vector`, `collision-sprite-blocking` (diversion case)",
+]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Input bindings, click-to-move, gamepad and buttons"
+description = "Extends the existing raw input section with configured eight-way movement bindings, held-key diagonals, activation/menu/runtime key separation, pointer click-to-move, normalized E-112 gamepad controls and the plain-data button-slot shape consumed by Epic 4's overlay (`id`, logical `x/y/w/h`, action, enabled) while preserving monotonic sequence numbers and the shared key claim/prune protocol."
+verify = "Recorded keyboard, pointer and approved gamepad events replay identically; held orthogonal keys produce a diagonal only when enabled; click-to-move uses logical pixels and the movement/pathfinding APIs; the button-slot shape is stable for Epic 4 entry 4.25; input-section claim/prune primitives preserve sequence order and do not duplicate the existing key protocol."
+covers = ["CAP-8"]
+after = [1, 2, 3, 4, 5, "3.3", "3.9", "3.27", "4.19"]
+hitl = false
+risk = "medium"
+references = [
+  "reference - docs/spec/engine/display-input-audio.md#e-110 to E-113",
+  "spine - architecture AD-14 and AD-26",
+  "handoff - epic-board-rendering/tickets.toml entry 4.25, overlay button slots consume this input shape",
+  "handoff - epic-board-rendering.md, raw input and key-claim ownership",
+  "code - packages/core/src/input/input.ts and packages/core/src/save/sections/input.ts",
+  "fixture - entry 5.2 `input-replay-button-slots`",
+]
+[[entry]]
+id = 10
+type = "story"
+title = "Actor animation and presentation integration"
+description = "Completes actor-facing animation state: directional walk/idle fallbacks, frame timing, facing and prior positions for presentation alpha, then connects the existing SpriteDraw and animation phase without duplicating compositor or camera state. Actor stance commands and completion waits are owned here for entry 7 to consume."
+verify = "Actor animation fixtures select the documented fallback, advance at fixed ticks, preserve state/draw hash separation for presentation alpha, and expose a deterministic stance completion result for entry 7; the existing compositor consumes the supplied frames and positions unchanged."
+covers = ["CAP-3"]
+after = [3, 4, "4.15", "4.23"]
+hitl = false
+risk = "medium"
+references = [
+  "reference - docs/spec/formats/character.md#defaults-and-fall-backs",
+  "reference - docs/spec/engine/movement-and-collision.md#e-21",
+  "handoff - epic-board-rendering/tickets.toml entries 4.15 and 4.23, SpriteDraw and animation phase contract",
+  "fixture - entry 5.2 `animation-fallback-stance`",
+]
+
+
+[[entry]]
+id = 7
+type = "story"
+title = "Movement waits and movement and input built-ins"
+description = "Replaces movement test doubles with real movement waits and registers the movement/input catalogue surface through the VM pack: Push, PlayerPath, ItemPath, waypoint operations, player/item steps and locations, active-player operations, wander, wait, get, clearBuffer and button operations, including multiRun coupling and by-reference outputs. Actor stance commands and their completion waits are owned by entry 10."
+verify = "Script fixtures start and await movements, restore mid-wait, run multiRun batches and read by-reference locations/path results; all movement/input names assigned here have real responders, effects and waits with no direct section mutation or duplicate key-consumption path; button built-ins and their claim/prune forwarding are covered here; stance command ownership is left to entry 10."
+covers = ["CAP-3", "CAP-8"]
+after = [4, 5, 6, "3.3", "3.9", "3.21", "3.22", "3.25", "4.11", 10]
+hitl = false
+risk = "high"
+references = [
+  "reference - docs/spec/engine/rpgcode-functions.md, movement and input ownership rows",
+  "spine - architecture AD-8, AD-9, AD-10 and AD-26",
+  "code - packages/core/src/ports/wait.ts and packages/core/src/script/packs/world.ts",
+  "fixture - entry 5.2 `movement-waits`",
+]
+
+[[entry]]
+id = 8
+type = "story"
+title = "Trigger state and activation dispatch"
+description = "Implements the triggers section and trigger phase: board step-on/key-press/repeat activation, item activation and facing, item-before-region and board-order selection, layer matching, loading/conditional checks, stop-movement, run-once re-arm, gone suppression, global/runtime keys and silent movement inside a running trigger."
+verify = "The authored trigger scenes cover once-per-entry, repeat distance, key-press versus step-on, item front/nearest precedence, layer matching, condition-before/set-after, stop movement, `gone` scope and re-arm after leaving; items hidden by E-45 loading conditions start no activation candidate or multitask thread (thread lifecycle itself is entry 3's); trigger programs run through the VM blocking seam in deterministic order."
+covers = ["CAP-4", "CAP-8"]
+after = [4, 6, 7, "3.3", "4.11", "4.20", "4.31"]
+hitl = false
+risk = "high"
+references = [
+  "reference - docs/spec/engine/movement-and-collision.md#e-40 to #e-45",
+  "reference - docs/spec/engine/display-input-audio.md#e-49",
+  "reference - docs/spec/formats/board.md, trigger fields and conditional activation",
+  "spine - architecture AD-8, AD-25, AD-26 and AD-32",
+  "fixture - entry 5.2 `triggers-precedence`, `actor-hydration-item-multitask`",
+]
+
+[[entry]]
+id = 9
+type = "story"
+title = "Board edges and transitions"
+description = "Implements the edges phase for no-link blocking, board links, program links, approved opposite-edge arrival alignment, blocked-arrival refusal, Send integration, old-board board/item thread lifecycle, persistent threads, destination trigger deactivation, board-entry trigger reload, camera handoff, music effects and path-cache clearing."
+verify = "Two-board recorded-input scenes cover blocked edges, successful board links, blocked arrival points, program links, preserved or ruled alignment, destination deactivation, board and item thread shutdown/persistence, enter programs and cache invalidation; state hashes match across batched and one-tick advances."
+covers = ["CAP-3", "CAP-4"]
+after = [4, 5, 8, "2.5", "2.9", "4.20", "4.31"]
+hitl = false
+risk = "high"
+references = [
+  "reference - docs/spec/engine/movement-and-collision.md#e-28, #e-47 and #e-48",
+  "reference - docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry",
+  "spine - architecture AD-26 and AD-32",
+  "fixture - entry 5.2 `edges-board-link-program`, `board-entry-thread-lifecycle`",
+]
+
+[[entry]]
+id = 11
+type = "story"
+title = "Random battle trigger and fighter handoff"
+description = "Adds the movement-owned random encounter boundary: battle-enabled board checks after activation, at-most-once-per-tile sampling, deterministic shared-RNG draw order, encounter selection and a plain-data fighter/trigger handoff for Epic 7, without implementing battle charge, damage, statuses or UI."
+verify = "An entry 5.2 battle-trigger fixture proves encounter checks occur after activation, no more than once per tile moved, use the shared RNG and produce stable fighter references and board context; the battle package can consume the handoff without importing movement internals."
+covers = ["CAP-4"]
+after = [8, 9, "2.6", "3.2", "3.21"]
+hitl = false
+risk = "medium"
+references = [
+  "reference - docs/spec/engine/movement-and-collision.md, random-battle paragraph after E-44",
+  "reference - docs/spec/engine/plugins-and-battle.md#random-encounters",
+  "handoff - _bmad-output/initiative-rpgtoolkit-reawakened/epic-battle/epic-battle.md",
+  "fixture - entry 5.2 `random-encounter`",
+]
+
+[[entry]]
+id = 12
+type = "story"
+title = "Replay, snapshot, reset and downstream contract sweep"
+description = "Closes Epic 5 with recorded-input corpus replay, state/draw hash and batching checks, movement-wait restore, cache-flush replay, catalogue ownership checks, phase registration and reset-seam reconciliation, movement-facing VM-budget verification, and documented handoffs for battle, menu/save, web runner and tooling."
+verify = "The authored suite and the reachable demo NPC intercept and battle-trigger handoff pass under fixed ticks and different advance batching; snapshots restore identical later behavior; every movement/trigger/input catalogue name resolves; sprites, triggers and input register reset correctly; the already-landed VM instruction-budget contract is either verified or amended through the docs-first path; typecheck, tests, lint, provenance, licence, fixture, golden and dependency gates pass."
+covers = ["CAP-3", "CAP-4", "CAP-8"]
+after = [5, 6, 7, 8, 9, 10, 11, "3.11", "4.29", "4.31"]
+hitl = false
+risk = "high"
+references = [
+  "audit - discovery/movement-readiness.md, findings F-01 to F-22",
+  "spine - architecture AD-1, AD-2, AD-11, AD-14, AD-25 and AD-26",
+  "fixture - entry 5.2 `demo-npc-pathfinding`, `demo-npc-battle-trigger`",
+]
