@@ -15,6 +15,7 @@ import {
   utf8Encode,
   CORE_PLUGIN,
   CATALOGUE_PLUGIN,
+  WORLD_PLUGIN,
   type AssetKey,
   type InputRecord,
   type ProgramLoader,
@@ -925,6 +926,7 @@ export function verifyCatalogueCompleteness(
   const plugins = [
     { definition: CORE_PLUGIN },
     { definition: CATALOGUE_PLUGIN },
+    { definition: WORLD_PLUGIN },
     { definition: TK2_COMPAT_PLUGIN },
   ];
   const services = createScriptServices(state, plugins);

@@ -73,6 +73,21 @@ export type WorldTileset = DataRecord & {
   readonly height: number;
 };
 
+/** One runtime tile replacement and its value before the edit. */
+export type WorldTileEdit = DataRecord & {
+  readonly index: number;
+  readonly tile: WorldTile | null;
+  readonly previous: WorldTile | null;
+  readonly scope: "program" | "board";
+  readonly owner?: number;
+};
+
+/** Runtime-only board state that is still part of the saveable world section. */
+export type WorldRuntime = DataRecord & {
+  readonly tileEdits: WorldTileEdit[];
+  readonly tileTypes: string[];
+};
+
 /** Hydrated, JSON-safe board data used by the compositor and movement systems. */
 export type WorldBoard = DataRecord & {
   readonly key: AssetKey;
@@ -110,4 +125,5 @@ export type WorldBoard = DataRecord & {
   readonly links?: DataRecord & { readonly north: string; readonly south: string; readonly east: string; readonly west: string };
   readonly start?: DataRecord & { readonly x: number; readonly y: number; readonly layer: number };
   readonly tilesets?: WorldTileset[];
+  readonly runtime?: WorldRuntime;
 };
