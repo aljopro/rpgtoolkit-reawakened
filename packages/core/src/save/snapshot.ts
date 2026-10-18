@@ -30,7 +30,8 @@ import { ScriptError } from "../script/errors.ts";
 import { COMPILER_VERSION } from "../script/program.ts";
 import { SCHEMA_VERSIONS, type GameState } from "./state.ts";
 import { asSpritesSection, createSpritesSection, SPRITES_SCHEMA_VERSION } from "../sprites/model.ts";
-
+import { createInputSection } from "../input/input.ts";
+import { INPUT_SCHEMA_VERSION } from "./sections/input.ts";
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
   return canon(tagNonFinite(state) as never);
@@ -124,6 +125,28 @@ function migrateSprites(record: Record<string, unknown>, schema: Record<string, 
     record.sprites = section;
     schema.sprites = SPRITES_SCHEMA_VERSION;
   }
+}
+
+/** Migrate the raw input section to the binding-aware schema. */
+function migrateInput(record: Record<string, unknown>, schema: Record<string, unknown>): void {
+  const version = schema.input;
+  if (typeof version !== "number") shapeError("the snapshot's `schema` has no numeric `input` version");
+  if (version >= INPUT_SCHEMA_VERSION) return;
+  const old = record.input;
+  if (typeof old !== "object" || old === null || Array.isArray(old)) {
+    record.input = createInputSection();
+    schema.input = INPUT_SCHEMA_VERSION;
+    return;
+  }
+  const oldRecord = old as Record<string, unknown>;
+  const current = createInputSection();
+  if (typeof oldRecord.nextSeq === "number") current.nextSeq = oldRecord.nextSeq;
+  if (Array.isArray(oldRecord.keys)) current.keys = oldRecord.keys as typeof current.keys;
+  if (typeof oldRecord.held === "object" && oldRecord.held !== null && !Array.isArray(oldRecord.held)) current.held = oldRecord.held as typeof current.held;
+  if (typeof oldRecord.pointer === "object" && oldRecord.pointer !== null && !Array.isArray(oldRecord.pointer)) current.pointer = oldRecord.pointer as typeof current.pointer;
+  if (typeof oldRecord.focused === "boolean") current.focused = oldRecord.focused;
+  record.input = current;
+  schema.input = INPUT_SCHEMA_VERSION;
 }
 
 function shapeError(message: string): never {
@@ -298,7 +321,7 @@ export function restoreGameState(json: string): GameState {
 
   migrateVm(record, schema as Record<string, unknown>);
   migrateSprites(record, schema as Record<string, unknown>);
-  migrateEngine(record, schema as Record<string, unknown>);
+  migrateInput(record, schema as Record<string, unknown>);
 
   validateShape(record);
   return parsed as GameState;

@@ -13,7 +13,7 @@ test("validateInputEvent accepts one valid event of each kind", () => {
     ["key with char", { kind: "key", name: "A", code: "KeyA", char: "a", down: true }],
     ["key with null char", { kind: "key", name: "ENTER", code: "Enter", char: null, down: false }],
     ["pointer", { kind: "pointer", x: 10, y: -20, buttons: 0 }],
-    ["gamepad", { kind: "gamepad" }],
+    ["gamepad", { kind: "gamepad", device: 0, connected: true, axes: { x: 0, y: 0 }, buttons: 0 }],
     ["focus", { kind: "focus", state: "gained" }],
     ["asset with bytes", { kind: "asset", reqId: 1, bytes: new Uint8Array([1, 2]) }],
     ["asset with null bytes", { kind: "asset", reqId: 1, bytes: null }],
@@ -64,7 +64,7 @@ test("validateInputEvent names the path of the first failure", () => {
     ],
     ["unknown kind", { kind: "nope" }, "kind"],
     ["absent kind", {}, "kind"],
-    ["extra key", { kind: "gamepad", extra: 1 }, "extra"],
+    ["extra key", { kind: "gamepad", device: 0, connected: true, axes: { x: 0, y: 0 }, buttons: 0, extra: 1 }, "extra"],
     [
       "missing on an asset reply",
       { kind: "asset", reqId: 1, bytes: null, missing: true },
@@ -147,7 +147,7 @@ test("validateInputEvent never throws on hostile input", () => {
 
   for (const [label, value] of [
     ["empty array", []],
-    ["array of events", [{ kind: "gamepad" }]],
+    ["array of events", [{ kind: "gamepad", device: 0, connected: true, axes: { x: 0, y: 0 }, buttons: 0 }]],
   ] as readonly (readonly [string, unknown])[]) {
     const result = validateInputEvent(value);
     equal(result.ok, false, label);
@@ -170,7 +170,7 @@ test("validateInputEvent never throws on hostile input", () => {
 });
 
 test("validateInputEvent returns a fresh value, not the input reference", () => {
-  const input = { kind: "gamepad" };
+  const input = { kind: "gamepad", device: 0, connected: true, axes: { x: 0, y: 0 }, buttons: 0 };
   const result = validateInputEvent(input);
   equal(result.ok, true);
   if (!result.ok) return;

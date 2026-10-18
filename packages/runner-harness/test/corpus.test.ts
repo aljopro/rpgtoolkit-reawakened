@@ -144,16 +144,16 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
   equal(results.length, 10);
 
   const expectedHashes: Record<string, string> = {
-    "sample-start-demo": "829f2b466a0a1702",
-    "sample-system-demo": "eb052fe6c075db1b",
-    "sample-sys-test-demo": "eb052fe6c075db1b",
-    "sample-win-demo": "45e33bc729425505",
-    "sample-oldman-demo": "2c804eb82048d23c",
-    "sample-man-demo": "f7b97e50ee70d395",
-    "sample-man-wander-demo": "e39ebd7510995834",
-    "sample-start-basic": "27e68efb5a40b9ea",
-    "sample-system-basic": "eb052fe6c075db1b",
-    "sample-wander-basic": "8564ec78d5e68d72",
+    "sample-start-demo": "7550d0d71d79bc35",
+    "sample-system-demo": "f384e0cc29fdca78",
+    "sample-sys-test-demo": "f384e0cc29fdca78",
+    "sample-win-demo": "3b1732084684c66e",
+    "sample-oldman-demo": "a51a83741d76d209",
+    "sample-man-demo": "8db3589e8f557fca",
+    "sample-man-wander-demo": "72cecfb9e0cca6b3",
+    "sample-start-basic": "125c516d113533c1",
+    "sample-system-basic": "f384e0cc29fdca78",
+    "sample-wander-basic": "6c07077b8ac4f38b",
   };
 
   for (const res of results) {
@@ -176,7 +176,7 @@ test("corpus: defined finish line for programs that never end (Basic/Prg/wander.
   const hash2 = host2.stateHash();
 
   equal(hash1, hash2);
-  equal(hash1, "8564ec78d5e68d72");
+  equal(hash1, "6c07077b8ac4f38b");
 
   for (let split = 0; split <= 5; split++) {
     const fresh = wander.createHost(0);

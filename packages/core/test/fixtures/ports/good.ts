@@ -393,6 +393,10 @@ export const pinPointerInput: PointerInput = {
 
 export const pinGamepadInput: GamepadInput = {
   kind: "gamepad",
+  device: 0,
+  connected: true,
+  axes: { x: 0, y: 0 },
+  buttons: 0,
 };
 
 export const pinFocusInput: FocusInput = {

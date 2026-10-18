@@ -11,8 +11,9 @@ import { readLegacyFont } from "../formats/font/reader.ts";
 import { gateTrueType } from "../formats/font/truetype.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
 import type { DrawList, Rgb, Tint } from "../ports/draw.ts";
-import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
+import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
+import type { InputConfig } from "../input/input.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
 import type { StartupPorts } from "../ports/startup.ts";
@@ -26,7 +27,7 @@ import { hydrateBoard } from "../world/hydrate.ts";
 import { coordLayout, tileToPixel } from "../world/coords.ts";
 import type { WorldBoard } from "../world/model.ts";
 import type { FxSection } from "../save/sections.ts";
-import { applyInputEvent, createInputSection, inputView, pruneClaimed } from "../input/index.ts";
+import { applyInputEvent, createInputSection, inputView, processGamepadEvents, pruneClaimed } from "../input/index.ts";
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
 import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, realignCamera, updateCamera } from "../world/camera.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
@@ -114,7 +115,8 @@ type EngineCommonInit = {
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
   readonly cameraTarget?: CameraTarget;
   readonly spriteRuntime?: SpriteRuntime;
-  readonly include?: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean };
+  readonly input?: InputConfig;
+  readonly include?: DrawListInclude;
   /** Decoded image assets supplied by a host or deterministic scene runner. */
   readonly assets?: ReadonlyMap<AssetKey, DecodedTexture>;
   /** Files the host ships with the engine under `media/` (the default bitmap font, bundled TrueType fonts and cursor images), as bytes like every other asset. */
@@ -162,7 +164,7 @@ const DEFAULT_ENGINE_PLUGINS: readonly ResolvedPlugin[] = resolveManifestPlugins
 export function createEngine(init: EngineInit): Engine {
   const index = init.assetIndex;
   const state: GameState = createGameState({ seed: init.seed });
-  state.input = createInputSection();
+  state.input = createInputSection(init.input);
   state.engine = { claims: [] };
   const defaultFontAsset = assetKey(DEFAULT_FONT);
   let root: AssetRoot = init.assetRoot;
@@ -587,7 +589,7 @@ export function createEngine(init: EngineInit): Engine {
     state.vm = createVmState();
     state.battle = fresh.battle;
     state.menu = fresh.menu;
-    state.input = createInputSection();
+    state.input = createInputSection(init.input);
     state.ui = fresh.ui;
     state.camera = createCameraSection(init.width, init.height);
     state.fx = fresh.fx;
@@ -913,6 +915,8 @@ export function createEngine(init: EngineInit): Engine {
           applyInputEvent(state.input, record.event);
           consumed.push(record);
         }
+        processGamepadEvents(state.input);
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
         return;
       }
       case "waits":

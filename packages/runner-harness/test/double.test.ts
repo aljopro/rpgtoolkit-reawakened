@@ -3,6 +3,7 @@ import { test } from "node:test";
 import type { InputRecord } from "@tk-reawakened/core";
 import { createTestEngine } from "../src/double/test-engine.ts";
 
+const GAMEPAD = { kind: "gamepad", device: 0, connected: false, axes: { x: 0, y: 0 }, buttons: 0 } as const;
 test("test double executes key down, pointer, key up and matches literals", () => {
   const engine = createTestEngine();
 
@@ -84,7 +85,7 @@ test("test double throws RangeError on past-stamped and future-stamped input", (
       engine1.advance(2, [
         {
           tick: -1,
-          event: { kind: "gamepad" },
+          event: GAMEPAD,
         },
       ]),
     RangeError,
@@ -96,7 +97,7 @@ test("test double throws RangeError on past-stamped and future-stamped input", (
       engine2.advance(2, [
         {
           tick: 2,
-          event: { kind: "gamepad" },
+          event: GAMEPAD,
         },
       ]),
     RangeError,
@@ -128,7 +129,7 @@ test("test double increments other counter for remaining events and returns null
   const bytes = new Uint8Array([1, 2, 3]);
 
   const inputs: InputRecord[] = [
-    { tick: 0, event: { kind: "gamepad" } },
+    { tick: 0, event: GAMEPAD },
     { tick: 1, event: { kind: "asset", reqId: 1, bytes } },
     { tick: 2, event: { kind: "blob.loaded", reqId: 2, bytes: null } },
     { tick: 3, event: { kind: "blob.saved", reqId: 3, ok: true } },

@@ -45,6 +45,7 @@ import {
   type WorldSection,
 } from "./sections.ts";
 import { createSpritesSection } from "../sprites/model.ts";
+import { createInputSection } from "../input/input.ts";
 
 /** Every `GameState` section key (AD-10), i.e. the schema version map's keys. */
 export const SCHEMA_VERSIONS = {
@@ -57,7 +58,7 @@ export const SCHEMA_VERSIONS = {
   vm: 5,
   battle: 1,
   menu: 1,
-  input: 1,
+  input: 2,
   ui: 1,
   camera: 1,
   fx: 1,
@@ -156,7 +157,7 @@ export function createGameState(init: { seed: number }): GameState {
     vm: createVmState(),
     battle: {},
     menu: {},
-    input: {} as InputSection,
+    input: createInputSection(),
     ui: {} as UiSection,
     camera: {} as CameraSection,
     fx: {} as FxSection,
