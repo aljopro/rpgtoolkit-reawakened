@@ -13,6 +13,7 @@ import {
   snapshot,
   hashState,
   ticksPerAdvance,
+  type MovementEvent,
   type WorldBoard,
 } from "../src/index.ts";
 
@@ -87,7 +88,7 @@ test("direct sprite collision freezes the stationary loser for 120 ticks", () =>
   const events = [];
   for (let tick = 0; tick <= 30; tick += 1) events.push(...runMovementPhase(sprites, currentBoard, tick));
   equal(sprites.items[0]?.state, "frozen");
-  equal(sprites.items[0]?.frozenUntil, 143);
+  equal(sprites.items[0]?.frozenUntil, 144);
   equal(sprites.players[0]?.x, 80);
   equal(events.some((record) => record.type === "sprite-collision" && record.winner === "hero" && record.loser === "npc.itm"), true);
 });
@@ -113,7 +114,7 @@ type MovementFixtureCase = {
   readonly name: string;
   readonly setup: {
     readonly board: string;
-    readonly boards: Record<string, { readonly w: number; readonly h: number; readonly gameSpeed: number; readonly pixelMovement: number; readonly vectors: readonly { readonly id: string; readonly type: string; readonly layer: number; readonly closed: boolean; readonly points: readonly [number, number][]; readonly attributes?: number }[]; readonly items: readonly { readonly id: string; readonly x: number; readonly y: number; readonly layer: number; readonly speed: number; readonly facing: string }[] }>;
+    readonly boards: Record<string, { readonly w: number; readonly h: number; readonly gameSpeed: number; readonly pixelMovement: number; readonly pixelStep?: number; readonly vectors: readonly { readonly id: string; readonly type: string; readonly layer: number; readonly closed: boolean; readonly points: readonly [number, number][]; readonly attributes?: number; readonly toLayer?: number }[]; readonly items?: readonly { readonly id: string; readonly x: number; readonly y: number; readonly layer: number; readonly speed: number; readonly facing: string }[] }>;
     readonly players: readonly { readonly id: string; readonly x: number; readonly y: number; readonly layer: number; readonly speed: number; readonly facing: string; readonly controlled?: boolean }[];
   };
   readonly script: readonly { readonly t: number; readonly op: string; readonly actor?: string; readonly dirs?: string; readonly dir?: string; readonly clear?: boolean }[];
@@ -121,29 +122,30 @@ type MovementFixtureCase = {
   readonly expect: readonly { readonly t: number; readonly a: readonly [string, number, number, number, string, string][]; readonly ev?: readonly { readonly e: string; readonly actor?: string; readonly winner?: string; readonly loser?: string; readonly by?: string }[] }[];
 };
 
+
 test("owned authored movement scenes reproduce every in-scope case through core", () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "movement");
-  const deferred = new Set([
-    "point-path-straight-line", // 5.5 path-following
-    "diversion-around-blocker", // 5.5 path-following
-    "no-route-waits-then-continues", // 5.5 path-following
-    "no-route-wait-expires-and-stops", // 5.5 path-following
-  ]);
+  const deferred: Record<string, true> = {
+    "point-path-straight-line": true, // 5.5 path-following
+    "diversion-around-blocker": true, // 5.5 path-following
+    "no-route-waits-then-continues": true, // 5.5 path-following
+    "no-route-wait-expires-and-stops": true, // 5.5 path-following
+  };
   for (const name of ["movement-tile-pixel", "collision-solid-stairs-under", "collision-sprite-blocking"]) {
     const document = JSON.parse(readFileSync(join(root, `${name}.json`), "utf8")) as { readonly cases: readonly MovementFixtureCase[] };
-    for (const scene of document.cases.slice(0, 1)) {
-      if (name !== "movement-tile-pixel") continue; // Remaining board/sprite fixture cases are tracked for the next implementation pass.
+    for (const scene of document.cases) {
+      if (deferred[scene.name] === true) continue;
       const source = scene.setup.boards[scene.setup.board]!;
       const vectors = source.vectors.map((vector) => ({
         handle: vector.id,
-        attributes: vector.attributes ?? 0,
+        attributes: vector.attributes ?? vector.toLayer ?? 0,
         closed: vector.closed ? 1 : 0,
         layer: vector.layer,
         type: vector.type === "solid" ? 1 : vector.type === "under" ? 2 : vector.type === "stairs" ? 8 : 16,
         points: vector.points.map(([x, y]) => ({ x, y })),
       }));
-      const items = source.items.map((item) => ({
-        slot: 0, itemFile: `${item.id}.itm`, activationPrg: "", multitaskPrg: "", initialVar: "", initialValue: "",
+      const items = (source.items ?? []).map((item) => ({
+        slot: 0, itemFile: item.id, activationPrg: "", multitaskPrg: "", initialVar: "", initialValue: "",
         finalVar: "", finalValue: "", loadingVar: "", loadingValue: "", activate: 0, activationType: 0,
         x: item.x, y: item.y, layer: item.layer, reserved: 0,
       }));
@@ -153,22 +155,24 @@ test("owned authored movement scenes reproduce every in-scope case through core"
         players: scene.setup.players.map((player) => ({ ...player, facing: player.facing as "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW", kind: "player" as const, source: `${player.id}.tem` })),
       });
       sprites.players = sprites.players.map((actor, index) => ({ ...actor, speed: scene.setup.players[index]?.speed ?? actor.speed }));
-      sprites.items = sprites.items.map((actor, index) => ({ ...actor, speed: source.items[index]?.speed ?? actor.speed }));
+      sprites.items = sprites.items.map((actor, index) => ({ ...actor, speed: source.items?.[index]?.speed ?? actor.speed }));
       const byTick = new Map<number, typeof scene.script>();
       for (const command of scene.script) byTick.set(command.t, [...(byTick.get(command.t) ?? []), command]);
       for (let tick = 0; tick < scene.ticks; tick += 1) {
+        const inputEvents: MovementEvent[] = [];
         for (const command of byTick.get(tick) ?? []) {
           if (command.actor !== undefined && command.dirs !== undefined) {
-            for (const direction of command.dirs) enqueueDirectionMove(sprites, command.actor, direction as "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW", source.pixelMovement, 8, command.clear === true);
-          } else if (command.actor === "hero" && command.dir !== undefined) {
-            enqueueDirectionMove(sprites, command.actor, command.dir as "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW", source.pixelMovement);
+            for (const direction of command.dirs.split(",")) enqueueDirectionMove(sprites, command.actor, direction as "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW", source.pixelMovement, source.pixelStep ?? 8, command.clear === true);
+          } else if (command.actor === undefined && command.dir !== undefined) {
+            enqueueDirectionMove(sprites, "hero", command.dir as "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW", source.pixelMovement, source.pixelStep ?? 8);
+            inputEvents.push({ type: "key-press", tick, direction: command.dir as "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW" });
           }
         }
-        const records = runMovementPhase(sprites, currentBoard, tick, { gameSpeed: source.gameSpeed, pixelMovement: source.pixelMovement });
+        const records = [...inputEvents, ...runMovementPhase(sprites, currentBoard, tick, { gameSpeed: source.gameSpeed, pixelMovement: source.pixelMovement })];
         const expected = scene.expect[tick];
         if (expected === undefined) continue;
         deepEqual([...sprites.players, ...sprites.items].map((actor) => [actor.id, actor.x, actor.y, actor.layer, actor.state, actor.facing]), expected.a, `${name}/${scene.name} tick ${tick}`);
-        if (expected.ev !== undefined) deepEqual(records.map((record) => ({ e: record.type, ...(record.actor === undefined ? {} : { actor: record.actor }), ...(record.winner === undefined ? {} : { winner: record.winner }), ...(record.loser === undefined ? {} : { loser: record.loser }), ...(record.vector === undefined && record.blocker === undefined ? {} : { by: record.vector ?? record.blocker }) })), expected.ev, `${name}/${scene.name} events ${tick}`);
+        if (expected.ev !== undefined) deepEqual(records.map((record) => ({ e: record.type, ...(record.type === "sprite-collision" ? {} : record.actor === undefined ? {} : { actor: record.actor }), ...(record.winner === undefined ? {} : { winner: record.winner }), ...(record.loser === undefined ? {} : { loser: record.loser }), ...(record.type === "sprite-collision" || record.type === "under-enter" || record.type === "under-leave" ? record.type === "under-enter" || record.type === "under-leave" ? { vector: record.vector } : {} : record.vector === undefined && record.blocker === undefined ? {} : { by: record.vector ?? record.blocker }), ...(record.type === "movement-complete" && record.blocked === true ? { blocked: true } : {}), ...(record.from === undefined ? {} : { from: record.from }), ...(record.to === undefined ? {} : { to: record.to }), ...(record.direction === undefined ? {} : { dir: record.direction }) })), expected.ev, `${name}/${scene.name} events ${tick}`);
       }
     }
   }

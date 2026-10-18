@@ -173,15 +173,28 @@ function shapeHitsVector(shape: readonly [number, number][], vector: WorldVector
 }
 function hitEdge(shape: readonly [number, number][], vector: WorldVector): [number, number] | null {
   const points = vectorPoints(vector);
-  for (let index = 0; index + 1 < points.length; index += 1) {
+  const segments = vector.closed !== 0 ? points.length : points.length - 1;
+  for (let index = 0; index < segments; index += 1) {
     const a = points[index];
-    const b = points[index + 1];
+    const b = points[(index + 1) % points.length];
     if (a === undefined || b === undefined) continue;
     for (let edge = 0; edge < shape.length; edge += 1) {
       const c = shape[edge];
       const d = shape[(edge + 1) % shape.length];
       if (c !== undefined && d !== undefined && segmentsIntersect(a, b, c, d)) return [b[0] - a[0], b[1] - a[1]];
     }
+  }
+  const shapeX = shape.map((point) => point[0]);
+  const shapeY = shape.map((point) => point[1]);
+  const minX = Math.min(...shapeX);
+  const maxX = Math.max(...shapeX);
+  const minY = Math.min(...shapeY);
+  const maxY = Math.max(...shapeY);
+  for (let index = 0; index < segments; index += 1) {
+    const a = points[index];
+    const b = points[(index + 1) % points.length];
+    if (a === undefined || b === undefined) continue;
+    if (Math.max(a[0], b[0]) >= minX && Math.min(a[0], b[0]) <= maxX && Math.max(a[1], b[1]) >= minY && Math.min(a[1], b[1]) <= maxY) return [b[0] - a[0], b[1] - a[1]];
   }
   return null;
 }
@@ -336,7 +349,7 @@ function advanceActor(section: SpritesSection, actor: SpriteActor, board: WorldB
     const move = next;
     const dx = move.target.x - actor.x;
     const dy = move.target.y - actor.y;
-    const active: SpriteActiveMove = { source: move.source, start: { x: actor.x, y: actor.y }, target: { ...move.target }, facing: move.facing, cadence: actor.prev !== null ? Math.max(0, ticksPerAdvance(actor.speed, gameSpeed) - 2) : 0, ignoreBoard: move.source === "points", tried: false };
+    const active: SpriteActiveMove = { source: move.source, start: { x: actor.x, y: actor.y }, target: { ...move.target }, facing: move.facing, cadence: actor.prev !== null ? Math.max(0, ticksPerAdvance(actor.speed, gameSpeed) - 1) : 0, ignoreBoard: move.source === "points", tried: false };
     movement = { ...movement, active };
     const moves = actor.queue.moves.length > 0 ? actor.queue.moves.slice(1) : actor.queue.moves;
     const nextActor: SpriteActor = { ...actor, state: "moving", queue: { ...queue, moves }, movement };
@@ -387,15 +400,18 @@ function advanceActor(section: SpritesSection, actor: SpriteActor, board: WorldB
           const remainingDx = fixed(active.target.x) - sx;
           const remainingDy = fixed(active.target.y) - sy;
           const done = passed || Math.sqrt(remainingDx * remainingDx + remainingDy * remainingDy) <= ADVANCE;
-          moved = { ...moved, movement: { ...cloneMovement(moved.movement), active: done ? null : { ...active, cadence: tpa - 1, facing: FACING[candidate] ?? actor.facing } }, state: done ? (moved.queue.moves.length === 0 ? "waiting" : "moving") : "moving" };
+          moved = { ...moved, movement: { ...cloneMovement(moved.movement), active: done ? null : { ...active, cadence: tpa - 1 } }, state: done ? (moved.queue.moves.length === 0 ? "waiting" : "moving") : "moving" };
           replaceActor(section, moved);
           if (done) event(tick, "movement-complete", { actor: actor.id }, sink);
           return;
         }
       }
     }
-    replaceActor(section, finishActor({ ...actor, facing: direction }, active, true, tpa, tick, sink));
+    const completes = actor.queue.moves.length === 0 && actor.queue.waypoint === null;
+    replaceActor(section, finishActor({ ...actor, facing: direction }, active, true, tpa, tick));
     event(tick, "blocked", { actor: actor.id, vector: hit.handle, blocked: true }, sink);
+    if (completes) event(tick, "movement-complete", { actor: actor.id, blocked: true }, sink);
+    return;
   }
   const blocker = spriteHit(section, actor, next.x, next.y);
   if (blocker !== null) {
@@ -443,6 +459,8 @@ export function enqueueDirectionMove(section: SpritesSection, id: string, facing
     return {
       ...value,
       state: value.visible ? "moving" : value.state,
+      prev: clear ? null : value.prev,
+      movement: clear ? { ...cloneMovement(value.movement), active: null, waitTicks: 0 } : value.movement,
       queue: {
         ...value.queue,
         moves: [...(clear ? [] : value.queue.moves), { source: "direction", target: { x: origin.x + vector[0] * distance, y: origin.y + vector[1] * distance }, facing }],
