@@ -266,3 +266,48 @@ A tracker source via libopenmpt (§10) would be the first optional pack, and the
 **Spine amendments for 6.1 (docs-first):**
 - AD-16: runners realise cues through registered audio sources; an unrealisable cue is a diagnostic and silence.
 - AD-31: audio formats contribute `AssetDecoder<AudioInfo>`.
+
+## 12. Generic core behaviour, language-neutral runner shape (owner direction, 2026-10-18)
+
+**Owner direction:** there needs to be a way to define "core behaviour" that stays generic, and the runner side needs a well-defined shape that works in most runner setups. A runner may not be written in TypeScript, but it must have the same shape.
+
+**What the spine already gives.** AD-1 makes every engine argument and result structured-cloneable plain data. AD-14 gives every port record a fixed key set (absent is `null`, never omitted). AD-30 already puts synth hot paths behind ports, so a runner can inject wasm while the TypeScript implementation stays the reference for goldens. The draw list is the working precedent: core emits data, any renderer replays it, and conformance vectors (epic 4 entries 4.6, 4.26) prove agreement. Audio should copy that pattern exactly.
+
+**Proposals:**
+
+1. **Core behaviour is normative prose plus data, not code.**
+   - A new spec page, `docs/spec/engine/audio.md` (or a section of `display-input-audio.md`), states what each cue means independently of any runner: `music.play` replaces the current track; `loop` semantics; `volume` is an integer percent of the game master; `sfx.play` channel rules; `soundfont.set` (the bank) semantics; when `audio.ended` is owed; what an unrealisable cue does.
+   - `AudioInfo` (§11) is a plain-data record. The core never knows source types or codecs, only format ids, lengths and loop points.
+2. **The runner shape is a protocol, not a class.** The runner-side contract is written once as messages plus a state machine; the TypeScript `AudioSource` interface is one binding of it. A Swift, Kotlin, Rust or C++ runner implements the same messages and states.
+
+   ```mermaid
+   stateDiagram-v2
+     [*] --> Loading: load(voiceId, bytes, bank|null)
+     Loading --> Ready: ready
+     Loading --> Failed: error(code)
+     Ready --> Playing: play(loop, volume, bus)
+     Playing --> Paused: pause
+     Paused --> Playing: resume
+     Playing --> Ended: ended (not looping)
+     Playing --> Stopped: stop
+     Paused --> Stopped: stop
+     Failed --> [*]
+     Ended --> [*]
+     Stopped --> [*]
+   ```
+
+   - **Messages in:** `load`, `play`, `pause`, `resume`, `stop`, `setVolume`, `setBank`.
+   - **Events out:** `ready`, `ended`, `error`.
+   - All are plain-data records with fixed keys and `null` for absence, under the AD-14 rules.
+   - The runner maps `cueId` to `voiceId` and turns `ended` into the `audio.ended { cueId }` input.
+   - A language-neutral schema (JSON Schema, generated from or checked against the TypeScript types) is published beside the spec page.
+3. **Conformance is data-driven, so any language can run it.** The §11 conformance kit becomes vectors: (asset bytes, message script) → expected events, lengths and a non-silent render check. This copies the shape of the rasteriser conformance vectors. A non-TypeScript runner proves itself by replaying the same vectors; the TypeScript implementation stays the reference (AD-30).
+4. **What a runner may decide, and what it may not.**
+   - It may: choose output API, buffer sizes, threading (AudioWorklet, native thread), and which sources and banks are installed.
+   - It may not: change cue meaning, invent or drop `audio.ended` for a cue that owes one, or feed anything back into core except the AD-14 inputs.
+
+**Wider scope (raise at epic 9 inception, not decided here).** The same treatment (a normative behaviour page, a language-neutral message schema and runner-replayable vectors) could cover the whole runner boundary: draw-list replay, audio, input events and AD-5 requests. That would let a fully native runner be built and checked against the same contract. Epic 6 does audio first and keeps the format reusable.
+
+**Breakdown impact (draft):**
+- Entry 6.1 writes the core-behaviour page and the runner protocol prose.
+- Entry 6.4a publishes the schema and the vector-based conformance kit beside the TypeScript binding.
