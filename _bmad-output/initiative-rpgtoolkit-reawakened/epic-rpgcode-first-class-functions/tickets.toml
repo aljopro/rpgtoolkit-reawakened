@@ -1,0 +1,111 @@
+# tickets.toml — planned entries of epic-rpgcode-first-class-functions, in build order. tickets.py reads it.
+# Table order is the build order; ids are stable names. Entry 1 is an owner-approval docs checkpoint (pending).
+# Extends RPGCode with first-class function values, dynamic invocation, and global symbol reassignment.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Rulings: Function handles, address-of syntax, invocation, and environment table"
+description = "Doc-first (G7), docs only: amends RPGCode language specification and ADR-0004 to define first-class function values (`FunctionValue` in `Value`), the address-of operator `&fn`, dynamic invocation syntax `f(args)`, global symbol reassignment for command overriding, and the unification of the 4-tier resolution pipeline into a single deterministic environment table with transparent built-in fallback."
+verify = "The commit touches only docs and affected specification/ADR files; each syntax and semantics decision carries an OWNER marker, evidence, and a rejected alternative; no implementation entry relies on unruled language syntax; a person approves the checkpoint."
+covers = ["CAP-5"]
+after = ["3.3", "3.27"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "spec - docs/spec/engine/rpgcode-language.md (FUN-1, FUN-5, R-35)",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-7, AD-8",
+  "idea - _bmad-output/initiative-rpgtoolkit-reawakened/nice-to-have.md, 'First-class function handles and pure-RPGCode plugin architecture'",
+]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Parser and AST support for function references and anonymous methods"
+description = "Extends the RPGCode parser and AST to parse `&identifier` (address-of function/command) and anonymous methods (`method(params) { ... }`), outputting typed AST nodes while maintaining 100% compatibility with legacy parameter and reference syntax."
+verify = "Parser tests verify `&name` and anonymous methods produce valid AST nodes; legacy address/reference syntax (`ParamSpec.byRef`, `return &lvalue`) continues to parse identically; syntax error diagnostics are clean and located."
+covers = ["CAP-5"]
+after = [1]
+hitl = false
+risk = "medium"
+references = [
+  "code - packages/core/src/script/parser.ts",
+  "spec - docs/spec/engine/rpgcode-language.md",
+]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Lowering and IR bytecode instructions for dynamic invocation"
+description = "Extends the AST lowerer to emit instructions for loading function handles (`load_fn`) and dynamic indirect calling (`call_indirect`) when a call expression targets a variable or expression rather than a fixed identifier."
+verify = "Lowerer unit tests confirm that `f(x)` lowers to `call_indirect` with target operand and argument count; static calls to un-reassigned built-ins lower efficiently; opcode formats maintain plain JSON serialization (G1)."
+covers = ["CAP-5"]
+after = [2]
+hitl = false
+risk = "medium"
+references = [
+  "code - packages/core/src/script/lower.ts",
+  "code - packages/core/src/script/ir.ts",
+]
+
+[[entry]]
+id = 4
+type = "story"
+title = "VM runtime execution of dynamic function handles and step budget"
+description = "Implements `call_indirect` execution in the step-machine VM: resolves function handles to executable program/frame targets or built-in handlers, enforces arity bounds, consumes VM steps deterministically against `Thread.budget`, and propagates returns/yields."
+verify = "Dynamic function calls execute correctly; arity mismatches throw catchable `arity.mismatch` errors; calling a non-function value throws `type.error`; step budget is counted identically to direct calls; G1/G3 invariants hold."
+covers = ["CAP-5"]
+after = [3]
+hitl = false
+risk = "high"
+references = [
+  "code - packages/core/src/script/vm.ts",
+  "ports - packages/core/src/ports/value.ts",
+]
+
+[[entry]]
+id = 5
+type = "story"
+title = "Unified environment table and global symbol reassignment"
+description = "Refactors command and function resolution into a unified environment table: global symbol assignments (`mediaPlay = myHook`) override active bindings; unassigned symbols fall back directly to core built-in handlers; `#redirect` compiles directly to environment assignments."
+verify = "Global symbol reassignments successfully intercept built-in calls; calling the original handle invokes the underlying engine command; un-reassigned calls execute at full native speed; legacy `#redirect` programs behave identically."
+covers = ["CAP-5"]
+after = [1, 4]
+hitl = false
+risk = "high"
+references = [
+  "code - packages/core/src/script/registry.ts",
+  "code - packages/core/src/script/builtins.ts",
+]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Serialization, snapshot, and save/restore of function handles"
+description = "Implements deterministic serialization of function handles and environment reassignments in `GameState.vm` (`save/sections/vm.ts`), ensuring games with active overrides save and restore bit-identically across snapshots and disk saves."
+verify = "SaveState schema v2 supports function handles; restoring a mid-game save preserves reassignments and function pointer variables; state hashes are bit-identical before save and after restore; G1 PlainData typecheck passes."
+covers = ["CAP-5"]
+after = [5, "3.11"]
+hitl = false
+risk = "high"
+references = [
+  "code - packages/core/src/save/sections/vm.ts",
+  "code - packages/core/src/save/state.ts",
+]
+
+[[entry]]
+id = 7
+type = "story"
+title = "Pure-RPGCode middleware plugin fixtures and legacy golden verification"
+description = "Validates the complete pure-RPGCode plugin architecture: authors multi-plugin middleware fixtures (`weather-system.prg`, `audio-stems.prg`) demonstrating chained command wrapping, verifies zero regressions across all legacy sample games (demo, Basic), and closes Epic 18."
+verify = "Middleware fixtures demonstrate 3+ plugins wrapping the same built-in with deterministic execution; all existing golden tests and sample game play-throughs pass with zero diffs; typecheck, lint, licence, and provenance gates pass."
+covers = ["CAP-5"]
+after = [6]
+hitl = false
+risk = "high"
+references = [
+  "fixtures - packages/core/test/fixtures/",
+  "golden - golden/scenes/",
+]
