@@ -262,8 +262,9 @@ test("engine classifies .tbm board-image dependencies as tile requests", () => {
   const boardRequest = initial.requests[0];
   if (boardRequest?.kind !== "asset") throw new Error("expected board request");
   const loaded = engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: boardRequest.reqId, bytes: boardBytes(board) } }]);
-  equal(loaded.requests[0]?.kind, "asset");
-  equal(loaded.requests[0]?.key, "bitmap/tiles.tbm");
+  const imageRequest = loaded.requests[0];
+  if (imageRequest?.kind !== "asset") throw new Error("expected tile bitmap request");
+  equal(imageRequest.key, "bitmap/tiles.tbm");
 });
 
 test("engine classifies .tan tile-animation dependencies as tile requests", () => {
@@ -281,6 +282,7 @@ test("engine classifies .tan tile-animation dependencies as tile requests", () =
   const boardRequest = initial.requests[0];
   if (boardRequest?.kind !== "asset") throw new Error("expected board request");
   const loaded = engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: boardRequest.reqId, bytes: boardBytes(board) } }]);
-  equal(loaded.requests[0]?.kind, "asset");
-  equal(loaded.requests[0]?.key, "tiles/anim.tan");
+  const animationRequest = loaded.requests[0];
+  if (animationRequest?.kind !== "asset") throw new Error("expected tile animation request");
+  equal(animationRequest.key, "tiles/anim.tan");
 });

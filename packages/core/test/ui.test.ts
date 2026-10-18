@@ -109,7 +109,8 @@ test("cursor maps allocate points, claim keys and draw the hand last", () => {
     input: { keys: [{ seq: 1, name: "Right", code: "ArrowRight", char: null }], focused: true },
     claims: [],
   }, wait), null);
-  const navigated = composeUi(state.ui, 100, 100, undefined, true, wait.cursorSelection);
+  const navigatedSelection = wait.kind === "input.key" ? wait.cursorSelection : undefined;
+  const navigated = composeUi(state.ui, 100, 100, undefined, true, navigatedSelection);
   const navigatedHand = navigated.at(-1);
   equal(navigatedHand?.kind, "blit");
   if (navigatedHand?.kind === "blit") {
