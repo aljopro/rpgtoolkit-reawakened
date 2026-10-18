@@ -39,9 +39,29 @@ export type WaypointLink = {
   cursor: number;
   live: boolean;
 };
+/** The actor's FIFO and its optional waypoint source. */
 export type SpriteQueue = {
   moves: SpriteMove[];
   waypoint: WaypointLink | null;
+};
+
+/** The resumable portion of one movement step (AD-10; E-22/R-50). */
+export type SpriteActiveMove = {
+  readonly source: QueueSource;
+  readonly start: SpritePoint;
+  readonly target: SpritePoint;
+  readonly facing: Facing | null;
+  readonly cadence: number;
+  readonly ignoreBoard: boolean;
+  readonly tried: boolean;
+};
+
+/** Fixed-tick movement state stored with the actor for snapshot/restore. */
+export type SpriteMovement = {
+  readonly active: SpriteActiveMove | null;
+  readonly waitTicks: number;
+  readonly pendingExit: Facing | null;
+  readonly under: string[];
 };
 
 /** One hydrated actor, shared by players and board items. */
@@ -68,6 +88,7 @@ export type SpriteActor = {
   readonly activationBase: SpriteBase;
   readonly visual: SpriteVisual;
   readonly queue: SpriteQueue;
+  readonly movement: SpriteMovement;
   readonly prev: SpritePoint | null;
   readonly frozenUntil: number | null;
   readonly multitaskProgram: string | null;
@@ -75,7 +96,7 @@ export type SpriteActor = {
   readonly multitaskThread: number | null;
 };
 
-/** The AD-10 `sprites` section, schema version 2. */
+/** The AD-10 `sprites` section, schema version 2 with movement-aware actors. */
 export type SpritesSection = {
   version: number;
   players: SpriteActor[];
@@ -176,6 +197,7 @@ export function actorFromSource(source: SpriteActorSource, board: WorldBoard, in
     activationBase: actorBase(actor, fallback.activation, 1),
     visual: actorVisual(source.character, source.item),
     queue: { moves: [], waypoint: null },
+    movement: { active: null, waitTicks: 0, pendingExit: null, under: [] },
     prev: null,
     frozenUntil: null,
     multitaskProgram: multitask === "" ? null : multitask,

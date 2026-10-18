@@ -110,13 +110,18 @@ function migrateEngine(record: Record<string, unknown>, schema: Record<string, u
   schema.engine = SCHEMA_VERSIONS.engine;
 }
 
-/** Migrate the old empty sprites placeholder to the versioned actor section. */
+/** Migrate the old empty sprites placeholder and v2 actors to the movement-aware section. */
 function migrateSprites(record: Record<string, unknown>, schema: Record<string, unknown>): void {
   const version = schema.sprites;
   if (typeof version !== "number") shapeError("the snapshot's `schema` has no numeric `sprites` version");
   if (version < SPRITES_SCHEMA_VERSION) {
     const current = asSpritesSection(record.sprites);
-    record.sprites = current === null ? createSpritesSection() : current;
+    const section = current === null ? createSpritesSection() : current;
+    const movement = { active: null, waitTicks: 0, pendingExit: null, under: [] };
+    section.players = section.players.map((actor) => ({ ...actor, movement: actor.movement ?? movement }));
+    section.items = section.items.map((actor) => ({ ...actor, movement: actor.movement ?? movement }));
+    section.version = SPRITES_SCHEMA_VERSION;
+    record.sprites = section;
     schema.sprites = SPRITES_SCHEMA_VERSION;
   }
 }
