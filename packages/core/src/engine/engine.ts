@@ -44,6 +44,7 @@ import {
   type ProgramRef,
   type ResolvedPlugin,
   type ScriptServices,
+  createVmState,
 } from "../script/index.ts";
 import type { Thread } from "../script/state.ts";
 import type { WaitView } from "../ports/wait.ts";
@@ -71,6 +72,13 @@ export type EnginePhaseRegistration = {
   readonly run: (state: GameState) => void;
 };
 
+/** A section owner reset callback (E-06; docs/spec/engine/main-loop-and-startup.md#reawakened-reset-sections). */
+export type EngineResetRegistration = {
+  readonly section: SectionKey;
+  readonly rank?: number;
+  readonly reset: (state: GameState) => void;
+};
+
 type EngineCommonInit = {
   readonly seed: number;
   readonly assetIndex: AssetIndex;
@@ -80,6 +88,7 @@ type EngineCommonInit = {
   readonly maxTicks: number;
   /** Resolved plugin layers; when absent boot builds them from the main file (E-02 step 3). */
   readonly plugins?: readonly ResolvedPlugin[];
+  readonly resetRegistrations?: readonly EngineResetRegistration[];
   readonly phaseRegistrations?: readonly EnginePhaseRegistration[];
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
   readonly cameraTarget?: CameraTarget;
@@ -151,6 +160,7 @@ export function createEngine(init: EngineInit): Engine {
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
   let failed = false;
+  let quitRequested = false;
   let breakpoints: readonly Breakpoint[] = [];
   state.surfaces = createSurfacesSection(init.width, init.height);
   state.camera = createCameraSection(init.width, init.height);
@@ -229,10 +239,66 @@ export function createEngine(init: EngineInit): Engine {
 
   /** `send` posts its request here; the engine swaps boards between ticks (E-19). A later send replaces an earlier one. */
   function applyEngineEffect(effect: EffectRecord): void {
-    if (effect.name !== "send") return;
-    const [board, x, y, layer] = effect.args;
-    if (typeof board !== "string" || typeof x !== "number" || typeof y !== "number" || typeof layer !== "number") return;
-    state.engine.transition = { board, x, y, layer };
+    const [, second] = effect.args;
+    if (effect.name === "send") {
+      const [board, x, y, layer] = effect.args;
+      if (typeof board === "string" && typeof x === "number" && typeof y === "number" && typeof layer === "number") state.engine.transition = { board, x, y, layer };
+      return;
+    }
+    if (effect.name === "reset") {
+      resetLifecycle();
+      return;
+    }
+    if (effect.name === "mainFile" && typeof second === "string") {
+      resetLifecycle(second);
+      return;
+    }
+    if (effect.name === "quit" && !quitRequested) {
+      quitRequested = true;
+      requestsOut.push({ kind: "quit", reqId: nextRequestId++ });
+    }
+  }
+  function resetLifecycle(nextMain?: string): void {
+    const rng = state.rng;
+    const time = state.time;
+    const fresh = createGameState({ seed: 0 });
+    state.world = fresh.world;
+    state.sprites = fresh.sprites;
+    state.party = fresh.party;
+    state.inventory = fresh.inventory;
+    state.triggers = fresh.triggers;
+    state.vm = createVmState();
+    state.battle = fresh.battle;
+    state.menu = fresh.menu;
+    state.input = createInputSection();
+    state.ui = fresh.ui;
+    state.camera = createCameraSection(init.width, init.height);
+    state.fx = fresh.fx;
+    state.audio = fresh.audio;
+    state.surfaces = createSurfacesSection(init.width, init.height);
+    state.rng = rng;
+    state.time = time;
+    pending.clear();
+    queuedInputs.length = 0;
+    installedFonts.clear();
+    quitRequested = false;
+    failed = false;
+    state.engine = mainKey === null ? { claims: [] } : { claims: [], boot: { stage: "assets", main: mainKey, fonts: [] } };
+    for (const registration of [...(init.resetRegistrations ?? [])].sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0))) registration.reset(state);
+    if (nextMain !== undefined) {
+      const found = index.byKey.get(assetKey(nextMain));
+      if (found === undefined) {
+        failed = true;
+        state.engine.boot = { stage: "stopped", main: "", fonts: [] };
+        diagnostics.push({ code: "asset.invalid", file: nextMain, line: 0, message: `main file "${nextMain}" is not in the asset index` });
+      } else {
+        mainKey = found;
+        mainFile = null;
+        root = init.assetRoot;
+        state.engine.boot = { stage: "main", main: found, fonts: [] };
+      }
+    }
+    services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS, loader ?? undefined);
   }
   function fail(diagnostic: Diagnostic): void {
     diagnostics.push(diagnostic);

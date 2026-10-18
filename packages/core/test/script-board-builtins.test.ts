@@ -1,6 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import { assetKey, createGameState, createScriptServices, createDefaultVirtuals, type GameState, type WorldBoard } from "../src/index.ts";
+import { assetKey, createGameState, createScriptServices, createDefaultVirtuals, ScriptError, type Arg, type GameState, type WorldBoard } from "../src/index.ts";
 import { applyWorldEffect } from "../src/world/effects.ts";
 import { WORLD_PLUGIN } from "../src/script/packs/world.ts";
 
@@ -37,6 +37,36 @@ test("board built-ins report board reads and synchronous world effects", () => {
   equal(state.world.board?.layers[0]?.tiles[0]?.asset, "tiles/new.tst");
   const vector = services.commands.get("boardgetvector")?.spec?.call(services.view, [{ value: 0, ref: null }, { value: 0, ref: null }], () => ({ value: null }));
   deepEqual(vector?.out, [[1, 2], [2, 1], [3, 1], [4, 0], [5, 3]]);
+});
+
+test("lifecycle built-ins emit reset, main-file, trigger, game-over and one shared quit effect", () => {
+  const state = createGameState({ seed: 12 });
+  const services = createScriptServices(state, [{ definition: WORLD_PLUGIN }]);
+  const call = (name: string, args: readonly Arg[] = []) => {
+    const spec = services.commands.get(name)?.spec;
+    if (spec === undefined) throw new Error(`missing command ${name}`);
+    return spec.call(services.view, args, () => ({ value: null }));
+  };
+  equal(call("reset").effects?.[0]?.args?.[0], "reset");
+  equal(call("mainFile", [{ value: "other.gam", ref: null }]).effects?.[0]?.args?.[0], "mainFile");
+  equal(call("gone").effects?.[0]?.section, "triggers");
+  equal(call("over").effects?.[0]?.args?.[0], "over");
+  for (const alias of ["quitgame", "dos", "windows"]) equal(call(alias).effects?.[0]?.args?.[0], "quit");
+});
+
+test("obsolete lifecycle built-ins raise catchable errors", () => {
+  const state = createGameState({ seed: 12 });
+  const services = createScriptServices(state, [{ definition: WORLD_PLUGIN }]);
+  for (const name of ["start", "godos", "win"]) {
+    const spec = services.commands.get(name)?.spec;
+    if (spec === undefined) throw new Error(`missing command ${name}`);
+    try {
+      spec.call(services.view, [], () => ({ value: null }));
+    } catch (error) {
+      if (!(error instanceof ScriptError)) throw error;
+      equal(error.code, "builtin.obsolete");
+    }
+  }
 });
 
 test("board virtual variables read hydrated board data", () => {
