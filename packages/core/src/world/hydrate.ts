@@ -7,13 +7,14 @@
 import type { AssetKey } from "../ports/keys.ts";
 import { frameAt, TICKS_PER_SECOND } from "../time/index.ts";
 import { BinaryReader } from "../formats/binary/reader.ts";
-import { resolveTileReference } from "../formats/resolver/resolver.ts";
+import { resolveAsset, resolveTileReference } from "../formats/resolver/resolver.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
 import { readBoard } from "../formats/board/reader.ts";
 import { boardGrid, type Board } from "../formats/board/model.ts";
 import { convertPreVectorBoard } from "../formats/board/pre-vector-convert.ts";
 import { readPreVectorBoard } from "../formats/board/pre-vector-reader.ts";
 import { readTileAnimation } from "../formats/tile-animation/reader.ts";
+import { readTileBitmap, tileBitmapCell } from "../formats/tile-bitmap/index.ts";
 import { readTileset, tileDimensions } from "../formats/tileset/index.ts";
 import { bakeLights } from "../render/shade.ts";
 import type {
@@ -153,6 +154,7 @@ function worldBoard(
   board: Board,
   layers: WorldBoard["layers"],
   tileMetadata: readonly WorldTileset[],
+  images: readonly WorldImage[],
 ): WorldBoard {
   const grid = boardGrid(board.sizeX, board.sizeY, board.coordType);
   const coord = board.coordType & 3;
@@ -190,7 +192,7 @@ function worldBoard(
     programs: board.programs.map(program),
     rawItems,
     items,
-    images: board.images.map(image),
+    images: images.map((value) => ({ ...value, ...(value.cells === undefined ? {} : { cells: value.cells.map((cell) => ({ ...cell })) }) })),
     threads: [...board.threads],
     constants: [...board.constants],
     layerTitles: [...board.layerTitles],
@@ -201,6 +203,10 @@ function worldBoard(
       layer: props.start.layer > 0 ? props.start.layer : 1,
     },
     tilesets: [...tileMetadata],
+    runtime: {
+      tileEdits: [],
+      tileTypes: Array.from({ length: board.sizeL * grid.width * grid.height }, () => "NORMAL"),
+    },
   };
   return bakeLights(hydrated);
 }
@@ -274,11 +280,89 @@ export function hydrateBoard(
       }),
     });
   }
+  const hydratedImages: WorldImage[] = [];
+  for (const source of board.images) {
+    const resolvedImage = resolveAsset(index, root, "bitmaps", source.file);
+    if (!resolvedImage.ok) {
+      hydratedImages.push(image(source));
+      continue;
+    }
+    const imageBytes = assets.get(resolvedImage.value);
+    if (imageBytes === undefined) {
+      hydratedImages.push({ ...image(source), asset: resolvedImage.value });
+      continue;
+    }
+    const isTileBitmap = source.file.toLowerCase().endsWith(".tbm");
+    if (!isTileBitmap) {
+      hydratedImages.push({ ...image(source), asset: resolvedImage.value });
+      continue;
+    }
+    const parsedBitmap = readTileBitmap(new BinaryReader(imageBytes, resolvedImage.value));
+    if (!parsedBitmap.ok) return { value: null, error: formatError(parsedBitmap.error, resolvedImage.value), missing: null };
+    const cells: NonNullable<WorldImage["cells"]> = [];
+    const columns = Math.max(0, parsedBitmap.value.width);
+    const rows = Math.max(0, parsedBitmap.value.height);
+    for (let x = 0; x < columns; x += 1) {
+      for (let y = 0; y < rows; y += 1) {
+        const bitmapCell = tileBitmapCell(parsedBitmap.value, x, y);
+        if (bitmapCell === undefined || bitmapCell.tile === "") continue;
+        const tileResult = resolveTileReference(index, root, bitmapCell.tile);
+        if (!tileResult.ok) return { value: null, error: formatError(tileResult.error, bitmapCell.tile), missing: null };
+        if (tileResult.value.kind === "empty") continue;
+        let selectedTile = tileResult.value;
+        if (selectedTile.kind === "animatedTile") {
+          addDependency(selectedTile.asset, dependencies, depSet);
+          const animationBytes = assets.get(selectedTile.asset);
+          if (animationBytes === undefined) return { value: null, error: null, missing: selectedTile.asset };
+          const animation = readTileAnimation(new BinaryReader(animationBytes, selectedTile.asset));
+          if (!animation.ok) return { value: null, error: formatError(animation.error, selectedTile.asset), missing: null };
+          const frameIndex = frameAt(0, tick, ticksPerFrame(animation.value.speed), animation.value.frames.length, true);
+          const frame = frameIndex < 0 ? "" : animation.value.frames[frameIndex] ?? "";
+          if (frame === "") continue;
+          const frameResult = resolveTileReference(index, root, frame);
+          if (!frameResult.ok) return { value: null, error: formatError(frameResult.error, frame), missing: null };
+          if (frameResult.value.kind === "empty") continue;
+          addDependency(frameResult.value.asset, dependencies, depSet);
+          selectedTile = frameResult.value;
+        }
+        const tileAsset = selectedTile.asset;
+        const tileNumber = selectedTile.kind === "tileset" || selectedTile.kind === "isometric" ? selectedTile.tile : 1;
+        addDependency(tileAsset, dependencies, depSet);
+        const tileBytes = assets.get(tileAsset);
+        if (tileBytes === undefined) return { value: null, error: null, missing: tileAsset };
+        const info = tileInfo(tileAsset, tileBytes);
+        if (info.error !== null) return { value: null, error: info.error, missing: null };
+        if (info.metadata !== null) metadata.set(tileAsset, info.metadata);
+        cells.push({
+          x,
+          y,
+          tile: {
+            asset: tileAsset,
+            tile: tileNumber,
+            ...(info.metadata === null ? {} : {
+              nativeWidth: info.metadata.nativeWidth,
+              nativeHeight: info.metadata.nativeHeight,
+              width: info.metadata.width,
+              height: info.metadata.height,
+            }),
+          },
+          tint: { r: bitmapCell.r, g: bitmapCell.g, b: bitmapCell.b },
+        });
+      }
+    }
+    hydratedImages.push({
+      ...image(source),
+      asset: resolvedImage.value,
+      width: columns * 32,
+      height: rows * 32,
+      cells,
+    });
+  }
   const layers = Array.from({ length: board.sizeL }, (_, layer) => ({
     tiles: Array.from({ length: grid.width * grid.height }, (_, cell) => {
       const lutIndex = board.tileMatrix[layer * grid.width * grid.height + cell] ?? 0;
       return resolved[lutIndex] ?? null;
     }),
   }));
-  return { value: { board: worldBoard(key, board, layers, [...metadata.values()]), dependencies }, error: null, missing: null };
+  return { value: { board: worldBoard(key, board, layers, [...metadata.values()], hydratedImages), dependencies }, error: null, missing: null };
 }
