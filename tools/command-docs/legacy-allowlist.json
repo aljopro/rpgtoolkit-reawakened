@@ -107,7 +107,6 @@
     "catalogue/forceredraw",
     "catalogue/rendernow",
     "catalogue/getres",
-    "catalogue/getcorner",
     "catalogue/createcanvas",
     "catalogue/killcanvas",
     "catalogue/drawcanvas",
