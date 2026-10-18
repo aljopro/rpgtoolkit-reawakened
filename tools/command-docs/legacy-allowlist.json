@@ -186,7 +186,6 @@
     "catalogue/setimagetranslucent",
     "catalogue/setimageadditive",
     "catalogue/viewbrd",
-    "catalogue/send",
     "catalogue/addplayer",
     "catalogue/newplayer",
     "catalogue/newplyr",

@@ -204,7 +204,6 @@ const ROWS: readonly Row[] = [
   { name: "setimageadditive", kind: "mixed", params: "file,x,y,w,h,%", sections: ["surfaces"], wait: null, obsolete: false, byRefOut: false },
   { name: "wipe", kind: "mixed", params: "file,effect[,speed]", sections: ["fx"], wait: null, obsolete: false, byRefOut: false },
   { name: "viewbrd", kind: "mixed", params: "file[,x,y[,cnv]]", sections: ["surfaces"], wait: null, obsolete: false, byRefOut: false },
-  { name: "send", kind: "mixed", params: "board,x,y[,layer]", sections: ["world","camera","sprites","vm","engine"], wait: null, obsolete: false, byRefOut: false },
   { name: "addplayer", kind: "mixed", params: "file", sections: ["party","inventory"], wait: null, obsolete: false, byRefOut: false },
   { name: "newplayer", kind: "mixed", params: "file", sections: ["party","sprites"], wait: null, obsolete: false, byRefOut: false },
   { name: "newplyr", kind: "mixed", params: "file", sections: ["party","sprites"], wait: null, obsolete: false, byRefOut: false },

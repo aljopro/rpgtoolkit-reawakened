@@ -65,6 +65,21 @@ The editor's "Test game" runs `engine <file.gam>` without saving open editors fi
 10. Enter the main loop.
 <a id="reawakened-startup-ports"></a>
 **Reawakened rule (OWNER; startup ports).** Startup calls data-only ports rather than host APIs: `InitialPlayerPort.createFromInitChar(initChar: AssetKey): PlayerId` creates the first player at step 6; `PlayerPresencePort.hasPlayer(): boolean` performs the step-8 no-player check and emits the specified diagnostic; and `SavedGamePort.load(path: SavePath): LoadResult` owns the step-9 saved-game branch. A successful load skips `initBoard`; a miss or failure returns to the ordinary `initBoard` path according to its result. `Load()` and `dirSav` remain menu-and-save responsibilities.
+<a id="reawakened-boot-sequence"></a>
+**Reawakened rule (OWNER; boot sequence, unverified default).** The core runs E-02 as data, driven by `advance`, with every file arriving as an AD-14 asset reply (time stays frozen while a reply is outstanding). Boot starts from the main file the runner names. The core then does these steps in order:
+
+1. **Step 1** is the host's: `Saved\` is the `saves` blob area, and the main file is the first asset requested. A game-folder root takes its `projectPath` from the main file; a package root ignores it.
+2. **Step 2** requests every `*.ttf` under the project's `Font\` folder, in index order, and installs each that passes the font licence gate into the run's font set; a rejected font is a located diagnostic and is skipped.
+3. **Step 3** builds the plugin manifest: the engine default manifest plus the native packs the main file's plugin list names through the legacy plugin table. A declined or unknown name is a located diagnostic. Menu and battle plugin names belong to those subsystems and are not manifest entries.
+4. **Steps 4 and 5** belong to the runner (window, resolution) and to movement-triggers (tile or pixel movement, game speed). The core does nothing for them.
+5. **Program sources** under `Prg\` are requested together with the fonts, because the script runtime resolves `run`, `thread`, includes, board programs and the enter program synchronously from the files already fetched.
+6. **Step 6** posts one `sprites` effect `createplayer(initChar)` with the resolved `Chrs` asset key (no effect when `initChar` is empty). A registered `sprites` owner applies it; until one registers, the record waits in the bounded pending queue. This effect is `InitialPlayerPort.createFromInitChar`'s contract.
+7. **Step 7** starts the start-up program as the one `blocking` thread and runs ordinary ticks, with no board loaded, until that thread has finished. Other threads and input run as in any tick.
+8. **Step 8** asks `PlayerPresencePort.hasPlayer()`. When it is false the engine stops and reports the diagnostic `startup.no-player` ("an initial character must be defined").
+9. **Step 9** asks `SavedGamePort.restored()`. When it is true no board is loaded and the saved state supplies the board, threads and music. Otherwise `initBoard` is loaded and entered at the board's start position (pixels) as in the board-entry rule below, and the engine enters the main loop.
+
+<a id="reawakened-board-entry"></a>
+**Reawakened rule (OWNER; board entry, unverified default).** Every arrival on a board, at boot or by `send`, runs these steps in order: the old board's `board` threads are killed (not at boot), the board is installed, the player is placed (`sprites` effect `placeplayer(x, y, layer, unit)`, `unit` `"pixel"` at boot from the board start and `"tile"` for `send`), the camera is re-aligned with no smoothing on the player (or on the destination when no player position is available), the program under the player is deactivated (`triggers` effect `deactivateat(x, y, layer, unit)`), the board music is posted as an `audio` effect (E-16; no record when the board names no music or the same file as the one already ruled playing), the board's threads start in board order, and the enter program runs. The enter program is the one `blocking` thread when none is live, and a `board` thread when the arrival comes from a program that is itself the blocking thread (AD-26 allows one blocking thread).
 
 ### Board loading and layers
 
