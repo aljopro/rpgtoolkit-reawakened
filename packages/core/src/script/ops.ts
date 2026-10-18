@@ -58,6 +58,26 @@ export type StepOp =
   | { readonly op: "storeRef"; readonly pos: SourcePos }
   | { readonly op: "index"; readonly pos: SourcePos }
   | { readonly op: "member"; readonly name: string; readonly pos: SourcePos }
+  /**
+   * Load a statically identified callable definition. `def` is a stable definition ID
+   * (for example `<inline>#lambda_1`) and captures are plain environment-cell IDs.
+   *
+   * The VM owns resolving the definition; keeping this as an instruction rather than
+   * embedding a closure preserves G1's plain-data state boundary.
+   */
+  | {
+      readonly op: "load_fn";
+      readonly def: string;
+      readonly captures: readonly string[];
+      readonly pos: SourcePos;
+    }
+  | {
+      /** Invoke the callable at the emitted operand index with `argc` following arguments. */
+      readonly op: "call_indirect";
+      readonly target: number;
+      readonly argc: number;
+      readonly pos: SourcePos;
+    }
   | {
       readonly op: "methodCall";
       readonly name: string;

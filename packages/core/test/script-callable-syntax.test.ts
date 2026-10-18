@@ -128,21 +128,36 @@ test("`=>` does not change `>=` or the legacy operators", () => {
   equal(kindOf(assignedValue("ok = (a == b)"), "binary").operator, "==");
 });
 
-test("compiling a lambda, a dictionary literal or an indirect call is a located refusal until 18.3", () => {
-  const cases: readonly [string, number][] = [
-    ["x = 1\nf = (a) => a", 2],
-    ["\n\nd = { k: 1 }", 3],
-    ["f(1)(2)", 1],
-  ];
-  for (const [source, line] of cases) {
-    let thrown: ScriptError | undefined;
-    try {
-      compileInline(source);
-    } catch (error) {
-      thrown = error as ScriptError;
-    }
-    if (thrown === undefined) throw new Error(`expected a refusal for: ${source}`);
-    equal(thrown.code, "syntax.unsupported", source);
-    equal(thrown.pos?.line, line, source);
+test("lowers lambdas to deterministic function handles and dynamic calls to explicit IR", () => {
+  const lambdaProgram = compileInline("f = (a) => a");
+  deepEqual(lambdaProgram.ops.slice(0, 6), [
+    { op: "load", name: "f", pos: { file: "<inline>", line: 1 } },
+    { op: "load_fn", def: "<inline>#lambda_1", captures: [], pos: { file: "<inline>", line: 1 } },
+    { op: "storeRef", pos: { file: "<inline>", line: 1 } },
+    { op: "pop", pos: { file: "<inline>", line: 1 } },
+    { op: "return", pos: { file: "<inline>", line: 1 } },
+    { op: "load", name: "a", pos: { file: "<inline>", line: 1 } },
+  ]);
+  equal(lambdaProgram.functions["<inline>#lambda_1"]?.[0]?.params[0]?.name, "a");
+
+  deepEqual(compileInline("f(1)(2)").ops, [
+    { op: "push", value: 1, pos: { file: "<inline>", line: 1 } },
+    { op: "call", name: "f", argc: 1, pos: { file: "<inline>", line: 1 } },
+    { op: "push", value: 2, pos: { file: "<inline>", line: 1 } },
+    { op: "call_indirect", target: 0, argc: 1, pos: { file: "<inline>", line: 1 } },
+    { op: "pop", pos: { file: "<inline>", line: 1 } },
+    { op: "return", pos: { file: "<inline>", line: 1 } },
+  ]);
+});
+
+test("dictionary literals remain a located refusal until object storage is implemented", () => {
+  let thrown: ScriptError | undefined;
+  try {
+    compileInline("\n\nd = { k: 1 }");
+  } catch (error) {
+    thrown = error as ScriptError;
   }
+  if (thrown === undefined) throw new Error("expected dictionary lowering refusal");
+  equal(thrown.code, "syntax.unsupported");
+  equal(thrown.pos?.line, 3);
 });
