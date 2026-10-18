@@ -1,7 +1,11 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   assetKey,
+  loadAnimation,
   advanceFx,
   advanceAnimations,
   applyFxDrawList,
@@ -10,11 +14,13 @@ import {
   createFxSection,
   createGameState,
   createScriptServices,
+  createSurfacesSection,
   updateCamera,
   RENDER_PLUGIN,
   type EffectRecord,
   type DrawList,
 } from "../src/index.ts";
+const testDir = dirname(fileURLToPath(import.meta.url));
 
 function effect(name: string, args: (string | number)[]): EffectRecord {
   return { seq: 1, tick: 0, thread: 1, name, kind: "mixed", args, out: {}, result: null, patch: null, wait: null, request: null };
@@ -69,6 +75,20 @@ test("script animations advance frames, emit each sound once and draw above the 
   equal(state.fx.animations.length, 1);
   applyFxEffect(state, { ...effect("endanimation", [1]), result: null });
   equal(state.fx.animations.length, 0);
+});
+
+test("animated GIF pages become distinct deterministic animation surfaces", () => {
+  const state = createGameState({ seed: 1 });
+  state.surfaces = createSurfacesSection();
+  applyFxEffect(state, { ...effect("animation", ["gif-anim89a.gif", 0, 0, 1]), result: 1 });
+  const animation = state.fx.animations[0];
+  if (animation === undefined) throw new Error("animation was not created");
+  const bytes = new Uint8Array(readFileSync(join(testDir, "fixtures", "authored", "gif-anim89a.gif")));
+  equal(loadAnimation(state, animation, bytes, () => null), true);
+  equal(animation.frames.length, 3);
+  equal(animation.frames.every((frame) => frame.surface !== undefined), true);
+  equal(new Set(animation.frames.map((frame) => frame.surface)).size, 3);
+  equal(animation.delayTicks, 6);
 });
 
 test("fade advances exactly 30 ticks and leaves a terminal primitive", () => {

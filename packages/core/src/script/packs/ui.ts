@@ -113,6 +113,10 @@ export const UI_PLUGIN: PluginDefinition = {
 export function applyUiEffect(state: { ui: UiSection; surfaces?: SurfacesSection }, name: string, args: readonly PlainData[]): void {
   const ui = state.ui;
   if (ui.message === undefined) Object.assign(ui, createUiSection());
+  if (ui.backgroundSurface === null && state.surfaces !== undefined && state.surfaces.entries !== undefined) {
+    ui.backgroundSurface = colourSurface(state.surfaces, ui.message.background);
+    ui.backgroundRev = 0;
+  }
   const first = args[0];
   const stringArg = (value: PlainData | undefined): string => typeof value === "string" ? value : "";
   const numberArg = (value: PlainData | undefined): number => typeof value === "number" ? value : 0;

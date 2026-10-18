@@ -1,5 +1,5 @@
 /** Owner: core/render (E-54, E-59; docs/spec/engine/plugins-and-battle.md#e-54, docs/spec/engine/rpgcode-functions.md#e-59). */
-import type { AssetKey } from "../../ports/keys.ts";
+import type { AssetKey, SurfaceId } from "../../ports/keys.ts";
 
 export type FxColor = { r: number; g: number; b: number };
 
@@ -8,6 +8,7 @@ export type AnimationFrameState = {
   image: string;
   asset: AssetKey | null;
   tile: number | null;
+  surface?: SurfaceId;
   srcWidth: number;
   srcHeight: number;
   transparent: FxColor;
