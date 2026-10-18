@@ -34,6 +34,44 @@ export type UiModal = {
   readonly result: number | string | null;
 };
 
+export type UiCursorPoint = {
+  readonly x: number;
+  readonly y: number;
+};
+
+export type UiCursorMap = {
+  readonly id: number;
+  readonly points: UiCursorPoint[];
+  readonly selected: number;
+};
+
+export type UiCursorImage = {
+  readonly asset: string;
+  readonly x: number;
+  readonly y: number;
+  readonly hotspotX: number;
+  readonly hotspotY: number;
+  readonly transparent: Rgb;
+  readonly width: number;
+  readonly height: number;
+};
+
+export type UiCursorHand = {
+  readonly asset: string;
+  readonly stretch: boolean;
+  readonly width: number;
+  readonly height: number;
+};
+
+export type UiButton = {
+  readonly slot: number;
+  readonly asset: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+
 export type UiSection = {
   font: FontRef;
   underline: boolean;
@@ -45,6 +83,12 @@ export type UiSection = {
   modal: UiModal | null;
   backgroundSurface: SurfaceId | null;
   backgroundRev: number;
+  cursorMaps?: UiCursorMap[];
+  nextCursorMapId?: number;
+  activeCursorMap?: number;
+  cursorHand?: UiCursorHand;
+  mouseCursor?: UiCursorImage | null;
+  buttons?: UiButton[];
 };
 
 const FALLBACK_FONT: FontRef = {
