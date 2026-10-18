@@ -193,10 +193,16 @@ def _ellipse_weight(light: dict[str, Any], point: tuple[int, int]) -> int | None
         return None
     if y_radius == 0 and dy != 0:
         return None
+    # Round-7: boundary excluded; strict inequality in exact integer arithmetic.
+    if x_radius != 0 and y_radius != 0:
+        if dx * dx * y_radius * y_radius + dy * dy * x_radius * x_radius >= (x_radius * y_radius) ** 2:
+            return None
+    elif (x_radius == 0 and dy >= y_radius) or (y_radius == 0 and dx >= x_radius):
+        return None
     rx = 0 if x_radius == 0 else dx * FIXED / x_radius
     ry = 0 if y_radius == 0 else dy * FIXED / y_radius
     distance = int(math.sqrt(rx * rx + ry * ry))
-    return None if distance > FIXED else FIXED - distance
+    return FIXED - distance
 
 
 def _point_on_segment(point: tuple[int, int], a: list[int], b: list[int]) -> bool:

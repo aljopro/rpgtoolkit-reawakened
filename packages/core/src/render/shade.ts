@@ -99,11 +99,14 @@ function ellipseWeight(light: WorldLight, point: WorldPoint): number | null {
   if (xRadius === 0 && yRadius === 0) return dx === 0 && dy === 0 ? FIXED : null;
   if (xRadius === 0 && dx !== 0) return null;
   if (yRadius === 0 && dy !== 0) return null;
+  // Round-7 boundary rule: normalized elliptical radius must be strictly below 1 (integer test, no float edge).
+  if (xRadius !== 0 && yRadius !== 0 && dx * dx * yRadius * yRadius + dy * dy * xRadius * xRadius >= xRadius * xRadius * yRadius * yRadius) return null;
+  if (xRadius === 0 && dy >= yRadius) return null;
+  if (yRadius === 0 && dx >= xRadius) return null;
   const rx = xRadius === 0 ? 0 : dx * FIXED / xRadius;
   const ry = yRadius === 0 ? 0 : dy * FIXED / yRadius;
   const radiusSquared = rx * rx + ry * ry;
   const distance = Math.trunc(Math.sqrt(radiusSquared));
-  if (distance > FIXED) return null;
   return FIXED - distance;
 }
 

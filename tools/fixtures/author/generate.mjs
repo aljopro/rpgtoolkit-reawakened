@@ -563,7 +563,12 @@ const LIGHT_NIGHT_BOARD = authoredBoard({
   ambient: [-110, -110, -110],
   lights: [ellipseLight([0, 0, 0], [130, 130, 130])],
 });
-
+// Round-7 boundary: centre and radii chosen so ellipse boundary points land exactly on
+// 32x32 cell centres, e.g. (208,80) and (112,16); both must stay unlit.
+const LIGHT_BOUNDARY_BOARD = authoredBoard({
+  ...LIGHT_BOARD_BASE,
+  lights: [{ layer: 1, type: 0, nodes: [[112, 80], [208, 80], [112, 144]], colours: [asRgb([-80, -40, -20]), asRgb([80, 120, 40])] }],
+});
 
 const AUTHORED = {
   // Authored from spec, unverified against a real file (no detail-4 sample
@@ -573,6 +578,7 @@ const AUTHORED = {
   "light-oracle-clipped.brd": LIGHT_CLIPPED_BOARD,
   "light-oracle-overlap.brd": LIGHT_OVERLAP_BOARD,
   "light-oracle-night.brd": LIGHT_NIGHT_BOARD,
+  "light-oracle-boundary.brd": LIGHT_BOUNDARY_BOARD,
 
   // exists in the archive). Two tiles pin the per-tile offset(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso).
   "detail4.tst": tileset(20, 4, 16, 1, palettePixel, 2),
@@ -853,6 +859,15 @@ const ORACLE_SCENES = {
     schema: 1,
     name: "S-LIGHT-OVERLAP",
     boardFiles: ["packages/core/test/fixtures/authored/light-oracle-overlap.brd", "packages/core/test/fixtures/authored/light-oracle.tst"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: { viewport: [256, 128], camera: [0, 0], include: { shading: true, images: false, sprites: false } },
+    tick: 0,
+  },
+  "S-LIGHT-BOUNDARY.json": {
+    schema: 1,
+    name: "S-LIGHT-BOUNDARY",
+    boardFiles: ["packages/core/test/fixtures/authored/light-oracle-boundary.brd", "packages/core/test/fixtures/authored/light-oracle.tst"],
     sprites: [],
     ambient: [0, 0, 0],
     view: { viewport: [256, 128], camera: [0, 0], include: { shading: true, images: false, sprites: false } },
