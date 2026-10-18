@@ -24,4 +24,6 @@ export type SurfacesSection = {
   entries: Record<string, SurfaceState>;
   slots: Record<string, SurfaceId>;
   colours: Record<string, SurfaceId>;
+  /** Reserved `renderNow` overlay canvas handle; zero means disabled. */
+  renderNow?: SurfaceId;
 };
