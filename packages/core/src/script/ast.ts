@@ -139,7 +139,39 @@ export type Expr =
       readonly target: Expr;
       readonly value: Expr;
       readonly line: number;
+    }
+  /**
+   * An arrow lambda (docs/spec/engine/rpgcode-language.md FUN-8). The body is always a block:
+   * an expression body `(x) => x + 1` is stored as `{ return x + 1 }`.
+   */
+  | {
+      readonly kind: "lambda";
+      readonly params: readonly Param[];
+      readonly body: Block;
+      /** True when written with an expression body (no braces). */
+      readonly exprBody: boolean;
+      readonly line: number;
+    }
+  /** A dictionary literal `{ key: value, ... }` (OOP-10); keys keep source order. */
+  | {
+      readonly kind: "object";
+      readonly entries: readonly ObjectEntry[];
+      readonly line: number;
+    }
+  /** A call whose callee is an arbitrary expression rather than a name: `f()()`, `a[i](x)`, `(x => x)(1)`. */
+  | {
+      readonly kind: "callIndirect";
+      readonly callee: Expr;
+      readonly args: readonly Expr[];
+      readonly line: number;
     };
+
+/** One `key: value` entry of a dictionary literal. */
+export type ObjectEntry = {
+  readonly key: string;
+  readonly value: Expr;
+  readonly line: number;
+};
 
 /** One branch of an if/elseif chain (STX-3). */
 export type IfBranch = {

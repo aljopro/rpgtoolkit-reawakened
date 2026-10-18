@@ -114,6 +114,7 @@ const TWO_CHAR_OPS = [
   "||",
   "->",
   "::",
+  "=>",
 ];
 const SINGLE_CHAR_OPS = [
   "(",

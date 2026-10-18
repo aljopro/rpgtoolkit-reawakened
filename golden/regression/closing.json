@@ -142,8 +142,8 @@
         {
           "code": "syntax.error",
           "file": "prg/start.prg",
-          "line": 6,
-          "message": "expected an expression but found `{`"
+          "line": 20,
+          "message": "expected a dictionary key but found `{`"
         }
       ],
       "checkpoints": [
@@ -214,8 +214,8 @@
         {
           "code": "syntax.error",
           "file": "prg/start.prg",
-          "line": 34,
-          "message": "expected an expression but found `{`"
+          "line": 54,
+          "message": "expected a dictionary key but found `{`"
         }
       ],
       "checkpoints": [
@@ -286,8 +286,8 @@
         {
           "code": "syntax.error",
           "file": "prg/start.prg",
-          "line": 33,
-          "message": "expected an expression but found `{`"
+          "line": 53,
+          "message": "expected a dictionary key but found `{`"
         }
       ],
       "checkpoints": [
@@ -370,8 +370,8 @@
         {
           "code": "syntax.error",
           "file": "prg/start.prg",
-          "line": 33,
-          "message": "expected an expression but found `{`"
+          "line": 53,
+          "message": "expected a dictionary key but found `{`"
         },
         {
           "code": "startup.no-player",
@@ -393,8 +393,8 @@
         {
           "code": "syntax.error",
           "file": "prg/game.prg",
-          "line": 9,
-          "message": "expected an expression but found `{`"
+          "line": 15,
+          "message": "expected a dictionary key but found `{`"
         },
         {
           "code": "startup.no-player",
@@ -416,8 +416,8 @@
         {
           "code": "syntax.error",
           "file": "prg/rpgcodecontest.prg",
-          "line": 31,
-          "message": "expected an expression but found `{`"
+          "line": 37,
+          "message": "expected a dictionary key but found `{`"
         },
         {
           "code": "startup.no-player",

@@ -20,6 +20,7 @@ import type {
   IfBranch,
   MemberDef,
   MethodDef,
+  ObjectEntry,
   Param,
   Statement,
   SwitchCase,
@@ -254,6 +255,85 @@ export function parse(tokens: readonly Token[], context: ParseContext = { redire
 
   // --- Expressions ---
 
+  /** Whether the `(` at `start` opens a lambda parameter list: its matching `)` is followed by `=>`. */
+  function isLambdaHead(start: number): boolean {
+    let depth = 0;
+    for (let cursor = start; cursor < tokens.length; cursor += 1) {
+      const token = tokens[cursor];
+      if (token === undefined || token.kind === "eof") return false;
+      if (token.kind !== "op") continue;
+      if (token.text === "(") depth += 1;
+      else if (token.text === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          let after = cursor + 1;
+          while (tokens[after]?.kind === "end") after += 1;
+          const next = tokens[after];
+          return next !== undefined && isOp(next, "=>");
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * The part of a lambda after `=>`: a `{` always opens a block body; anything else is a single
+   * expression returned by the lambda. Lambdas are expressions, so they never declare a name.
+   */
+  function parseLambdaBody(params: readonly Param[], line: number, inArgs: boolean): Expr {
+    skipEnds();
+    if (isOp(peek(), "{")) {
+      return { kind: "lambda", params, body: expectBlock("after `=>`"), exprBody: false, line };
+    }
+    const value = parseExpression(inArgs);
+    return {
+      kind: "lambda",
+      params,
+      body: [{ kind: "return", value, byRef: false, line }],
+      exprBody: true,
+      line,
+    };
+  }
+
+  /** `{ key: value, key2: value2 }`: keys are identifiers or strings, a trailing comma is allowed (OOP-10). */
+  function parseObjectLiteral(): Expr {
+    const open = expectOp("{", "to open a dictionary literal");
+    const entries: ObjectEntry[] = [];
+    skipEnds();
+    while (!isOp(peek(), "}")) {
+      const keyToken = peek();
+      if (keyToken.kind !== "identifier" && keyToken.kind !== "string") {
+        throw new ScriptError(
+          "syntax.error",
+          `expected a dictionary key but found ${describe(keyToken)}`,
+          { file: "", line: keyToken.line },
+        );
+      }
+      consume();
+      skipEnds();
+      const key = keyToken.kind === "identifier" ? keyToken.name : keyToken.value;
+      expectOp(":", `after the dictionary key \`${key}\``);
+      skipEnds();
+      const value = parseExpression();
+      entries.push({ key, value, line: keyToken.line });
+      skipEnds();
+      if (isOp(peek(), ",")) {
+        consume();
+        skipEnds();
+        continue;
+      }
+      if (!isOp(peek(), "}")) {
+        throw new ScriptError(
+          "syntax.error",
+          `expected \`,\` or \`}\` in a dictionary literal but found ${describe(peek())}`,
+          { file: "", line: peek().line },
+        );
+      }
+    }
+    consume(); // '}'
+    return { kind: "object", entries, line: open.line };
+  }
+
   function parsePrimary(inArgs = false): Expr {
     skipEnds();
     const token = peek();
@@ -268,13 +348,24 @@ export function parse(tokens: readonly Token[], context: ParseContext = { redire
       return { kind: "literal", value: token.value, line: token.line };
     }
 
-    // Parenthesized expression: ( expr )
+    // `(params) => body` lambda (FUN-8), or a parenthesized expression.
     if (isOp(token, "(")) {
+      if (isLambdaHead(index)) {
+        const params = parseParams();
+        skipEnds();
+        expectOp("=>", "after the lambda parameter list");
+        return parseLambdaBody(params, token.line, inArgs);
+      }
       consume();
       const expr = parseExpression();
       skipEnds();
       expectOp(")", "to close parenthesized expression");
       return expr;
+    }
+
+    // Dictionary literal `{ key: value, ... }` (OOP-10).
+    if (isOp(token, "{")) {
+      return parseObjectLiteral();
     }
 
     // :name -> label reference in args list (STX-5), global-forcing name read elsewhere (SEM-4)
@@ -320,8 +411,15 @@ export function parse(tokens: readonly Token[], context: ParseContext = { redire
       }
     }
 
-    // Plain identifier: variable
+    // Single-parameter lambda without parentheses: `x => expr` (FUN-8).
     if (token.kind === "identifier") {
+      const arrow = tokens[index + 1];
+      if (arrow !== undefined && isOp(arrow, "=>")) {
+        consume();
+        consume();
+        const param: Param = { name: token.name, byRef: false, typeName: null, line: token.line };
+        return parseLambdaBody([param], token.line, inArgs);
+      }
       consume();
       return { kind: "variable", name: token.name, scope: null, line: token.line };
     }
@@ -353,11 +451,11 @@ export function parse(tokens: readonly Token[], context: ParseContext = { redire
           expr = { kind: "methodCall", receiver: expr.receiver, name: expr.name, args, line: expr.line };
           continue;
         }
-        throw new ScriptError(
-          "syntax.error",
-          "only named functions or object methods can be called",
-          { file: "", line: token.line },
-        );
+        // Any other callee (`f()()`, `a[i](x)`, a parenthesised lambda) is an indirect call (FUN-8).
+        consume();
+        const indirectArgs = parseArgs();
+        expr = { kind: "callIndirect", callee: expr, args: indirectArgs, line: expr.line };
+        continue;
       }
 
       // `file.func(args)`: a call bound to that file first, which queues the file (MOD-2).
