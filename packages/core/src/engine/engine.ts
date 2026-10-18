@@ -33,7 +33,10 @@ import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
 import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, realignCamera, updateCamera } from "../world/camera.ts";
 import { applyInputEffect, applySpriteEffect } from "../script/packs/world.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
-import { resetSpritesSection, type SpriteRuntime } from "../sprites/runtime.ts";
+import type { SpriteActor, Facing } from "../sprites/model.ts";
+import { resetSpritesSection, placeSelectedPlayer, type SpriteRuntime } from "../sprites/runtime.ts";
+import { boardCollisionAt } from "../sprites/movement.ts";
+import { resetTriggersSection } from "../triggers/model.ts";
 import { applyTriggerEffect } from "../triggers/runtime.ts";
 import { clearPathfindingCache } from "../sprites/pathfinding.ts";
 import { EffectBus, type EffectApplier } from "./effects.ts";
@@ -46,6 +49,7 @@ import {
   drainDiagnostics,
   ENGINE_DEFAULT_MANIFEST,
   endBoardThreads,
+  endItemThreads,
   fileProgramRef,
   runThreadsPhase,
   runWaitsPhase,
@@ -701,12 +705,61 @@ export function createEngine(init: EngineInit): Engine {
     if (arrival.unit === "pixel") return { x: arrival.x, y: arrival.y };
     return tileToPixel(coordLayout(board.coordType), board.sizeX, arrival.x, arrival.y);
   }
+  /** Compute R-53's continuous opposite-edge arrival without changing the source board. */
+  function edgeArrival(player: SpriteActor, direction: Facing, board: WorldBoard): Arrival | null {
+    const points = player.collisionBase.points;
+    if (points.length === 0) return null;
+    let left = points[0]!.x;
+    let top = points[0]!.y;
+    let right = left;
+    let bottom = top;
+    for (let index = 1; index < points.length; index += 1) {
+      const point = points[index]!;
+      if (point.x < left) left = point.x;
+      if (point.x > right) right = point.x;
+      if (point.y < top) top = point.y;
+      if (point.y > bottom) bottom = point.y;
+    }
+    const minX = -left;
+    const maxX = board.width - right;
+    const minY = -top;
+    const maxY = board.height - bottom;
+    let x: number;
+    let y: number;
+    if (direction === "E" || direction === "W") {
+      x = direction === "E" ? minX : maxX;
+      y = Math.max(minY, Math.min(maxY, player.y));
+    } else {
+      y = direction === "S" ? minY : maxY;
+      x = Math.max(minX, Math.min(maxX, player.x));
+    }
+    if (boardCollisionAt(player, board, x, y) !== null) return null;
+    return { x, y, layer: player.layer, unit: "pixel" };
+  }
+
+  function clearPendingExit(playerId: string): void {
+    state.sprites.players = state.sprites.players.map((actor) => actor.id === playerId
+      ? { ...actor, movement: { ...actor.movement, pendingExit: null } }
+      : actor);
+  }
+
+  function stopOldBoardThreads(): void {
+    endBoardThreads(state.vm);
+    for (const item of state.sprites.items) {
+      const source = item.handle === null ? item.id : `item:${item.source}`;
+      endItemThreads(state.vm, source);
+    }
+  }
+
   /** Board entry (E-19, E-47; docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry). */
   function arrive(board: WorldBoard, arrival: Arrival, fromSend: boolean): void {
-    if (fromSend) endBoardThreads(state.vm);
+    if (fromSend) stopOldBoardThreads();
     clearPathfindingCache();
     state.world = { board };
+    resetTriggersSection(state.triggers);
+    state.triggers.boardKey = board.key;
     const placement: PlainData[] = [arrival.x, arrival.y, arrival.layer, arrival.unit];
+    placeSelectedPlayer(state.sprites, arrival.x, arrival.y, arrival.layer, arrival.unit);
     bus.postEffect("sprites", engineEffect("sprites", "placeplayer", placement));
     state.camera = realignCamera(state.camera, board, cameraAim(board, arrival));
     bus.postEffect("triggers", engineEffect("triggers", "deactivateat", placement));
@@ -714,6 +767,38 @@ export function createEngine(init: EngineInit): Engine {
     // An empty list is stored as one empty string and empty entries are ignored (docs/spec/formats/board.md#threads-constants-and-settings).
     for (const name of board.threads ?? []) if (name !== "") startFileProgram(name, board.key, "board");
     if (board.enterPrg !== undefined && board.enterPrg !== "") startFileProgram(board.enterPrg, board.key, blockingAlive() ? "board" : "blocking");
+  }
+
+  /** Resolve the selected player's pending edge exit during AD-26's edges phase. */
+  function runEdgesPhase(): void {
+    const board = state.world.board;
+    const player = state.sprites.players.find((actor) => actor.id === state.sprites.selectedPlayer) ?? state.sprites.players[0];
+    const direction = player?.movement.pendingExit;
+    if (board === null || board === undefined || player === undefined || direction === null || direction === undefined) return;
+    const edge = direction === "N" ? "north" : direction === "S" ? "south" : direction === "E" ? "east" : direction === "W" ? "west" : null;
+    const link = edge === null ? "" : board.links?.[edge] ?? "";
+    if (link === "") {
+      clearPendingExit(player.id);
+      return;
+    }
+    if (link.toLowerCase().endsWith(".prg")) {
+      clearPendingExit(player.id);
+      startFileProgram(link, board.key, "blocking");
+      return;
+    }
+    const target = resolveAsset(index, root, "boards", link);
+    if (!target.ok) {
+      clearPendingExit(player.id);
+      diagnostics.push({ code: "asset.missing", file: link, line: 0, message: `edge link board "${link}" is not in the asset index` });
+      return;
+    }
+    const loaded = loadBoard(target.value);
+    if (loaded === "pending") return;
+    clearPendingExit(player.id);
+    if (loaded === null) return;
+    const arrival = edgeArrival(player, direction, loaded);
+    if (arrival === null) return;
+    arrive(loaded, arrival, true);
   }
 
   /** E-02 step 9's tail: the main file's `initBoard` entered at the board's start position. */
@@ -963,6 +1048,9 @@ export function createEngine(init: EngineInit): Engine {
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
         return;
       case "edges":
+        runEdgesPhase();
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        return;
       case "triggers":
       case "battle":
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
