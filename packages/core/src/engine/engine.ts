@@ -34,6 +34,7 @@ import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt,
 import { applyInputEffect, applySpriteEffect } from "../script/packs/world.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
 import { resetSpritesSection, type SpriteRuntime } from "../sprites/runtime.ts";
+import { applyTriggerEffect } from "../triggers/runtime.ts";
 import { clearPathfindingCache } from "../sprites/pathfinding.ts";
 import { EffectBus, type EffectApplier } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
@@ -207,6 +208,7 @@ export function createEngine(init: EngineInit): Engine {
     const values = effect.args as readonly Value[]; // Script effects use the VM Value subset.
     applySpriteEffect(state, effect.name, values);
   });
+  bus.register("triggers", (effect) => applyTriggerEffect(state, effect));
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
   let failed = false;

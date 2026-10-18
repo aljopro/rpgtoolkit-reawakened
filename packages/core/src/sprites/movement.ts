@@ -75,6 +75,8 @@ function cloneMovement(movement: SpriteMovement): SpriteMovement {
     waitTicks: movement.waitTicks,
     pendingExit: movement.pendingExit,
     under: [...movement.under],
+    lastStepTick: movement.lastStepTick,
+    lastStepDistance: movement.lastStepDistance,
   };
 }
 function event(
@@ -273,7 +275,9 @@ function finishActor(actor: SpriteActor, active: SpriteActiveMove, blocked: bool
   const waypointDone = waypoint !== null && waypoint.cycles !== 0 && waypoint.cursor >= waypoint.points.length && waypoint.cycle + 1 >= waypoint.cycles;
   const nextWaypoint = waypointDone ? null : waypoint;
   const queue = actor.queue.moves.length > 0 || nextWaypoint !== null;
-  const movement = { ...cloneMovement(actor.movement), active: null, waitTicks: 0 };
+  const dx = actor.x - active.start.x;
+  const dy = actor.y - active.start.y;
+  const movement = { ...cloneMovement(actor.movement), active: null, waitTicks: 0, lastStepTick: tick, lastStepDistance: blocked ? 0 : Math.sqrt(dx * dx + dy * dy) };
   const state = queue ? "moving" : "waiting";
   if (!queue) event(tick, "movement-complete", { actor: actor.id, blocked }, sink);
   return { ...actor, state, movement, queue: { ...actor.queue, waypoint: nextWaypoint }, ...(queue ? {} : { frozenUntil: null }), prev: { x: actor.x, y: actor.y } };
@@ -542,7 +546,14 @@ export function movementCadence(actor: SpriteActor, gameSpeed = 0): number {
 
 /** Type guard for consumers reading old snapshots before movement state existed. */
 export function ensureMovementState(actor: SpriteActor): SpriteMovement {
-  return actor.movement ?? { active: null, waitTicks: 0, pendingExit: null, under: [] };
+  return {
+    active: actor.movement?.active ?? null,
+    waitTicks: actor.movement?.waitTicks ?? 0,
+    pendingExit: actor.movement?.pendingExit ?? null,
+    under: actor.movement?.under ?? [],
+    lastStepTick: actor.movement?.lastStepTick ?? null,
+    lastStepDistance: actor.movement?.lastStepDistance ?? 0,
+  };
 }
 
 /** Keep the movement state JSON-safe when a caller restores a pre-5.4 actor. */

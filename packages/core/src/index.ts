@@ -12,5 +12,6 @@ export * from "./save/index.ts";
 export * from "./world/index.ts";
 export * from "./render/index.ts";
 export * from "./sprites/index.ts";
+export * from "./triggers/index.ts";
 export * from "./raster/index.ts";
 export * from "./engine/index.ts";

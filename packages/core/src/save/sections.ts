@@ -44,8 +44,8 @@ export type PartySection = Record<string, never>;
 /** Owner: `core/menu` (items, equipment, gold). Filled by epic menu-party-save. */
 export type InventorySection = Record<string, never>;
 
-/** Owner: `core/triggers` (armed and fired state, repeat counters). Filled by epic movement-triggers. */
-export type TriggersSection = Record<string, never>;
+/** Owner: `core/triggers` (armed and fired state, repeat counters). */
+export type { TriggersSection } from "../triggers/model.ts";
 
 /** Owner: `core/battle` (fighter references, charge, status). Filled by epic battle. */
 export type BattleSection = Record<string, never>;

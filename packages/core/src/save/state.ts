@@ -44,6 +44,7 @@ import {
   type UiSection,
   type WorldSection,
 } from "./sections.ts";
+import { createTriggersSection } from "../triggers/model.ts";
 import { createSpritesSection } from "../sprites/model.ts";
 import { createInputSection } from "../input/input.ts";
 
@@ -54,7 +55,7 @@ export const SCHEMA_VERSIONS = {
   sprites: 2,
   party: 1,
   inventory: 1,
-  triggers: 1,
+  triggers: 2,
   vm: 5,
   battle: 1,
   menu: 1,
@@ -153,7 +154,7 @@ export function createGameState(init: { seed: number }): GameState {
     sprites: createSpritesSection(),
     party: {},
     inventory: {},
-    triggers: {},
+    triggers: createTriggersSection(),
     vm: createVmState(),
     battle: {},
     menu: {},
