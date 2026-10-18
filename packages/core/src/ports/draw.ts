@@ -73,6 +73,9 @@ export type BlitSource = TexRef | SurfaceRef;
 /** A font a `text` command draws with (AD-15). */
 export type FontRef = {
   readonly asset: AssetKey;
+  readonly size: number;
+  readonly bold: boolean;
+  readonly italic: boolean;
 };
 
 /** One laid-out glyph: the glyph id and its advance in logical pixels (AD-15). */
