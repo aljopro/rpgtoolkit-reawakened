@@ -44,3 +44,5 @@ Thumbs.db
 ehthumbs.db
 desktop.ini
 .worktrees
+__pycache__/
+*.pyc
