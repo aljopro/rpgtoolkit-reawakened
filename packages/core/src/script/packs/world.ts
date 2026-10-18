@@ -60,8 +60,8 @@ function effect(name: string, args: readonly Arg[], kind: CommandEffect["kind"] 
 function docs(summary: string, behaviour: string, tags: BuiltinDoc["tags"] = ["legacy"]): BuiltinDoc {
   return { summary, behaviour, groups: ["board-tiles-vectors-screen-effects-33"], tags, waits: { kind: "never", summary: "The command completes in the current script turn." } };
 }
-function noArgs(name: string): BuiltinSpec {
-  return { name, aliases: [], params: [], doc: docs(`Obsolete ${name} command.`, "Raises a catchable obsolete-command error and skips the statement.", ["legacy", "obsolete"]), call: () => { throw new ScriptError("builtin.obsolete", `"${name}" is obsolete: the statement is skipped`); } };
+function noArgs(name: string, params: BuiltinSpec["params"] = []): BuiltinSpec {
+  return { name, aliases: [], params, doc: docs(`Obsolete ${name} command.`, "Raises a catchable obsolete-command error and skips the statement.", ["legacy", "obsolete"]), call: () => { throw new ScriptError("builtin.obsolete", `"${name}" is obsolete: the statement is skipped`); } };
 }
 
 const GET_NAME: BuiltinSpec = {
@@ -238,13 +238,18 @@ const LIFECYCLE_QUIT: BuiltinSpec = {
   call: () => ({ value: null, effects: [{ kind: "state-write", section: "engine", args: ["quit"] }] }),
 };
 const LIFECYCLE_COMMANDS: readonly BuiltinSpec[] = [
-  LIFECYCLE_RESET, LIFECYCLE_MAIN_FILE, LIFECYCLE_GONE, LIFECYCLE_OVER, LIFECYCLE_QUIT, noArgs("win"), noArgs("start"), noArgs("godos"),
+  LIFECYCLE_RESET, LIFECYCLE_MAIN_FILE, LIFECYCLE_GONE, LIFECYCLE_OVER, LIFECYCLE_QUIT,
+  noArgs("win"),
+  noArgs("start", [{ name: "file", optional: false, byRef: false, variadic: false }]),
+  noArgs("godos", [{ name: "command", optional: false, byRef: false, variadic: false }]),
 ];
 
 const WORLD_COMMANDS: readonly BuiltinSpec[] = [
-  GET_NAME, PUT, LAYER_PUT, tileGetter("getboardtile", "boardgettile"), TILE_TYPE_GET, TILE_TYPE, noArgs("animatedtiles"), noArgs("parallax"), AMBIENT,
+  GET_NAME, PUT, LAYER_PUT, tileGetter("getboardtile", "boardgettile"), TILE_TYPE_GET, TILE_TYPE,
+  noArgs("animatedtiles", [{ name: "list", optional: true, byRef: true, variadic: false }]),
+  noArgs("parallax", [{ name: "setting", optional: false, byRef: false, variadic: false }]), AMBIENT,
   GET_VECTOR, SET_VECTOR, GET_VECTOR_POINT, SET_VECTOR_POINT, GET_PROGRAM, SET_PROGRAM, GET_PROGRAM_POINT, SET_PROGRAM_POINT, PRG,
-  noArgs("setconstants"), noArgs("underarrow"),
+  noArgs("setconstants", [{ name: "args", optional: true, byRef: false, variadic: true }]), noArgs("underarrow"),
   GET_CORNER, CAMERA_PAN_TO, CAMERA_FOLLOW, CAMERA_RESET, CAMERA_SHAKE, SEND,
   ...LIFECYCLE_COMMANDS,
 ];
