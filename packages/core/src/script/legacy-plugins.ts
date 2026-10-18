@@ -16,6 +16,8 @@ import { ScriptError } from "./errors.ts";
 import type { PluginManifestDiagnostic } from "./manifest.ts";
 import type { CommandEffect, CommandRequest, CommandResult, CommandView, PluginDefinition } from "./plugin.ts";
 import { toStringValue } from "./values.ts";
+import { RENDER_PLUGIN } from "./packs/render.ts";
+import { WORLD_PLUGIN } from "./packs/world.ts";
 
 /** Status classification for legacy plugins. */
 export type LegacyPluginStatus = "native" | "declined" | "subsystem" | "loader";
@@ -1344,6 +1346,8 @@ export const TWBUTTON_PLUGIN: PluginDefinition = {
 
 /** All first-party native legacy plugin definitions. */
 export const NATIVE_PACKS: readonly PluginDefinition[] = [
+  WORLD_PLUGIN,
+  RENDER_PLUGIN,
   GSMISC_PLUGIN,
   TRIUKEN_PLUGIN,
   FILEREADWRITE_PLUGIN,
@@ -1355,6 +1359,8 @@ export const NATIVE_PACKS: readonly PluginDefinition[] = [
 
 /** Map of pack ID to PluginDefinition for host resolvers. */
 export const NATIVE_PACK_TABLE: Readonly<Record<string, PluginDefinition>> = {
+  world: WORLD_PLUGIN,
+  render: RENDER_PLUGIN,
   gsmisc: GSMISC_PLUGIN,
   triuken: TRIUKEN_PLUGIN,
   filereadwrite: FILEREADWRITE_PLUGIN,

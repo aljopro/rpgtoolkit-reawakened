@@ -52,6 +52,8 @@ export type PluginManifestParseResult = {
 export const ENGINE_DEFAULT_MANIFEST: PluginManifest = [
   { id: "core" },
   { id: "catalogue" },
+  { id: "world" },
+  { id: "render" },
   { id: "gsmisc" },
   { id: "triuken" },
   { id: "filereadwrite" },

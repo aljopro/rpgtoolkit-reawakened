@@ -15,10 +15,12 @@ function command(name: string, call: BuiltinSpec["call"]): BuiltinSpec {
   return { name, aliases: [], params: [], call };
 }
 
-test("the default manifest is core at the bottom followed by catalogue and native packs", () => {
+test("the default manifest is core and catalogue followed by owner/native packs", () => {
   deepEqual(ENGINE_DEFAULT_MANIFEST.map((entry) => entry.id), [
     "core",
     "catalogue",
+    "world",
+    "render",
     "gsmisc",
     "triuken",
     "filereadwrite",

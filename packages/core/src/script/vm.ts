@@ -16,11 +16,11 @@ import type { PlainData } from "../ports/plain-data.ts";
 import type { ObjectValue, RefId, Value, VarScope } from "../ports/value.ts";
 import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
-import type { GameState } from "../save/state.ts";
+import type { GameState, SectionKey } from "../save/state.ts";
 import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
-import { recordDiagnostic, recordEffect } from "./effects.ts";
+import { recordDiagnostic, recordEffect, type EffectRecord } from "./effects.ts";
 import {
   failureClass,
   HANDLER_NOT_HANDLING,
@@ -105,6 +105,8 @@ export type ScriptServices = {
   readonly diagnostics: Diagnostic[];
   /** Manifest options remain host/service data and never enter VM state. */
   readonly pluginOptions: ReadonlyMap<string, PlainData>;
+  /** Engine-owned synchronous effect dispatch hook. */
+  readonly postEffect?: (section: SectionKey, effect: EffectRecord) => void;
 };
 
 /** Take every diagnostic collected since the last drain, oldest first. */
@@ -120,6 +122,7 @@ export function createScriptServices(
   virtuals?: VirtualVariablePort,
   loaderOrGameId?: ProgramLoader | string,
   explicitGameId = "default",
+  postEffect?: (section: SectionKey, effect: EffectRecord) => void,
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
@@ -178,6 +181,7 @@ export function createScriptServices(
     diagnostics,
     pluginOptions,
     ...(loader === undefined ? {} : { loader }),
+    ...(postEffect === undefined ? {} : { postEffect }),
   };
 }
 
@@ -1198,7 +1202,7 @@ function performCall(
       for (const [index, value] of result.out ?? []) {
         out[String(index)] = typeof value === "number" && value === 0 ? 0 : value;
       }
-      recordEffect(vm, {
+      const recorded = recordEffect(vm, {
         tick,
         thread: thread.id,
         name,
@@ -1210,6 +1214,7 @@ function performCall(
         wait: null,
         request: null,
       });
+      if (section !== undefined) services.postEffect?.(section, recorded);
     }
   }
 

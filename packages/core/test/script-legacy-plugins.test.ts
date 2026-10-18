@@ -147,15 +147,17 @@ test("declined plugin diagnostics provide located codes, counts and reasons", ()
   equal(getDeclinedPluginDiagnostic("GsMiscPlugins.dll"), undefined);
 });
 
-test("native packs table registers all 7 native packs with matching ids", () => {
-  equal(NATIVE_PACKS.length, 7);
+test("native packs table registers all 9 native packs with matching ids", () => {
+  equal(NATIVE_PACKS.length, 9);
   deepEqual(Object.keys(NATIVE_PACK_TABLE).sort(), [
     "filereadwrite",
     "gsmisc",
     "kaimu",
     "proplug",
+    "render",
     "triuken",
     "twbutton",
+    "world",
     "xfmwin",
   ]);
   for (const pack of NATIVE_PACKS) {
