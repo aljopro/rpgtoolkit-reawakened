@@ -89,7 +89,7 @@ const EARTHQUAKE = transition(
     summary: "Shake the whole game screen, from barely noticeable to strongest.",
     behaviour: "Shakes the screen in increasingly strong four-tick bursts. Technically, intensity is clamped to 1..10; pass p moves the screen p logical pixels through the four corners, for 4*i fixed ticks total, and the script waits until the final pass.",
     groups: ["board-tiles-vectors-screen-effects-33"],
-    waits: { kind: "ticks", summary: "Blocks through all four-corner shake passes." },
+    waits: { kind: "ticks", summary: "Waits 4 times the intensity ticks, through all four-corner shake passes." },
     see: ["docs/spec/engine/rpgcode-functions.md#reawakened-earthquake"],
   },
   (args) => {
@@ -99,7 +99,18 @@ const EARTHQUAKE = transition(
   },
 );
 
-const BORDER_COLOR = effectCommand("bordercolor", "fx");
+const BORDER_COLOR: BuiltinSpec = {
+  ...effectCommand("bordercolor", "fx"),
+  doc: {
+    summary: "Obsolete.",
+    behaviour: "Kept so old games that call it still run: it records the three colour values for the fx section and does not wait. The native specification marks the command obsolete.",
+    groups: ["graphics-canvases-animation-video-31"],
+    tags: ["obsolete"],
+    replacedBy: { kind: "syntax", text: "No replacement; the command is kept for old games." },
+    reason: "The native specification marks bordercolor obsolete; the engine still records its colour so old games do not fail.",
+    waits: { kind: "never", summary: "Does not wait." },
+  },
+};
 
 function animationCommand(name: "animation" | "sizedanimation"): BuiltinSpec {
   const sized = name === "sizedanimation";

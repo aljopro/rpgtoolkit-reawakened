@@ -223,15 +223,6 @@ export function getPixel(state: SurfacesSection, id: SurfaceId, x: number, y: nu
 /** The snapshot shape used by save files, exposed for format and test callers. */
 export type { RgbaSnapshot, SurfaceState };
 
-/** Capture a whole surface or region into a newly allocated persistent surface. */
-export function captureScreen(state: SurfacesSection, source: SurfaceId = 0 as SurfaceId, rect?: { x: number; y: number; w: number; h: number }, cache?: SurfacePixelCache): SurfaceId | null {
-  const sourceEntry = entry(state, source);
-  if (sourceEntry === null) return null;
-  const region = copyRegion(state, source, rect ?? { x: 0, y: 0, w: sourceEntry.bitmap.w, h: sourceEntry.bitmap.h }, cache);
-  if (region === null) return null;
-  return createSurface(state, region.w, region.h, region.rgba);
-}
-
 /** `canvasGetScreen` copies the composed screen into an existing canvas (E-56). */
 export function canvasGetScreen(state: SurfacesSection, destination: SurfaceId, source: SurfaceId = 0 as SurfaceId, cache?: SurfacePixelCache): number | null {
   const sourceEntry = entry(state, source);

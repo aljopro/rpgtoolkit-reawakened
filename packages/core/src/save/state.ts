@@ -3,8 +3,10 @@
  *
  * `GameState` has exactly AD-10's 18 sections. Entry 2 owns four of them —
  * `schema` (here), `vm` (`core/script`), `rng` (`core/rng`) and `time`
- * (`core/time`); the other fourteen are the `Record<string, never>`
- * placeholders of `sections.ts`. `SchemaState` is AD-23's per-section version
+ * (`core/time`); of the other fourteen, seven are real sections declared under
+ * `save/sections/` (`world`, `camera`, `ui`, `fx`, `surfaces`, `input`,
+ * `engine`) and seven are the `Record<string, never>` placeholders of
+ * `sections.ts` that later epics fill. `SchemaState` is AD-23's per-section version
  * map plus the compiler version, and `SCHEMA_VERSIONS` is the current version
  * of every section, each starting at 1.
  *
