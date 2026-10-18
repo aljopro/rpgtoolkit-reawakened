@@ -20,7 +20,7 @@ Give core a pure, deterministic way to know how long an audio asset is, because 
 Length, loop and bank-need only. No sample decoding for playback (entry 6.12), no MP3/OGG decoder (transcoded on import, entry 6.3), no tracker format.
 
 ## Key Decisions
-Length is computed in integer ticks with the rounding rule of entry 6.1; a MIDI file with an unreadable tempo map is a diagnostic with length 0, which makes `mediaWait` a diagnostic too.
+Length is computed in integer ticks with the rounding rule of entry 6.1; a file whose length cannot be read returns a `FormatError` and the caller plays silence; what `mediaWait` and `mediaLength` do for an unreadable length is ruled in entry 6.1, not here.
 
 ## Acceptance
 A decoder per format registers through the existing `decoders` array; an `AudioInfo` is `{ lengthTicks, loopStartTick, needsBank }` with every key present and `null` for absence (AD-14); the corpus table is committed.

@@ -28,19 +28,23 @@ It does not own the Web Audio output, autoplay unlock, focus handling or the bro
 | D-7 | Version baseline and `mp3pause` | **Follow 3.1.0** unless the later behaviour is a deliberate fix; `mp3pause(file)` is play-once-then-wait on `sfx` (owner direction) | Decided | Edit the parity ledger in 6.2 |
 | D-8 | Who decides "it ended" | **PROPOSE:** core is the only clock; end tick is start plus asset length; `audio.ended` is advisory; cues carry the tick they were due so a late runner catches up. This **amends AD-9 and AD-14**, which let the runner's reply drive the wake. | Owner approval required (6.1) | Keep AD-14 as written and let the headless runner's `audio.ended` drive waits, accepting device-dependent timing on real runners |
 | D-9 | Saved playback versus legacy Q11 (saves stored no audio) | **PROPOSE:** keep AD-16's rule that core records what plays and re-emits it after load; record the departure from Q11 in the parity ledger; music after load restarts from the top (section 9 default) | Owner approval required (6.1) | Save nothing; rebuild music from the board on load |
-| D-10 | Envelope Done-when item 2 (browser test) | **Assumption to confirm:** no browser harness exists, so 6.16 proves the render path offline in Node and hands the browser test to epic 9 | To confirm | Add a browser harness entry here, delaying 6.16 |
+| D-10 | Envelope Done-when item 2 (browser test) and item 3 (user `.sf2`) | **Assumption to confirm at the 6.3 checkpoint:** no browser harness exists, so 6.16 proves the render path offline in Node and epic 9 owns the browser test and the user `.sf2` runner contract | To confirm (6.3) | Add a browser harness entry here, delaying 6.16 |
 | D-11 | One rulings entry or three | **Assumption to confirm:** three (6.1 core, 6.2 commands and behaviour, 6.3 platform), each with its own owner checkpoint | To confirm | Merge into one checkpoint |
 | D-12 | Epic size | 17 entries, above the typical range; kept as one epic as Epic 4 was, because the lanes share one cue contract | To confirm | Split synth and bank (6.11 to 6.14) into a second epic |
-| D-13 | Per-track voice counts and the track limit | **PROPOSE for 6.2:** `music` 1, `sfx` 1 (legacy parity), `ambience` 4, `voice` 2, `ui` 4, an `effects` track with 16, at most 16 named tracks, total 32 | Owner choice, unverified defaults | Change the defaults table |
+| D-13 | Per-track voice counts and the track limit | **PROPOSE for 6.2:** `music` 1, `sfx` 1 (legacy parity), `ambience` 4, `voice` 2, `ui` 4, at most 16 named tracks, total 32. An overlapping-effects track is author-created with `mediaTrack(name, voices)` (for example `effects` with 16), not a sixth built-in, so D-6 stands. | Owner choice, unverified defaults | Change the defaults table |
 | D-14 | Where audio length comes from | **Assumption A-4:** pure core `AssetDecoder<AudioInfo>` (WAV, MIDI) through entry 3.14's `decoders`; the synth carries the playback decoders | To confirm | Move length parsing into `synth` and pass lengths in as asset metadata |
 | D-15 | MP3 and OGG | **Section 9 default:** transcode on import; core and synth handle WAV and MIDI only. No entry in any epic builds the transcoder. | Owner approval required (6.3) | Add decoders to 6.5 and 6.12 |
 | D-16 | Tracker/XM and unknown formats | Envelope non-goal stands: diagnostic plus silence, never a state change | Ratified | Promote the section 10 nice-to-have |
+| D-17 | Epic 4's effect-record names | **PROPOSE:** keep `music.play` and `sfx.play` as the Epic 4 to Epic 6 effect vocabulary; the applier maps them to the `music` and `sfx` tracks. What changes is who decides: `postBoardMusic` and `engine.musicAsset` stop deciding same-file and silence at board entry, and the applier does (Q5 to Q8, Q10). | Owner approval required (6.1) | Rename the effects in a migration of entries 4.20 and 4.23's producers |
+| D-18 | The `music` virtual variable (Q19) | **PROPOSE:** read from the `music` track's file (battle track during a fight, not empty after `mediaStop`), replacing the `state.audio.music` read | Owner approval required (6.1) | Keep a separate `audio.music` string beside the tracks |
+| D-19 | Script volume versus the player's mix (clarifies D-1) | **PROPOSE:** a volume a script sets and reads (`setvolume`, `mediaVolume`) is core state that is outside the game save and untouched by `reset()` and `load()` (Q12, Q13); the player's own mix (the options sliders) is a runner-side multiplier that never enters core. Both are "settings" in the sense that a save never carries them. | **Owner to confirm** (6.1) | Make all volumes host-held and give scripts no read-back |
 
 ### Judgement calls worth the owner's attention
 
 - <!-- OWNER: D-8 --> Demoting `audio.ended` makes script timing independent of the sound device, at the cost of changing two spine rules and needing an asset length for every playable file.
 - <!-- OWNER: D-9 --> Keeping saved playback departs from the legacy engine; the alternative loses what a stinger or ambience track was doing at the moment of a save.
-- <!-- OWNER: D-10 --> Offline rendering proves the synth path but not Web Audio; the browser proof moves to epic 9.
+- <!-- OWNER: D-10 --> Offline rendering proves the synth path but not Web Audio; the browser proof and the user `.sf2` contract move to epic 9, confirmed at the 6.3 checkpoint.
+- <!-- OWNER: D-19 --> The owner decision was "volumes are settings". A value a script can read back must still be replay-safe, so this proposal splits it into script volume (core state, not saved) and the player's mix (runner-side); confirm that is what was meant.
 - <!-- OWNER: D-15 --> If the transcoder is never built, an MP3 or OGG file in a game is silent with a diagnostic. The corpus has none.
 
 ## 3. Breakdown
@@ -48,21 +52,21 @@ It does not own the Web Audio output, autoplay unlock, focus handling or the bro
 | # | Title | after | Risk | Lane | Check |
 |---|---|---|---|---|---|
 | 1 | Core audio rulings: tracks, time, cues and waits | 3.9, 3.27, 4.29 | high | docs | OWNER-marked rules for P1, P2, P4, P5; AD-9, AD-14, AD-16 amended; person approves |
-| 2 | Media commands, voices, layered audio and legacy parity rulings | 1, 3.27, 3.29 | high | docs | command family, voice model, parity ledger; catalogue and command-docs checks; person approves |
-| 3 | Platform rulings: SoundFont policy, sources, runner protocol and video | 1, 1.5, 3.14 | high | docs | R-59, formats, bank, protocol, video; person approves |
-| 4 | Independent audio timeline oracle and authored audio fixtures | 1, 2, 1.9 | medium | fixtures | 12 named scenes and authored WAV and MIDI with hand-worked lengths; check mode; no core imports |
+| 2 | Media commands, voices, layered audio and legacy parity rulings | 1, 3.27, 3.29 | high | docs | command family, voice model, parity ledger, the `deprecated` marker; docs only, catalogue and Audio-table edits left to 8 and 9; person approves |
+| 3 | Platform rulings: SoundFont policy, sources, runner protocol and video | 1, 1.5, 3.14 | high | docs | R-59, formats, bank, protocol, video, Done-when items 2 and 3 assigned; person approves |
+| 4 | Independent audio timeline oracle and authored audio fixtures | 1, 2, 1.9 | medium | fixtures | 14 named scenes and authored WAV and MIDI with hand-worked lengths; check mode; no core imports |
 | 5 | AudioInfo decoders for WAV and MIDI | 3, 4, 2.10, 3.14 | medium | core decoders | authored and corpus files decode to the oracle lengths |
-| 6 | Audio state section, track engine and cue emission | 1, 2, 4, 5, 3.11, 3.21, 4.11, 4.19, 4.20, 4.23, 4.31 | high | core audio (tracer) | board music boot to cue to oracle state; snapshot; settings kept |
+| 6 | Audio state section, track engine and cue emission | 1, 2, 4, 5, 3.11, 3.21, 4.11, 4.19, 4.20, 4.23, 4.31 | high | core audio (tracer) | board music boot to cue to oracle state, the board-music authority and `music` variable moved, `soundfont.set`, snapshot, settings kept |
 | 7 | Voices, voice stealing, fades and synced starts | 2, 4, 6 | high | core audio | four scenes per tick; stealing and fades deterministic |
-| 8 | Media control built-ins and the track wait | 2, 6, 7, 2.10, 3.3, 3.9, 3.22, 3.25, 3.29 | high | VM seam | control pack, `audio.track` wait, diagnostics, help text |
-| 9 | Media query built-ins, legacy command mapping and catalogue sweep | 8, 3.17 | medium | VM seam | query pack, legacy names routed, parity scene, corpus equivalence |
+| 8 | Media control built-ins and the track wait | 2, 6, 7, 2.10, 3.3, 3.9, 3.22, 3.25, 3.29 | high | VM seam | control pack incl. both `mediaVolume` forms and the audio read view, `soundFont` commands, `audio.track` wait replacing the unresolved `audio.sfx` wait, diagnostics, help text |
+| 9 | Media query built-ins, legacy command mapping and catalogue sweep | 8, 3.17 | medium | VM seam | query pack on the audio view, legacy names routed, `deprecated` marker, parity scene, corpus equivalence |
 | 10 | Video built-ins and the video wait | 3, 6, 8, 3.22 | medium | VM seam | `playavi` wait resolves on `video.ended`; music restarts |
 | 11 | synth: MidiSynth, the Null backend and the AudioSource seam | 3, 1.9 | medium | synth | interfaces, Null backend, registry, voice state machine |
 | 12 | SpessaSynth backend, PCM sources, track buses and voice pool | 5, 7, 11, 1.5 | high | synth | sources agree with `AudioInfo`; buses match oracle ramps; licence gate |
 | 13 | SoundFont bundling gate and the Path B bank | 3, 1.5 | medium | licence | gate audits SoundFonts; bank provenance verified; person approves |
 | 14 | Path C: the authored TK-16 SoundFont | 13 | medium | assets | provenance per sample; person approves the sound |
-| 15 | Runner audio protocol schema and conformance vectors | 3, 7, 11 | medium | protocol | schema checked against types; vectors replay |
-| 16 | Headless null-audio cue goldens and the offline MIDI render test | 6, 7, 9, 10, 12, 13, 15, 1.9 | medium | conformance | cue goldens in Node and Bun; offline render non-silent |
+| 15 | Runner audio protocol schema and conformance vectors | 3, 7, 11, 12 | medium | protocol | schema checked against types; vectors replay through the Null and PCM sources |
+| 16 | Headless null-audio cue goldens and the offline MIDI render test | 6, 7, 9, 10, 12, 13, 15, 1.9 | medium | conformance | cue goldens in Node and Bun with a synthetic battle-music hand-off; offline render non-silent |
 | 17 | Replay, reset and downstream contract sweep | 9, 10, 14, 15, 16, 3.11, 4.31 | high | integration | replay under batching, reset, catalogue, handoffs, sweep |
 
 ### Lane and shared-seam ownership
@@ -94,13 +98,22 @@ Downstream handoffs (written by entry 6.17):
 - **Epic 7:** battle music is posted as audio effects with source `battle`; the pre-fight track restarts after the fight (Q9); a fight with no music is silent (Q8). Epic 7's envelope does not mention this yet.
 - **Editor epics:** audio preview through `synth`, the project default-SoundFont setting, the editor warning for obsolete audio commands, and the MP3/OGG and AVI transcoders.
 
+### Done-when mapping
+
+| Envelope Done-when | Delivered by | Note |
+|---|---|---|
+| 1. Music and sound-effect cues from boards, battles, animation frames and scripts appear in headless null-audio tests | 6.6 (boards, animation frames), 6.8 and 6.9 (scripts), 6.16 (goldens) | Battle cues: no battle runtime exists, so 6.16 and 6.6 prove the hand-off rules with a synthetic `source: battle` effect record; real battle cues are epic 7's. Confirmed at 6.3 |
+| 2. The synth plays a sample MIDI through the SoundFont in a browser test | 6.12 and 6.16 (offline Node render), epic 9 (browser) | D-10, confirmed at 6.3 |
+| 3. A user can point the runner at their own `.sf2` | 6.3 (the contract), epic 9 (the runner) | D-10, confirmed at 6.3 |
+| 4. Audio built-ins register with the VM and drive the cues | 6.8, 6.9, 6.10 | |
+
 ## 5. Validation record
 
 **Round 0 (author, 2026-10-18).** Read the envelope, the exploration (sections 1 to 13 and work packages P1 to P10), the facts of rounds 8 and 9, the spine rows AD-9, AD-14, AD-16, AD-26, AD-30 and AD-31, and the provider tickets. Four read-only scouts covered the spine and code seams, the provider and downstream entries, the spec and facts, and the corpus, licence and oracle tooling. No code or legacy GPL source was opened.
 
-**Round 1 (planned).** An independent reviewer checks Ticket, Set and Dependencies against `~/.agents/skills/bmad-ticket/references/validate-checks.md`. Expected findings: wrong provider pins, a `verify` that names an asset no earlier entry builds, a one-sided handoff, and an entry that claims another epic's names.
+**Round 1 (independent reviewer, 2026-10-18).** Found, among other things: the board-music path (`postBoardMusic`, `engine.musicAsset`, the `music` virtual variable) had no owner and would block `same-file-rules`; entry 6.15 needed 6.12; entry 6.14's verify used the render test built later; battle goldens could not be produced without a battle runtime; Done-when items 2 and 3 had no checkpoint; the `video-restarts-music` scene sat in two entries; `mediaVolume` was split across two packs; the Audio table and the catalogue had two owners; "obsolete" already means `builtin.obsolete` machinery in this repository (F-14); D-13's `effects` track contradicted D-6; music after load had two owners; audit finding F-04 was wrong (a live unresolved-wait hazard) and two citations drifted; `soundfont.set` had no test. Each was corrected in the tickets, plans, audit, proposal and exploration. A new owner question surfaced: how a script-set volume relates to the player's mix (D-19).
 
-**Round 2 (planned).** Re-run `tickets.py status` and `next`; require no cycle, `undeclared_after`, `order_conflict` or drift. Owner approval is still required for entries 6.1 to 6.3 before implementation entries become ready-for-dev.
+**Round 2 (planned).** Re-run `tickets.py status` and `next`; a second independent review; require no cycle, `undeclared_after`, `order_conflict` or drift. Owner approval is still required for entries 6.1 to 6.3 before implementation entries become ready-for-dev.
 
 ## References
 

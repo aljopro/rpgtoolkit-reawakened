@@ -19,10 +19,10 @@ Prove the cues and the render path work headlessly, deterministically and on bot
 Null-audio goldens and an offline render test. No Web Audio and no browser test.
 
 ## Key Decisions
-Done-when item 2 of the envelope asks for a browser test; none can run until epic 9 supplies a browser runner, so this epic proves the same path offline and hands the browser test over (to confirm).
+Done-when item 1 asks for battle cues and item 2 for a browser test; neither can be shown here (no battle runtime, no browser harness), so this epic proves the hand-off with a synthetic battle-music effect and the render path offline, and hands both to epics 7 and 9 (confirmed in entry 6.3).
 
 ## Acceptance
-Cue goldens cover board music, battle hand-off and video; the render test uses the bundled bank.
+Cue goldens cover board music and the battle hand-off rules (Q8, Q9) through a synthetic effect; the render test uses the bundled bank; real battle cues are epic 7's to add.
 
 ## Verification
 Golden and golden:bun; the render test; closing regression check.

@@ -21,7 +21,7 @@ Make the core know what is playing, on which track, for how long, and say so in 
 Owns the `audio` section type including the voice and fade fields, the `core/audio` barrel and cue emission. Voice allocation, stealing, fades and synced starts are entry 6.7 and do not change the section type. No built-in commands (6.8, 6.9).
 
 ## Key Decisions
-Core is the only clock; `audio.ended` never moves script time. Playback state is saved; volumes are settings held by the host. Stopped tracks keep their file so later board entry, battle end or video end can restart it (Q10).
+Core is the only clock (proposed in entry 6.1; build to the approved ruling); `audio.ended` never moves script time. Playback state is saved; volumes are settings. Stopped tracks keep their file so later board entry, battle end or video end can restart it (Q10). The video-restart scene is entry 6.10's; this entry only provides the restart hook.
 
 ## Acceptance
 Per-tick state and cues match the oracle; the old `AudioCueKind` is replaced and every producer, validator and port fixture that named it is migrated; settings never enter the state hash.

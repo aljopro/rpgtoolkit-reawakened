@@ -22,7 +22,7 @@ Rule the author-facing audio surface and the legacy behaviour it must keep, so b
 Docs only. Obsolete audio commands stay callable and are marked obsolete in documentation only (owner); no runtime warning. Does not rule core state or cues (entry 6.1).
 
 ## Key Decisions
-The standard family from section 13 of the exploration; names, argument order and `tkMD_` values are ratified here. Version rule: follow 3.1.0 unless the later behaviour is a clear deliberate fix. `mp3pause(file)` is `mediaPlay(file, 'sfx', tkMD_ONCE | tkMD_WAIT)`. Total voice cap 32 (owner).
+The standard family from section 13 of the exploration; names, argument order and `tkMD_` values are ratified here. Version rule: follow 3.1.0 unless the later behaviour is a clear deliberate fix. `mp3pause(file)` is `mediaPlay(file, 'sfx', tkMD_ONCE | tkMD_WAIT)`. Total voice cap 32 (owner). Obsolete marking is documentation only and uses the `deprecated` tag, so old games still run quietly. Proposed defaults (owner choice): `ambience` 4 voices, `voice` 2, `ui` 4, at most 16 named tracks; author-created tracks such as an overlapping-effects track use `mediaTrack`, not a sixth built-in.
 
 ## Acceptance
 The Audio table lists each legacy name with its standard equivalent and an obsolete mark; every new name has a signature, units, defaults, a worked example and help text in the simple-first style; the stealing order, same-file rule, fade maths and sync rule are deterministic with a worked example each.

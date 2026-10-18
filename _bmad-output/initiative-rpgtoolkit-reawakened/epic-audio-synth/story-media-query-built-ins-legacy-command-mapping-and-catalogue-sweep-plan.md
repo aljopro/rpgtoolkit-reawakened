@@ -17,7 +17,7 @@ context:
 Make every old audio command keep working, as a thin mapping onto the standard family, and give authors the read commands.
 
 ## Boundaries
-Owns the query pack module and the legacy mapping. No runtime obsolete warnings (owner); the editor warning is future work in the editor epics. Does not touch video (6.10).
+Owns the query pack module and the legacy mapping. No runtime obsolete warnings and no `obsolete` flag (owner); the editor warning is future work in the editor epics. Does not touch video (6.10) or `mediaVolume` (entry 6.8).
 
 ## Key Decisions
 Legacy behaviour comes from the parity ledger of entry 6.2. The plugin commands' legacy meaning is unchecked: unanswered ones are recorded as not reproduced with a diagnostic, not guessed.

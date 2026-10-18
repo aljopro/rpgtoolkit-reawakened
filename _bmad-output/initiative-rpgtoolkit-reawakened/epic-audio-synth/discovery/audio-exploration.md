@@ -253,13 +253,13 @@ flowchart LR
 6. **Failure is never a game-state change.** An unknown format, a source the runner lacks, or a bad file gives a diagnostic and silence. The cue stream and game state stay the same in every runner, so replays and goldens are unaffected by which sources are installed.
 7. **Distribution and licences.** An audio pack ships both halves: a `PluginDefinition` with the decoder (and any commands) plus a `synth` source module. Anything bundled with the engine passes G6. Packs a user installs are their own business, under ADR 0004's ungated-extension rule. A "write an audio source" guide belongs to epic documentation-website.
 
-**Breakdown impact (draft):** entry 6.4 splits:
+**Breakdown impact (superseded by the inception breakdown):** the pre-inception draft split entry 6.4 into three pieces; the inception proposal maps them to entries 6.5 (core WAV and MIDI `AudioInfo` decoders), 6.11 (`AudioSource` contract, registry), 6.12 (MIDI backend, PCM source, bus routing) and 6.15 (conformance kit):
 
 | Entry | Scope |
 |---|---|
-| 6.4a | `AudioInfo`, the `AudioSource` contract, the registry, bus routing, the conformance kit |
-| 6.4b | the MIDI source (SpessaSynth) |
-| 6.4c | the PCM/ADPCM source and core WAV/MIDI `AudioInfo` decoders |
+| 6.4a (draft) | `AudioInfo`, the `AudioSource` contract, the registry, bus routing, the conformance kit (now 6.5, 6.11, 6.12, 6.15) |
+| 6.4b (draft) | the MIDI source (SpessaSynth) (now 6.12) |
+| 6.4c (draft) | the PCM/ADPCM source and core WAV/MIDI `AudioInfo` decoders (now 6.5 and 6.12) |
 
 A tracker source via libopenmpt (§10) would be the first optional pack, and the BusDriver XM is its test case.
 
@@ -309,14 +309,14 @@ A tracker source via libopenmpt (§10) would be the first optional pack, and the
 **Wider scope (raise at epic 9 inception, not decided here).** The same treatment (a normative behaviour page, a language-neutral message schema and runner-replayable vectors) could cover the whole runner boundary: draw-list replay, audio, input events and AD-5 requests. That would let a fully native runner be built and checked against the same contract. Epic 6 does audio first and keeps the format reusable.
 
 **Breakdown impact (draft):**
-- Entry 6.1 writes the core-behaviour page and the runner protocol prose.
-- Entry 6.4a publishes the schema and the vector-based conformance kit beside the TypeScript binding.
+- Entry 6.3 writes the runner protocol prose and entry 6.1 the cue semantics (inception numbering).
+- Entry 6.15 publishes the schema and the vector-based conformance kit beside the TypeScript binding.
 
 ## 13. Standardized media commands and audio tracks (owner direction, 2026-10-18)
 
-**Status:** owner direction; the exact names, signatures and units are a proposal for entry 6.1 to rule (G7, docs first). Nothing is removed.
+**Status:** owner direction; the exact names, signatures and units are a proposal for entry 6.2 to rule (G7, docs first). Nothing is removed.
 
-**Direction.** Reawakened defines one standard family of media commands that covers everything an author wants to do with audio: load, play, stop, pause, resume and seek to a time. Audio plays on **tracks** so sound effects and background music layer instead of sharing one slot. Every legacy audio command keeps working and is marked **obsolete** in `docs/spec/engine/rpgcode-functions.md`, with a pointer to the standard command that replaces it.
+**Direction.** Reawakened defines one standard family of media commands that covers everything an author wants to do with audio: load, play, stop, pause, resume and seek to a time. Audio plays on **tracks** so sound effects and background music layer instead of sharing one slot. Every legacy audio command keeps working and is documented as obsolete, with a pointer to the standard command that replaces it. The marker is the command-docs `deprecated` tag with `replacedBy`, **not** the catalogue `obsolete` field or the word "obsolete" in a spec-table Notes cell, because in this repository both make the command raise `builtin.obsolete` and skip the statement (audit F-14).
 
 ### Tracks
 
@@ -417,7 +417,7 @@ A fun extra for music-player screens: read title, artist, album and similar tags
 11. Layered audio (proposal, prompted by owner research on modern engines, 2026-10-18; voices accepted as direction):
    - **Fades:** `mediaFade(track, percent, seconds)` ramps a track's volume over time. Core owns the ramp as a pure function of one fade cue (start tick, duration, target), so queries and replays are exact and the runner only renders it (P4, P7). A fade to 0 leaves the track playing silently, which is how music stems are switched in and out.
    - **Synced stems:** a way to start a track in lock-step with another track's position (for example an extra `sync` argument on `mediaPlay`), so music layers (drums, bass, melody, combat strings) stay aligned when added later.
-   - **Voices per track:** a track's voice count is settable; a built-in multi-voice effects track (for example `effects` with about 32 voices, a common engine default) covers overlapping sound effects, while `sfx` stays at 1 voice for legacy parity.
+   - **Voices per track:** a track's voice count is settable with `mediaTrack(name, voices)`; an author-created overlapping-effects track (for example `effects` with 16 voices, within the total cap of 32) covers overlapping sound effects, while the built-in `sfx` track stays at 1 voice for legacy parity. It is not a sixth built-in (D-6 stands).
    - **Voice stealing:** when every voice is busy, a fixed core rule picks the sound that stops (oldest first, or lowest priority with play order breaking ties), so replays never depend on the audio device.
    - **Stingers:** a short musical clip on its own track over the music needs nothing new; optional ducking (the music dips while the stinger plays) is a nice-to-have built on `mediaFade`.
 
@@ -493,7 +493,7 @@ A fun extra for music-player screens: read title, artist, album and similar tags
 - **Decide:** the voice model.
 - **Handles.** With more than one voice, a script cannot stop or query one particular sound through the track alone. **Recommend:** `mediaPlay(file, track, flags, &voice)` returns a voice number by reference, and `mediaStop`, `mediaPause`, `mediaSeek`, `mediaFade` and the queries accept an optional voice; omitted means the track's primary voice (voice 0), which keeps single-voice tracks and old games unchanged.
 - **Same file already playing.** Legacy rules: music with the same name carries on if playing and restarts if stopped (round 8 Q5); the sound-effect slot ignores the same name while it is still playing (Q3). **Recommend:** one rule, "on a single-voice track, the same file already playing is left alone unless `tkMD_RESTART`; on a multi-voice track every play takes a free voice", so rapid footsteps overlap.
-- **Defaults to set:** voice count per built-in track (`music` 1, `sfx` 1, `ambience` and `ui` a small number, `voice` 1 or 2 **[owner choice, still open]**, plus a multi-voice effects track as in item 11), a maximum number of named tracks, and the total voice cap. **Decided (owner, 2026-10-18): the total voice cap is 32.** It is a general engine default, not a measured figure for this project; 6.2 and 6.4 may revisit it only with evidence.
+- **Defaults to set:** voice count per built-in track (`music` 1, `sfx` 1, `ambience` 4, `voice` 2, `ui` 4 as proposed defaults, **owner choice, still open**), a maximum number of named tracks (proposed 16), and the total voice cap. **Decided (owner, 2026-10-18): the total voice cap is 32.** It is a general engine default, not a measured figure for this project; entries 6.7 and 6.12 may revisit it only with evidence.
 - **Stealing rule, decide:** when every voice is busy, drop the oldest, the quietest, or the lowest priority. **Recommend:** lowest priority first, then oldest, then lowest voice index, with `priority` an optional play argument defaulting to 0. All three are pure functions of core state, so the choice is deterministic. Rejected alternative: leave it to the runner, which breaks replays.
 - **Late sounds (§9):** the late-SFX threshold (about 250 ms, drop) belongs here; define it in ticks.
 - **Produces:** the voice rule page and defaults table.
