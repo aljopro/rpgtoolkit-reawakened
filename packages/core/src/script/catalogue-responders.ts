@@ -398,13 +398,6 @@ const PACK_CATALOGUE_FALLBACKS: readonly BuiltinSpec[] = [
   effectCommand("msgbox", "ui", "mixed"),
   effectCommand("clear", "surfaces"),
   effectCommand("fade", "fx", "draw-audio-cue"),
-  effectCommand("viewbrd", "world"),
-  effectCommand("put", "world"),
-  effectCommand("layerput", "world"),
-  effectCommand("getboardtile", "world", "pure"),
-  effectCommand("boardgettile", "world", "pure"),
-  effectCommand("setconstants", "world"),
-  effectCommand("animation", "world"),
 ].map(fallbackDocumentation);
 
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */

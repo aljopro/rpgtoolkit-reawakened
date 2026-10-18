@@ -11,6 +11,7 @@ import { composeBoard } from "../render/compose.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
 import type { WorldBoard } from "../world/model.ts";
 import { applyInputEvent, createInputSection, inputView, pruneClaimed } from "../input/index.ts";
+import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
 import { EffectBus, type EffectApplier } from "./effects.ts";
 import type { EngineSection } from "../save/sections/engine.ts";
 import {
@@ -98,6 +99,7 @@ export function createEngine(init: EngineInit): Engine {
     registrationByPhase.set(registration.phase, list);
   }
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
+  bus.register("world", (effect) => applyWorldEffect(state, effect));
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
   let boardBytes: Uint8Array | null = null;
@@ -210,6 +212,7 @@ export function createEngine(init: EngineInit): Engine {
         return;
       case "threads":
         runThreadsPhase(state.vm, services, STEP_BUDGET);
+        expireProgramTileEdits(state);
         return;
       case "time":
         runTimePhase(state.time);

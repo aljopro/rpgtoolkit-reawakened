@@ -2,6 +2,7 @@ import {
   CATALOGUE_RESPONDERS_PLUGIN,
   CATALOGUE_STUBS_PLUGIN,
   CORE_PLUGIN,
+  WORLD_PLUGIN,
   createScriptServices as createResolvedScriptServices,
   type GameState,
   type Logger,
@@ -20,6 +21,7 @@ const TEST_CORE_PLUGIN: PluginDefinition = {
 const DEFAULT_RESOLVED: readonly ResolvedPlugin[] = [
   { definition: TEST_CORE_PLUGIN },
   { definition: CATALOGUE_STUBS_PLUGIN },
+  { definition: WORLD_PLUGIN },
 ];
 
 type TestPlugin = PluginDefinition | ResolvedPlugin;
