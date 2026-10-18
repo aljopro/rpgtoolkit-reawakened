@@ -68,6 +68,9 @@ jobs:
       # case can never pass by skipping.
       - run: pnpm test:strict
       - run: pnpm golden
+      # The closing suite boots every fetched sample game through the real engine and compares frames, hashes and
+      # diagnostics with the committed regression baselines (ticket 4.28).
+      - run: pnpm closing
       # Independent-oracle drift checks (Pillow is a CI-only dev tool, HPND, never shipped).
       - run: python3 -m pip install Pillow
       - run: pnpm oracle:check
@@ -127,6 +130,12 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: fixtures/legacy
+          key: legacy-games-${{ hashFiles('tools/fixtures/sources.json') }}
+      # `golden:bun` also replays the closing suite, which boots the fetched sample games under both runtimes.
+      - run: pnpm fixtures:fetch
       - run: pnpm golden:bun
   gate:
     needs: [typecheck, lint, unit, golden, golden-bun, licence, provenance, graph]

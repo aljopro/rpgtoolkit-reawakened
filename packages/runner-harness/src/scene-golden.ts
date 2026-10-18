@@ -9,7 +9,7 @@ export type SceneGoldenInput = {
 };
 export type SceneGoldenOutcome = { readonly ok: boolean; readonly message: string; readonly drawHash: string; readonly stateHash: string };
 
-type LedgerEntry = { readonly path: string; readonly scene: string; readonly class: string; readonly gating: boolean; readonly producer: string };
+type LedgerEntry = { readonly path: string; readonly scene: string; readonly suite?: string; readonly class: string; readonly gating: boolean; readonly producer: string };
 type Ledger = { readonly schema: number; readonly goldens: readonly LedgerEntry[] };
 
 function readLedger(text: string): Ledger {
@@ -64,8 +64,10 @@ export function checkSceneGolden(input: SceneGoldenInput): SceneGoldenOutcome {
 export function checkSceneGoldens(inputs: readonly SceneGoldenInput[], ledgerText: string): { readonly ok: boolean; readonly lines: readonly string[] } {
   try {
     const ledger = readLedger(ledgerText);
+    // Rows of another suite (the closing suite's regression baselines) are replayed by that suite, not as scenes.
+    const sceneRows = ledger.goldens.filter((entry) => entry.suite === undefined);
     const names = new Set(inputs.map((input) => (JSON.parse(input.sceneText) as { readonly name?: unknown }).name));
-    for (const entry of ledger.goldens) {
+    for (const entry of sceneRows) {
       if (!names.has(entry.scene)) throw new Error(`${entry.scene}: ledger scene is missing`);
     }
     const seen = new Set<string>();
@@ -78,7 +80,7 @@ export function checkSceneGoldens(inputs: readonly SceneGoldenInput[], ledgerTex
       if (!outcome.ok) throw new Error(outcome.message);
       lines.push(`${outcome.message}; draw=${outcome.drawHash}; state=${outcome.stateHash}`);
     }
-    if (seen.size !== ledger.goldens.length) throw new Error(`ledger has ${ledger.goldens.length} entries but ${seen.size} scenes were replayed`);
+    if (seen.size !== sceneRows.length) throw new Error(`ledger has ${sceneRows.length} scene entries but ${seen.size} scenes were replayed`);
     return { ok: true, lines };
   } catch (error) {
     return { ok: false, lines: [error instanceof Error ? error.message : String(error)] };

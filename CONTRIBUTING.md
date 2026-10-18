@@ -101,11 +101,14 @@ pnpm fixtures:author:check       # fail if those committed fixtures drift from t
 pnpm golden                      # the headless golden suite (G5)
 pnpm dump fixtures/legacy/demo   # parse a legacy project and print it (needs fixtures:fetch)
 pnpm dump:check                  # the corpus digest gate (runs in the golden job, after fixtures:fetch)
+pnpm closing                     # boot every sample game through the real engine and compare with the committed baselines (needs fixtures:fetch)
 ```
 
 The `*:test` scripts are the tool self-tests that CI also runs, so run them when you touch `tools/`. `pnpm graph:write` is a dev aid that CI never runs. `pnpm license` and `pnpm license:test` are aliases of `licence` and `licence:test`.
 
 `pnpm golden:record` rewrites the golden and is the only writer of it. Never run it in CI. A golden change is a reviewed behaviour change (G5), so explain it in the pull request.
+
+`pnpm closing` boots all eight fetched sample games through the real engine and compares their frames, hashes and diagnostics with the baselines committed under `golden/regression/` (it needs `fixtures:fetch`, runs in the `golden` job and again under Bun in `golden-bun`, and takes about a minute). `pnpm closing:record` rewrites those baselines and the closing rows of `golden/ledger.json`; like `golden:record` it is a deliberate act and never runs in CI. The scripted run and each game's expected outcome live in `golden/closing/plan.json`; a Toolkit 2 game that cannot boot yet is listed there as an expected failure with its epic and reason, and fails the suite as soon as it starts to boot, so the entry is removed on purpose.
 
 Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `core`, `runner-harness` and `runner-headless` expose `typecheck:tests` only, and their tests run through the root `pnpm test`.
 
