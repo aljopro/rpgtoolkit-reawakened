@@ -27,7 +27,7 @@
 **Q2. Wipe effects 1 to 12 and speed.** *Owner-relayed, confidence not stated.*
 * Effects 1 to 4 agree with our default.
 * Effects 5 to 8 are diagonals; effects 9 to 12 are push slides.
-* The default speed is 1.
+* The default speed is 1. Owner-confirmed 2026-10-18: a larger speed number is faster, and the default speed takes about 10 seconds to wipe across a 640-pixel-wide screen.
 * The speed unit is pixels per redraw, scaled by the frame rate.
 * Speed 0 hangs the program.
 * No final full-image draw happens, so the old image can remain on screen when the call returns.
@@ -94,7 +94,7 @@ These are the doc-first spec amendments made from the answers above (G7). Each r
 | 1 | Fade types | ADOPT types 0 to 5 as stepped effects (0 default when omitted); 30 fixed ticks, blocking (Reawakened determinism choice); other types do nothing. Per-step geometry and end state left to the owner and 4.22's plan | `rpgcode-functions.md#reawakened-fade-types` | not stated; geometry and end state unanswered | Keeping the out/in/out-in/crossfade table (contradicted); inventing exact geometry from a one-word description |
 | 2 | Wipe 1 to 4 | KEEP (answer agrees) | `#reawakened-wipe-effects-and-speed` | not stated | none |
 | 2 | Wipe 5 to 12 | ADOPT 5 to 8 diagonals, 9 to 12 push slides; corner and direction order is a Reawakened assumption | same | not stated; order unanswered | Keeping centre-out and edges-in as 5 to 8 (contradicted); extra effects 13 to 16 for them (no demand) |
-| 2 | Wipe speed | ADOPT default 1; unit pixels per fixed tick (factor 1 for frame-rate scaling, assumption) | same | not stated; scale factor unanswered | Percentage progress with default 4 (contradicted) |
+| 2 | Wipe speed | ADOPT default 1; unit pixels per fixed tick (factor 1 for frame-rate scaling, assumption) | same | owner-confirmed 2026-10-18 (default about 10 s across 640 px; larger is faster) | Percentage progress with default 4 (contradicted) |
 | 2 | Wipe speed 0 | KEEP a defined failure: `builtin.bad-arg` (legacy hangs); negative treated alike | same | not stated | One-tick completion for 0 (hides an author mistake); reproducing the hang (G1/determinism) |
 | 2 | Wipe final frame | ADD final exact-image draw (legacy can leave the old image) | same | not stated | Reproducing the stale image |
 | 3 | Message window | ADOPT 600 × 100 centred at top, no margin, 50% translucency, text all at once | `#reawakened-message-window-defaults` | not stated | Percentage rectangle with 8-pixel margin (contradicted) |
@@ -115,6 +115,6 @@ These are the doc-first spec amendments made from the answers above (G7). Each r
 
 1. **Zoom (Q6, LOW):** the unit of the "shrink amount" is not in the answer; the percent-of-view reading and the 30-tick bound are inferences.
 2. **Fade (Q1):** only visual names were relayed; the geometry, end state and colours are unspecified, and 4.22's plan must settle them.
-3. **Wipe speed (Q2):** one pixel per tick is 640 ticks across a 640-wide surface (about 10.7 seconds); the frame-rate scale factor was not relayed. Diagonal corners and push directions are assumptions.
+3. **Wipe speed (Q2):** settled by the owner (2026-10-18): about 10 seconds for the default speed across 640 pixels, and a larger number is faster. One pixel per tick (640 ticks, about 10.7 seconds) matches, so the scale factor of 1 stands. Diagonal corners and push directions remain assumptions.
 4. **Light boundary (Q8):** adopting it requires a golden change in follow-up ticket 4.34.
 5. **`text` (Q5):** changes the merged 4.8 behaviour and its committed vectors.
