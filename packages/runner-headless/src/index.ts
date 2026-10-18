@@ -51,7 +51,7 @@ function runGolden(argv: string[]): number {
     const scriptsGolden =
       readFileOrUndefined(join(root, "golden/scripts/golden.json")) ?? (record ? "" : undefined);
     const ledgerText = readFileOrUndefined(join(root, "golden/ledger.json"));
-    const sceneGoldens = ledgerText === undefined ? undefined : readdirSync(join(root, "golden/scenes")).filter((name) => name.endsWith(".json")).map((name) => {
+    const sceneGoldens = ledgerText === undefined ? undefined : readdirSync(join(root, "golden/scenes")).filter((name) => name.endsWith(".json")).sort().map((name) => {
       const sceneText = readFileSync(join(root, "golden/scenes", name), "utf8");
       const scene = JSON.parse(sceneText) as { readonly boardFiles: readonly string[]; readonly name: string };
       const ledger = JSON.parse(ledgerText) as { readonly goldens: readonly { readonly scene: string; readonly path: string }[] };
