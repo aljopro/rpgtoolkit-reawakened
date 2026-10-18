@@ -70,7 +70,7 @@ Per-tile RGB tint, used for shadows and colour effects.
 
 ### Lights
 
-Light sources are editable objects. The engine bakes them into shading layer 0 at load time and does not keep them. **Reawakened rule (OWNER; unverified default).** Ellipse falloff is a normalized elliptical radius with linear endpoint falloff (`1` at centre, `0` at the radius); gradient falloff is a clamped projection along its two nodes; clipped gradient uses the same projection only inside its polygon/clip shape. Interpolate the two stored colours in fixed-point integer steps and clamp the shade. The stored light layer is ignored. This is a Reawakened default pending extraction answers.
+Light sources are editable objects. The engine bakes them into shading layer 0 at load time and does not keep them. **Reawakened rule (OWNER; light falloff; round-7 facts adopted and kept).** Ellipse falloff is a normalized elliptical radius with linear endpoint falloff (`1` at centre, `0` at the radius), and the ellipse boundary is excluded: only pixels strictly inside the ellipse are lit (adopted from the owner-relayed legacy fact). Gradient falloff is a clamped projection along its two nodes; clipped gradient uses the same projection only inside its polygon/clip shape. Interpolate the two stored colours in fixed-point integer steps and clamp the shade once; the clamp is kept as a deliberate Reawakened departure, because the legacy lighting does not clamp. The stored light layer is ignored. See [display-input-audio.md#reawakened-light-and-raster-arithmetic](../engine/display-input-audio.md#reawakened-light-and-raster-arithmetic).
 
 | # | Field | Type | Meaning |
 |---|---|---|---|
