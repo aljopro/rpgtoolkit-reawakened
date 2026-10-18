@@ -19,7 +19,7 @@ export function effectCommand(
         ? "Draw text on the current screen."
         : `${name} applies a deterministic ${section} command to the current game state.`,
       behaviour: textDoc
-        ? "The command places text at character-cell coordinates (8×16 logical pixels), truncating coordinates toward zero; newlines advance one 16-pixel row, and glyph layout uses the current FontRef metrics. The call records one ui effect and does not wait."
+        ? "Draws text on a grid of square cells as wide and tall as the current font size, counting from cell (1, 1) at the top left. Technically, each coordinate is truncated toward zero and maps to the pixel origin ((x - 1) × size, (y - 1) × size); a newline moves down one cell row (size pixels), text outside the surface is clipped, and glyph layout uses the current FontRef metrics. The call records one ui effect and does not wait."
         : `The command records one ${kind} effect for ${section}; arguments are retained in source order and the call does not wait.`,
       groups: [section],
       waits: { kind: "never", summary: "The command completes in the current script turn." },

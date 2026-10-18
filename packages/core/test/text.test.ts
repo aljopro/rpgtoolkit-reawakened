@@ -37,13 +37,24 @@ test("bitmap text layout is stable across sizes and wraps at words", () => {
   equal(resolveFont("TKR-8X8", fonts, fallback).asset, key);
 });
 
-test("text emission uses FontRef metrics and fixed 8x16 cell origins", () => {
+test("text emission uses FontRef metrics and 1-based square cells one font size wide", () => {
   const ref = { asset: key, size: 8, bold: false, italic: false } as const;
-  const commands = emitCellText("A", 1.9, -0.5, { r: 7, g: 8, b: 9 }, ref);
-  deepEqual(commands, [{
-    kind: "text", x: 8, y: 0, text: "A", font: ref, rgb: { r: 7, g: 8, b: 9 },
+  // Cell (1, 1) is the top-left cell; a fractional coordinate truncates toward zero first.
+  deepEqual(emitCellText("A", 1, 1, { r: 7, g: 8, b: 9 }, ref), [{
+    kind: "text", x: 0, y: 0, text: "A", font: ref, rgb: { r: 7, g: 8, b: 9 },
     advances: [{ glyph: 65, advance: 8 }],
   }]);
+  const truncated = emitCellText("A", 2.9, -0.5, { r: 7, g: 8, b: 9 }, ref);
+  equal(truncated[0]?.kind === "text" ? truncated[0].x : null, 8);
+  equal(truncated[0]?.kind === "text" ? truncated[0].y : null, -8);
+  // The cell follows the current font size, not a fixed 8x16 size.
+  const ref16 = { ...ref, size: 16 } as const;
+  const large = emitCellText("A", 2, 3, { r: 1, g: 2, b: 3 }, ref16);
+  equal(large[0]?.kind === "text" ? large[0].x : null, 16);
+  equal(large[0]?.kind === "text" ? large[0].y : null, 32);
+  // A newline advances one cell row, a font size in pixels.
+  const rows = emitCellText("A\nB", 1, 1, { r: 1, g: 2, b: 3 }, ref).map((command) => (command.kind === "text" ? command.y : null));
+  deepEqual(rows, [0, 8]);
   deepEqual(emitText("A", 0, 0, { r: 1, g: 2, b: 3 }, ref, { underline: true }).map((command) => command.kind), ["text", "line"]);
 });
 
