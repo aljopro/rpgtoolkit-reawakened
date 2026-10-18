@@ -1,7 +1,7 @@
 ---
 ticket: 12
 type: feature
-status: built
+status: done
 ---
 
 # Board edit and board-read built-ins

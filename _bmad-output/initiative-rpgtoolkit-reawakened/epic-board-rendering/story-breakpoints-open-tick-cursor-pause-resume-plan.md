@@ -3,7 +3,7 @@ title: 'Breakpoints: the open-tick cursor, pause and resume'
 type: feature
 ticket: 30
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: '1c6a7510'
 route: full
 route_source: pinned

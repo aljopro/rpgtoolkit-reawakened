@@ -3,7 +3,7 @@ title: 'Engine loop: phases, catch-up, input, waits, focus pause and presentatio
 type: feature
 ticket: 19
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: 'fcd62d30'
 route: full
 route_source: pinned
