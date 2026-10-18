@@ -226,6 +226,14 @@ export function hydrateBoard(
   const grid = boardGrid(board.sizeX, board.sizeY, board.coordType);
   const dependencies: AssetKey[] = [];
   const depSet = new Set<AssetKey>();
+  const backgroundImage = board.properties.backgroundImage;
+  if (backgroundImage !== undefined && backgroundImage !== "") {
+    const background = resolveAsset(index, root, "bitmaps", backgroundImage);
+    if (background.ok) {
+      addDependency(background.value, dependencies, depSet);
+      if (!assets.has(background.value)) return { value: null, error: null, missing: background.value };
+    }
+  }
   const resolved: (WorldTile | null)[] = [];
   const metadata = new Map<AssetKey, WorldTileset>();
   for (const reference of board.lut) {
@@ -287,10 +295,10 @@ export function hydrateBoard(
       hydratedImages.push(image(source));
       continue;
     }
+    addDependency(resolvedImage.value, dependencies, depSet);
     const imageBytes = assets.get(resolvedImage.value);
     if (imageBytes === undefined) {
-      hydratedImages.push({ ...image(source), asset: resolvedImage.value });
-      continue;
+      return { value: null, error: null, missing: resolvedImage.value };
     }
     const isTileBitmap = source.file.toLowerCase().endsWith(".tbm");
     if (!isTileBitmap) {
