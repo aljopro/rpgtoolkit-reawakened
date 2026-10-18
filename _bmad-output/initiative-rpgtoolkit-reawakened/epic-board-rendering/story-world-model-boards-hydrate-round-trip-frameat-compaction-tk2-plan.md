@@ -3,7 +3,7 @@ title: 'World model: boards hydrate into the world section'
 type: feature
 ticket: 10
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: '42816c2a'
 route: full
 risk: high

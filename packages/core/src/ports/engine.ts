@@ -72,6 +72,12 @@ export type TickReport = {
  * The engine a runner drives (AD-1). Every argument and result is
  * structured-cloneable plain data, so the core runs in a Worker.
  */
+/** Optional compositor inputs used by headless golden scenes and editor previews. */
+export type DrawListInclude = {
+  readonly shading: boolean;
+  readonly images: boolean;
+  readonly sprites: boolean;
+};
 export interface Engine {
   /**
    * Run whole fixed ticks, consuming `inputs` in array order. When an open
@@ -81,7 +87,7 @@ export interface Engine {
   advance(ticks: number, inputs: readonly InputRecord[], maxTicks?: number, resume?: ResumeMode): TickReport;
 
   /** A pure function of current state; `alpha` is 0 in tests (AD-1). */
-  drawList(alpha?: number): DrawList;
+  drawList(alpha?: number, include?: DrawListInclude): DrawList;
 
   /**
    * The pixels of surface `id` at revision `rev`, or `null` when the surface

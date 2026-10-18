@@ -2,7 +2,7 @@ import { hashDrawList, hashState } from "../canon/index.ts";
 import { resolveAsset } from "../formats/resolver/resolver.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
 import type { DrawList } from "../ports/draw.ts";
-import type { Engine, Diagnostic, Breakpoint, ResumeMode, SurfacePixels } from "../ports/engine.ts";
+import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
@@ -419,8 +419,12 @@ export function createEngine(init: EngineInit): Engine {
         stateHash: hashState(state),
       };
     },
-    drawList(alpha = 0) {
-      return currentDrawList(alpha);
+    drawList(alpha = 0, include: DrawListInclude = { shading: false, images: false, sprites: false }) {
+      const board: WorldBoard | null = state.world.board ?? null;
+      if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
+      const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
+      const cameraPos = positionAt(state.camera, presentationAlpha);
+      return composeBoard({ board, tick: state.time.tick, camera: cameraPos, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include });
     },
     surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null {
       if (id === (0 as SurfaceId)) refreshFrame();

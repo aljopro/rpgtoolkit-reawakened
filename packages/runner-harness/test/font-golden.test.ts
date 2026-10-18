@@ -27,7 +27,7 @@ function authoredPangramPng(): Uint8Array {
 
 test("authored font pangram golden is stable through the reader and PNG path", () => {
   const actual = authoredPangramPng();
-  const expected = readFileSync(join(repoRoot, "golden", "reference", "tkr-font-pangram.png"));
+  const expected = readFileSync(join(repoRoot, "golden", "regression", "tkr-font-pangram.png"));
   const comparison = comparePngPixels(actual, new Uint8Array(expected));
   equal(comparison.error, null);
   equal(comparison.equal, true, comparison.firstDifference ? JSON.stringify(comparison.firstDifference) : "");
