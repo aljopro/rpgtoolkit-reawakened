@@ -1,0 +1,398 @@
+{
+  "statements": [
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "assign",
+        "operator": "=",
+        "target": {
+          "kind": "decl",
+          "scope": "global",
+          "name": "cells"
+        },
+        "value": {
+          "kind": "literal",
+          "value": 0
+        }
+      }
+    },
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "literal",
+        "value": 0
+      }
+    },
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "assign",
+        "operator": "=",
+        "target": {
+          "kind": "decl",
+          "scope": "local",
+          "name": "ledger"
+        },
+        "value": {
+          "kind": "call",
+          "name": "ledger",
+          "args": []
+        }
+      }
+    },
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "assign",
+        "operator": "=",
+        "target": {
+          "kind": "decl",
+          "scope": "local",
+          "name": "index"
+        },
+        "value": {
+          "kind": "literal",
+          "value": 0
+        }
+      }
+    },
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "call",
+        "name": "update",
+        "args": [
+          {
+            "kind": "variable",
+            "name": "ledger",
+            "scope": null
+          },
+          {
+            "kind": "variable",
+            "name": "index",
+            "scope": null
+          },
+          {
+            "kind": "literal",
+            "value": 1
+          }
+        ]
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "selectcell",
+      "params": [
+        {
+          "name": "index",
+          "byRef": true,
+          "typeName": null
+        }
+      ],
+      "body": [
+        {
+          "kind": "return",
+          "value": {
+            "kind": "index",
+            "base": {
+              "kind": "variable",
+              "name": "cells",
+              "scope": null
+            },
+            "index": {
+              "kind": "variable",
+              "name": "index",
+              "scope": null
+            }
+          },
+          "byRef": true
+        }
+      ],
+      "isInline": false
+    },
+    {
+      "name": "globalcell",
+      "params": [],
+      "body": [
+        {
+          "kind": "return",
+          "value": {
+            "kind": "variable",
+            "name": "cells",
+            "scope": "global"
+          },
+          "byRef": true
+        }
+      ],
+      "isInline": false
+    },
+    {
+      "name": "update",
+      "params": [
+        {
+          "name": "ledger",
+          "byRef": false,
+          "typeName": null
+        },
+        {
+          "name": "index",
+          "byRef": true,
+          "typeName": null
+        },
+        {
+          "name": "amount",
+          "byRef": false,
+          "typeName": null
+        }
+      ],
+      "body": [
+        {
+          "kind": "expr",
+          "expr": {
+            "kind": "assign",
+            "operator": "=",
+            "target": {
+              "kind": "decl",
+              "scope": "local",
+              "name": "slot"
+            },
+            "value": {
+              "kind": "methodCall",
+              "receiver": {
+                "kind": "variable",
+                "name": "ledger",
+                "scope": null
+              },
+              "name": "nested",
+              "args": [
+                {
+                  "kind": "variable",
+                  "name": "index",
+                  "scope": null
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": "expr",
+          "expr": {
+            "kind": "assign",
+            "operator": "=",
+            "target": {
+              "kind": "call",
+              "name": "selectcell",
+              "args": [
+                {
+                  "kind": "variable",
+                  "name": "index",
+                  "scope": null
+                }
+              ]
+            },
+            "value": {
+              "kind": "binary",
+              "operator": "+",
+              "left": {
+                "kind": "variable",
+                "name": "amount",
+                "scope": null
+              },
+              "right": {
+                "kind": "methodCall",
+                "receiver": {
+                  "kind": "variable",
+                  "name": "ledger",
+                  "scope": null
+                },
+                "name": "at",
+                "args": [
+                  {
+                    "kind": "variable",
+                    "name": "index",
+                    "scope": null
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "kind": "expr",
+          "expr": {
+            "kind": "assign",
+            "operator": "=",
+            "target": {
+              "kind": "decl",
+              "scope": "local",
+              "name": "combined"
+            },
+            "value": {
+              "kind": "call",
+              "name": "selectcell",
+              "args": [
+                {
+                  "kind": "binary",
+                  "operator": "+",
+                  "left": {
+                    "kind": "call",
+                    "name": "globalcell",
+                    "args": []
+                  },
+                  "right": {
+                    "kind": "variable",
+                    "name": "index",
+                    "scope": null
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": "return",
+          "value": {
+            "kind": "binary",
+            "operator": "+",
+            "left": {
+              "kind": "binary",
+              "operator": "+",
+              "left": {
+                "kind": "binary",
+                "operator": "+",
+                "left": {
+                  "kind": "call",
+                  "name": "globalcell",
+                  "args": []
+                },
+                "right": {
+                  "kind": "call",
+                  "name": "selectcell",
+                  "args": [
+                    {
+                      "kind": "variable",
+                      "name": "index",
+                      "scope": null
+                    }
+                  ]
+                }
+              },
+              "right": {
+                "kind": "decl",
+                "scope": "local",
+                "name": "slot"
+              }
+            },
+            "right": {
+              "kind": "variable",
+              "name": "combined",
+              "scope": null
+            }
+          },
+          "byRef": false
+        }
+      ],
+      "isInline": false
+    }
+  ],
+  "classes": [
+    {
+      "name": "ledger",
+      "bases": [],
+      "members": [
+        {
+          "name": "values",
+          "arraySize": null,
+          "access": "public"
+        }
+      ],
+      "methods": [
+        {
+          "name": "at",
+          "params": [
+            {
+              "name": "index",
+              "byRef": false,
+              "typeName": null
+            }
+          ],
+          "body": [
+            {
+              "kind": "return",
+              "value": {
+                "kind": "index",
+                "base": {
+                  "kind": "variable",
+                  "name": "values",
+                  "scope": null
+                },
+                "index": {
+                  "kind": "variable",
+                  "name": "index",
+                  "scope": null
+                }
+              },
+              "byRef": true
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "ledger"
+        },
+        {
+          "name": "valuesref",
+          "params": [],
+          "body": [
+            {
+              "kind": "return",
+              "value": {
+                "kind": "variable",
+                "name": "values",
+                "scope": null
+              },
+              "byRef": true
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "ledger"
+        },
+        {
+          "name": "nested",
+          "params": [
+            {
+              "name": "index",
+              "byRef": false,
+              "typeName": null
+            }
+          ],
+          "body": [
+            {
+              "kind": "return",
+              "value": {
+                "kind": "index",
+                "base": {
+                  "kind": "variable",
+                  "name": "values",
+                  "scope": null
+                },
+                "index": {
+                  "kind": "variable",
+                  "name": "index",
+                  "scope": null
+                }
+              },
+              "byRef": false
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "ledger"
+        }
+      ],
+      "isStruct": false
+    }
+  ],
+  "includes": []
+}

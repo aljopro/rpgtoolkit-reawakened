@@ -48,6 +48,27 @@ Ruled by entry 3.8, doc-first:
 ### The `system.` namespace (PRG-1)
 
 The engine exposes its own namespace through the same dot syntax: `system.pause` (used by many Toolkit 2.x games) resolves to the engine's `pause`, not to a file. A game may also ship a `system.prg` library; it is an ordinary library file reached only by `#include` or an implicit call. <!-- OWNER: PRG-1 — alternatives: (a) load `system.prg` automatically at boot, as a shared library; (b) treat it as an ordinary library reached only by `#include` or an implicit call (decided). The demo copy is referenced by nothing, so (a) would invent behaviour the corpus does not show. -->
+### Pure-RPGCode plugins and middleware (MOD-4) — Reawakened rule
+
+RPGCode scripts can register custom commands and middleware interceptors via the built-in `registerPlugin(pluginDefinition)` function:
+
+```rpgcode
+registerPlugin({
+    name: "audio-blips",
+    commands: {
+        message: (text, next) => {
+            playSound("blip.wav");
+            next(text); // yields to next plugin layer or native built-in
+        }
+    }
+});
+```
+
+* **Onion middleware composition.** Multiple plugins wrapping the same command compose into an ordered chain (`Plugin A -> Plugin B -> Native Built-in`). When an interceptor runs, the engine provides `next` as a callable parameter representing the next layer down. Calling `next(...)` forwards execution and arguments to that layer.
+* **No global monkey-patching.** Plugins register explicitly through the plugin registry rather than overwriting global variables or command tokens. Variable assignments (`message = 5`) do not alter or clobber command dispatch.
+* **Waiting commands.** When `next(...)` calls a command that yields or waits for user input (such as `message` waiting for a keypress), the calling thread suspends inside the interceptor frame. Under rule **G1**, this suspended frame serializes to plain JSON so mid-tick game state can be saved and restored cleanly.
+* **Lifecycle.** Plugins register during startup initialization (e.g. from an `init.prg` or project manifest). When a saved game is restored, the registered plugin table is assumed to be established by the game startup sequence before saved threads resume. <!-- OWNER: MOD-4 — 2026-10-18: pure-RPGCode plugin middleware with registerPlugin(def) and next() chaining. -->
+
 
 ## Objects
 
@@ -122,5 +143,34 @@ Terms used below: a **class** is a set of members and methods; an **object** is 
 * `protected` is not a word of the language. — legacy behaviour (R3-Q1). **Reawakened rule:** the loader rejects it with a located diagnostic, because a file that uses it is not valid 3.1 and ignoring it would quietly change a program's meaning.
 * Access is checked at each access, at run time, and a blocked access is a catchable runtime error. An access from outside any method, or from a method running on a different class, needs `public`; a method of the same class may also reach `private`. — legacy behaviour (R3-Q1).
 * The check compares class identities, not instances: any method of class `C` may reach the private members of any `C` object. — legacy behaviour (R3-Q1).
+### Dictionaries and property bags (OOP-10) — Reawakened rule
+
+Modern RPGCode code can create and manipulate dictionary objects directly via object literal syntax `{ key1: val1, key2: val2 }`:
+
+```rpgcode
+potion = {
+    name: "Health Potion",
+    healAmount: 50,
+    use: (target) => {
+        target.hp += this.healAmount;
+    }
+};
+```
+
+* **Universal dictionary foundation.** Dictionaries backed by environment cells serve as the single underlying runtime storage foundation for both modern property bags and compiled legacy `class` instances.
+* **Legacy class compilation.** Legacy `class` declarations compile to constructor functions that instantiate dictionaries pre-populated with declared fields, access metadata, and prototype links to ancestor classes. No duplicate object runtime is required.
+* **Property access.** Properties can be accessed using modern dot syntax (`obj.prop`), legacy arrow syntax (`obj->prop`), or string-bracket indexing (`obj["prop"]`).
+
+### Auto-bound receivers and `this` (OOP-11) — Reawakened rule
+
+* **Auto-binding on member access.** When a callable is accessed as a property of an object (`obj.method` or `obj->method`), the retrieved callable is automatically bound with `receiver = obj`.
+* **Preserved receiver on tear-off.** Passing or storing a torn-off method retains its original receiver:
+  ```rpgcode
+  cb = potion.use;
+  cb(player); // 'this' remains potion!
+  ```
+* **Standalone lambdas.** A lambda defined outside an object literal has `receiver = null`. Inside such a lambda, `this` evaluates to `null`.
+* **Explicit rebinding with `bindThis`.** The built-in function `bindThis(fn, targetObj)` returns a new callable value explicitly bound to `targetObj`. <!-- OWNER: OOP-10, OOP-11 — 2026-10-18: dictionary objects, auto-bound methods on property read, and explicit bindThis(fn, obj). -->
+
 
 **References.** R2-Q16, R2-Q17, R2-Q18, R2-Q19 (`docs/provenance/facts-round-2.md`); R3-Q1, R3-Q2 (`docs/provenance/facts-round-3.md`); the values and `return &` rules in [rpgcode-language.md](rpgcode-language.md); the failure table in [errors and threads](rpgcode-errors-and-threads.md); `byRef` on a `ParamSpec` (AD-8) and the vm state section (AD-10) in the architecture spine.
