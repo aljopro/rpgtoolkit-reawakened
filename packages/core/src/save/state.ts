@@ -26,6 +26,7 @@ import { createTimeState, type TimeState } from "../time/time.ts";
 import {
   createCameraSection,
   createUiSection,
+  createFxSection,
   type AudioSection,
   type BattleSection,
   type CameraSection,
@@ -155,7 +156,7 @@ export function createGameState(init: { seed: number }): GameState {
     input: {} as InputSection,
     ui: {} as UiSection,
     camera: {} as CameraSection,
-    fx: {},
+    fx: {} as FxSection,
     audio: {},
     surfaces: {} as SurfacesSection,
     rng: seedRng(init.seed),

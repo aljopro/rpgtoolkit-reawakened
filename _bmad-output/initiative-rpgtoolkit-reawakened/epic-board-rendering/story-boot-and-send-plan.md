@@ -3,7 +3,7 @@ title: 'Boot and send'
 type: feature
 ticket: 20
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: 'b5d59593'
 route: full
 route_source: pinned
