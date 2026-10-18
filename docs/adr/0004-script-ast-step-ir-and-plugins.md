@@ -131,6 +131,28 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
    ```
 
    Rules that keep this safe: a result needed inside one command invocation is split into request and continuation, or provided by the host as a synchronous lookup it can answer from memory; the headless harness scripts replies as inputs, so plugin tests need no host. A small helper that builds the request-and-continuation record, and a test helper for scripted replies, belong with entry 3.
+8. **First-Class Callables, Serializable Step Closures, and Pure-RPGCode Middleware (Epic 18):**
+   To enable modular feature libraries (such as custom HUDs and battle engines) written directly in RPGCode without requiring native TypeScript plugins or global symbol monkey-patching:
+   * **Callable Values (`Value.Callable`):** Callables are first-class values represented as plain serializable data records:
+     ```typescript
+     export interface CallableValue {
+       type: 'callable';
+       def: string;              // Deterministic program definition ID (e.g. "items.prg#lambda_1")
+       captures: readonly string[]; // IDs of captured environment cells
+       receiver: string | null;  // Object ID for 'this', or null
+     }
+     ```
+   * **Step IR Instruction Extensions:**
+     - `OP_MAKE_CALLABLE { def, captures }`: pushes a new callable record referencing static definition `def` and capturing cell IDs.
+     - `OP_CALL_INDIRECT { argCount }`: dynamically invokes a callable value evaluated from a primary expression.
+     - `OP_GET_MEMBER_BOUND { prop }`: retrieves a property and, if the value is a callable, auto-binds its `receiver` to the target object.
+   * **Step-Machine Closure Serialization (G1):**
+     Lexical captures are stored as explicit environment cells in game state (`vm.cells`). Mid-tick snapshots, save files, and golden replays serialize active closures and suspended `next` frames as plain JSON without relying on opaque host closures.
+   * **Auto-Bound Receivers:**
+     Property access `obj.method` produces a callable bound to `obj`, eliminating JavaScript-style detached-receiver pitfalls. Explicit rebinding is provided by the built-in `bindThis(fn, targetObj)`.
+   * **Pure-RPGCode Middleware (`registerPlugin`):**
+     The native TypeScript plugin middleware architecture (`CommandHandler` chaining through `next`) is dogfooded in RPGCode via `registerPlugin(pluginDefinition)`. RPGCode scripts wrap engine commands cleanly in an onion pipeline without polluting or colliding with global variables.
+
 
 ## Consequences
 
