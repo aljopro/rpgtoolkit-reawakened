@@ -5,6 +5,7 @@ import { ScriptError } from "../errors.ts";
 import type { Arg, BuiltinDoc, BuiltinSpec } from "../builtins.ts";
 import type { CommandEffect, CommandResult, PluginDefinition } from "../plugin.ts";
 import { applyWorldEffect } from "../../world/effects.ts";
+import { applyCameraEffect } from "../../world/camera.ts";
 
 function numberArg(args: readonly Arg[], index: number, fallback = 0): number {
   const value = args[index]?.value;
@@ -118,12 +119,77 @@ const PRG: BuiltinSpec = {
   name: "prg", aliases: [], params: [{ name: "program", optional: false, byRef: false, variadic: false }, { name: "x", optional: false, byRef: false, variadic: false }, { name: "y", optional: false, byRef: false, variadic: false }, { name: "layer", optional: true, byRef: false, variadic: false }], doc: docs("Move a board program to a new location until the board is left.", "Set the first program point to pixel x and y and optional one-based layer immediately; the call does not wait."), call: (view, args) => { board(view); return effect("prg", args); },
 };
 
+const GET_CORNER: BuiltinSpec = {
+  name: "getcorner", aliases: ["getCorner"], params: [{ name: "topX", optional: false, byRef: true, variadic: false }, { name: "topY", optional: false, byRef: true, variadic: false }],
+  doc: docs("Get the corner of the currently shown portion of the board.", "Retrieve the top-left pixel coordinates of the visible screen area on the board. Technically, writes the camera's current top-left world coordinates into the topX and topY by-reference integer parameters immediately; the call does not wait.", ["legacy"]),
+  call: (view, args) => {
+    const camera = view.state?.camera;
+    const x = camera !== undefined ? Math.round(camera.x) : 0;
+    const y = camera !== undefined ? Math.round(camera.y) : 0;
+    return { value: 0, out: [...output(args, 0, x), ...output(args, 1, y)] };
+  },
+};
+const CAMERA_PAN_TO: BuiltinSpec = {
+  name: "camerapanto", aliases: ["cameraPanTo"], params: [{ name: "x", optional: false, byRef: false, variadic: false }, { name: "y", optional: false, byRef: false, variadic: false }, { name: "duration", optional: false, byRef: false, variadic: false }, { name: "easing", optional: false, byRef: false, variadic: false }],
+  doc: docs("Pan the camera to a point.", "Move the camera smoothly from its current position to the specified target coordinates over a duration of time. Technically, duration is in seconds converted to ticks via durationTicks = ceil(duration * 60) (minimum 1 tick for positive duration). Easing must be one of 'linear', 'smoothstep', 'easeIn', 'easeOut', or 'easeInOut'. Non-blocking; the camera position interpolates deterministically on each engine tick.", ["experimental"]),
+  call: (_view, args) => {
+    if (args.length < 4) throw new ScriptError("builtin.bad-arg", '"cameraPanTo" expects x, y, duration, easing');
+    const x = numberArg(args, 0);
+    const y = numberArg(args, 1);
+    const rawDur = args[2]?.value;
+    const duration = typeof rawDur === "number" && Number.isFinite(rawDur) ? rawDur : 0;
+    const easing = stringArg(args, 3, "linear");
+    return {
+      value: null,
+      effects: [{ kind: "state-write", section: "camera", args: ["panTo", x, y, duration, easing] }],
+    };
+  },
+};
+const CAMERA_FOLLOW: BuiltinSpec = {
+  name: "camerafollow", aliases: ["cameraFollow"], params: [{ name: "entityId", optional: false, byRef: false, variadic: false }],
+  doc: docs("Follow an entity with the camera.", "Keep the camera focused on the given entity as it moves across the board. Technically, sets the camera target to the specified entity ID. On each tick, the camera clamps or centers the viewport relative to the tracked entity's position without blocking the script.", ["experimental"]),
+  call: (_view, args) => {
+    if (args.length < 1) throw new ScriptError("builtin.bad-arg", '"cameraFollow" expects entityId');
+    const raw = args[0]?.value;
+    const entityId = typeof raw === "number" || typeof raw === "string" ? raw : 0;
+    return {
+      value: null,
+      effects: [{ kind: "state-write", section: "camera", args: ["follow", entityId] }],
+    };
+  },
+};
+const CAMERA_RESET: BuiltinSpec = {
+  name: "camerareset", aliases: ["cameraReset"], params: [],
+  doc: docs("Restore default player-follow camera behaviour.", "Return the camera to its default mode of following the selected player character. Technically, resets the tracking target to the active player with default deadzone and smoothing (both zero), clamping to board bounds or centering if the board is smaller than the viewport.", ["experimental"]),
+  call: () => ({
+    value: null,
+    effects: [{ kind: "state-write", section: "camera", args: ["reset"] }],
+  }),
+};
+const CAMERA_SHAKE: BuiltinSpec = {
+  name: "camerashake", aliases: ["cameraShake"], params: [{ name: "duration", optional: false, byRef: false, variadic: false }, { name: "amplitude", optional: false, byRef: false, variadic: false }],
+  doc: docs("Make the camera wobble for a while; a larger amplitude feels stronger, and the command does not hold up the script.", "Make the screen wobble with a continuous vibration that gradually feels stronger with higher amplitude. Technically, duration is in seconds converted with durationTicks = ceil(duration * 60) (minimum 1 tick for positive duration), and amplitude is in logical-viewport pixels. Evaluates using the shared deterministic shake(amplitude, ticks) primitive cycling (-a,-a), (a,-a), (-a,a), (a,a) per tick without RNG. Non-blocking; a new shake replaces any active shake.", ["experimental"]),
+  call: (_view, args) => {
+    if (args.length < 2) throw new ScriptError("builtin.bad-arg", '"cameraShake" expects duration, amplitude');
+    const rawDur = args[0]?.value;
+    const rawAmp = args[1]?.value;
+    if (typeof rawDur !== "number" || !Number.isFinite(rawDur) || typeof rawAmp !== "number" || !Number.isFinite(rawAmp)) {
+      throw new ScriptError("builtin.bad-arg", "cameraShake arguments must be finite numbers");
+    }
+    return {
+      value: null,
+      effects: [{ kind: "state-write", section: "camera", args: ["shake", rawDur, rawAmp] }],
+    };
+  },
+};
+
 const WORLD_COMMANDS: readonly BuiltinSpec[] = [
   GET_NAME, PUT, LAYER_PUT, tileGetter("getboardtile", "boardgettile"), TILE_TYPE_GET, TILE_TYPE, noArgs("animatedtiles"), noArgs("parallax"), AMBIENT,
   GET_VECTOR, SET_VECTOR, GET_VECTOR_POINT, SET_VECTOR_POINT, GET_PROGRAM, SET_PROGRAM, GET_PROGRAM_POINT, SET_PROGRAM_POINT, PRG,
   noArgs("setconstants"), noArgs("underarrow"),
+  GET_CORNER, CAMERA_PAN_TO, CAMERA_FOLLOW, CAMERA_RESET, CAMERA_SHAKE,
 ];
 
-/** Apply a recorded world effect; exported for engine and host-owned tests. */
-export { applyWorldEffect };
+/** Apply a recorded world or camera effect; exported for engine and host-owned tests. */
+export { applyWorldEffect, applyCameraEffect };
 export const WORLD_PLUGIN: PluginDefinition = { id: "world", version: "1.0.0", doc: { summary: "Board, layer, tile, vector and program operations.", groups: [] }, commands: WORLD_COMMANDS };

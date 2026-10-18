@@ -373,13 +373,6 @@ const STUBS: readonly CatalogueStub[] = [
     params: [{ name: "x", optional: false, byRef: true, variadic: false }, { name: "y", optional: false, byRef: true, variadic: false }],
   },
   {
-    name: "getcorner",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "x", optional: false, byRef: true, variadic: false }, { name: "y", optional: false, byRef: true, variadic: false }],
-  },
-  {
     name: "drawenemy",
     kind: "draw-audio-cue",
     sections: ["surfaces"],
