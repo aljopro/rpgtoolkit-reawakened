@@ -103,13 +103,27 @@ test("cursor maps allocate points, claim keys and draw the hand last", () => {
   const run = command("cursormaprun", state, [arg(1)]);
   applyUiEffect(state, "cursormaprun", firstEffect(run).args ?? []);
   const wait = run.wait as Wait;
+  equal(pollInputKey({
+    tick: 0,
+    ui: state.ui as never,
+    input: { keys: [{ seq: 1, name: "Right", code: "ArrowRight", char: null }], focused: true },
+    claims: [],
+  }, wait), null);
+  const navigatedSelection = wait.kind === "input.key" ? wait.cursorSelection : undefined;
+  const navigated = composeUi(state.ui, 100, 100, undefined, true, navigatedSelection);
+  const navigatedHand = navigated.at(-1);
+  equal(navigatedHand?.kind, "blit");
+  if (navigatedHand?.kind === "blit") {
+    equal(navigatedHand.dst.x, 10);
+    equal(navigatedHand.dst.y, 50);
+  }
   const result = pollInputKey({
     tick: 0,
     ui: state.ui as never,
-    input: { keys: [{ seq: 1, name: "0", code: "Digit0", char: "0" }], focused: true },
+    input: { keys: [{ seq: 2, name: "0", code: "Digit0", char: "0" }], focused: true },
     claims: [],
   }, wait);
-  deepEqual(result, { value: 0, ok: true, claim: 1 });
+  deepEqual(result, { value: 0, ok: true, claim: 2 });
   const commands = composeUi(state.ui, 100, 100);
   const hand = commands.at(-1);
   equal(hand?.kind, "blit");
