@@ -36,6 +36,20 @@ corpus cannot supply them (ticket 2.22):
   "pass by sharing the writer primitives". `pnpm fixtures:author:check` re-runs it
   and fails if the committed bytes drift; `pnpm fixtures:author` rewrites them and
   is a deliberate act, exactly like `pnpm golden:record` (G5).
+- `movement/` — the movement oracle's fourteen named scenes (ticket 5.2), written
+  by the same generator from the rules in
+  [docs/spec/engine/movement-and-collision.md](docs/spec/engine/movement-and-collision.md)
+  (R-50 to R-54 and the ratifications) and
+  [docs/spec/engine/display-input-audio.md](docs/spec/engine/display-input-audio.md#reawakened-gamepad-contract):
+  authored boards and actors, fixed-tick recorded inputs, and the expected per-tick
+  outcome facts (positions, layers, fired triggers, events). The facts come from the
+  reference simulation in `tools/fixtures/movement/`, which imports nothing from
+  `packages/core`; `--check` also scans for such an import. There are **no state or
+  draw hashes**: the consuming entries assert those. `manifest.json` lists every scene
+  and case and the "proposed" rulings (`P-n`) each relies on where the spec is silent.
+  `demo-npc-pathfinding` and `demo-npc-battle-trigger` model programs from the fetched
+  `demo` game and pin their digests; the files are read only when fetched and are
+  never committed.
 - `real/` — tiny files an editor produced: a detail-1, a detail-2 and a detail-3
   tileset, plus a `.tan` and a `.gph` held for ticket 16.7.
 - `anonymised/` — derivatives of real legacy samples, produced by
@@ -96,8 +110,8 @@ pnpm icons:test                  # the icon builder's own tests
 pnpm icons                       # rebuild media/icons from media/tkr.png (the logo's icon set)
 pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
 pnpm fixtures:check              # fail if anything under fixtures/ is tracked
-pnpm fixtures:author             # rewrite packages/core/test/fixtures/authored (deliberate, see below)
-pnpm fixtures:author:check       # fail if those committed fixtures drift from the generator
+pnpm fixtures:author             # rewrite packages/core/test/fixtures/authored and .../movement (deliberate, see below)
+pnpm fixtures:author:check       # fail if those committed fixtures drift from the generator, or the oracle imports core
 pnpm golden                      # the headless golden suite (G5)
 pnpm dump fixtures/legacy/demo   # parse a legacy project and print it (needs fixtures:fetch)
 pnpm dump:check                  # the corpus digest gate (runs in the golden job, after fixtures:fetch)

@@ -1,0 +1,192 @@
+{
+  "schema": 1,
+  "scenes": [
+    {
+      "scene": "movement-tile-pixel",
+      "file": "movement-tile-pixel.json",
+      "cases": [
+        "tile-default-speed",
+        "tile-game-speed-slower",
+        "tile-game-speed-clamps-to-one-tick",
+        "tile-speed-zero",
+        "pixel-push-eight",
+        "pixel-one-pixel-step",
+        "queue-clear-and-append",
+        "point-path-straight-line"
+      ],
+      "proposed": ["P-1","P-3","P-4"]
+    },
+    {
+      "scene": "collision-solid-stairs-under",
+      "file": "collision-solid-stairs-under.json",
+      "cases": [
+        "tile-solid-blocks",
+        "pixel-glancing-slide",
+        "pixel-head-on-blocks",
+        "tile-movement-never-slides",
+        "open-polyline-blocks-crossing",
+        "stairs-change-layer-and-layers-are-scoped"
+      ],
+      "proposed": ["P-3","P-4","P-5"]
+    },
+    {
+      "scene": "collision-sprite-blocking",
+      "file": "collision-sprite-blocking.json",
+      "cases": [
+        "stationary-loses",
+        "freeze-thaw-and-refreeze",
+        "controlled-player-wins-between-movers",
+        "faster-sprite-wins",
+        "equal-speed-larger-drawid-loses",
+        "diversion-around-blocker",
+        "no-route-waits-then-continues",
+        "no-route-wait-expires-and-stops"
+      ],
+      "proposed": ["P-16","P-17"]
+    },
+    {
+      "scene": "edges-board-link-program",
+      "file": "edges-board-link-program.json",
+      "cases": [
+        "no-link-edge-is-solid",
+        "board-link-arrives-opposite-edge",
+        "arrival-clamps-along-edge",
+        "blocked-arrival-is-refused",
+        "program-link-runs-program",
+        "west-edge-arrives-east-edge"
+      ],
+      "proposed": ["P-11"]
+    },
+    {
+      "scene": "board-entry-thread-lifecycle",
+      "file": "board-entry-thread-lifecycle.json",
+      "cases": ["send-from-blocking-thread","send-from-board-thread","second-send-replaces-first"],
+      "proposed": ["P-11"]
+    },
+    {
+      "scene": "triggers-precedence",
+      "file": "triggers-precedence.json",
+      "cases": [
+        "step-on-once-per-entry-and-rearm",
+        "repeat-distance",
+        "key-press-versus-step-on",
+        "layer-matching",
+        "layer-one-player-fires",
+        "last-region-in-board-order-wins",
+        "items-before-regions-front-then-nearest",
+        "equal-front-and-distance-lowest-index",
+        "condition-failure-falls-through",
+        "run-once-condition-before-set-after",
+        "aborted-program-does-not-set",
+        "stop-movement-clears-queue",
+        "gone-suppresses-until-board-left",
+        "movement-inside-a-trigger-is-silent",
+        "hidden-item-is-not-a-candidate"
+      ],
+      "proposed": ["P-6","P-7","P-8"]
+    },
+    {
+      "scene": "actor-hydration-item-multitask",
+      "file": "actor-hydration-item-multitask.json",
+      "cases": ["hydrate-order-and-item-threads"],
+      "proposed": ["P-9"]
+    },
+    {
+      "scene": "pathfinding-axial-diagonal-vector",
+      "file": "pathfinding-axial-diagonal-vector.json",
+      "cases": [
+        "axial-around-wall",
+        "diagonal-around-wall",
+        "vector-around-wall",
+        "blocked-goal-nearest-free",
+        "tie-order-is-total",
+        "unreachable-goal-approaches",
+        "cache-hit-edit-flush-and-new-route"
+      ],
+      "proposed": ["P-2","P-17"]
+    },
+    {
+      "scene": "input-replay-button-slots",
+      "file": "input-replay-button-slots.json",
+      "cases": [
+        "keyboard-diagonal-and-repeat",
+        "diagonals-disabled-last-press-wins",
+        "gamepad-dead-zone-edges-and-merge",
+        "gamepad-disconnect-and-unknown-devices",
+        "pointer-click-to-move-and-button-slots",
+        "gamepad-only-named-actions"
+      ],
+      "proposed": ["P-12","P-13","P-18"]
+    },
+    {
+      "scene": "movement-waits",
+      "file": "movement-waits.json",
+      "cases": [
+        "pause-thread-flag-waits-for-completion",
+        "without-the-flag-the-thread-continues",
+        "blocking-thread-implies-the-wait",
+        "multirun-one-wait-over-both-sprites",
+        "waypoint-path-copy-two-cycles",
+        "waypoint-link-sees-live-edit"
+      ],
+      "proposed": ["P-15"]
+    },
+    {
+      "scene": "animation-fallback-stance",
+      "file": "animation-fallback-stance.json",
+      "cases": [
+        "diagonal-walk-falls-back-to-horizontal",
+        "missing-idle-uses-walk-present-idle-loops",
+        "stance-plays-once-and-completes",
+        "held-stance-until-movement-resumes"
+      ],
+      "proposed": ["P-14"]
+    },
+    {
+      "scene": "random-encounter",
+      "file": "random-encounter.json",
+      "cases": [
+        "type-zero-one-roll-per-tile-after-activation",
+        "type-one-every-n-tiles",
+        "pixel-steps-within-a-tile-roll-once",
+        "board-forbids-battles",
+        "main-file-disables-fighting",
+        "custom-fight-program",
+        "no-enemy-of-the-skill-level"
+      ],
+      "proposed": ["P-6","P-10"]
+    },
+    {
+      "scene": "demo-npc-pathfinding",
+      "file": "demo-npc-pathfinding.json",
+      "cases": ["wander-when-the-player-is-far","intercept-but-the-player-keeps-moving"],
+      "proposed": ["P-10","P-15","P-17"]
+    },
+    {
+      "scene": "demo-npc-battle-trigger",
+      "file": "demo-npc-battle-trigger.json",
+      "cases": ["stationary-player-is-intercepted-and-fights"],
+      "proposed": ["P-15","P-17"]
+    }
+  ],
+  "proposed": {
+    "P-1": "Step cadence: the next queued step's first advance is one cadence slot after the previous advance; an idle sprite starts on the tick the command arrives.",
+    "P-2": "Grid path nodes are the tile's bottom-centre reference point (32 cx + 16, 32 cy + 31); edges are checked by sweeping the base in 4 px samples.",
+    "P-3": "An advance of 4 px is Euclidean along the step vector, truncated to 1/256 px (45 degrees = 724/256 px per axis).",
+    "P-4": "A step ends when its target is reached or passed (non-positive projection on the original direction); a blocked step ends alone and the next queued step continues.",
+    "P-5": "R-54 slide: the hit edge is the first overlapping edge in stored order; the turned step has the same length; the facing of a step is the octant of its vector.",
+    "P-6": "Triggers are evaluated when a player step completes and when the activation key is pressed; a repeat region fires on entry then every distanceRepeat px; losing candidates are not marked fired; re-arming is evaluated at step completion.",
+    "P-7": "Item activation turns the item to face the player and clears the player's queue (E-43).",
+    "P-8": "Trigger programs are modelled as ops (set, gone, abort, silentMove); silent movement locks trigger evaluation until the player's queue drains and evaluates nothing at the end.",
+    "P-9": "An item hidden by its loading condition starts no thread; showing it later starts the thread and hiding or removing it stops the thread.",
+    "P-10": "Random encounter: type 0 draws one integer in [0, chances) per tile moved and fights on 0; type 1 counts tiles; a fight draws a count 1 + [0, 4) then one index into the skill-level pool per enemy.",
+    "P-11": "Edge arrival keeps the player's remaining queue on refusal and clears it on success; send() tile coordinates are one-based, bottom-centre of the tile; the layer is one-based.",
+    "P-12": "With diagonals disabled, two held orthogonal directions move along the most recently pressed one.",
+    "P-13": "Button slot hit-test is half-open [x, x + w) x [y, y + h); an enabled slot press is one key-queue entry for its action; a disabled slot swallows the click.",
+    "P-14": "Animation: frame delays are round-half-up ticks (minimum 1); a state change resets the frame; idle starts after idleMs of no movement; a held stance releases when movement resumes.",
+    "P-15": "Movement and key waits are polled in the `waits` phase, so a thread resumes on the tick after the movement completes; movement started from a blocking thread implies the wait.",
+    "P-16": "Diversion and the pathfinder treat every other visible sprite on the layer as an obstacle; a route counts only if it reaches the goal; the 120-tick wait retests each tick.",
+    "P-17": "Pathfinder conventions: step costs 10 (4-way) and 10 / 14 (8-way), Manhattan and octile heuristics, ties by (f, x, y, insertion); nearest free node by squared distance then (x, y); the capped search approaches the expanded node nearest the goal; vector mode handles axis-aligned solids and keeps the whole base on the board.",
+    "P-18": "Gamepad edges are computed on the merged held state: an action already held by another source appends no queue entry."
+  }
+}

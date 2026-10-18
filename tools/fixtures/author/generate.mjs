@@ -38,11 +38,18 @@
 //   * four GIFs (docs/spec/formats/images.md#gif) — still GIF87a, animated
 //     three-page GIF89a with sub-rectangles and disposal, interlaced GIF89a,
 //     and a 128×64 page that exercises the deferred clear code.
+//   * the movement oracle's fourteen named scenes (ticket 5.2,
+//     `tools/fixtures/movement/`): authored boards, actors and fixed-tick recorded
+//     inputs with expected per-tick outcome facts (positions, layers, fired
+//     triggers, events) derived by that directory's own reference simulation.
+//     No state or draw hashes; no import from `packages/core` (the check below
+//     scans for one). Written to `packages/core/test/fixtures/movement/`.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendCmp1, ascii, buildZip, concat, le16, le32 } from "./zip.mjs";
+import { MOVEMENT_OUT, checkMovementCorpus, checkMovementImports, movementFixtureFiles } from "../movement/index.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..", "..");
@@ -903,6 +910,26 @@ function checkOracleScenes(out = defaultSceneOut) {
   return problems;
 }
 
+/** Where the movement oracle's scenes go: beside `authored/` by default, else under the output directory. */
+function movementOut(out) {
+  return out === defaultOut ? MOVEMENT_OUT : join(out, "movement");
+}
+
+function writeMovementFixtures(dir) {
+  mkdirSync(dir, { recursive: true });
+  for (const [name, bytes] of movementFixtureFiles()) writeFileSync(join(dir, name), bytes);
+}
+
+function checkMovementFixtures(dir) {
+  const problems = [];
+  for (const [name, expected] of movementFixtureFiles()) {
+    let actual;
+    try { actual = readFileSync(join(dir, name)); } catch { problems.push(`movement/${name}: missing`); continue; }
+    if (!actual.equals(expected)) problems.push(`movement/${name}: differs from a fresh run`);
+  }
+  return problems;
+}
+
 /** Write every authored fixture and oracle scene under their canonical output paths. */
 export function generate(out = defaultOut) {
   mkdirSync(out, { recursive: true });
@@ -912,6 +939,7 @@ export function generate(out = defaultOut) {
     writeFileSync(destination, bytes);
   }
   if (out === defaultOut) writeOracleScenes();
+  writeMovementFixtures(movementOut(out));
   return out;
 }
 
@@ -938,6 +966,7 @@ export function check(out = defaultOut) {
     }
   }
   if (out === defaultOut) problems.push(...checkOracleScenes());
+  problems.push(...checkMovementFixtures(movementOut(out)), ...checkMovementImports(), ...checkMovementCorpus());
   return problems;
 }
 
@@ -957,7 +986,7 @@ function main(argv) {
     return 0;
   }
   generate(out);
-  console.log(`wrote ${authoredFixtures().length} authored fixtures to ${out}`);
+  console.log(`wrote ${authoredFixtures().length} authored fixtures and ${movementFixtureFiles().length} movement oracle files to ${out}`);
   return 0;
 }
 
