@@ -1,4 +1,5 @@
 import type { DecodedTexture } from "../formats/image/model.ts";
+import type { LegacyFont } from "../formats/font/model.ts";
 import type {
   BlitCommand,
   DrawCommand,
@@ -6,10 +7,12 @@ import type {
   EllipseCommand,
   Rgb,
   Rect,
+  TextCommand,
 } from "../ports/draw.ts";
 import type { AssetKey, ScratchId, SurfaceId } from "../ports/keys.ts";
 
-export type RasterAssets = ReadonlyMap<AssetKey, DecodedTexture>;
+export type RasterAsset = DecodedTexture | LegacyFont;
+export type RasterAssets = ReadonlyMap<AssetKey, RasterAsset>;
 export type RasterSurfaces = ReadonlyMap<SurfaceId, DecodedTexture>;
 export type RasterResult = {
   readonly width: number;
@@ -29,13 +32,23 @@ function validRect(rect: Rect): boolean {
     Number.isInteger(rect.w) && Number.isInteger(rect.h) &&
     rect.w >= 0 && rect.h >= 0;
 }
+function isTexture(asset: RasterAsset | undefined): asset is DecodedTexture {
+  return asset !== undefined && "rgba" in asset && "w" in asset && "h" in asset;
+}
+
+function isFont(asset: RasterAsset | undefined): asset is LegacyFont {
+  return asset !== undefined && "values" in asset && asset.values.length >= 256 * 8;
+}
 
 function sourceTexture(
   command: BlitCommand,
   assets: RasterAssets,
   surfaces: RasterSurfaces,
 ): DecodedTexture | null {
-  if ("asset" in command.source) return assets.get(command.source.asset) ?? null;
+  if ("asset" in command.source) {
+    const asset = assets.get(command.source.asset);
+    return isTexture(asset) ? asset : null;
+  }
   return surfaces.get(command.source.surface) ?? null;
 }
 
@@ -234,6 +247,52 @@ function drawBlit(
   return null;
 }
 
+function drawText(
+  target: TargetEntry,
+  command: TextCommand,
+  assets: RasterAssets,
+): string | null {
+  const asset = assets.get(command.font.asset);
+  if (!isFont(asset)) return "missing bitmap font asset";
+  const size = Number.isFinite(command.font.size) && command.font.size > 0
+    ? Math.max(1, Math.floor(command.font.size + 0.5))
+    : 8;
+  let cursorX = Math.trunc(command.x);
+  let cursorY = Math.trunc(command.y);
+  let glyphIndex = 0;
+  for (const character of Array.from(command.text)) {
+    if (character === "\n") {
+      cursorX = Math.trunc(command.x);
+      cursorY += 16;
+      continue;
+    }
+    const codePoint = character.codePointAt(0) ?? 0xfffd;
+    const advance = command.advances[glyphIndex]?.advance ?? (size + (command.font.bold ? 1 : 0));
+    const glyph = command.advances[glyphIndex]?.glyph ?? (codePoint <= 0xff ? codePoint : 0xff);
+    glyphIndex += 1;
+    const glyphCode = Math.max(0, Math.min(255, Math.trunc(glyph)));
+    for (let sourceY = 0; sourceY < 8; sourceY += 1) {
+      const row = asset.values[glyphCode * 8 + sourceY] ?? 0;
+      const destinationY = cursorY + Math.floor(sourceY * size / 8);
+      const nextY = cursorY + Math.floor((sourceY + 1) * size / 8);
+      for (let sourceX = 0; sourceX < 8; sourceX += 1) {
+        if ((row & (1 << (7 - sourceX))) === 0) continue;
+        const destinationX = cursorX + Math.floor(sourceX * size / 8);
+        const nextX = cursorX + Math.floor((sourceX + 1) * size / 8);
+        const italicOffset = command.font.italic ? Math.floor((7 - sourceY) * size / 32) : 0;
+        for (let y = destinationY; y < Math.max(destinationY + 1, nextY); y += 1) {
+          for (let x = destinationX + italicOffset; x < Math.max(destinationX + 1, nextX) + italicOffset; x += 1) {
+            drawPixel(target, x, y, command.rgb);
+            if (command.font.bold) drawPixel(target, x + 1, y, command.rgb);
+          }
+        }
+      }
+    }
+    cursorX += Math.max(1, Math.trunc(advance));
+  }
+  return null;
+}
+
 function result(root: TargetEntry, error: string | null): RasterResult {
   return { width: root.width, height: root.height, rgba: root.rgba, error };
 }
@@ -295,7 +354,7 @@ export function rasterize(
         else targets.pop();
         break;
       case "text":
-        error = "unsupported draw command: text";
+        error = drawText(targets[targets.length - 1]!, command, assets);
         break;
       default: {
         const exhaustive: never = command;
