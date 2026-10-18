@@ -2,6 +2,7 @@ import { hashDrawList, hashState } from "../canon/index.ts";
 import { resolveAsset } from "../formats/resolver/resolver.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
 import type { DrawList } from "../ports/draw.ts";
+import type { Engine, Diagnostic, Breakpoint, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
