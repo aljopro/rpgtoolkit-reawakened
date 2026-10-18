@@ -205,6 +205,27 @@ function validateVmShape(vm: Record<string, unknown>): void {
   }
 }
 
+function validateSurfacesShape(value: unknown): void {
+  const surfaces = recordAt(value, "surfaces");
+  const nextId = numberAt(surfaces.nextId, "surfaces.nextId");
+  if (nextId < 1) shapeError("the snapshot's surfaces.nextId must be positive");
+  const entries = recordAt(surfaces.entries, "surfaces.entries");
+  for (const rawId of Object.keys(entries)) {
+    const item = recordAt(entries[rawId], `surfaces.entries.${rawId}`);
+    numberAt(item.id, `surfaces.entries.${rawId}.id`);
+    numberAt(item.rev, `surfaces.entries.${rawId}.rev`);
+    const bitmap = recordAt(item.bitmap, `surfaces.entries.${rawId}.bitmap`);
+    if (bitmap.t !== "rgba") shapeError(`the snapshot's surfaces.entries.${rawId}.bitmap.t must be "rgba"`);
+    numberAt(bitmap.w, `surfaces.entries.${rawId}.bitmap.w`);
+    numberAt(bitmap.h, `surfaces.entries.${rawId}.bitmap.h`);
+    stringAt(bitmap.b64, `surfaces.entries.${rawId}.bitmap.b64`);
+  }
+  const slots = recordAt(surfaces.slots, "surfaces.slots");
+  for (const slot of Object.keys(slots)) numberAt(slots[slot], `surfaces.slots.${slot}`);
+  const colours = recordAt(surfaces.colours, "surfaces.colours");
+  for (const colour of Object.keys(colours)) numberAt(colours[colour], `surfaces.colours.${colour}`);
+}
+
 function validateShape(record: Record<string, unknown>): void {
   const schema = recordAt(record.schema, "schema");
   for (const key of Object.keys(SCHEMA_VERSIONS)) numberAt(schema[key], `schema.${key}`);
@@ -217,6 +238,7 @@ function validateShape(record: Record<string, unknown>): void {
   for (const key of ["s0", "s1", "s2", "s3"]) numberAt(rng[key], `rng.${key}`);
   numberAt(recordAt(record.time, "time").tick, "time.tick");
   validateVmShape(recordAt(record.vm, "vm"));
+  validateSurfacesShape(record.surfaces);
 }
 
 /** Parse and check a snapshot's canonical form (see the file header). */
