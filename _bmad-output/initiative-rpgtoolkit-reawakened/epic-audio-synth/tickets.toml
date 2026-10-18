@@ -4,9 +4,9 @@
 # The audio timeline oracle is authored from docs/spec and rulings; it is not a legacy-parity claim and holds no hashes.
 # Shared-seam owners: 6 owns the `audio` section type and the `core/audio` barrel, 7 adds voice, fade and sync
 # behaviour without changing the type, 8 owns the control pack, `mediaVolume`, the `mediaplay` and `mediastop` rows,
-# the audio read view and the `audio.track` wait, 9 owns the query pack and the legacy mapping, 10 owns the video
-# pack, and 17 performs the final catalogue, barrel and stub-removal reconciliation. The Audio table and the
-# catalogue rows are edited only by 8, 9 and 10, each for its names, in that order.
+# the audio read view and the `audio.track` wait, 9 owns the query pack, `sound` (obsolete, raises error) and the
+# legacy mapping, 10 owns the video pack, and 17 performs the final catalogue, barrel and stub-removal reconciliation.
+# The Audio table and the catalogue rows are edited only by 8, 9 and 10, each for its names, in that order.
 
 [[entry]]
 id = 1
@@ -144,7 +144,7 @@ id = 8
 type = "story"
 title = "Media control built-ins and the track wait"
 description = "Registers the media control pack through the VM registry: `mediaTrack`, `mediaLoad`, `mediaPlay` (the existing `mediaplay` extended with optional arguments, not deprecated; flags, sync, priority, voice handle by reference), `mediaStop` (likewise the existing `mediastop`), `mediaPause`, `mediaResume`, `mediaSeek`, `mediaLoop`, `mediaFade`, `mediaWait` and `mediaVolume` in both its set and read forms, a read-only audio view for built-ins that entry 6.9's queries reuse, the Reawakened `soundFont` and `soundFontReset` commands, the `tkMD_` constants, and the `audio.track` wait kind that replaces the unresolved `audio.sfx` wait the catalogue responder creates today, with the ruled diagnostics (`tkMD_LOOP | tkMD_WAIT`, unknown track, wait on a loop), help text in the CLAUDE.md style, and the Audio-table and catalogue rows for these names; commands act through recorded effects, never by writing the section directly."
-verify = "Script fixtures play then wait and resume on the exact end tick, suspend on pause and continue on resume, wake on stop or replace, restore mid-wait, and report each ruled diagnostic; `soundFont` and `soundFontReset` produce the `soundfont-setting` cues; the oracle scene `media-wait-suspend` reproduces per tick; a `wav` or `sound` call no longer parks a thread on an unresolved `audio.sfx` wait kind; `catalogue:check` and `command-docs:check` pass for every new name."
+verify = "Script fixtures play then wait and resume on the exact end tick, suspend on pause and continue on resume, wake on stop or replace, restore mid-wait, and report each ruled diagnostic; `soundFont` and `soundFontReset` produce the `soundfont-setting` cues; the oracle scene `media-wait-suspend` reproduces per tick; a `wav` call no longer parks a thread on an unresolved `audio.sfx` wait kind; `catalogue:check` and `command-docs:check` pass for every new name."
 covers = ["CAP-7"]
 after = [2, 6, 7, "2.10", "3.3", "3.9", "3.22", "3.25", "3.29"]
 hitl = false
@@ -160,8 +160,8 @@ references = [
 id = 9
 type = "story"
 title = "Media query built-ins, legacy command mapping and catalogue sweep"
-description = "Registers the media query pack (`mediaState`, `mediaFlags`, `mediaPlaying`, `mediaFile`, `mediaPosition`, `mediaLength`, `mediaTracks`, `getVolume`) on entry 6.8's audio view and routes the obsolete legacy names `midiplay`, `playmidi`, `mediarest`, `midirest`, `wav`, `mp3`, `wavstop` and `mp3pause` to their standard equivalents while keeping legacy behaviour (music always loops, sound effects never do, replace rules), tagging them `deprecated` with `replacedBy`; `mp3pause` is play-once-then-wait on `sfx`; `setvolume` stays the master volume and `sound` stays as the spec documents it; the `fademidiin`, `fademidiout` and `setmidivolume` plugin commands are mapped, or recorded as not reproduced; it reconciles the `wav` and `mp3pause` catalogue rows with the ruling and edits the Audio table only for these names, never touching a catalogue `obsolete` field. `mediaplay` and `mediastop` are entry 6.8's and are not deprecated."
-verify = "The oracle scene `legacy-parity-ledger` reproduces per tick through the legacy names; corpus programs that call legacy audio commands produce the same cue stream as their standard-command equivalents; every legacy audio name still responds and no catalogue row gains `obsolete: true`; `catalogue:check` and `command-docs:check` pass; the catalogue rows for `wav` and `mp3pause` agree with the ruled behaviour."
+description = "Registers the media query pack (`mediaState`, `mediaFlags`, `mediaPlaying`, `mediaFile`, `mediaPosition`, `mediaLength`, `mediaTracks`, `getVolume`) on entry 6.8's audio view and routes the obsolete legacy names `midiplay`, `playmidi`, `mediarest`, `midirest`, `wav`, `mp3`, `wavstop` and `mp3pause` to their standard equivalents while keeping legacy behaviour (music always loops, sound effects never do, replace rules), tagging them `deprecated` with `replacedBy`; `mp3pause` is play-once-then-wait on `sfx`; `setvolume` stays the master volume; `sound` is owned here and reconciled with the spec row (R-36: raises `builtin.obsolete` and skips the statement; its catalogue row gains `obsolete: true` and loses the unresolved `audio.sfx` wait); the `fademidiin`, `fademidiout` and `setmidivolume` plugin commands are mapped, or recorded as not reproduced; it reconciles the `wav` and `mp3pause` catalogue rows with the ruling and edits the Audio table only for these names; `mediaplay` and `mediastop` are entry 6.8's and are not deprecated."
+verify = "The oracle scene `legacy-parity-ledger` reproduces per tick through the legacy names; corpus programs that call legacy audio commands produce the same cue stream as their standard-command equivalents; `sound` raises `builtin.obsolete` and skips its statement per the spec row; `catalogue:check` and `command-docs:check` pass; the catalogue rows for `wav`, `sound` and `mp3pause` agree with the ruled behaviour."
 covers = ["CAP-7"]
 after = [8, "3.17"]
 hitl = false
