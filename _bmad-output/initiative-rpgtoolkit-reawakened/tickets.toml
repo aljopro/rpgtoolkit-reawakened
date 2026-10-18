@@ -46,7 +46,7 @@ id = 6
 slug = "epic-audio-synth"
 title = "Music, effects and MIDI play through a shared synth"
 covers = ["CAP-7"]
-after = [{ epic = 1, needs = "the synth package scaffold and licence gate" }, { epic = 3, needs = "audio built-in registration" }, { epic = 4, needs = "the `audio` effect records for board music (4.20) and per-frame animation sounds (4.23), which this epic turns into cues" }]
+after = [{ epic = 1, needs = "the synth package scaffold and licence gate" }, { epic = 2, needs = "the asset resolver for Media-folder names (2.10)" }, { epic = 3, needs = "audio built-in registration" }, { epic = 4, needs = "the `audio` effect records for board music (4.20) and per-frame animation sounds (4.23), which this epic turns into cues" }]
 
 [[epic]]
 id = 7
