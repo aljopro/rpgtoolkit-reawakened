@@ -2,7 +2,7 @@
 
 # Clean-room extraction, round 7 — rendering behaviour questions
 
-* **Status:** ready for owner relay; no answer has been received.
+* **Status:** answers received 2026-10-17 as an owner-relayed summary of differences from the defaults; recorded in [facts-round-7.md](facts-round-7.md). Q1 to Q8 and Q11 are answered fully or partly (some sub-questions remain unanswered, listed there); Q9 and Q10 were not asked.
 * **Date:** 2026-10-17
 * **Process:** [ADR 0006](../adr/0006-clean-room-spec-extraction.md) decision 2. The owner should forward this numbered list to the TK-side engineer and ask for short answers from memory, limited to the numbered questions. The answerer should describe behaviour in prose, not source code or the structure of the old program. A separate reviewer must check the returned prose before it enters `docs/`.
 * **How answers land:** after the owner relays the answers, the reviewed prose goes in `facts-round-7.md`, with the answerer's confidence label preserved. The completed round then gets one row in [extraction-log.md](extraction-log.md), following round 5's owner-relayed precedent. This question-list commit does not record answers or claim legacy parity.
