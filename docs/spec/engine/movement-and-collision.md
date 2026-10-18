@@ -44,7 +44,17 @@ Movement is queued: the keyboard, the mouse, scripts (`Push`, `PlayerPath`, `Ite
 - The original engine implements this by counting frames at the measured frame rate ([main-loop-and-startup.md](main-loop-and-startup.md#timing)); the formula above is the time-based equivalent.
 - Idle and custom stance animations play at their own `delay`.
 
-> **Open conflict R-50 — sprite speed and the game speed offset.** the legacy feature inventory (E-04) says the game speed offset is "−4…+4, ±10 % per step"; this page, `docs/spec/engine/movement-and-collision.md:41`, says the time per 4-pixel advance "becomes `speed − 100 ms × gameSpeed`, never less than one frame". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+<a id="r-50"></a>
+<!-- OWNER: R-50 -->
+**R-50 Sprite speed and game speed (OWNER; ruled 2026-10-18; Reawakened rule).** In plain terms: a sprite's `speed` says how long it takes to walk 4 pixels, and the game speed makes every sprite quicker or slower by 100 ms per step of the setting, so a game plays the same on any machine. Technically, and deterministically:
+
+1. `speedMs = floor(speed × 1000 + 0.5)` (an integer, from the character or item file). `gameSpeed` is the main-file value clamped to −4..+4; positive is faster.
+2. `intervalMs = max(oneTickMs, speedMs − 100 × gameSpeed)` where `oneTickMs` is one 60 Hz tick (1000/60 ms). A `speed` of 0 or less gives `speedMs <= 0` and therefore exactly one tick per advance.
+3. `ticksPerAdvance = max(1, floor((intervalMs × 60 + 500) / 1000))` using integer arithmetic only. This is `core/time`'s round-half-up seconds-to-ticks rule applied to `intervalMs / 1000`; at the default 0.05 s and game speed 0 it is 3 ticks, so one 32 px tile takes 8 advances = 24 ticks.
+4. A moving sprite advances **4 px** every `ticksPerAdvance` ticks, in the `movement` phase, never more than the distance left to the step target (the last advance is shorter). The first advance happens on the tick the move starts. No wall-clock time, frame rate or measured rate is ever read.
+5. The step size of E-23 (32 px tile steps, small pixel-movement steps, 8 px pixel push) is unchanged; only the time per 4 px advance is ruled here.
+
+Evidence: this page's Speed section (4 px per `speed`, `speed − 100 ms × gameSpeed`, never less than one frame); AD-2 (fixed 60 Hz tick) and `core/time` `secondsToTicks`; the discovery reconciliation row R-50 and F-16 in `movement-readiness.md`. **Rejected alternative:** the legacy inventory's "±10 % per step" (E-04) multiplier, because the explicit formula already has units, is easy to make integer-exact, and removes frame-rate dependence. A frame-counting implementation (the original's measured frame rate) is also rejected for the same reason. Consumers: entries 5.2 (oracle), 5.3, 5.4.
 
 ## Sprite states
 
@@ -79,7 +89,16 @@ Moving off a board edge is blocked unless that edge has a link.
 <a id="e-30"></a>
 **E-30 Occlusion ("under").** For a sprite on layer L, board content on higher layers that overlaps the sprite's frame is drawn **over** it. **Under vectors** promote the board graphics they enclose — on layer L, optionally all layers below, optionally the background image — so those draw over the sprite. The trigger is the sprite's collision base intersecting the vector, or, with the frame-intersect option, its image frame doing so. Overlapping under vectors do not stack translucency.
 
-> **Open conflict R-54 — wall-sliding threshold.** the legacy feature inventory (E-26) says the engine slides when a solid edge is hit at "less than about 45° to the movement direction"; this page, `docs/spec/engine/movement-and-collision.md:67`, slides on an "angle ≥ 45°, or ≥ 27° on isometric boards". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+<a id="r-54"></a>
+<!-- OWNER: R-54 -->
+**R-54 Wall sliding threshold (OWNER; ruled 2026-10-18; Reawakened rule).** In plain terms: when a walking sprite brushes along a wall at a shallow angle it slides along the wall instead of stopping; head-on it stops. Technically, and deterministically (pixel movement only; tile movement never slides):
+
+1. For the solid edge hit, let `m` be the step's movement vector and `e` the edge's direction vector. Both are converted to integers (board pixels × 256, rounded half-up) before any comparison. The hit is *glancing* when the angle from the edge's normal is **≥ 45°** (the angle between `m` and the edge line is at most 45°): `|cross(m, e)| <= |dot(m, e)|` (inclusive).
+2. On an isometric board the threshold is **≥ 27°** from the normal (the angle to the edge line is at most 63°); compare with the fixed rational `tan 63° ≈ 1.96261`: `|cross(m, e)| × 100000 <= |dot(m, e)| × 196261`. Never evaluate trigonometric functions, floating-point `atan` or `**`.
+3. A glancing hit turns the step one of the eight directions left (counter-clockwise) or right (clockwise). Each candidate is tested against the board like a normal step; of the candidates that are free, take the one with the lowest 8-way facing index (N = 0, NE = 1, E = 2, SE = 3, S = 4, SW = 5, W = 6, NW = 7). If none is free the step is blocked. Exactly one slide is tried per step.
+4. A non-glancing hit (below the threshold) blocks the step.
+
+Evidence: this page's Collision with the board section (angle ≥ 45°, ≥ 27° isometric) and E-26; AD-13 (no engine-dependent maths) and AD-25 (total order). **Rejected alternative:** the legacy inventory's "less than about 45°" wording, which is exclusive and approximate and gives different answers at the boundary. Consumers: entries 5.2, 5.4.
 
 ## Collision between sprites
 
@@ -93,7 +112,16 @@ Sprites' collision polygons are compared. When two collide, one freezes for 2 se
 <a id="e-29"></a>
 **E-29 Z-ordering.** **Reawakened rule (OWNER; R-55).** Render sprites by the total key `(layer, screen-space y of the sprite reference point after projection, drawId)`. `drawId` is one stable integer: players precede items, and each category is ordered by its index. On isometric boards the y component is projected screen-space reference-point y, not raw board y. Re-inserting a moving sprite never changes this key.
 
-> **Open conflict R-51 — sprite-sprite collision outcome.** The legacy feature inventory (E-27) says a sprite blocked while following a path tries a "diversion … wait … stops"; this page, `docs/spec/engine/movement-and-collision.md:84`, says that of two colliding sprites one freezes for 2 seconds and names which one loses. Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+<a id="r-51"></a>
+<!-- OWNER: R-51 -->
+**R-51 Sprite collision versus path diversion (OWNER; ruled 2026-10-18; Reawakened rule).** In plain terms: when two sprites bump, one of them stops for two seconds; a sprite that is walking a path first tries to step around the other before giving up. The two behaviours are layered, and the work is split: **entry 5.4 owns direct collision (items 1 and 2)** and **entry 5.5 owns path diversion (items 3 and 4)**.
+
+1. *Detection.* In the `movement` phase, in ascending `drawId` order (players before items, then index), a sprite's step is tested against every other sprite on the same layer by collision polygon; a hit blocks the step and the sprite does not move on that tick.
+2. *Direct collision result.* The loser is chosen by this order: a stationary sprite loses to a moving one; otherwise the user-controlled player wins; otherwise the faster sprite wins (smaller `ticksPerAdvance`); otherwise the sprite with the larger `drawId` loses. The loser enters **frozen for 120 ticks** (2 s at 60 Hz) with its position unchanged and its queue untouched; it then returns to waiting. The winner's step is blocked for that tick only.
+3. *Diversion (path-following actors only).* An actor following a path (pathfinding, waypoint vector or `ItemPath`/`PlayerPath` points; not a direction-string or keyboard step) that is blocked by a sprite makes **one** deterministic local diversion attempt per blocked step: it runs the pathfinder of entry 5.5, in the active mode, on the same layer, with the blocker's collision base as an obstacle and the cap of 1000 node expansions, to reach the next point on its original path. If a route is found it is queued ahead of the remaining path and the collision is not applied.
+4. *Fallbacks.* With no route, the actor **waits**, re-testing the same step each tick for at most 120 ticks; if the blocker clears it continues. If the wait expires the actor **stops**: its queue is cleared and the direct-collision result of item 2 applies (frozen for 120 ticks if it loses, otherwise it simply stops).
+
+Evidence: this page's Collision between sprites section (loser order, 2 s freeze) and Sprite states (frozen); E-27 (diversion, wait, stop); the discovery reconciliation row R-51; AD-25. **Rejected alternative:** choosing only one source (freeze only, or diversion only), because that silently discards a documented behaviour of the other. Consumers: entries 5.2 (`collision-sprite-blocking`), 5.4, 5.5. Items 2 to 4 beyond the cited text (120-tick wait, one attempt per step, queue-ahead) are an unverified default recorded under the owner's approval of the rule as written.
 
 ## Activation: programs and items
 
@@ -139,7 +167,17 @@ The other fixed hooks are the random battle, the custom battle program, the game
 
 **Reawakened rule.** The trigger points above may be implemented on an internal event bus, but the observable firing rules must hold exactly: once-per-entry, distance re-arm, precedence, layer matching, and the condition-before / set-after pair of conditional activation.
 
-> **Open conflict R-52 — activation precedence.** the legacy feature inventory (E-43) says that among qualifying items the "one most directly in front and then nearest" wins, and that "Items take precedence over regions"; this page, `docs/spec/engine/movement-and-collision.md:103`, checks the items first and then the board programs, and says that if several programs match "the last one in board order wins". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+<a id="r-52"></a>
+<!-- OWNER: R-52 -->
+**R-52 Activation precedence (OWNER; ruled 2026-10-18; Reawakened rule).** In plain terms: when more than one thing could run, the nearest thing in front of the player runs first, items before board programs, and a program whose condition is not met is simply skipped. Technically, and deterministically, after a player step finishes or the activation key is pressed:
+
+1. *Filter.* Keep only candidates on the player's layer whose activation type matches the event (step, key press or repeat) and whose polygon overlaps; then apply each candidate's condition (`variable == value`, E-44). A failed condition removes the candidate and **does not consume** the event: the next candidate is considered.
+2. *Items before regions.* Qualifying items are chosen before any region. Among items: the one most directly in front of the player wins, then the nearest, then the lowest compacted runtime item index (never a raw file slot). "In front" is the larger `dot(facingVector, itemReference − playerReference)` where `facingVector` has integer components in {−1, 0, 1}; "nearest" is the smaller squared distance between reference points, all in integer fixed-point pixels.
+3. *Regions.* If no item qualifies, among qualifying board programs the **last in stored board order** wins.
+4. *Set-after.* The winner's `set variable = value` is applied only after its program has completed successfully; a program aborted by an unhandled error does not set it, and a failed condition never sets anything.
+5. Movement that happens inside a running trigger never fires other triggers, and the board-program rules E-40 to E-45 otherwise hold.
+
+Evidence: this page's Activation section ("last one in board order wins"), E-43, E-44 and the Reawakened rule above; AD-25; the discovery reconciliation row R-52. **Rejected alternative:** an unfiltered pick (choose a winner first, then test its condition), which lets a failed condition block a valid lower-ranked trigger; and treating items and regions as one pool. Consumers: entries 5.2 (`triggers-precedence`), 5.8.
 
 ## Moving between boards
 
@@ -165,7 +203,16 @@ Scripts can also move the player with `Send(board, x, y, layer)`.
 <a id="e-48"></a>
 **E-48 Edge link to a program.** The player walks off an edge whose link is a `.prg`.
 
-> **Open conflict R-53 — board-edge arrival alignment.** the legacy feature inventory (E-28) says the arrival point is "aligned to an 8 px or 32 px grid"; this page, `docs/spec/engine/movement-and-collision.md:147`, says the player is placed against the opposite edge "keeping its position along the edge, inferred". Owner epic: **movement-triggers**. Landed code: none. The owner settles it at inception; this page rules nothing.
+<a id="r-53"></a>
+<!-- OWNER: R-53 -->
+**R-53 Board-edge arrival alignment (OWNER; ruled 2026-10-18; Reawakened rule).** In plain terms: walking off one board edge puts you on the opposite edge of the next board at the same spot along the edge, with no snapping to a grid; if that spot is blocked you stay where you were. Technically, and deterministically:
+
+1. Keep the player's continuous pixel coordinate along the edge (y when leaving east or west, x when leaving north or south). The coordinate across the edge is the opposite edge's innermost value at which the collision base lies entirely inside the new board. Coordinates are board pixels and are never rounded to an 8 or 32 px grid.
+2. Clamp the along-edge coordinate to the range in which the collision base lies inside the new board.
+3. Test the collision base at that point against the new board's solid vectors on the arrival layer. If it is blocked, or no valid range exists, the **arrival is rejected**: the move fails, the source board, the player's position and its queue's remaining state are unchanged, and no thread is stopped or started.
+4. On success the existing E-19 and E-47 board-entry rules apply unchanged.
+
+Evidence: this page's Moving between boards section ("keeping its position along the edge, inferred") and E-28; the discovery reconciliation row R-53. **Rejected alternative:** the legacy inventory's "aligned to an 8 px or 32 px grid" snap, which is not in the more specific movement page and would invent a position. Consumers: entries 5.2 (`edges-board-link-program`), 5.9.
 
 ## Path-finding
 
@@ -187,6 +234,20 @@ The search gives up after 1000 node expansions. A grid cell is blocked if the sp
 * **vector:** any angle, through the vertices of inflated obstacles (visibility-graph style).
 
 If the target is unreachable, get as close as possible. Results are cached per board and invalidated on a board change or a vector edit.
+
+## Movement and trigger ratifications (Epic 5 entry 5.1)
+
+<a id="r-50-ratifications"></a>
+<!-- OWNER: R-50-ratifications -->
+**Ratified with R-50 to R-54 (OWNER; approved 2026-10-18; Reawakened rules).** In plain terms: these are the small shared rules that the movement and trigger entries rely on so nothing is left to each builder's guess.
+
+- **Fixed tick.** All movement, freezes, waits and repeat distances run on the fixed 60 Hz tick (AD-2). Durations are converted with the integer rounding of R-50; no host clock, `Date`, frame rate or `Math.random` is read (G3).
+- **Total order.** Every iteration that can change an outcome (sprites, candidates, vectors, path nodes) uses an explicit total order (AD-25): sprites by ascending `drawId`, board vectors and programs by stored board order, items by compacted runtime index, path ties by node coordinate then insertion index.
+- **Actor geometry and fall-backs.** Collision and activation polygons, and missing-animation fall-backs, are the ruled defaults of [../formats/character.md](../formats/character.md#defaults-and-fall-backs) (collision rectangle (−15, −15) to (15, 0), activation rectangle (−24, −24) to (24, 8), diamonds on isometric boards; a missing diagonal uses the nearest horizontal direction; a missing idle animation uses the walk animation).
+- **Condition before, set after.** A conditional trigger tests its condition first (R-52 item 1) and sets its variable only after the program completes (R-52 item 4).
+- **Key claims.** Key waits, `get`, `clearBuffer` and the gamepad actions of E-112 share the one claim-by-input-sequence-number protocol of Epic 4 (entries 4.1 and 4.19): sequence numbers stay monotonic, a wait stores the sequence at park, and the input owner prunes claimed keys.
+- **VM budget boundary.** The numeric per-tick VM step budget remains an Epic 3 (rpgcode-vm) provider contract. Epic 5 specifies only what is visible to movement: a blocking program that exhausts the budget is preempted at a tick boundary and resumes on the next tick, and movement and trigger phases still run each tick. Entry 5.12 verifies this and may open a docs-first amendment if the number must change.
+- **Deferred to other epics (not ruled here).** Battle behaviour beyond the random-battle trigger handoff and fighter handoff (battle epic), menu and save/load behaviour (menu/save), board music and sound effects (audio), runner or host specifics (runners), and editor, language-server, debugger or other tooling (tooling). Epic 5 emits plain data and effect records only; the presentation of cursors, buttons and overlays remains Epic 4.
 
 ## Scrolling
 
