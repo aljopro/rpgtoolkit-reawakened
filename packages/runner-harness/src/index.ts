@@ -11,4 +11,4 @@ export { goldenJob, type GoldenOutcome, type GoldenTexts } from "./job.ts";
 export { buildCorpus, buildFetchedCorpus, compareScriptsGolden, createMemoryLoader, formatScriptsGolden, runAllCorpusPrograms, runCorpusProgram, runFetchedCorpus, verifyCatalogueCompleteness, type CorpusProgram, type FetchedGameFiles, type ProgramResult, type ScriptsGolden } from "./corpus.ts";
 export { encodeRgbaPng, comparePngPixels, type PixelComparison } from "./png.ts";
 export { runTracerScene, type TracerScene, type TracerResult } from "./tracer.ts";
-export { checkSceneGolden, checkSceneGoldens, type SceneGoldenInput, type SceneGoldenOutcome } from "./scene-golden.ts";
+export { checkSceneGolden, type SceneGoldenInput, type SceneGoldenOutcome } from "./scene-golden.ts";

@@ -105,7 +105,7 @@ function sceneBlits(scene: TracerScene, available: ReadonlyMap<AssetKey, Uint8Ar
     }
     return texture === undefined ? null : { key, texture };
   };
-  if (scene.view.include.images) {
+  if (scene.view.include.images && scene.view.layerImages === undefined) {
     const boardBytes = available.get(assetKey(scenePath(scene.boardFiles[0] ?? "")));
     if (boardBytes !== undefined) {
       const parsed = readBoard(new BinaryReader(boardBytes));
@@ -142,7 +142,7 @@ function sceneBlits(scene: TracerScene, available: ReadonlyMap<AssetKey, Uint8Ar
 export function runTracerScene(scene: TracerScene, files: ReadonlyMap<string, Uint8Array>): TracerResult {
   if (scene.schema !== 1 || scene.boardFiles.length === 0) throw new Error("invalid tracer scene schema");
   const logicalPaths = scene.boardFiles.map(scenePath);
-  const index = createAssetIndex(logicalPaths);
+  const index = createAssetIndex(logicalPaths.filter((path) => !path.toLowerCase().endsWith(".tbm")));
   const available = new Map<AssetKey, Uint8Array>();
   for (let i = 0; i < scene.boardFiles.length; i += 1) {
     const source = files.get(scene.boardFiles[i] ?? "");
@@ -188,15 +188,14 @@ export function runTracerScene(scene: TracerScene, files: ReadonlyMap<string, Ui
     width: scene.view.viewport[0],
     height: scene.view.viewport[1],
     maxTicks: 60,
-    cameraTarget,
-    globalAmbient: { r: scene.ambient[0], g: scene.ambient[1], b: scene.ambient[2] },
+    include: scene.view.include,
     ...(scene.sprites === undefined ? {} : { sprites: scene.sprites }),
     ...(blits.length === 0 ? {} : { blits }),
   });
   let report = engine.advance(0, []);
   let guard = 0;
   while (report.loading && guard++ < scene.boardFiles.length + 16) {
-    const records = report.requests.filter((request) => request.kind === "asset").map((request) => ({ tick: report.tickAfter, event: { kind: "asset" as const, reqId: request.reqId, bytes: available.get(request.key) ?? null } }));
+    const records = report.requests.filter((request) => request.kind === "asset").map((request) => ({ tick: report.tickAfter, event: { kind: "asset" as const, reqId: request.reqId, bytes: request.key.endsWith(".tbm") ? null : available.get(request.key) ?? null } }));
     report = engine.advance(0, records);
   }
   if (report.loading) return { scene: scene.name, drawList: engine.drawList(0, scene.view.include), drawHash: "", stateHash: report.stateHash, pixels: new Uint8Array(), png: new Uint8Array(), error: "engine remained loading after asset replies", ticks: [] };

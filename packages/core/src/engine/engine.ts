@@ -9,7 +9,6 @@ import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
 import { gateTrueType } from "../formats/font/truetype.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
-import type { DecodedTexture } from "../formats/image/model.ts";
 import type { DrawList, Rgb, Tint } from "../ports/draw.ts";
 import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
