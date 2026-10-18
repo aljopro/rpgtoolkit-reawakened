@@ -1,119 +1,82 @@
-/**
- * E-92 engine-backed virtual variables (ticket 3.12; E-92, R-37; owner ruling U2).
- *
- * Exposes the 44 legacy virtual variables and Reawakened additions through
- * VirtualVariablePort. Reading checks virtuals after locals and globals; assigning
- * to a virtual writes to globals, breaking the link for the remainder of the session.
- */
-
+/** E-92 engine-backed virtual variables, including board data (R-37). */
 import type { Value } from "../ports/value.ts";
 import type { GameState } from "../save/state.ts";
 import { TICKS_PER_SECOND } from "../time/time.ts";
+import { ScriptError } from "./errors.ts";
 
 export type VirtualVariablePort = {
   read(name: string): Value | undefined;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
 }
 
+function requiresBoard(name: string): boolean {
+  return name === "boardbackground" || name === "boardskill" || name.startsWith("boardtitle[") || name.startsWith("constant[") || name === "ambientred" || name === "ambientgreen" || name === "ambientblue";
+}
+
+/** Read the board-backed virtuals from the hydrated world section. */
 export function createDefaultVirtuals(state: GameState): VirtualVariablePort {
   return {
     read(rawName: string): Value | undefined {
       const name = rawName.toLowerCase();
-      if (name === "gametime") {
-        return Math.floor(state.time.tick / TICKS_PER_SECOND);
-      }
-
+      if (name === "gametime") return Math.floor(state.time.tick / TICKS_PER_SECOND);
       const audio = asRecord(state.audio);
-      if (name === "music") {
-        return typeof audio?.music === "string" ? audio.music : "";
-      }
-
+      if (name === "music") return typeof audio?.music === "string" ? audio.music : "";
       const world = asRecord(state.world);
       const board = asRecord(world?.board);
-      if (name === "boardbackground") {
-        return typeof board?.background === "string" ? board.background : "";
-      }
-      if (name === "boardskill") {
-        return typeof board?.skill === "number" ? board.skill : 0;
-      }
-
+      if (requiresBoard(name) && board === undefined) throw new ScriptError("world.no-board", `virtual variable "${rawName}" requires a loaded board`);
+      if (name === "boardbackground") return typeof board?.battleBackground === "string" ? board.battleBackground : typeof board?.background === "string" ? board.background : "";
+      if (name === "boardskill") return typeof board?.battleSkill === "number" ? board.battleSkill : typeof board?.skill === "number" ? board.skill : 0;
       const surfaces = asRecord(state.surfaces);
-      if (name === "cnvrendernow") {
-        return typeof surfaces?.renderNow === "number" ? surfaces.renderNow : 0;
-      }
-
-      const ambient = asRecord(world?.ambient);
-      if (name === "ambientred") {
-        if (typeof world?.ambientRed === "number") return world.ambientRed;
-        return typeof ambient?.r === "number" ? ambient.r : 0;
-      }
-      if (name === "ambientgreen") {
-        if (typeof world?.ambientGreen === "number") return world.ambientGreen;
-        return typeof ambient?.g === "number" ? ambient.g : 0;
-      }
-      if (name === "ambientblue") {
-        if (typeof world?.ambientBlue === "number") return world.ambientBlue;
-        return typeof ambient?.b === "number" ? ambient.b : 0;
-      }
-
-      let m = /^playerx\[([0-4])\]$/.exec(name);
-      if (m) {
-        const idx = Number(m[1]);
-        const sprites = asRecord(state.sprites);
-        const players = Array.isArray(sprites?.players) ? sprites.players : undefined;
-        const player = asRecord(players?.[idx]);
+      if (name === "cnvrendernow") return typeof surfaces?.renderNow === "number" ? surfaces.renderNow : 0;
+      const ambient = asRecord(board?.ambient);
+      if (name === "ambientred") return typeof ambient?.r === "number" ? ambient.r : 0;
+      if (name === "ambientgreen") return typeof ambient?.g === "number" ? ambient.g : 0;
+      if (name === "ambientblue") return typeof ambient?.b === "number" ? ambient.b : 0;
+      let match = /^playerx\[([0-4])\]$/.exec(name);
+      if (match !== null) {
+        const players = asRecord(state.sprites)?.players;
+        const player = asRecord(Array.isArray(players) ? players[Number(match[1])] : undefined);
         return typeof player?.x === "number" ? player.x : 0;
       }
-      m = /^playery\[([0-4])\]$/.exec(name);
-      if (m) {
-        const idx = Number(m[1]);
-        const sprites = asRecord(state.sprites);
-        const players = Array.isArray(sprites?.players) ? sprites.players : undefined;
-        const player = asRecord(players?.[idx]);
+      match = /^playery\[([0-4])\]$/.exec(name);
+      if (match !== null) {
+        const players = asRecord(state.sprites)?.players;
+        const player = asRecord(Array.isArray(players) ? players[Number(match[1])] : undefined);
         return typeof player?.y === "number" ? player.y : 0;
       }
-      m = /^playerlayer\[([0-4])\]$/.exec(name);
-      if (m) {
-        const idx = Number(m[1]);
-        const sprites = asRecord(state.sprites);
-        const players = Array.isArray(sprites?.players) ? sprites.players : undefined;
-        const player = asRecord(players?.[idx]);
+      match = /^playerlayer\[([0-4])\]$/.exec(name);
+      if (match !== null) {
+        const players = asRecord(state.sprites)?.players;
+        const player = asRecord(Array.isArray(players) ? players[Number(match[1])] : undefined);
         return typeof player?.layer === "number" ? player.layer : 0;
       }
-      m = /^playerhandle\[([0-4])\]$/.exec(name);
-      if (m) {
-        const idx = Number(m[1]);
-        const party = asRecord(state.party);
-        const members = Array.isArray(party?.members) ? party.members : undefined;
-        const member = asRecord(members?.[idx]);
+      match = /^playerhandle\[([0-4])\]$/.exec(name);
+      if (match !== null) {
+        const members = asRecord(state.party)?.members;
+        const member = asRecord(Array.isArray(members) ? members[Number(match[1])] : undefined);
         return typeof member?.name === "string" ? member.name : "";
       }
-      m = /^boardtitle\[([1-8])\]$/.exec(name);
-      if (m) {
-        const idx = Number(m[1]);
-        const layerTitles = asRecord(board?.layerTitles);
-        const title = layerTitles?.[idx];
+      match = /^boardtitle\[([1-8])\]$/.exec(name);
+      if (match !== null) {
+        const titles = board?.layerTitles;
+        const title = Array.isArray(titles) ? titles[Number(match[1])] : undefined;
         return typeof title === "string" ? title : "";
       }
-      m = /^constant\[(10|[0-9])\]$/.exec(name);
-      if (m) {
-        const idx = Number(m[1]);
-        const constants = asRecord(board?.constants);
-        const c = constants?.[idx];
-        return typeof c === "number" ? c : 0;
+      match = /^constant\[(10|[0-9])\]$/.exec(name);
+      if (match !== null) {
+        const constants = board?.constants;
+        const value = Array.isArray(constants) ? constants[Number(match[1])] : asRecord(constants)?.[match[1] ?? ""];
+        return typeof value === "string" || typeof value === "number" ? value : 0;
       }
-      m = /^threads\[([0-9]+)\]$/.exec(name);
-      if (m) {
-        const id = Number(m[1]);
-        const thread = state.vm.threads.find((t) => t.id === id);
+      match = /^threads\[([0-9]+)\]$/.exec(name);
+      if (match !== null) {
+        const id = Number(match[1]);
+        const thread = state.vm.threads.find((entry) => entry.id === id);
         return thread ? thread.id : 0;
       }
-
       return undefined;
     },
   };
