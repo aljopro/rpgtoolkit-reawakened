@@ -20,7 +20,7 @@ export interface GlyphRaster {
   readonly coverage: Uint8Array;
 }
 
-const glyphRasterCache = new Map<string, GlyphRaster>();
+const glyphRasterCache = new WeakMap<TrueTypeFont, Map<string, GlyphRaster>>();
 
 function flattenOutline(
   commands: readonly TrueTypeOutlineCommand[],
@@ -271,8 +271,13 @@ export function getGlyphRaster(
   bold = false,
   italic = false,
 ): GlyphRaster {
-  const cacheKey = `${font.family}:${font.subfamily}:${size}:${glyph.id}:${bold ? 1 : 0}:${italic ? 1 : 0}`;
-  const cached = glyphRasterCache.get(cacheKey);
+  let fontCache = glyphRasterCache.get(font);
+  if (fontCache === undefined) {
+    fontCache = new Map<string, GlyphRaster>();
+    glyphRasterCache.set(font, fontCache);
+  }
+  const cacheKey = `${size}:${glyph.id}:${bold ? 1 : 0}:${italic ? 1 : 0}`;
+  const cached = fontCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
   const roundedSize = Math.max(1, Math.floor(size + 0.5));
@@ -288,7 +293,7 @@ export function getGlyphRaster(
       offsetY: 0,
       coverage: new Uint8Array(0),
     };
-    glyphRasterCache.set(cacheKey, emptyRaster);
+    fontCache.set(cacheKey, emptyRaster);
     return emptyRaster;
   }
 
@@ -310,6 +315,6 @@ export function getGlyphRaster(
     offsetY: pxMinY,
     coverage,
   };
-  glyphRasterCache.set(cacheKey, raster);
+  fontCache.set(cacheKey, raster);
   return raster;
 }
