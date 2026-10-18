@@ -1,7 +1,7 @@
 ---
 ticket: 7
 type: feature
-status: built
+status: done
 ---
 
 # Persistent surfaces, revisions and read-back
