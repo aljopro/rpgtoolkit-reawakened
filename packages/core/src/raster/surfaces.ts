@@ -273,6 +273,9 @@ export function editSurface(state: SurfacesSection, id: SurfaceId, editor: Surfa
   editor(rgba, current.bitmap.w, current.bitmap.h);
   current.rev += 1;
   current.bitmap = snapshot(current.bitmap.w, current.bitmap.h, rgba);
+  for (const colour of Object.keys(state.colours)) {
+    if (state.colours[colour] === id) delete state.colours[colour];
+  }
   return true;
 }
 

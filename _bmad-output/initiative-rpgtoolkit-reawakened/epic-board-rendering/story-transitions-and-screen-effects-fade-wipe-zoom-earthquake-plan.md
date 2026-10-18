@@ -1,7 +1,7 @@
 ---
 ticket: 22
 type: feature
-status: built
+status: done
 ---
 
 # Transitions and screen effects

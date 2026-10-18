@@ -5,6 +5,7 @@ import {
   colourSurface,
   createSurface,
   createSurfacesSection,
+  editSurface,
   getPixel,
   killSurface,
   readSurfacePixels,
@@ -40,6 +41,15 @@ test("surface ids are monotonic and colour surfaces are interned", () => {
   const red = colourSurface(state, { r: 255, g: 0, b: 0 });
   equal(colourSurface(state, { r: 255, g: 0, b: 0 }), red);
   equal(getPixel(state, red, 0, 0)?.r, 255);
+});
+
+test("editing an interned colour surface invalidates its colour cache entry", () => {
+  const state = createSurfacesSection();
+  const red = colourSurface(state, { r: 255, g: 0, b: 0 });
+  equal(editSurface(state, red, (rgba) => { rgba[0] = 0; }), true);
+  const replacement = colourSurface(state, { r: 255, g: 0, b: 0 });
+  equal(replacement === red, false);
+  equal(getPixel(state, replacement, 0, 0)?.r, 255);
 });
 
 test("screen capture and slots round-trip through the save shape", () => {

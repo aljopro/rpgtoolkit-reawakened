@@ -1,7 +1,7 @@
 ---
 ticket: 24
 type: feature
-status: built
+status: done
 ---
 
 # Ticket 4.24 plan
