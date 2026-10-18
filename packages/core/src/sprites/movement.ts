@@ -14,6 +14,7 @@ import {
   type SpritesSection,
   type WaypointLink,
 } from "./model.ts";
+import { findPath } from "./pathfinding.ts";
 
 const FP = 256;
 const ADVANCE = 4 * FP;
@@ -35,8 +36,17 @@ export type MovementEvent = {
   readonly vector?: string;
   readonly blocked?: boolean;
   readonly direction?: Facing;
-};
+  readonly mode?: number;
+  readonly goal?: SpritePoint;
+  readonly route?: SpritePoint[];
+  readonly via?: SpritePoint[];
+  readonly expansions?: number;
+  readonly capped?: boolean;
+  readonly reached?: boolean;
+  readonly goalAdjusted?: SpritePoint | null;
+  readonly cache?: "hit" | "miss";
 
+};
 export type MovementOptions = {
   readonly gameSpeed?: number;
   readonly pixelMovement?: number;
@@ -156,7 +166,7 @@ function polygonsOverlap(left: readonly [number, number][], right: readonly [num
 function shapeHitsVector(shape: readonly [number, number][], vector: WorldVector): boolean {
   const points = vectorPoints(vector);
   if (points.length < 2) return false;
-  if (vector.closed !== 0 && polygonsOverlap(shape, points)) return true;
+  if (vector.closed !== 0) return polygonsOverlap(shape, points);
   for (let index = 0; index + 1 < points.length; index += 1) {
     const a = points[index];
     const b = points[index + 1];
@@ -169,7 +179,7 @@ function shapeHitsVector(shape: readonly [number, number][], vector: WorldVector
       if (pointInPolygon(a[0], a[1], shape) || pointInPolygon(b[0], b[1], shape)) return true;
     }
   }
-  return vector.closed !== 0 && shape.some((point) => pointInPolygon(point[0], point[1], points));
+  return false;
 }
 function hitEdge(shape: readonly [number, number][], vector: WorldVector): [number, number] | null {
   const points = vectorPoints(vector);
@@ -204,15 +214,13 @@ function isGlancing(mx: number, my: number, ex: number, ey: number, iso: boolean
   return iso ? crossAbs * 100000 <= dotAbs * 196261 : crossAbs <= dotAbs;
 }
 function facingIndex(dx: number, dy: number): number {
-  if (dx === 0 && dy < 0) return 0;
-  if (dx > 0 && dy < 0) return 1;
-  if (dx > 0 && dy === 0) return 2;
-  if (dx > 0 && dy > 0) return 3;
-  if (dx === 0 && dy > 0) return 4;
-  if (dx < 0 && dy > 0) return 5;
-  if (dx < 0 && dy === 0) return 6;
-  if (dx < 0 && dy < 0) return 7;
-  return -1;
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax === 0 && ay === 0) return -1;
+  if (ay * 1000 <= ax * 414) return dx > 0 ? 2 : 6;
+  if (ax * 1000 <= ay * 414) return dy > 0 ? 4 : 0;
+  if (dx > 0) return dy > 0 ? 3 : 1;
+  return dy > 0 ? 5 : 7;
 }
 function ticksPerAdvance(speed: number, gameSpeed: number): number {
   const speedMs = Math.floor(speed * 1000 + 0.5);
@@ -349,7 +357,7 @@ function advanceActor(section: SpritesSection, actor: SpriteActor, board: WorldB
     const move = next;
     const dx = move.target.x - actor.x;
     const dy = move.target.y - actor.y;
-    const active: SpriteActiveMove = { source: move.source, start: { x: actor.x, y: actor.y }, target: { ...move.target }, facing: move.facing, cadence: actor.prev !== null ? Math.max(0, ticksPerAdvance(actor.speed, gameSpeed) - 1) : 0, ignoreBoard: move.source === "points", tried: false };
+    const active: SpriteActiveMove = { source: move.source, start: { x: actor.x, y: actor.y }, target: { ...move.target }, facing: move.facing, cadence: actor.prev !== null ? Math.max(0, ticksPerAdvance(actor.speed, gameSpeed) - 1) : 0, ignoreBoard: move.source === "points", tried: false, ...(move.pathMode === undefined ? {} : { pathMode: move.pathMode }), ...(move.deferredComplete === true ? { deferredComplete: true } : {}) };
     movement = { ...movement, active };
     const moves = actor.queue.moves.length > 0 ? actor.queue.moves.slice(1) : actor.queue.moves;
     const nextActor: SpriteActor = { ...actor, state: "moving", queue: { ...queue, moves }, movement };
@@ -415,9 +423,21 @@ function advanceActor(section: SpritesSection, actor: SpriteActor, board: WorldB
   }
   const blocker = spriteHit(section, actor, next.x, next.y);
   if (blocker !== null) {
-    const following = active.source === "path" || active.source === "waypoint-path" || active.source === "waypoint-link";
-    if (following && movement.waitTicks === 0) {
-      replaceActor(section, { ...actor, movement: { ...movement, waitTicks: WAIT_TICKS } });
+    const following = active.source === "points" || active.source === "path" || active.source === "waypoint-path" || active.source === "waypoint-link";
+    if (following && movement.waitTicks === 0 && !active.tried) {
+      const diversion = findPath(board, section, actor, active.target, active.pathMode ?? 1);
+      if (diversion.reached && diversion.points.length > 0) {
+        const moves: SpriteMove[] = diversion.points.map((point) => ({ source: "path", target: { ...point }, facing: null, pathMode: active.pathMode ?? 1, deferredComplete: true }));
+        replaceActor(section, {
+          ...actor,
+          state: "moving",
+          queue: { ...actor.queue, moves: [...moves, ...actor.queue.moves] },
+          movement: { ...movement, active: null, waitTicks: 0 },
+        });
+        event(tick, "diversion", { actor: actor.id, blocker: blocker.id, via: diversion.points }, sink);
+        return;
+      }
+      replaceActor(section, { ...actor, movement: { ...movement, active: { ...active, tried: true }, waitTicks: WAIT_TICKS } });
       event(tick, "waiting-for-blocker", { actor: actor.id, blocker: blocker.id }, sink);
       return;
     }
@@ -426,9 +446,8 @@ function advanceActor(section: SpritesSection, actor: SpriteActor, board: WorldB
         replaceActor(section, { ...actor, movement: { ...movement, waitTicks: movement.waitTicks - 1 } });
         return;
       }
-      replaceActor(section, { ...actor, queue: { ...actor.queue, moves: [] }, movement: { ...movement, active: null, waitTicks: 0 }, state: "waiting" });
+      replaceActor(section, { ...actor, queue: { ...actor.queue, moves: [] }, movement: { ...movement, active: null, waitTicks: 0 }, state: "frozen", frozenUntil: tick + FREEZE_TICKS });
       event(tick, "path-stopped", { actor: actor.id, blocker: blocker.id }, sink);
-      resolveCollision(section, actor, blocker, tick, gameSpeed, sink);
       return;
     }
     resolveCollision(section, actor, blocker, tick, gameSpeed, sink);
@@ -440,7 +459,11 @@ function advanceActor(section: SpritesSection, actor: SpriteActor, board: WorldB
   const passed = (fixed(active.target.x) - next.x) * vx + (fixed(active.target.y) - next.y) * vy <= 0;
   const done = next.reached || passed;
   if (done) {
-    moved = finishActor(moved, active, false, tpa, tick, sink);
+    if (active.deferredComplete === true && moved.queue.moves.length === 0 && moved.queue.waypoint === null) {
+      moved = { ...moved, state: "moving", movement: { ...cloneMovement(moved.movement), active: { ...active, cadence: 0, deferredComplete: false } } };
+    } else {
+      moved = finishActor(moved, active, false, tpa, tick, sink);
+    }
   } else {
     moved = { ...moved, state: "moving", movement: { ...cloneMovement(moved.movement), active: { ...active, cadence: tpa - 1 } } };
   }

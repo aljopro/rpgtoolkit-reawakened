@@ -31,6 +31,7 @@ import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
 import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, realignCamera, updateCamera } from "../world/camera.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
 import { resetSpritesSection, type SpriteRuntime } from "../sprites/runtime.ts";
+import { clearPathfindingCache } from "../sprites/pathfinding.ts";
 import { EffectBus, type EffectApplier } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
 import type { EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
@@ -689,6 +690,7 @@ export function createEngine(init: EngineInit): Engine {
   /** Board entry (E-19, E-47; docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry). */
   function arrive(board: WorldBoard, arrival: Arrival, fromSend: boolean): void {
     if (fromSend) endBoardThreads(state.vm);
+    clearPathfindingCache();
     state.world = { board };
     const placement: PlainData[] = [arrival.x, arrival.y, arrival.layer, arrival.unit];
     bus.postEffect("sprites", engineEffect("sprites", "placeplayer", placement));
@@ -809,6 +811,7 @@ export function createEngine(init: EngineInit): Engine {
     if (sceneBoardKey === null || state.world.board !== undefined && state.world.board !== null) return false;
     const loaded = loadBoard(sceneBoardKey);
     if (loaded === "pending" || loaded === null) return false;
+    clearPathfindingCache();
     state.world = { board: loaded };
     state.camera = initCameraForBoard(state.camera, loaded, init.cameraTarget);
     return true;

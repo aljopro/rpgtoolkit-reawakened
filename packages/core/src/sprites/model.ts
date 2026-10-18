@@ -39,6 +39,8 @@ export type SpriteMove = {
   readonly source: QueueSource;
   readonly target: SpritePoint;
   readonly facing: Facing | null;
+  readonly pathMode?: 1 | 2 | 3;
+  readonly deferredComplete?: boolean;
 };
 export type WaypointLink = {
   points: SpritePoint[];
@@ -62,6 +64,8 @@ export type SpriteActiveMove = {
   readonly cadence: number;
   readonly ignoreBoard: boolean;
   readonly tried: boolean;
+  readonly pathMode?: 1 | 2 | 3;
+  readonly deferredComplete?: boolean;
 };
 
 /** Fixed-tick movement state stored with the actor for snapshot/restore. */
