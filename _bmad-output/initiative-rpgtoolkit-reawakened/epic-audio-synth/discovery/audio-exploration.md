@@ -407,7 +407,7 @@ A fun extra for music-player screens: read title, artist, album and similar tags
 1. `mp3pause` timing (decided direction, owner 2026-10-18): follow 3.1.0, so `mp3pause(file)` is `mediaPlay(file, "sfx", tkMD_ONCE | tkMD_WAIT)`. Evidence: the spec baseline is Toolkit 3.1 (ADR 0007); the command's own release note says it pauses the game while the sound plays; the final version's non-waiting behaviour makes it identical to `mp3`, which reads as a regression; zero archive programs use it. Rejected alternative: the final version's non-blocking alias of `wav`.
 2. Answered by round 9 M1: 3.1.0 played MP3, OGG and tracker files as looping music; the final version plays only MIDI (also round 8 Q17). The format policy itself stays with §9's "MP3/OGG handling" decision.
 3. Track reuse (accepted direction, owner 2026-10-18): a new play on a track replaces that track's audio (per voice, the legacy single-slot rule), except that replaying the file already playing carries on (round 9 M2) unless `tkMD_RESTART` is set. The maximum number of named tracks remains for 6.1 to set.
-4. AD-16 amendment (accepted direction, owner 2026-10-18): replace the fixed `music.*` and `sfx.*` cue kinds with generic per-track kinds (`media.load`, `media.play`, `media.stop`, `media.pause`, `media.resume`, `media.seek`, `media.volume`, `media.fade`, `media.flags`), each carrying a `track` field (and a voice index where a track has more than one voice); `music` and `sfx` become track names. Rejected alternative: keep the old kinds and add a `track` field, which makes the names misleading and needs two copies of every new feature. The cue format is internal (core to runner); 6.1 confirms that nothing built yet produces or consumes the old kinds.
+4. AD-16 amendment (accepted direction, owner 2026-10-18): replace the fixed `music.*` and `sfx.*` cue kinds with generic per-track kinds (`media.load`, `media.play`, `media.stop`, `media.pause`, `media.resume`, `media.seek`, `media.volume`, `media.fade`, `media.flags`), each carrying a `track` field (and a voice index where a track has more than one voice); `music` and `sfx` become track names. Rejected alternative: keep the old kinds and add a `track` field, which makes the names misleading and needs two copies of every new feature. The cue format is internal (core to runner). **Correction (checked in code, 2026-10-18):** the old kinds are already in use. Epic 4's engine posts `music.play` (board music) and `sfx.play` (animation-frame sounds) `audio` effects, `AudioCue`/`AudioCueKind` are published in `packages/core/src/ports/audio.ts`, and `audio.ended` is a validated input. So the amendment is a migration of those producers, the port type and the validator, not a greenfield change (work package P4 below).
 5. Channels (accepted direction, owner 2026-10-18): §9's "SFX channels: one channel (parity)" becomes "the `sfx` track has 1 voice". Old games behave the same; the voice count and the stealing rule are open item 11.
 6. Built-in tracks (accepted direction, owner 2026-10-18): `music`, `sfx`, `ambience`, `voice` and `ui`; 6.1 sets each one's default flags and voice count.
 7. Ratify the `tkMD_` names and values, the state-versus-flags split, `mediaLoop`, and the waiting rules above.
@@ -415,8 +415,112 @@ A fun extra for music-player screens: read title, artist, album and similar tags
 9. Version rule for the other 3.1.0-versus-final splits (round 8 Q7, Q12, Q17): follow 3.1.0 as the spec baseline unless the later behaviour is clearly a deliberate fix; then take the fix and record it as a Reawakened ruling with evidence; a later behaviour that looks like a regression is treated as a bug (as for `mp3pause`).
 10. Name clashes (resolved, 2026-10-18). **Rule already in the spec:** built-ins bind at compile time, so a script method with the same name as a built-in is never called at those call sites, and the definition raises a required warning naming the built-in it shadows (`docs/spec/engine/rpgcode-functions.md`, R-35; resolution order in `rpgcode-modules-and-objects.md`). So adding a new media built-in would silently replace an old game's own method of that name, with a warning. **Archive scan:** 3,192 unique `.prg` programs in the RPG Toolkit archive (loose and inside zips, nested to three levels) contain **no** method definitions and **no** calls named `mediaLoad`, `mediaPause`, `mediaResume`, `mediaSeek`, `mediaLoop`, `mediaWait`, `mediaState`, `mediaFlags`, `mediaPlaying`, `mediaFile`, `mediaPosition`, `mediaLength`, `mediaVolume`, `mediaTracks`, `mediaFade`, `mediaInfo` or `getVolume` (case-insensitive). The new names are safe to add; the shadow warning covers any game outside the archive. Caveat: a text scan; non-`.zip` archives and calls without parentheses are not seen.
 11. Layered audio (proposal, prompted by owner research on modern engines, 2026-10-18; voices accepted as direction):
-   - **Fades:** `mediaFade(track, percent, seconds)` ramps a track's volume over time, computed in core per tick (the runner only smooths between ticks). A fade to 0 leaves the track playing silently, which is how music stems are switched in and out.
+   - **Fades:** `mediaFade(track, percent, seconds)` ramps a track's volume over time. Core owns the ramp as a pure function of one fade cue (start tick, duration, target), so queries and replays are exact and the runner only renders it (P4, P7). A fade to 0 leaves the track playing silently, which is how music stems are switched in and out.
    - **Synced stems:** a way to start a track in lock-step with another track's position (for example an extra `sync` argument on `mediaPlay`), so music layers (drums, bass, melody, combat strings) stay aligned when added later.
    - **Voices per track:** a track's voice count is settable; a built-in multi-voice effects track (for example `effects` with about 32 voices, a common engine default) covers overlapping sound effects, while `sfx` stays at 1 voice for legacy parity.
    - **Voice stealing:** when every voice is busy, a fixed core rule picks the sound that stops (oldest first, or lowest priority with play order breaking ties), so replays never depend on the audio device.
    - **Stingers:** a short musical clip on its own track over the music needs nothing new; optional ducking (the music dips while the stinger plays) is a nice-to-have built on `mediaFade`.
+
+### What 6.1 has to solve: work packages
+
+6.1 is the docs-first, owner-checkpoint entry that fixes the audio rules before any code (G7). Ten pieces need an answer. Each is written as: what has to be decided, what the repo already says, a recommendation, and what it produces. Statements about code are from a read of `packages/core` on 2026-10-18; anything not checked is marked **[unchecked]**.
+
+| # | Package | Hard part | Needs the owner? |
+|---|---|---|---|
+| P1 | Track model and `GameState.audio` shape | what is saved, what is a setting | yes (volume) |
+| P2 | Time, position and who decides "it ended" | core clock versus the real audio device | recommend, confirm |
+| P3 | Command surface, errors and obsolete marking | exact signatures; track creation; warning noise | yes (warnings) |
+| P4 | Cue protocol (AD-16) and the runner protocol | migrating live producers; fade representation | no |
+| P5 | Waits | wake rules; restore mid-wait | yes (pause) |
+| P6 | Voices, mixing and voice stealing | handles; same-file rule; limits | partly |
+| P7 | Layered audio: fades, synced stems, ducking | curve maths; sync with unequal lengths | no |
+| P8 | Legacy parity ledger and the version rule | encode every relayed fact once | no |
+| P9 | Decisions inherited from section 9 | unchanged, still owed | partly |
+| P10 | Deliverables, order and breakdown impact | sequencing the rulings | no |
+
+#### P1. Track model and `GameState.audio` shape
+
+- **Decide:** the plain-data shape: a table of tracks by name, each with `file`, `state`, `flags`, `volume`, and a list of voices (each with `file`, start tick, position basis, `cueId`); the master volume; the monotonic `cueId` counter; the "music variable" (round 8 Q19).
+- **Repo already says:** the `audio` section is a placeholder in the reset and load lists (`catalogue-responders.ts` names `audio` among the `reset` and `load` sections); the engine has an `audio` phase after `animation` (AD-26). Round 8 Q12/Q13 (A-3): volume is not saved and `reset()` leaves it alone, which contradicts the epic's earlier assumption that game volume is saved state.
+- **Tension:** per-track volume sliders (Epic 8 options menu) are *settings* a player expects to survive across games and loads, while track playback is *game state*.
+- **Recommend:** split the section. Playback state (what is on each track, its state, flags, position) is saved and migrates like the `sprites` and `input` sections did (schema bump plus migration of the placeholder). Volumes (master and per track) are settings: not in a game save, untouched by `reset()` and `load()`, held by the host and passed in. Rejected alternative: save volumes with the game, which makes loading an old save change what the player hears.
+- **Also decide:** music after load. §9 defaults to "restart from the top", which matches the legacy round-8 behaviour for video and board entry; then saved music position is unused for `music`, and 6.1 must say whether other tracks (`ambience`, `voice`) resume mid-file or restart.
+- **Produces:** the `audio` section schema (v2) with an OWNER-marked rule for each field, and the save/settings split.
+
+#### P2. Time, position and who decides "it ended"
+
+- **Decide:** where a track's position and end come from.
+- **Repo already says:** AD-16 and this section: position advances on the fixed tick from the asset's known length; the runner never reports position back (G2, G3). But AD-16 also has `audio.ended { cueId }` as a *reply* from the runner, and `audio.ended` is already a validated input. The two conflict: if the runner decides when a sound ended, script timing (a `mediaWait` waking, `mediaState`) would depend on the audio device, so two runners or two runs could diverge.
+- **Recommend:** core is the only clock. A track's end tick is `startTick + lengthTicks` (a loop pass boundary for looping tracks) and waits wake on it. `audio.ended` is demoted to advisory: used only to cross-check or to free a runner voice early, never to move script time. Cues carry the tick they were due at, so a runner that starts late (a decode stall) seeks forward to catch up instead of drifting. Rejected alternative: the runner's `ended` drives script time, which is how legacy behaved but is not replay-safe.
+- **Needs a length source.** Core does no I/O (G2), so lengths must arrive as asset metadata: computed at import (§9's transcode-on-import is the natural place) or by the synth decoders (6.4: MIDI needs a tempo-map walk, MP3 variable bit rate and tracker files need the decoder). **[unchecked]** whether the asset table already carries a duration field.
+- **Also decide:** the seconds-to-ticks rounding (round half-up through `core/time`'s existing conversion, as the movement entries used), whether `mediaPosition` and `mediaLength` return whole seconds or fractions (recommend: fractions, computed with `core/fmath`, G3), and what a track of unknown length does (`mediaWait` is a diagnostic, `mediaLength` returns 0).
+- **Produces:** a time-model rule with the end-tick formula, the catch-up rule for late starts, and the demotion of `audio.ended` (an AD-16 edit).
+
+#### P3. Command surface, errors and obsolete marking
+
+- **Decide:** final names, argument lists, defaults and units for the 10 control and 9 query commands, plus three things the proposal does not yet have:
+  - a command to **create or configure a track** (for example `mediaTrack(name[, voices])`); today "authors may create tracks by name" has no command;
+  - **track-name rules**: case folding (RPGCode folds identifiers, LEX-10, but string contents are not folded), allowed characters, and whether an unknown track in a play call is an error or creates it (recommend error with a located diagnostic, so a typo cannot silently create a silent track);
+  - a **voice handle** (see P6).
+- **Obsolete marking.** R-36 already has "obsolete: warning" (stays callable, shows a warning when warnings are on). Using it on `wav` would warn on every legacy call (536 in the archive). The owner said the old commands are "obsolete", not removed. **Recommend:** documentation and editor hints only (the spec row, the command list and help text point at the standard command), with no runtime warning, so old games run quietly. Rejected alternative: runtime warnings, which are noise in games that cannot be edited.
+- **Catalogue.** The command-effect catalogue lists 282 names; new Reawakened names are additions, with precedent: entry 4.1 added the camera commands the same way. Each new name needs a catalogue row, a responder, a `docs/spec` row and help text in the CLAUDE.md style, and `catalogue:check` and `command-docs:check` must pass. **Checked mismatches to reconcile:** the code's catalogue lists `wav` as `file[,block]` with an `audio.sfx` wait and `mp3pause` with no wait and not obsolete, while round 8 Q2 says `wav` never waits and §13 now says `mp3pause` waits.
+- **Legacy plugin audio commands.** The code also carries `fademidiin`, `fademidiout` and `setmidivolume` (legacy-plugin stubs). They must map onto tracks (for example `fademidiout(speed)` becomes `mediaFade("music", 0, ...)`), or be recorded as not reproduced. **[unchecked]** their legacy meaning; ask in the next extraction round.
+- **Produces:** the Audio table of `rpgcode-functions.md` rewritten (obsolete column, standard equivalents), the new constants block in `rpgcode-language.md`, catalogue rows.
+
+#### P4. Cue protocol (AD-16) and the runner protocol
+
+- **Decide:** the exact cue set and fields, and how fades travel.
+- **Repo already says:** the engine posts `music.play` and `sfx.play` effects today (board music, frame sounds); `AudioCueKind` has the old fixed kinds; `GameState.audio` and the `audio` applier do not exist yet (Epic 4 queues effects until Epic 6 registers one, assumption A-12).
+- **Migration list:** the two producers in the engine, the `AudioCueKind` type, the `audio.ended` validator, the pending-effect queue's kind names, any golden or conformance that lists cue kinds **[unchecked]**, and the runner-side exhaustive `switch` (AD-16's check).
+- **Fade representation, decide:** one `media.fade { track, voice, targetPercent, startTick, durationTicks }` cue with the runner ramping, versus a `media.volume` cue every tick. **Recommend:** the single cue. Core computes the volume at any tick as a pure function of the cue (so `mediaVolume` and replays are exact) and posts one record; the runner only needs to render the ramp. Rejected alternative: per-tick volume cues, which flood the cue list for no gain.
+- **Runner protocol (section 12):** the messages in (`load`, `play`, `pause`, `resume`, `stop`, `setVolume`, `setBank`) gain `seek` and `fade`, and carry `track` and `voice`; the language-neutral schema and the conformance vectors (6.4a) are written against the final set, so settle the set before them.
+- **Produces:** the AD-16 amendment text (generic per-track kinds, voice field, `media.fade`, demoted `audio.ended`), the revised runner message list, and a migration note for Epic 4's two producers.
+
+#### P5. Waits
+
+- **Decide:** the wait kind and its wake rules.
+- **Repo already says:** the named wait kinds are `render.msgbox`, `input.mouse`, `menu.screen`, `audio.sfx` and `video` (`ports/wait.ts`); waits are plain data, restore mid-wait, and the engine's waits phase runs before the `audio` phase.
+- **Decide:** replace `audio.sfx` with a per-track kind (for example `audio.track { track, voice, endTick }`), storing the absolute end tick so a restore resumes on the same tick.
+- **Wake rules to confirm:** a wait ends when its track is stopped or replaced (current text). **Open:** what a *pause* does. Current text says pause wakes the wait; the alternative is that a paused track suspends the wait and a resume continues it, which is what an author pressing "pause" in a music player expects. **Recommend:** suspend on pause, wake on stop or replace. Rejected alternative: wake on pause, which makes a script continue while the sound is merely held.
+- **Ordering:** a script issues `mediaStop` in the threads phase; the `audio` phase runs later in the same tick, so 6.1 must say which tick a wait ends on (recommend: the same tick, because the stop is applied when the effect posts, as Epic 4's effect bus does).
+- **Also:** `tkMD_LOOP | tkMD_WAIT` is a diagnostic at the call; `mediaWait` on a loop waits for the end of the current pass; a track with unknown length makes `mediaWait` a diagnostic (P2).
+- **Produces:** the AD-9 wait-kind amendment and the wake-rule table.
+
+#### P6. Voices, mixing and voice stealing
+
+- **Decide:** the voice model.
+- **Handles.** With more than one voice, a script cannot stop or query one particular sound through the track alone. **Recommend:** `mediaPlay(file, track, flags, &voice)` returns a voice number by reference, and `mediaStop`, `mediaPause`, `mediaSeek`, `mediaFade` and the queries accept an optional voice; omitted means the track's primary voice (voice 0), which keeps single-voice tracks and old games unchanged.
+- **Same file already playing.** Legacy rules: music with the same name carries on if playing and restarts if stopped (round 8 Q5); the sound-effect slot ignores the same name while it is still playing (Q3). **Recommend:** one rule, "on a single-voice track, the same file already playing is left alone unless `tkMD_RESTART`; on a multi-voice track every play takes a free voice", so rapid footsteps overlap.
+- **Defaults to set:** voice count per built-in track (`music` 1, `sfx` 1, `ambience` and `ui` a small number, `voice` 1 or 2 **[owner choice]**, plus a multi-voice effects track as in item 11), a total voice cap (32 is a common engine default; **unverified, general knowledge**), and a maximum number of named tracks.
+- **Stealing rule, decide:** when every voice is busy, drop the oldest, the quietest, or the lowest priority. **Recommend:** lowest priority first, then oldest, then lowest voice index, with `priority` an optional play argument defaulting to 0. All three are pure functions of core state, so the choice is deterministic. Rejected alternative: leave it to the runner, which breaks replays.
+- **Late sounds (§9):** the late-SFX threshold (about 250 ms, drop) belongs here; define it in ticks.
+- **Produces:** the voice rule page and defaults table.
+
+#### P7. Layered audio: fades, synced stems and ducking
+
+- **Fade maths.** Linear in ticks with integer maths, rounding rule stated, `percent` 0 to 100, a fade started while another runs replaces it from the current value. **Decide** what a fade to 0 does at the end: leave the track playing silent (stem switching, recommended) or stop it (needs a flag such as `tkMD_STOP_AT_END`).
+- **Pause during a fade:** the fade clock freezes with the track (recommend) or keeps running.
+- **Synced stems.** `mediaPlay(..., sync)` starts a track at another track's current position. **Decide** the behaviour when lengths differ: position modulo the new file's length (recommend), or an error. State plainly that stems only stay aligned if they have the same length and loop points. Needs P2's lengths.
+- **Ducking** stays a nice-to-have built on fades; 6.1 only reserves the room (a fade can be attached to a track pair later without changing the cue set).
+- **Legacy plugin mapping:** `fademidiin`, `fademidiout` and `setmidivolume` map here (P3).
+- **Produces:** the fade and sync rules, with a deterministic worked example for each.
+
+#### P8. Legacy parity ledger and the version rule
+
+- **Decide:** one table in the spec that encodes every owner-relayed legacy fact once, each with the Reawakened disposition (kept, kept as a default, or departed from with a reason).
+- **Facts to encode (rounds 8 and 9):** music change by name ignores case and carries on if playing, restarts if stopped (Q5); a missing music file stops the old music first and gives silence with no error (Q6); board entry compares with the music loaded now, an empty field means silence (Q7); battle starts stop board music, a fight with no music is silent (Q8); video stops music and restarts it from the start afterwards, the player cannot skip (Q16); losing focus pauses the game and the engine never touches the audio (Q15); the `music` variable shows the battle track in a fight and is not empty after `mediaStop` (Q19); all files live under the Media folder, subfolders allowed, no extension added, case-insensitive (Q18); music always loops, sound effects never do (M1, M4).
+- **Decide on focus loss:** the engine pausing the game is existing behaviour; whether the *runner* mutes or pauses tracks on focus loss is a runner choice (it may not change cue meaning, section 12), so 6.1 should say audio continues unless the runner decides otherwise, to match Q15.
+- **Version rule (item 9):** follow 3.1.0 unless the later behaviour is a clear deliberate fix; apply it to Q7, Q12 and Q17.
+- **Produces:** the parity table, each row citing its facts-round row.
+
+#### P9. Decisions inherited from section 9 (unchanged)
+
+Still owed by 6.1: MP3/OGG handling (now linked to P2 lengths and to legacy 3.1.0 playing MP3, OGG and tracker files as music), BusDriver XM, the XG/GS missing-bank fallback, the Path B bank, and music after load (P1). Also from section 8: R-59 (the SoundFont rule), the AD-16 `soundfont.set` amendment and the AVI request handling. None of these changed because of the media-command work, except that "SFX channels" is now voices (item 5).
+
+#### P10. Deliverables, decision order and breakdown impact
+
+- **Deliverables (all docs):** a new normative page (suggest `docs/spec/engine/audio-media.md`) holding the track model, time model, commands, constants, waits, voices and parity table with stable anchors and OWNER markers; the rewritten Audio table in `rpgcode-functions.md`; the AD-16 and AD-9 amendments; catalogue rows; a facts-round-9 disposition update; the Epic 8 handoff (volume sliders, the settings/save split) and the Epic 9 handoff (the runner protocol and conformance vectors).
+- **Order that avoids rework:** P2 (time) before P1 (state), then P4 (cues) and P5 (waits), then P3 (commands) and P6 (voices), then P7 (layers), with P8 applied as a check on every row.
+- **Owner decisions** (the rest are recommendations to approve in one sitting): volumes as settings versus saved state (P1); runtime warnings versus documentation-only obsolete marking (P3); pause suspends versus wakes a wait (P5); the built-in voice counts and the total cap (P6).
+- **Size.** This is larger than the single docs entry in section 8. Option: split it into **6.1a** (P1, P2, P4, P5: the core rules) and **6.1b** (P3, P6, P7, P8, P9: commands and behaviour), each with its own owner checkpoint, as Epic 4 did with its rulings entries.
+- **Breakdown impact:** 6.2 grows (track and voice model, fade maths, end-tick computation, settings split); 6.3 grows from about 14 legacy names to those plus about 20 new built-ins (split control and query); 6.4's mixer needs per-track buses and a voice pool; 6.7's goldens should include an independent audio timeline oracle (expected track states at fixed ticks, produced without importing `packages/core`, as the movement oracle in Epic 5 did) so the core's tick maths is checked against something other than itself.
