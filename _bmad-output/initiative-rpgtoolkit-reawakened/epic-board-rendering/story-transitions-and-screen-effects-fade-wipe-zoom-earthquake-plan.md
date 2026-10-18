@@ -24,7 +24,7 @@ Zoom follows the LOW-confidence E-59 Reawakened reading: shrink amount 0..75, ce
 
 - Replace the empty `FxSection` with explicit plain-data state and helpers.
 - Add effect command responders with exact argument validation and blocking waits.
-- Apply FX effects per tick and append transition primitives to draw lists; resolve wipe image assets through the existing asset/request seam.
+- Apply FX effects per tick and append transition primitives to draw lists; store wipe image keys for host-renderer asset resolution.
 - Reset FX state through the lifecycle reset seam and ensure snapshot/restore retains active transitions.
-- Add focused unit tests and authored transition regression fixtures without changing independent-oracle goldens.
+- Add focused unit tests and transition regression coverage without changing independent-oracle goldens.
 - Cite `docs/spec/engine/rpgcode-functions.md#e-59`, `#reawakened-fade-types`, `#reawakened-wipe-effects-and-speed`, `#reawakened-zoom`, and `docs/provenance/facts-round-7.md`.
