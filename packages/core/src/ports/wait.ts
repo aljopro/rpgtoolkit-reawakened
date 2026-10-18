@@ -66,8 +66,16 @@ export type NamedWait = {
   resumeRefs: string[];
 };
 
-/** A wait for a key; parkSeq is the first input sequence it may claim. */
-export type InputKeyWait = { kind: "input.key"; global: boolean; key: string | null; parkSeq?: number; resumeRefs?: string[] };
+/** A key wait may carry cursor-map navigation state while retaining the input.key wait kind. */
+export type InputKeyWait = {
+  kind: "input.key";
+  global: boolean;
+  key: string | null;
+  parkSeq?: number;
+  resumeRefs?: string[];
+  cursorMap?: number;
+  cursorSelection?: number;
+};
 
 /** A wait for coupled sprite movement (`multiRun`, E-33). */
 export type MovementWait = { kind: "movement"; global: boolean; moves: WaitMove[] };
@@ -102,11 +110,11 @@ export type Wait = SleepWait | InputKeyWait | MovementWait | RequestWait | BlobW
 /** The wait kind names, namespaced where an owner part owns the kind. */
 export type WaitKind = Wait["kind"];
 
-/** Read-only state exposed to wait resolvers (AD-9; input is owned by core/input). */
 export type WaitInputView = {
   readonly nextSeq?: number;
   readonly keys: readonly { readonly seq: number; readonly name: string; readonly code: string; readonly char: string | null }[];
   readonly focused: boolean;
+  readonly pointer?: { readonly x: number; readonly y: number; readonly buttons: number };
 };
 export type WaitUiView = { readonly [name: string]: unknown };
 

@@ -1,5 +1,7 @@
+import { assetKey } from "../formats/resolver/resolver.ts";
 import type { DrawCommand, FontRef, Rgb } from "../ports/draw.ts";
-import type { UiSection } from "../save/sections/ui.ts";
+import type { InputSection } from "../save/sections/input.ts";
+import type { UiCursorImage, UiSection } from "../save/sections/ui.ts";
 import { emitText, layoutText } from "./text.ts";
 
 const WINDOW_WIDTH = 600;
@@ -93,15 +95,76 @@ function drawModal(commands: DrawCommand[], ui: UiSection, width: number, height
   });
 }
 
+function drawButtons(commands: DrawCommand[], input: InputSection | undefined): void {
+  for (const button of input?.buttons ?? []) {
+    commands.push({
+      kind: "blit",
+      source: { asset: assetKey(button.asset), tile: null },
+      src: { x: 0, y: 0, w: button.width, h: button.height },
+      dst: { x: button.x, y: button.y, w: button.width, h: button.height },
+      key: { r: 255, g: 0, b: 255 },
+      tint: { r: 0, g: 0, b: 0 },
+      alpha: 255,
+      blend: "normal",
+      iso2d: false,
+    });
+  }
+}
+
+function cursorMapPoint(ui: UiSection): { readonly x: number; readonly y: number } | null {
+  const id = ui.activeCursorMap;
+  if (id === undefined) return null;
+  const map = ui.cursorMaps?.find((entry) => entry.id === id);
+  if (map === undefined || map.points.length === 0) return null;
+  const index = Math.max(0, Math.min(map.points.length - 1, map.selected));
+  return map.points[index] ?? null;
+}
+
+function cursorCommand(cursor: UiCursorImage, pointer: { readonly x: number; readonly y: number }): DrawCommand {
+  return {
+    kind: "blit",
+    source: { asset: assetKey(cursor.asset), tile: null },
+    src: { x: 0, y: 0, w: cursor.width, h: cursor.height },
+    dst: { x: pointer.x - cursor.hotspotX, y: pointer.y - cursor.hotspotY, w: cursor.width, h: cursor.height },
+    key: cursor.transparent,
+    tint: { r: 0, g: 0, b: 0 },
+    alpha: 255,
+    blend: "normal",
+    iso2d: false,
+  };
+}
+
+function drawCursor(commands: DrawCommand[], ui: UiSection, input: InputSection | undefined): void {
+  const pointer = input?.pointer ?? { x: 0, y: 0, buttons: 0 };
+  if (ui.mouseCursor !== undefined && ui.mouseCursor !== null) {
+    commands.push(cursorCommand(ui.mouseCursor, pointer));
+    return;
+  }
+  const point = cursorMapPoint(ui);
+  if (point === null) return;
+  const hand = ui.cursorHand ?? { asset: "media/cursors/tkr-hand.png", stretch: true, width: 32, height: 32 };
+  commands.push(cursorCommand({ asset: hand.asset, x: point.x - 40, y: point.y - 10, hotspotX: 0, hotspotY: 0, transparent: { r: 255, g: 0, b: 255 }, width: hand.width, height: hand.height }, { x: point.x - 40, y: point.y - 10 }));
+}
+
 /** Append the deterministic UI overlay after board composition (E-55/E-60). */
-export function composeUi(ui: UiSection, width: number, height: number): DrawCommand[] {
+export function composeUi(ui: UiSection, width: number, height: number, input?: InputSection, includeCursor = true): DrawCommand[] {
   const commands: DrawCommand[] = [];
-  if (!Array.isArray(ui.draws)) return commands;
-  for (const draw of ui.draws) {
-    commands.push(...textCommands(draw.text, draw.x, draw.y, draw.rgb, draw.font, undefined, draw.underline));
+  if (Array.isArray(ui.draws)) {
+    for (const draw of ui.draws) {
+      commands.push(...textCommands(draw.text, draw.x, draw.y, draw.rgb, draw.font, undefined, draw.underline));
+    }
   }
   drawMessage(commands, ui, width);
   drawModal(commands, ui, width, height);
+  drawButtons(commands, input);
+  if (includeCursor) drawCursor(commands, ui, input);
+  return commands;
+}
+
+/** Compose only the cursor so the engine can append it after post-processing effects. */
+export function composeUiCursor(ui: UiSection, input?: InputSection): DrawCommand[] {
+  const commands: DrawCommand[] = [];
+  drawCursor(commands, ui, input);
   return commands;
 }
 
