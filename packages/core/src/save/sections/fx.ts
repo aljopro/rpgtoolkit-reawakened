@@ -1,7 +1,37 @@
-/** Owner: core/render (E-59; docs/spec/engine/rpgcode-functions.md#e-59). */
+/** Owner: core/render (E-54, E-59; docs/spec/engine/plugins-and-battle.md#e-54, docs/spec/engine/rpgcode-functions.md#e-59). */
 import type { AssetKey } from "../../ports/keys.ts";
 
 export type FxColor = { r: number; g: number; b: number };
+
+/** A resolved frame used by a stand-alone script animation (E-54). */
+export type AnimationFrameState = {
+  image: string;
+  asset: AssetKey | null;
+  tile: number | null;
+  srcWidth: number;
+  srcHeight: number;
+  transparent: FxColor;
+  sound: string;
+};
+
+/** Saveable playback state for one `animation`/`sizedAnimation` call (E-54). */
+export type AnimationState = {
+  id: number;
+  file: string;
+  asset: AssetKey | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  loop: boolean;
+  originTick: number;
+  delayTicks: number;
+  frame: number;
+  frames: AnimationFrameState[];
+  loaded: boolean;
+  finished: boolean;
+  soundFrame: number;
+};
 
 export type FadeState = {
   kind: "fade";
@@ -42,6 +72,8 @@ export type FxSection = {
   zoomPercent: number;
   zoom: ZoomState | null;
   earthquake: EarthquakeState | null;
+  animations: AnimationState[];
+  nextAnimationId: number;
 };
 
 export function createFxSection(): FxSection {
@@ -52,5 +84,7 @@ export function createFxSection(): FxSection {
     zoomPercent: 0,
     zoom: null,
     earthquake: null,
+    animations: [],
+    nextAnimationId: 1,
   };
 }
