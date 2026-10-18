@@ -14,7 +14,7 @@ import {
   formatScriptsGolden,
   runAllCorpusPrograms,
 } from "./corpus.ts";
-import { checkSceneGolden, type SceneGoldenInput } from "./scene-golden.ts";
+import { checkSceneGolden, checkSceneGoldens, type SceneGoldenInput } from "./scene-golden.ts";
 
 export type GoldenTexts = {
   readonly vectors?: string | undefined;
@@ -22,6 +22,7 @@ export type GoldenTexts = {
   readonly golden?: string | undefined;
   readonly scriptsGolden?: string | null | undefined;
   readonly sceneGolden?: SceneGoldenInput | undefined;
+  readonly sceneGoldens?: readonly SceneGoldenInput[] | undefined;
 };
 
 export type GoldenOutcome =
@@ -132,8 +133,12 @@ export function goldenJob(
         lines.push(`scripts: ${results.length} programs ok (snapshot/restore verified)`);
       }
     }
-    // Stage 6: real-engine independent scene oracle (headless supplies the required S-01 input).
-    if (texts.sceneGolden !== undefined) {
+    // Stage 6: replay every ledger scene through the real engine.
+    if (texts.sceneGoldens !== undefined) {
+      const scenes = checkSceneGoldens(texts.sceneGoldens, texts.sceneGoldens[0]?.ledgerText ?? "");
+      if (!scenes.ok) throw new Error(scenes.lines[scenes.lines.length - 1] ?? "scene-golden failed");
+      lines.push(...scenes.lines.map((line) => `scene-golden: ${line}`));
+    } else if (texts.sceneGolden !== undefined) {
       const scene = checkSceneGolden(texts.sceneGolden);
       if (!scene.ok) throw new Error(scene.message);
       lines.push(`scene-golden: ${scene.message}; draw=${scene.drawHash}; state=${scene.stateHash}`);

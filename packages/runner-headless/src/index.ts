@@ -50,20 +50,21 @@ function runGolden(argv: string[]): number {
     const golden = readFileOrUndefined(join(root, "golden/test-double/golden.json"));
     const scriptsGolden =
       readFileOrUndefined(join(root, "golden/scripts/golden.json")) ?? (record ? "" : undefined);
-    const sceneFile = join(root, "golden/scenes/S-01.json");
-    const sceneGolden = existsSync(sceneFile)
-      ? (() => {
-          const sceneText = readFileSync(sceneFile, "utf8");
-          const scene = JSON.parse(sceneText) as { readonly boardFiles: readonly string[] };
-          return {
-            sceneText,
-            assets: scene.boardFiles.map((path) => ({ path, bytes: new Uint8Array(readFileSync(join(root, path))) })),
-            referencePng: new Uint8Array(readFileSync(join(root, "golden/reference/S-01.png"))),
-            ledgerText: readFileSync(join(root, "golden/ledger.json"), "utf8"),
-          };
-        })()
-      : undefined;
-    const result = goldenJob({ vectors, run, golden, scriptsGolden, sceneGolden }, record);
+    const ledgerText = readFileOrUndefined(join(root, "golden/ledger.json"));
+    const sceneGoldens = ledgerText === undefined ? undefined : readdirSync(join(root, "golden/scenes")).filter((name) => name.endsWith(".json")).map((name) => {
+      const sceneText = readFileSync(join(root, "golden/scenes", name), "utf8");
+      const scene = JSON.parse(sceneText) as { readonly boardFiles: readonly string[]; readonly name: string };
+      const ledger = JSON.parse(ledgerText) as { readonly goldens: readonly { readonly scene: string; readonly path: string }[] };
+      const row = ledger.goldens.find((entry) => entry.scene === scene.name);
+      if (row === undefined) throw new Error(`${scene.name}: no ledger entry`);
+      return {
+        sceneText,
+        assets: scene.boardFiles.map((path) => ({ path, bytes: new Uint8Array(readFileSync(join(root, path))) })),
+        referencePng: new Uint8Array(readFileSync(join(root, row.path))),
+        ledgerText,
+      };
+    });
+    const result = goldenJob({ vectors, run, golden, scriptsGolden, sceneGoldens }, record);
 
     if (!result.ok) {
       const completed = result.lines.slice(0, -1);
