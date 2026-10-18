@@ -9,8 +9,9 @@
  * `surfacePixels` is `null`, and the report's `consumed`/`requests`/`audioCues`
  * are empty with `loading: false`, `paused: null`. `diagnostics` carries the
  * located runtime failures the VM collected during the batch (AD-24), so the
- * golden `runLog` driver accepts it. Epic 4's `createEngine` supersedes it
- * by calling the same phase handlers with the registry from entry 3.
+ * golden `runLog` driver accepts it. It stays beside `createEngine` as the
+ * script-only host for VM, corpus and restore tests that need no world or
+ * renderer; the full-engine golden path uses `createEngine`.
  */
 
 import {

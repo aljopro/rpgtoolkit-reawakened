@@ -1,8 +1,10 @@
 /**
- * State section declarations for AD-10. The seven sections owned by this
- * rendering entry are split into modules under `save/sections/`; this barrel
- * preserves the public imports and keeps the remaining sections explicit
- * placeholders until their owning epics land.
+ * State section declarations for AD-10. The seven sections the board-rendering
+ * epic owns (`world`, `camera`, `ui`, `fx`, `surfaces`, `input`, `engine`) live
+ * in modules under `save/sections/`; this barrel re-exports them and declares
+ * the seven sections still owned by later epics (`sprites`, `party`,
+ * `inventory`, `triggers`, `battle`, `menu`, `audio`) as explicit empty
+ * placeholders.
  *
  * AD-10 (one state tree, one owner per section); AD-11 (one canonical form);
  * docs/spec/formats/save-game.md#layout-minor-4 (the saved game).
