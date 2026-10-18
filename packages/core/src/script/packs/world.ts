@@ -208,11 +208,45 @@ const SEND: BuiltinSpec = {
   },
 };
 
+const LIFECYCLE_RESET: BuiltinSpec = {
+  name: "reset", aliases: [], params: [],
+  doc: { summary: "Reset the game.", behaviour: "Clear the reset sections, preserve rng and time, restart plugins and rerun startup from E-02 step 3. The call posts the lifecycle request and does not wait.", groups: ["program-flow-errors-debugging-25"], waits: { kind: "never", summary: "Does not wait." }, tags: ["legacy"], see: ["docs/spec/engine/main-loop-and-startup.md#reawakened-reset-sections"] },
+  call: () => ({ value: null, effects: [{ kind: "state-write", section: "engine", args: ["reset"] }] }),
+};
+const LIFECYCLE_MAIN_FILE: BuiltinSpec = {
+  name: "mainfile", aliases: ["mainFile"], params: [{ name: "gam", optional: false, byRef: false, variadic: false }],
+  doc: { summary: "Load a new main file.", behaviour: "Request a switch to the named game project and return immediately; the engine performs the new boot sequence.", groups: ["files-saves-os-15", "board-tiles-vectors-screen-effects-33"], waits: { kind: "never", summary: "Does not wait." }, tags: ["legacy"], see: ["docs/spec/engine/main-loop-and-startup.md#e-06"] },
+  call: (_view, args) => {
+    const file = args[0]?.value;
+    if (typeof file !== "string" || file.trim() === "") throw new ScriptError("builtin.bad-arg", '"mainFile" expects a main file name');
+    return { value: null, effects: [{ kind: "state-write", section: "engine", args: ["mainFile", file] }] };
+  },
+};
+const LIFECYCLE_GONE: BuiltinSpec = {
+  name: "gone", aliases: [], params: [],
+  doc: { summary: "Suppress the current board trigger until the board is left.", behaviour: "Mark only the currently running board-trigger instance suppressed; the source program, sprites and unrelated threads are unchanged and the call does not wait.", groups: ["program-flow-errors-debugging-25"], waits: { kind: "never", summary: "Does not wait." }, tags: ["legacy"], see: ["docs/spec/engine/movement-and-collision.md#reawakened-gone-trigger-suppression"] },
+  call: () => ({ value: null, effects: [{ kind: "state-write", section: "triggers", args: ["gone"] }] }),
+};
+const LIFECYCLE_OVER: BuiltinSpec = {
+  name: "over", aliases: [], params: [],
+  doc: { summary: "Show the game-over flow.", behaviour: "Request the board-rendering game-over flow and return immediately; host window behaviour is not selected by this command.", groups: ["program-flow-errors-debugging-25"], waits: { kind: "never", summary: "Does not wait." }, tags: ["legacy"], see: ["docs/spec/engine/rpgcode-functions.md#e-55"] },
+  call: () => ({ value: null, effects: [{ kind: "state-write", section: "engine", args: ["over"] }] }),
+};
+const LIFECYCLE_QUIT: BuiltinSpec = {
+  name: "quitgame", aliases: ["dos", "windows"], params: [],
+  doc: { summary: "Quit the game.", behaviour: "Post one quit request to the runner and return immediately.", groups: ["program-flow-errors-debugging-25", "reawakened-additions-not-part-of-the-282-legacy-catalogue"], waits: { kind: "never", summary: "Does not wait." }, tags: ["legacy"], see: ["docs/spec/engine/main-loop-and-startup.md#e-06"] },
+  call: () => ({ value: null, effects: [{ kind: "state-write", section: "engine", args: ["quit"] }] }),
+};
+const LIFECYCLE_COMMANDS: readonly BuiltinSpec[] = [
+  LIFECYCLE_RESET, LIFECYCLE_MAIN_FILE, LIFECYCLE_GONE, LIFECYCLE_OVER, LIFECYCLE_QUIT, noArgs("win"), noArgs("start"), noArgs("godos"),
+];
+
 const WORLD_COMMANDS: readonly BuiltinSpec[] = [
   GET_NAME, PUT, LAYER_PUT, tileGetter("getboardtile", "boardgettile"), TILE_TYPE_GET, TILE_TYPE, noArgs("animatedtiles"), noArgs("parallax"), AMBIENT,
   GET_VECTOR, SET_VECTOR, GET_VECTOR_POINT, SET_VECTOR_POINT, GET_PROGRAM, SET_PROGRAM, GET_PROGRAM_POINT, SET_PROGRAM_POINT, PRG,
   noArgs("setconstants"), noArgs("underarrow"),
   GET_CORNER, CAMERA_PAN_TO, CAMERA_FOLLOW, CAMERA_RESET, CAMERA_SHAKE, SEND,
+  ...LIFECYCLE_COMMANDS,
 ];
 
 /** Apply a recorded world or camera effect; exported for engine and host-owned tests. */
