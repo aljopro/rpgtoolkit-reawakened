@@ -94,6 +94,27 @@ test("iso2d blits leave pixels outside the exact diamond transparent", () => {
   equal(result.rgba[(31 * 64 + 32) * 4], 255);
 });
 
+test("a tile index selects the 64-pixel diamond of an .iso tileset and the 32-pixel tile of a .tst tileset", () => {
+  const strip = (tileWidth: number): { w: number; h: number; rgba: Uint8Array } => {
+    const rgba = new Uint8Array(tileWidth * 2 * 32 * 4);
+    for (let y = 0; y < 32; y += 1) {
+      for (let x = 0; x < tileWidth * 2; x += 1) rgba.set([x < tileWidth ? 10 : 200, 0, 0, 255], (y * tileWidth * 2 + x) * 4);
+    }
+    return { w: tileWidth * 2, h: 32, rgba };
+  };
+  for (const [name, tileWidth] of [["tiles/a.iso", 64], ["tiles/a.tst", 32]] as const) {
+    const key = assetKey(name);
+    const result = rasterize({
+      tick: 0, width: tileWidth, height: 32, commands: [
+        { kind: "blit", source: { asset: key, tile: 2 }, src: { x: 0, y: 0, w: tileWidth, h: 32 }, dst: { x: 0, y: 0, w: tileWidth, h: 32 },
+          key: null, tint: { r: 0, g: 0, b: 0 }, alpha: 255, blend: "normal", iso2d: false },
+      ],
+    }, new Map([[key, strip(tileWidth)]]));
+    equal(result.error, null, name);
+    equal(result.rgba[0], 200, name);
+  }
+});
+
 test("iso2d uses the documented half-up source coordinates at diamond edges", () => {
   const key = assetKey("test/iso-edge");
   const rgba = new Uint8Array(32 * 32 * 4);

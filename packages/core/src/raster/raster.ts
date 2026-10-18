@@ -163,9 +163,10 @@ function drawEllipse(target: TargetEntry, command: EllipseCommand): void {
   }
 }
 
+/** A tileset texture is a strip of tiles 32 pixels apart, or 64 for the diamonds of an `.iso` tileset. */
 function sourceOffset(command: BlitCommand): number {
   if (!("asset" in command.source) || command.source.tile === null) return 0;
-  return (command.source.tile - 1) * 32;
+  return (command.source.tile - 1) * (command.source.asset.endsWith(".iso") ? 64 : 32);
 }
 
 function isoSource(command: BlitCommand, x: number, y: number): [number, number] | null {
