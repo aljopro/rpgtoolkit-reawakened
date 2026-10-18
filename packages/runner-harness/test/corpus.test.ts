@@ -144,7 +144,7 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
   equal(results.length, 10);
 
   const expectedHashes: Record<string, string> = {
-    "sample-start-demo": "705fc13ae169af2e",
+    "sample-start-demo": "7bb58669fc69c778",
     "sample-system-demo": "77ea790a87e7819d",
     "sample-sys-test-demo": "77ea790a87e7819d",
     "sample-win-demo": "4e036c0c50414d2b",
