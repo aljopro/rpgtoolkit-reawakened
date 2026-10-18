@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent 2-D and isometric board oracle for tickets 4.4 and 4.17.
+"""Independent 2-D, isometric and lit-board oracle for tickets 4.4, 4.17 and 4.33.
 
 This module deliberately imports only Pillow and the format readers published in
 ``docs/spec/tools/rpgtk_formats.py``. It consumes versioned JSON scene data and
@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import math
 import re
 import sys
 from pathlib import Path
@@ -120,7 +121,7 @@ def board_model(path: Path) -> dict[str, Any]:
             model["lights"][-1]["nodes"].append([value, 0])
         elif field.startswith("  node[") and field.endswith(".y"):
             model["lights"][-1]["nodes"][-1][1] = value
-        elif field in ("r", "g", "b") and model["lights"] and model["lights"][-1]["nodes"]:
+        elif field in ("  r", "  g", "  b") and model["lights"] and model["lights"][-1]["nodes"]:
             # Colour records follow nodes; parse them as triples in a side list.
             colors = model["lights"][-1]["colors"]
             if not colors or len(colors[-1]) == 3:
@@ -150,6 +151,100 @@ def board_model(path: Path) -> dict[str, Any]:
             if i + 3 < len(values): model["shades"].append(values[i:i + 4])
     return model
 
+
+FIXED = 1_000_000
+MAX_TINT = 1020
+
+
+def _clamp(value: int, minimum: int, maximum: int) -> int:
+    return max(minimum, min(maximum, value))
+
+
+def _interpolate(start: int, end: int, weight: int) -> int:
+    return start + int((end - start) * weight / FIXED)
+
+
+def _colour_at(colours: list[list[int]], weight: int) -> tuple[int, int, int]:
+    edge = colours[0] if colours else [0, 0, 0]
+    centre = colours[1] if len(colours) > 1 else edge
+    return tuple(_clamp(_interpolate(edge[i], centre[i], weight), -255, 255) for i in range(3))
+
+
+def _projection(point: tuple[int, int], start: tuple[int, int], end: tuple[int, int]) -> int:
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length_squared = dx * dx + dy * dy
+    if length_squared <= 0:
+        return 0
+    numerator = (point[0] - start[0]) * dx + (point[1] - start[1]) * dy
+    return _clamp(int(numerator * FIXED / length_squared), 0, FIXED)
+
+
+def _ellipse_weight(light: dict[str, Any], point: tuple[int, int]) -> int | None:
+    nodes = light["nodes"]
+    if len(nodes) < 3:
+        return None
+    centre, x_radius_point, y_radius_point = nodes[:3]
+    x_radius = abs(x_radius_point[0] - centre[0]) or abs(x_radius_point[1] - centre[1])
+    y_radius = abs(y_radius_point[1] - centre[1]) or abs(y_radius_point[0] - centre[0])
+    dx, dy = abs(point[0] - centre[0]), abs(point[1] - centre[1])
+    if x_radius == 0 and y_radius == 0:
+        return FIXED if dx == 0 and dy == 0 else None
+    if x_radius == 0 and dx != 0:
+        return None
+    if y_radius == 0 and dy != 0:
+        return None
+    rx = 0 if x_radius == 0 else dx * FIXED / x_radius
+    ry = 0 if y_radius == 0 else dy * FIXED / y_radius
+    distance = int(math.sqrt(rx * rx + ry * ry))
+    return None if distance > FIXED else FIXED - distance
+
+
+def _point_on_segment(point: tuple[int, int], a: list[int], b: list[int]) -> bool:
+    cross = (point[0] - a[0]) * (b[1] - a[1]) - (point[1] - a[1]) * (b[0] - a[0])
+    return cross == 0 and min(a[0], b[0]) <= point[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= point[1] <= max(a[1], b[1])
+
+
+def _inside_polygon(point: tuple[int, int], polygon: list[list[int]]) -> bool:
+    if len(polygon) < 3:
+        return True
+    inside = False
+    for index, a in enumerate(polygon):
+        b = polygon[index - 1]
+        if _point_on_segment(point, a, b):
+            return True
+        if (a[1] > point[1]) != (b[1] > point[1]):
+            left = (point[0] - a[0]) * (b[1] - a[1])
+            right = (b[0] - a[0]) * (point[1] - a[1])
+            if (b[1] > a[1] and left < right) or (b[1] < a[1] and left > right):
+                inside = not inside
+    return inside
+
+
+def _light_tint(light: dict[str, Any], point: tuple[int, int]) -> tuple[int, int, int] | None:
+    if light["type"] == 0:
+        weight = _ellipse_weight(light, point)
+        return None if weight is None else _colour_at(light["colors"], weight)
+    nodes = light["nodes"]
+    if len(nodes) < 2:
+        return None
+    if light["type"] == 2 and not _inside_polygon(point, nodes[2:]):
+        return None
+    return _colour_at(light["colors"], _projection(point, nodes[0], nodes[1]))
+
+
+def _baked_light_records(model: dict[str, Any], width: int, height: int) -> list[list[int]]:
+    cells: list[list[int]] = []
+    for y in range(height):
+        for x in range(width):
+            point = (x * 32 + 16, y * 32 + 16)
+            total = [0, 0, 0]
+            for light in model["lights"]:
+                contribution = _light_tint(light, point)
+                if contribution is not None:
+                    for channel in range(3):
+                        total[channel] += contribution[channel]
+            cells.append([1, *(_clamp(value, -MAX_TINT, MAX_TINT) for value in total)])
+    return cells
 
 _palette: list[tuple[int, int, int]] | None = None
 
@@ -314,6 +409,10 @@ def render(scene: dict[str, Any]) -> Image.Image:
     cells = model["cells"]
     include = scene["view"]["include"]
     ambient = tuple(scene["ambient"][i] + model.get(("ambient r", "ambient g", "ambient b")[i], 0) for i in range(3))
+    if include["shading"] and model["lights"]:
+        # Match the engine's load-time bake: source light objects disappear and
+        # their clamped additive contribution becomes shading layer zero.
+        model["shades"].extend(_baked_light_records(model, model["sizeX"], model["sizeY"]))
     rotated = model["coordType"] & 3 == 2
     iso = model["coordType"] & 3 in (1, 2)
     grid_width = model["sizeX"] + model["sizeY"] if rotated else model["sizeX"]
@@ -409,7 +508,8 @@ def check() -> list[str]:
     ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
     entries = ledger.get("goldens")
     if not isinstance(entries, list): return ["ledger.goldens must be a list"]
-    committed = {path.name for path in PNG_DIR.glob("*.png")}
+    # Other reference PNGs (for example the bitmap-font pangram) are not board scenes.
+    committed = {path.name for path in PNG_DIR.glob("S-*.png")}
     listed = set()
     for entry in entries:
         if not isinstance(entry, dict) or not all(k in entry for k in ("path", "class", "gating", "producer")):

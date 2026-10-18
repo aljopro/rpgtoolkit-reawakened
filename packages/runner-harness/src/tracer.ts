@@ -15,6 +15,11 @@ export type TracerResult = { readonly scene: string; readonly drawList: DrawList
 function scenePath(path: string): string {
   if (path.includes("/Boards/")) return `Boards/${path.split("/Boards/")[1] ?? ""}`;
   if (path.includes("/Tiles/")) return `Tiles/${path.split("/Tiles/")[1] ?? ""}`;
+  if (path.includes("/fixtures/authored/")) {
+    const basename = path.split("/").at(-1) ?? path;
+    if (basename.endsWith(".brd")) return `Boards/${basename}`;
+    if (basename.endsWith(".tst") || basename.endsWith(".iso")) return `Tiles/${basename}`;
+  }
   return path;
 }
 
@@ -35,8 +40,8 @@ export function runTracerScene(scene: TracerScene, files: ReadonlyMap<string, Ui
     const records = report.requests.filter((request) => request.kind === "asset").map((request) => ({ tick: report.tickAfter, event: { kind: "asset" as const, reqId: request.reqId, bytes: available.get(request.key) ?? null } }));
     report = engine.advance(0, records);
   }
-  if (report.loading) return { scene: scene.name, drawList: engine.drawList(0), drawHash: "", stateHash: report.stateHash, pixels: new Uint8Array(), png: new Uint8Array(), error: "engine remained loading after asset replies" };
-  const drawList = engine.drawList(0);
+  if (report.loading) return { scene: scene.name, drawList: engine.drawList(0, scene.view.include), drawHash: "", stateHash: report.stateHash, pixels: new Uint8Array(), png: new Uint8Array(), error: "engine remained loading after asset replies" };
+  const drawList = engine.drawList(0, scene.view.include);
   const textures = new Map<AssetKey, DecodedTexture>();
   for (const [key, bytes] of available) {
     if (!key.endsWith(".tst") && !key.endsWith(".iso")) continue;

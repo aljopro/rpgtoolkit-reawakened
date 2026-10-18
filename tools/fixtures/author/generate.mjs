@@ -450,7 +450,7 @@ const i32 = (value) => le32(value);
  * The parser's strings are NUL-terminated CP1252 and all numeric fields are
  * little-endian signed values.
  */
-function authoredBoard({ sizeX, sizeY, sizeL, coordType, lut, cells, shades, start = [1, 1, 1] }) {
+function authoredBoard({ sizeX, sizeY, sizeL, coordType, lut, cells, shades, lights = [], ambient = [0, 0, 0], start = [1, 1, 1] }) {
   const grid = (coordType & 3) === 2 ? sizeX + sizeY : sizeX;
   const gridHeight = (coordType & 3) === 2 ? grid : sizeY;
   const total = grid * gridHeight * sizeL;
@@ -476,7 +476,15 @@ function authoredBoard({ sizeX, sizeY, sizeL, coordType, lut, cells, shades, sta
     for (const [count, r, g, b] of shade.runs) out.push(i16(count), i16(r), i16(g), i16(b));
   }
   out.push(
-    i16(-1), // lights
+    lights.length - 1 < 0 ? i16(-1) : i16(lights.length - 1), // light upper bound
+  );
+  for (const light of lights) {
+    out.push(i32(light.layer), i32(light.type), i16(light.nodes.length - 1));
+    for (const [x, y] of light.nodes) out.push(i32(x), i32(y));
+    out.push(i16(light.colours.length - 1));
+    for (const colour of light.colours) out.push(i16(colour.r), i16(colour.g), i16(colour.b));
+  }
+  out.push(
     i16(-1), // vectors
     i16(-1), // programs
     i16(-1), // sprites
@@ -488,7 +496,7 @@ function authoredBoard({ sizeX, sizeY, sizeL, coordType, lut, cells, shades, sta
     zstr(""), i32(0), i32(0), // background image/type/colour
     zstr(""), zstr(""), zstr(""), // music, enter program, battle background
     i16(-1), i16(0), i16(0), // battle skill/allow battles/disable saving
-    i16(0), i16(0), i16(0), // board ambient
+    i16(ambient[0]), i16(ambient[1]), i16(ambient[2]),
     i16(start[0]), i16(start[1]), i16(start[2]),
   );
   return concat(out);
@@ -523,8 +531,49 @@ const ROTATED_BOARD = authoredBoard({
   start: [2, 1, 1],
 });
 
+// A flat, authored 24-bit tileset keeps the light oracle readable: tile 1 is
+// mid-grey and tiles 2-5 form a coloured strip. None is the transparent key.
+const LIGHT_COLOURS = [[128, 128, 128], [220, 64, 64], [64, 196, 80], [72, 96, 220], [224, 176, 48]];
+const LIGHT_TST = tileset(20, 2, 16, 3, (_k, tile) => LIGHT_COLOURS[tile] ?? LIGHT_COLOURS[0], LIGHT_COLOURS.length);
+const LIGHT_LUT = ["", ...LIGHT_COLOURS.map((_colour, tile) => `light-oracle.tst${tile + 1}`)];
+const LIGHT_CELLS = Array.from({ length: 32 }, (_unused, index) => [index, index < 8 ? 2 + (index % 4) : 1]);
+const asRgb = ([r, g, b]) => ({ r, g, b });
+const ellipseLight = (edge, centre) => ({ layer: 1, type: 0, nodes: [[128, 64], [224, 64], [128, 112]], colours: [asRgb(edge), asRgb(centre)] });
+const gradientLight = (start, end) => ({ layer: 1, type: 1, nodes: [[0, 16], [256, 112]], colours: [asRgb(start), asRgb(end)] });
+const clippedGradientLight = (start, end) => ({
+  layer: 1,
+  type: 2,
+  nodes: [[0, 112], [256, 16], [64, 16], [192, 16], [192, 112], [64, 112]],
+  colours: [asRgb(start), asRgb(end)],
+});
+const LIGHT_BOARD_BASE = { sizeX: 8, sizeY: 4, sizeL: 1, coordType: 0, lut: LIGHT_LUT, cells: LIGHT_CELLS, shades: [] };
+const LIGHT_ELLIPSE_BOARD = authoredBoard({ ...LIGHT_BOARD_BASE, lights: [ellipseLight([-80, -40, -20], [80, 120, 40])] });
+const LIGHT_GRADIENT_BOARD = authoredBoard({ ...LIGHT_BOARD_BASE, lights: [gradientLight([-70, 20, -40], [90, -20, 70])] });
+const LIGHT_CLIPPED_BOARD = authoredBoard({ ...LIGHT_BOARD_BASE, lights: [clippedGradientLight([-30, -80, 40], [110, 60, -40])] });
+const LIGHT_OVERLAP_BOARD = authoredBoard({
+  ...LIGHT_BOARD_BASE,
+  lights: [
+    ellipseLight([20, 0, 40], [180, 140, 180]),
+    gradientLight([80, 30, 0], [80, 30, 0]),
+    ellipseLight([255, 255, 255], [255, 255, 255]),
+  ],
+});
+const LIGHT_NIGHT_BOARD = authoredBoard({
+  ...LIGHT_BOARD_BASE,
+  ambient: [-110, -110, -110],
+  lights: [ellipseLight([0, 0, 0], [130, 130, 130])],
+});
+
+
 const AUTHORED = {
   // Authored from spec, unverified against a real file (no detail-4 sample
+  "light-oracle.tst": LIGHT_TST,
+  "light-oracle-ellipse.brd": LIGHT_ELLIPSE_BOARD,
+  "light-oracle-gradient.brd": LIGHT_GRADIENT_BOARD,
+  "light-oracle-clipped.brd": LIGHT_CLIPPED_BOARD,
+  "light-oracle-overlap.brd": LIGHT_OVERLAP_BOARD,
+  "light-oracle-night.brd": LIGHT_NIGHT_BOARD,
+
   // exists in the archive). Two tiles pin the per-tile offset(docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso).
   "detail4.tst": tileset(20, 4, 16, 1, palettePixel, 2),
   // Authored from spec, unverified against a real file (no detail-5 sample).
@@ -771,6 +820,51 @@ const ORACLE_SCENES = {
       camera: [999, 999],
       include: { shading: true, images: false, sprites: true },
     },
+    tick: 0,
+  },
+  "S-LIGHT-ELLIPSE.json": {
+    schema: 1,
+    name: "S-LIGHT-ELLIPSE",
+    boardFiles: ["packages/core/test/fixtures/authored/light-oracle-ellipse.brd", "packages/core/test/fixtures/authored/light-oracle.tst"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: { viewport: [256, 128], camera: [0, 0], include: { shading: true, images: false, sprites: false } },
+    tick: 0,
+  },
+  "S-LIGHT-GRADIENT.json": {
+    schema: 1,
+    name: "S-LIGHT-GRADIENT",
+    boardFiles: ["packages/core/test/fixtures/authored/light-oracle-gradient.brd", "packages/core/test/fixtures/authored/light-oracle.tst"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: { viewport: [256, 128], camera: [0, 0], include: { shading: true, images: false, sprites: false } },
+    tick: 0,
+  },
+  "S-LIGHT-CLIPPED.json": {
+    schema: 1,
+    name: "S-LIGHT-CLIPPED",
+    boardFiles: ["packages/core/test/fixtures/authored/light-oracle-clipped.brd", "packages/core/test/fixtures/authored/light-oracle.tst"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: { viewport: [256, 128], camera: [0, 0], include: { shading: true, images: false, sprites: false } },
+    tick: 0,
+  },
+  "S-LIGHT-OVERLAP.json": {
+    schema: 1,
+    name: "S-LIGHT-OVERLAP",
+    boardFiles: ["packages/core/test/fixtures/authored/light-oracle-overlap.brd", "packages/core/test/fixtures/authored/light-oracle.tst"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: { viewport: [256, 128], camera: [0, 0], include: { shading: true, images: false, sprites: false } },
+    tick: 0,
+  },
+  "S-LIGHT-NIGHT.json": {
+    schema: 1,
+    name: "S-LIGHT-NIGHT",
+    boardFiles: ["packages/core/test/fixtures/authored/light-oracle-night.brd", "packages/core/test/fixtures/authored/light-oracle.tst"],
+    sprites: [],
+    ambient: [0, 0, 0],
+    view: { viewport: [256, 128], camera: [0, 0], include: { shading: true, images: false, sprites: false } },
     tick: 0,
   },
 };
