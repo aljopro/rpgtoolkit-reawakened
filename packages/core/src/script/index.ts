@@ -111,6 +111,8 @@ export {
 } from "./values.ts";
 export { CORE_PLUGIN } from "./builtins.ts";
 export { RENDER_PLUGIN } from "./packs/render.ts";
+export { UI_COMMANDS, UI_PLUGIN, applyUiEffect } from "./packs/ui.ts";
+export { GRAPHICS_COMMANDS, GRAPHICS_PLUGIN } from "./packs/graphics.ts";
 export { WORLD_PLUGIN } from "./packs/world.ts";
 export type { Arg, BuiltinDoc, BuiltinSpec, DocExample, DocReturns, DocTag, DocThrow, DocWait, ParamDoc, ParamDocValue, ParamSpec, RunnerSupport } from "./builtins.ts";
 export {
@@ -211,7 +213,9 @@ export {
   pollMovement,
   pollRequest,
   pollSleep,
+  pollRenderMsgBox,
   REQUEST_TIMEOUT_TEXT,
+  UI_WAIT_KIND_RESOLVERS,
   WAIT_KIND_RESOLVERS,
 } from "./waits.ts";
 export type { ScriptServices, ScriptStatus } from "./vm.ts";

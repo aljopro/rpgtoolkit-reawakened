@@ -1,6 +1,12 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import { ENGINE_PHASES, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard } from "../src/index.ts";
+import { ENGINE_PHASES, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board } from "../src/index.ts";
+
+function boardBytes(board: Board): Uint8Array {
+  const encoded = writeBoard(board);
+  if (!encoded.ok) throw new Error(encoded.error.message);
+  return encoded.value;
+}
 
 test("createEngine exposes its initial board request at advance(0) and missing bytes unblock loading", () => {
   const engine = createEngine({ seed: 7, assetIndex: createAssetIndex(["Boards/start.brd"]), assetRoot: PACKAGE_ROOT, initialBoard: "start.brd", width: 512, height: 384, maxTicks: 8 });
@@ -156,4 +162,127 @@ test("step resume executes one VM instruction and pauses again", () => {
   equal(stepped.ticksRun, 0);
   equal(stepped.tickAfter, 0);
   equal(stepped.paused?.thread, 1);
+});
+
+function authoredBmp(): Uint8Array {
+  const bytes = new Uint8Array(62);
+  bytes[0] = 0x42; bytes[1] = 0x4d;
+  const put32 = (at: number, value: number): void => {
+    bytes[at] = value & 255; bytes[at + 1] = (value >>> 8) & 255; bytes[at + 2] = (value >>> 16) & 255; bytes[at + 3] = (value >>> 24) & 255;
+  };
+  const put16 = (at: number, value: number): void => { bytes[at] = value & 255; bytes[at + 1] = (value >>> 8) & 255; };
+  put32(2, 62); put32(10, 54); put32(14, 40); put32(18, 2); put32(22, 1); put16(26, 1); put16(28, 24); put32(34, 8);
+  bytes.set([0, 0, 255, 0, 255, 0, 0, 0], 54);
+  return bytes;
+}
+
+function authoredBoard(backgroundImage = ""): Uint8Array {
+  const empty = createEmptyBoard();
+  const board = { ...empty, properties: { ...empty.properties, backgroundImage } };
+  const encoded = writeBoard(board);
+  if (!encoded.ok) throw new Error(encoded.error.message);
+  return encoded.value;
+}
+
+function pixelsAfter(command: string, boardBytes = authoredBoard()): Uint8Array {
+  const engine = createEngine({
+    seed: 19,
+    assetIndex: createAssetIndex(["Boards/test.brd", "Bitmap/pixel.bmp"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 4,
+    height: 2,
+    maxTicks: 20,
+    program: `createcanvas(4, 2, c)\n${command}\nend()\n`,
+  });
+  let result = engine.advance(0, []);
+  for (let step = 0; step < 8; step += 1) {
+    const events = result.requests
+      .filter((request) => request.kind === "asset")
+      .map((request) => ({ tick: result.tickAfter, event: { kind: "asset" as const, reqId: request.reqId, bytes: request.key === "boards/test.brd" ? boardBytes : authoredBmp() } }));
+    result = engine.advance(1, events);
+    if (result.requests.length === 0 && !result.loading) break;
+  }
+  const surface = engine.surfacePixels(1 as never, 1) ?? engine.surfacePixels(1 as never, 2) ?? engine.surfacePixels(1 as never, 0);
+  if (surface === null) throw new Error("expected rendered screen pixels");
+  return surface.rgba;
+}
+
+test("image graphics command families apply exact decoded pixels", () => {
+  deepEqual(pixelsAfter('bitmap("pixel.bmp", c)').slice(0, 8), new Uint8Array([255, 0, 0, 255, 255, 0, 0, 255]));
+  deepEqual(pixelsAfter('setimage("pixel.bmp", 1, 0, 2, 1, c)').slice(4, 12), new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]));
+  deepEqual(pixelsAfter('setimagetransparent("pixel.bmp", 0, 0, 2, 1, 255, 0, 0, c)').slice(0, 8), new Uint8Array([0, 0, 0, 0, 0, 255, 0, 255]));
+  deepEqual(pixelsAfter('setimagetranslucent("pixel.bmp", 0, 0, 2, 1, c)').slice(0, 8), new Uint8Array([128, 0, 0, 255, 0, 128, 0, 255]));
+  deepEqual(pixelsAfter('setimageadditive("pixel.bmp", 0, 0, 2, 1, 50, c)').slice(0, 8), new Uint8Array([127, 0, 0, 255, 0, 127, 0, 255]));
+});
+
+test("board preview image pixels are applied after the image reply", () => {
+  const rgba = pixelsAfter('viewbrd("test.brd", 0, 0, c)', authoredBoard("pixel.bmp"));
+  deepEqual(rgba.slice(0, 8), new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]));
+});
+
+test("missing image reply is located and leaves the screen unchanged", () => {
+  const engine = createEngine({ seed: 19, assetIndex: createAssetIndex(["Boards/test.brd", "Bitmap/pixel.bmp"]), assetRoot: PACKAGE_ROOT, initialBoard: "test.brd", width: 4, height: 2, maxTicks: 20, program: 'createcanvas(4, 2, c)\nsetimage("pixel.bmp", 0, 0, 2, 1, c)\nend()\n' });
+  let result = engine.advance(0, []);
+  for (let step = 0; step < 6; step += 1) {
+    const events = result.requests.filter((request) => request.kind === "asset").map((request) => ({ tick: result.tickAfter, event: { kind: "asset" as const, reqId: request.reqId, bytes: request.key === "boards/test.brd" ? authoredBoard() : null } }));
+    result = engine.advance(1, events);
+    if (result.diagnostics.some((diagnostic) => diagnostic.code === "asset.missing")) break;
+  }
+  const surface = engine.surfacePixels(1 as never, 1) ?? engine.surfacePixels(1 as never, 2) ?? engine.surfacePixels(1 as never, 0);
+  if (surface === null) throw new Error("expected unchanged screen pixels");
+  deepEqual(surface.rgba, new Uint8Array(4 * 2 * 4));
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "asset.missing" && diagnostic.file === "bitmap/pixel.bmp"), true);
+});
+
+test("engine classifies .tbm board-image dependencies as tile requests", () => {
+  const empty = createEmptyBoard();
+  const board: Board = {
+    ...empty,
+    images: [{
+      file: "tiles.tbm",
+      left: 0,
+      top: 0,
+      layer: 0,
+      drawType: 0,
+      transparent: { r: 255, g: 0, b: 255 },
+      reserved: 0,
+    }],
+  };
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd", "Bitmap/tiles.tbm"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 1,
+  });
+  const initial = engine.advance(0, []);
+  const boardRequest = initial.requests[0];
+  if (boardRequest?.kind !== "asset") throw new Error("expected board request");
+  const loaded = engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: boardRequest.reqId, bytes: boardBytes(board) } }]);
+  const imageRequest = loaded.requests[0];
+  if (imageRequest?.kind !== "asset") throw new Error("expected tile bitmap request");
+  equal(imageRequest.key, "bitmap/tiles.tbm");
+});
+
+test("engine classifies .tan tile-animation dependencies as tile requests", () => {
+  const board: Board = { ...createEmptyBoard(), lut: ["anim.tan"] };
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd", "Tiles/anim.tan"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 1,
+  });
+  const initial = engine.advance(0, []);
+  const boardRequest = initial.requests[0];
+  if (boardRequest?.kind !== "asset") throw new Error("expected board request");
+  const loaded = engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: boardRequest.reqId, bytes: boardBytes(board) } }]);
+  const animationRequest = loaded.requests[0];
+  if (animationRequest?.kind !== "asset") throw new Error("expected tile animation request");
+  equal(animationRequest.key, "tiles/anim.tan");
 });

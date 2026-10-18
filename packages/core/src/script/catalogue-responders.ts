@@ -18,6 +18,8 @@ import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
 import type { SectionKey } from "../save/state.ts";
 import { effectCommand } from "./packs/common.ts";
+import { UI_COMMANDS } from "./packs/ui.ts";
+import { GRAPHICS_COMMANDS } from "./packs/graphics.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
 
 const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
@@ -50,6 +52,27 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
     groups: ["message-window-text-fonts-30"],
     waits: { kind: "until-input", summary: "Yields until a cursor-map key selects a button." },
     see: ["docs/spec/engine/rpgcode-functions.md#reawakened-msgbox-layout"],
+  },
+  animation: {
+    summary: "Play an animation at pixel x,y. If animation() is called in a thread, it may be looped using the last parameter and returns an id that can be used to end the animation.",
+    behaviour: "Starts the named .anm or animated GIF at the given pixel position. Technically, frames advance every fixed delay tick, a true loop flag keeps the animation running until endAnimation, and the call returns a deterministic animation id without waiting.",
+    groups: ["graphics-canvases-animation-video-31"],
+    waits: { kind: "never", summary: "Starts playback without waiting." },
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
+  },
+  sizedanimation: {
+    summary: "Play a resized animation at pixel x,y. If sizedAnimation() is called in a thread, it may be looped using the last parameter and returns an id that can be used to end...",
+    behaviour: "Starts the named .anm or animated GIF at the given pixel position and size. Technically, height precedes width as in the legacy call, the first-page GIF delay is used, a true loop flag keeps the animation running until endAnimation, and the call returns a deterministic animation id without waiting.",
+    groups: ["graphics-canvases-animation-video-31"],
+    waits: { kind: "never", summary: "Starts playback without waiting." },
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
+  },
+  endanimation: {
+    summary: "End a multitasking animation.",
+    behaviour: "Stops the animation with the supplied id. Technically, an unknown id is ignored and the call completes immediately.",
+    groups: ["graphics-canvases-animation-video-31"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
   },
   fade: {
     summary: "Perform a fade using the current colour. There are several different types of fades.",
@@ -169,10 +192,42 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
   },
 };
 
+const UI_NATIVE_SUMMARIES: Readonly<Record<string, string>> = {
+  mwincls: "Clear and hide the message window.",
+  show: "Show the message window.",
+  mbox: "Show the message window.",
+  wingraphic: "Set the message window background image.",
+  font: "Load a true type font. TK2 fonts are not supported.",
+  wincolor: "Set the message window's colour using a DOS code.",
+  wincolorrgb: "Set the message window's colour.",
+  setmwintranslucency: "Set the translucency of the message window. 0% is invisible; 100% is opaque.",
+  pixeltext: "Displays text on the screen using pixel coordinates.",
+  fontsize: "Set the font size.",
+  bold: "Toggle emboldening of text.",
+  italics: "Toggle italicizing of text.",
+  underline: "Toggle underlining of text.",
+  color: "Change to a DOS colour.",
+  colorrgb: "Change the active colour to an RGB value.",
+  getcolor: "Get the current colour.",
+  getfontsize: "Get the current font size.",
+  gettextwidth: "Get the width of a string of text in pixels, relative to the current font and size.",
+  gettextheight: "Get the height of a string of text in pixels, relative to the current font and size.",
+  print: "Write the specified string one line down from the last call to text().",
+  prompt: "Ask the player a question and return the result.",
+  statictext: "obsolete.",
+};
+
 function documentCommands(commands: readonly BuiltinSpec[]): readonly BuiltinSpec[] {
+  const uiDocs = new Map(UI_COMMANDS.flatMap((command) => command.doc === undefined ? [] : [[command.name, command.doc] as const]));
   return commands.map((command) => {
-    const doc = TICKET_4_29_DOCS[command.name];
-    return doc === undefined ? command : { ...command, doc };
+    const source = TICKET_4_29_DOCS[command.name] ?? uiDocs.get(command.name);
+    if (source === undefined) return command;
+    const summary = UI_NATIVE_SUMMARIES[command.name] ?? source.summary;
+    const obsolete = command.name === "mwinsize" || command.name === "statictext";
+    const doc = obsolete
+      ? { ...source, summary, replacedBy: { kind: "syntax" as const, text: "Use the fixed message-window commands instead." }, reason: "The Reawakened message window has fixed geometry and renders all text at once." }
+      : { ...source, summary };
+    return { ...command, doc };
   });
 }
 type Row = {
@@ -392,20 +447,17 @@ const PACK_CATALOGUE_FALLBACKS: readonly BuiltinSpec[] = [
   effectCommand("camerafollow", "camera"),
   effectCommand("camerareset", "camera"),
   effectCommand("camerashake", "fx", "draw-audio-cue"),
-  effectCommand("drawline", "surfaces"),
-  effectCommand("drawrect", "surfaces"),
-  effectCommand("fillrect", "surfaces"),
   effectCommand("text", "ui"),
   effectCommand("msgbox", "ui", "mixed"),
-  effectCommand("clear", "surfaces"),
   effectCommand("fade", "fx", "draw-audio-cue"),
-].map(fallbackDocumentation);
+].map(fallbackDocumentation).concat(GRAPHICS_COMMANDS, UI_COMMANDS.filter((command) => ["createcursormap", "cursormapadd", "cursormaprun", "killcursormap", "cursormaphand", "mousecursor"].includes(command.name)));
 
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
 
+const CATALOGUE_GRAPHICS_NAMES = new Set(GRAPHICS_COMMANDS.flatMap((command) => [command.name, ...command.aliases]));
 const CATALOGUE_OWNED_NAMES = new Set([
-  ...CATALOGUE_STUBS_PLUGIN.commands.map((command) => command.name),
-  ...CATALOGUE_RESPONDERS_PLUGIN.commands.map((command) => command.name),
+  ...CATALOGUE_STUBS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
+  ...CATALOGUE_RESPONDERS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
 ]);
 const CORE_FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
 
@@ -415,9 +467,9 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
   commands: [
-    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands),
+    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name))),
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
-      (command) => !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
+      (command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name) && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
     ),
     ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
   ],

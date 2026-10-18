@@ -27,12 +27,47 @@ export function pollSleep(view: WaitView, wait: Wait): WaitResult | null {
   return view.tick >= wait.until ? DONE : null;
 }
 
-/** `input.key`: resolve with the lowest unclaimed key at or after parkSeq. */
+/** `input.key`: resolve ordinary keys or cursor-map navigation/selection. */
 export function pollInputKey(view: WaitView, wait: Wait): WaitResult | null {
   if (wait.kind !== "input.key") return null;
+  const floor = wait.parkSeq ?? 0;
+  const claimed = new Set(view.claims ?? []);
+  const cursorMaps = (view.ui as { readonly cursorMaps?: readonly { readonly id: number; readonly points: readonly { readonly x: number; readonly y: number }[] }[] } | undefined)?.cursorMaps;
+  const map = wait.cursorMap === undefined ? undefined : cursorMaps?.find((entry) => entry.id === wait.cursorMap);
+  if (map !== undefined) {
+    const count = map.points.length;
+    if (count === 0) return null;
+    let selected = Math.max(0, Math.min(count - 1, Math.trunc(wait.cursorSelection ?? 0)));
+    const pointer = view.input?.pointer;
+    if (pointer !== undefined && pointer.buttons !== 0) {
+      let best = 0;
+      let distance = Number.POSITIVE_INFINITY;
+      for (let index = 0; index < map.points.length; index += 1) {
+        const point = map.points[index]!;
+        const dx = point.x - pointer.x;
+        const dy = point.y - pointer.y;
+        const candidate = dx * dx + dy * dy;
+        if (candidate < distance) { distance = candidate; best = index; }
+      }
+      return { value: best, ok: true };
+    }
+    if (view.input !== undefined) {
+      for (const key of view.input.keys) {
+        if (key.seq < floor || claimed.has(key.seq)) continue;
+        const normalized = key.name.toLowerCase();
+        if (normalized === "left" || normalized === "up") selected = (selected + count - 1) % count;
+        else if (normalized === "right" || normalized === "down") selected = (selected + 1) % count;
+        else if (normalized === "enter" || normalized === "return" || normalized === "space") return { value: selected, ok: true, claim: key.seq };
+        else if (/^[0-9]+$/.test(normalized)) {
+          const direct = Number(normalized);
+          if (direct >= 0 && direct < count) return { value: direct, ok: true, claim: key.seq };
+        } else continue;
+        wait.cursorSelection = selected;
+      }
+    }
+    return null;
+  }
   if (view.input !== undefined) {
-    const floor = wait.parkSeq ?? 0;
-    const claimed = new Set(view.claims ?? []);
     for (const key of view.input.keys) {
       if (key.seq < floor || claimed.has(key.seq)) continue;
       return { value: key.name, ok: true, claim: key.seq };
@@ -62,7 +97,37 @@ export function pollRequest(view: WaitView, wait: Wait): WaitResult | null {
   return null;
 }
 
-/** The kinds the VM itself owns: sleeps, input, movement and host requests. */
+/** Resolve the UI's prompt or button result from modal state or a key event. */
+export function pollRenderMsgBox(view: WaitView, wait: Wait): WaitResult | null {
+  if (wait.kind !== "render.msgbox") return null;
+  const modal = view.ui?.modal;
+  if (modal !== null && typeof modal === "object" && "result" in modal) {
+    const result = modal.result;
+    if (typeof result === "string" || typeof result === "number") return { value: result, ok: true };
+  }
+  if (view.input === undefined) return null;
+  const claimed = new Set(view.claims ?? []);
+  for (const key of view.input.keys) {
+    if (claimed.has(key.seq)) continue;
+    const normalized = key.name.toLowerCase();
+    if (wait.id === "prompt") {
+      if (normalized === "enter" || normalized === "return" || normalized === "space") return { value: key.char ?? "", ok: true, claim: key.seq };
+      continue;
+    }
+    const style = wait.payload[2] === 1 ? 1 : 0;
+    if (normalized === "yes" || normalized === "y") return { value: 6, ok: true, claim: key.seq };
+    if (normalized === "no" || normalized === "n") return { value: 7, ok: true, claim: key.seq };
+    if (normalized === "enter" || normalized === "return" || normalized === "space") return { value: style === 1 ? 6 : 1, ok: true, claim: key.seq };
+  }
+  return null;
+}
+
+/** UI-owned wait kinds, kept separate so hosts can extend the VM registry without duplicate registration. */
+export const UI_WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
+  { kind: "render.msgbox", poll: pollRenderMsgBox },
+];
+
+/** The VM-owned wait kinds. */
 export const WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "sleep", poll: pollSleep },
   { kind: "input.key", poll: pollInputKey },
@@ -95,8 +160,8 @@ export function createWaitPoll(resolvers: readonly WaitKindResolver[]): WaitPoll
   };
 }
 
-/** The default poll: the VM-owned kinds only. */
-export const defaultWaitPoll: WaitPoll = createWaitPoll(WAIT_KIND_RESOLVERS);
+/** The default poll for VM and UI-owned kinds. */
+export const defaultWaitPoll: WaitPoll = createWaitPoll([...WAIT_KIND_RESOLVERS, ...UI_WAIT_KIND_RESOLVERS]);
 
 /** A short plain description of a wait, for diagnostics (deadlock reports). */
 export function describeWait(wait: Wait): string {

@@ -1,10 +1,12 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
+  blitTexture,
   canvasGetScreen,
   colourSurface,
   createSurface,
   createSurfacesSection,
+  editSurface,
   getPixel,
   killSurface,
   readSurfacePixels,
@@ -42,6 +44,15 @@ test("surface ids are monotonic and colour surfaces are interned", () => {
   equal(getPixel(state, red, 0, 0)?.r, 255);
 });
 
+test("editing an interned colour surface invalidates its colour cache entry", () => {
+  const state = createSurfacesSection();
+  const red = colourSurface(state, { r: 255, g: 0, b: 0 });
+  equal(editSurface(state, red, (rgba) => { rgba[0] = 0; }), true);
+  const replacement = colourSurface(state, { r: 255, g: 0, b: 0 });
+  equal(replacement === red, false);
+  equal(getPixel(state, replacement, 0, 0)?.r, 255);
+});
+
 test("screen capture and slots round-trip through the save shape", () => {
   const state = createSurfacesSection(2, 1);
   const source = createSurface(state, 2, 1, new Uint8Array([1, 2, 3, 255, 4, 5, 6, 255]));
@@ -54,4 +65,17 @@ test("screen capture and slots round-trip through the save shape", () => {
   equal(replaceSurface(state, destination, 2, 1, new Uint8Array([0, 0, 0, 255, 0, 0, 0, 255])), 2);
   equal((saved as SurfaceId) > source, true);
   equal(destination !== saved, true);
+});
+
+test("decoded image blits preserve keys, alpha, scaling and one revision", () => {
+  const state = createSurfacesSection(3, 2);
+  const image = {
+    w: 2,
+    h: 1,
+    rgba: new Uint8Array([255, 0, 255, 255, 20, 40, 60, 255]),
+  };
+  equal(blitTexture(state, image, 0 as SurfaceId, 0, 0, 3, 1, { r: 255, g: 0, b: 255 }), true);
+  equal(state.entries["0"]?.rev, 1);
+  deepEqual(getPixel(state, 0 as SurfaceId, 0, 0), { r: 0, g: 0, b: 0 });
+  deepEqual(getPixel(state, 0 as SurfaceId, 2, 0), { r: 20, g: 40, b: 60 });
 });

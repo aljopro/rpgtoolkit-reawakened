@@ -18,6 +18,7 @@ export type InputView = {
   readonly held: { readonly [name: string]: boolean };
   readonly pointer: { readonly x: number; readonly y: number; readonly buttons: number };
   readonly focused: boolean;
+  readonly buttons?: readonly { readonly slot: number; readonly asset: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number }[];
 };
 
 export function createInputSection(): InputSection {

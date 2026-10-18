@@ -54,16 +54,27 @@ test("lifecycle built-ins emit reset, main-file, trigger, game-over and one shar
   for (const alias of ["quitgame", "dos", "windows"]) equal(call(alias).effects?.[0]?.args?.[0], "quit");
 });
 
-test("obsolete lifecycle built-ins raise catchable errors", () => {
+test("obsolete world built-ins reject every documented call form", () => {
   const state = createGameState({ seed: 12 });
   const services = createScriptServices(state, [{ definition: WORLD_PLUGIN }]);
-  for (const name of ["start", "godos", "win"]) {
+  const documentedCalls: readonly (readonly [string, readonly Arg[]])[] = [
+    ["start", [{ value: "main.gam", ref: null }]],
+    ["godos", [{ value: "echo", ref: null }]],
+    ["win", []],
+    ["animatedtiles", [{ value: 1, ref: null }]],
+    ["parallax", [{ value: 1, ref: null }]],
+    ["setconstants", [{ value: 1, ref: null }, { value: "name", ref: null }]],
+    ["underarrow", []],
+  ];
+  for (const [name, documentedArgs] of documentedCalls) {
     const spec = services.commands.get(name)?.spec;
     if (spec === undefined) throw new Error(`missing command ${name}`);
-    throws(
-      () => spec.call(services.view, [], () => ({ value: null })),
-      (error: unknown): error is ScriptError => error instanceof ScriptError && error.code === "builtin.obsolete",
-    );
+    for (const args of [[], documentedArgs] as readonly (readonly Arg[])[]) {
+      throws(
+        () => spec.call(services.view, args, () => ({ value: null })),
+        (error: unknown): error is ScriptError => error instanceof ScriptError && error.code === "builtin.obsolete",
+      );
+    }
   }
 });
 

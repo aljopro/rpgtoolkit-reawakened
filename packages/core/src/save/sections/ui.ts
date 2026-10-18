@@ -1,2 +1,124 @@
-/** Owner: core/render. */
-export type UiSection = Record<string, never>;
+/** Deterministic message-window, text and modal state (E-55/E-60). */
+
+import type { FontRef, Rgb } from "../../ports/draw.ts";
+import type { SurfaceId } from "../../ports/keys.ts";
+
+export type UiTextDraw = {
+  readonly x: number;
+  readonly y: number;
+  readonly cell: boolean;
+  readonly text: string;
+  readonly font: FontRef;
+  readonly rgb: Rgb;
+  readonly underline: boolean;
+};
+
+export type UiMessageWindow = {
+  readonly visible: boolean;
+  readonly text: string;
+  readonly color: Rgb;
+  readonly background: Rgb;
+  readonly graphic: string;
+  readonly translucency: number;
+};
+
+export type UiModal = {
+  readonly kind: "prompt" | "msgbox";
+  readonly text: string;
+  readonly title: string;
+  readonly style: number;
+  readonly textColor: Rgb;
+  readonly background: Rgb;
+  readonly graphic: string;
+  readonly selected: number;
+  readonly result: number | string | null;
+};
+
+export type UiCursorPoint = {
+  readonly x: number;
+  readonly y: number;
+};
+
+export type UiCursorMap = {
+  readonly id: number;
+  readonly points: UiCursorPoint[];
+  readonly selected: number;
+};
+
+export type UiCursorImage = {
+  readonly asset: string;
+  readonly x: number;
+  readonly y: number;
+  readonly hotspotX: number;
+  readonly hotspotY: number;
+  readonly transparent: Rgb;
+  readonly width: number;
+  readonly height: number;
+};
+
+export type UiCursorHand = {
+  readonly asset: string;
+  readonly stretch: boolean;
+  readonly width: number;
+  readonly height: number;
+};
+
+export type UiButton = {
+  readonly slot: number;
+  readonly asset: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+export type UiSection = {
+  font: FontRef;
+  underline: boolean;
+  color: Rgb;
+  message: UiMessageWindow;
+  draws: UiTextDraw[];
+  cursorX: number;
+  cursorY: number;
+  modal: UiModal | null;
+  backgroundSurface: SurfaceId | null;
+  backgroundRev: number;
+  cursorMaps?: UiCursorMap[];
+  nextCursorMapId?: number;
+  activeCursorMap?: number;
+  cursorHand?: UiCursorHand;
+  mouseCursor?: UiCursorImage | null;
+  buttons?: UiButton[];
+};
+
+const FALLBACK_FONT: FontRef = {
+  asset: "media/fonts/tkr-8x8.fnt" as FontRef["asset"],
+  size: 8,
+  bold: false,
+  italic: false,
+};
+const WHITE: Rgb = { r: 255, g: 255, b: 255 };
+const BLACK: Rgb = { r: 0, g: 0, b: 0 };
+
+/** Fresh UI state; the engine installs the matching colour surface after allocation. */
+export function createUiSection(): UiSection {
+  return {
+    font: FALLBACK_FONT,
+    underline: false,
+    color: WHITE,
+    message: {
+      visible: false,
+      text: "",
+      color: WHITE,
+      background: BLACK,
+      graphic: "",
+      translucency: 50,
+    },
+    draws: [],
+    cursorX: 0,
+    cursorY: 0,
+    modal: null,
+    backgroundSurface: null,
+    backgroundRev: 0,
+  };
+}

@@ -459,6 +459,21 @@ references = [
 ]
 
 [[entry]]
+id = 35
+type = "story"
+title = "Image-backed graphics applier and board preview pixels"
+description = "Completes the image-backed side of the graphics seam for `image`, `drawImage`, `drawImagePart`, `imagePut`, `imageLoad` and board-preview image paths. Decoded image assets arrive through the deterministic engine asset cache and are applied to core-owned surfaces as RGBA pixels; no host decoder enters core. The applier preserves surface revisions, reset safety and replayable draw-list sources."
+verify = "A program loads authored image fixtures and exercises every affected image command plus a 2D and isometric board preview; the decoded pixels reach the target screen or canvas exactly, cache-flush replay and save/restore produce identical pixels and hashes, and golden and per-command vector checks fail on a one-pixel change."
+covers = ["CAP-6"]
+after = [24, 11]
+hitl = false
+risk = "medium"
+references = [
+  "reference - docs/spec/engine/rpgcode-functions.md#e-56, docs/spec/engine/rpgcode-functions.md#e-58, docs/spec/engine/rpgcode-functions.md#e-63",
+  "reference - docs/spec/engine/main-loop-and-startup.md#e-57",
+]
+
+[[entry]]
 id = 25
 type = "story"
 title = "Cursor maps, mouse cursor, overlay order and debug overlays"
@@ -505,7 +520,7 @@ title = "Closing suite: the sample games boot and render headlessly"
 description = "One job over the fetched corpus (both 3.1 games and the six TK2 games): boots each through the real engine, advances a defined number of ticks with scripted input, rasterises the first board and a later frame to PNG, records state and draw-list hashes with epic 3's finish line (same state hash after N ticks), and files each PNG in the ledger as regression-baseline, offering the owner the chance to upgrade named frames to legacy-screenshot (reported, non-gating)."
 verify = "The suite passes on the fetched fixtures with committed baselines for each game, fails when any game's frame or hash drifts, and a game that cannot boot reports its diagnostic rather than a blank frame."
 covers = ["CAP-2", "CAP-6"]
-after = [27, "1.7", "2.11", "3.15", "16.4", "16.8", "16.9"]
+after = [27, 35, "1.7", "2.11", "3.15", "16.4", "16.8", "16.9"]
 hitl = false
 risk = "medium"
 references = [

@@ -18,10 +18,20 @@ export {
   type CameraShakeState,
   type CameraTrackingTarget,
 } from "./sections/camera.ts";
-export type { UiSection } from "./sections/ui.ts";
-export type { FxSection } from "./sections/fx.ts";
+export { createUiSection, type UiSection, type UiMessageWindow, type UiModal, type UiTextDraw, type UiCursorPoint, type UiCursorMap, type UiCursorImage, type UiCursorHand, type UiButton } from "./sections/ui.ts";
+export {
+  createFxSection,
+  type AnimationFrameState,
+  type AnimationState,
+  type EarthquakeState,
+  type FadeState,
+  type FxColor,
+  type FxSection,
+  type WipeState,
+  type ZoomState,
+} from "./sections/fx.ts";
 export type { RgbaSnapshot, SurfaceState, SurfacesSection } from "./sections/surfaces.ts";
-export type { InputSection } from "./sections/input.ts";
+export type { InputSection, InputButton } from "./sections/input.ts";
 export type { EngineSection } from "./sections/engine.ts";
 
 /** Owner: `core/sprites` (players, items, queues, facing). Filled by epic movement-triggers. */
