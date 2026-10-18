@@ -3,7 +3,7 @@ title: 'Movement, collision, trigger and gamepad rulings'
 type: 'feature'
 ticket: 1
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: 'd53cdd804d5f93525c2aa4e444bc848e75f550a5'
 risk: 'high'
 context:
