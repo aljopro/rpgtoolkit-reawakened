@@ -311,3 +311,53 @@ A tracker source via libopenmpt (§10) would be the first optional pack, and the
 **Breakdown impact (draft):**
 - Entry 6.1 writes the core-behaviour page and the runner protocol prose.
 - Entry 6.4a publishes the schema and the vector-based conformance kit beside the TypeScript binding.
+
+## 13. Standardized media commands and audio tracks (owner direction, 2026-10-18)
+
+**Status:** owner direction; the exact names, signatures and units are a proposal for entry 6.1 to rule (G7, docs first). Nothing is removed.
+
+**Direction.** Reawakened defines one standard family of media commands that covers everything an author wants to do with audio: load, play, stop, pause, resume and seek to a time. Audio plays on **tracks** so sound effects and background music layer instead of sharing one slot. Every legacy audio command keeps working and is marked **obsolete** in `docs/spec/engine/rpgcode-functions.md`, with a pointer to the standard command that replaces it.
+
+### Tracks
+
+- A track is a named, independent playback channel with its own asset, position, paused flag, loop flag and volume.
+- Two tracks always exist: `music` (the legacy background-music slot) and `sfx` (the legacy single sound-effect slot). Authors may create more by name (for example `ambience`, `voice`).
+- Tracks mix together; starting audio on one track never stops another. The master volume (`setvolume`) scales all tracks; each track also has its own volume.
+- Track state lives in `GameState.audio` as plain data (G1, AD-10), so it saves, restores and replays identically. Position advances on the fixed tick from the asset's known length; the runner never reports position back into core (G2, G3, AD-16).
+
+### Proposed standard commands
+
+| Command | Does | Waits? |
+|---|---|---|
+| `mediaLoad(track, file)` | Put a file on a track without playing it, so the first play does not stall (see §7). | no |
+| `mediaPlay(file[, track[, loop]])` | Play a file on a track (default `music`, which loops by default; `sfx` does not). Existing one-argument calls behave as today. | no |
+| `mediaStop([track])` | Stop a track and rewind it (default `music`). | no |
+| `mediaPause([track])` / `mediaResume([track])` | Pause and resume a track where it stopped. | no |
+| `mediaSeek(track, seconds)` | Jump to a time in the track. | no |
+| `mediaPosition(track[, &ret])` | Current time in the track, in seconds. | no |
+| `mediaPlaying(track[, &ret])` | Whether the track is playing (not stopped, not paused). | no |
+| `mediaVolume(track, percent)` | Set one track's volume, 0 to 100. | no |
+| `mediaWait([track])` | Wait until the track finishes (default `sfx`). Covers the 3.1.0 `mp3pause` behaviour. | yes |
+
+Seconds are converted to ticks through `core/time` (AD-2); help text follows the CLAUDE.md rule (plain terms first, then units, ticks, order and whether the script waits).
+
+### Legacy commands: obsolete, still working
+
+| Legacy command | Standard equivalent |
+|---|---|
+| `midiplay`, `playmidi`, `mediaplay(file)` | `mediaPlay(file)` on `music` |
+| `mediastop`, `mediarest`, `midirest` | `mediaStop()` on `music` (`midirest` is a stop, not a pause, per the spec row and round-8 Q1) |
+| `wav`, `mp3` | `mediaPlay(file, "sfx")` |
+| `wavstop` | `mediaStop("sfx")` |
+| `mp3pause(file)` | `mediaPlay(file, "sfx")`; followed by `mediaWait("sfx")` if the 3.1.0 blocking behaviour is chosen (open item below) |
+| `setvolume` | unchanged; master volume over all tracks |
+
+**Corpus evidence (archive census, 2026-10-18).** Of 46,681 program files (43,087 unique) in the RPG Toolkit archive: `wav` 536 call sites, `midiplay` 214, `midirest` 77, `mediaplay` 73, `playmidi` 69, `mp3` 21, `wavstop` 19, `mediastop` 14, `setvolume` 13, `mediarest` 1, `mp3pause` 0. The only `mp3pause` source is the release note in `rpgtoolkit.com/history.txt` (`#Mp3Pause("filename.mp3")`, "plays an mp3 file, except it will pause the game completely while it plays"). The legacy names are common in real games, which is why they stay.
+
+### Open items for 6.1
+
+1. `mp3pause` timing: 3.1.0 blocks until the sound ends; the final version does not (round-8 Q1). Recommended: non-blocking alias, with `mediaWait` for scripts that need to wait.
+2. Whether legacy `mediaplay` played MP3 as music (not established; add to the next owner extraction round).
+3. Track limits: how many named tracks, and what happens when a track is reused while playing (recommended: the new play replaces the track's current audio, matching the legacy single-slot rule).
+4. AD-16 amendment: cue kinds become per-track (`media.load`, `media.play`, `media.stop`, `media.pause`, `media.resume`, `media.seek`, `media.volume`, each with a `track` field) replacing the fixed `music.*` and `sfx.*` kinds, or the existing kinds gain a `track` field.
+5. §9's "SFX channels: one channel (parity)" default is superseded by tracks; legacy `wav` still uses the single `sfx` track, so parity holds for old games.
