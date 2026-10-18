@@ -5,7 +5,7 @@ import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
 import { gateTrueType } from "../formats/font/truetype.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
-import type { DrawList } from "../ports/draw.ts";
+import type { DrawList, Tint } from "../ports/draw.ts";
 import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
 import type { PlainData } from "../ports/plain-data.ts";
@@ -13,8 +13,9 @@ import type { RunnerRequest } from "../ports/requests.ts";
 import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
-import { composeBoard } from "../render/compose.ts";
+import { composeBoard, type SpriteDraw } from "../render/compose.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
+import { coordLayout, tileToPixel } from "../world/coords.ts";
 import type { WorldBoard } from "../world/model.ts";
 import { applyInputEvent, createInputSection, inputView, pruneClaimed } from "../input/index.ts";
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
@@ -83,6 +84,10 @@ type EngineCommonInit = {
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
   readonly cameraTarget?: CameraTarget;
   readonly include?: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean };
+  /** Sprites composed over the board until the sprites section feeds the compositor (movement-triggers owns that). */
+  readonly sprites?: readonly SpriteDraw[];
+  /** Script ambient summed with the board's once per tile blit (E-17). */
+  readonly globalAmbient?: Tint;
 };
 
 /**
@@ -112,9 +117,6 @@ type RequestEntry = { readonly reqId: number; readonly key: AssetKey; readonly k
 type SourceLocation = { file: string; line: number };
 type Paused = { thread: number; frame: number; line: number };
 type Arrival = { readonly x: number; readonly y: number; readonly layer: number; readonly unit: "pixel" | "tile" };
-
-/** The pixel size of one 2D tile, used only to aim the camera when no player position exists. */
-const TILE_PX = 32;
 
 const DEFAULT_ENGINE_PLUGINS: readonly ResolvedPlugin[] = resolveManifestPlugins(ENGINE_DEFAULT_MANIFEST).plugins;
 
@@ -154,6 +156,11 @@ export function createEngine(init: EngineInit): Engine {
   state.camera = createCameraSection(init.width, init.height);
   const surfaceCache: SurfacePixelCache = new Map();
   let frameHash = hashDrawList({ tick: 0, width: init.width, height: init.height, commands: [] });
+  // Sprites and script ambient reach the compositor through the same plain-data view fields the editor and export use (AD-29).
+  const presentation = {
+    ...(init.sprites === undefined ? {} : { sprites: init.sprites }),
+    ...(init.globalAmbient === undefined ? {} : { globalAmbient: init.globalAmbient }),
+  };
   if (init.mainFile === undefined) {
     const resolved = resolveAsset(index, root, "boards", init.initialBoard);
     if (resolved.ok) sceneBoardKey = resolved.value;
@@ -285,11 +292,12 @@ export function createEngine(init: EngineInit): Engine {
     state.engine.musicAsset = music.value;
     bus.postEffect("audio", engineEffect("audio", "music.play", [music.value, true, null, board.key], "draw-audio-cue"));
   }
-  function cameraAim(arrival: Arrival): CameraPoint {
+  /** The player's position when a sprites owner supplies one, else the arrival point converted by the board's own layout (E-11). */
+  function cameraAim(board: WorldBoard, arrival: Arrival): CameraPoint {
     const player = init.cameraTarget?.getPlayerPosition() ?? null;
     if (player !== null) return player;
     if (arrival.unit === "pixel") return { x: arrival.x, y: arrival.y };
-    return { x: (arrival.x - 1) * TILE_PX + TILE_PX / 2, y: (arrival.y - 1) * TILE_PX + TILE_PX / 2 };
+    return tileToPixel(coordLayout(board.coordType), board.sizeX, arrival.x, arrival.y);
   }
   /** Board entry (E-19, E-47; docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry). */
   function arrive(board: WorldBoard, arrival: Arrival, fromSend: boolean): void {
@@ -297,7 +305,7 @@ export function createEngine(init: EngineInit): Engine {
     state.world = { board };
     const placement: PlainData[] = [arrival.x, arrival.y, arrival.layer, arrival.unit];
     bus.postEffect("sprites", engineEffect("sprites", "placeplayer", placement));
-    state.camera = realignCamera(state.camera, board, cameraAim(arrival));
+    state.camera = realignCamera(state.camera, board, cameraAim(board, arrival));
     bus.postEffect("triggers", engineEffect("triggers", "deactivateat", placement));
     postBoardMusic(board);
     for (const name of board.threads ?? []) startFileProgram(name, board.key, "board");
@@ -539,6 +547,7 @@ export function createEngine(init: EngineInit): Engine {
       viewport: { width: init.width, height: init.height },
       alpha: presentationAlpha,
       include,
+      ...presentation,
     });
   }
   function refreshFrame(): void {
@@ -669,7 +678,7 @@ export function createEngine(init: EngineInit): Engine {
       if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
       const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
       const cameraPos = positionAt(state.camera, presentationAlpha);
-      return composeBoard({ board, tick: state.time.tick, camera: cameraPos, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include });
+      return composeBoard({ board, tick: state.time.tick, camera: cameraPos, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include, ...presentation });
     },
     surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null {
       if (id === (0 as SurfaceId)) refreshFrame();

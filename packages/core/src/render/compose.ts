@@ -4,6 +4,7 @@ import { frameAt } from "../time/index.ts";
 import type { AssetKey } from "../ports/keys.ts";
 import type { DrawCommand, DrawList, Rect, Rgb, Tint } from "../ports/draw.ts";
 import { addTint, ambientTint, cellTint } from "./shade.ts";
+import { coordLayout, ISO_TILE_HEIGHT, ISO_TILE_WIDTH, isIsometric, pixelToTile, tileToPixel, type CoordLayout } from "../world/coords.ts";
 import type {
   WorldBoard,
   WorldImage,
@@ -303,7 +304,11 @@ function emitUnderVectorRedraw(
       }
     }
 
-    for (let layerNum = 1; layerNum <= maxLayer; layerNum += 1) {
+    // Isometric diamonds overlap, so a one-row source slice cannot say which tile owns a
+    // pixel and an `iso2d` blit cannot be sliced at all: promoted tile redraw is 2D-only
+    // (plan 4.18, owner-visible item). Background spans above still apply.
+    const promotedLayers = isIsometric(coordLayout(board.coordType)) ? 0 : maxLayer;
+    for (let layerNum = 1; layerNum <= promotedLayers; layerNum += 1) {
       const layerIdx = layerNum - 1;
       const layer = layers[layerIdx];
       if (layer === undefined) continue;
@@ -421,8 +426,14 @@ function emitSprite(
         const cdy = dstY + cell.y * TILE_SIZE;
         const cellDst: Rect = { x: cdx, y: cdy, w: cellW, h: cellH };
         if (!visible(cellDst, view.viewport)) continue;
-        const cellBoardX = Math.floor(boardLeft / TILE_SIZE) + cell.x;
-        const cellBoardY = Math.floor(boardTop / TILE_SIZE) + cell.y;
+        // Shading is stored per tile of the board grid. On isometric boards the
+        // tile under the cell's centre (inverse of board.md#coordinates) supplies it.
+        const layout = coordLayout(board.coordType);
+        const under = isIsometric(layout)
+          ? pixelToTile(layout, board.sizeX, boardLeft + cell.x * TILE_SIZE + TILE_SIZE / 2, boardTop + cell.y * TILE_SIZE + TILE_SIZE / 2)
+          : null;
+        const cellBoardX = under === null ? Math.floor(boardLeft / TILE_SIZE) + cell.x : under.x - 1;
+        const cellBoardY = under === null ? Math.floor(boardTop / TILE_SIZE) + cell.y : under.y - 1;
         const cellTintOverride = addTint(cell.tint ?? NO_TINT, sprite.frame?.tint ?? sprite.tint ?? NO_TINT);
         commands.push(tileCommand(
           board,
@@ -632,6 +643,61 @@ function emitImage(
   if (command !== null) commands.push(command);
 }
 
+/**
+ * One layer of an isometric board (docs/spec/formats/board.md#drawing-order-and-effects,
+ * docs/spec/formats/tiles.md#isometric-tiles). Tiles are walked in painter order, which is
+ * the projected key `(centre y, centre x)`: row by row for the stacked layout, and
+ * diagonal by diagonal (`x + y` constant, `x` rising) for the rotated one, so no sort is
+ * needed. An `.iso` tile is blitted 1:1 into its 64×32 diamond; an ordinary tile is
+ * blitted with `iso2d` so the rasteriser squashes it into the same diamond.
+ */
+function emitIsometricLayer(
+  commands: DrawCommand[],
+  board: WorldBoard,
+  layer: WorldLayer,
+  layerNumber: number,
+  layout: CoordLayout,
+  view: BoardView,
+): void {
+  const gridWidth = board.gridWidth ?? (layout === "iso-rotated" ? board.sizeX + board.sizeY : board.sizeX);
+  const gridHeight = board.gridHeight ?? (layout === "iso-rotated" ? gridWidth : board.sizeY);
+  const emit = (x: number, y: number): void => {
+    const tile = layer.tiles[y * gridWidth + x];
+    if (tile === null || tile === undefined) return;
+    const selected = selectedTile(tile, view.tick);
+    const width = selected.width ?? TILE_SIZE;
+    const height = selected.height ?? TILE_SIZE;
+    const centre = tileToPixel(layout, board.sizeX, x + 1, y + 1);
+    const dst: Rect = {
+      x: centre.x - ISO_TILE_WIDTH / 2 - view.camera.x,
+      y: centre.y - ISO_TILE_HEIGHT / 2 - view.camera.y,
+      w: ISO_TILE_WIDTH,
+      h: ISO_TILE_HEIGHT,
+    };
+    if (!visible(dst, view.viewport)) return;
+    commands.push({
+      kind: "blit",
+      source: { asset: selected.asset, tile: selected.tile },
+      src: { x: 0, y: 0, w: width, h: height },
+      dst,
+      key: TILE_KEY,
+      tint: tileTint(board, layerNumber, x, y, view.include.shading, view.globalAmbient, selected.tint),
+      alpha: 255,
+      blend: "normal",
+      iso2d: width !== ISO_TILE_WIDTH || height !== ISO_TILE_HEIGHT,
+    });
+  };
+  if (layout === "iso-stacked") {
+    for (let y = 0; y < gridHeight; y += 1) {
+      for (let x = 0; x < gridWidth; x += 1) emit(x, y);
+    }
+    return;
+  }
+  for (let sum = 0; sum <= gridWidth + gridHeight - 2; sum += 1) {
+    for (let x = Math.max(0, sum - gridHeight + 1); x <= Math.min(sum, gridWidth - 1); x += 1) emit(x, sum - x);
+  }
+}
+
 function composeBoardView(view: BoardView): DrawList {
   const { board, viewport, camera } = view;
   const commands: DrawCommand[] = [{ kind: "fill", rgb: board.background }];
@@ -656,22 +722,27 @@ function composeBoardView(view: BoardView): DrawList {
     ? sortSprites(view.sprites, view.alpha, camera.y)
     : [];
   const layers = view.layers ?? board.layers;
+  const layout = coordLayout(board.coordType);
   for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
     const layer = layers[layerIndex];
     if (layer === undefined) continue;
     const layerNumber = layerIndex + 1;
-    for (let y = 0; y < board.sizeY; y += 1) {
-      for (let x = 0; x < board.sizeX; x += 1) {
-        const tile = layer.tiles[y * board.sizeX + x];
-        if (tile === null || tile === undefined) continue;
-        const selected = selectedTile(tile, view.tick);
-        const width = selected.width ?? TILE_SIZE;
-        const height = selected.height ?? TILE_SIZE;
-        const dx = x * TILE_SIZE - camera.x;
-        const dy = y * TILE_SIZE - camera.y;
-        if (!visible({ x: dx, y: dy, w: width, h: height }, viewport)) continue;
-        commands.push(tileCommand(board, tile, view.tick, layerNumber, x, y, dx, dy, view.include.shading, view.globalAmbient));
+    if (layout === "2d") {
+      for (let y = 0; y < board.sizeY; y += 1) {
+        for (let x = 0; x < board.sizeX; x += 1) {
+          const tile = layer.tiles[y * board.sizeX + x];
+          if (tile === null || tile === undefined) continue;
+          const selected = selectedTile(tile, view.tick);
+          const width = selected.width ?? TILE_SIZE;
+          const height = selected.height ?? TILE_SIZE;
+          const dx = x * TILE_SIZE - camera.x;
+          const dy = y * TILE_SIZE - camera.y;
+          if (!visible({ x: dx, y: dy, w: width, h: height }, viewport)) continue;
+          commands.push(tileCommand(board, tile, view.tick, layerNumber, x, y, dx, dy, view.include.shading, view.globalAmbient));
+        }
       }
+    } else {
+      emitIsometricLayer(commands, board, layer, layerNumber, layout, view);
     }
     if (view.include.images) {
       for (const image of board.images ?? []) emitImage(commands, image, board, view, layerNumber);

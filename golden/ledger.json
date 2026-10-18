@@ -11,7 +11,6 @@
     { "path": "golden/reference/S-LIGHT-GRADIENT.png", "scene": "S-LIGHT-GRADIENT", "class": "independent-reference", "gating": true, "producer": "4.33" },
     { "path": "golden/reference/S-LIGHT-CLIPPED.png", "scene": "S-LIGHT-CLIPPED", "class": "independent-reference", "gating": true, "producer": "4.33" },
     { "path": "golden/reference/S-LIGHT-OVERLAP.png", "scene": "S-LIGHT-OVERLAP", "class": "independent-reference", "gating": true, "producer": "4.33" },
-    { "path": "golden/reference/S-LIGHT-NIGHT.png", "scene": "S-LIGHT-NIGHT", "class": "independent-reference", "gating": true, "producer": "4.33" },
-    { "path": "golden/reference/liberation-mono-pangram.png", "scene": "PANGRAM-TRUETYPE", "class": "regression-baseline", "gating": true, "producer": "4.9" }
+    { "path": "golden/reference/S-LIGHT-NIGHT.png", "scene": "S-LIGHT-NIGHT", "class": "independent-reference", "gating": true, "producer": "4.33" }
   ]
 }

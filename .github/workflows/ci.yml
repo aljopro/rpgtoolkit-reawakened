@@ -68,6 +68,9 @@ jobs:
       # case can never pass by skipping.
       - run: pnpm test:strict
       - run: pnpm golden
+      # Independent-oracle drift checks (Pillow is a CI-only dev tool, HPND, never shipped).
+      - run: python3 -m pip install Pillow
+      - run: pnpm oracle:check
       # The corpus gate (epic 2 Done-when 1): `pnpm dump:check` re-runs the dump
       # over both sample games and compares its JSON report with the committed
       # `golden/legacy-corpus.json`. A parser or decoder that drifts fails there,

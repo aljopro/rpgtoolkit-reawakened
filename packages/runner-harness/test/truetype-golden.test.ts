@@ -37,7 +37,7 @@ export function truetypePangramPng(): Uint8Array {
 
 test("bundled TrueType font pangram golden is stable through layout, raster and PNG path", () => {
   const actual = truetypePangramPng();
-  const expected = readFileSync(join(repoRoot, "golden", "reference", "liberation-mono-pangram.png"));
+  const expected = readFileSync(join(repoRoot, "golden", "regression", "liberation-mono-pangram.png"));
   const comparison = comparePngPixels(actual, new Uint8Array(expected));
   equal(comparison.error, null);
   equal(comparison.equal, true, comparison.firstDifference ? JSON.stringify(comparison.firstDifference) : "");
