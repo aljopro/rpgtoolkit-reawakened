@@ -214,3 +214,55 @@ Proposals:
 2. Whether import-time transcoding lives in the editor epics, epic 9 packaging, or a shared tool, and which G6-clean encoder it uses.
 3. The music-source interface shape in `synth`, and whether libopenmpt is adopted (it would also turn the BusDriver XM decision into "plays").
 4. A licence survey of chip emulators (SPC700, NES APU, Game Boy APU, SID, common VGM chips) to see which, if any, pass G6.
+
+## 11. Extensible audio platform (owner direction, 2026-10-18)
+
+**Owner direction:** the audio platform must be extensible, so that a new music source (a tracker player, a chip emulator, a new codec) is easy to add. This promotes the "music-source seam" from §10 into epic 6's design. The individual formats in §10 stay nice to have.
+
+**Proposal: reuse AD-31, not a second plugin system.** AD-31 already makes formats pluggable: `AssetDecoder { id, extensions, detect(header), decode(bytes, context) }`, registered through `PluginDefinition.decoders` (ADR 0004), and the core formats implement the same interface. Audio splits along the existing core/runner line.
+
+```mermaid
+flowchart LR
+  subgraph pack["an audio format pack"]
+    D["core half: AssetDecoder&lt;AudioInfo&gt;<br/>(in PluginDefinition.decoders)"]
+    S["runner half: AudioSource<br/>(registered with synth)"]
+  end
+  D -- "same format id and detect()" --- S
+  Core["core: cue names an asset;<br/>duration and loop come from AudioInfo"] --> D
+  Runner["runner: realises the cue"] --> S
+  S --> Bus["mixer buses → output"]
+```
+
+1. **Core half: what the simulation needs to know.** An audio format contributes an `AssetDecoder<AudioInfo>`. `AudioInfo` is plain data: format id, length (or "loops forever"), loop points, and whether it needs a bank. It is pure and deterministic. It feeds AD-14's headless `audio.ended`, blocking `wav`, and the prefetch plan. No sample decoding happens in core.
+2. **Runner half: how it sounds.** `synth` defines an `AudioSource` contract with:
+   - `id` (matching the decoder's), `extensions` and `detect(header)`
+   - an optional bank requirement (a SoundFont for MIDI, a patch set for an OPL source)
+   - a factory that turns bytes into a playable voice: start, stop, pause, resume, volume, loop, render PCM frames, report end
+
+   `synth` keeps a registry: the runner picks the source by format, routes it to the music or SFX bus, and sends `audio.ended` when the voice ends.
+3. **Built-ins use the same seam.** MIDI (`spessasynth_core` plus a SoundFont) and PCM (WAV, including ADPCM) are the first two sources, registered exactly as a third-party source would be. This is the AD-31 practice of core formats implementing the public interface. A Null source serves headless runs.
+4. **"Banks" are general.** The SoundFont is the MIDI source's bank. The bank choice (`RunConfig`, project default, player override, `soundFont()`) applies to any source that declares a bank kind, so a later OPL source can take patch sets without new configuration plumbing. The script command keeps the name `soundFont` for now; whether to generalise it is a 6.1 judgement call.
+5. **A conformance kit.** One shared suite that every source must pass:
+   - its length agrees with its core decoder's `AudioInfo`
+   - loops and stop/pause/resume behave
+   - volume and bus routing apply
+   - an offline render is non-silent
+   - a corrupt file gives a diagnostic, never a throw
+
+   This mirrors the host-conformance suite in editor-foundation.
+6. **Failure is never a game-state change.** An unknown format, a source the runner lacks, or a bad file gives a diagnostic and silence. The cue stream and game state stay the same in every runner, so replays and goldens are unaffected by which sources are installed.
+7. **Distribution and licences.** An audio pack ships both halves: a `PluginDefinition` with the decoder (and any commands) plus a `synth` source module. Anything bundled with the engine passes G6. Packs a user installs are their own business, under ADR 0004's ungated-extension rule. A "write an audio source" guide belongs to epic documentation-website.
+
+**Breakdown impact (draft):** entry 6.4 splits:
+
+| Entry | Scope |
+|---|---|
+| 6.4a | `AudioInfo`, the `AudioSource` contract, the registry, bus routing, the conformance kit |
+| 6.4b | the MIDI source (SpessaSynth) |
+| 6.4c | the PCM/ADPCM source and core WAV/MIDI `AudioInfo` decoders |
+
+A tracker source via libopenmpt (§10) would be the first optional pack, and the BusDriver XM is its test case.
+
+**Spine amendments for 6.1 (docs-first):**
+- AD-16: runners realise cues through registered audio sources; an unrealisable cue is a diagnostic and silence.
+- AD-31: audio formats contribute `AssetDecoder<AudioInfo>`.
