@@ -248,6 +248,12 @@ function boardHit(actor: SpriteActor, board: WorldBoard, x: number, y: number): 
   const shape = translateBase(actor, x, y);
   return (board.vectors ?? []).find((vector) => vector.layer === actor.layer && vector.type === SOLID && shapeHitsVector(shape, vector)) ?? null;
 }
+
+/** Test an actor collision base at a pixel position against destination-board solids. */
+export function boardCollisionAt(actor: SpriteActor, board: WorldBoard, x: number, y: number): WorldVector | null {
+  return boardHit(actor, board, fixed(x), fixed(y));
+}
+
 function spriteHit(section: SpritesSection, actor: SpriteActor, x: number, y: number): SpriteActor | null {
   const shape = translateBase(actor, x, y);
   return allActors(section)
@@ -389,7 +395,8 @@ function advanceActor(section: SpritesSection, actor: SpriteActor, board: WorldB
   if (actor.kind === "player") {
     const exit = offBoard(actor, board, next.x, next.y);
     if (exit !== null) {
-      replaceActor(section, { ...actor, facing: exit, movement: { ...movement, active: null, pendingExit: exit } });
+      const exited = finishActor({ ...actor, facing: exit, movement: { ...movement, active: null, pendingExit: exit } }, active, true, tpa, tick, sink);
+      replaceActor(section, exited);
       event(tick, "edge-exit", { actor: actor.id, direction: exit }, sink);
       return;
     }
