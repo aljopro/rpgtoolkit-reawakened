@@ -39,7 +39,8 @@ import { boardCollisionAt } from "../sprites/movement.ts";
 import { resetTriggersSection } from "../triggers/model.ts";
 import { applyTriggerEffect } from "../triggers/runtime.ts";
 import { clearPathfindingCache } from "../sprites/pathfinding.ts";
-import { EffectBus, type EffectApplier } from "./effects.ts";
+import { runRandomEncounterPhase } from "../sprites/encounters.ts";
+import { EffectBus, type EffectApplier, type PostEffect } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
 import type { EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
 import {
@@ -90,7 +91,7 @@ export type EnginePhase = (typeof ENGINE_PHASES)[number];
 export type EnginePhaseRegistration = {
   readonly phase: EnginePhase;
   readonly rank?: number;
-  readonly run: (state: GameState) => void;
+  readonly run: (state: GameState, postEffect?: (section: SectionKey, effect: PostEffect) => void) => void;
 };
 
 /** A section owner reset callback (E-06; docs/spec/engine/main-loop-and-startup.md#reawakened-reset-sections). */
@@ -1045,22 +1046,34 @@ export function createEngine(init: EngineInit): Engine {
         return;
       case "movement":
         state.camera = updateCamera(state.camera, state.world.board ?? null, init.cameraTarget ?? init.spriteRuntime);
-        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       case "edges":
         runEdgesPhase();
-        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       case "triggers":
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
+        return;
       case "battle":
-        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        if (mainFile !== null) {
+          runRandomEncounterPhase(state, {
+            fightingDisabled: mainFile.fightingDisabled,
+            enemies: mainFile.enemies,
+            fightType: mainFile.fightType,
+            chances: mainFile.chances,
+            useCustomFightPrg: mainFile.useCustomFightPrg,
+            customFightPrg: mainFile.customFightPrg,
+          }, (section, effect) => bus.postEffect(section, effect));
+        }
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       case "animation":
         runAnimationPhase();
-        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       case "audio":
-        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       default: {
         const neverPhase: never = phase;

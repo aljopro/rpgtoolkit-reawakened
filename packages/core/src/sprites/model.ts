@@ -11,6 +11,7 @@ import type { WorldBoard, WorldItem } from "../world/model.ts";
 
 export const SPRITES_SCHEMA_VERSION = 2;
 
+
 export const FACING = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export type Facing = (typeof FACING)[number];
 export type SpriteKind = "player" | "item";
@@ -80,6 +81,13 @@ export type SpriteMovement = {
   readonly lastStepDistance: number;
 };
 
+/** Persisted progress for movement-owned random encounters. */
+export type RandomEncounterProgress = {
+  readonly boardKey: string;
+  readonly tile: SpritePoint;
+  readonly tiles: number;
+};
+
 /** One hydrated actor, shared by players and board items. */
 export type SpriteActor = {
   readonly id: string;
@@ -112,13 +120,14 @@ export type SpriteActor = {
   readonly multitaskThread: number | null;
 };
 
-/** The AD-10 `sprites` section, schema version 2 with movement-aware actors. */
+/** The AD-10 `sprites` section, schema version 2 with movement-aware actors and optional encounter progress. */
 export type SpritesSection = {
   version: number;
   players: SpriteActor[];
   items: SpriteActor[];
   selectedPlayer: string | null;
   nextItemHandle: number;
+  randomEncounter?: RandomEncounterProgress | null;
 };
 
 export type SpriteActorSource = {
@@ -256,7 +265,7 @@ export function boardItemSources(
   });
 }
 
-export type SpriteStateParts = Pick<SpritesSection, "players" | "items" | "selectedPlayer" | "nextItemHandle">;
+export type SpriteStateParts = Pick<SpritesSection, "players" | "items" | "selectedPlayer" | "nextItemHandle" | "randomEncounter">;
 export type SpriteStateRecord = SpriteStateParts & { readonly version: number };
 
 export function isSpriteActor(value: unknown): value is SpriteActor {
@@ -270,11 +279,21 @@ export function asSpritesSection(value: unknown): SpritesSection | null {
   const record = value as Partial<SpritesSection>;
   if (!Array.isArray(record.players) || !Array.isArray(record.items) || (record.selectedPlayer !== null && typeof record.selectedPlayer !== "string") || typeof record.nextItemHandle !== "number") return null;
   if (!record.players.every(isSpriteActor) || !record.items.every(isSpriteActor)) return null;
-  return {
+  const progress = record.randomEncounter;
+  const randomEncounter = progress === null ? null : (
+    typeof progress === "object" && progress !== null && !Array.isArray(progress) && typeof progress.boardKey === "string"
+      && typeof progress.tile === "object" && progress.tile !== null && !Array.isArray(progress.tile)
+      && typeof progress.tile.x === "number" && typeof progress.tile.y === "number" && typeof progress.tiles === "number"
+      ? { boardKey: progress.boardKey, tile: { x: progress.tile.x, y: progress.tile.y }, tiles: progress.tiles }
+      : null
+  );
+  const section: SpritesSection = {
     version: typeof record.version === "number" ? record.version : SPRITES_SCHEMA_VERSION,
     players: record.players as SpriteActor[],
     items: record.items as SpriteActor[],
     selectedPlayer: record.selectedPlayer ?? null,
     nextItemHandle: record.nextItemHandle,
   };
+  if (progress !== undefined) section.randomEncounter = randomEncounter;
+  return section;
 }
