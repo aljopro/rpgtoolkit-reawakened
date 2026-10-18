@@ -3,6 +3,7 @@ import type { Wait } from "../../ports/wait.ts";
 import { ScriptError } from "../errors.ts";
 import type { BuiltinDoc, BuiltinSpec } from "../builtins.ts";
 import { effectCommand, pack } from "./common.ts";
+import { GRAPHICS_COMMANDS } from "./graphics.ts";
 import { validateFxArgument } from "../../render/fx.ts";
 import { UI_COMMANDS } from "./ui.ts";
 
@@ -111,4 +112,5 @@ export const RENDER_PLUGIN = pack("render", "Deterministic rendering, camera, UI
   ZOOM,
   EARTHQUAKE,
   BORDER_COLOR,
+  ...GRAPHICS_COMMANDS,
 ]);
