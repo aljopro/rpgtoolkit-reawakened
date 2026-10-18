@@ -15,6 +15,7 @@ import { convertPreVectorBoard } from "../formats/board/pre-vector-convert.ts";
 import { readPreVectorBoard } from "../formats/board/pre-vector-reader.ts";
 import { readTileAnimation } from "../formats/tile-animation/reader.ts";
 import { readTileset, tileDimensions } from "../formats/tileset/index.ts";
+import { bakeLights } from "../render/shade.ts";
 import type {
   WorldBoard,
   WorldImage,
@@ -160,7 +161,7 @@ function worldBoard(
   const props = board.properties;
   const rawItems = board.sprites.map(itemFromSprite);
   const items = rawItems.filter((item) => item.itemFile.length > 0);
-  return {
+  const hydrated: WorldBoard = {
     key,
     coordType: board.coordType,
     sizeX: board.sizeX,
@@ -201,6 +202,7 @@ function worldBoard(
     },
     tilesets: [...tileMetadata],
   };
+  return bakeLights(hydrated);
 }
 
 /** Hydrate a board into JSON-safe world state; decoded bytes remain in the caller cache. */
