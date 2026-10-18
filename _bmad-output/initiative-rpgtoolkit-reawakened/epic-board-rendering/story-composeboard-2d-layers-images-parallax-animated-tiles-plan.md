@@ -3,7 +3,7 @@ title: 'composeBoard for 2D boards: layers, images, parallax, animated tiles'
 type: feature
 ticket: 14
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: '857b3220'
 route: full
 risk: high
