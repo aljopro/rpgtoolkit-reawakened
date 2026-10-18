@@ -171,8 +171,11 @@ const IMPLEMENTED_COMMANDS = new Set([
 const REAL_PACK_COMMANDS = new Set([
   "camerapanto", "camerafollow", "camerareset", "camerashake",
   "drawline", "drawrect", "fillrect", "text", "msgbox", "clear", "fade",
-  "viewbrd", "put", "layerput", "getboardtile", "boardgettile",
-  "setconstants", "animation",
+  "viewbrd", "put", "layerput", "getboardname", "getboardtile", "boardgettile",
+  "getboardtiletype", "tiletype", "animatedtiles", "parallax", "setambientlevel",
+  "boardgetvector", "boardsetvector", "boardgetvectorpoint", "boardsetvectorpoint",
+  "boardgetprogram", "boardsetprogram", "boardgetprogrampoint", "boardsetprogrampoint",
+  "prg", "setconstants", "underarrow", "animation",
 ]);
 
 /** The stub-safe rows of the catalogue, in catalogue order. */
