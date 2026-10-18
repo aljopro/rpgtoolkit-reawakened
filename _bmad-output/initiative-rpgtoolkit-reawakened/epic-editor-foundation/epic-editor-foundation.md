@@ -50,3 +50,8 @@ Authors can open a legacy project in VS Code or in the browser and edit its sett
 - Decision: envelope re-sliced against the architecture spine, 2026-10-10.
 - Decision: Jensen, 2026-10-15: `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` as the normative spec (ADR 0007, entry 1.13); the owner attests it is clean (extraction-log round 4). `docs/editor-features.md` (T-xx) is not replaced.
 - Evidence (R-60): docs/spec/formats/rpgcode-program.md describes the editor's test run (`Prg\sys_test.prg` with its settings prefix, the engine run as `<main file> sys_test.prg`), and packaging-and-paths.md the new-project defaults; inputs for the test-run and new-project features.
+- Handoff (from epic audio-synth exploration, 2026-10-18; detail in `epic-audio-synth/discovery/audio-exploration.md` §4, §6 and §7):
+  - The project needs a Reawakened default-SoundFont setting, because `.gam` has no field (ties to research flow `08-project-file-by-convention`).
+  - Test-run should report loading stalls with the asset that caused them, and warn on asset references the prefetch planner cannot predict (e.g. `send(boardVar$)`).
+  - Audio preview in editors plays through the `synth` package with the project's SoundFont.
+  - Packaging bundles the authored SoundFont, warns on unclear bank licences, and never redistributes the legacy MIDI pack.
