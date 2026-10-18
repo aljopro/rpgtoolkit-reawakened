@@ -386,7 +386,6 @@ Seconds are converted to ticks through `core/time` (AD-2); help text follows the
 
 A fun extra for music-player screens: read title, artist, album and similar tags from the file (ID3 for MP3, Vorbis comments for OGG, the text chunks of MIDI files), for example `mediaInfo(file, key[, &ret])`. Deterministic, since tags are part of the asset bytes, but format-specific; settle which formats and keys are supported and what missing tags return (`""`). Not in the 6.1 scope unless promoted; also log in `../../nice-to-have.md`.
 
-
 ### Legacy commands: obsolete, still working
 
 | Legacy command | Standard equivalent |
@@ -407,3 +406,6 @@ A fun extra for music-player screens: read title, artist, album and similar tags
 3. Track limits: how many named tracks, and what happens when a track is reused while playing (recommended: the new play replaces the track's current audio, matching the legacy single-slot rule).
 4. AD-16 amendment: cue kinds become per-track (`media.load`, `media.play`, `media.stop`, `media.pause`, `media.resume`, `media.seek`, `media.volume`, each with a `track` field) replacing the fixed `music.*` and `sfx.*` kinds, or the existing kinds gain a `track` field.
 5. §9's "SFX channels: one channel (parity)" default is superseded by tracks; legacy `wav` still uses the single `sfx` track, so parity holds for old games.
+6. Built-in tracks: confirm `ambience`, `voice` and `ui` alongside the required `music` and `sfx`.
+7. Ratify the `tkMD_` names and values, the state-versus-flags split, `mediaLoop`, and the waiting rules above.
+8. The AD-16 cue amendment also needs a loop-toggle cue and per-track volume, and `GameState.audio` must hold per-track state, flags and asset lengths.
