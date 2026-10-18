@@ -3,6 +3,7 @@ import type { EffectRecord } from "../script/effects.ts";
 import type { GameState } from "../save/state.ts";
 import type { AssetKey } from "../ports/keys.ts";
 import type { WorldBoard, WorldPoint, WorldProgram, WorldTile, WorldTileEdit, WorldVector } from "./model.ts";
+import { invalidatePathfindingCache } from "../sprites/pathfinding.ts";
 
 function numberArg(effect: EffectRecord, index: number, fallback = 0): number {
   const value = effect.args[index];
@@ -155,7 +156,10 @@ export function applyWorldEffect(state: GameState, effect: EffectRecord): void {
       next = { ...board, runtime: { ...(board.runtime ?? { tileEdits: [], tileTypes: [] }), tileTypes } };
     }
   }
-  if (next !== board) state.world = { ...state.world, board: next };
+  if (next !== board) {
+    if (effect.name === "boardsetvector" || effect.name === "boardsetvectorpoint") invalidatePathfindingCache(String(board.key));
+    state.world = { ...state.world, board: next };
+  }
 }
 
 /** Remove `put` edits when their calling program has finished. */

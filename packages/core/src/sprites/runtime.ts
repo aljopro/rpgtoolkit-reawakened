@@ -18,6 +18,7 @@ import {
   type SpritesSection,
   type WaypointLink,
 } from "./model.ts";
+import { findPath, type PathMode, type PathResult } from "./pathfinding.ts";
 
 export type SpriteThreadResolver = (program: string) => ProgramRef | null;
 export type SpriteRuntimeOptions = {
@@ -168,6 +169,41 @@ export function enqueueMove(section: SpritesSection, id: string, move: SpriteMov
     return true;
   }
   return false;
+}
+
+/** Find and enqueue a deterministic path while retaining the actor's existing FIFO owner. */
+export function enqueuePathMove(
+  section: SpritesSection,
+  board: WorldBoard,
+  id: string,
+  goal: SpritePoint,
+  mode: PathMode = 1,
+  clear = true,
+): PathResult | null {
+  const actor = actorFor(section, id);
+  if (actor === null) return null;
+  const result = findPath(board, section, actor, goal, mode);
+  if (result.points.length === 0) return result;
+  const moves = result.points.map((point): SpriteMove => ({ source: "path", target: clonePoint(point), facing: null, pathMode: mode }));
+  const playerIndex = section.players.findIndex((value) => value.id === id);
+  const itemIndex = section.items.findIndex((value) => value.id === id);
+  const update = (value: SpriteActor): SpriteActor => ({
+    ...value,
+    state: value.visible ? "moving" : value.state,
+    queue: { ...value.queue, moves: clear ? moves : [...value.queue.moves, ...moves] },
+  });
+  if (playerIndex >= 0) section.players = section.players.map((value, index) => index === playerIndex ? update(value) : value);
+  else if (itemIndex >= 0) section.items = section.items.map((value, index) => index === itemIndex ? update(value) : value);
+  return result;
+}
+
+/** Append a straight point path, preserving the existing `points` movement semantics. */
+export function enqueuePointPathMove(section: SpritesSection, id: string, points: readonly SpritePoint[], clear = true, pathMode?: PathMode): boolean {
+  let changed = false;
+  points.forEach((point, index) => {
+    changed = enqueueMove(section, id, { source: "points", target: clonePoint(point), facing: null, ...(pathMode === undefined ? {} : { pathMode }) }, clear && index === 0) || changed;
+  });
+  return changed;
 }
 
 /** Copy a waypoint vector into an actor's queue or link it for live edits. */
