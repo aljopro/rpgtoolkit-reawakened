@@ -25,6 +25,7 @@ import { createVmState, type VmState } from "../script/state.ts";
 import { createTimeState, type TimeState } from "../time/time.ts";
 import {
   createCameraSection,
+  createUiSection,
   createFxSection,
   type AudioSection,
   type BattleSection,
@@ -153,7 +154,7 @@ export function createGameState(init: { seed: number }): GameState {
     battle: {},
     menu: {},
     input: {} as InputSection,
-    ui: {},
+    ui: {} as UiSection,
     camera: {} as CameraSection,
     fx: {} as FxSection,
     audio: {},

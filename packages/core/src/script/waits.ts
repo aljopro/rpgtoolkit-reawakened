@@ -62,7 +62,37 @@ export function pollRequest(view: WaitView, wait: Wait): WaitResult | null {
   return null;
 }
 
-/** The kinds the VM itself owns: sleeps, input, movement and host requests. */
+/** Resolve the UI's prompt or button result from modal state or a key event. */
+export function pollRenderMsgBox(view: WaitView, wait: Wait): WaitResult | null {
+  if (wait.kind !== "render.msgbox") return null;
+  const modal = view.ui?.modal;
+  if (modal !== null && typeof modal === "object" && "result" in modal) {
+    const result = modal.result;
+    if (typeof result === "string" || typeof result === "number") return { value: result, ok: true };
+  }
+  if (view.input === undefined) return null;
+  const claimed = new Set(view.claims ?? []);
+  for (const key of view.input.keys) {
+    if (claimed.has(key.seq)) continue;
+    const normalized = key.name.toLowerCase();
+    if (wait.id === "prompt") {
+      if (normalized === "enter" || normalized === "return" || normalized === "space") return { value: key.char ?? "", ok: true, claim: key.seq };
+      continue;
+    }
+    const style = wait.payload[2] === 1 ? 1 : 0;
+    if (normalized === "yes" || normalized === "y") return { value: 6, ok: true, claim: key.seq };
+    if (normalized === "no" || normalized === "n") return { value: 7, ok: true, claim: key.seq };
+    if (normalized === "enter" || normalized === "return" || normalized === "space") return { value: style === 1 ? 6 : 1, ok: true, claim: key.seq };
+  }
+  return null;
+}
+
+/** UI-owned wait kinds, kept separate so hosts can extend the VM registry without duplicate registration. */
+export const UI_WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
+  { kind: "render.msgbox", poll: pollRenderMsgBox },
+];
+
+/** The VM-owned wait kinds. */
 export const WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "sleep", poll: pollSleep },
   { kind: "input.key", poll: pollInputKey },
@@ -95,8 +125,8 @@ export function createWaitPoll(resolvers: readonly WaitKindResolver[]): WaitPoll
   };
 }
 
-/** The default poll: the VM-owned kinds only. */
-export const defaultWaitPoll: WaitPoll = createWaitPoll(WAIT_KIND_RESOLVERS);
+/** The default poll for VM and UI-owned kinds. */
+export const defaultWaitPoll: WaitPoll = createWaitPoll([...WAIT_KIND_RESOLVERS, ...UI_WAIT_KIND_RESOLVERS]);
 
 /** A short plain description of a wait, for diagnostics (deadlock reports). */
 export function describeWait(wait: Wait): string {

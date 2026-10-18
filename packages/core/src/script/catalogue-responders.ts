@@ -18,6 +18,7 @@ import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
 import type { SectionKey } from "../save/state.ts";
 import { effectCommand } from "./packs/common.ts";
+import { UI_COMMANDS } from "./packs/ui.ts";
 import { GRAPHICS_COMMANDS } from "./packs/graphics.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
 
@@ -191,10 +192,42 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
   },
 };
 
+const UI_NATIVE_SUMMARIES: Readonly<Record<string, string>> = {
+  mwincls: "Clear and hide the message window.",
+  show: "Show the message window.",
+  mbox: "Show the message window.",
+  wingraphic: "Set the message window background image.",
+  font: "Load a true type font. TK2 fonts are not supported.",
+  wincolor: "Set the message window's colour using a DOS code.",
+  wincolorrgb: "Set the message window's colour.",
+  setmwintranslucency: "Set the translucency of the message window. 0% is invisible; 100% is opaque.",
+  pixeltext: "Displays text on the screen using pixel coordinates.",
+  fontsize: "Set the font size.",
+  bold: "Toggle emboldening of text.",
+  italics: "Toggle italicizing of text.",
+  underline: "Toggle underlining of text.",
+  color: "Change to a DOS colour.",
+  colorrgb: "Change the active colour to an RGB value.",
+  getcolor: "Get the current colour.",
+  getfontsize: "Get the current font size.",
+  gettextwidth: "Get the width of a string of text in pixels, relative to the current font and size.",
+  gettextheight: "Get the height of a string of text in pixels, relative to the current font and size.",
+  print: "Write the specified string one line down from the last call to text().",
+  prompt: "Ask the player a question and return the result.",
+  statictext: "obsolete.",
+};
+
 function documentCommands(commands: readonly BuiltinSpec[]): readonly BuiltinSpec[] {
+  const uiDocs = new Map(UI_COMMANDS.flatMap((command) => command.doc === undefined ? [] : [[command.name, command.doc] as const]));
   return commands.map((command) => {
-    const doc = TICKET_4_29_DOCS[command.name];
-    return doc === undefined ? command : { ...command, doc };
+    const source = TICKET_4_29_DOCS[command.name] ?? uiDocs.get(command.name);
+    if (source === undefined) return command;
+    const summary = UI_NATIVE_SUMMARIES[command.name] ?? source.summary;
+    const obsolete = command.name === "mwinsize" || command.name === "statictext";
+    const doc = obsolete
+      ? { ...source, summary, replacedBy: { kind: "syntax" as const, text: "Use the fixed message-window commands instead." }, reason: "The Reawakened message window has fixed geometry and renders all text at once." }
+      : { ...source, summary };
+    return { ...command, doc };
   });
 }
 type Row = {

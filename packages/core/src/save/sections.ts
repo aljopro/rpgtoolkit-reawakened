@@ -18,7 +18,7 @@ export {
   type CameraShakeState,
   type CameraTrackingTarget,
 } from "./sections/camera.ts";
-export type { UiSection } from "./sections/ui.ts";
+export { createUiSection, type UiSection, type UiMessageWindow, type UiModal, type UiTextDraw } from "./sections/ui.ts";
 export {
   createFxSection,
   type AnimationFrameState,

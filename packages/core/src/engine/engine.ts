@@ -15,6 +15,7 @@ import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
 import { composeBoard, type SpriteDraw } from "../render/compose.ts";
+import { composeUi } from "../render/ui.ts";
 import { applyFxDrawList, advanceFx, applyFxEffect } from "../render/fx.ts";
 import { advanceAnimations, loadAnimation } from "../render/animation.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
@@ -43,6 +44,7 @@ import {
   startThread,
   STEP_BUDGET,
   stepThread,
+  applyUiEffect,
   type EffectRecord,
   type ProgramLoader,
   type ProgramRef,
@@ -160,6 +162,7 @@ export function createEngine(init: EngineInit): Engine {
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
   bus.register("world", (effect) => applyWorldEffect(state, effect));
   bus.register("camera", (effect) => applyCameraEffect(state, effect));
+  bus.register("ui", (effect) => applyUiEffect(state, effect.name, effect.args));
   bus.register("fx", (effect) => applyFxEffect(state, effect));
   bus.register("engine", (effect) => applyEngineEffect(effect));
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
@@ -667,22 +670,22 @@ export function createEngine(init: EngineInit): Engine {
       consumed.push(record);
     }
   }
-  function currentDrawList(alpha = 0): DrawList {
+  function currentDrawList(alpha = 0, include = init.include ?? { shading: false, images: false, sprites: false }): DrawList {
     const board: WorldBoard | null = state.world.board ?? null;
     const empty = { tick: state.time.tick, width: init.width, height: init.height, commands: [] as DrawList["commands"] };
-    if (board === null) return applyFxDrawList(empty, state.fx);
-    const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
-    const cameraPos = positionAt(state.camera, presentationAlpha);
-    const include = init.include ?? { shading: false, images: false, sprites: false };
-    return applyFxDrawList(composeBoard({
-      board,
-      tick: state.time.tick,
-      camera: cameraPos,
-      viewport: { width: init.width, height: init.height },
-      alpha: presentationAlpha,
-      include,
-      ...presentation,
-    }), state.fx);
+    const base = board === null
+      ? empty
+      : composeBoard({
+        board,
+        tick: state.time.tick,
+        camera: positionAt(state.camera, Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0),
+        viewport: { width: init.width, height: init.height },
+        alpha: Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0,
+        include,
+        ...presentation,
+      });
+    const withUi = { ...base, commands: [...base.commands, ...composeUi(state.ui, init.width, init.height)] };
+    return applyFxDrawList(withUi, state.fx);
   }
   function refreshFrame(): void {
     const list = currentDrawList(0);
@@ -808,12 +811,7 @@ export function createEngine(init: EngineInit): Engine {
       };
     },
     drawList(alpha = 0, include: DrawListInclude = { shading: false, images: false, sprites: false }) {
-      const board: WorldBoard | null = state.world.board ?? null;
-      const empty = { tick: state.time.tick, width: init.width, height: init.height, commands: [] as DrawList["commands"] };
-      if (board === null) return applyFxDrawList(empty, state.fx);
-      const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
-      const cameraPos = positionAt(state.camera, presentationAlpha);
-      return applyFxDrawList(composeBoard({ board, tick: state.time.tick, camera: cameraPos, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include, ...presentation }), state.fx);
+      return currentDrawList(alpha, include);
     },
     surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null {
       if (id === (0 as SurfaceId)) refreshFrame();

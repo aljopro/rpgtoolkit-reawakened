@@ -5,6 +5,7 @@ import type { BuiltinDoc, BuiltinSpec } from "../builtins.ts";
 import { effectCommand, pack } from "./common.ts";
 import { GRAPHICS_COMMANDS } from "./graphics.ts";
 import { validateFxArgument } from "../../render/fx.ts";
+import { UI_COMMANDS } from "./ui.ts";
 
 function transitionDoc(summary: string, behaviour: string, wait: string): BuiltinDoc {
   return {
@@ -177,17 +178,15 @@ const END_ANIMATION: BuiltinSpec = {
     return { value: null, effects: [{ kind: "state-write", section: "fx", args: [id] }] };
   },
 };
-
 /** Rendering owner pack: camera, UI, effects and surfaces are separate command layers. */
 export const RENDER_PLUGIN = pack("render", "Deterministic rendering, camera, UI and visual-effect commands.", [
+  ...UI_COMMANDS,
   FADE,
   WIPE,
   ZOOM,
   EARTHQUAKE,
   BORDER_COLOR,
   ...GRAPHICS_COMMANDS,
-  effectCommand("text", "ui"),
-  effectCommand("msgbox", "ui", "mixed", "msgBox"),
   ANIMATION,
   SIZED_ANIMATION,
   END_ANIMATION,
