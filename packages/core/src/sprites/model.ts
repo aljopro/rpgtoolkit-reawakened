@@ -24,8 +24,16 @@ export type SpriteVisual = {
   idle: string[];
   battle: string[];
   custom: { animation: string; handle: string }[];
+  /** Stable logical selection (`walk.E`, `idle.S`, or `stance.wave`). */
+  animation: string | null;
+  /** The selected animation file passed through to SpriteDraw. */
+  file: string | null;
   stance: string | null;
   frame: number;
+  frameTicks: number;
+  idleTicks: number;
+  stanceHeld: boolean;
+  stanceComplete: boolean;
 };
 export type SpriteMove = {
   readonly source: QueueSource;
@@ -161,8 +169,14 @@ function actorVisual(character: Character | undefined, item: Item | undefined): 
     idle: [...idle],
     battle: [...battle],
     custom: custom.map((stance) => ({ animation: stance.animation, handle: stance.handle })),
+    animation: null,
+    file: null,
     stance: null,
     frame: 0,
+    frameTicks: 0,
+    idleTicks: 0,
+    stanceHeld: false,
+    stanceComplete: false,
   };
 }
 
