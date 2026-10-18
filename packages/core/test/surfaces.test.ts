@@ -1,4 +1,4 @@
-import { deepEqual, equal, notEqual } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
   canvasGetScreen,
@@ -53,5 +53,5 @@ test("screen capture and slots round-trip through the save shape", () => {
   equal(typeof restoreGameState(snapshot({ ...createGameState({ seed: 1 }), surfaces: state })), "object");
   equal(replaceSurface(state, destination, 2, 1, new Uint8Array([0, 0, 0, 255, 0, 0, 0, 255])), 2);
   equal((saved as SurfaceId) > source, true);
-  notEqual(destination, saved);
+  equal(destination !== saved, true);
 });
