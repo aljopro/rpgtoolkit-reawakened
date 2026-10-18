@@ -1,0 +1,433 @@
+{
+  "schema": 1,
+  "comment": "Regression baselines of the closing suite (ticket 4.28): each sample game booted through the real engine, driven by golden/closing/plan.json. Every PNG is class regression-baseline in golden/ledger.json: it locks what Reawakened draws today and is no independent reference. Regenerating is a deliberate act like a golden (G5): run `pnpm closing:record` and review the diff.",
+  "games": {
+    "demo": {
+      "dialect": "tk3",
+      "outcome": "boots",
+      "ticks": 600,
+      "bootStage": "running",
+      "board": "boards/start.brd",
+      "diagnostics": [],
+      "checkpoints": [
+        {
+          "tick": 30,
+          "stateHash": "3554e155d9f74618"
+        },
+        {
+          "tick": 60,
+          "stateHash": "167c8e666fbce723"
+        },
+        {
+          "tick": 90,
+          "stateHash": "309607f0ed1b190c"
+        },
+        {
+          "tick": 120,
+          "stateHash": "6917cb587057a9ab"
+        },
+        {
+          "tick": 600,
+          "stateHash": "8f241eef521668af"
+        }
+      ],
+      "frames": [
+        {
+          "label": "title",
+          "tick": 30,
+          "stateHash": "3554e155d9f74618",
+          "drawHash": "f72bd4c297b9a827",
+          "pixelHash": "d8e1caa95e9e4249",
+          "commands": 5,
+          "width": 640,
+          "height": 480,
+          "png": "golden/regression/closing/demo-title.png"
+        },
+        {
+          "label": "board",
+          "tick": 120,
+          "stateHash": "6917cb587057a9ab",
+          "drawHash": "9a40be8a0b5ca816",
+          "pixelHash": "de76cd21894894bf",
+          "commands": 128,
+          "width": 640,
+          "height": 480,
+          "png": "golden/regression/closing/demo-board.png"
+        },
+        {
+          "label": "later",
+          "tick": 600,
+          "stateHash": "8f241eef521668af",
+          "drawHash": "f3d5432c7e51d4fb",
+          "pixelHash": "de76cd21894894bf",
+          "commands": 128,
+          "width": 640,
+          "height": 480,
+          "sameAs": "board"
+        }
+      ]
+    },
+    "Basic": {
+      "dialect": "tk3",
+      "outcome": "boots",
+      "ticks": 600,
+      "bootStage": "running",
+      "board": "boards/start.brd",
+      "diagnostics": [],
+      "checkpoints": [
+        {
+          "tick": 30,
+          "stateHash": "a6adab281b821414"
+        },
+        {
+          "tick": 60,
+          "stateHash": "78038549980a0c88"
+        },
+        {
+          "tick": 90,
+          "stateHash": "41a4de11374d953e"
+        },
+        {
+          "tick": 120,
+          "stateHash": "d8fb76c2a14cfca3"
+        },
+        {
+          "tick": 600,
+          "stateHash": "865f87cf8353ce6d"
+        }
+      ],
+      "frames": [
+        {
+          "label": "title",
+          "tick": 30,
+          "stateHash": "a6adab281b821414",
+          "drawHash": "e047748c69394b97",
+          "pixelHash": "d8e1caa95e9e4249",
+          "commands": 5,
+          "width": 640,
+          "height": 480,
+          "png": "golden/regression/closing/Basic-title.png"
+        },
+        {
+          "label": "board",
+          "tick": 120,
+          "stateHash": "d8fb76c2a14cfca3",
+          "drawHash": "0e6b513fcb19e42c",
+          "pixelHash": "a27277e54249bddd",
+          "commands": 307,
+          "width": 640,
+          "height": 480,
+          "png": "golden/regression/closing/Basic-board.png"
+        },
+        {
+          "label": "later",
+          "tick": 600,
+          "stateHash": "865f87cf8353ce6d",
+          "drawHash": "cd2745bce1f25e89",
+          "pixelHash": "a27277e54249bddd",
+          "commands": 307,
+          "width": 640,
+          "height": 480,
+          "sameAs": "board"
+        }
+      ]
+    },
+    "Caoquest": {
+      "dialect": "tk2",
+      "outcome": "boots-with-diagnostics",
+      "ticks": 600,
+      "bootStage": "running",
+      "board": "boards/cao's house.brd",
+      "diagnostics": [
+        {
+          "code": "syntax.error",
+          "file": "prg/start.prg",
+          "line": 6,
+          "message": "expected an expression but found `{`"
+        }
+      ],
+      "checkpoints": [
+        {
+          "tick": 30,
+          "stateHash": "035bea0236c9533b"
+        },
+        {
+          "tick": 60,
+          "stateHash": "f244aae6f6ff720f"
+        },
+        {
+          "tick": 90,
+          "stateHash": "2a799e6ad80e0eb3"
+        },
+        {
+          "tick": 120,
+          "stateHash": "548a360d329be748"
+        },
+        {
+          "tick": 600,
+          "stateHash": "c56b715c251ca8be"
+        }
+      ],
+      "frames": [
+        {
+          "label": "title",
+          "tick": 30,
+          "stateHash": "035bea0236c9533b",
+          "drawHash": "98181d90a5bda9f0",
+          "pixelHash": "896a47cb2cef890c",
+          "commands": 267,
+          "width": 640,
+          "height": 480,
+          "png": "golden/regression/closing/Caoquest-title.png"
+        },
+        {
+          "label": "board",
+          "tick": 120,
+          "stateHash": "548a360d329be748",
+          "drawHash": "9a9f3bdbe0f064aa",
+          "pixelHash": "896a47cb2cef890c",
+          "commands": 267,
+          "width": 640,
+          "height": 480,
+          "sameAs": "title"
+        },
+        {
+          "label": "later",
+          "tick": 600,
+          "stateHash": "c56b715c251ca8be",
+          "drawHash": "ab4c95f647f72487",
+          "pixelHash": "896a47cb2cef890c",
+          "commands": 267,
+          "width": 640,
+          "height": 480,
+          "sameAs": "title"
+        }
+      ]
+    },
+    "ChimeranEmpire": {
+      "dialect": "tk2",
+      "outcome": "boots-with-diagnostics",
+      "ticks": 600,
+      "bootStage": "running",
+      "board": "boards/relic room start.brd",
+      "diagnostics": [
+        {
+          "code": "syntax.error",
+          "file": "prg/start.prg",
+          "line": 34,
+          "message": "expected an expression but found `{`"
+        }
+      ],
+      "checkpoints": [
+        {
+          "tick": 30,
+          "stateHash": "86dbe3a194966628"
+        },
+        {
+          "tick": 60,
+          "stateHash": "f6a20e826c0e6f85"
+        },
+        {
+          "tick": 90,
+          "stateHash": "73488e4861972ac5"
+        },
+        {
+          "tick": 120,
+          "stateHash": "f45857789fcbc47c"
+        },
+        {
+          "tick": 600,
+          "stateHash": "fcaa53cbe5fa3fd2"
+        }
+      ],
+      "frames": [
+        {
+          "label": "title",
+          "tick": 30,
+          "stateHash": "86dbe3a194966628",
+          "drawHash": "27a73777dd4c10d0",
+          "pixelHash": "dd29ff49b951570c",
+          "commands": 210,
+          "width": 640,
+          "height": 480,
+          "png": "golden/regression/closing/ChimeranEmpire-title.png"
+        },
+        {
+          "label": "board",
+          "tick": 120,
+          "stateHash": "f45857789fcbc47c",
+          "drawHash": "6bb737f92fea090a",
+          "pixelHash": "dd29ff49b951570c",
+          "commands": 210,
+          "width": 640,
+          "height": 480,
+          "sameAs": "title"
+        },
+        {
+          "label": "later",
+          "tick": 600,
+          "stateHash": "fcaa53cbe5fa3fd2",
+          "drawHash": "85cacc9d281ce0e7",
+          "pixelHash": "dd29ff49b951570c",
+          "commands": 210,
+          "width": 640,
+          "height": 480,
+          "sameAs": "title"
+        }
+      ]
+    },
+    "FinalDestiny": {
+      "dialect": "tk2",
+      "outcome": "boots-with-diagnostics",
+      "ticks": 600,
+      "bootStage": "running",
+      "board": "boards/house on grass.brd",
+      "diagnostics": [
+        {
+          "code": "syntax.error",
+          "file": "prg/start.prg",
+          "line": 33,
+          "message": "expected an expression but found `{`"
+        }
+      ],
+      "checkpoints": [
+        {
+          "tick": 30,
+          "stateHash": "d4e818c0dfc0a897"
+        },
+        {
+          "tick": 60,
+          "stateHash": "ffa7cfe3c7c3cc14"
+        },
+        {
+          "tick": 90,
+          "stateHash": "ddb5156f28f1842c"
+        },
+        {
+          "tick": 120,
+          "stateHash": "9101cf45bf513a91"
+        },
+        {
+          "tick": 600,
+          "stateHash": "ad6363d387e6c6b3"
+        }
+      ],
+      "frames": [
+        {
+          "label": "title",
+          "tick": 30,
+          "stateHash": "d4e818c0dfc0a897",
+          "drawHash": "203461ff1f13c20c",
+          "pixelHash": "4e73c0d917aad0c3",
+          "commands": 210,
+          "width": 640,
+          "height": 480,
+          "png": "golden/regression/closing/FinalDestiny-title.png"
+        },
+        {
+          "label": "board",
+          "tick": 120,
+          "stateHash": "9101cf45bf513a91",
+          "drawHash": "914fca520d4c096e",
+          "pixelHash": "4e73c0d917aad0c3",
+          "commands": 210,
+          "width": 640,
+          "height": 480,
+          "sameAs": "title"
+        },
+        {
+          "label": "later",
+          "tick": 600,
+          "stateHash": "ad6363d387e6c6b3",
+          "drawHash": "7f6c816972bb7113",
+          "pixelHash": "4e73c0d917aad0c3",
+          "commands": 210,
+          "width": 640,
+          "height": 480,
+          "sameAs": "title"
+        }
+      ]
+    },
+    "School2Demo": {
+      "dialect": "tk2",
+      "outcome": "stopped",
+      "ticks": 0,
+      "bootStage": "stopped",
+      "board": null,
+      "diagnostics": [
+        {
+          "code": "plugin.declined-network",
+          "file": "main/schoolsout2.gam",
+          "line": 0,
+          "message": "legacy plugin \"tkplug0\" is not supported (TK2 slot 0 (in TransChat2b: FTP plugin; unportable network); observed in 1 corpus programs)"
+        },
+        {
+          "code": "asset.missing",
+          "file": "main/schoolsout2.gam",
+          "line": 0,
+          "message": "initChar \"start.tem\" is not in the asset index"
+        },
+        {
+          "code": "syntax.error",
+          "file": "prg/start.prg",
+          "line": 33,
+          "message": "expected an expression but found `{`"
+        },
+        {
+          "code": "startup.no-player",
+          "file": "main/schoolsout2.gam",
+          "line": 0,
+          "message": "an initial character must be defined"
+        }
+      ],
+      "checkpoints": [],
+      "frames": []
+    },
+    "LittleMan": {
+      "dialect": "tk2",
+      "outcome": "stopped",
+      "ticks": 0,
+      "bootStage": "stopped",
+      "board": null,
+      "diagnostics": [
+        {
+          "code": "syntax.error",
+          "file": "prg/game.prg",
+          "line": 9,
+          "message": "expected an expression but found `{`"
+        },
+        {
+          "code": "startup.no-player",
+          "file": "main/littlemanwithapeashooter.gam",
+          "line": 0,
+          "message": "an initial character must be defined"
+        }
+      ],
+      "checkpoints": [],
+      "frames": []
+    },
+    "BusDriver": {
+      "dialect": "tk2",
+      "outcome": "stopped",
+      "ticks": 0,
+      "bootStage": "stopped",
+      "board": null,
+      "diagnostics": [
+        {
+          "code": "syntax.error",
+          "file": "prg/rpgcodecontest.prg",
+          "line": 31,
+          "message": "expected an expression but found `{`"
+        },
+        {
+          "code": "startup.no-player",
+          "file": "main/busdriver.gam",
+          "line": 0,
+          "message": "an initial character must be defined"
+        }
+      ],
+      "checkpoints": [],
+      "frames": []
+    }
+  }
+}

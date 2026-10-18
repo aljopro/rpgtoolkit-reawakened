@@ -1,0 +1,14 @@
+TKR cursors (tkr-arrow.png, tkr-hand.png)
+
+Copyright (c) 2026 Jensen (project author)
+Licence: MIT, under the repository LICENSE.
+Authoring date: 2026-10-18.
+
+This is original authored work (G7 clean-room). The cursors were drawn from
+scratch for TK Reawakened and are not traced or derived from any legacy
+binary, game, screenshot, or fetched fixture.
+
+Both cursors are 32×32 pixels, complying with the round-7 cursor rule
+(docs/spec/engine/rpgcode-functions.md#reawakened-default-cursors).
+`tkr-arrow.png` is the default mouse pointer with hotspot at (0, 0).
+`tkr-hand.png` is the default cursor-map hand rendered at (mapX - 40, mapY - 10).
