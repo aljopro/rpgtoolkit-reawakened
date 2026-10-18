@@ -207,6 +207,7 @@ function validateVmShape(vm: Record<string, unknown>): void {
 
 function validateSurfacesShape(value: unknown): void {
   const surfaces = recordAt(value, "surfaces");
+  if (Object.keys(surfaces).length === 0) return;
   const nextId = numberAt(surfaces.nextId, "surfaces.nextId");
   if (nextId < 1) shapeError("the snapshot's surfaces.nextId must be positive");
   const entries = recordAt(surfaces.entries, "surfaces.entries");
