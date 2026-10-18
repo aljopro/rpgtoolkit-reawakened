@@ -2,7 +2,7 @@
 title: "Message window, text built-ins and modal prompts"
 ticket: 21
 type: feature
-status: built
+status: done
 ---
 
 # Ticket 4.21 plan

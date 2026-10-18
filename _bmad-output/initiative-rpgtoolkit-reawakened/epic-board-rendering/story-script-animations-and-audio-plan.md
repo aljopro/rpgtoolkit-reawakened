@@ -1,7 +1,7 @@
 ---
 ticket: 23
 type: feature
-status: built
+status: done
 ---
 
 # Script animations and per-frame audio effects
