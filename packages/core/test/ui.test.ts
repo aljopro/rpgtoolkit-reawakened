@@ -2,9 +2,11 @@ import { deepEqual, equal } from "node:assert/strict";
 import test from "node:test";
 import {
   applyUiEffect,
+  colourSurface,
   composeUi,
   createGameState,
   createScriptServices,
+  createSurfacesSection,
   pollRenderMsgBox,
   UI_COMMANDS,
   UI_PLUGIN,
@@ -49,11 +51,12 @@ test("message-window effects splice globals and use deterministic defaults", () 
 
 test("engine-backed message windows use the default translucent colour surface", () => {
   const state = createGameState({ seed: 0 });
-  state.surfaces = { nextId: 1, entries: { "0": { id: 0, rev: 0, bitmap: { t: "rgba", w: 2, h: 2, b64: "AAAAAAAA" } } }, slots: {}, colours: {} };
+  state.surfaces = createSurfacesSection();
+  const expected = colourSurface(state.surfaces, { r: 0, g: 0, b: 0 });
   const effect = firstEffect(command("mwin", state, [arg("Hello")]));
   applyUiEffect(state, "mwin", effect.args ?? []);
   equal(state.ui.message.translucency, 50);
-  equal(state.ui.backgroundSurface, 1);
+  equal(state.ui.backgroundSurface, expected);
   equal(composeUi(state.ui, 800, 600)[0]?.kind, "blit");
 });
 
