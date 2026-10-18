@@ -57,14 +57,14 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
     behaviour: "Starts the named .anm or animated GIF at the given pixel position. Technically, frames advance every fixed delay tick, a true loop flag keeps the animation running until endAnimation, and the call returns a deterministic animation id without waiting.",
     groups: ["graphics-canvases-animation-video-31"],
     waits: { kind: "never", summary: "Starts playback without waiting." },
-    see: ["docs/spec/engine/plugins-and-battle.md#e-54", "docs/spec/formats/animation.md#layout"],
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
   },
   sizedanimation: {
     summary: "Play a resized animation at pixel x,y. If sizedAnimation() is called in a thread, it may be looped using the last parameter and returns an id that can be used to end...",
     behaviour: "Starts the named .anm or animated GIF at the given pixel position and size. Technically, height precedes width as in the legacy call, the first-page GIF delay is used, a true loop flag keeps the animation running until endAnimation, and the call returns a deterministic animation id without waiting.",
     groups: ["graphics-canvases-animation-video-31"],
     waits: { kind: "never", summary: "Starts playback without waiting." },
-    see: ["docs/spec/engine/plugins-and-battle.md#e-54", "docs/spec/formats/animation.md#layout"],
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
   },
   endanimation: {
     summary: "End a multitasking animation.",

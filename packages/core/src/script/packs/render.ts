@@ -132,7 +132,7 @@ function animationCommand(name: "animation" | "sizedanimation"): BuiltinSpec {
       groups: ["graphics-canvases-animation-video-31"],
       waits: { kind: "never", summary: "Starts playback without waiting." },
       effects: ["fx"],
-      see: ["docs/spec/engine/plugins-and-battle.md#e-54", "docs/spec/formats/animation.md#layout"],
+      see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
     },
     call: (view, args) => {
       const values = args.map((arg) => arg.value as PlainData);

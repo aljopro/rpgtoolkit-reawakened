@@ -1,6 +1,7 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 import {
+  assetKey,
   advanceFx,
   advanceAnimations,
   applyFxDrawList,
@@ -44,8 +45,8 @@ test("script animations advance frames, emit each sound once and draw above the 
   animation.loaded = true;
   animation.delayTicks = 1;
   animation.frames = [
-    { image: "a.bmp", asset: "Bitmap/a.bmp", tile: null, srcWidth: 8, srcHeight: 6, transparent: { r: 1, g: 2, b: 3 }, sound: "one.wav" },
-    { image: "b.bmp", asset: "Bitmap/b.bmp", tile: null, srcWidth: 8, srcHeight: 6, transparent: { r: 4, g: 5, b: 6 }, sound: "two.wav" },
+    { image: "a.bmp", asset: assetKey("Bitmap/a.bmp"), tile: null, srcWidth: 8, srcHeight: 6, transparent: { r: 1, g: 2, b: 3 }, sound: "one.wav" },
+    { image: "b.bmp", asset: assetKey("Bitmap/b.bmp"), tile: null, srcWidth: 8, srcHeight: 6, transparent: { r: 4, g: 5, b: 6 }, sound: "two.wav" },
   ];
   equal((advanceAnimations(state) as readonly { file: string; sound: string }[])[0]?.sound, "one.wav");
   state.time.tick = 1;
@@ -54,7 +55,7 @@ test("script animations advance frames, emit each sound once and draw above the 
   equal(commands.at(-1)?.kind, "blit");
   deepEqual(commands.at(-1), {
     kind: "blit",
-    source: { asset: "Bitmap/b.bmp", tile: null },
+    source: { asset: assetKey("Bitmap/b.bmp"), tile: null },
     src: { x: 0, y: 0, w: 8, h: 6 },
     dst: { x: 12, y: 20, w: 8, h: 6 },
     key: { r: 4, g: 5, b: 6 },
