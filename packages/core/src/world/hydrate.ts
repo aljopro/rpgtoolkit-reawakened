@@ -203,6 +203,10 @@ function worldBoard(
       layer: props.start.layer > 0 ? props.start.layer : 1,
     },
     tilesets: [...tileMetadata],
+    runtime: {
+      tileEdits: [],
+      tileTypes: Array.from({ length: board.sizeL * grid.width * grid.height }, () => "NORMAL"),
+    },
   };
   return bakeLights(hydrated);
 }
