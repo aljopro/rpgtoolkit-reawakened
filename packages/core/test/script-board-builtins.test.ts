@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 import { assetKey, createGameState, createScriptServices, createDefaultVirtuals, ScriptError, type Arg, type GameState, type WorldBoard } from "../src/index.ts";
 import { applyWorldEffect } from "../src/world/effects.ts";
@@ -60,12 +60,10 @@ test("obsolete lifecycle built-ins raise catchable errors", () => {
   for (const name of ["start", "godos", "win"]) {
     const spec = services.commands.get(name)?.spec;
     if (spec === undefined) throw new Error(`missing command ${name}`);
-    try {
-      spec.call(services.view, [], () => ({ value: null }));
-    } catch (error) {
-      if (!(error instanceof ScriptError)) throw error;
-      equal(error.code, "builtin.obsolete");
-    }
+    throws(
+      () => spec.call(services.view, [], () => ({ value: null })),
+      (error: unknown): error is ScriptError => error instanceof ScriptError && error.code === "builtin.obsolete",
+    );
   }
 });
 
