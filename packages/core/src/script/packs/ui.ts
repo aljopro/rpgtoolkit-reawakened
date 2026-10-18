@@ -93,7 +93,7 @@ function uiEffect(name: string, args: readonly PlainData[]): CommandEffect {
 }
 
 export const UI_COMMANDS: readonly BuiltinSpec[] = [
-  uiCommand("createCursorMap", [{ name: "ret", optional: true, byRef: true, variadic: false }], cursorDoc("Create a list of cursor-map points.", "Creates an empty cursor map and returns its integer handle, also writing the optional reference; points are added in order and the call does not wait."), (view, args) => {
+  uiCommand("createCursorMap", [{ name: "ret", optional: true, byRef: true, variadic: false }], cursorDoc("Create a cursor map.", "Creates an empty cursor map and returns its integer handle, also writing the optional reference; points are added in order and the call does not wait."), (view, args) => {
     const ui = uiState(view);
     const id = ui.nextCursorMapId ?? 1;
     return { value: id, out: output(args, 0, id), effects: [uiEffect("createcursormap", [id])] };
@@ -102,16 +102,16 @@ export const UI_COMMANDS: readonly BuiltinSpec[] = [
     { name: "x", optional: false, byRef: false, variadic: false },
     { name: "y", optional: false, byRef: false, variadic: false },
     { name: "map", optional: false, byRef: false, variadic: false },
-  ], cursorDoc("Add a selectable point to a cursor map.", "Appends the integer pixel point `(x,y)` to the selected map; map order defines keyboard selection order and the call does not wait."), (_view, args) => ({ value: null, effects: [uiEffect("cursormapadd", [Math.trunc(number(args, 0)), Math.trunc(number(args, 1)), Math.trunc(number(args, 2))])] })),
+  ], cursorDoc("Add a point to a cursor map.", "Appends the integer pixel point `(x,y)` to the selected map; map order defines keyboard selection order and the call does not wait."), (_view, args) => ({ value: null, effects: [uiEffect("cursormapadd", [Math.trunc(number(args, 0)), Math.trunc(number(args, 1)), Math.trunc(number(args, 2))])] })),
   uiCommand("cursorMapRun", [
     { name: "map", optional: false, byRef: false, variadic: false },
     { name: "ret", optional: true, byRef: true, variadic: false },
-  ], { summary: "Run a cursor map.", behaviour: "Shows the hand at the selected map point and waits for a key or mouse selection. Technically, arrow keys move through points, number keys select a zero-based point, Enter/Return/Space confirms, mouse presses choose the nearest point, and the returned index is one-based.", groups: [CURSOR_GROUP], waits: { kind: "until-input", summary: "Yields until a cursor-map point is selected." }, see: ["docs/spec/engine/rpgcode-functions.md#e-60"] }, (_view, args) => {
+  ], { summary: "Run a cursor map.", behaviour: "Shows the hand at the selected map point and waits for a key or mouse selection. Technically, arrow keys move through points, number keys select a zero-based point, Enter/Return/Space confirms, mouse presses choose the nearest point, and the returned index is zero-based.", groups: [CURSOR_GROUP], waits: { kind: "until-input", summary: "Yields until a cursor-map point is selected." }, see: ["docs/spec/engine/rpgcode-functions.md#e-60"] }, (_view, args) => {
     const map = Math.trunc(number(args, 0));
     const refs = args[1]?.ref === null || args[1]?.ref === undefined ? [] : [args[1].ref];
     return { value: null, effects: [uiEffect("cursormaprun", [map])], wait: { kind: "input.key", global: true, key: null, cursorMap: map, cursorSelection: 0, resumeRefs: refs } };
   }),
-  uiCommand("killCursorMap", [{ name: "map", optional: false, byRef: false, variadic: false }], cursorDoc("Destroy a cursor map.", "Removes the selected map and any active selection; later runs of that handle wait for a valid map and the call does not wait."), (_view, args) => ({ value: null, effects: [uiEffect("killcursormap", [Math.trunc(number(args, 0))])] })),
+  uiCommand("killCursorMap", [{ name: "map", optional: false, byRef: false, variadic: false }], cursorDoc("Kill a cursor map.", "Removes the selected map and any active selection; later runs of that handle wait for a valid map and the call does not wait."), (_view, args) => ({ value: null, effects: [uiEffect("killcursormap", [Math.trunc(number(args, 0))])] })),
   uiCommand("cursorMapHand", [
     { name: "cursor", optional: false, byRef: false, variadic: false },
     { name: "stretch", optional: true, byRef: false, variadic: false },
