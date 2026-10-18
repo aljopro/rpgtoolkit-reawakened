@@ -76,7 +76,20 @@ Input is read only while the player is idle; during blocking scripts keys go to 
 **E-111 Mouse.** Click (blocking or polling) and move coordinates for scripts, click-to-move, cursor maps and on-screen buttons.
 
 <a id="e-112"></a>
-**E-112 Joystick/gamepad.** An optional joystick, mapped to movement and confirm/cancel. **Open point (owner: movement-triggers).** This spec records no other joystick behaviour, and the rebuild's ports already declare a `GamepadInput` (`packages/core/src/ports/input.ts`), so gamepad support counts as a **Reawakened addition** until that epic rules on it; the E-112 anchor is kept so citations to the id still resolve.
+**E-112 Joystick/gamepad.** An optional joystick, mapped to movement and confirm/cancel. The legacy engine records no other joystick behaviour, so the contract below is a **Reawakened addition**; the E-112 anchor is kept so citations to the id still resolve.
+
+<a id="reawakened-gamepad-contract"></a>
+<!-- OWNER: E-112 -->
+**Reawakened rule (OWNER; E-112 gamepad contract; ruled 2026-10-18).** In plain terms: a game controller can walk the player and press confirm or cancel exactly like the keyboard does, and a controller that is unplugged is ignored. Technically, and deterministically:
+
+1. *Normalized event.* The host reports `{ kind: "gamepad", device, connected, axes: { x, y }, buttons }` as plain data. `device` is an integer 0..3 (other values are ignored); `axes.x` and `axes.y` are integers in −1000..1000 (right and down positive); `buttons` is an integer bitmask: bit 0 up, 1 down, 2 left, 3 right, 4 confirm, 5 cancel, 6 menu. No host or browser controller API, object or float enters `core`; the host does the normalizing.
+2. *Dead-zone.* An axis value with absolute value below 250 counts as 0 (strict less-than; 250 itself is active). The pressed directions are the d-pad bits OR the active axes (x < 0 left, x > 0 right, y < 0 up, y > 0 down).
+3. *Project bindings.* The main file's bindings map each direction, confirm (the activation key), cancel and menu to the same logical actions as the keyboard (E-24, E-110); a gamepad input adds nothing the bindings do not name. Diagonals follow the keyboard rule (two directions 90° apart, only where diagonals are allowed).
+4. *Same held/edge state.* A gamepad action updates the same held-key set and key queue as a keyboard key: a press edge on a tick appends one key-queue entry with the next monotonic input sequence number and sets the key held; a release edge clears it; a held action produces no repeat entries. Edges are computed per device from the previous event for that device; simultaneous edges are processed in ascending device then ascending bit order.
+5. *Disconnect.* An event with `connected: false` releases everything that device held and is otherwise ignored; events for a device that has never reported `connected: true` are ignored. Connected devices are merged: an action is held while any connected device holds it.
+6. *Buttons and cursor map.* On-screen button slots are a separate concern (entry 5.6 defines the slot data `{ id, x, y, w, h, action, enabled }`); the gamepad never moves the pointer.
+
+Evidence: the legacy inventory's single line (joystick mapped to movement and confirm/cancel); `docs/spec/formats/main-file.md` `useJoystick`; the `GamepadInput` port in `packages/core/src/ports/input.ts` and AD-14 (event name fixed, payload deferred to this epic); the shared key-claim protocol (Epic 4, entries 4.1 and 4.19). **Rejected alternative:** exposing the browser or native controller API (or float analogue values and per-device bindings) to `core`, which would break G2/G3 and make replays host-dependent. Dead-zone value 250, the device range and the bit layout are an unverified default recorded under the owner's approval of the rule as written. Deferred: haptics, analogue speed, remapping UI and multiplayer assignment. Consumers: entries 5.2 (`input-replay-button-slots`), 5.6.
 
 <a id="e-113"></a>
 **E-113 Focus handling.** The game pauses when the window loses focus.
