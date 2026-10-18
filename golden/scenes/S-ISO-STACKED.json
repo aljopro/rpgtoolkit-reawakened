@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "name": "S-ISO-STACKED",
+  "layout": "iso-stacked",
+  "boardFiles": [
+    "packages/core/test/fixtures/authored/iso-oracle-stacked.brd",
+    "packages/core/test/fixtures/authored/iso-oracle-grass.iso",
+    "packages/core/test/fixtures/authored/iso-oracle-ordinary.tst"
+  ],
+  "sprites": [
+    {
+      "id": "player",
+      "key": "player",
+      "layer": 1,
+      "x": 64,
+      "y": 32,
+      "drawId": 1,
+      "under": [
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "id": "item",
+      "key": "item",
+      "layer": 1,
+      "x": 96,
+      "y": 40,
+      "drawId": 2,
+      "under": [
+        1,
+        2,
+        4
+      ]
+    }
+  ],
+  "ambient": [
+    12,
+    -5,
+    0
+  ],
+  "view": {
+    "viewport": [
+      128,
+      64
+    ],
+    "camera": [
+      999,
+      999
+    ],
+    "include": {
+      "shading": true,
+      "images": false,
+      "sprites": true
+    }
+  },
+  "tick": 0
+}

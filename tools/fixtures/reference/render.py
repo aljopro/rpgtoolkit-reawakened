@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Independent 2-D board oracle for ticket 4.4.
+"""Independent 2-D and isometric board oracle for tickets 4.4 and 4.17.
 
 This module deliberately imports only Pillow and the format readers published in
-``docs/spec/tools/rpgtk_formats.py``.  It consumes versioned JSON scene data and
-renders RGBA PNGs using integer pixel operations.  ``--check`` validates the
+``docs/spec/tools/rpgtk_formats.py``. It consumes versioned JSON scene data and
+renders RGBA PNGs using integer pixel operations. ``--check`` validates the
 schema, regenerates every committed PNG, and compares decoded pixels.
 """
 from __future__ import annotations
@@ -42,6 +42,9 @@ def validate_scene(scene: Any, filename: str = "scene") -> dict[str, Any]:
         fail(f"{filename}: schema must be 1")
     if not isinstance(scene.get("name"), str) or not scene["name"]:
         fail(f"{filename}: name is required")
+    layout = scene.get("layout", "2d")
+    if layout not in {"2d", "iso-stacked", "iso-rotated"}:
+        fail(f"{filename}: layout must be 2d, iso-stacked or iso-rotated")
     boards = scene.get("boardFiles")
     if not isinstance(boards, list) or not boards or any(not isinstance(p, str) for p in boards):
         fail(f"{filename}: boardFiles must be a non-empty string list")
@@ -185,17 +188,24 @@ def tile_image(path: Path, number: int) -> Image.Image:
     if detail == 150:
         diamond = Image.new("RGBA", (64, 32), (0, 0, 0, 0)); target = diamond.load()
         it = iter([image.getpixel((x, y)) for x in range(32) for y in range(32)])
-        for y in range(32):
-            k = y if y <= 15 else 31 - y
-            for x in range(31 - 2 * k, 33 + 2 * k): target[x, y] = next(it)
+        for x in range(64):
+            for y in range(32):
+                if _iso_mask(x, y):
+                    target[x, y] = next(it)
         image = diamond
     return image
 
-
-def resolve_tile(project: Path, ref: str, tick: int) -> Image.Image | None:
+def resolve_tile(project: Path, ref: str, tick: int, asset_dirs: tuple[Path, ...] = ()) -> Image.Image | None:
     if not ref: return None
+    def asset_path(name: str) -> Path:
+        default = project / "Tiles" / name
+        if default.exists(): return default
+        for directory in asset_dirs:
+            candidate = directory / name
+            if candidate.exists(): return candidate
+        return default
     if ref.lower().endswith(".tan"):
-        records = trace(project / "Tiles" / ref, F.parse_tan)
+        records = trace(asset_path(ref), F.parse_tan)
         frames = [value for _, _, field, value in records if field.startswith("frame[") and value]
         speed = next((value for _, _, field, value in records if field.startswith("speed")), 1)
         if not frames: return None
@@ -203,7 +213,59 @@ def resolve_tile(project: Path, ref: str, tick: int) -> Image.Image | None:
         ref = frame
     match = re.match(r"(.+\.(?:tst|iso))(\d+)$", ref, re.I)
     if not match: return None
-    return tile_image(project / "Tiles" / match.group(1), int(match.group(2)))
+    return tile_image(asset_path(match.group(1)), int(match.group(2)))
+
+
+def _iso_mask(x: int, y: int) -> bool:
+    k = y if y <= 15 else 31 - y
+    return 31 - 2 * k <= x <= 32 + 2 * k
+
+
+def _round_half_up(numerator: int, denominator: int = 1) -> int:
+    """Round an integer ratio to nearest, resolving .5 toward +infinity."""
+    return (numerator * 2 + denominator) // (2 * denominator)
+
+
+def project_2d_tile(image: Image.Image) -> Image.Image:
+    """Project a 32×32 tile onto the exact 64×32 diamond mask.
+
+    The inverse affine map is sx=(X-32+2Y)/2 and sy=(32-X+2Y)/2.
+    Integer half-up rounding and source-edge clamping are used, as required by
+    the Reawakened iso2d rule.
+    """
+    if image.size != (32, 32):
+        fail(f"iso2d source must be 32x32, got {image.size}")
+    out = Image.new("RGBA", (64, 32), (0, 0, 0, 0))
+    source, target = image.load(), out.load()
+    for x in range(64):
+        for y in range(32):
+            if not _iso_mask(x, y):
+                continue
+            sx = max(0, min(31, _round_half_up(x - 32 + 2 * y, 2)))
+            sy = max(0, min(31, _round_half_up(32 - x + 2 * y, 2)))
+            target[x, y] = source[sx, sy]
+    return out
+
+
+def board_pixel_size(model: dict[str, Any]) -> tuple[int, int]:
+    """Return the documented canvas size for a board's coordinate style."""
+    if model["coordType"] & 3 == 2:
+        return 64 * model["sizeX"] - 32, 32 * model["sizeY"]
+    if model["coordType"] & 1:
+        return 64 * model["sizeX"] - 32, 16 * model["sizeY"] - 16
+    return model["sizeX"] * 32, model["sizeY"] * 32
+
+
+def tile_pixel(model: dict[str, Any], x: int, y: int) -> tuple[int, int]:
+    """Return the projected reference point from board.md#coordinates."""
+    if model["coordType"] & 3 == 2:
+        return (
+            (x - y + model["sizeX"]) * 32,
+            (x + y - model["sizeX"]) * 16 - 16,
+        )
+    if model["coordType"] & 1:
+        return 64 * x - (32 if y % 2 else 64), 16 * y - 16
+    return (x - 1) * 32, (y - 1) * 32
 
 
 def apply_tint(image: Image.Image, tint: tuple[int, int, int], zero_tint_exact: bool = True) -> Image.Image:
@@ -242,29 +304,54 @@ def bitmap_image(project: Path, filename: str, tick: int) -> Image.Image | None:
 def render(scene: dict[str, Any]) -> Image.Image:
     board_path = ROOT / scene["boardFiles"][0]
     model = board_model(board_path)
+    expected_layout = "iso-rotated" if model["coordType"] & 3 == 2 else "iso-stacked" if model["coordType"] & 1 else "2d"
+    if scene.get("layout", "2d") != expected_layout:
+        fail(f"{scene['name']}: layout does not match board coordType")
     project = board_path.parent.parent
-    board_size = (model["sizeX"] * 32, model["sizeY"] * 32)
+    asset_dirs = tuple((ROOT / path).parent for path in scene["boardFiles"][1:])
+    board_size = board_pixel_size(model)
     board = Image.new("RGBA", board_size, (model.get("bkgColor", 0) & 255, (model.get("bkgColor", 0) >> 8) & 255, (model.get("bkgColor", 0) >> 16) & 255, 255))
     cells = model["cells"]
     include = scene["view"]["include"]
     ambient = tuple(scene["ambient"][i] + model.get(("ambient r", "ambient g", "ambient b")[i], 0) for i in range(3))
+    rotated = model["coordType"] & 3 == 2
+    iso = model["coordType"] & 3 in (1, 2)
+    grid_width = model["sizeX"] + model["sizeY"] if rotated else model["sizeX"]
+    grid_height = grid_width if rotated else model["sizeY"]
+    cells_per_layer = grid_width * grid_height
+    draw_tiles: list[tuple[tuple[int, int, int, int], Image.Image, tuple[int, int, int], tuple[int, int]]] = []
     for index, tile_ref in enumerate(cells):
-        if not tile_ref or index >= model["sizeX"] * model["sizeY"] * model["sizeL"]: continue
-        layer, rem = divmod(index, model["sizeX"] * model["sizeY"]); y, x = divmod(rem, model["sizeX"])
+        if not tile_ref or index >= cells_per_layer * model["sizeL"]:
+            continue
+        layer, rem = divmod(index, cells_per_layer)
+        y, x = divmod(rem, grid_width)
         ref = model["lut"][tile_ref] if tile_ref < len(model["lut"]) else ""
-        tile = resolve_tile(project, ref, scene["tick"])
-        if tile is None: continue
+        tile = resolve_tile(project, ref, scene["tick"], asset_dirs)
+        if tile is None:
+            continue
+        if iso and tile.size == (32, 32):
+            tile = project_2d_tile(tile)
         tint = ambient
         if include["shading"] and model["shades"]:
-            shade_index = y * model["sizeX"] + x
-            # The example has one shading layer; run groups cover cells in order.
+            shade_index = y * grid_width + x
             cursor = 0
             shade = (0, 0, 0)
             for count, r, g, b in model["shades"]:
-                if cursor <= shade_index < cursor + count: shade = (r, g, b); break
+                if cursor <= shade_index < cursor + count:
+                    shade = (r, g, b)
+                    break
                 cursor += count
             tint = tuple(tint[i] + shade[i] for i in range(3))
-        board.alpha_composite(apply_tint(tile, tint), (x * 32, y * 32))
+        if iso:
+            px, py = tile_pixel(model, x + 1, y + 1)
+            # Paint each isometric layout in projected screen order. The
+            # stacked and rotated boards have different centre formulas, but
+            # both use the same layer -> y -> x painter's key.
+            draw_tiles.append(((layer, py, px, index), tile, tint, (px - 32, py - 16)))
+        else:
+            draw_tiles.append(((layer, y, x, index), tile, tint, (x * 32, y * 32)))
+    for _, tile, tint, position in sorted(draw_tiles, key=lambda item: item[0]):
+        board.alpha_composite(apply_tint(tile, tint), position)
     if include["images"]:
         for image in model["images"]:
             if image.get("file"):
@@ -291,6 +378,10 @@ def render(scene: dict[str, Any]) -> Image.Image:
     if scene["view"].get("smallBoard") == "center-if-small":
         offset = ((viewport[0] - board.width) // 2, (viewport[1] - board.height) // 2)
     else:
+        camera = (
+            max(0, min(camera[0], max(0, board.width - viewport[0]))),
+            max(0, min(camera[1], max(0, board.height - viewport[1]))),
+        )
         offset = (-camera[0], -camera[1])
     out = Image.new("RGBA", viewport, (0, 0, 0, 255))
     out.alpha_composite(board, offset)
@@ -303,6 +394,18 @@ def compare_pixels(actual: Image.Image, expected: Image.Image) -> bool:
 
 def check() -> list[str]:
     problems: list[str] = []
+    grass = ROOT / "docs/spec/examples/game/Game/Example/Tiles/grass.iso"
+    grass_expected = ROOT / "docs/spec/examples/renders/grass_iso.png"
+    try:
+        tile = tile_image(grass, 1)
+        canvas = Image.new("RGBA", tile.size, (255, 0, 255, 255))
+        canvas.alpha_composite(tile)
+        expected = Image.open(grass_expected).convert("RGBA")
+        actual = canvas.resize(expected.size, Image.Resampling.NEAREST)
+        if not compare_pixels(actual, expected):
+            problems.append("grass.iso: decoded RGBA differs from docs/spec example render")
+    except Exception as error:
+        problems.append(f"grass.iso: {error}")
     ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
     entries = ledger.get("goldens")
     if not isinstance(entries, list): return ["ledger.goldens must be a list"]
