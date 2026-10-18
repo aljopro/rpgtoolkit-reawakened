@@ -111,6 +111,7 @@ export {
 } from "./values.ts";
 export { CORE_PLUGIN } from "./builtins.ts";
 export { RENDER_PLUGIN } from "./packs/render.ts";
+export { GRAPHICS_COMMANDS, GRAPHICS_PLUGIN } from "./packs/graphics.ts";
 export { WORLD_PLUGIN } from "./packs/world.ts";
 export type { Arg, BuiltinDoc, BuiltinSpec, DocExample, DocReturns, DocTag, DocThrow, DocWait, ParamDoc, ParamDocValue, ParamSpec, RunnerSupport } from "./builtins.ts";
 export {
