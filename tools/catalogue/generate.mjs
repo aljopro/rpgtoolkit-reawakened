@@ -169,13 +169,27 @@ const IMPLEMENTED_COMMANDS = new Set([
 ]);
 /** Commands owned by first-party world/render packs; catalogue stubs must not shadow them. */
 const REAL_PACK_COMMANDS = new Set([
+  // world pack
   "camerapanto", "camerafollow", "camerareset", "camerashake", "getcorner",
   "drawline", "drawrect", "fillrect", "text", "msgbox", "clear", "fade",
   "viewbrd", "put", "layerput", "getboardname", "getboardtile", "boardgettile",
   "getboardtiletype", "tiletype", "animatedtiles", "parallax", "setambientlevel",
   "boardgetvector", "boardsetvector", "boardgetvectorpoint", "boardsetvectorpoint",
   "boardgetprogram", "boardsetprogram", "boardgetprogrampoint", "boardsetprogrampoint",
-  "prg", "setconstants", "underarrow", "animation",
+  "prg", "setconstants", "underarrow", "send", "reset", "mainfile", "gone", "over",
+  "quitgame", "dos", "windows", "win", "start", "godos",
+  // render and UI packs
+  "animation", "sizedanimation", "endanimation", "bordercolor", "wipe", "zoom", "earthquake",
+  "mwin", "mwincls", "mwinsize", "setmwintranslucency", "wincolor", "wincolorrgb",
+  "wingraphic", "textspeed", "font", "fontsize", "bold", "italics", "underline",
+  "color", "colorrgb", "getcolor", "getfontsize", "gettextwidth", "gettextheight",
+  "print", "show", "statictext", "mbox", "prompt", "pixeltext",
+  "createcursormap", "cursormapadd", "cursormaprun", "killcursormap", "cursormaphand", "mousecursor",
+  // graphics pack
+  "drawcircle", "fillcircle", "setpixel", "getpixel", "savescreen", "restorescreen",
+  "restorearrayscreen", "restorescreenarray", "rendernow", "getres", "drawenemy", "createcanvas", "killcanvas",
+  "drawcanvas", "drawcanvastransparent", "canvasdrawpart", "canvasgetscreen", "bitmap",
+  "setimage", "setimagetransparent", "setimagetranslucent", "setimageadditive",
 ]);
 
 /** The stub-safe rows of the catalogue, in catalogue order. */
@@ -272,17 +286,6 @@ function makeStub(stub: CatalogueStub): BuiltinSpec {
     name: stub.name,
     aliases: [],
     params: stub.params,
-    ...(stub.name === "endanimation"
-      ? {
-          doc: {
-            summary: "End a multitasking animation.",
-            behaviour: "Stops the animation with the supplied id. Technically, an unknown id is ignored and the call completes immediately.",
-            groups: ["graphics-canvases-animation-video-31"],
-            waits: { kind: "never", summary: "Does not wait." },
-            see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
-          },
-        }
-      : {}),
     call: (_view, args) => {
       if (stub.obsolete) {
         throw new ScriptError(

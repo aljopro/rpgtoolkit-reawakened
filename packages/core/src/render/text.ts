@@ -12,7 +12,6 @@ import { FONT_GLYPH_HEIGHT, FONT_GLYPH_WIDTH } from "../formats/font/model.ts";
 import { readTrueTypeFont, trueTypeFontMetrics, type TrueTypeFont } from "../formats/font/truetype.ts";
 import type { AssetKey, Rgb, DrawCommand, FontRef, GlyphAdvance } from "../ports/index.ts";
 
-export type BitmapFontMap = ReadonlyMap<AssetKey, LegacyFont>;
 export type FontMap = ReadonlyMap<AssetKey, LegacyFont | TrueTypeFont | Uint8Array>;
 
 export interface TextLayoutOptions {

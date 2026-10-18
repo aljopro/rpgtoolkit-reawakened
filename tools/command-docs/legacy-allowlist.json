@@ -69,8 +69,6 @@
     "catalogue/setbutton",
     "catalogue/checkbutton",
     "catalogue/clearbuttons",
-    "catalogue/earthquake",
-    "catalogue/bordercolor",
     "catalogue/forceredraw",
     "catalogue/removeplayer",
     "catalogue/putplayer",
