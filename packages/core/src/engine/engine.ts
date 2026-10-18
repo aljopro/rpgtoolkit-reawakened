@@ -1,5 +1,6 @@
 import { hashDrawList, hashState } from "../canon/index.ts";
-import { resolveAsset, assetKey } from "../formats/resolver/resolver.ts";
+import { resolveAsset, assetKey, resolveTileReference } from "../formats/resolver/resolver.ts";
+import { classifyImageReference } from "../formats/animation/image-reference.ts";
 import { BinaryReader } from "../formats/binary/reader.ts";
 import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
@@ -15,9 +16,11 @@ import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
 import { composeBoard, type SpriteDraw } from "../render/compose.ts";
 import { applyFxDrawList, advanceFx, applyFxEffect } from "../render/fx.ts";
+import { advanceAnimations, loadAnimation } from "../render/animation.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
 import { coordLayout, tileToPixel } from "../world/coords.ts";
 import type { WorldBoard } from "../world/model.ts";
+import type { FxSection } from "../save/sections.ts";
 import { applyInputEvent, createInputSection, inputView, pruneClaimed } from "../input/index.ts";
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
 import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, realignCamera, updateCamera } from "../world/camera.ts";
@@ -519,6 +522,63 @@ export function createEngine(init: EngineInit): Engine {
   function phaseView(): WaitView {
     return { tick: state.time.tick, input: inputView(state.input), ui: state.ui, claims: state.engine.claims ?? [] };
   }
+  function resolveAnimationFile(file: string): AssetKey | null {
+    const preferred = file.toLowerCase().endsWith(".gif") ? "bitmaps" : "animations";
+    const first = resolveAsset(index, root, preferred, file);
+    if (first.ok) return first.value;
+    const second = preferred === "bitmaps" ? "animations" : "bitmaps";
+    const fallback = resolveAsset(index, root, second, file);
+    return fallback.ok ? fallback.value : null;
+  }
+  function resolveAnimationImage(image: string): { readonly asset: AssetKey; readonly tile: number | null } | null {
+    const reference = classifyImageReference(image);
+    if (reference.kind === "empty") return null;
+    if (reference.kind === "tile") {
+      const resolved = resolveAsset(index, root, "tiles", reference.tileset);
+      return resolved.ok ? { asset: resolved.value, tile: reference.index } : null;
+    }
+    if (reference.kind === "singleTile") {
+      const resolved = resolveTileReference(index, root, reference.path);
+      return resolved.ok && resolved.value.kind === "singleTile" ? { asset: resolved.value.asset, tile: null } : null;
+    }
+    const resolved = resolveAsset(index, root, "bitmaps", reference.kind === "picture" || reference.kind === "tileBitmap" ? reference.path : image);
+    return resolved.ok ? { asset: resolved.value, tile: null } : null;
+  }
+  function prepareAnimations(): void {
+    const animations = (state.fx as Partial<FxSection>).animations ?? [];
+    for (const animation of animations) {
+      if (animation.loaded || animation.finished) continue;
+      const key = animation.asset ?? resolveAnimationFile(animation.file);
+      if (key === null) {
+        animation.finished = true;
+        diagnostics.push({ code: "asset.missing", file: animation.file, line: 0, message: `animation "${animation.file}" is not in the asset index` });
+        continue;
+      }
+      animation.asset = key;
+      const bytes = cache.get(key);
+      if (bytes === undefined) {
+        request(key, "animation");
+        continue;
+      }
+      if (!loadAnimation(state, animation, bytes, resolveAnimationImage)) {
+        animation.finished = true;
+        diagnostics.push({ code: "asset.invalid", file: key, line: 0, message: `cannot decode animation "${animation.file}"` });
+      }
+    }
+  }
+  function runAnimationPhase(): void {
+    advanceFx(state);
+    prepareAnimations();
+    const sounds = advanceAnimations(state);
+    for (const sound of sounds) {
+      const resolved = resolveAsset(index, root, "media", sound.sound);
+      if (!resolved.ok) {
+        diagnostics.push({ code: "asset.missing", file: sound.sound, line: 0, message: `animation sound "${sound.sound}" is not in the asset index` });
+        continue;
+      }
+      bus.postEffect("audio", engineEffect("audio", "sfx.play", [resolved.value, false, null, sound.file], "draw-audio-cue"));
+    }
+  }
   function runPhase(phase: EnginePhase, consumed: InputRecord[]): void {
     state.engine.phase = phase;
     switch (phase) {
@@ -561,7 +621,7 @@ export function createEngine(init: EngineInit): Engine {
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
         return;
       case "animation":
-        advanceFx(state);
+        runAnimationPhase();
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
         return;
       case "audio":

@@ -100,6 +100,84 @@ const EARTHQUAKE = transition(
 
 const BORDER_COLOR = effectCommand("bordercolor", "fx");
 
+function animationCommand(name: "animation" | "sizedanimation"): BuiltinSpec {
+  const sized = name === "sizedanimation";
+  const params = sized
+    ? [
+        { name: "file", optional: false, byRef: false, variadic: false },
+        { name: "x", optional: false, byRef: false, variadic: false },
+        { name: "y", optional: false, byRef: false, variadic: false },
+        { name: "height", optional: false, byRef: false, variadic: false },
+        { name: "width", optional: false, byRef: false, variadic: false },
+        { name: "loop", optional: true, byRef: false, variadic: false },
+      ]
+    : [
+        { name: "file", optional: false, byRef: false, variadic: false },
+        { name: "x", optional: false, byRef: false, variadic: false },
+        { name: "y", optional: false, byRef: false, variadic: false },
+        { name: "loop", optional: true, byRef: false, variadic: false },
+      ];
+  return {
+    name,
+    aliases: [],
+    params,
+    doc: {
+      summary: sized
+        ? "Play a resized animation at pixel x,y. If sizedAnimation() is called in a thread, it may be looped using the last parameter and returns an id that can be used to end..."
+        : "Play an animation at pixel x,y. If animation() is called in a thread, it may be looped using the last parameter and returns an id that can be used to end the animation.",
+      behaviour: sized
+        ? "Starts the named .anm or animated GIF at the given pixel position and size. Technically, height precedes width as in the legacy call, the first-page GIF delay is used, a true loop flag keeps the animation running until endAnimation, and the call returns a deterministic animation id without waiting."
+        : "Starts the named .anm or animated GIF at the given pixel position. Technically, frames advance every fixed delay tick, a true loop flag keeps the animation running until endAnimation, and the call returns a deterministic animation id without waiting.",
+      returns: { summary: "The animation id.", unit: "integer" },
+      groups: ["graphics-canvases-animation-video-31"],
+      waits: { kind: "never", summary: "Starts playback without waiting." },
+      effects: ["fx"],
+      see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
+    },
+    call: (view, args) => {
+      const values = args.map((arg) => arg.value as PlainData);
+      if (typeof values[0] !== "string" || typeof values[1] !== "number" || !Number.isFinite(values[1]) || typeof values[2] !== "number" || !Number.isFinite(values[2])) {
+        throw new ScriptError("builtin.bad-arg", `${name} requires a file and finite pixel coordinates`);
+      }
+      const sizeArgs = sized ? [values[3], values[4]] : [];
+      if (sized && sizeArgs.some((value) => typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value) || value <= 0)) {
+        throw new ScriptError("builtin.bad-arg", `${name} requires positive integer dimensions`);
+      }
+      const loopIndex = sized ? 5 : 3;
+      const loop = values[loopIndex];
+      if (loop !== undefined && loop !== true && loop !== false && loop !== 0 && loop !== 1) {
+        throw new ScriptError("builtin.bad-arg", `${name} loop must be 0 or 1`);
+      }
+      const id = view.state?.fx.nextAnimationId ?? 1;
+      return {
+        value: id,
+        effects: [{ kind: "state-write", section: "fx", args: values }],
+      };
+    },
+  };
+}
+
+const ANIMATION = animationCommand("animation");
+const SIZED_ANIMATION = animationCommand("sizedanimation");
+const END_ANIMATION: BuiltinSpec = {
+  name: "endanimation",
+  aliases: [],
+  params: [{ name: "id", optional: false, byRef: false, variadic: false }],
+  doc: {
+    summary: "End a multitasking animation.",
+    behaviour: "Stops the animation with the supplied id. Technically, an unknown id is ignored and the call completes immediately.",
+    groups: ["graphics-canvases-animation-video-31"],
+    waits: { kind: "never", summary: "Does not wait." },
+    effects: ["fx"],
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
+  },
+  call: (_view, args) => {
+    const id = args[0]?.value;
+    if (typeof id !== "number" || !Number.isFinite(id) || !Number.isInteger(id)) throw new ScriptError("builtin.bad-arg", "endAnimation id must be an integer");
+    return { value: null, effects: [{ kind: "state-write", section: "fx", args: [id] }] };
+  },
+};
+
 /** Rendering owner pack: camera, UI, effects and surfaces are separate command layers. */
 export const RENDER_PLUGIN = pack("render", "Deterministic rendering, camera, UI and visual-effect commands.", [
   FADE,
@@ -110,4 +188,7 @@ export const RENDER_PLUGIN = pack("render", "Deterministic rendering, camera, UI
   ...GRAPHICS_COMMANDS,
   effectCommand("text", "ui"),
   effectCommand("msgbox", "ui", "mixed", "msgBox"),
+  ANIMATION,
+  SIZED_ANIMATION,
+  END_ANIMATION,
 ]);

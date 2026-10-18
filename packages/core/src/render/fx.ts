@@ -6,10 +6,20 @@ import { ScriptError } from "../script/errors.ts";
 import type { GameState } from "../save/state.ts";
 import { createFxSection, type FxSection, type FxColor } from "../save/sections/fx.ts";
 import { shake } from "../world/camera.ts";
+import { animationBlits, applyAnimationEffect } from "./animation.ts";
 
 function ensureFx(state: GameState): FxSection {
   const current = state.fx as Partial<FxSection>;
-  if (current.borderColor === undefined || current.fade === undefined || current.wipe === undefined || current.zoomPercent === undefined || current.zoom === undefined || current.earthquake === undefined) {
+  if (
+    current.borderColor === undefined ||
+    current.fade === undefined ||
+    current.wipe === undefined ||
+    current.zoomPercent === undefined ||
+    current.zoom === undefined ||
+    current.earthquake === undefined ||
+    current.animations === undefined ||
+    current.nextAnimationId === undefined
+  ) {
     state.fx = { ...createFxSection(), ...state.fx };
   }
   return state.fx;
@@ -166,6 +176,10 @@ function zoomCommand(command: DrawCommand, scale: number, cx: number, cy: number
 
 /** Apply a recorded `fx` command to saveable state. */
 export function applyFxEffect(state: GameState, effect: EffectRecord): void {
+  if (effect.name === "animation" || effect.name === "sizedanimation" || effect.name === "endanimation") {
+    applyAnimationEffect(state, effect);
+    return;
+  }
   const args = effect.args ?? [];
   if (effect.name === "bordercolor") {
     const fx = ensureFx(state);
@@ -252,11 +266,14 @@ export function applyFxDrawList(list: DrawList, fx: FxSection): DrawList {
     zoomPercent: fx.zoomPercent ?? defaults.zoomPercent,
     zoom: fx.zoom ?? defaults.zoom,
     earthquake: fx.earthquake ?? defaults.earthquake,
+    animations: fx.animations ?? defaults.animations,
+    nextAnimationId: fx.nextAnimationId ?? defaults.nextAnimationId,
   };
   const zoom = normalized.zoomPercent <= 0 ? 1 : 100 / Math.max(1, 100 - normalized.zoomPercent);
   const cx = list.width / 2;
   const cy = list.height / 2;
   const commands = list.commands.map((command) => zoom === 1 ? command : zoomCommand(command, zoom, cx, cy));
+  commands.push(...animationBlits(normalized));
   commands.push(...wipeCommands(normalized, list.width, list.height));
   commands.push(...fadeCommands(normalized, list.width, list.height));
   return { ...list, commands };

@@ -1,7 +1,9 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 import {
+  assetKey,
   advanceFx,
+  advanceAnimations,
   applyFxDrawList,
   applyFxEffect,
   createCameraSection,
@@ -30,7 +32,43 @@ test("fx section defaults are deterministic and saveable", () => {
     zoomPercent: 0,
     zoom: null,
     earthquake: null,
+    animations: [],
+    nextAnimationId: 1,
   });
+});
+
+test("script animations advance frames, emit each sound once and draw above the board", () => {
+  const state = createGameState({ seed: 1 });
+  applyFxEffect(state, { ...effect("animation", ["spark.anm", 12, 20, 1]), result: 1 });
+  const animation = state.fx.animations[0];
+  if (animation === undefined) throw new Error("animation was not created");
+  animation.loaded = true;
+  animation.delayTicks = 1;
+  animation.frames = [
+    { image: "a.bmp", asset: assetKey("Bitmap/a.bmp"), tile: null, srcWidth: 8, srcHeight: 6, transparent: { r: 1, g: 2, b: 3 }, sound: "one.wav" },
+    { image: "b.bmp", asset: assetKey("Bitmap/b.bmp"), tile: null, srcWidth: 8, srcHeight: 6, transparent: { r: 4, g: 5, b: 6 }, sound: "two.wav" },
+  ];
+  equal((advanceAnimations(state) as readonly { file: string; sound: string }[])[0]?.sound, "one.wav");
+  state.time.tick = 1;
+  equal((advanceAnimations(state) as readonly { file: string; sound: string }[])[0]?.sound, "two.wav");
+  const commands = applyFxDrawList(blank(), state.fx).commands;
+  equal(commands.at(-1)?.kind, "blit");
+  deepEqual(commands.at(-1), {
+    kind: "blit",
+    source: { asset: assetKey("Bitmap/b.bmp"), tile: null },
+    src: { x: 0, y: 0, w: 8, h: 6 },
+    dst: { x: 12, y: 20, w: 8, h: 6 },
+    key: { r: 4, g: 5, b: 6 },
+    tint: { r: 0, g: 0, b: 0 },
+    alpha: 255,
+    blend: "normal",
+    iso2d: false,
+  });
+  state.time.tick = 2;
+  equal((advanceAnimations(state) as readonly unknown[]).length, 1);
+  equal(state.fx.animations.length, 1);
+  applyFxEffect(state, { ...effect("endanimation", [1]), result: null });
+  equal(state.fx.animations.length, 0);
 });
 
 test("fade advances exactly 30 ticks and leaves a terminal primitive", () => {

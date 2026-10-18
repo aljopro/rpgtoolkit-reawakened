@@ -52,6 +52,27 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
     waits: { kind: "until-input", summary: "Yields until a cursor-map key selects a button." },
     see: ["docs/spec/engine/rpgcode-functions.md#reawakened-msgbox-layout"],
   },
+  animation: {
+    summary: "Play an animation at pixel x,y. If animation() is called in a thread, it may be looped using the last parameter and returns an id that can be used to end the animation.",
+    behaviour: "Starts the named .anm or animated GIF at the given pixel position. Technically, frames advance every fixed delay tick, a true loop flag keeps the animation running until endAnimation, and the call returns a deterministic animation id without waiting.",
+    groups: ["graphics-canvases-animation-video-31"],
+    waits: { kind: "never", summary: "Starts playback without waiting." },
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
+  },
+  sizedanimation: {
+    summary: "Play a resized animation at pixel x,y. If sizedAnimation() is called in a thread, it may be looped using the last parameter and returns an id that can be used to end...",
+    behaviour: "Starts the named .anm or animated GIF at the given pixel position and size. Technically, height precedes width as in the legacy call, the first-page GIF delay is used, a true loop flag keeps the animation running until endAnimation, and the call returns a deterministic animation id without waiting.",
+    groups: ["graphics-canvases-animation-video-31"],
+    waits: { kind: "never", summary: "Starts playback without waiting." },
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
+  },
+  endanimation: {
+    summary: "End a multitasking animation.",
+    behaviour: "Stops the animation with the supplied id. Technically, an unknown id is ignored and the call completes immediately.",
+    groups: ["graphics-canvases-animation-video-31"],
+    waits: { kind: "never", summary: "Does not wait." },
+    see: ["docs/spec/engine/plugins-and-battle.md#e-54"],
+  },
   fade: {
     summary: "Perform a fade using the current colour. There are several different types of fades.",
     behaviour: "Plays a screen effect and waits for it to finish. Technically, types 0 to 5 select the effect (0 when the argument is omitted), each running 30 fixed ticks; any other type does nothing and raises no error.",
