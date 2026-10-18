@@ -528,7 +528,7 @@ export const pinText: TextCommand = {
   x: 10,
   y: 20,
   text: "Hello",
-  font: { asset: "font.ttf" as AssetKey },
+  font: { asset: "font.ttf" as AssetKey, size: 8, bold: false, italic: false },
   rgb: { r: 255, g: 255, b: 255 },
   advances: [{ glyph: 65, advance: 8 }],
 };

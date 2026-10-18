@@ -104,3 +104,56 @@ test("an authored RPGCode program executes through the engine VM", () => {
   equal(resumed.ticksRun, 1);
   equal(resumed.diagnostics.length, 0);
 });
+
+function breakpointEngine(program: string, seed = 7) {
+  const board = writeBoard(createEmptyBoard());
+  if (!board.ok) throw new Error(board.error.message);
+  const engine = createEngine({
+    seed,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program,
+  });
+  const first = engine.advance(0, []);
+  const request = first.requests[0];
+  if (request?.kind !== "asset") throw new Error("expected board asset request");
+  engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: board.value } }]);
+  return engine;
+}
+
+test("breakpoints stop inside a tick and continue to the uninterrupted hash", () => {
+  const uninterrupted = breakpointEngine("x = 1\nx = 2\nend()\n");
+  const debugged = breakpointEngine("x = 1\nx = 2\nend()\n");
+  const baseline = uninterrupted.advance(1, []);
+  debugged.setBreakpoints([{ file: "<inline>", line: 2 }]);
+  const stopped = debugged.advance(2, []);
+  equal(stopped.ticksRun, 0);
+  equal(stopped.tickAfter, 0);
+  equal(stopped.paused?.line, 2);
+  const resumed = debugged.advance(1, []);
+  equal(resumed.ticksRun, 1);
+  equal(resumed.paused, null);
+  equal(resumed.stateHash, baseline.stateHash);
+});
+
+test("breakpoints that never hit preserve every tick hash", () => {
+  const plain = breakpointEngine("x = 1\nend()\n", 11);
+  const debugged = breakpointEngine("x = 1\nend()\n", 11);
+  debugged.setBreakpoints([{ file: "<inline>", line: 99 }]);
+  for (let tick = 0; tick < 3; tick += 1) equal(debugged.advance(1, []).stateHash, plain.advance(1, []).stateHash);
+});
+
+test("step resume executes one VM instruction and pauses again", () => {
+  const engine = breakpointEngine("x = 1\nx = 2\nend()\n", 13);
+  engine.setBreakpoints([{ file: "<inline>", line: 2 }]);
+  const stopped = engine.advance(1, []);
+  equal(stopped.paused?.line, 2);
+  const stepped = engine.advance(0, [], undefined, "step");
+  equal(stepped.ticksRun, 0);
+  equal(stepped.tickAfter, 0);
+  equal(stepped.paused?.thread, 1);
+});
