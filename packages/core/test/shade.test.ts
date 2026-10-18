@@ -47,9 +47,28 @@ test("light rasterization supports ellipse, gradient and clipped gradient", () =
   const ellipseLayer = rasterizeLights([ellipse], 2, 1);
   const gradientLayer = rasterizeLights([gradient], 2, 1);
   const clippedLayer = rasterizeLights([clipped], 2, 1);
-  deepEqual(ellipseLayer.records, [{ runCount: 1, r: 100, g: 100, b: 100 }, { runCount: 1, r: -100, g: -100, b: -100 }]);
+  // (48,16) lies exactly on the ellipse boundary (round-7: excluded, so unlit).
+  deepEqual(ellipseLayer.records, [{ runCount: 1, r: 100, g: 100, b: 100 }, { runCount: 1, r: 0, g: 0, b: 0 }]);
   deepEqual(gradientLayer.records, [{ runCount: 1, r: 0, g: 0, b: 0 }, { runCount: 1, r: 100, g: 100, b: 100 }]);
   deepEqual(clippedLayer.records, [{ runCount: 1, r: -50, g: -50, b: -50 }, { runCount: 1, r: 50, g: 50, b: 50 }]);
+});
+
+test("ellipse light excludes its boundary and lights strictly interior cells", () => {
+  const colours = [{ r: -100, g: -100, b: -100 }, { r: 100, g: 100, b: 100 }];
+  // Centre (112,80), radii 96 x 64: cell centres (208,80) and (112,16) are on the boundary; (144,80) is inside.
+  const light: WorldLight = { layer: 99, type: 0, nodes: [{ x: 112, y: 80 }, { x: 208, y: 80 }, { x: 112, y: 144 }], colours };
+  const layer = rasterizeLights([light], 8, 4);
+  const at = (x: number, y: number) => {
+    let index = y * 8 + x;
+    for (const record of layer.records) {
+      if (index < record.runCount) return record;
+      index -= record.runCount;
+    }
+    throw new Error("out of range");
+  };
+  deepEqual(at(6, 2), { runCount: at(6, 2).runCount, r: 0, g: 0, b: 0 });
+  deepEqual(at(3, 0), { runCount: at(3, 0).runCount, r: 0, g: 0, b: 0 });
+  equal(at(4, 2).r !== 0, true);
 });
 
 test("bakeLights consumes source light objects into reserved shading layer zero", () => {
