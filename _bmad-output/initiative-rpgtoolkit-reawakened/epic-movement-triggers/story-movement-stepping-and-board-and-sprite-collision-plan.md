@@ -3,7 +3,7 @@ title: 'Movement stepping and board and sprite collision'
 type: 'feature'
 ticket: 4
 created: '2026-10-18'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'pinned'
 baseline_revision: '97333859'

@@ -3,7 +3,7 @@ title: 'Unified actor and sprite runtime state'
 type: 'feature'
 ticket: 3
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: 'd53cdd804d5f93525c2aa4e444bc848e75f550a5'
 risk: 'high'
 route: 'full'

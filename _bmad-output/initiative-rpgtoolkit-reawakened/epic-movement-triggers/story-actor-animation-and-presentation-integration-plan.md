@@ -3,7 +3,7 @@ title: 'Actor animation and presentation integration'
 type: 'feature'
 ticket: 10
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: 'a3c1a027'
 route: 'full'
 route_source: 'pinned'
