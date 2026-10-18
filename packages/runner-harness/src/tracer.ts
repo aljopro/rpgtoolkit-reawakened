@@ -188,6 +188,7 @@ export function runTracerScene(scene: TracerScene, files: ReadonlyMap<string, Ui
     width: scene.view.viewport[0],
     height: scene.view.viewport[1],
     maxTicks: 60,
+    cameraTarget,
     assets: textures,
     globalAmbient: { r: scene.ambient[0], g: scene.ambient[1], b: scene.ambient[2] },
     ...(scene.sprites === undefined ? {} : { sprites: scene.sprites }),
