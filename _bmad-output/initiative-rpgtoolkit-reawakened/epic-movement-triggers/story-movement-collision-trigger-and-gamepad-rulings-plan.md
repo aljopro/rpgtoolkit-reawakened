@@ -3,7 +3,7 @@ title: 'Movement, collision, trigger and gamepad rulings'
 type: 'feature'
 ticket: 1
 created: '2026-10-18'
-status: 'draft'
+status: 'built'
 baseline_revision: 'd53cdd804d5f93525c2aa4e444bc848e75f550a5'
 risk: 'high'
 context:
@@ -31,3 +31,10 @@ Every proposed row has evidence, a rejected alternative, an OWNER marker, and a 
 
 ## Verification
 Run catalogue and provenance checks, link/anchor review, and the independent ticket-store validation. A person approves the plan checkpoint before implementation tickets become ready-for-dev.
+
+## Implementation Notes
+
+- **Ruled (Jensen, 2026-10-18):** R-50 to R-54 and E-112 approved exactly as written in `discovery/inception-proposal.md` section 2; the "Proposed" notes in this plan are approved.
+- **Written to docs/spec:** `docs/spec/engine/movement-and-collision.md` anchors `#r-50`, `#r-51` (direct collision = entry 5.4, diversion = entry 5.5), `#r-52`, `#r-53`, `#r-54` and `#r-50-ratifications` (fixed tick, total order, actor fall-backs, condition-before/set-after, key claims, VM-budget boundary, deferrals); `docs/spec/engine/display-input-audio.md#reawakened-gamepad-contract` (E-112). Each carries an OWNER marker, evidence, the rejected alternative and a deterministic rule.
+- **Unverified defaults inside the approved rules** (recorded in the docs, for owner awareness): R-51 120-tick wait, one diversion attempt per blocked step and queue-ahead; E-112 dead-zone 250, device range 0..3 and the bit layout; R-54 integer scaling (x256) and the `tan 63°` rational for the isometric threshold.
+- **Other rows touched:** `parity-checklist.md` conflict note; spine Deferred bullet for the VM budget. No catalogue row changed. No TypeScript, fixtures or goldens.
