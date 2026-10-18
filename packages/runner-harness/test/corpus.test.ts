@@ -150,10 +150,10 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
     "sample-win-demo": "3b1732084684c66e",
     "sample-oldman-demo": "a51a83741d76d209",
     "sample-man-demo": "8db3589e8f557fca",
-    "sample-man-wander-demo": "72cecfb9e0cca6b3",
+    "sample-man-wander-demo": "bf852aca0a053503",
     "sample-start-basic": "125c516d113533c1",
     "sample-system-basic": "f384e0cc29fdca78",
-    "sample-wander-basic": "6c07077b8ac4f38b",
+    "sample-wander-basic": "278c0fcbe086ed7f",
   };
 
   for (const res of results) {
@@ -176,7 +176,7 @@ test("corpus: defined finish line for programs that never end (Basic/Prg/wander.
   const hash2 = host2.stateHash();
 
   equal(hash1, hash2);
-  equal(hash1, "6c07077b8ac4f38b");
+  equal(hash1, "278c0fcbe086ed7f");
 
   for (let split = 0; split <= 5; split++) {
     const fresh = wander.createHost(0);
@@ -196,15 +196,11 @@ test("corpus: man_wander.prg transfers control to man.prg via run() and complete
 
   const host = manWander.createHost(0);
   equal(host.state().vm.threads[0]?.status, "ready");
-  host.advance(1, []); // tick 0 -> itemPath movement wait
-  equal(host.state().vm.threads[0]?.wait?.kind, "movement");
-  host.advance(1, []); // tick 1 -> intercept, run("man.prg") yields
+  host.advance(1, []); // real movement command runs through the hydrated-free corpus host without a generic catalogue wait
   equal(host.state().vm.threads[0]?.status, "ready");
-  const prog = host.state().vm.threads[0]?.frames[0]?.program;
-  equal(prog?.kind === "file" ? prog.path : undefined, "man.prg");
-  host.advance(1, []); // tick 2 -> man.prg runs, waits on input.key
+  host.advance(1, []); // intercept branch reaches man.prg and parks on its input wait
   equal(host.state().vm.threads[0]?.wait?.kind, "input.key");
-  host.advance(1, manWander.inputsForTick ? manWander.inputsForTick(3) : []); // tick 3 -> ENTER completes wait() and program
+  host.advance(1, manWander.inputsForTick ? manWander.inputsForTick(3) : []); // ENTER completes wait() and program
   equal(host.state().vm.threads[0]?.status, "finished");
 });
 

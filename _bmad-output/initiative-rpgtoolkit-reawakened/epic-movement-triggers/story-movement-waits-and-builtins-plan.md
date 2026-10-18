@@ -84,6 +84,31 @@ Proposed ruling (pending owner review): movement command waits use the actor's q
 
 Proposed ruling (pending owner review): stance commands use a `sprite.stance` wait resolved from the 5.10 animation owner's `stanceComplete` result. Evidence: 5.10 owns stance progression and emits completion; rejected alternative: deriving a duration in the command would duplicate animation timing and diverge on hold/release.
 
+Golden/corpus drift ruling (recorded after replay): `sample-man-wander-demo`
+changed from `72cecfb9e0cca6b3` to `bf852aca0a053503` and
+`sample-wander-basic` changed from `6c07077b8ac4f38b` to
+`278c0fcbe086ed7f`. Replay confirms both changes are caused by the real
+movement pack replacing the catalogue test-double: `wander` now consumes
+its deterministic direction and emits sprite movement effects, while
+`man_wander.prg` executes the real `itemPath` branch and reaches the
+following input wait. The generic one-tick movement wait assertion was
+removed from the corpus test because that host has no hydrated sprite;
+the real engine movement-wait cases remain covered by the authored scene.
+Rejected alternative: retaining the old hashes or generic wait would pin
+test-double behaviour and violate G5.
+
+Fixture scene coverage (all six `movement-waits` cases are asserted through
+the core movement runtime per tick; no cases are deferred to another owner):
+
+| Case | Real-core assertion |
+|---|---|
+| `pause-thread-flag-waits-for-completion` | path queue, per-tick actor position/state, movement completion at tick 23, wake/locate at tick 24 |
+| `without-the-flag-the-thread-continues` | concurrent path progression, sleep wake at tick 10, per-tick position/state |
+| `blocking-thread-implies-the-wait` | two real push steps, blocking movement wait, completion at tick 15, continuation at tick 16 |
+| `multirun-one-wait-over-both-sprites` | both real paths, coupled wait until slower actor completion at tick 31, continuation at tick 32 |
+| `waypoint-path-copy-two-cycles` | copied waypoint queue, both cycles, per-tick positions and completion |
+| `waypoint-link-sees-live-edit` | linked waypoint route after the tick-12 vector edit, per-tick positions and completion |
+
 ## Plan Change Log
 
 ## Review Triage Log
