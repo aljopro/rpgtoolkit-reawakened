@@ -6,10 +6,11 @@
 // movement-triggers (first player, presence, camera target) and menu-party-save (saved games)
 // until those epics register the real owners.
 import { test } from "node:test";
-import { deepEqual, equal, ok } from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { deepEqual, equal } from "node:assert/strict";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { TextEncoder } from "node:util";
 import {
   assetKey,
   createAssetIndex,
@@ -131,7 +132,7 @@ function makeDoubles(restored = false): Doubles {
             if (effect.name === "createplayer") players.push(effect.args[0] ?? null);
             if (effect.name === "placeplayer") {
               const [x, y, , unit] = effect.args as [number, number, number, string];
-              position = unit === "tile" ? { x: (x - 1) * 32 + 16, y: (y - 1) * 32 + 16 } : { x, y };
+              position = unit === "tile" ? { x: (x - 1) * 32 + 16, y: (y - 1) * 32 + 31 } : { x, y };
             }
           },
         },
@@ -211,8 +212,8 @@ test("a scripted game boots from start.prg to its first board with the ruled eff
   const result = run(engine, game.files, 30);
   deepEqual(result.requests.slice(0, 1), ["main.gam"]);
   deepEqual(result.requests.filter((key) => key.startsWith("font/")), ["font/good.ttf", "font/broken.ttf"]);
-  ok(result.requests.indexOf("prg/start.prg") > 0);
-  ok(result.requests.includes("boards/start.brd"));
+  equal(result.requests.indexOf("prg/start.prg") > 0, true);
+  equal(result.requests.includes("boards/start.brd"), true);
   deepEqual(result.diagnostics.map((diagnostic) => diagnostic.code), ["font.rejected"]);
   const state = doubles.state();
   equal(state.engine.boot?.stage, "running");
@@ -273,7 +274,7 @@ test("a restored saved game skips initBoard and its board entry", () => {
 test("a main file's plugin list reports declined and unknown plugins and keeps booting", () => {
   const game = authorGame({ ...SCRIPTED, plugins: ["no-such-plugin.dll"] });
   const result = run(bootEngine(game, makeDoubles()), game.files, 10);
-  ok(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved" && diagnostic.message.includes("no-such-plugin.dll")));
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved" && diagnostic.message.includes("no-such-plugin.dll")), true);
 });
 
 test("a game-folder root takes its project path from the main file", () => {
@@ -281,7 +282,7 @@ test("a game-folder root takes its project path from the main file", () => {
   const doubles = makeDoubles();
   const result = run(bootEngine(game, doubles), game.files, 10);
   deepEqual(result.requests.slice(0, 1), ["main/test.gam"]);
-  ok(result.requests.includes("game/sample/boards/start.brd"));
+  equal(result.requests.includes("game/sample/boards/start.brd"), true);
   equal(doubles.state().world.board?.key, "game/sample/boards/start.brd");
   equal(doubles.state().vm.globals.entered, 1);
 });
@@ -322,8 +323,8 @@ test("send leaves the ruled state: old board threads dead, a persistent thread a
   // The start board's bg.prg thread died; the persistent thread and the new board's thread live.
   equal(livePrograms(state), "board:world,persistent:script");
   equal(state.engine.transition, undefined);
-  // Tile (30, 20) is pixel (944, 624): the camera centres on it without smoothing.
-  deepEqual({ x: state.camera.x, y: state.camera.y, prevX: state.camera.prevX, prevY: state.camera.prevY }, { x: 784, y: 504, prevX: 784, prevY: 504 });
+  // Tile (30, 20) is pixel (944, 639) on a 2D board (E-11): the camera centres on it without smoothing.
+  deepEqual({ x: state.camera.x, y: state.camera.y, prevX: state.camera.prevX, prevY: state.camera.prevY }, { x: 784, y: 519, prevX: 784, prevY: 519 });
   deepEqual(doubles.sprites.map((effect) => [effect.name, ...effect.args]).slice(-1), [["placeplayer", 30, 20, 1, "tile"]]);
   deepEqual(doubles.triggers.map((effect) => [effect.name, ...effect.args]).slice(-1), [["deactivateat", 30, 20, 1, "tile"]]);
   // Both boards name theme.mid, so the second arrival posts no replacement music record (E-16).
@@ -342,7 +343,7 @@ test("send resumes the caller on the next tick and a different board music posts
   run(engine, game.files, 1);
   equal(doubles.state().vm.globals.aftersend, 1);
   deepEqual(doubles.audio.map((effect) => effect.args[0]), ["media/theme.mid", "media/other.mid"]);
-  // Tile (2, 3) is pixel (48, 80): the camera clamps to the board corner.
+  // Tile (2, 3) is pixel (48, 95): the camera clamps to the board corner.
   deepEqual({ x: doubles.state().camera.x, y: doubles.state().camera.y }, { x: 0, y: 0 });
 });
 
@@ -359,23 +360,24 @@ test("send to a board that is not in the game reports a diagnostic, changes noth
 test("send validates its arguments with a catchable script error", () => {
   const game = authorGame({ ...SEND_GAME, programs: { ...SEND_GAME.programs, "enter.prg": 'send("", 1, 1)\nend()\n' } });
   const result = run(bootEngine(game, makeDoubles()), game.files, 4);
-  ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes("send")), JSON.stringify(result.diagnostics));
+  equal(result.diagnostics.some((diagnostic) => diagnostic.message.includes("send")), true, JSON.stringify(result.diagnostics));
 });
 
 // The sample games: their start.prg boots through the real engine with the doubles above.
 const legacyRoot = join(repoRoot, "fixtures", "legacy");
 const haveLegacy = existsSync(legacyRoot);
 
+/** Every file under `root`, as `/`-separated paths relative to it (directories are skipped by their read failing). */
 function listFiles(root: string): string[] {
   const found: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir).sort()) {
-      const full = join(dir, entry);
-      if (statSync(full).isDirectory()) walk(full);
-      else found.push(relative(root, full).split("\\").join("/"));
+  for (const entry of readdirSync(root, { recursive: true }).map((path) => path.split("\\").join("/")).sort()) {
+    try {
+      readFileSync(join(root, entry));
+      found.push(entry);
+    } catch {
+      // A directory: its files are listed on their own.
     }
-  };
-  walk(root);
+  }
   return found;
 }
 
