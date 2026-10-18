@@ -18,6 +18,7 @@ import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
 import type { SectionKey } from "../save/state.ts";
 import { effectCommand } from "./packs/common.ts";
+import { GRAPHICS_COMMANDS } from "./packs/graphics.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
 
 const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
@@ -413,20 +414,17 @@ const PACK_CATALOGUE_FALLBACKS: readonly BuiltinSpec[] = [
   effectCommand("camerafollow", "camera"),
   effectCommand("camerareset", "camera"),
   effectCommand("camerashake", "fx", "draw-audio-cue"),
-  effectCommand("drawline", "surfaces"),
-  effectCommand("drawrect", "surfaces"),
-  effectCommand("fillrect", "surfaces"),
   effectCommand("text", "ui"),
   effectCommand("msgbox", "ui", "mixed"),
-  effectCommand("clear", "surfaces"),
   effectCommand("fade", "fx", "draw-audio-cue"),
-].map(fallbackDocumentation);
+].map(fallbackDocumentation).concat(GRAPHICS_COMMANDS);
 
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
 
+const CATALOGUE_GRAPHICS_NAMES = new Set(GRAPHICS_COMMANDS.flatMap((command) => [command.name, ...command.aliases]));
 const CATALOGUE_OWNED_NAMES = new Set([
-  ...CATALOGUE_STUBS_PLUGIN.commands.map((command) => command.name),
-  ...CATALOGUE_RESPONDERS_PLUGIN.commands.map((command) => command.name),
+  ...CATALOGUE_STUBS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
+  ...CATALOGUE_RESPONDERS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
 ]);
 const CORE_FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
 
@@ -436,9 +434,9 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
   commands: [
-    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands),
+    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name))),
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
-      (command) => !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
+      (command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name) && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
     ),
     ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
   ],
