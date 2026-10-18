@@ -2,7 +2,7 @@ import { hashDrawList, hashState } from "../canon/index.ts";
 import { resolveAsset } from "../formats/resolver/resolver.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
 import type { DrawList } from "../ports/draw.ts";
-import type { Engine, Diagnostic, Breakpoint, SurfacePixels } from "../ports/engine.ts";
+import type { Engine, Diagnostic, Breakpoint, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
@@ -27,9 +27,11 @@ import {
   runWaitsPhase,
   startProgram,
   STEP_BUDGET,
+  stepThread,
   type ProgramRef,
   type ResolvedPlugin,
 } from "../script/index.ts";
+import type { Thread } from "../script/state.ts";
 import type { WaitView } from "../ports/wait.ts";
 import { runTimePhase } from "../time/time.ts";
 import { rasterize, readSurfacePixels, replaceSurface, surfaceTextures, createSurfacesSection, type SurfacePixelCache } from "../raster/index.ts";
@@ -69,6 +71,8 @@ export type EngineInit = {
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
 };
 type RequestEntry = { readonly reqId: number; readonly key: AssetKey; readonly kind: "board" | "tile" };
+type SourceLocation = { file: string; line: number };
+type Paused = { thread: number; frame: number; line: number };
 
 const DEFAULT_ENGINE_PLUGINS: readonly ResolvedPlugin[] = ENGINE_DEFAULT_MANIFEST.flatMap((entry) => {
   const definition = entry.id === "core"
@@ -147,6 +151,7 @@ export function createEngine(init: EngineInit): Engine {
       claims: state.engine.claims ?? [],
       ...(state.engine.phase === undefined ? {} : { phase: state.engine.phase }),
     };
+    if (state.engine.openTick !== undefined) next.openTick = state.engine.openTick;
     if (state.engine.pendingEffects !== undefined) next.pendingEffects = state.engine.pendingEffects;
     if (state.engine.effectDropped !== undefined) next.effectDropped = state.engine.effectDropped;
     if (state.engine.effectDiagnostics !== undefined) next.effectDiagnostics = state.engine.effectDiagnostics;
@@ -257,7 +262,6 @@ export function createEngine(init: EngineInit): Engine {
     }
     queuedInputs.unshift(...deferred);
   }
-
   function consumeStoppedInputs(consumed: InputRecord[]): void {
     if (!failed) return;
     const records = takeQueuedInputs(state.time.tick);
@@ -266,13 +270,11 @@ export function createEngine(init: EngineInit): Engine {
       consumed.push(record);
     }
   }
-
   function currentDrawList(alpha = 0): DrawList {
     const board: WorldBoard | null = state.world.board ?? null;
     if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
     return composeBoard({ board, tick: state.time.tick, camera: { x: 0, y: 0 }, viewport: { width: init.width, height: init.height }, alpha, include: { shading: false, images: false, sprites: false } });
   }
-
   function refreshFrame(): void {
     const list = currentDrawList(0);
     const nextHash = hashDrawList(list);
@@ -281,9 +283,76 @@ export function createEngine(init: EngineInit): Engine {
     replaceSurface(state.surfaces, 0 as SurfaceId, rendered.width, rendered.height, rendered.rgba);
     frameHash = nextHash;
   }
+  function threadLocation(thread: Thread): SourceLocation | null {
+    const frame = thread.frames[thread.frames.length - 1];
+    if (frame === undefined) return null;
+    const program = services.programs.get(frame.program);
+    return program.ops[frame.ip]?.pos ?? program.ops[frame.ip - 1]?.pos ?? null;
+  }
+  function breakpointAt(location: SourceLocation | null): boolean {
+    if (location === null) return false;
+    return breakpoints.some((breakpoint) => breakpoint.file === location.file && breakpoint.line === location.line);
+  }
+  function pauseAt(thread: Thread, location: SourceLocation | null): Paused | null {
+    if (location === null) return null;
+    return { thread: thread.id, frame: Math.max(0, thread.frames.length - 1), line: location.line };
+  }
+  function beginOpenTick(): void {
+    const readyThreads = state.vm.threads
+      .filter((thread) => thread.status === "ready")
+      .sort((left, right) => left.id - right.id)
+      .map((thread) => thread.id);
+    state.engine.openTick = { readyThreads, readyIndex: 0, currentThread: readyThreads[0] ?? 0, stepsUsed: 0 };
+  }
+  function nextOpenThread(): void {
+    const cursor = state.engine.openTick;
+    if (cursor === undefined) return;
+    cursor.readyIndex += 1;
+    const next = cursor.readyThreads[cursor.readyIndex];
+    if (next === undefined) delete state.engine.openTick;
+    else cursor.currentThread = next;
+  }
+  function runOpenThreads(mode: ResumeMode): Paused | null {
+    if (state.engine.openTick === undefined) beginOpenTick();
+    const cursor = state.engine.openTick;
+    if (cursor === undefined) return null;
+    while (state.engine.openTick !== undefined) {
+      const active = state.vm.threads.find((thread) => thread.id === cursor.currentThread);
+      if (active === undefined || active.status !== "ready") {
+        nextOpenThread();
+        continue;
+      }
+      const before = threadLocation(active);
+      const suppressed = cursor.skip !== undefined && before !== null && cursor.skip.file === before.file && cursor.skip.line === before.line;
+      if (!suppressed && breakpointAt(before)) {
+        if (before !== null) cursor.skip = { file: before.file, line: before.line };
+        return pauseAt(active, before);
+      }
+      const steps = stepThread(active, state.vm, services, 1);
+      cursor.stepsUsed += steps;
+      const after = threadLocation(active);
+      if (after === null || before === null || after.file !== before.file || after.line !== before.line) delete cursor.skip;
+      else if (before !== null) cursor.skip = { file: before.file, line: before.line };
+      if (mode === "step" && steps > 0) {
+        const paused = pauseAt(active, after ?? before);
+        if (active.status !== "ready") nextOpenThread();
+        return paused;
+      }
+      if (active.status !== "ready") nextOpenThread();
+    }
+    return null;
+  }
+  function finishOpenTick(consumed: InputRecord[], mode: ResumeMode): Paused | null {
+    const paused = runOpenThreads(mode);
+    if (paused !== null || state.engine.openTick !== undefined) return paused;
+    for (const phase of ENGINE_PHASES) {
+      if (phase !== "input" && phase !== "waits" && phase !== "threads") runPhase(phase, consumed);
+    }
+    return null;
+  }
 
   const engine: Engine = {
-    advance(ticks: number, inputs: readonly InputRecord[], maxTicks?: number) {
+    advance(ticks: number, inputs: readonly InputRecord[], maxTicks?: number, resume: ResumeMode = "continue") {
       requestsOut.length = 0;
       const consumed: InputRecord[] = [];
       const failedAtStart = failed;
@@ -297,13 +366,24 @@ export function createEngine(init: EngineInit): Engine {
       const cap = maxTicks ?? init.maxTicks;
       const bounded = Math.min(requestedTicks, Math.max(0, Math.trunc(cap)));
       let ticksRun = 0;
-      while (!failed && pending.size === 0 && state.world.board !== undefined && state.world.board !== null && state.input.focused && ticksRun < bounded) {
-        runPhase("input", consumed);
-        if (!state.input.focused) break;
-        for (const phase of ENGINE_PHASES) {
-          if (phase !== "input") runPhase(phase, consumed);
+      let paused: Paused | null = null;
+      while (!failed && pending.size === 0 && state.world.board !== undefined && state.world.board !== null && state.input.focused && (state.engine.openTick !== undefined || ticksRun < bounded)) {
+        if (state.engine.openTick === undefined) {
+          runPhase("input", consumed);
+          if (!state.input.focused) break;
+          runPhase("waits", consumed);
+        }
+        if (state.engine.openTick === undefined && breakpoints.length === 0 && resume !== "step") {
+          runPhase("threads", consumed);
+          for (const phase of ENGINE_PHASES) {
+            if (phase !== "input" && phase !== "waits" && phase !== "threads") runPhase(phase, consumed);
+          }
+        } else {
+          paused = finishOpenTick(consumed, resume);
+          if (paused !== null) break;
         }
         ticksRun += 1;
+        resume = "continue";
       }
       syncEngineState();
       const reportDiagnostics = [...diagnostics.splice(0), ...drainDiagnostics(services)];
@@ -315,7 +395,7 @@ export function createEngine(init: EngineInit): Engine {
         requests: [...requestsOut],
         diagnostics: reportDiagnostics,
         loading: !failed && pending.size > 0,
-        paused: null,
+        paused,
         stateHash: hashState(state),
       };
     },
@@ -331,6 +411,5 @@ export function createEngine(init: EngineInit): Engine {
     },
     setBreakpoints(next: readonly Breakpoint[]) { breakpoints = next; },
   };
-  void breakpoints;
   return engine;
 }
