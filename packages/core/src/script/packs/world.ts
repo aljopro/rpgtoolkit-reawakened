@@ -183,11 +183,36 @@ const CAMERA_SHAKE: BuiltinSpec = {
   },
 };
 
+const SEND: BuiltinSpec = {
+  name: "send", aliases: [], params: [{ name: "file", optional: false, byRef: false, variadic: false }, { name: "x", optional: false, byRef: false, variadic: false }, { name: "y", optional: false, byRef: false, variadic: false }, { name: "layer", optional: true, byRef: false, variadic: false }],
+  doc: {
+    summary: "Send the player to a new board.",
+    behaviour: "Move the player to another board of your game, at the tile you name, and carry on there: the old board's background threads stop, the new board's threads and its enter program start, and the camera jumps straight to the player with no scrolling. Technically, x and y are one-based tile coordinates and layer is one-based (omitted or below 1 means layer 1). The call records the request and parks the calling thread until the next tick; between the two ticks the engine loads the board (time stands still while its files arrive), places the player, re-aligns the camera without smoothing, deactivates the program under the player, switches the board music and starts the board threads and enter program, so the script resumes on the new board. A second send in the same tick replaces the first, and a board name that is not in the game raises a located diagnostic and changes nothing.",
+    groups: ["board-tiles-vectors-screen-effects-33"],
+    tags: ["legacy"],
+    waits: { kind: "ticks", summary: "Parks the calling thread for one tick while the engine swaps boards." },
+    see: ["docs/spec/engine/movement-and-collision.md#reawakened-send-board", "docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry"],
+  },
+  call: (view, args) => {
+    const file = args[0]?.value;
+    if (typeof file !== "string" || file.trim() === "") throw new ScriptError("builtin.bad-arg", '"send" expects a board file name as its first argument');
+    const x = args[1]?.value;
+    const y = args[2]?.value;
+    if (typeof x !== "number" || !Number.isFinite(x) || typeof y !== "number" || !Number.isFinite(y)) throw new ScriptError("builtin.bad-arg", '"send" expects numeric x and y tile coordinates');
+    const layer = Math.max(1, numberArg(args, 3, 1));
+    return {
+      value: null,
+      effects: [{ kind: "state-write", section: "engine", args: [file, Math.trunc(x), Math.trunc(y), layer] }],
+      wait: { kind: "sleep", global: true, until: view.clock.tick() + 1, resumesCall: true },
+    };
+  },
+};
+
 const WORLD_COMMANDS: readonly BuiltinSpec[] = [
   GET_NAME, PUT, LAYER_PUT, tileGetter("getboardtile", "boardgettile"), TILE_TYPE_GET, TILE_TYPE, noArgs("animatedtiles"), noArgs("parallax"), AMBIENT,
   GET_VECTOR, SET_VECTOR, GET_VECTOR_POINT, SET_VECTOR_POINT, GET_PROGRAM, SET_PROGRAM, GET_PROGRAM_POINT, SET_PROGRAM_POINT, PRG,
   noArgs("setconstants"), noArgs("underarrow"),
-  GET_CORNER, CAMERA_PAN_TO, CAMERA_FOLLOW, CAMERA_RESET, CAMERA_SHAKE,
+  GET_CORNER, CAMERA_PAN_TO, CAMERA_FOLLOW, CAMERA_RESET, CAMERA_SHAKE, SEND,
 ];
 
 /** Apply a recorded world or camera effect; exported for engine and host-owned tests. */

@@ -20,9 +20,32 @@ export type OpenTickCursor = {
   skip?: { file: string; line: number };
 };
 
+/** What an outstanding host request is for (AD-17); boot adds the main file, fonts and programs. */
+export type EngineRequestKind = "main" | "font" | "program" | "board" | "tile";
+
+/** Boot progress (E-02): `main` and `assets` load files, `startup` runs the start-up program, `board` loads `initBoard`. */
+export type BootStage = "main" | "assets" | "startup" | "board" | "running" | "stopped";
+
+export type BootState = {
+  stage: BootStage;
+  /** Canonical key of the main file asset. */
+  main: string;
+  /** Keys of the private fonts installed for this run, in index order (E-02 step 2). */
+  fonts: string[];
+};
+
+/** A `send` waiting for the engine to swap boards between ticks (E-19). */
+export type BoardTransition = {
+  board: string;
+  /** One-based tile coordinates and layer. */
+  x: number;
+  y: number;
+  layer: number;
+};
+
 export type EngineSection = {
   readonly nextRequestId?: number;
-  readonly pending?: { readonly reqId: number; readonly key: string; readonly kind: "board" | "tile" }[];
+  readonly pending?: { readonly reqId: number; readonly key: string; readonly kind: EngineRequestKind }[];
   readonly failed?: boolean;
   phase?: EnginePhase;
   claims?: number[];
@@ -30,4 +53,10 @@ export type EngineSection = {
   pendingEffects?: EngineEffectQueue;
   effectDropped?: Partial<Record<SectionKey, number>>;
   effectDiagnostics?: Diagnostic[];
+  /** Present when the engine boots from a main file; absent in scene mode. */
+  boot?: BootState;
+  /** The `send` the engine will perform before the next tick. */
+  transition?: BoardTransition;
+  /** The board music asset last posted as an `audio` effect; same-file arrivals post nothing (E-16). */
+  musicAsset?: string;
 };

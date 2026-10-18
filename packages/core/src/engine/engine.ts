@@ -1,10 +1,16 @@
 import { hashDrawList, hashState } from "../canon/index.ts";
-import { resolveAsset } from "../formats/resolver/resolver.ts";
+import { resolveAsset, assetKey } from "../formats/resolver/resolver.ts";
+import { BinaryReader } from "../formats/binary/reader.ts";
+import { readMainFile } from "../formats/main-file/reader.ts";
+import type { MainFile } from "../formats/main-file/model.ts";
+import { gateTrueType } from "../formats/font/truetype.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
 import type { DrawList } from "../ports/draw.ts";
 import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
+import type { PlainData } from "../ports/plain-data.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
+import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
 import { composeBoard } from "../render/compose.ts";
@@ -12,26 +18,31 @@ import { hydrateBoard } from "../world/hydrate.ts";
 import type { WorldBoard } from "../world/model.ts";
 import { applyInputEvent, createInputSection, inputView, pruneClaimed } from "../input/index.ts";
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
-import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, updateCamera } from "../world/camera.ts";
-import type { CameraTarget } from "../ports/camera.ts";
+import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, realignCamera, updateCamera } from "../world/camera.ts";
+import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
 import { EffectBus, type EffectApplier } from "./effects.ts";
-import type { EngineSection } from "../save/sections/engine.ts";
+import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
+import type { EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
 import {
-  CATALOGUE_PLUGIN,
   COMPILER_VERSION,
-  CORE_PLUGIN,
   createScriptServices,
   defaultWaitPoll,
   drainDiagnostics,
   ENGINE_DEFAULT_MANIFEST,
-  NATIVE_PACK_TABLE,
+  endBoardThreads,
+  fileProgramRef,
   runThreadsPhase,
   runWaitsPhase,
+  ScriptError,
   startProgram,
+  startThread,
   STEP_BUDGET,
   stepThread,
+  type EffectRecord,
+  type ProgramLoader,
   type ProgramRef,
   type ResolvedPlugin,
+  type ScriptServices,
 } from "../script/index.ts";
 import type { Thread } from "../script/state.ts";
 import type { WaitView } from "../ports/wait.ts";
@@ -59,41 +70,66 @@ export type EnginePhaseRegistration = {
   readonly run: (state: GameState) => void;
 };
 
-export type EngineInit = {
+type EngineCommonInit = {
   readonly seed: number;
   readonly assetIndex: AssetIndex;
   readonly assetRoot: AssetRoot;
-  readonly initialBoard: string;
   readonly width: number;
   readonly height: number;
   readonly maxTicks: number;
-  readonly program?: string | ProgramRef;
+  /** Resolved plugin layers; when absent boot builds them from the main file (E-02 step 3). */
   readonly plugins?: readonly ResolvedPlugin[];
   readonly phaseRegistrations?: readonly EnginePhaseRegistration[];
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
   readonly cameraTarget?: CameraTarget;
   readonly include?: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean };
 };
-type RequestEntry = { readonly reqId: number; readonly key: AssetKey; readonly kind: "board" | "tile" };
+
+/**
+ * Scene mode: load one board and optionally run one program, with no start-up
+ * sequence. The tracer bullet, the golden scenes and the editor previews use it.
+ */
+export type SceneInit = EngineCommonInit & {
+  readonly initialBoard: string;
+  readonly program?: string | ProgramRef;
+  readonly mainFile?: never;
+  readonly startup?: never;
+};
+
+/**
+ * Boot mode: run E-02 from the main file at the index path `mainFile`
+ * (docs/spec/engine/main-loop-and-startup.md#reawakened-boot-sequence).
+ */
+export type BootInit = EngineCommonInit & {
+  readonly mainFile: string;
+  readonly startup: StartupPorts;
+  readonly initialBoard?: never;
+  readonly program?: never;
+};
+
+export type EngineInit = SceneInit | BootInit;
+type RequestEntry = { readonly reqId: number; readonly key: AssetKey; readonly kind: EngineRequestKind };
 type SourceLocation = { file: string; line: number };
 type Paused = { thread: number; frame: number; line: number };
+type Arrival = { readonly x: number; readonly y: number; readonly layer: number; readonly unit: "pixel" | "tile" };
 
-const DEFAULT_ENGINE_PLUGINS: readonly ResolvedPlugin[] = ENGINE_DEFAULT_MANIFEST.flatMap((entry) => {
-  const definition = entry.id === "core"
-    ? CORE_PLUGIN
-    : entry.id === "catalogue"
-      ? CATALOGUE_PLUGIN
-      : NATIVE_PACK_TABLE[entry.id];
-  return definition === undefined ? [] : [{ definition }];
-});
+/** The pixel size of one 2D tile, used only to aim the camera when no player position exists. */
+const TILE_PX = 32;
+
+const DEFAULT_ENGINE_PLUGINS: readonly ResolvedPlugin[] = resolveManifestPlugins(ENGINE_DEFAULT_MANIFEST).plugins;
 
 /** Create the deterministic fixed-tick engine; host assets arrive only as AD-14 replies. */
 export function createEngine(init: EngineInit): Engine {
+  const index = init.assetIndex;
   const state: GameState = createGameState({ seed: init.seed });
   state.input = createInputSection();
   state.engine = { claims: [] };
-  const resolved = resolveAsset(init.assetIndex, init.assetRoot, "boards", init.initialBoard);
-  const boardKey = resolved.ok ? resolved.value : null;
+  let root: AssetRoot = init.assetRoot;
+  let mainFile: MainFile | null = null;
+  let loader: ProgramLoader | null = null;
+  let sceneBoardKey: AssetKey | null = null;
+  let mainKey: AssetKey | null = null;
+  const installedFonts = new Map<AssetKey, Uint8Array>();
   const pending = new Map<number, RequestEntry>();
   const queuedInputs: InputRecord[] = [];
   const cache = new Map<AssetKey, Uint8Array>();
@@ -109,28 +145,36 @@ export function createEngine(init: EngineInit): Engine {
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
   bus.register("world", (effect) => applyWorldEffect(state, effect));
   bus.register("camera", (effect) => applyCameraEffect(state, effect));
+  bus.register("engine", (effect) => applyEngineEffect(effect));
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
-  let boardBytes: Uint8Array | null = null;
-  let started = false;
   let failed = false;
   let breakpoints: readonly Breakpoint[] = [];
   state.surfaces = createSurfacesSection(init.width, init.height);
   state.camera = createCameraSection(init.width, init.height);
   const surfaceCache: SurfacePixelCache = new Map();
   let frameHash = hashDrawList({ tick: 0, width: init.width, height: init.height, commands: [] });
-  if (!resolved.ok) diagnostics.push({ code: "asset.invalid", file: init.initialBoard, line: 0, message: resolved.error.message });
+  if (init.mainFile === undefined) {
+    const resolved = resolveAsset(index, root, "boards", init.initialBoard);
+    if (resolved.ok) sceneBoardKey = resolved.value;
+    else diagnostics.push({ code: "asset.invalid", file: init.initialBoard, line: 0, message: resolved.error.message });
+  } else {
+    const found = index.byKey.get(assetKey(init.mainFile));
+    if (found === undefined) {
+      diagnostics.push({ code: "asset.invalid", file: init.mainFile, line: 0, message: `main file "${init.mainFile}" is not in the asset index` });
+      failed = true;
+      state.engine.boot = { stage: "stopped", main: "", fonts: [] };
+    } else {
+      mainKey = found;
+      state.engine.boot = { stage: "main", main: found, fonts: [] };
+    }
+  }
 
-  const services = createScriptServices(
-    state,
-    init.plugins ?? DEFAULT_ENGINE_PLUGINS,
-    undefined,
-    undefined,
-    undefined,
-    "engine",
-    (section, effect) => bus.dispatchRecorded(section, effect),
-  );
-  if (init.program !== undefined) {
+  function makeServices(plugins: readonly ResolvedPlugin[], programLoader?: ProgramLoader): ScriptServices {
+    return createScriptServices(state, plugins, undefined, undefined, programLoader, "engine", (section, effect) => bus.dispatchRecorded(section, effect));
+  }
+  let services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS);
+  if (init.mainFile === undefined && init.program !== undefined) {
     const ref: ProgramRef = typeof init.program === "string"
       ? { kind: "inline", text: init.program, compiler: COMPILER_VERSION, dialect: "tk3" }
       : init.program;
@@ -144,11 +188,6 @@ export function createEngine(init: EngineInit): Engine {
     pending.set(entry.reqId, entry);
     requestsOut.push({ kind: "asset", reqId: entry.reqId, key });
   }
-  function startRequests(): void {
-    if (started || boardKey === null) return;
-    started = true;
-    request(boardKey, "board");
-  }
   function syncEngineState(): void {
     const next: EngineSection = {
       nextRequestId,
@@ -161,23 +200,10 @@ export function createEngine(init: EngineInit): Engine {
     if (state.engine.pendingEffects !== undefined) next.pendingEffects = state.engine.pendingEffects;
     if (state.engine.effectDropped !== undefined) next.effectDropped = state.engine.effectDropped;
     if (state.engine.effectDiagnostics !== undefined) next.effectDiagnostics = state.engine.effectDiagnostics;
+    if (state.engine.boot !== undefined) next.boot = state.engine.boot;
+    if (state.engine.transition !== undefined) next.transition = state.engine.transition;
+    if (state.engine.musicAsset !== undefined) next.musicAsset = state.engine.musicAsset;
     state.engine = next;
-  }
-  function hydrateWhenReady(): void {
-    if (failed || boardKey === null || boardBytes === null) return;
-    const result = hydrateBoard(boardKey, boardBytes, init.assetIndex, init.assetRoot, cache, state.time.tick);
-    if (result.error !== null) {
-      diagnostics.push({ code: "asset.invalid", file: result.error.path, line: result.error.offset, message: result.error.message });
-      failed = true;
-      return;
-    }
-    if (result.missing !== null) {
-      request(result.missing, "tile");
-      return;
-    }
-    state.world = { board: result.value?.board ?? null };
-    if (state.world.board === null) failed = true;
-    else state.camera = initCameraForBoard(state.camera, state.world.board ?? null, init.cameraTarget);
   }
   function consumeAsset(record: InputRecord, consumed: InputRecord[]): void {
     if (record.event.kind !== "asset") return;
@@ -188,11 +214,231 @@ export function createEngine(init: EngineInit): Engine {
     if (record.event.bytes === null) {
       diagnostics.push({ code: "asset.missing", file: entry.key, line: 0, message: `asset not found: ${entry.key}` });
       failed = true;
+      if (state.engine.boot !== undefined) state.engine.boot.stage = "stopped";
       return;
     }
-    const owned = new Uint8Array(record.event.bytes);
-    cache.set(entry.key, owned);
-    if (entry.kind === "board") boardBytes = owned;
+    cache.set(entry.key, new Uint8Array(record.event.bytes));
+  }
+
+  /** `send` posts its request here; the engine swaps boards between ticks (E-19). A later send replaces an earlier one. */
+  function applyEngineEffect(effect: EffectRecord): void {
+    if (effect.name !== "send") return;
+    const [board, x, y, layer] = effect.args;
+    if (typeof board !== "string" || typeof x !== "number" || typeof y !== "number" || typeof layer !== "number") return;
+    state.engine.transition = { board, x, y, layer };
+  }
+  function fail(diagnostic: Diagnostic): void {
+    diagnostics.push(diagnostic);
+    failed = true;
+    if (state.engine.boot !== undefined) state.engine.boot.stage = "stopped";
+  }
+  function blockingAlive(): boolean {
+    return state.vm.threads.some((thread) => thread.kind === "blocking" && thread.status !== "finished");
+  }
+
+  /** Hydrate board `key`, requesting its file and then each missing tile asset in turn. */
+  function loadBoard(key: AssetKey): "pending" | WorldBoard | null {
+    const bytes = cache.get(key);
+    if (bytes === undefined) {
+      request(key, "board");
+      return "pending";
+    }
+    const result = hydrateBoard(key, bytes, index, root, cache, state.time.tick);
+    if (result.error !== null) {
+      fail({ code: "asset.invalid", file: result.error.path, line: result.error.offset, message: result.error.message });
+      return null;
+    }
+    if (result.missing !== null) {
+      request(result.missing, "tile");
+      return "pending";
+    }
+    const board = result.value?.board ?? null;
+    if (board === null) failed = true;
+    return board;
+  }
+
+  /**
+   * Compile `name` from the fetched sources and start it as a thread. A missing,
+   * pre-compiled or syntactically wrong program is a located diagnostic and no
+   * thread, never a throw out of `advance`.
+   */
+  function startFileProgram(name: string, owner: string, kind: "board" | "blocking"): void {
+    if (loader === null) return;
+    try {
+      const ref = fileProgramRef(loader, name);
+      services.programs.get(ref);
+      startThread(state.vm, { ref, kind, owner: kind === "blocking" ? "script" : "world" });
+    } catch (error) {
+      if (!(error instanceof ScriptError)) throw error;
+      diagnostics.push({ code: error.code, file: error.pos?.file ?? owner, line: error.pos?.line ?? 0, message: error.message });
+    }
+  }
+  function postBoardMusic(board: WorldBoard): void {
+    const name = board.backgroundMusic ?? "";
+    if (name === "") return;
+    const music = resolveAsset(index, root, "media", name);
+    if (!music.ok) {
+      diagnostics.push({ code: "asset.missing", file: board.key, line: 0, message: `board music "${name}" is not in the asset index` });
+      return;
+    }
+    if (state.engine.musicAsset === music.value) return;
+    state.engine.musicAsset = music.value;
+    bus.postEffect("audio", engineEffect("audio", "music.play", [music.value, true, null, board.key], "draw-audio-cue"));
+  }
+  function cameraAim(arrival: Arrival): CameraPoint {
+    const player = init.cameraTarget?.getPlayerPosition() ?? null;
+    if (player !== null) return player;
+    if (arrival.unit === "pixel") return { x: arrival.x, y: arrival.y };
+    return { x: (arrival.x - 1) * TILE_PX + TILE_PX / 2, y: (arrival.y - 1) * TILE_PX + TILE_PX / 2 };
+  }
+  /** Board entry (E-19, E-47; docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry). */
+  function arrive(board: WorldBoard, arrival: Arrival, fromSend: boolean): void {
+    if (fromSend) endBoardThreads(state.vm);
+    state.world = { board };
+    const placement: PlainData[] = [arrival.x, arrival.y, arrival.layer, arrival.unit];
+    bus.postEffect("sprites", engineEffect("sprites", "placeplayer", placement));
+    state.camera = realignCamera(state.camera, board, cameraAim(arrival));
+    bus.postEffect("triggers", engineEffect("triggers", "deactivateat", placement));
+    postBoardMusic(board);
+    for (const name of board.threads ?? []) startFileProgram(name, board.key, "board");
+    if (board.enterPrg !== undefined && board.enterPrg !== "") startFileProgram(board.enterPrg, board.key, blockingAlive() ? "board" : "blocking");
+  }
+
+  /** E-02 step 9's tail: the main file's `initBoard` entered at the board's start position. */
+  function bootBoardKey(main: MainFile): AssetKey | null {
+    if (main.initBoard === "") {
+      fail({ code: "startup.no-board", file: mainKey ?? "", line: 0, message: "the main file names no initBoard" });
+      return null;
+    }
+    const resolved = resolveAsset(index, root, "boards", main.initBoard);
+    if (!resolved.ok) {
+      fail({ code: "asset.missing", file: mainKey ?? "", line: 0, message: `initBoard "${main.initBoard}" is not in the asset index` });
+      return null;
+    }
+    return resolved.value;
+  }
+  function startBoot(boot: NonNullable<EngineSection["boot"]>): boolean {
+    if (mainKey === null) return false;
+    if (boot.stage === "main") {
+      const bytes = cache.get(mainKey);
+      if (bytes === undefined) {
+        request(mainKey, "main");
+        return false;
+      }
+      const parsed = readMainFile(new BinaryReader(bytes, mainKey));
+      if (!parsed.ok) {
+        fail({ code: "asset.invalid", file: mainKey, line: parsed.error.offset, message: parsed.error.message });
+        return false;
+      }
+      mainFile = parsed.value;
+      if (root.kind === "game") root = { kind: "game", projectPath: mainFile.projectPath };
+      for (const key of [...privateFontKeys(index, root), ...programKeys(index, root)]) request(key, key.endsWith(".ttf") ? "font" : "program");
+      boot.stage = "assets";
+      return true;
+    }
+    if (boot.stage === "assets") {
+      if (mainFile === null) return false;
+      const fonts = privateFontKeys(index, root);
+      const programs = programKeys(index, root);
+      if (![...fonts, ...programs].every((key) => cache.has(key))) return false;
+      for (const key of fonts) {
+        const gated = gateTrueType(cache.get(key) ?? new Uint8Array(), key);
+        if (!gated.ok) {
+          diagnostics.push({ code: "font.rejected", file: key, line: gated.error.offset, message: gated.error.message });
+          continue;
+        }
+        installedFonts.set(key, cache.get(key) ?? new Uint8Array());
+        boot.fonts.push(key);
+      }
+      const manifest = pluginManifestFor(mainFile, mainKey);
+      diagnostics.push(...manifest.diagnostics);
+      const resolvedPlugins = resolveManifestPlugins(manifest.manifest, mainKey);
+      diagnostics.push(...resolvedPlugins.diagnostics);
+      loader = { index, root, read: (key) => cache.get(key) };
+      services = makeServices(init.plugins ?? resolvedPlugins.plugins, loader);
+      if (mainFile.initChar !== "") {
+        const player = resolveAsset(index, root, "characters", mainFile.initChar);
+        if (player.ok) bus.postEffect("sprites", engineEffect("sprites", "createplayer", [player.value]));
+        else diagnostics.push({ code: "asset.missing", file: mainKey, line: 0, message: `initChar "${mainFile.initChar}" is not in the asset index` });
+      }
+      if (mainFile.startupPrg !== "") startFileProgram(mainFile.startupPrg, mainKey, "blocking");
+      boot.stage = "startup";
+      return true;
+    }
+    return false;
+  }
+  function stepBoot(boot: NonNullable<EngineSection["boot"]>): boolean {
+    if (boot.stage === "main" || boot.stage === "assets") return startBoot(boot);
+    if (boot.stage === "startup") {
+      if (blockingAlive()) return false;
+      const ports = init.startup;
+      if (mainFile === null || ports === undefined) return false;
+      if (!ports.presence.hasPlayer()) {
+        fail({ code: "startup.no-player", file: mainKey ?? "", line: 0, message: "an initial character must be defined" });
+        return false;
+      }
+      if (ports.savedGame.restored()) {
+        boot.stage = "running";
+        return false;
+      }
+      boot.stage = "board";
+      return true;
+    }
+    if (boot.stage === "board") {
+      if (mainFile === null) return false;
+      const key = bootBoardKey(mainFile);
+      if (key === null) return false;
+      const loaded = loadBoard(key);
+      if (loaded === "pending" || loaded === null) return false;
+      arrive(loaded, { x: loaded.start?.x ?? 64, y: loaded.start?.y ?? 64, layer: loaded.start?.layer ?? 1, unit: "pixel" }, false);
+      boot.stage = "running";
+      return true;
+    }
+    return false;
+  }
+  function stepTransition(transition: NonNullable<EngineSection["transition"]>): boolean {
+    const target = resolveAsset(index, root, "boards", transition.board);
+    if (!target.ok) {
+      diagnostics.push({ code: "asset.missing", file: transition.board, line: 0, message: `send: board "${transition.board}" is not in the asset index` });
+      delete state.engine.transition;
+      return true;
+    }
+    const loaded = loadBoard(target.value);
+    if (loaded === "pending" || loaded === null) return false;
+    delete state.engine.transition;
+    arrive(loaded, { x: transition.x, y: transition.y, layer: transition.layer, unit: "tile" }, true);
+    return true;
+  }
+  function stepScene(): boolean {
+    if (sceneBoardKey === null || state.world.board !== undefined && state.world.board !== null) return false;
+    const loaded = loadBoard(sceneBoardKey);
+    if (loaded === "pending" || loaded === null) return false;
+    state.world = { board: loaded };
+    state.camera = initCameraForBoard(state.camera, loaded, init.cameraTarget);
+    return true;
+  }
+  /**
+   * Run every engine-owned step that needs no tick (start-up stages, a pending
+   * `send`, the scene board) until one waits for a host reply or a tick.
+   */
+  function drive(): void {
+    for (let guard = 0; guard < 64; guard += 1) {
+      if (failed || pending.size > 0 || state.engine.openTick !== undefined) return;
+      const boot = state.engine.boot;
+      const transition = state.engine.transition;
+      let progressed: boolean;
+      if (boot === undefined) progressed = transition !== undefined ? stepTransition(transition) : stepScene();
+      else if (transition !== undefined && boot.stage !== "main" && boot.stage !== "assets") progressed = stepTransition(transition);
+      else progressed = stepBoot(boot);
+      if (!progressed) return;
+    }
+  }
+  /** Ticks run once nothing is outstanding: a scene needs its board, boot needs the start-up program or the main loop. */
+  function canTick(): boolean {
+    if (failed || pending.size > 0 || state.engine.transition !== undefined) return false;
+    const boot = state.engine.boot;
+    if (boot === undefined) return state.world.board !== undefined && state.world.board !== null;
+    return boot.stage === "startup" || boot.stage === "running";
   }
   function phaseView(): WaitView {
     return { tick: state.time.tick, input: inputView(state.input), ui: state.ui, claims: state.engine.claims ?? [] };
@@ -299,7 +545,7 @@ export function createEngine(init: EngineInit): Engine {
     const list = currentDrawList(0);
     const nextHash = hashDrawList(list);
     if (nextHash === frameHash) return;
-    const rendered = rasterize(list, new Map(), surfaceTextures(state.surfaces, surfaceCache));
+    const rendered = rasterize(list, installedFonts, surfaceTextures(state.surfaces, surfaceCache));
     replaceSurface(state.surfaces, 0 as SurfaceId, rendered.width, rendered.height, rendered.rgba);
     frameHash = nextHash;
   }
@@ -377,17 +623,15 @@ export function createEngine(init: EngineInit): Engine {
       const consumed: InputRecord[] = [];
       const failedAtStart = failed;
       for (const input of inputs) queuedInputs.push(input);
-      startRequests();
       processPreTickEvents(consumed);
-      const boardUnloaded = state.world.board === undefined || state.world.board === null;
-      if (!failed && pending.size === 0 && boardBytes !== null && boardUnloaded) hydrateWhenReady();
+      drive();
       if (failedAtStart) consumeStoppedInputs(consumed);
       const requestedTicks = Number.isFinite(ticks) ? Math.max(0, Math.trunc(ticks)) : 0;
       const cap = maxTicks ?? init.maxTicks;
       const bounded = Math.min(requestedTicks, Math.max(0, Math.trunc(cap)));
       let ticksRun = 0;
       let paused: Paused | null = null;
-      while (!failed && pending.size === 0 && state.world.board !== undefined && state.world.board !== null && state.input.focused && (state.engine.openTick !== undefined || ticksRun < bounded)) {
+      while (canTick() && state.input.focused && (state.engine.openTick !== undefined || ticksRun < bounded)) {
         if (state.engine.openTick === undefined) {
           runPhase("input", consumed);
           if (!state.input.focused) break;
@@ -404,6 +648,7 @@ export function createEngine(init: EngineInit): Engine {
         }
         ticksRun += 1;
         resume = "continue";
+        drive();
       }
       syncEngineState();
       const reportDiagnostics = [...diagnostics.splice(0), ...drainDiagnostics(services)];
