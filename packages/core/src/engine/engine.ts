@@ -15,6 +15,7 @@ import type { InputRecord } from "../ports/input.ts";
 import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputConfig } from "../input/input.ts";
 import type { PlainData } from "../ports/plain-data.ts";
+import type { Value } from "../ports/value.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
 import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
@@ -30,6 +31,7 @@ import type { FxSection } from "../save/sections.ts";
 import { applyInputEvent, createInputSection, inputView, processGamepadEvents, pruneClaimed } from "../input/index.ts";
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
 import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, realignCamera, updateCamera } from "../world/camera.ts";
+import { applyInputEffect, applySpriteEffect } from "../script/packs/world.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
 import { resetSpritesSection, type SpriteRuntime } from "../sprites/runtime.ts";
 import { clearPathfindingCache } from "../sprites/pathfinding.ts";
@@ -197,6 +199,14 @@ export function createEngine(init: EngineInit): Engine {
   bus.register("fx", (effect) => applyFxEffect(state, effect));
   bus.register("surfaces", (effect) => applySurfaceEffect(effect));
   bus.register("engine", (effect) => applyEngineEffect(effect));
+  bus.register("input", (effect) => {
+    const values = effect.args as readonly Value[]; // Script effects use the VM Value subset.
+    applyInputEffect(state, effect.name, values);
+  });
+  bus.register("sprites", (effect) => {
+    const values = effect.args as readonly Value[]; // Script effects use the VM Value subset.
+    applySpriteEffect(state, effect.name, values);
+  });
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
   let failed = false;
@@ -843,7 +853,17 @@ export function createEngine(init: EngineInit): Engine {
     return boot.stage === "startup" || boot.stage === "running";
   }
   function phaseView(): WaitView {
-    return { tick: state.time.tick, input: inputView(state.input), ui: state.ui, claims: state.engine.claims ?? [] };
+    return {
+      tick: state.time.tick,
+      input: inputView(state.input),
+      ui: state.ui,
+      sprites: [...state.sprites.players, ...state.sprites.items].map((actor) => ({
+        id: actor.id,
+        stance: actor.visual.stance,
+        stanceComplete: actor.visual.stanceComplete,
+      })),
+      claims: state.engine.claims ?? [],
+    };
   }
   function resolveAnimationFile(file: string): AssetKey | null {
     const preferred = file.toLowerCase().endsWith(".gif") ? "bitmaps" : "animations";

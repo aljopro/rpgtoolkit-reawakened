@@ -269,11 +269,14 @@ function free(section: SpritesSection, actor: SpriteActor, board: WorldBoard, x:
   return boardHit(actor, board, x, y) === null && spriteHit(section, actor, x, y) === null && offBoard(actor, board, x, y) === null;
 }
 function finishActor(actor: SpriteActor, active: SpriteActiveMove, blocked: boolean, tpa: number, tick: number, sink?: (event: MovementEvent) => void): SpriteActor {
-  const queue = actor.queue.moves.length > 0 || actor.queue.waypoint !== null;
+  const waypoint = actor.queue.waypoint;
+  const waypointDone = waypoint !== null && waypoint.cycles !== 0 && waypoint.cursor >= waypoint.points.length && waypoint.cycle + 1 >= waypoint.cycles;
+  const nextWaypoint = waypointDone ? null : waypoint;
+  const queue = actor.queue.moves.length > 0 || nextWaypoint !== null;
   const movement = { ...cloneMovement(actor.movement), active: null, waitTicks: 0 };
   const state = queue ? "moving" : "waiting";
   if (!queue) event(tick, "movement-complete", { actor: actor.id, blocked }, sink);
-  return { ...actor, state, movement, ...(queue ? {} : { frozenUntil: null }), prev: { x: actor.x, y: actor.y } };
+  return { ...actor, state, movement, queue: { ...actor.queue, waypoint: nextWaypoint }, ...(queue ? {} : { frozenUntil: null }), prev: { x: actor.x, y: actor.y } };
 }
 function collisionLoser(section: SpritesSection, actor: SpriteActor, blocker: SpriteActor, gameSpeed: number): SpriteActor {
   const actorMoving = actor.state === "moving";

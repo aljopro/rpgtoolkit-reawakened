@@ -114,6 +114,7 @@ export { RENDER_PLUGIN } from "./packs/render.ts";
 export { UI_COMMANDS, UI_PLUGIN, applyUiEffect } from "./packs/ui.ts";
 export { GRAPHICS_COMMANDS, GRAPHICS_PLUGIN } from "./packs/graphics.ts";
 export { WORLD_PLUGIN } from "./packs/world.ts";
+export { MOVEMENT_COMMANDS, MOVEMENT_PLUGIN, applyInputEffect, applySpriteEffect } from "./packs/movement.ts";
 export type { Arg, BuiltinDoc, BuiltinSpec, DocExample, DocReturns, DocTag, DocThrow, DocWait, ParamDoc, ParamDocValue, ParamSpec, RunnerSupport } from "./builtins.ts";
 export {
   commandDocumentation,

@@ -16,6 +16,7 @@ import {
   type MovementEvent,
   type WorldBoard,
 } from "../src/index.ts";
+import { enqueuePathMove, setWaypoint } from "../src/sprites/runtime.ts";
 
 function board(vectors: WorldBoard["vectors"] = [], items: WorldBoard["items"] = []): WorldBoard {
   const empty = createEmptyBoard();
@@ -174,6 +175,55 @@ test("owned authored movement scenes reproduce every in-scope case through core"
         deepEqual([...sprites.players, ...sprites.items].map((actor) => [actor.id, actor.x, actor.y, actor.layer, actor.state, actor.facing]), expected.a, `${name}/${scene.name} tick ${tick}`);
         if (expected.ev !== undefined) deepEqual(records.map((record) => ({ e: record.type, ...(record.type === "sprite-collision" ? {} : record.actor === undefined ? {} : { actor: record.actor }), ...(record.winner === undefined ? {} : { winner: record.winner }), ...(record.loser === undefined ? {} : { loser: record.loser }), ...(record.type === "sprite-collision" || record.type === "under-enter" || record.type === "under-leave" ? record.type === "under-enter" || record.type === "under-leave" ? { vector: record.vector } : {} : record.vector === undefined && record.blocker === undefined ? {} : { by: record.vector ?? record.blocker }), ...(record.type === "movement-complete" && record.blocked === true ? { blocked: true } : {}), ...(record.from === undefined ? {} : { from: record.from }), ...(record.to === undefined ? {} : { to: record.to }), ...(record.direction === undefined ? {} : { dir: record.direction }) })), expected.ev, `${name}/${scene.name} events ${tick}`);
       }
+    }
+  }
+});
+
+test("movement-waits fixture drives every owned case through the real core movement phase", () => {
+  type Case = {
+    readonly name: string;
+    readonly setup: {
+      readonly board: string;
+      readonly boards: Record<string, {
+        readonly vectors: readonly { readonly id: string; readonly type: string; readonly layer: number; readonly closed: boolean; readonly points: readonly [number, number][]; readonly attributes?: number; readonly toLayer?: number }[];
+        readonly items?: readonly { readonly id: string; readonly x: number; readonly y: number; readonly layer: number; readonly speed: number; readonly facing: string }[];
+      }>;
+      readonly players: readonly { readonly id: string; readonly x: number; readonly y: number; readonly layer: number; readonly speed: number; readonly facing: string; readonly controlled?: boolean }[];
+    };
+    readonly ticks: number;
+    readonly expect: readonly { readonly a: readonly [string, number, number, number, string, string][] }[];
+  };
+  const root = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "movement");
+  const data = JSON.parse(readFileSync(join(root, "movement-waits.json"), "utf8")) as { readonly cases: readonly Case[] };
+  equal(data.cases.length, 6);
+  for (const scene of data.cases) {
+    const source = scene.setup.boards[scene.setup.board]!;
+    const vectors = source.vectors.map((vector) => ({ handle: vector.id, attributes: vector.attributes ?? vector.toLayer ?? 0, closed: vector.closed ? 1 : 0, layer: vector.layer, type: vector.type === "solid" ? 1 : vector.type === "under" ? 2 : vector.type === "stairs" ? 8 : 16, points: vector.points.map(([x, y]) => ({ x, y })) }));
+    const items = (source.items ?? []).map((item) => ({ slot: 0, itemFile: item.id, activationPrg: "", multitaskPrg: "", initialVar: "", initialValue: "", finalVar: "", finalValue: "", loadingVar: "", loadingValue: "", activate: 0, activationType: 0, x: item.x, y: item.y, layer: item.layer, reserved: 0 }));
+    const currentBoard = board(vectors, items);
+    const sprites = hydrateSprites({ board: currentBoard, players: scene.setup.players.map((player) => ({ ...player, facing: player.facing as "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW", kind: "player" as const, source: `${player.id}.tem` })) });
+    const item = (id: string) => sprites.items.find((actor) => actor.id === id)!;
+    sprites.players = sprites.players.map((actor, index) => ({ ...actor, speed: scene.setup.players[index]?.speed ?? actor.speed }));
+    sprites.items = sprites.items.map((actor, index) => ({ ...actor, speed: source.items?.[index]?.speed ?? actor.speed }));
+    if (scene.name === "pause-thread-flag-waits-for-completion" || scene.name === "without-the-flag-the-thread-continues") {
+      enqueuePathMove(sprites, currentBoard, "a", { x: 144, y: 95 }, 1);
+    } else if (scene.name === "blocking-thread-implies-the-wait") {
+      enqueueDirectionMove(sprites, "hero", "E", 0); enqueueDirectionMove(sprites, "hero", "E", 0);
+    } else if (scene.name === "multirun-one-wait-over-both-sprites") {
+      enqueuePathMove(sprites, currentBoard, "a", { x: 112, y: 95 }, 1);
+      enqueuePathMove(sprites, currentBoard, "b", { x: 176, y: 127 }, 1);
+    } else {
+      const points = source.vectors.find((vector) => vector.id === "patrol")!.points.map(([x, y]) => ({ x, y }));
+      setWaypoint(sprites, "a", points, scene.name === "waypoint-path-copy-two-cycles" ? 2 : 1, scene.name === "waypoint-link-sees-live-edit");
+    }
+    for (let tick = 0; tick < scene.ticks; tick += 1) {
+      if (scene.name === "waypoint-link-sees-live-edit" && tick === 12) {
+        const actor = item("a"); const waypoint = actor.queue.waypoint;
+        if (waypoint !== null) waypoint.points[1] = { x: 176, y: 159 };
+      }
+      runMovementPhase(sprites, currentBoard, tick);
+      const expected = scene.expect[tick];
+      if (expected !== undefined) deepEqual([...sprites.players, ...sprites.items].map((actor) => [actor.id, actor.x, actor.y, actor.layer, actor.state, actor.facing]), expected.a, `${scene.name} tick ${tick}`);
     }
   }
 });

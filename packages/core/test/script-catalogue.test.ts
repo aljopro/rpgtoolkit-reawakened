@@ -63,7 +63,14 @@ const STUB_KINDS: Record<string, true> = {
   "state-write": true,
   "draw-audio-cue": true,
 };
-const catalogueRows = catalogue.names.filter((row) => STUB_KINDS[row.effectKind] === true);
+const REAL_PACK_COMMANDS: Record<string, true> = {
+  push: true, pushitem: true, playerstep: true, itemstep: true, playerpath: true, itempath: true,
+  playerlocation: true, itemlocation: true, playergetpath: true, itemgetpath: true, activeplayer: true,
+  playerdirection: true, itemdirection: true, playerspeed: true, itemspeed: true, playerstance: true,
+  itemstance: true, wander: true, wait: true, get: true, clearbuffer: true, setbutton: true,
+  checkbutton: true, clearbuttons: true, mousemove: true, mouseclick: true,
+};
+const catalogueRows = catalogue.names.filter((row) => STUB_KINDS[row.effectKind] === true && REAL_PACK_COMMANDS[row.name.toLowerCase()] !== true);
 const rowByName = new Map(catalogueRows.map((row) => [row.name.toLowerCase(), row]));
 
 const COMMANDS: readonly BuiltinSpec[] = CATALOGUE_STUBS_PLUGIN.commands;
@@ -128,8 +135,8 @@ function callArity(spec: BuiltinSpec): number {
 test("every catalogue stub name resolves to its own spec, folded to lower case", () => {
   const services = createScriptServices(createGameState({ seed: 0 }));
 
-  equal(COMMANDS.length, 61);
-  equal(new Set(COMMANDS.map((spec) => spec.name)).size, 61);
+  equal(COMMANDS.length, 51);
+  equal(new Set(COMMANDS.map((spec) => spec.name)).size, 51);
   for (const spec of COMMANDS) {
     equal(spec.name, spec.name.toLowerCase());
     const resolved = services.commands.get(spec.name);
@@ -152,7 +159,7 @@ test("every catalogue stub name resolves to its own spec, folded to lower case",
 });
 
 test("the stub layer declares the catalogue's by-reference outputs", () => {
-  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 19);
+  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 13);
   // Variadic rows cannot fix an output position in their generated spec.
   equal(COMMANDS.filter((spec) => spec.params.some((param) => param.variadic)).length, 0);
   for (const spec of COMMANDS) {
@@ -236,10 +243,6 @@ test("a by-reference argument is written back and recorded by index", () => {
   }
 });
 
-test("a literal in a by-reference position is refused", () => {
-  // `mouseMove` writes back parameters 1..2 (docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-6).
-  equal(errorOf(() => run("mouseMove(1, 2)\n")).code, "builtin.out-not-by-ref");
-});
 
 test("the obsolete names raise builtin.obsolete and record nothing", () => {
   for (const name of ["underarrow", "itemwalkspeed"]) {

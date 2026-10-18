@@ -72,41 +72,6 @@ function makeStub(stub: CatalogueStub): BuiltinSpec {
 
 const STUBS: readonly CatalogueStub[] = [
   {
-    name: "mousemove",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "x", optional: false, byRef: true, variadic: false }, { name: "y", optional: false, byRef: true, variadic: false }],
-  },
-  {
-    name: "clearbuffer",
-    kind: "state-write",
-    sections: ["input"],
-    obsolete: false,
-    params: [],
-  },
-  {
-    name: "setbutton",
-    kind: "state-write",
-    sections: ["input"],
-    obsolete: false,
-    params: [{ name: "file", optional: false, byRef: false, variadic: false }, { name: "num", optional: false, byRef: false, variadic: false }, { name: "x", optional: false, byRef: false, variadic: false }, { name: "y", optional: false, byRef: false, variadic: false }, { name: "w", optional: false, byRef: false, variadic: false }, { name: "h", optional: false, byRef: false, variadic: false }],
-  },
-  {
-    name: "checkbutton",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "x", optional: false, byRef: false, variadic: false }, { name: "y", optional: false, byRef: false, variadic: false }, { name: "num", optional: false, byRef: true, variadic: false }],
-  },
-  {
-    name: "clearbuttons",
-    kind: "state-write",
-    sections: ["input"],
-    obsolete: false,
-    params: [],
-  },
-  {
     name: "forceredraw",
     kind: "state-write",
     sections: ["engine"],
@@ -149,13 +114,6 @@ const STUBS: readonly CatalogueStub[] = [
     params: [],
   },
   {
-    name: "playerlocation",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "h", optional: false, byRef: false, variadic: false }, { name: "x", optional: false, byRef: true, variadic: false }, { name: "y", optional: false, byRef: true, variadic: false }, { name: "layer", optional: false, byRef: true, variadic: false }],
-  },
-  {
     name: "destroyitem",
     kind: "state-write",
     sections: ["sprites"],
@@ -177,13 +135,6 @@ const STUBS: readonly CatalogueStub[] = [
     params: [{ name: "itemnum", optional: false, byRef: false, variadic: false }],
   },
   {
-    name: "itemlocation",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "itemnum", optional: false, byRef: false, variadic: false }, { name: "x", optional: false, byRef: true, variadic: false }, { name: "y", optional: false, byRef: true, variadic: false }, { name: "layer", optional: false, byRef: true, variadic: false }],
-  },
-  {
     name: "itemcount",
     kind: "pure",
     sections: [],
@@ -203,27 +154,6 @@ const STUBS: readonly CatalogueStub[] = [
     sections: ["sprites"],
     obsolete: false,
     params: [{ name: "percent", optional: false, byRef: false, variadic: false }],
-  },
-  {
-    name: "playergetpath",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "h", optional: false, byRef: false, variadic: false }, { name: "path", optional: false, byRef: true, variadic: false }],
-  },
-  {
-    name: "itemgetpath",
-    kind: "pure",
-    sections: [],
-    obsolete: false,
-    params: [{ name: "h", optional: false, byRef: false, variadic: false }, { name: "path", optional: false, byRef: true, variadic: false }],
-  },
-  {
-    name: "wander",
-    kind: "state-write",
-    sections: ["sprites"],
-    obsolete: false,
-    params: [{ name: "h", optional: false, byRef: false, variadic: false }, { name: "restrict", optional: true, byRef: false, variadic: false }],
   },
   {
     name: "pathfind",

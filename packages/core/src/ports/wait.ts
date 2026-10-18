@@ -80,6 +80,9 @@ export type InputKeyWait = {
 /** A wait for coupled sprite movement (`multiRun`, E-33). */
 export type MovementWait = { kind: "movement"; global: boolean; moves: WaitMove[] };
 
+/** A wait for the 5.10 sprite animation owner to report stance completion. */
+export type StanceWait = { kind: "sprite.stance"; global: boolean; actor: string; stance: string };
+
 /** A wait for a host reply (AD-5), located at the call that made it. */
 export type RequestWait = {
   kind: "request";
@@ -105,7 +108,7 @@ export type BlobWait = {
 };
 
 /** Every wait kind the VM registry knows (AD-9). */
-export type Wait = SleepWait | InputKeyWait | MovementWait | RequestWait | BlobWait | NamedWait;
+export type Wait = SleepWait | InputKeyWait | MovementWait | StanceWait | RequestWait | BlobWait | NamedWait;
 
 /** The wait kind names, namespaced where an owner part owns the kind. */
 export type WaitKind = Wait["kind"];
@@ -118,11 +121,17 @@ export type WaitInputView = {
 };
 export type WaitUiView = { readonly [name: string]: unknown };
 
+export type WaitSpriteView = {
+  readonly id: string;
+  readonly stance: string | null;
+  readonly stanceComplete: boolean;
+};
 /** What the waits phase may read while deciding. */
 export type WaitView = {
   readonly tick: number;
   readonly input?: WaitInputView;
   readonly ui?: WaitUiView;
+  readonly sprites?: readonly WaitSpriteView[];
   readonly claims?: readonly number[];
 };
 

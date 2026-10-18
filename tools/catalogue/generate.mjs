@@ -190,8 +190,13 @@ const REAL_PACK_COMMANDS = new Set([
   "restorearrayscreen", "restorescreenarray", "rendernow", "getres", "drawenemy", "createcanvas", "killcanvas",
   "drawcanvas", "drawcanvastransparent", "canvasdrawpart", "canvasgetscreen", "bitmap",
   "setimage", "setimagetransparent", "setimagetranslucent", "setimageadditive",
-]);
+  // movement and input pack
+  "push", "pushitem", "playerstep", "itemstep", "playerpath", "itempath", "playerlocation", "itemlocation",
+  "playergetpath", "itemgetpath", "activeplayer", "playerdirection", "itemdirection", "playerspeed",
+  "itemspeed", "playerstance", "itemstance", "wander", "wait", "get", "clearbuffer", "setbutton",
+  "checkbutton", "clearbuttons", "mousemove", "mouseclick",
 
+]);
 /** The stub-safe rows of the catalogue, in catalogue order. */
 export function stubRows(catalogue) {
   return catalogue.names.filter(
