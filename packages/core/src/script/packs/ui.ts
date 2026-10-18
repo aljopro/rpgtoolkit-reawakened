@@ -72,8 +72,58 @@ function plainDoc(summary: string, behaviour: string, waits: BuiltinDoc["waits"]
 const textParam: ParamSpec = { name: "text", optional: false, byRef: false, variadic: false };
 const NO_ARGS: readonly ParamSpec[] = [];
 const DIALOGUE = "message-window-text-fonts-30";
+const CURSOR_GROUP = "mouse-buttons-cursor-maps-11";
+const DEFAULT_ARROW = "media/cursors/tkr-arrow.png";
+const DEFAULT_HAND = "media/cursors/tkr-hand.png";
+
+function cursorDoc(summary: string, behaviour: string): BuiltinDoc {
+  return { summary, behaviour, groups: [CURSOR_GROUP], waits: { kind: "never", summary: "Completes in the current script turn." }, see: ["docs/spec/engine/rpgcode-functions.md#reawakened-default-cursors"] };
+}
+
+function uiState(view: CommandView): UiSection {
+  return view.state?.ui as UiSection ?? createUiSection();
+}
+
+function output(args: readonly Arg[], index: number, value: number): readonly (readonly [number, number])[] {
+  return args[index]?.ref === null || args[index] === undefined ? [] : [[index, value]];
+}
+
+function uiEffect(name: string, args: readonly PlainData[]): CommandEffect {
+  return { kind: "state-write", section: "ui", args: [...args] };
+}
 
 export const UI_COMMANDS: readonly BuiltinSpec[] = [
+  uiCommand("createCursorMap", [{ name: "ret", optional: true, byRef: true, variadic: false }], cursorDoc("Create a cursor map.", "Creates an empty cursor map and returns its integer handle, also writing the optional reference; points are added in order and the call does not wait."), (view, args) => {
+    const ui = uiState(view);
+    const id = ui.nextCursorMapId ?? 1;
+    return { value: id, out: output(args, 0, id), effects: [uiEffect("createcursormap", [id])] };
+  }),
+  uiCommand("cursorMapAdd", [
+    { name: "x", optional: false, byRef: false, variadic: false },
+    { name: "y", optional: false, byRef: false, variadic: false },
+    { name: "map", optional: false, byRef: false, variadic: false },
+  ], cursorDoc("Add a point to a cursor map.", "Appends the integer pixel point `(x,y)` to the selected map; map order defines keyboard selection order and the call does not wait."), (_view, args) => ({ value: null, effects: [uiEffect("cursormapadd", [Math.trunc(number(args, 0)), Math.trunc(number(args, 1)), Math.trunc(number(args, 2))])] })),
+  uiCommand("cursorMapRun", [
+    { name: "map", optional: false, byRef: false, variadic: false },
+    { name: "ret", optional: true, byRef: true, variadic: false },
+  ], { summary: "Run a cursor map.", behaviour: "Shows the hand at the selected map point and waits for a key or mouse selection. Technically, arrow keys move through points, number keys select a zero-based point, Enter/Return/Space confirms, mouse presses choose the nearest point, and the returned index is zero-based.", groups: [CURSOR_GROUP], waits: { kind: "until-input", summary: "Yields until a cursor-map point is selected." }, see: ["docs/spec/engine/rpgcode-functions.md#e-60"] }, (_view, args) => {
+    const map = Math.trunc(number(args, 0));
+    const refs = args[1]?.ref === null || args[1]?.ref === undefined ? [] : [args[1].ref];
+    return { value: null, effects: [uiEffect("cursormaprun", [map])], wait: { kind: "input.key", global: true, key: null, cursorMap: map, cursorSelection: 0, resumeRefs: refs } };
+  }),
+  uiCommand("killCursorMap", [{ name: "map", optional: false, byRef: false, variadic: false }], cursorDoc("Kill a cursor map.", "Removes the selected map and any active selection; later runs of that handle wait for a valid map and the call does not wait."), (_view, args) => ({ value: null, effects: [uiEffect("killcursormap", [Math.trunc(number(args, 0))])] })),
+  uiCommand("cursorMapHand", [
+    { name: "cursor", optional: false, byRef: false, variadic: false },
+    { name: "stretch", optional: true, byRef: false, variadic: false },
+  ], cursorDoc("Choose the cursor-map hand.", "Selects a bundled or custom hand image. Technically, an empty name restores the bundled 32×32 hand, `stretch` defaults on and scales custom images to 32×32 with nearest-neighbour sampling, and the call does not wait."), (_view, args) => ({ value: null, effects: [uiEffect("cursormaphand", [text(args, 0), number(args, 1, 1) === 0 ? 0 : 1])] })),
+  uiCommand("mouseCursor", [
+    { name: "file", optional: false, byRef: false, variadic: false },
+    { name: "hotspotX", optional: true, byRef: false, variadic: false },
+    { name: "hotspotY", optional: true, byRef: false, variadic: false },
+    { name: "red", optional: true, byRef: false, variadic: false },
+    { name: "green", optional: true, byRef: false, variadic: false },
+    { name: "blue", optional: true, byRef: false, variadic: false },
+  ], cursorDoc("Choose the mouse cursor.", "Uses the bundled 32×32 arrow for `TK DEFAULT` or an empty file; otherwise uses the custom image with the supplied hot spot and transparent RGB key, and the call does not wait. A custom cursor is drawn at the current pointer position."), (_view, args) => ({ value: null, effects: [uiEffect("mousecursor", [text(args, 0), Math.trunc(number(args, 1)), Math.trunc(number(args, 2)), Math.trunc(number(args, 3)), Math.trunc(number(args, 4)), Math.trunc(number(args, 5))])] })),
   uiCommand("mwin", [textParam], plainDoc("Show a line of dialogue.", "Shows the fixed 600×100 logical-pixel message window at the top, appending the text after `<var>` splicing and rendering all glyphs at once; it does not wait."), (view, args) => ({ value: null, effects: [effect("mwin", [spliceVariables(text(args, 0), view)])] })),
   uiCommand("mwincls", NO_ARGS, plainDoc("Clear and hide the dialogue window.", "Hides the message window and clears all of its text immediately; it does not wait."), () => ({ value: null, effects: [effect("mwincls")] })),
   uiCommand("mwinSize", [{ name: "percent", optional: true, byRef: false, variadic: true }], { summary: "Obsolete.", behaviour: "Raises the catchable obsolete-command error for every call; the fixed message-window geometry cannot be changed.", groups: [DIALOGUE], tags: ["obsolete"], waits: { kind: "never", summary: "Does not wait." } }, () => { throw new ScriptError("builtin.obsolete", '"mwinsize" is obsolete: the statement is skipped'); }),
@@ -163,6 +213,51 @@ export function applyUiEffect(state: { ui: UiSection; surfaces?: SurfacesSection
     }
     case "prompt": ui.modal = { kind: "prompt", text: stringArg(first), title: "", style: 0, textColor: ui.color, background: ui.message.background, graphic: "", selected: 0, result: null }; return;
     case "msgbox": ui.modal = { kind: "msgbox", text: stringArg(args[0]), title: stringArg(args[1]), style: numberArg(args[2]) === 1 ? 1 : 0, textColor: typeof args[3] === "number" ? dosPaletteEntry(numberArg(args[3])) : ui.color, background: typeof args[4] === "number" ? dosPaletteEntry(numberArg(args[4])) : ui.message.background, graphic: stringArg(args[5]), selected: 0, result: null }; return;
+    case "createcursormap": {
+      const id = Math.trunc(numberArg(first));
+      const maps = ui.cursorMaps ?? [];
+      ui.cursorMaps = [...maps, { id, points: [], selected: 0 }];
+      ui.nextCursorMapId = Math.max(ui.nextCursorMapId ?? 1, id + 1);
+      return;
+    }
+    case "cursormapadd": {
+      const x = Math.trunc(numberArg(args[0]));
+      const y = Math.trunc(numberArg(args[1]));
+      const id = Math.trunc(numberArg(args[2]));
+      ui.cursorMaps = (ui.cursorMaps ?? []).map((map) => map.id === id ? { ...map, points: [...map.points, { x, y }] } : map);
+      return;
+    }
+    case "cursormaprun": {
+      ui.activeCursorMap = Math.trunc(numberArg(first));
+      return;
+    }
+    case "killcursormap": {
+      const id = Math.trunc(numberArg(first));
+      ui.cursorMaps = (ui.cursorMaps ?? []).filter((map) => map.id !== id);
+      if (ui.activeCursorMap === id) delete ui.activeCursorMap;
+      return;
+    }
+    case "cursormaphand": {
+      const cursor = stringArg(first).trim();
+      const asset = cursor === "" ? DEFAULT_HAND : assetKey(cursor);
+      ui.cursorHand = { asset, stretch: numberArg(args[1]) !== 0, width: 32, height: 32 };
+      return;
+    }
+    case "mousecursor": {
+      const file = stringArg(first).trim();
+      if (file.toLowerCase() === "none") { ui.mouseCursor = null; return; }
+      ui.mouseCursor = {
+        asset: file === "" || file.toLowerCase() === "tk default" ? DEFAULT_ARROW : assetKey(file),
+        x: 0,
+        y: 0,
+        hotspotX: Math.trunc(numberArg(args[1])),
+        hotspotY: Math.trunc(numberArg(args[2])),
+        transparent: { r: Math.trunc(numberArg(args[3])), g: Math.trunc(numberArg(args[4])), b: Math.trunc(numberArg(args[5])) },
+        width: 32,
+        height: 32,
+      };
+      return;
+    }
     default: return;
   }
 }

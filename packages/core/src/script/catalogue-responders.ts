@@ -450,7 +450,7 @@ const PACK_CATALOGUE_FALLBACKS: readonly BuiltinSpec[] = [
   effectCommand("text", "ui"),
   effectCommand("msgbox", "ui", "mixed"),
   effectCommand("fade", "fx", "draw-audio-cue"),
-].map(fallbackDocumentation).concat(GRAPHICS_COMMANDS);
+].map(fallbackDocumentation).concat(GRAPHICS_COMMANDS, UI_COMMANDS.filter((command) => ["createcursormap", "cursormapadd", "cursormaprun", "killcursormap", "cursormaphand", "mousecursor"].includes(command.name)));
 
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
 

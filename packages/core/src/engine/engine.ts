@@ -9,7 +9,7 @@ import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
 import { gateTrueType } from "../formats/font/truetype.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
-import type { DrawList, Tint } from "../ports/draw.ts";
+import type { DrawList, Rgb, Tint } from "../ports/draw.ts";
 import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
 import type { PlainData } from "../ports/plain-data.ts";
@@ -18,7 +18,7 @@ import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
 import { composeBoard, type SpriteDraw } from "../render/compose.ts";
-import { composeUi } from "../render/ui.ts";
+import { composeUi, composeUiCursor } from "../render/ui.ts";
 import { applyFxDrawList, advanceFx, applyFxEffect } from "../render/fx.ts";
 import { advanceAnimations, loadAnimation } from "../render/animation.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
@@ -87,6 +87,14 @@ export type EngineResetRegistration = {
   readonly rank?: number;
   readonly reset: (state: GameState) => void;
 };
+/** Optional E-05 overlays supplied by the runner, never enabled implicitly in goldens. */
+export type DebugOverlayConfig = {
+  readonly fps?: number;
+  readonly drawVectorsFlags?: number;
+  readonly pathColor?: Rgb;
+  readonly path?: readonly { readonly x: number; readonly y: number }[];
+  readonly destination?: { readonly x: number; readonly y: number };
+};
 
 type EngineCommonInit = {
   readonly seed: number;
@@ -106,6 +114,7 @@ type EngineCommonInit = {
   readonly sprites?: readonly SpriteDraw[];
   /** Script ambient summed with the board's once per tile blit (E-17). */
   readonly globalAmbient?: Tint;
+  readonly debug?: DebugOverlayConfig;
 };
 
 /**
@@ -939,6 +948,36 @@ export function createEngine(init: EngineInit): Engine {
   }
   function currentDrawList(alpha = 0, include = init.include ?? { shading: false, images: false, sprites: false }): DrawList {
     const board: WorldBoard | null = state.world.board ?? null;
+    const camera = positionAt(state.camera, Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0);
+    const debugCommands = (): DrawList["commands"] => {
+      const debug = init.debug;
+      if (debug === undefined) return [];
+      const commands: DrawList["commands"] = [];
+      const colour = debug.pathColor ?? { r: 255, g: 255, b: 255 };
+      const linePoints = (points: readonly { readonly x: number; readonly y: number }[], rgb: Rgb, closed = false): void => {
+        for (let i = 1; i < points.length; i += 1) {
+          const a = points[i - 1]!;
+          const b = points[i]!;
+          commands.push({ kind: "line", x1: Math.round(a.x - camera.x), y1: Math.round(a.y - camera.y), x2: Math.round(b.x - camera.x), y2: Math.round(b.y - camera.y), rgb });
+        }
+        if (closed && points.length > 2) {
+          const a = points[points.length - 1]!;
+          const b = points[0]!;
+          commands.push({ kind: "line", x1: Math.round(a.x - camera.x), y1: Math.round(a.y - camera.y), x2: Math.round(b.x - camera.x), y2: Math.round(b.y - camera.y), rgb });
+        }
+      };
+      const flags = debug.drawVectorsFlags ?? 0;
+      if ((flags & 1) !== 0) for (const vector of board?.vectors ?? []) linePoints(vector.points, colour, vector.closed !== 0);
+      if ((flags & 2) !== 0) for (const sprite of init.sprites ?? []) if (sprite.collisionBase !== undefined) linePoints(sprite.collisionBase, { r: 255, g: 128, b: 0 }, true);
+      if ((flags & 4) !== 0 && debug.path !== undefined) linePoints(debug.path, colour);
+      if ((flags & 8) !== 0 && debug.destination !== undefined) {
+        const x = Math.round(debug.destination.x - camera.x);
+        const y = Math.round(debug.destination.y - camera.y);
+        commands.push({ kind: "ellipse", rect: { x: x - 5, y: y - 5, w: 10, h: 10 }, rgb: colour, filled: false });
+      }
+      if (debug.fps !== undefined) commands.push({ kind: "text", x: 4, y: 4, text: `FPS ${Math.round(debug.fps)}`, font: state.ui.font, rgb: colour, advances: [] });
+      return commands;
+    };
     const empty = { tick: state.time.tick, width: init.width, height: init.height, commands: [] as DrawList["commands"] };
     const base = board === null
       ? empty
@@ -952,8 +991,9 @@ export function createEngine(init: EngineInit): Engine {
         assets: decodedAssets(),
         ...presentation,
       });
-    const withUi = { ...base, commands: [...base.commands, ...composeUi(state.ui, init.width, init.height)] };
-    return applyFxDrawList(withUi, state.fx);
+    const withUi = { ...base, commands: [...base.commands, ...debugCommands(), ...composeUi(state.ui, init.width, init.height, state.input, false)] };
+    const withFx = applyFxDrawList(withUi, state.fx);
+    return { ...withFx, commands: [...withFx.commands, ...composeUiCursor(state.ui, state.input)] };
   }
   function refreshFrame(): void {
     const list = currentDrawList(0);

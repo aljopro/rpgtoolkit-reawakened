@@ -13,4 +13,14 @@ export type InputSection = {
   held: { [name: string]: boolean };
   pointer: { x: number; y: number; buttons: number };
   focused: boolean;
+  buttons?: InputButton[];
+};
+
+export type InputButton = {
+  readonly slot: number;
+  readonly asset: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
 };
