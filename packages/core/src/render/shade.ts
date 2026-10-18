@@ -211,8 +211,3 @@ export function bakeLights(board: WorldBoard): WorldBoard {
 export function addTint(a: Tint, b: Tint): Tint {
   return addRgb(a, b);
 }
-
-/** True when a rasterised cell has no shade contribution. */
-export function isZeroTint(value: Tint): boolean {
-  return value.r === 0 && value.g === 0 && value.b === 0;
-}
