@@ -3,8 +3,16 @@ import { assetKey } from "../formats/resolver/resolver.ts";
 import { frameAt } from "../time/index.ts";
 import type { AssetKey } from "../ports/keys.ts";
 import type { DrawCommand, DrawList, Rect, Rgb, Tint } from "../ports/draw.ts";
-import { addTint, cellTint } from "./shade.ts";
-import type { WorldBoard, WorldImage, WorldLayer, WorldTile } from "../world/model.ts";
+import { addTint, ambientTint, cellTint } from "./shade.ts";
+import type {
+  WorldBoard,
+  WorldImage,
+  WorldImageCell,
+  WorldLayer,
+  WorldPoint,
+  WorldTile,
+  WorldVector,
+} from "../world/model.ts";
 
 const TILE_SIZE = 32;
 const NO_TINT: Tint = { r: 0, g: 0, b: 0 };
@@ -21,6 +29,47 @@ export type BoardBlit = {
   readonly iso2d?: boolean;
 };
 
+export type SpriteFrame = {
+  readonly asset?: AssetKey;
+  readonly file?: string;
+  readonly tile?: number | null;
+  readonly src?: Rect;
+  readonly width?: number;
+  readonly height?: number;
+  readonly anchorX?: number;
+  readonly anchorY?: number;
+  readonly transparent?: Rgb | null;
+  readonly cells?: readonly WorldImageCell[];
+  readonly tint?: Tint;
+};
+
+export type SpriteDraw = {
+  readonly id: string;
+  readonly key: string;
+  readonly layer: number;
+  readonly x: number;
+  readonly y: number;
+  readonly drawId: number;
+  readonly frame?: SpriteFrame;
+  readonly phase?: number;
+  readonly translucency?: number;
+  readonly blend?: "normal" | "additive" | "translucent";
+  readonly prev?: readonly [number, number] | { readonly x: number; readonly y: number };
+  readonly under?: readonly number[];
+  readonly collisionBase?: readonly WorldPoint[];
+
+  readonly asset?: AssetKey;
+  readonly file?: string;
+  readonly tile?: number | null;
+  readonly src?: Rect;
+  readonly width?: number;
+  readonly height?: number;
+  readonly transparent?: Rgb | null;
+  readonly cells?: readonly WorldImageCell[];
+  readonly tint?: Tint;
+  readonly alpha?: number;
+};
+
 export type BoardView = {
   readonly board: WorldBoard;
   readonly tick: number;
@@ -32,6 +81,8 @@ export type BoardView = {
   readonly assets?: ReadonlyMap<AssetKey, DecodedTexture>;
   /** Runtime layer edits replace the board's saved layer list for this frame. */
   readonly layers?: readonly WorldLayer[];
+  /** Sprites to render in strict layer and screen-space Y order. */
+  readonly sprites?: readonly SpriteDraw[];
   /** Additional image commands supplied by a presentation owner. */
   readonly blits?: readonly BoardBlit[];
   /** Script ambient is summed with board ambient once per tile blit (E-17). */
@@ -40,6 +91,405 @@ export type BoardView = {
 
 function visible(rect: Rect, viewport: { readonly width: number; readonly height: number }): boolean {
   return rect.w > 0 && rect.h > 0 && rect.x + rect.w > 0 && rect.y + rect.h > 0 && rect.x < viewport.width && rect.y < viewport.height;
+}
+
+function edgesIntersect(
+  x1: number, y1: number, x2: number, y2: number,
+  x3: number, y3: number, x4: number, y4: number,
+): boolean {
+  const d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (d === 0) return false;
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / d;
+  const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / d;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+function pointInPolygon(px: number, py: number, points: readonly WorldPoint[]): boolean {
+  let inside = false;
+  const count = points.length;
+  for (let i = 0, j = count - 1; i < count; j = i++) {
+    const p1 = points[i]!;
+    const p2 = points[j]!;
+    if ((p1.y > py) !== (p2.y > py)) {
+      const xIntersect = p1.x + ((py - p1.y) * (p2.x - p1.x)) / (p2.y - p1.y);
+      if (px < xIntersect) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function polygonIntersectsRect(points: readonly WorldPoint[], rect: Rect): boolean {
+  if (points.length < 3 || rect.w <= 0 || rect.h <= 0) return false;
+  const rx1 = rect.x;
+  const ry1 = rect.y;
+  const rx2 = rect.x + rect.w;
+  const ry2 = rect.y + rect.h;
+
+  for (const p of points) {
+    if (p.x >= rx1 && p.x <= rx2 && p.y >= ry1 && p.y <= ry2) return true;
+  }
+
+  if (
+    pointInPolygon(rx1, ry1, points) ||
+    pointInPolygon(rx2, ry1, points) ||
+    pointInPolygon(rx1, ry2, points) ||
+    pointInPolygon(rx2, ry2, points)
+  ) {
+    return true;
+  }
+
+  const count = points.length;
+  for (let i = 0, j = count - 1; i < count; j = i++) {
+    const p1 = points[i]!;
+    const p2 = points[j]!;
+    if (
+      edgesIntersect(p1.x, p1.y, p2.x, p2.y, rx1, ry1, rx2, ry1) ||
+      edgesIntersect(p1.x, p1.y, p2.x, p2.y, rx1, ry2, rx2, ry2) ||
+      edgesIntersect(p1.x, p1.y, p2.x, p2.y, rx1, ry1, rx1, ry2) ||
+      edgesIntersect(p1.x, p1.y, p2.x, p2.y, rx2, ry1, rx2, ry2)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function polygonScanlineSpans(points: readonly WorldPoint[], y: number): Array<[number, number]> {
+  if (points.length < 3) return [];
+  const yVal = y + 0.5;
+  const intercepts: number[] = [];
+  const count = points.length;
+  for (let i = 0, j = count - 1; i < count; j = i++) {
+    const p1 = points[i]!;
+    const p2 = points[j]!;
+    if ((p1.y > yVal) !== (p2.y > yVal)) {
+      const x = p1.x + ((yVal - p1.y) * (p2.x - p1.x)) / (p2.y - p1.y);
+      intercepts.push(Math.round(x));
+    }
+  }
+  if (intercepts.length < 2) return [];
+  intercepts.sort((a, b) => a - b);
+  const spans: Array<[number, number]> = [];
+  for (let i = 0; i < intercepts.length - 1; i += 2) {
+    const x1 = intercepts[i]!;
+    const x2 = intercepts[i + 1]!;
+    if (x2 > x1) spans.push([x1, x2]);
+  }
+  return spans;
+}
+
+function mergeIntervals(intervals: Array<[number, number]>): Array<[number, number]> {
+  if (intervals.length <= 1) return intervals;
+  intervals.sort((a, b) => a[0] - b[0]);
+  const merged: Array<[number, number]> = [[intervals[0]![0], intervals[0]![1]]];
+  for (let i = 1; i < intervals.length; i += 1) {
+    const last = merged[merged.length - 1]!;
+    const curr = intervals[i]!;
+    if (curr[0] <= last[1]) {
+      last[1] = Math.max(last[1], curr[1]);
+    } else {
+      merged.push([curr[0], curr[1]]);
+    }
+  }
+  return merged;
+}
+
+function spritePosition(
+  sprite: SpriteDraw,
+  alpha: number,
+): { readonly x: number; readonly y: number } {
+  if (sprite.prev === undefined) return { x: sprite.x, y: sprite.y };
+  const prev = sprite.prev;
+  let prevX = sprite.x;
+  let prevY = sprite.y;
+  if ("x" in prev) {
+    prevX = prev.x;
+    prevY = prev.y;
+  } else {
+    prevX = prev[0] ?? sprite.x;
+    prevY = prev[1] ?? sprite.y;
+  }
+  return {
+    x: prevX + (sprite.x - prevX) * alpha,
+    y: prevY + (sprite.y - prevY) * alpha,
+  };
+}
+
+function sortSprites(
+  sprites: readonly SpriteDraw[],
+  alpha: number,
+  cameraY: number,
+): SpriteDraw[] {
+  return [...sprites].sort((a, b) => {
+    if (a.layer !== b.layer) return a.layer - b.layer;
+    const aY = spritePosition(a, alpha).y - cameraY;
+    const bY = spritePosition(b, alpha).y - cameraY;
+    if (aY !== bY) return aY - bY;
+    if (a.drawId !== b.drawId) return a.drawId - b.drawId;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function emitUnderVectorRedraw(
+  commands: DrawCommand[],
+  sprite: SpriteDraw,
+  board: WorldBoard,
+  view: BoardView,
+  layers: readonly WorldLayer[],
+  boardLeft: number,
+  boardTop: number,
+  spriteW: number,
+  spriteH: number,
+  worldX: number,
+  worldY: number,
+): void {
+  const vectors = board.vectors;
+  if (vectors === undefined || vectors.length === 0) return;
+
+  const frameRect: Rect = { x: boardLeft, y: boardTop, w: spriteW, h: spriteH };
+  const collisionRect: Rect = {
+    x: Math.round(worldX) - 15,
+    y: Math.round(worldY) - 15,
+    w: 31,
+    h: 16,
+  };
+
+  const activeVectors: WorldVector[] = [];
+  for (const v of vectors) {
+    if (v.type !== 2 || v.points.length < 3) continue;
+    const coversLower = (v.attributes & 2) !== 0;
+    if (coversLower ? sprite.layer > v.layer : sprite.layer !== v.layer) continue;
+    const frameTrigger = (v.attributes & 4) !== 0;
+    const testRect = frameTrigger ? frameRect : collisionRect;
+    if (polygonIntersectsRect(v.points, testRect)) {
+      activeVectors.push(v);
+    }
+  }
+
+  if (activeVectors.length === 0) return;
+
+  let maxLayer = 0;
+  for (const v of activeVectors) {
+    if (v.layer > maxLayer) maxLayer = v.layer;
+  }
+
+  for (let row = 0; row < spriteH; row += 1) {
+    const y = boardTop + row;
+    const dstY = y - view.camera.y;
+    if (dstY < 0 || dstY >= view.viewport.height) continue;
+
+    const bgIntervals: Array<[number, number]> = [];
+    for (const v of activeVectors) {
+      if ((v.attributes & 1) !== 0) {
+        const spans = polygonScanlineSpans(v.points, y);
+        for (const [x1, x2] of spans) {
+          const cx1 = Math.max(x1, boardLeft);
+          const cx2 = Math.min(x2, boardLeft + spriteW);
+          if (cx2 > cx1) bgIntervals.push([cx1, cx2]);
+        }
+      }
+    }
+    const mergedBg = mergeIntervals(bgIntervals);
+    for (const [spanX1, spanX2] of mergedBg) {
+      const spanW = spanX2 - spanX1;
+      const dstX = spanX1 - view.camera.x;
+      if (visible({ x: dstX, y: dstY, w: spanW, h: 1 }, view.viewport)) {
+        commands.push({
+          kind: "rect",
+          rect: { x: dstX, y: dstY, w: spanW, h: 1 },
+          rgb: board.background,
+          filled: true,
+        });
+      }
+    }
+
+    for (let layerNum = 1; layerNum <= maxLayer; layerNum += 1) {
+      const layerIdx = layerNum - 1;
+      const layer = layers[layerIdx];
+      if (layer === undefined) continue;
+
+      const layerIntervals: Array<[number, number]> = [];
+      for (const v of activeVectors) {
+        const coversLower = (v.attributes & 2) !== 0;
+        const promotes = coversLower ? layerNum <= v.layer : layerNum === v.layer;
+        if (promotes) {
+          const spans = polygonScanlineSpans(v.points, y);
+          for (const [x1, x2] of spans) {
+            const cx1 = Math.max(x1, boardLeft);
+            const cx2 = Math.min(x2, boardLeft + spriteW);
+            if (cx2 > cx1) layerIntervals.push([cx1, cx2]);
+          }
+        }
+      }
+
+      const merged = mergeIntervals(layerIntervals);
+      for (const [spanX1, spanX2] of merged) {
+        const tileXStart = Math.floor(spanX1 / TILE_SIZE);
+        const tileXEnd = Math.floor((spanX2 - 1) / TILE_SIZE);
+        const tileY = Math.floor(y / TILE_SIZE);
+        if (tileY < 0 || tileY >= board.sizeY) continue;
+
+        for (let tx = tileXStart; tx <= tileXEnd; tx += 1) {
+          if (tx < 0 || tx >= board.sizeX) continue;
+          const tile = layer.tiles[tileY * board.sizeX + tx];
+          if (tile === null || tile === undefined) continue;
+          const selected = selectedTile(tile, view.tick);
+          const tileLeft = tx * TILE_SIZE;
+          const subX1 = Math.max(spanX1, tileLeft);
+          const subX2 = Math.min(spanX2, tileLeft + TILE_SIZE);
+          const subW = subX2 - subX1;
+          if (subW <= 0) continue;
+          const srcX = subX1 - tileLeft;
+          const srcY = y - tileY * TILE_SIZE;
+          const dstX = subX1 - view.camera.x;
+          if (!visible({ x: dstX, y: dstY, w: subW, h: 1 }, view.viewport)) continue;
+          commands.push({
+            kind: "blit",
+            source: { asset: selected.asset, tile: selected.tile },
+            src: { x: srcX, y: srcY, w: subW, h: 1 },
+            dst: { x: dstX, y: dstY, w: subW, h: 1 },
+            key: TILE_KEY,
+            tint: tileTint(board, layerNum, tx, tileY, view.include.shading, view.globalAmbient, selected.tint),
+            alpha: 255,
+            blend: "normal",
+            iso2d: false,
+          });
+        }
+      }
+    }
+  }
+}
+
+function emitSprite(
+  commands: DrawCommand[],
+  sprite: SpriteDraw,
+  board: WorldBoard,
+  view: BoardView,
+  layers: readonly WorldLayer[],
+): void {
+  const pos = spritePosition(sprite, view.alpha);
+  const worldX = pos.x;
+  const worldY = pos.y;
+
+  const cells = sprite.frame?.cells ?? sprite.cells;
+  let width = sprite.frame?.width ?? sprite.width;
+  let height = sprite.frame?.height ?? sprite.height;
+
+  const file = sprite.frame?.file ?? sprite.file;
+  const explicitAsset = sprite.frame?.asset ?? sprite.asset;
+  const texture = (file !== undefined || explicitAsset !== undefined)
+    ? textureFor(view.assets, file ?? "", explicitAsset)
+    : null;
+
+  if (width === undefined && texture !== null) width = texture.texture.w;
+  if (height === undefined && texture !== null) height = texture.texture.h;
+
+  if (cells !== undefined && cells.length > 0) {
+    if (width === undefined) {
+      let maxX = 0;
+      for (const cell of cells) if (cell.x > maxX) maxX = cell.x;
+      width = (maxX + 1) * TILE_SIZE;
+    }
+    if (height === undefined) {
+      let maxY = 0;
+      for (const cell of cells) if (cell.y > maxY) maxY = cell.y;
+      height = (maxY + 1) * TILE_SIZE;
+    }
+  }
+
+  const spriteW = width ?? 16;
+  const spriteH = height ?? 16;
+
+  const anchorX = sprite.frame?.anchorX ?? Math.floor(spriteW / 2);
+  const anchorY = sprite.frame?.anchorY ?? spriteH;
+
+  const boardLeft = Math.round(worldX - anchorX);
+  const boardTop = Math.round(worldY - anchorY);
+
+  const dstX = boardLeft - view.camera.x;
+  const dstY = boardTop - view.camera.y;
+  const dstRect: Rect = { x: dstX, y: dstY, w: spriteW, h: spriteH };
+
+  if (visible(dstRect, view.viewport)) {
+    if (cells !== undefined && cells.length > 0) {
+      for (const cell of cells) {
+        if (cell.tile === null) continue;
+        const tile = selectedTile(cell.tile, view.tick);
+        const cellW = tile.width ?? TILE_SIZE;
+        const cellH = tile.height ?? TILE_SIZE;
+        const cdx = dstX + cell.x * TILE_SIZE;
+        const cdy = dstY + cell.y * TILE_SIZE;
+        const cellDst: Rect = { x: cdx, y: cdy, w: cellW, h: cellH };
+        if (!visible(cellDst, view.viewport)) continue;
+        const cellBoardX = Math.floor(boardLeft / TILE_SIZE) + cell.x;
+        const cellBoardY = Math.floor(boardTop / TILE_SIZE) + cell.y;
+        const cellTintOverride = addTint(cell.tint ?? NO_TINT, sprite.frame?.tint ?? sprite.tint ?? NO_TINT);
+        commands.push(tileCommand(
+          board,
+          tile,
+          view.tick,
+          sprite.layer,
+          cellBoardX,
+          cellBoardY,
+          cdx,
+          cdy,
+          view.include.shading,
+          view.globalAmbient,
+          cellTintOverride,
+        ));
+      }
+    } else if (texture !== null) {
+      const key = sprite.frame?.transparent ?? sprite.transparent ?? { r: 255, g: 255, b: 255 };
+      const tint = view.include.shading ? ambientTint(board, view.globalAmbient) : NO_TINT;
+      const alpha = sprite.translucency ?? sprite.alpha ?? 255;
+      const blend = sprite.blend ?? "normal";
+      const src = sprite.frame?.src ?? sprite.src ?? { x: 0, y: 0, w: texture.texture.w, h: texture.texture.h };
+      commands.push({
+        kind: "blit",
+        source: { asset: texture.key, tile: null },
+        src,
+        dst: dstRect,
+        key,
+        tint,
+        alpha,
+        blend,
+        iso2d: false,
+      });
+    } else {
+      const tileIndex = sprite.frame?.tile ?? sprite.tile;
+      const tileAsset = sprite.frame?.asset ?? sprite.asset;
+      if (tileIndex !== null && tileIndex !== undefined && tileAsset !== undefined) {
+        const key = sprite.frame?.transparent ?? sprite.transparent ?? TILE_KEY;
+        const tint = view.include.shading ? ambientTint(board, view.globalAmbient) : NO_TINT;
+        const alpha = sprite.translucency ?? sprite.alpha ?? 255;
+        const blend = sprite.blend ?? "normal";
+        const src = sprite.frame?.src ?? sprite.src ?? { x: 0, y: 0, w: spriteW, h: spriteH };
+        commands.push({
+          kind: "blit",
+          source: { asset: tileAsset, tile: tileIndex },
+          src,
+          dst: dstRect,
+          key,
+          tint,
+          alpha,
+          blend,
+          iso2d: false,
+        });
+      } else {
+        const colour = sprite.key === "player"
+          ? { r: 64, g: 96, b: 224 }
+          : { r: 192, g: 128, b: 32 };
+        commands.push({
+          kind: "rect",
+          rect: dstRect,
+          rgb: colour,
+          filled: true,
+        });
+      }
+    }
+  }
+
+  emitUnderVectorRedraw(commands, sprite, board, view, layers, boardLeft, boardTop, spriteW, spriteH, worldX, worldY);
 }
 
 function textureFor(
@@ -202,6 +652,9 @@ function composeBoardView(view: BoardView): DrawList {
       if (command !== null) commands.push(command);
     }
   }
+  const sortedSprites = (view.include.sprites && view.sprites !== undefined && view.sprites.length > 0)
+    ? sortSprites(view.sprites, view.alpha, camera.y)
+    : [];
   const layers = view.layers ?? board.layers;
   for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
     const layer = layers[layerIndex];
@@ -222,6 +675,20 @@ function composeBoardView(view: BoardView): DrawList {
     }
     if (view.include.images) {
       for (const image of board.images ?? []) emitImage(commands, image, board, view, layerNumber);
+    }
+    if (view.include.sprites && sortedSprites.length > 0) {
+      const layerSprites = layerNumber === 1
+        ? sortedSprites.filter((s) => s.layer <= 1)
+        : sortedSprites.filter((s) => s.layer === layerNumber);
+      for (const sprite of layerSprites) {
+        emitSprite(commands, sprite, board, view, layers);
+      }
+    }
+  }
+  if (view.include.sprites && sortedSprites.length > 0) {
+    const higherSprites = sortedSprites.filter((s) => s.layer > layers.length);
+    for (const sprite of higherSprites) {
+      emitSprite(commands, sprite, board, view, layers);
     }
   }
   for (const blit of view.blits ?? []) {
