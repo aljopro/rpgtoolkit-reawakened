@@ -445,3 +445,66 @@ export function blitSurface(
     }
   });
 }
+/** Copy decoded image pixels into a persistent surface without allocating a source handle. */
+export function blitTexture(
+  state: SurfacesSection,
+  texture: DecodedTexture,
+  destination: SurfaceId,
+  x: number,
+  y: number,
+  width?: number,
+  height?: number,
+  key?: Rgb,
+  alpha = 255,
+  additive = false,
+  sourceRect?: { readonly x: number; readonly y: number; readonly w: number; readonly h: number },
+): boolean {
+  const destinationEntry = entry(state, destination);
+  if (destinationEntry === null) return false;
+  const cropX = sourceRect === undefined ? 0 : Math.max(0, Math.trunc(sourceRect.x));
+  const cropY = sourceRect === undefined ? 0 : Math.max(0, Math.trunc(sourceRect.y));
+  const cropWidth = sourceRect === undefined ? texture.w : Math.min(texture.w - cropX, Math.max(0, Math.trunc(sourceRect.w)));
+  const cropHeight = sourceRect === undefined ? texture.h : Math.min(texture.h - cropY, Math.max(0, Math.trunc(sourceRect.h)));
+  const outWidth = width === undefined ? cropWidth : Math.max(0, Math.trunc(width));
+  const outHeight = height === undefined ? cropHeight : Math.max(0, Math.trunc(height));
+  if (outWidth === 0 || outHeight === 0 || cropWidth === 0 || cropHeight === 0) return true;
+  const dx = Math.trunc(x);
+  const dy = Math.trunc(y);
+  return editSurface(state, destination, (target, targetWidth, targetHeight) => {
+    for (let row = 0; row < outHeight; row += 1) {
+      const sourceY = cropY + Math.min(cropHeight - 1, Math.floor(row * cropHeight / outHeight));
+      for (let column = 0; column < outWidth; column += 1) {
+        const sourceX = cropX + Math.min(cropWidth - 1, Math.floor(column * cropWidth / outWidth));
+        const from = (sourceY * texture.w + sourceX) * 4;
+        const sr = texture.rgba[from] ?? 0;
+        const sg = texture.rgba[from + 1] ?? 0;
+        const sb = texture.rgba[from + 2] ?? 0;
+        const sa = texture.rgba[from + 3] ?? 0;
+        if (key !== undefined && sr === Math.trunc(key.r) && sg === Math.trunc(key.g) && sb === Math.trunc(key.b)) continue;
+        const tx = dx + column;
+        const ty = dy + row;
+        if (tx < 0 || ty < 0 || tx >= targetWidth || ty >= targetHeight) continue;
+        const at = (ty * targetWidth + tx) * 4;
+        if (additive) {
+          target[at] = Math.min(255, (target[at] ?? 0) + Math.trunc(sr * alpha / 255));
+          target[at + 1] = Math.min(255, (target[at + 1] ?? 0) + Math.trunc(sg * alpha / 255));
+          target[at + 2] = Math.min(255, (target[at + 2] ?? 0) + Math.trunc(sb * alpha / 255));
+          target[at + 3] = 255;
+          continue;
+        }
+        const effective = Math.trunc(sa * alpha / 255);
+        if (effective >= 255) {
+          target[at] = sr;
+          target[at + 1] = sg;
+          target[at + 2] = sb;
+          target[at + 3] = sa;
+        } else if (effective > 0) {
+          target[at] = Math.trunc((sr * effective + (target[at] ?? 0) * (255 - effective)) / 255);
+          target[at + 1] = Math.trunc((sg * effective + (target[at + 1] ?? 0) * (255 - effective)) / 255);
+          target[at + 2] = Math.trunc((sb * effective + (target[at + 2] ?? 0) * (255 - effective)) / 255);
+          target[at + 3] = 255;
+        }
+      }
+    }
+  });
+}
