@@ -14,6 +14,7 @@ import {
   startProgram,
   runThreadsPhase,
   type CameraPoint,
+  type CameraSection,
   type CameraTarget,
   type WorldBoard,
   assetKey,
@@ -113,12 +114,12 @@ test("camera tracking follows entity by ID", () => {
   };
 
   const board = dummyBoard(1000, 800);
-  let camera = { ...createCameraSection(640, 480), target: { kind: "entity" as const, entityId: 10 } };
+  let camera: CameraSection = { ...createCameraSection(640, 480), target: { kind: "entity", entityId: 10 } };
   camera = updateCamera(camera, board, targetPort);
   equal(camera.x, 500 - 320);
   equal(camera.y, 400 - 240);
 
-  camera = { ...camera, target: { kind: "entity" as const, entityId: "npc_bob" } };
+  camera = { ...camera, target: { kind: "entity", entityId: "npc_bob" } };
   camera = updateCamera(camera, board, targetPort);
   equal(camera.x, 350 - 320);
   equal(camera.y, 250 - 240);
@@ -184,7 +185,7 @@ test("camera smoothing advances towards target deterministically", () => {
 
 test("scripted pan interpolates curves with plain JSON easing curves", () => {
   const board = dummyBoard(1000, 800);
-  let camera = {
+  let camera: CameraSection = {
     ...createCameraSection(640, 480),
     x: 0,
     y: 0,
@@ -211,7 +212,7 @@ test("scripted pan interpolates curves with plain JSON easing curves", () => {
   equal(camera.pan, null);
 
   // Replay gives identical trace
-  let replay = {
+  let replay: CameraSection = {
     ...createCameraSection(640, 480),
     x: 0,
     y: 0,
@@ -337,7 +338,7 @@ test("camera built-ins execute through RPGCode program", () => {
     cameraShake(0.2, 6);
   `;
 
-  startProgram(state.vm, { kind: "inline", text: script, compiler: 5, dialect: "tk3" });
+  startProgram(state.vm, { kind: "inline", text: script, compiler: "5", dialect: "tk3" });
   runThreadsPhase(state.vm, services, 100);
 
   equal(state.vm.globals["cx"], 45);
@@ -355,21 +356,13 @@ test("cameraShake validates arguments and rejects non-finite values", () => {
 
   throws(() => {
     applyCameraEffect(state, {
-      seq: 1,
-      tick: 0,
-      kind: "state-write",
-      section: "camera",
       args: ["shake", NaN, 5],
-    });
+    } as never);
   }, /finite numbers/);
 
   // Negative duration is a no-op
   applyCameraEffect(state, {
-    seq: 2,
-    tick: 0,
-    kind: "state-write",
-    section: "camera",
     args: ["shake", -1, 5],
-  });
+  } as never);
   equal(state.camera.shake, null);
 });
