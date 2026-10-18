@@ -3,7 +3,7 @@ title: 'Board edges and transitions'
 type: 'feature'
 ticket: 9
 created: '2026-10-18'
-status: 'built'
+status: done
 route: 'full'
 route_source: 'pinned'
 baseline_revision: 'd53cdd804d5f93525c2aa4e444bc848e75f550a5'
