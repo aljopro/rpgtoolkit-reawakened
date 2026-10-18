@@ -12,3 +12,11 @@ Add one entry per idea: what it is, who raised it and when, what it depends on, 
 - **Depends on:** 4.15 (sprites in the compositor), 4.16 (camera), and the answer to round-7 question 8 (light falloff), which sets the look of the light's pool.
 - **Settle first:** what the light is anchored to; how the shading is recomputed as it moves at a fixed, deterministic cost per tick; the script commands to attach and remove a light, with docs to the ADR 0004 standard.
 - **Status:** the static night scene in the lit-scene oracle is a first independent check of the same round light.
+
+## Modern and retro audio formats
+
+- **Raised by:** owner, 2026-10-18 (epic 6 pre-inception exploration).
+- **Idea:** support modern game audio delivery formats (Ogg Vorbis, Opus, FLAC as a source format, gapless MP3 handling) and classic chip and tracker formats (MOD/XM/S3M/IT, SPC, NSF, GBS, SID, VGM) as pluggable music sources in `synth`.
+- **Today:** legacy needs MIDI and WAV (including ADPCM); MP3/OGG appear in the spec but not in the fetched corpus; tracker modules are an epic 6 non-goal, though one corpus game ships an XM.
+- **Depends on:** epic 6's `synth` interface and duration parsing; the import and packaging pipeline (editor epics, epic 9); a G6 licence survey, because most well-known chip players are LGPL or GPL.
+- **Settle first:** the delivery format and loop-tag rule for new music; where transcoding lives; the music-source interface; which chip emulators pass G6. Full notes: `epic-audio-synth/discovery/audio-exploration.md` §10.

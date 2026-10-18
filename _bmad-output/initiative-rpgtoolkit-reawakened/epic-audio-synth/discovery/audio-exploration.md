@@ -171,3 +171,46 @@ Ownership:
 | XG/GS missing bank | fall back to GM bank 0 |
 | Late SFX threshold | about 250 ms, drop |
 | Path B bank | Florestan or GMGSx, after provenance verification |
+
+## 10. Nice to have: modern and retro audio formats (owner, 2026-10-18)
+
+**Status:** nice to have, not in the epic 6 scope unless the owner promotes it. Also logged in `../../nice-to-have.md`. Library licences and browser support below are from general knowledge and are **unverified**; check each before adoption (G6).
+
+### Modern delivery formats
+
+| Format | Role in a modern game | Fit for Reawakened |
+|---|---|---|
+| Ogg Vorbis | Standard for music and long ambience; good size/quality; royalty-free; loops cleanly | Strong candidate as the recommended **delivery** format for new music. Loop points can use the `LOOPSTART`/`LOOPLENGTH` comment-tag convention other RPG engines use (a Reawakened rule to confirm). The Ogg granule position gives the exact length cheaply, which is what AD-14's headless `audio.ended` needs. |
+| WAV | Uncompressed PCM; editing source; short, low-latency SFX | Already required (legacy SFX, including ADPCM, §6.1). Stays the SFX format; too large for music. |
+| MP3 | Historically common; encoder delay and padding cause loop gaps or pops; legacy patent history | Legacy support only. Proposal: transcode looping MP3 music to Ogg on import so loops are gapless; one-shot MP3 can play as is. |
+| FLAC | Lossless; archiving and soundtrack distribution; large in builds | **Source** format: accepted on import and in the editor, transcoded to Ogg/Opus when packaging. Exact length is in `STREAMINFO`. |
+| Opus | Best quality at low bitrate; decodes at 48 kHz; has pre-skip | Candidate delivery format beside Vorbis for small web bundles; duration must subtract pre-skip. Safari support for Opus in an Ogg container is unverified. |
+
+Proposals:
+- **Source and delivery formats are separate** (like the PNG/WebP image question in epic 9). Authors may bring WAV/FLAC/MP3/Ogg; packaging emits Ogg Vorbis or Opus for music and keeps WAV (or a compact form) for SFX. Editor import and export own the transcoding; the encoder dependency must meet G6.
+- **Headless needs durations, not decoders.** Under null audio the core only needs each file's length (Ogg granule, FLAC `STREAMINFO`, Opus pre-skip, MP3 frame walk with the Xing/LAME header). Real decoding is a runner concern, either browser codecs or bundled permissive decoders.
+- **Authored loop points** fit both MIDI (CC111 or markers, §6.11) and Ogg tags, so one loop rule covers both.
+
+### Classic chip and tracker formats
+
+| Format | What it is | Licence situation of well-known players (unverified) |
+|---|---|---|
+| MOD / XM / S3M / IT | Tracker modules: notes plus their own samples in one file | libopenmpt is BSD and would pass G6. The one corpus XM (`BusDriver`) would play. |
+| SPC | SNES SPC700 program and RAM snapshot | Common players are LGPL or GPL (game-music-emu, snes_spc), which G6 blocks; a permissive SPC700 emulator would need finding or writing. |
+| NSF | NES sound program | Same picture as SPC (game-music-emu is LGPL). |
+| GBS | Game Boy sound program | Same as NSF. |
+| SID | Commodore 64 music | reSID and libsidplayfp are GPL; blocked. |
+| VGM / VGZ | Register-level logs for many arcade and console chips | The format is documented; each chip needs an emulator, and their licences vary. |
+
+Proposals:
+- **These fit the pluggable design as extra sources.** `synth` gains a general music-source interface beside `MidiSynth` (bytes in, PCM out, length or "loops forever"). Tracker and chip players are optional backends, and only permissively licensed ones may ship. The core stays the same: cues name an asset; the runner picks the source by format.
+- **Content provenance is separate from format support.** Most SPC, NSF, GBS, SID and VGM files in circulation are rips of commercial game music. The runner may play files a user supplies but must never bundle such content (architecture-options §6 point 5, G7). Original chiptunes made in trackers are fine.
+- **Fits the Super NES direction.** Original music written for SNES-style trackers and shipped as SPC or a tracker module would give the most authentic 16-bit sound. It depends on finding a permissive SPC700 player; until then, tracker modules through libopenmpt are the practical retro route.
+- **Determinism is unaffected.** Chip and tracker playback happens in the runner. Files that loop forever never send `audio.ended`, the same as looping MIDI. A tagged length (for example SPC's ID666 length) can be used for one-shot playback.
+
+### Settle first (if promoted)
+
+1. The recommended delivery format for new music (Vorbis, Opus, or both) and the loop-tag rule.
+2. Whether import-time transcoding lives in the editor epics, epic 9 packaging, or a shared tool, and which G6-clean encoder it uses.
+3. The music-source interface shape in `synth`, and whether libopenmpt is adopted (it would also turn the BusDriver XM decision into "plays").
+4. A licence survey of chip emulators (SPC700, NES APU, Game Boy APU, SID, common VGM chips) to see which, if any, pass G6.
