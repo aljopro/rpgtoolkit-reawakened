@@ -82,3 +82,39 @@
 * **Fully unaddressed sub-questions:** Q3 default colours and negative speed; Q4 wrap rule, button placement, selection and waiting; Q5 fractional/negative coordinates, clipping and `pixeltext`; Q6 range, anchor, sampling and replacement; Q7 stretch option and arrow hot spot; Q11 edge pixels and outside-diamond handling.
 * **Low or medium confidence:** Q6 duration (LOW); Q5 newline behaviour (MEDIUM, content not relayed).
 * **Not observed:** the summary does not claim any answer was observed in a running game.
+
+---
+
+## Round 7 decisions (Proposed ruling, pending owner review)
+
+These are the doc-first spec amendments made from the answers above (G7). Each row says what was decided, the evidence (the round-7 answer, owner-relayed) and the rejected alternative. Confidence is the confidence of the *evidence*; "inferred" marks a Reawakened choice made where the answer was silent.
+
+| Q | Row | Decision | Spec anchor | Evidence confidence | Rejected alternative |
+|---|---|---|---|---|---|
+| 1 | Fade types | ADOPT types 0 to 5 as stepped effects (0 default when omitted); 30 fixed ticks, blocking (Reawakened determinism choice); other types do nothing. Per-step geometry and end state left to the owner and 4.22's plan | `rpgcode-functions.md#reawakened-fade-types` | not stated; geometry and end state unanswered | Keeping the out/in/out-in/crossfade table (contradicted); inventing exact geometry from a one-word description |
+| 2 | Wipe 1 to 4 | KEEP (answer agrees) | `#reawakened-wipe-effects-and-speed` | not stated | none |
+| 2 | Wipe 5 to 12 | ADOPT 5 to 8 diagonals, 9 to 12 push slides; corner and direction order is a Reawakened assumption | same | not stated; order unanswered | Keeping centre-out and edges-in as 5 to 8 (contradicted); extra effects 13 to 16 for them (no demand) |
+| 2 | Wipe speed | ADOPT default 1; unit pixels per fixed tick (factor 1 for frame-rate scaling, assumption) | same | not stated; scale factor unanswered | Percentage progress with default 4 (contradicted) |
+| 2 | Wipe speed 0 | KEEP a defined failure: `builtin.bad-arg` (legacy hangs); negative treated alike | same | not stated | One-tick completion for 0 (hides an author mistake); reproducing the hang (G1/determinism) |
+| 2 | Wipe final frame | ADD final exact-image draw (legacy can leave the old image) | same | not stated | Reproducing the stale image |
+| 3 | Message window | ADOPT 600 × 100 centred at top, no margin, 50% translucency, text all at once | `#reawakened-message-window-defaults` | not stated | Percentage rectangle with 8-pixel margin (contradicted) |
+| 3 | `textspeed` | ADOPT obsolete error on any call | same, and the `textspeed` table row | not stated | Keeping glyphs-per-second reveal (contradicted) |
+| 3 | Colours, negative speed | UNANSWERED: colours kept (DOS 0 / 15); negative speed moot | same | n/a | none |
+| 4 | `msgBox` | ADOPT sized from wrapped text, 80 × 28 `Yes`/`No`, title merged into body (first line, inferred), returns 1/6/7 | `#reawakened-msgbox-layout` | not stated; wrap rule, placement, selection unanswered (earlier bounds kept) | Fixed 60% × 22% panel with 16-pixel buttons (contradicted) |
+| 5 | `text()` cell and base | ADOPT square cell of one font size, 1-based coordinates; origin `((x−1)s, (y−1)s)`. Changes merged 4.8 (PR C) | `#reawakened-text-cell-size` | not stated | Fixed 8 × 16 zero-based cell (contradicted) |
+| 5 | `text()` newlines | KEEP one-row advance, now one cell row | same | **MEDIUM**; content not relayed | Inventing a different newline rule |
+| 6 | Zoom argument | ADOPT "shrink amount" reading: camera shows `100 − percent` per cent; 0 to 75; owner to review | `#reawakened-zoom` | **LOW** for the unit; not stated for shrink and blocking | Scale reading with 100 one-to-one (contradicted); pixel-shrink reading (unit not given) |
+| 6 | Zoom blocking and duration | ADOPT blocking, bounded to 30 ticks; legacy "minutes at 60 fps" not adopted | same | **LOW** (from reading arithmetic, not run) | Adopting minutes-long calls; keeping non-blocking |
+| 7 | Cursors | ADOPT both bundled images 32 × 32; hand no hot spot, drawn at (−40, −10) from the map point; arrow hot spot (0,0) kept; stretch policy kept | `#reawakened-default-cursors` | not stated; arrow hot spot and stretch unanswered | 16 × 16 assets with hot spot (1,1) (contradicted) |
+| 8 | Light layer, bake, direction | KEEP (answer agrees) | `display-input-audio.md#reawakened-light-and-raster-arithmetic`, `board.md#lights` | not stated | none |
+| 8 | Clamping | KEEP our single final clamp (deliberate departure; legacy does not clamp) | same | not stated | Removing the clamp (unbounded shades, determinism and safety) |
+| 8 | Ellipse boundary | ADOPT excluding the boundary; built code and the S-LIGHT-ELLIPSE oracle still include it, so ticket 4.34 follows | same | not stated | Keeping inclusive boundary (our falloff includes it) |
+| 11 | Iso2d averaging, 62-wide diamond | DEFER: recorded in both iso2d anchors, no rule change (non-parity rule; 4.18 is building on it) | `tiles.md#reawakened-iso2d-projection`, `display-input-audio.md#reawakened-iso2d-projection` | not stated | Changing the rule now under 4.18 |
+
+### Decisions the owner should look at hardest
+
+1. **Zoom (Q6, LOW):** the unit of the "shrink amount" is not in the answer; the percent-of-view reading and the 30-tick bound are inferences.
+2. **Fade (Q1):** only visual names were relayed; the geometry, end state and colours are unspecified, and 4.22's plan must settle them.
+3. **Wipe speed (Q2):** one pixel per tick is 640 ticks across a 640-wide surface (about 10.7 seconds); the frame-rate scale factor was not relayed. Diagonal corners and push directions are assumptions.
+4. **Light boundary (Q8):** adopting it requires a golden change in follow-up ticket 4.34.
+5. **`text` (Q5):** changes the merged 4.8 behaviour and its committed vectors.
