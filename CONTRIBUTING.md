@@ -58,6 +58,21 @@ corpus cannot supply them (ticket 2.22):
   placeholder and every content byte with a synthetic pattern. The plan of
   ticket 2.22 records the source paths; the sources themselves are never
   committed.
+- `parser-oop/` — four compact RPGCode programs and reviewed `*.ast.json` semantic
+  expectations for collection, widget composition, inheritance and references.
+  They are independently authored from
+  [the language specification](docs/spec/engine/rpgcode-language.md#keywords-and-structure)
+  and [the object specification](docs/spec/engine/rpgcode-modules-and-objects.md#objects),
+  using neutral names and new method bodies. They are parser-contract goldens,
+  not original-engine executions or runtime-parity evidence. Run them with
+  `pnpm build` followed by
+  `node --test packages/core/test/script-oop-goldens.test.ts`. Successful-node
+  line bookkeeping is omitted; malformed-input tests retain code and location.
+  Tests never rewrite expectations. Change a golden only after manually
+  reviewing its semantic nodes and expression grouping against source and spec.
+  Valid documented syntax failures belong in the spec/bug workflow, not in
+  narrowed fixtures or expected-failure tests. Known valid forms such as
+  `returnMethod` references and conversion declarations are not pinned as failures.
 
 `pnpm fixtures:check` fails when anything under the root `fixtures/` is tracked,
 so a fetched file can never be committed by mistake.
