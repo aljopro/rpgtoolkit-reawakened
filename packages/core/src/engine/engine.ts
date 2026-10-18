@@ -1,14 +1,16 @@
-import { hashState } from "../canon/index.ts";
+import { hashDrawList, hashState } from "../canon/index.ts";
 import { resolveAsset } from "../formats/resolver/resolver.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
-import type { Engine, Diagnostic, Breakpoint } from "../ports/engine.ts";
+import type { DrawList } from "../ports/draw.ts";
+import type { Engine, Diagnostic, Breakpoint, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
-import type { AssetKey } from "../ports/keys.ts";
+import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState } from "../save/state.ts";
 import { composeBoard } from "../render/compose.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
 import type { WorldBoard } from "../world/model.ts";
+import { rasterize, readSurfacePixels, replaceSurface, surfaceTextures, createSurfacesSection, type SurfacePixelCache } from "../raster/index.ts";
 
 export type EngineInit = {
   readonly seed: number;
@@ -35,6 +37,9 @@ export function createEngine(init: EngineInit): Engine {
   let started = false;
   let failed = false;
   let requestsOut: RunnerRequest[] = [];
+  state.surfaces = createSurfacesSection(init.width, init.height);
+  const surfaceCache: SurfacePixelCache = new Map();
+  let frameHash = hashDrawList({ tick: 0, width: init.width, height: init.height, commands: [] });
   if (!resolved.ok) diagnostics.push({ code: "asset.invalid", file: init.initialBoard, line: 0, message: resolved.error.message });
 
   function request(key: AssetKey, kind: RequestEntry["kind"]): void {
@@ -72,6 +77,21 @@ export function createEngine(init: EngineInit): Engine {
     }
     state.world = { board: result.value?.board ?? null };
     if (state.world.board === null) failed = true;
+  }
+
+  function currentDrawList(alpha = 0): DrawList {
+    const board: WorldBoard | null = state.world.board ?? null;
+    if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
+    return composeBoard({ board, tick: state.time.tick, camera: { x: 0, y: 0 }, viewport: { width: init.width, height: init.height }, alpha, include: { shading: false, images: false, sprites: false } });
+  }
+
+  function refreshFrame(): void {
+    const list = currentDrawList(0);
+    const nextHash = hashDrawList(list);
+    if (nextHash === frameHash) return;
+    const rendered = rasterize(list, new Map(), surfaceTextures(state.surfaces, surfaceCache));
+    replaceSurface(state.surfaces, 0 as SurfaceId, rendered.width, rendered.height, rendered.rgba);
+    frameHash = nextHash;
   }
 
   const engine: Engine = {
@@ -127,11 +147,12 @@ export function createEngine(init: EngineInit): Engine {
       };
     },
     drawList(alpha = 0) {
-      const board: WorldBoard | null = state.world.board ?? null;
-      if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
-      return composeBoard({ board, tick: state.time.tick, camera: { x: 0, y: 0 }, viewport: { width: init.width, height: init.height }, alpha, include: { shading: false, images: false, sprites: false } });
+      return currentDrawList(alpha);
     },
-    surfacePixels() { return null; },
+    surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null {
+      if (id === (0 as SurfaceId)) refreshFrame();
+      return readSurfacePixels(state.surfaces, id, rev, surfaceCache);
+    },
     setBreakpoints(_breakpoints: readonly Breakpoint[]) {},
   };
   return engine;

@@ -155,7 +155,7 @@ export function createGameState(init: { seed: number }): GameState {
     camera: {},
     fx: {},
     audio: {},
-    surfaces: {},
+    surfaces: {} as SurfacesSection,
     rng: seedRng(init.seed),
     time: createTimeState(),
     engine: {},
