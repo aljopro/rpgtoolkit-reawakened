@@ -14,6 +14,7 @@ import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
 import { composeBoard, type SpriteDraw } from "../render/compose.ts";
+import { applyFxDrawList, advanceFx, applyFxEffect } from "../render/fx.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
 import { coordLayout, tileToPixel } from "../world/coords.ts";
 import type { WorldBoard } from "../world/model.ts";
@@ -156,6 +157,7 @@ export function createEngine(init: EngineInit): Engine {
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
   bus.register("world", (effect) => applyWorldEffect(state, effect));
   bus.register("camera", (effect) => applyCameraEffect(state, effect));
+  bus.register("fx", (effect) => applyFxEffect(state, effect));
   bus.register("engine", (effect) => applyEngineEffect(effect));
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
@@ -556,7 +558,12 @@ export function createEngine(init: EngineInit): Engine {
       case "edges":
       case "triggers":
       case "battle":
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        return;
       case "animation":
+        advanceFx(state);
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        return;
       case "audio":
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
         return;
@@ -602,11 +609,12 @@ export function createEngine(init: EngineInit): Engine {
   }
   function currentDrawList(alpha = 0): DrawList {
     const board: WorldBoard | null = state.world.board ?? null;
-    if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
+    const empty = { tick: state.time.tick, width: init.width, height: init.height, commands: [] as DrawList["commands"] };
+    if (board === null) return applyFxDrawList(empty, state.fx);
     const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
     const cameraPos = positionAt(state.camera, presentationAlpha);
     const include = init.include ?? { shading: false, images: false, sprites: false };
-    return composeBoard({
+    return applyFxDrawList(composeBoard({
       board,
       tick: state.time.tick,
       camera: cameraPos,
@@ -614,7 +622,7 @@ export function createEngine(init: EngineInit): Engine {
       alpha: presentationAlpha,
       include,
       ...presentation,
-    });
+    }), state.fx);
   }
   function refreshFrame(): void {
     const list = currentDrawList(0);
@@ -741,10 +749,11 @@ export function createEngine(init: EngineInit): Engine {
     },
     drawList(alpha = 0, include: DrawListInclude = { shading: false, images: false, sprites: false }) {
       const board: WorldBoard | null = state.world.board ?? null;
-      if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
+      const empty = { tick: state.time.tick, width: init.width, height: init.height, commands: [] as DrawList["commands"] };
+      if (board === null) return applyFxDrawList(empty, state.fx);
       const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
       const cameraPos = positionAt(state.camera, presentationAlpha);
-      return composeBoard({ board, tick: state.time.tick, camera: cameraPos, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include, ...presentation });
+      return applyFxDrawList(composeBoard({ board, tick: state.time.tick, camera: cameraPos, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include, ...presentation }), state.fx);
     },
     surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null {
       if (id === (0 as SurfaceId)) refreshFrame();
