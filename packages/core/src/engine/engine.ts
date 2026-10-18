@@ -337,7 +337,7 @@ export function createEngine(init: EngineInit): Engine {
       y = typeof args[2] === "number" ? args[2] : 0;
       width = typeof args[3] === "number" ? args[3] : undefined;
       height = typeof args[4] === "number" ? args[4] : undefined;
-      const destinationIndex = effect.name === "setimagetransparent" ? 8 : 5;
+      const destinationIndex = effect.name === "setimagetransparent" ? 8 : effect.name === "setimageadditive" ? 6 : 5;
       destination = typeof args[destinationIndex] === "number" ? args[destinationIndex] as SurfaceId : destination;
       if (effect.name === "setimagetransparent") keyColour = {
         r: typeof args[5] === "number" ? args[5] : 0,
