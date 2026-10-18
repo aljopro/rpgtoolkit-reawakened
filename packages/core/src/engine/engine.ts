@@ -1,6 +1,9 @@
 import { hashDrawList, hashState } from "../canon/index.ts";
 import { resolveAsset, assetKey, resolveTileReference } from "../formats/resolver/resolver.ts";
 import { classifyImageReference } from "../formats/animation/image-reference.ts";
+import { decodeTexture, type DecodedTexture } from "../formats/image/index.ts";
+import { expandSingleTileToRgba, readSingleTile } from "../formats/single-tile/index.ts";
+import { expandTileToRgba, readTileset, tileDimensions } from "../formats/tileset/index.ts";
 import { BinaryReader } from "../formats/binary/reader.ts";
 import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
@@ -56,7 +59,7 @@ import {
 import type { Thread } from "../script/state.ts";
 import type { WaitView } from "../ports/wait.ts";
 import { runTimePhase } from "../time/time.ts";
-import { rasterize, readSurfacePixels, replaceSurface, surfaceTextures, createSurfacesSection, type SurfacePixelCache } from "../raster/index.ts";
+import { blitTexture, rasterize, readSurfacePixels, replaceSurface, surfaceTextures, createSurfacesSection, type RasterAsset, type SurfacePixelCache } from "../raster/index.ts";
 
 /** AD-26's immutable phase order. */
 export const ENGINE_PHASES = [
@@ -161,9 +164,13 @@ export function createEngine(init: EngineInit): Engine {
   let sceneBoardKey: AssetKey | null = null;
   let mainKey: AssetKey | null = null;
   const installedFonts = new Map<AssetKey, Uint8Array>();
-  const pending = new Map<number, RequestEntry>();
-  const queuedInputs: InputRecord[] = [];
   const cache = new Map<AssetKey, Uint8Array>();
+  const decodedImages = new Map<AssetKey, DecodedTexture>();
+  const decodedTiles = new Map<AssetKey, DecodedTexture>();
+  const pending = new Map<number, RequestEntry>();
+  const pendingImageEffects: Array<{ readonly key: AssetKey; readonly effect: EffectRecord }> = [];
+  const pendingBoardPreviews: Array<{ readonly key: AssetKey; readonly effect: EffectRecord }> = [];
+  const queuedInputs: InputRecord[] = [];
   const requestsOut: RunnerRequest[] = [];
   const diagnostics: Diagnostic[] = [];
   const registrations = [...(init.phaseRegistrations ?? [])].sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0));
@@ -178,6 +185,7 @@ export function createEngine(init: EngineInit): Engine {
   bus.register("camera", (effect) => applyCameraEffect(state, effect));
   bus.register("ui", (effect) => applyUiEffect(state, effect.name, effect.args));
   bus.register("fx", (effect) => applyFxEffect(state, effect));
+  bus.register("surfaces", (effect) => applySurfaceEffect(effect));
   bus.register("engine", (effect) => applyEngineEffect(effect));
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
@@ -229,6 +237,161 @@ export function createEngine(init: EngineInit): Engine {
     pending.set(entry.reqId, entry);
     requestsOut.push({ kind: "asset", reqId: entry.reqId, key });
   }
+  const IMAGE_EFFECTS: Record<string, true> = {
+    bitmap: true,
+    setimage: true,
+    setimagetransparent: true,
+    setimagetranslucent: true,
+    setimageadditive: true,
+  };
+  function imageTexture(key: AssetKey): DecodedTexture | null {
+    const cached = decodedImages.get(key);
+    if (cached !== undefined) return cached;
+    const bytes = cache.get(key);
+    if (bytes === undefined) return null;
+    const decoded = decodeTexture(bytes, key);
+    if (!decoded.ok) {
+      diagnostics.push({ code: "asset.invalid", file: key, line: decoded.error.offset, message: decoded.error.message });
+      failed = true;
+      return null;
+    }
+    decodedImages.set(key, decoded.value);
+    return decoded.value;
+  }
+  function tileTexture(key: AssetKey): DecodedTexture | null {
+    const cached = decodedTiles.get(key);
+    if (cached !== undefined) return cached;
+    const bytes = cache.get(key);
+    if (bytes === undefined) return null;
+    const lower = key.toLowerCase();
+    if (lower.endsWith(".gph")) {
+      const parsed = readSingleTile(bytes, key);
+      if (!parsed.ok) {
+        diagnostics.push({ code: "asset.invalid", file: key, line: parsed.error.offset, message: parsed.error.message });
+        failed = true;
+        return null;
+      }
+      const rgba = expandSingleTileToRgba(parsed.value, "row-major");
+      if (!rgba.ok) return null;
+      const texture = { w: parsed.value.width, h: parsed.value.height, rgba: rgba.value };
+      decodedTiles.set(key, texture);
+      return texture;
+    }
+    if (!lower.endsWith(".tst") && !lower.endsWith(".iso")) return null;
+    const parsed = readTileset(bytes, key);
+    if (!parsed.ok) {
+      diagnostics.push({ code: "asset.invalid", file: key, line: parsed.error.offset, message: parsed.error.message });
+      failed = true;
+      return null;
+    }
+    const native = tileDimensions(parsed.value.detail);
+    const scale = parsed.value.detail.size === 16 ? 2 : 1;
+    const width = native.width * scale;
+    const height = native.height * scale;
+    const rgba = new Uint8Array(width * parsed.value.tiles.length * height * 4);
+    for (let tile = 0; tile < parsed.value.tiles.length; tile += 1) {
+      const expanded = expandTileToRgba(parsed.value, tile);
+      if (!expanded.ok) return null;
+      for (let x = 0; x < native.width; x += 1) {
+        for (let y = 0; y < native.height; y += 1) {
+          const source = (x * native.height + y) * 4;
+          for (let dx = 0; dx < scale; dx += 1) {
+            for (let dy = 0; dy < scale; dy += 1) {
+              const targetX = tile * width + x * scale + dx;
+              const targetY = y * scale + dy;
+              const target = (targetY * width * parsed.value.tiles.length + targetX) * 4;
+              rgba[target] = expanded.value[source] ?? 0;
+              rgba[target + 1] = expanded.value[source + 1] ?? 0;
+              rgba[target + 2] = expanded.value[source + 2] ?? 0;
+              rgba[target + 3] = expanded.value[source + 3] ?? 0;
+            }
+          }
+        }
+      }
+    }
+    const texture = { w: width * parsed.value.tiles.length, h: height, rgba };
+    decodedTiles.set(key, texture);
+    return texture;
+  }
+  function imageAsset(file: unknown): AssetKey | null {
+    if (typeof file !== "string" || file === "") return null;
+    const resolved = resolveAsset(index, root, "bitmaps", file);
+    return resolved.ok ? resolved.value : null;
+  }
+  function imageDiagnostic(file: unknown, message: string): void {
+    const located = typeof file === "string" && file !== "" ? file : "<image>";
+    diagnostics.push({ code: "asset.missing", file: located, line: 0, message });
+    failed = true;
+    if (state.engine.boot !== undefined) state.engine.boot.stage = "stopped";
+  }
+  function applySurfaceImage(effect: EffectRecord, texture: DecodedTexture): void {
+    const args = effect.args;
+    let destination = 0 as SurfaceId;
+    let x = 0;
+    let y = 0;
+    let width: number | undefined;
+    let height: number | undefined;
+    let keyColour: { readonly r: number; readonly g: number; readonly b: number } | undefined;
+    let alpha = 255;
+    let additive = false;
+    if (effect.name === "bitmap") {
+      destination = typeof args[1] === "number" ? args[1] as SurfaceId : destination;
+      const size = state.surfaces.entries[String(destination)]?.bitmap;
+      width = size?.w;
+      height = size?.h;
+    } else {
+      x = typeof args[1] === "number" ? args[1] : 0;
+      y = typeof args[2] === "number" ? args[2] : 0;
+      width = typeof args[3] === "number" ? args[3] : undefined;
+      height = typeof args[4] === "number" ? args[4] : undefined;
+      const destinationIndex = effect.name === "setimagetransparent" ? 8 : effect.name === "setimageadditive" ? 6 : 5;
+      destination = typeof args[destinationIndex] === "number" ? args[destinationIndex] as SurfaceId : destination;
+      if (effect.name === "setimagetransparent") keyColour = {
+        r: typeof args[5] === "number" ? args[5] : 0,
+        g: typeof args[6] === "number" ? args[6] : 0,
+        b: typeof args[7] === "number" ? args[7] : 0,
+      };
+      if (effect.name === "setimagetranslucent") alpha = 128;
+      if (effect.name === "setimageadditive") {
+        const percent = typeof args[5] === "number" ? Math.max(0, Math.min(100, Math.trunc(args[5]))) : 0;
+        alpha = Math.trunc(percent * 255 / 100);
+        additive = true;
+      }
+    }
+    if (width === undefined || height === undefined) {
+      imageDiagnostic(args[0], `${effect.name}: image dimensions are invalid`);
+      return;
+    }
+    if (!blitTexture(state.surfaces, texture, destination, x, y, width, height, keyColour, alpha, additive)) {
+      imageDiagnostic(args[0], `${effect.name}: destination surface is not live`);
+    }
+  }
+  function applySurfaceEffect(effect: EffectRecord): void {
+    if (!IMAGE_EFFECTS[effect.name]) {
+      if (effect.name === "viewbrd") {
+        const key = typeof effect.args[0] === "string" ? resolveAsset(index, root, "boards", effect.args[0]) : null;
+        if (key === null || !key.ok) {
+          imageDiagnostic(effect.args[0], `viewbrd: board "${String(effect.args[0] ?? "")}" is not in the asset index`);
+          return;
+        }
+        pendingBoardPreviews.push({ key: key.value, effect });
+        request(key.value, "board-preview");
+      }
+      return;
+    }
+    const key = imageAsset(effect.args[0]);
+    if (key === null) {
+      imageDiagnostic(effect.args[0], `${effect.name}: image is not in the asset index`);
+      return;
+    }
+    const texture = imageTexture(key);
+    if (texture === null) {
+      pendingImageEffects.push({ key, effect });
+      request(key, "image");
+      return;
+    }
+    applySurfaceImage(effect, texture);
+  }
   function syncEngineState(): void {
     const next: EngineSection = {
       nextRequestId,
@@ -255,10 +418,109 @@ export function createEngine(init: EngineInit): Engine {
     if (record.event.bytes === null) {
       diagnostics.push({ code: "asset.missing", file: entry.key, line: 0, message: `asset not found: ${entry.key}` });
       failed = true;
+      pendingImageEffects.splice(0, pendingImageEffects.length, ...pendingImageEffects.filter((item) => item.key !== entry.key));
+      pendingBoardPreviews.splice(0, pendingBoardPreviews.length, ...pendingBoardPreviews.filter((item) => item.key !== entry.key));
       if (state.engine.boot !== undefined) state.engine.boot.stage = "stopped";
       return;
     }
     cache.set(entry.key, new Uint8Array(record.event.bytes));
+    if (entry.kind === "image") {
+      imageTexture(entry.key);
+      const waiting = pendingImageEffects.filter((item) => item.key === entry.key);
+      pendingImageEffects.splice(0, pendingImageEffects.length, ...pendingImageEffects.filter((item) => item.key !== entry.key));
+      const texture = decodedImages.get(entry.key);
+      if (texture !== undefined) for (const item of waiting) applySurfaceImage(item.effect, texture);
+    } else if (entry.kind === "tile") {
+      tileTexture(entry.key);
+    }
+  }
+  function rasterAssets(): ReadonlyMap<AssetKey, RasterAsset> {
+    for (const key of cache.keys()) {
+      if (isBitmapKey(key)) imageTexture(key);
+      else {
+        const lower = key.toLowerCase();
+        if (lower.endsWith(".tst") || lower.endsWith(".iso") || lower.endsWith(".gph")) tileTexture(key);
+      }
+    }
+    const assets = new Map<AssetKey, RasterAsset>();
+    for (const [key, bytes] of installedFonts) assets.set(key, bytes);
+    for (const [key, texture] of decodedImages) assets.set(key, texture);
+    for (const [key, texture] of decodedTiles) assets.set(key, texture);
+    return assets;
+  }
+  function decodedAssets(): ReadonlyMap<AssetKey, DecodedTexture> {
+    const assets = new Map<AssetKey, DecodedTexture>();
+    for (const [key, texture] of decodedImages) assets.set(key, texture);
+    for (const [key, texture] of decodedTiles) assets.set(key, texture);
+    return assets;
+  }
+  function isBitmapKey(key: AssetKey): boolean {
+    return key.startsWith("bitmap/") || key.includes("/bitmap/");
+  }
+  function requestKindFor(key: AssetKey): EngineRequestKind {
+    return isBitmapKey(key) ? "image" : "tile";
+  }
+  function prepareBoardPreviews(): boolean {
+    if (pendingBoardPreviews.length === 0) return true;
+    const item = pendingBoardPreviews[0];
+    if (item === undefined) return true;
+    const bytes = cache.get(item.key);
+    if (bytes === undefined) {
+      request(item.key, "board-preview");
+      return false;
+    }
+    const hydrated = hydrateBoard(item.key, bytes, index, root, cache, state.time.tick);
+    if (hydrated.error !== null || hydrated.value === null) {
+      fail({ code: "asset.invalid", file: hydrated.error?.path ?? item.key, line: hydrated.error?.offset ?? 0, message: hydrated.error?.message ?? `cannot load preview board "${item.key}"` });
+      pendingBoardPreviews.shift();
+      return false;
+    }
+    if (hydrated.missing !== null) {
+      request(hydrated.missing, requestKindFor(hydrated.missing));
+      return false;
+    }
+    for (const dependency of hydrated.value.dependencies) {
+      if (isBitmapKey(dependency)) {
+        if (imageTexture(dependency) === null) {
+          pendingBoardPreviews.shift();
+          return false;
+        }
+      } else {
+        const lower = dependency.toLowerCase();
+        if ((lower.endsWith(".tst") || lower.endsWith(".iso") || lower.endsWith(".gph")) && tileTexture(dependency) === null) {
+          pendingBoardPreviews.shift();
+          return false;
+        }
+      }
+    }
+    const args = item.effect.args;
+    const destination = typeof args[3] === "number" ? args[3] as SurfaceId : 0 as SurfaceId;
+    const destinationSize = state.surfaces.entries[String(destination)]?.bitmap;
+    if (destinationSize === undefined) {
+      imageDiagnostic(args[0], `viewbrd: destination surface ${String(destination)} is not live`);
+      pendingBoardPreviews.shift();
+      return false;
+    }
+    const list = composeBoard({
+      board: hydrated.value.board,
+      tick: state.time.tick,
+      camera: { x: 0, y: 0 },
+      viewport: { width: destinationSize.w, height: destinationSize.h },
+      alpha: 0,
+      include: { shading: true, images: true, sprites: false },
+      assets: decodedAssets(),
+    });
+    const rendered = rasterize(list, rasterAssets());
+    if (rendered.error !== null) {
+      fail({ code: "asset.invalid", file: item.key, line: 0, message: `viewbrd: ${rendered.error}` });
+      pendingBoardPreviews.shift();
+      return false;
+    }
+    const x = typeof args[1] === "number" ? args[1] : 0;
+    const y = typeof args[2] === "number" ? args[2] : 0;
+    blitTexture(state.surfaces, { w: rendered.width, h: rendered.height, rgba: rendered.rgba }, destination, x, y);
+    pendingBoardPreviews.shift();
+    return true;
   }
 
   /** `send` posts its request here; the engine swaps boards between ticks (E-19). A later send replaces an earlier one. */
@@ -303,10 +565,14 @@ export function createEngine(init: EngineInit): Engine {
     state.rng = rng;
     state.time = time;
     pending.clear();
+    pendingImageEffects.length = 0;
+    pendingBoardPreviews.length = 0;
     queuedInputs.length = 0;
     installedFonts.clear();
-    quitRequested = false;
+    decodedImages.clear();
+    decodedTiles.clear();
     failed = false;
+    quitRequested = false;
     state.engine = mainKey === null ? { claims: [] } : { claims: [], boot: { stage: "assets", main: mainKey, fonts: [] } };
     for (const registration of [...(init.resetRegistrations ?? [])].sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0))) registration.reset(state);
     if (nextMain !== undefined) {
@@ -346,7 +612,7 @@ export function createEngine(init: EngineInit): Engine {
       return null;
     }
     if (result.missing !== null) {
-      request(result.missing, "tile");
+      request(result.missing, requestKindFor(result.missing));
       return "pending";
     }
     const board = result.value?.board ?? null;
@@ -522,6 +788,7 @@ export function createEngine(init: EngineInit): Engine {
   function drive(): void {
     for (let guard = 0; guard < 64; guard += 1) {
       if (failed || pending.size > 0 || state.engine.openTick !== undefined) return;
+      if (pendingBoardPreviews.length > 0 && !prepareBoardPreviews()) return;
       const boot = state.engine.boot;
       const transition = state.engine.transition;
       let progressed: boolean;
@@ -728,6 +995,7 @@ export function createEngine(init: EngineInit): Engine {
         viewport: { width: init.width, height: init.height },
         alpha: Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0,
         include,
+        assets: decodedAssets(),
         ...presentation,
       });
     const withUi = { ...base, commands: [...base.commands, ...debugCommands(), ...composeUi(state.ui, init.width, init.height, state.input, false)] };
@@ -738,7 +1006,7 @@ export function createEngine(init: EngineInit): Engine {
     const list = currentDrawList(0);
     const nextHash = hashDrawList(list);
     if (nextHash === frameHash) return;
-    const rendered = rasterize(list, installedFonts, surfaceTextures(state.surfaces, surfaceCache));
+    const rendered = rasterize(list, rasterAssets(), surfaceTextures(state.surfaces, surfaceCache));
     replaceSurface(state.surfaces, 0 as SurfaceId, rendered.width, rendered.height, rendered.rgba);
     frameHash = nextHash;
   }
