@@ -1,9 +1,9 @@
-import type { EnginePhaseRegistration } from "../engine/engine.ts";
+import type { EnginePhaseRegistration, EngineResetRegistration } from "../engine/engine.ts";
 import { enqueueDirectionMove } from "../sprites/movement.ts";
 import type { Facing } from "../sprites/model.ts";
 import { enqueuePathMove } from "../sprites/runtime.ts";
 import type { GameState } from "../save/state.ts";
-import { processGamepadEvents, takeInputActions } from "./input.ts";
+import { createInputSection, processGamepadEvents, takeInputActions, type InputConfig } from "./input.ts";
 
 const FACING_BY_ACTION: Record<string, Facing> = {
   up: "N",
@@ -72,4 +72,9 @@ export function inputPhaseRegistration(options: InputPhaseOptions = {}): EngineP
     rank: options.rank ?? 0,
     run: (state) => runInputPhase(state, options),
   };
+}
+
+/** Register the input owner at the reset seam so quit/restart clears transient input state. */
+export function inputResetRegistration(config: InputConfig = {}, rank = 0): EngineResetRegistration {
+  return { section: "input", rank, reset: (state) => { state.input = createInputSection(config); } };
 }

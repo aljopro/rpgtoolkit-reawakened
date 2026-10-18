@@ -8,5 +8,5 @@ export {
   takeInputActions,
 } from "./input.ts";
 export type { InputAction, InputConfig, InputKey, InputView } from "./input.ts";
-export { inputPhaseRegistration, runInputPhase } from "./registration.ts";
+export { inputPhaseRegistration, inputResetRegistration, runInputPhase } from "./registration.ts";
 export type { InputPhaseOptions } from "./registration.ts";
