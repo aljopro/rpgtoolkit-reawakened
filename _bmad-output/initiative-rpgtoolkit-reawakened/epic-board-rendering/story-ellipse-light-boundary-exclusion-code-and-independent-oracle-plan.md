@@ -2,7 +2,7 @@
 title: "Ellipse light boundary exclusion: code and independent oracle"
 type: feature
 ticket: 34
-status: built
+status: done
 assignee: "Build4x34"
 created: '2026-10-17'
 ---

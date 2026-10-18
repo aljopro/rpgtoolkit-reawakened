@@ -1,7 +1,7 @@
 ---
 ticket: 16
 type: feature
-status: built
+status: done
 ---
 
 # Camera: tracking, deadzone, centring, scripted pans and camera built-ins

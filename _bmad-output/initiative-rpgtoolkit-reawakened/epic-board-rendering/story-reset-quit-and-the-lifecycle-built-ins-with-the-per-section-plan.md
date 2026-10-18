@@ -1,7 +1,7 @@
 ---
 ticket: 31
 type: feature
-status: built
+status: done
 ---
 
 # Reset, quit and lifecycle built-ins
