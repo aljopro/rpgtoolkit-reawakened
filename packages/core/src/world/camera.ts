@@ -18,6 +18,16 @@ import type {
 } from "../save/sections/camera.ts";
 import type { WorldBoard } from "./model.ts";
 import { ScriptError } from "../script/errors.ts";
+import { coordLayout, tileToPixel } from "./coords.ts";
+
+/** Where the camera centres with no tracked sprite: the board's start tile, converted by the board's own layout (E-11). */
+function boardStartPoint(board: WorldBoard | null): CameraPoint | null {
+  if (board?.start === undefined) return null;
+  const layout = coordLayout(board.coordType);
+  return layout === "2d"
+    ? { x: board.start.x * 32 + 16, y: board.start.y * 32 + 16 }
+    : tileToPixel(layout, board.sizeX, board.start.x, board.start.y);
+}
 
 /** Supported easing function names for scripted pans (AD-33, E-51). */
 export const CAMERA_EASINGS = [
@@ -164,8 +174,9 @@ export function realignCamera(
 ): CameraSection {
   const bw = board?.width ?? 0;
   const bh = board?.height ?? 0;
-  const tx = targetPosition?.x ?? (board?.start ? board.start.x * 32 + 16 : 0);
-  const ty = targetPosition?.y ?? (board?.start ? board.start.y * 32 + 16 : 0);
+  const start = boardStartPoint(board);
+  const tx = targetPosition?.x ?? start?.x ?? 0;
+  const ty = targetPosition?.y ?? start?.y ?? 0;
   const desiredX = tx - Math.floor(camera.viewportWidth / 2);
   const desiredY = ty - Math.floor(camera.viewportHeight / 2);
   const clamped = clampCameraPosition(desiredX, desiredY, camera.viewportWidth, camera.viewportHeight, bw, bh, camera.smallBoard);
@@ -186,7 +197,7 @@ export function initCameraForBoard(
   board: WorldBoard | null,
   targetPort?: CameraTarget | null,
 ): CameraSection {
-  const targetPos = targetPort?.getPlayerPosition() ?? (board?.start ? { x: board.start.x * 32 + 16, y: board.start.y * 32 + 16 } : null);
+  const targetPos = targetPort?.getPlayerPosition() ?? boardStartPoint(board);
   return realignCamera(camera, board, targetPos);
 }
 
@@ -200,7 +211,8 @@ function resolveTargetPosition(
     case "player": {
       const pos = targetPort?.getPlayerPosition();
       if (pos) return { position: pos };
-      if (board?.start) return { position: { x: board.start.x * 32 + 16, y: board.start.y * 32 + 16 } };
+      const start = boardStartPoint(board);
+      if (start !== null) return { position: start };
       return { position: currentCenter };
     }
     case "entity": {

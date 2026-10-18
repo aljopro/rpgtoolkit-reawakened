@@ -6,7 +6,7 @@ A scene is a versioned JSON object consumed by `render.py`, not a renderer-speci
 - `name`: stable scene identifier; it also names the output PNG.
 - `layout`: optional `2d`, `iso-stacked`, or `iso-rotated` label; the renderer checks it against the board coordinate type.
 - `boardFiles`: non-empty paths relative to the repository root. The first path is the `.brd`; following paths declare assets used by the scene.
-- `sprites`: `SpriteDraw` records with `id`, `key`, `layer`, pixel reference `x`/`y`, stable `drawId`, and optional previous `prev: [x,y]` and `under` flag vector.
+- `sprites`: `SpriteDraw` records with `id`, `key`, `layer`, pixel reference `x`/`y`, stable `drawId`, and optional previous `prev: [x,y]` and `under` flag vector. A sprite is drawn on its own layer: after that layer's tiles and before the next layer's, so higher-layer tiles cover it (`docs/spec/formats/board.md#drawing-order-and-effects`); layer 1 also takes any sprite with a lower layer, and sprites above the top layer draw last.
 - `ambient`: signed RGB offsets applied in addition to the board ambient.
 - Board light sources live in the referenced `.brd` (not in the scene JSON). The independent renderer bakes each static ellipse, gradient, or clipped-gradient light into shading layer 0 at 32×32 tile centres using the fixed-point rules in `docs/spec/engine/display-input-audio.md#reawakened-light-and-raster-arithmetic`; the board's stored light layer is ignored.
 - `view`: logical `viewport: [width,height]`, `camera: [x,y]`, and booleans `include.shading`, `include.images`, `include.sprites`. A camera is clamped to the board pixel dimensions; optional `smallBoard: "center-if-small"`, layer-image descriptors and blit descriptors are plain data.

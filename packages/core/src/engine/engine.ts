@@ -1,13 +1,13 @@
 import { hashDrawList, hashState } from "../canon/index.ts";
 import { resolveAsset } from "../formats/resolver/resolver.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
-import type { DrawList } from "../ports/draw.ts";
+import type { DrawList, Tint } from "../ports/draw.ts";
 import type { Engine, Diagnostic, Breakpoint, DrawListInclude, ResumeMode, SurfacePixels } from "../ports/engine.ts";
 import type { InputRecord } from "../ports/input.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
-import { composeBoard } from "../render/compose.ts";
+import { composeBoard, type SpriteDraw } from "../render/compose.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
 import type { WorldBoard } from "../world/model.ts";
 import { applyInputEvent, createInputSection, inputView, pruneClaimed } from "../input/index.ts";
@@ -73,6 +73,10 @@ export type EngineInit = {
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
   readonly cameraTarget?: CameraTarget;
   readonly include?: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean };
+  /** Sprites composed over the board until the sprites section feeds the compositor (movement-triggers owns that). */
+  readonly sprites?: readonly SpriteDraw[];
+  /** Script ambient summed with the board's once per tile blit (E-17). */
+  readonly globalAmbient?: Tint;
 };
 type RequestEntry = { readonly reqId: number; readonly key: AssetKey; readonly kind: "board" | "tile" };
 type SourceLocation = { file: string; line: number };
@@ -119,6 +123,11 @@ export function createEngine(init: EngineInit): Engine {
   state.camera = createCameraSection(init.width, init.height);
   const surfaceCache: SurfacePixelCache = new Map();
   let frameHash = hashDrawList({ tick: 0, width: init.width, height: init.height, commands: [] });
+  // Sprites and script ambient reach the compositor through the same plain-data view fields the editor and export use (AD-29).
+  const presentation = {
+    ...(init.sprites === undefined ? {} : { sprites: init.sprites }),
+    ...(init.globalAmbient === undefined ? {} : { globalAmbient: init.globalAmbient }),
+  };
   if (!resolved.ok) diagnostics.push({ code: "asset.invalid", file: init.initialBoard, line: 0, message: resolved.error.message });
 
   const services = createScriptServices(
@@ -293,6 +302,7 @@ export function createEngine(init: EngineInit): Engine {
       viewport: { width: init.width, height: init.height },
       alpha: presentationAlpha,
       include,
+      ...presentation,
     });
   }
   function refreshFrame(): void {
@@ -424,7 +434,7 @@ export function createEngine(init: EngineInit): Engine {
       if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
       const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
       const cameraPos = positionAt(state.camera, presentationAlpha);
-      return composeBoard({ board, tick: state.time.tick, camera: cameraPos, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include });
+      return composeBoard({ board, tick: state.time.tick, camera: cameraPos, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include, ...presentation });
     },
     surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null {
       if (id === (0 as SurfaceId)) refreshFrame();
