@@ -230,7 +230,14 @@ export function emitText(
   return commands;
 }
 
-/** Emit Toolkit's fixed 8×16 text-cell coordinates. */
+/**
+ * Emit `text(x, y, ...)` cell coordinates (docs/spec/engine/rpgcode-functions.md#reawakened-text-cell-size).
+ *
+ * A cell is square and one font size on a side, and the first cell is (1, 1).
+ * Each coordinate is truncated toward zero, then maps to `(c - 1) * size`
+ * pixels. A newline advances one cell row (`size` pixels) unless the caller
+ * supplies its own line height.
+ */
 export function emitCellText(
   text: string,
   cellX: number,
@@ -239,9 +246,10 @@ export function emitCellText(
   ref: FontRef,
   options: EmitTextOptions = {},
 ): DrawCommand[] {
-  const x = Math.trunc(cellX) * FONT_GLYPH_WIDTH;
-  const y = Math.trunc(cellY) * DEFAULT_LINE_HEIGHT;
-  return emitText(text, x, y, rgb, ref, options);
+  const side = roundedSize(ref.size);
+  const x = (Math.trunc(cellX) - 1) * side;
+  const y = (Math.trunc(cellY) - 1) * side;
+  return emitText(text, x, y, rgb, ref, { ...options, lineHeight: options.lineHeight ?? side });
 }
 
 export { FONT_GLYPH_HEIGHT, FONT_GLYPH_WIDTH };

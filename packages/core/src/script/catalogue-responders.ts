@@ -30,7 +30,7 @@ const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
   },
   text: {
     summary: "Displays text on the screen.",
-    behaviour: "Draws text using fixed 8x16 logical-pixel cells, truncating at the surface edge and clipping to the target surface; it does not wait.",
+    behaviour: "Draws text on a grid of square cells as wide and tall as the current font size, counting from cell (1, 1) at the top left. Technically, each coordinate is truncated toward zero and maps to the pixel origin ((x - 1) × size, (y - 1) × size); text outside the surface is clipped and the call does not wait.",
     groups: ["message-window-text-fonts-30"],
     waits: { kind: "never", summary: "Does not wait." },
     see: ["docs/spec/engine/rpgcode-functions.md#reawakened-text-cell-size"],
