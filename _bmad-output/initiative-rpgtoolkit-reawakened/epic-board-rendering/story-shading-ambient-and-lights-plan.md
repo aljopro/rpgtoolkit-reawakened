@@ -3,7 +3,7 @@ title: 'Shading, ambient and lights'
 type: feature
 ticket: 13
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: 'fcd62d30'
 route: full
 risk: medium

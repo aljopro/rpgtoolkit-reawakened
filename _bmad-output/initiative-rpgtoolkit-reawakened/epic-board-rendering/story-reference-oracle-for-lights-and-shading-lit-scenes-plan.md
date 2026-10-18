@@ -2,7 +2,7 @@
 title: "Reference oracle for lights and shading: lit scenes"
 type: feature
 ticket: 33
-status: built
+status: done
 assignee: "BuildLitOracle"
 created: '2026-10-17'
 ---
