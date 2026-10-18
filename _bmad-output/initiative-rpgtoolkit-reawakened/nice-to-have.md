@@ -29,3 +29,12 @@ Add one entry per idea: what it is, who raised it and when, what it depends on, 
 - **Depends on:** completion of core authoring data models / file format specifications (TKR/TK3 board, item, sprite, and dialogue formats), language tooling (LSP / diagnostics), and stable headless runner test harness capabilities.
 - **Settle first:** harness interface boundaries (CLI, MCP server, or editor-ui integration); whether agents generate native TKR files directly or call project APIs/SDKs; automated evaluation loops (e.g., using headless goldens to let the AI playtest its own generated levels); model context constraints around tilesets, board dimensions, and script validation.
 - **Status:** logged as an idea.
+
+## Media metadata for music-player screens
+
+- **Raised by:** owner, 2026-10-18.
+- **Idea:** let scripts read a media file's tags (title, artist, album and similar) so authors can build music-player screens, for example `mediaInfo(file, key[, &ret])`.
+- **Today:** the proposed media commands (epic-audio-synth `discovery/audio-exploration.md` section 13) cover playback control and state queries, not tags.
+- **Depends on:** the standard media command family and per-format asset loading in epic audio-synth.
+- **Settle first:** which formats (ID3 for MP3, Vorbis comments for OGG, MIDI text chunks) and keys are supported; what a missing tag returns (`""`); tags are asset bytes, so reads stay deterministic.
+- **Status:** logged as an idea.

@@ -321,25 +321,71 @@ A tracker source via libopenmpt (§10) would be the first optional pack, and the
 ### Tracks
 
 - A track is a named, independent playback channel with its own asset, position, paused flag, loop flag and volume.
-- Two tracks always exist: `music` (the legacy background-music slot) and `sfx` (the legacy single sound-effect slot). Authors may create more by name (for example `ambience`, `voice`).
+- Built-in tracks always exist. `music` (the legacy background-music slot) and `sfx` (the legacy single sound-effect slot) are required, because the legacy commands map onto them. Recommended additional built-ins, for 6.1 to confirm: `ambience` (looping environment sound), `voice` (dialogue) and `ui` (menu and cursor sounds), which also give a game's options menu per-category volume sliders (an Epic 8 handoff). Authors may create more tracks by name.
 - Tracks mix together; starting audio on one track never stops another. The master volume (`setvolume`) scales all tracks; each track also has its own volume.
 - Track state lives in `GameState.audio` as plain data (G1, AD-10), so it saves, restores and replays identically. Position advances on the fixed tick from the asset's known length; the runner never reports position back into core (G2, G3, AD-16).
 
-### Proposed standard commands
+### Proposed standard commands: control
 
 | Command | Does | Waits? |
 |---|---|---|
 | `mediaLoad(track, file)` | Put a file on a track without playing it, so the first play does not stall (see §7). | no |
-| `mediaPlay(file[, track[, loop]])` | Play a file on a track (default `music`, which loops by default; `sfx` does not). Existing one-argument calls behave as today. | no |
+| `mediaPlay(file[, track[, flags]])` | Play a file on a track (default `music`). `flags` combine `tkMD_` play flags (below); default `tkMD_LOOP` on `music`, `tkMD_ONCE` elsewhere. Existing one-argument calls behave as today. | only with `tkMD_WAIT` |
 | `mediaStop([track])` | Stop a track and rewind it (default `music`). | no |
 | `mediaPause([track])` / `mediaResume([track])` | Pause and resume a track where it stopped. | no |
 | `mediaSeek(track, seconds)` | Jump to a time in the track. | no |
-| `mediaPosition(track[, &ret])` | Current time in the track, in seconds. | no |
-| `mediaPlaying(track[, &ret])` | Whether the track is playing (not stopped, not paused). | no |
+| `mediaLoop(track, on)` | Turn looping on or off in place, without restarting the track (a music player's loop toggle). | no |
 | `mediaVolume(track, percent)` | Set one track's volume, 0 to 100. | no |
 | `mediaWait([track])` | Wait until the track finishes (default `sfx`). Covers the 3.1.0 `mp3pause` behaviour. | yes |
 
+### Proposed standard commands: queries
+
+Every write has a matching read, so an author can build a music player screen in RPGCode (play/pause button, progress bar, scrubbing, loop toggle, per-track volume, playlist). Reads use the by-reference return convention.
+
+| Command | Returns |
+|---|---|
+| `mediaState(track[, &ret])` | `tkMD_STOPPED`, `tkMD_PLAYING` or `tkMD_PAUSED`: what the track is doing now. |
+| `mediaFlags(track[, &ret])` | The track's current `tkMD_` play flags: how it is set to play. Test looping with `mediaFlags(t) & tkMD_LOOP`. |
+| `mediaPlaying(track[, &ret])` | Shorthand for `mediaState(track) == tkMD_PLAYING`. |
+| `mediaFile(track[, &ret])` | The file on the track, or `""`. |
+| `mediaPosition(track[, &ret])` | Current time in the track, in seconds. |
+| `mediaLength(track or file[, &ret])` | Length in seconds; by file works before playing (playlist durations). |
+| `mediaVolume(track[, &ret])` | The track's volume (the one-argument reading form). |
+| `mediaTracks(&ret[])` | The names of all tracks. |
+| `getVolume([&ret])` | The master volume, matching `setvolume`. |
+
+**State versus flags.** `mediaState` and `mediaFlags` are deliberately separate: state is what is happening now (exactly one of stopped, playing, paused); flags are settings that hold in every state. A looping song that is paused reports `tkMD_PAUSED` and still has `tkMD_LOOP`, so it loops again after resume. Merging them would lose "paused, will loop" versus "paused, will stop at the end".
+
+### Constants (values illustrative until 6.1 rules them)
+
+Following the existing `tkMV_`/`tkVT_`/`tkPRG_` convention in `docs/spec/engine/rpgcode-language.md`:
+
+| Play flag | Value | Meaning |
+|---|---|---|
+| `tkMD_ONCE` | 0 | play once and stop |
+| `tkMD_LOOP` | 1 | loop until stopped |
+| `tkMD_WAIT` | 2 | the script waits until it ends (`mediaPlay` then `mediaWait`) |
+| `tkMD_RESTART` | 4 | restart from the top if the same file is already playing on the track (otherwise leave it running) |
+
+| State | Value |
+|---|---|
+| `tkMD_STOPPED` | 0 |
+| `tkMD_PLAYING` | 1 |
+| `tkMD_PAUSED` | 2 |
+
+### Waiting rules
+
+- `mediaWait` on a looping track resumes at the end of the current loop pass (useful for switching music on a loop boundary) and posts a debug diagnostic so the author sees it. Rejected alternative: waiting forever, a silent hang.
+- `mediaPlay` with `tkMD_LOOP | tkMD_WAIT` is rejected with a diagnostic at the call, since waiting on an endless loop is meaningless.
+- A wait ends on the tick its track is stopped, paused or replaced by another `mediaPlay`, so a wait never hangs behind another script's action.
+- Every query answer and wait end comes from core state or from asset facts read at load (for example length); none from the audio device (G2, G3). Epic 6 must therefore know each asset's length up front for every format it plays.
+
 Seconds are converted to ticks through `core/time` (AD-2); help text follows the CLAUDE.md rule (plain terms first, then units, ticks, order and whether the script waits).
+
+### Nice to have: media metadata
+
+A fun extra for music-player screens: read title, artist, album and similar tags from the file (ID3 for MP3, Vorbis comments for OGG, the text chunks of MIDI files), for example `mediaInfo(file, key[, &ret])`. Deterministic, since tags are part of the asset bytes, but format-specific; settle which formats and keys are supported and what missing tags return (`""`). Not in the 6.1 scope unless promoted; also log in `../../nice-to-have.md`.
+
 
 ### Legacy commands: obsolete, still working
 
