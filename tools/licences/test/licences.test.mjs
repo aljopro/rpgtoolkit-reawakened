@@ -1,7 +1,8 @@
 // Tests covering all matrix rows of story-licence-gate-and-third-party-notices-plan.md
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, copyFileSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,6 +13,7 @@ import {
   checkLicences,
 } from "../check.mjs";
 
+const repoRoot = join(import.meta.dirname, "..", "..", "..");
 const blueOakListPath = join(import.meta.dirname, "..", "blue-oak-list.json");
 const configPath = join(import.meta.dirname, "..", "config.json");
 
@@ -56,9 +58,11 @@ function withTempWorkspace(fn) {
         ],
       }, null, 2),
     );
+    const tempConfig = { ...baseConfig };
+    delete tempConfig.bundledAssets;
     writeFileSync(
       join(toolsDir, "config.json"),
-      JSON.stringify(baseConfig, null, 2),
+      JSON.stringify(tempConfig, null, 2),
     );
     // Default THIRD_PARTY_NOTICES
     writeFileSync(join(dir, "THIRD_PARTY_NOTICES"), "# Notices\n");
@@ -429,4 +433,144 @@ test("CLI e2e: runs through a symlinked file and a symlinked directory", (t) => 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// -------------------------------------------------------------
+// Bundled Font Asset Tests (ADR 0003, Entry 4.9)
+// -------------------------------------------------------------
+
+test("evaluator: OFL-1.1 software dependency is rejected", () => {
+  const res = evaluateLicense("OFL-1.1", defaultPolicy);
+  assert.equal(res.pass, false);
+  assert.ok(res.reason.includes("not on the Blue Oak Council permissive list"));
+});
+
+test("bundled font: allowed Liberation asset passes with matching hash and notice", () => {
+  withTempWorkspace((dir) => {
+    const fontRel = "media/fonts/LiberationMono-Regular.ttf";
+    const realFont = join(repoRoot, fontRel);
+    const destFont = join(dir, fontRel);
+    mkdirSync(dirname(destFont), { recursive: true });
+    copyFileSync(realFont, destFont);
+    const fontBytes = readFileSync(destFont);
+    const fontHash = createHash("sha256").update(fontBytes).digest("hex");
+
+    const configWithFont = {
+      ...baseConfig,
+      bundledAssets: {
+        fonts: [
+          {
+            path: fontRel,
+            license: "OFL-1.1",
+            adr: "ADR-0003",
+            release: "Liberation Fonts 2.1.5",
+            sha256: fontHash,
+          },
+        ],
+      },
+    };
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(configWithFont, null, 2));
+    writeFileSync(
+      join(dir, "THIRD_PARTY_NOTICES"),
+      `# Notices\n### Liberation Fonts\n- ${fontRel} (SHA-256 ${fontHash})\n`,
+    );
+
+    const res = checkLicences(dir, {
+      prodLicensesJson: {},
+      allLicensesJson: {},
+    });
+    assert.equal(res.pass, true);
+    assert.equal(res.violations.length, 0);
+  });
+});
+
+test("bundled font: missing notice or hash fails", () => {
+  withTempWorkspace((dir) => {
+    const fontRel = "media/fonts/LiberationMono-Regular.ttf";
+    const destFont = join(dir, fontRel);
+    mkdirSync(dirname(destFont), { recursive: true });
+    writeFileSync(destFont, "fake-font-bytes");
+    const realHash = createHash("sha256").update("fake-font-bytes").digest("hex");
+
+    // 1. Missing notice in THIRD_PARTY_NOTICES
+    const configWithFont = {
+      ...baseConfig,
+      bundledAssets: {
+        fonts: [
+          {
+            path: fontRel,
+            license: "OFL-1.1",
+            adr: "ADR-0003",
+            release: "Liberation Fonts 2.1.5",
+            sha256: realHash,
+          },
+        ],
+      },
+    };
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(configWithFont, null, 2));
+    writeFileSync(join(dir, "THIRD_PARTY_NOTICES"), "# Notices without font\n");
+
+    let res = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
+    assert.equal(res.pass, false);
+    assert.ok(res.violations.some((v) => v.type === "missing-font-notice" && v.path === fontRel));
+
+    // 2. Hash mismatch in config
+    configWithFont.bundledAssets.fonts[0].sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(configWithFont, null, 2));
+    writeFileSync(join(dir, "THIRD_PARTY_NOTICES"), `# Notices\n${fontRel}\n${realHash}\n`);
+
+    res = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
+    assert.equal(res.pass, false);
+    assert.ok(res.violations.some((v) => v.type === "bundled-font-hash-mismatch" && v.path === fontRel));
+  });
+});
+
+test("bundled font: unlisted OFL path fails", () => {
+  withTempWorkspace((dir) => {
+    const unlistedFont = join(dir, "media", "fonts", "unlisted.ttf");
+    mkdirSync(dirname(unlistedFont), { recursive: true });
+    writeFileSync(unlistedFont, "unlisted-ttf-bytes");
+
+    const configWithoutFont = {
+      ...baseConfig,
+      bundledAssets: { fonts: [] },
+    };
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(configWithoutFont, null, 2));
+    writeFileSync(join(dir, "THIRD_PARTY_NOTICES"), "# Notices\n");
+
+    const res = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
+    assert.equal(res.pass, false);
+    assert.ok(res.violations.some((v) => v.type === "unlisted-bundled-font" && v.path === "media/fonts/unlisted.ttf"));
+  });
+});
+
+test("bundled font: font licence failing Blue Oak without ADR exception fails", () => {
+  withTempWorkspace((dir) => {
+    const fontRel = "media/fonts/LiberationSans-Regular.ttf";
+    const destFont = join(dir, fontRel);
+    mkdirSync(dirname(destFont), { recursive: true });
+    writeFileSync(destFont, "font-bytes");
+    const hash = createHash("sha256").update("font-bytes").digest("hex");
+
+    const configUnapproved = {
+      ...baseConfig,
+      bundledAssets: {
+        fonts: [
+          {
+            path: fontRel,
+            license: "OFL-1.1",
+            // Missing adr: "ADR-0003"
+            release: "Liberation Fonts 2.1.5",
+            sha256: hash,
+          },
+        ],
+      },
+    };
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(configUnapproved, null, 2));
+    writeFileSync(join(dir, "THIRD_PARTY_NOTICES"), `# Notices\n${fontRel}\n${hash}\n`);
+
+    const res = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
+    assert.equal(res.pass, false);
+    assert.ok(res.violations.some((v) => v.type === "unapproved-font-license" && v.path === fontRel));
+  });
 });

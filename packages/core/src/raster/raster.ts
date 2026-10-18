@@ -1,5 +1,7 @@
 import type { DecodedTexture } from "../formats/image/model.ts";
 import type { LegacyFont } from "../formats/font/model.ts";
+import { readTrueTypeFont, trueTypeFontMetrics, type TrueTypeFont } from "../formats/font/truetype.ts";
+import { getGlyphRaster } from "./glyph.ts";
 import type {
   BlitCommand,
   DrawCommand,
@@ -11,7 +13,7 @@ import type {
 } from "../ports/draw.ts";
 import type { AssetKey, ScratchId, SurfaceId } from "../ports/keys.ts";
 
-export type RasterAsset = DecodedTexture | LegacyFont;
+export type RasterAsset = DecodedTexture | LegacyFont | TrueTypeFont | Uint8Array;
 export type RasterAssets = ReadonlyMap<AssetKey, RasterAsset>;
 export type RasterSurfaces = ReadonlyMap<SurfaceId, DecodedTexture>;
 export type RasterResult = {
@@ -38,6 +40,10 @@ function isTexture(asset: RasterAsset | undefined): asset is DecodedTexture {
 
 function isFont(asset: RasterAsset | undefined): asset is LegacyFont {
   return asset !== undefined && "values" in asset && asset.values.length >= 256 * 8;
+}
+
+function isTrueTypeFont(asset: RasterAsset | undefined): asset is TrueTypeFont {
+  return asset !== undefined && typeof asset === "object" && "kind" in asset && asset.kind === "truetype";
 }
 
 function sourceTexture(
@@ -252,7 +258,76 @@ function drawText(
   command: TextCommand,
   assets: RasterAssets,
 ): string | null {
-  const asset = assets.get(command.font.asset);
+  let asset = assets.get(command.font.asset);
+  if (asset instanceof Uint8Array) {
+    const parsed = readTrueTypeFont(asset);
+    if (parsed.ok) asset = parsed.value;
+  }
+
+  if (isTrueTypeFont(asset)) {
+    const size = Number.isFinite(command.font.size) && command.font.size > 0
+      ? Math.max(1, Math.floor(command.font.size + 0.5))
+      : 8;
+    const metrics = trueTypeFontMetrics(asset, size);
+    let cursorX = Math.trunc(command.x);
+    let cursorY = Math.trunc(command.y);
+    let glyphIndex = 0;
+
+    for (const character of Array.from(command.text)) {
+      if (character === "\n") {
+        cursorX = Math.trunc(command.x);
+        cursorY += metrics.lineHeight;
+        continue;
+      }
+      const glyphInfo = command.advances[glyphIndex];
+      glyphIndex += 1;
+      const glyph = glyphInfo !== undefined
+        ? asset.glyphById(glyphInfo.glyph)
+        : asset.charToGlyph(character);
+      const advance = glyphInfo !== undefined
+        ? glyphInfo.advance
+        : (Math.floor(glyph.advance * size / asset.unitsPerEm + 0.5) + (command.font.bold ? 1 : 0));
+
+      const raster = getGlyphRaster(asset, glyph, size, command.font.bold, command.font.italic);
+      if (raster.width > 0 && raster.height > 0) {
+        const baselineY = cursorY + metrics.ascent;
+        const startX = cursorX + raster.offsetX;
+        const startY = baselineY + raster.offsetY;
+
+        for (let gy = 0; gy < raster.height; gy += 1) {
+          const dy = startY + gy;
+          if (dy < 0 || dy >= target.height) continue;
+          for (let gx = 0; gx < raster.width; gx += 1) {
+            const dx = startX + gx;
+            if (dx < 0 || dx >= target.width) continue;
+            const cov = raster.coverage[gy * raster.width + gx]!;
+            if (cov === 0) continue;
+            const at = (dy * target.width + dx) * 4;
+
+            if (cov === 255) {
+              target.rgba[at] = clampByte(command.rgb.r);
+              target.rgba[at + 1] = clampByte(command.rgb.g);
+              target.rgba[at + 2] = clampByte(command.rgb.b);
+              target.rgba[at + 3] = 255;
+            } else {
+              const dr = target.rgba[at]!;
+              const dg = target.rgba[at + 1]!;
+              const db = target.rgba[at + 2]!;
+              const da = target.rgba[at + 3]!;
+              target.rgba[at] = Math.floor((dr * (255 - cov) + command.rgb.r * cov + 127) / 255);
+              target.rgba[at + 1] = Math.floor((dg * (255 - cov) + command.rgb.g * cov + 127) / 255);
+              target.rgba[at + 2] = Math.floor((db * (255 - cov) + command.rgb.b * cov + 127) / 255);
+              target.rgba[at + 3] = Math.min(255, da + Math.floor((cov * (255 - da) + 127) / 255));
+            }
+          }
+        }
+      }
+
+      cursorX += Math.max(0, Math.trunc(advance));
+    }
+    return null;
+  }
+
   if (!isFont(asset)) return "missing bitmap font asset";
   const size = Number.isFinite(command.font.size) && command.font.size > 0
     ? Math.max(1, Math.floor(command.font.size + 0.5))

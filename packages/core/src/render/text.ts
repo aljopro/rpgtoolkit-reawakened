@@ -9,13 +9,17 @@
 
 import type { LegacyFont } from "../formats/font/model.ts";
 import { FONT_GLYPH_HEIGHT, FONT_GLYPH_WIDTH } from "../formats/font/model.ts";
+import { readTrueTypeFont, trueTypeFontMetrics, type TrueTypeFont } from "../formats/font/truetype.ts";
 import type { AssetKey, Rgb, DrawCommand, FontRef, GlyphAdvance } from "../ports/index.ts";
 
 export type BitmapFontMap = ReadonlyMap<AssetKey, LegacyFont>;
+export type FontMap = ReadonlyMap<AssetKey, LegacyFont | TrueTypeFont | Uint8Array>;
 
 export interface TextLayoutOptions {
   readonly maxWidth?: number;
   readonly lineHeight?: number;
+  readonly font?: TrueTypeFont | LegacyFont;
+  readonly fonts?: FontMap;
 }
 
 export interface TextLine {
@@ -63,6 +67,22 @@ function makeGlyphs(text: string, ref: FontRef): GlyphAdvance[] {
   return codePoints(text).map((character) => ({ glyph: glyphCode(character), advance }));
 }
 
+function makeTrueTypeGlyphs(text: string, ref: FontRef, font: TrueTypeFont): GlyphAdvance[] {
+  const size = roundedSize(ref.size);
+  const chars = codePoints(text);
+  const glyphs: GlyphAdvance[] = [];
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i]!;
+    const nextCh = chars[i + 1];
+    const g = font.charToGlyph(ch);
+    const advancePx = Math.floor(g.advance * size / font.unitsPerEm + 0.5) + (ref.bold ? 1 : 0);
+    const kerning = nextCh !== undefined ? font.getKerning(g, font.charToGlyph(nextCh)) : 0;
+    const kerningPx = Math.floor(kerning * size / font.unitsPerEm + 0.5);
+    glyphs.push({ glyph: g.id, advance: Math.max(0, advancePx + kerningPx) });
+  }
+  return glyphs;
+}
+
 function widthOf(glyphs: readonly GlyphAdvance[]): number {
   return glyphs.reduce((sum, glyph) => sum + glyph.advance, 0);
 }
@@ -70,7 +90,7 @@ function widthOf(glyphs: readonly GlyphAdvance[]): number {
 /** Resolve a named project font, applying the documented family aliases. */
 export function resolveFont(
   name: string,
-  fonts: BitmapFontMap,
+  fonts: ReadonlyMap<AssetKey, unknown>,
   fallback: AssetKey,
   size = DEFAULT_FONT_SIZE,
   bold = false,
@@ -81,21 +101,33 @@ export function resolveFont(
   for (const asset of fonts.keys()) {
     const path = String(asset).toLowerCase();
     const family = path.slice(path.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
-    if (family === folded || path === folded || path.endsWith(`/${folded}`) || path.endsWith(`/${folded}.fnt`)) {
+    if (family === folded || path === folded || path.endsWith(`/${folded}`) || path.endsWith(`/${folded}.fnt`) || path.endsWith(`/${folded}.ttf`)) {
       chosen = asset;
       break;
     }
   }
   if (chosen === undefined) {
-    const family = folded === "arial" || folded === "sans-serif" ? "liberation-sans"
-      : folded === "times new roman" || folded === "serif" ? "liberation-serif"
-      : folded === "courier new" || folded === "monospace" ? "liberation-mono"
+    const isSans = folded === "arial" || folded === "sans-serif" || folded === "liberation sans" || folded === "liberationsans";
+    const isSerif = folded === "times new roman" || folded === "serif" || folded === "liberation serif" || folded === "liberationserif";
+    const isMono = folded === "courier new" || folded === "monospace" || folded === "liberation mono" || folded === "liberationmono";
+
+    const family = isSans ? "liberationsans"
+      : isSerif ? "liberationserif"
+      : isMono ? "liberationmono"
       : "";
-    for (const asset of fonts.keys()) {
-      const path = String(asset).toLowerCase();
-      if (family !== "" && path.includes(family)) {
-        chosen = asset;
-        break;
+
+    if (family !== "") {
+      for (const asset of fonts.keys()) {
+        const path = String(asset).toLowerCase().replace(/[-_]/g, "");
+        if (path.includes(family)) {
+          chosen = asset;
+          break;
+        }
+      }
+      if (chosen === undefined) {
+        if (isSans) chosen = "media/fonts/LiberationSans-Regular.ttf" as AssetKey;
+        else if (isSerif) chosen = "media/fonts/LiberationSerif-Regular.ttf" as AssetKey;
+        else if (isMono) chosen = "media/fonts/LiberationMono-Regular.ttf" as AssetKey;
       }
     }
   }
@@ -115,10 +147,26 @@ export function bitmapFontMetrics(ref: FontRef): { readonly advance: number; rea
 }
 
 /** Lay out text, preserving explicit newlines and wrapping only at words. */
-export function layoutText(text: string, ref: FontRef, options: TextLayoutOptions = {},): TextLayout {
-  const metrics = bitmapFontMetrics(ref);
+export function layoutText(text: string, ref: FontRef, options: TextLayoutOptions = {}): TextLayout {
+  let font: TrueTypeFont | null = null;
+  if (options.font && "kind" in options.font && options.font.kind === "truetype") {
+    font = options.font;
+  } else if (options.fonts) {
+    const candidate = options.fonts.get(ref.asset);
+    if (candidate && typeof candidate === "object" && "kind" in candidate && candidate.kind === "truetype") {
+      font = candidate;
+    } else if (candidate instanceof Uint8Array) {
+      const parsed = readTrueTypeFont(candidate);
+      if (parsed.ok) font = parsed.value;
+    }
+  }
+
+  const metrics = font !== null ? trueTypeFontMetrics(font, ref.size) : bitmapFontMetrics(ref);
   const lineHeight = options.lineHeight === undefined ? metrics.lineHeight : Math.max(1, Math.floor(options.lineHeight));
   const maxWidth = options.maxWidth === undefined ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(options.maxWidth));
+  const getGlyphsFor = (str: string): GlyphAdvance[] =>
+    font !== null ? makeTrueTypeGlyphs(str, ref, font) : makeGlyphs(str, ref);
+
   const lines: TextLine[] = [];
   for (const paragraph of text.split("\n")) {
     const words = paragraph.split(" ");
@@ -131,18 +179,18 @@ export function layoutText(text: string, ref: FontRef, options: TextLayoutOption
     };
     for (const word of words) {
       const candidate = current === "" ? word : `${current} ${word}`;
-      const candidateGlyphs = makeGlyphs(candidate, ref);
+      const candidateGlyphs = getGlyphsFor(candidate);
       if (current !== "" && widthOf(candidateGlyphs) > maxWidth) flush();
-      if (current === "" && word !== "" && widthOf(makeGlyphs(word, ref)) > maxWidth) {
+      if (current === "" && word !== "" && widthOf(getGlyphsFor(word)) > maxWidth) {
         for (const character of codePoints(word)) {
-          const one = makeGlyphs(character, ref);
+          const one = getGlyphsFor(character);
           if (current !== "" && widthOf(glyphs) + one[0]!.advance > maxWidth) flush();
           current += character;
           glyphs.push(one[0]!);
         }
       } else {
         current = current === "" ? word : `${current} ${word}`;
-        glyphs = makeGlyphs(current, ref);
+        glyphs = getGlyphsFor(current);
       }
     }
     flush();

@@ -4,3 +4,4 @@ export * from "./model.ts";
 export * from "./reader.ts";
 export * from "./writer.ts";
 export * from "./glyph.ts";
+export * from "./truetype.ts";

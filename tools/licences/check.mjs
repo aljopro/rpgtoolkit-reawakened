@@ -2,8 +2,9 @@
 // Evaluates production and dev workspace dependencies against the pinned
 // Blue Oak Council list (v16) and repo policy configuration, and verifies
 // that all production dependencies appear in THIRD_PARTY_NOTICES.
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -285,6 +286,96 @@ export function normalizePackages(pnpmOutput) {
 }
 
 /**
+ * Audits bundled font assets against config records, on-disk files, and notices.
+ */
+export function auditBundledFonts(root, config, noticesContent, noticesFilePresent) {
+  const violations = [];
+  const warnings = [];
+  const fontRecords = config.bundledAssets?.fonts || [];
+  const recordedPaths = new Set(fontRecords.map((r) => r.path));
+
+  for (const record of fontRecords) {
+    const fullPath = join(root, record.path);
+    if (!existsSync(fullPath)) {
+      violations.push({
+        type: "missing-bundled-font",
+        path: record.path,
+        message: `Bundled font asset missing at ${record.path}`,
+      });
+      continue;
+    }
+
+    const bytes = readFileSync(fullPath);
+    const actualHash = createHash("sha256").update(bytes).digest("hex");
+    if (actualHash !== record.sha256) {
+      violations.push({
+        type: "bundled-font-hash-mismatch",
+        path: record.path,
+        expectedHash: record.sha256,
+        actualHash,
+        message: `Bundled font '${record.path}' SHA-256 mismatch (expected ${record.sha256}, got ${actualHash})`,
+      });
+    }
+
+    if (record.license === "OFL-1.1") {
+      if (record.adr !== "ADR-0003") {
+        violations.push({
+          type: "unapproved-font-license",
+          path: record.path,
+          license: record.license,
+          message: `Bundled font '${record.path}' with license 'OFL-1.1' requires ADR-0003 exemption`,
+        });
+      }
+    } else {
+      const evalRes = evaluateLicense(record.license, config);
+      if (!evalRes.pass && !record.adr) {
+        violations.push({
+          type: "unapproved-font-license",
+          path: record.path,
+          license: record.license,
+          message: `Bundled font '${record.path}' with license '${record.license}' rejected: ${evalRes.reason}`,
+        });
+      }
+    }
+
+    if (noticesFilePresent) {
+      const fileName = record.path.slice(record.path.lastIndexOf("/") + 1);
+      const hasFileName = noticesContent.includes(fileName) || noticesContent.includes(record.path);
+      const hasHash = noticesContent.includes(record.sha256);
+      if (!hasFileName || !hasHash) {
+        violations.push({
+          type: "missing-font-notice",
+          path: record.path,
+          message: `Bundled font '${record.path}' or its SHA-256 hash '${record.sha256}' is missing from THIRD_PARTY_NOTICES`,
+        });
+      }
+    }
+  }
+
+  const mediaFonts = join(root, "media", "fonts");
+  if (existsSync(mediaFonts)) {
+    const fontExts = new Set([".ttf", ".otf", ".woff", ".woff2"]);
+    for (const name of readdirSync(mediaFonts)) {
+      const dotIndex = name.lastIndexOf(".");
+      if (dotIndex === -1) continue;
+      const ext = name.slice(dotIndex).toLowerCase();
+      if (fontExts.has(ext)) {
+        const relPath = `media/fonts/${name}`;
+        if (!recordedPaths.has(relPath)) {
+          violations.push({
+            type: "unlisted-bundled-font",
+            path: relPath,
+            message: `Font file '${relPath}' found on disk but is not recorded in bundledAssets.fonts config`,
+          });
+        }
+      }
+    }
+  }
+
+  return { violations, warnings, count: fontRecords.length };
+}
+
+/**
  * Audits licenses and notices for a workspace.
  */
 export function checkLicences(root = repoRoot, options = {}) {
@@ -424,10 +515,20 @@ export function checkLicences(root = repoRoot, options = {}) {
     }
   }
 
+  // 6. Audit bundled font assets
+  let fontCount = 0;
+  if (config.bundledAssets?.fonts || existsSync(join(root, "media", "fonts"))) {
+    const fontAudit = auditBundledFonts(root, config, noticesContent, noticesFilePresent);
+    violations.push(...fontAudit.violations);
+    warnings.push(...fontAudit.warnings);
+    fontCount = fontAudit.count;
+  }
+
   return {
     pass: violations.length === 0,
     prodCount: prodPackages.size,
     allCount: allPackages.size,
+    fontCount,
     violations,
     warnings,
   };
@@ -489,6 +590,9 @@ if (isMain) {
       console.log(`\nLicence check PASSED.`);
       console.log(`  Production packages checked: ${result.prodCount}`);
       console.log(`  Total (prod + dev) packages checked: ${result.allCount}`);
+      if (result.fontCount !== undefined) {
+        console.log(`  Bundled fonts checked: ${result.fontCount}`);
+      }
       console.log(`  0 violations found.`);
       process.exit(0);
     }
