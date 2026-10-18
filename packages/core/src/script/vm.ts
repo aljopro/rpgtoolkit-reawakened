@@ -479,6 +479,7 @@ function stackEffect(op: StepOp): { readonly pops: number; readonly pushes: numb
     case "name":
     case "load":
     case "declRef":
+    case "load_fn":
     case "dup":
       return { pops: 0, pushes: 1 };
     case "storeRef":
@@ -492,6 +493,8 @@ function stackEffect(op: StepOp): { readonly pops: number; readonly pushes: numb
     case "select":
       return { pops: 3, pushes: 1 };
     case "methodCall":
+      return { pops: op.argc + 1, pushes: 1 };
+    case "call_indirect":
       return { pops: op.argc + 1, pushes: 1 };
     case "construct":
     case "call":

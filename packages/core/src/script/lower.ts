@@ -66,7 +66,8 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
   const ops: StepOp[] = [];
   const posCache = new Map<number, SourcePos>();
   const statements: StatementRange[] = [];
-
+  const lambdaDefs: { readonly def: string; readonly expr: Extract<Expr, { kind: "lambda" }> }[] = [];
+  let lambdaNumber = 0;
   function getPos(line: number): SourcePos {
     let p = posCache.get(line);
     if (!p) {
@@ -232,18 +233,36 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
           ops.push({ op: "compound", operator: expr.operator, pos: getPos(expr.line) });
         }
         break;
-      case "lambda":
+      case "lambda": {
+        const def = `${file}#lambda_${lambdaNumber + 1}`;
+        lambdaNumber += 1;
+        lambdaDefs.push({ def, expr });
+        // Captures are represented as stable cell IDs by the VM. The lowerer does not
+        // allocate runtime cells, so this instruction deliberately carries the empty
+        // deterministic set; 18.4 resolves the enclosing environment when invoked.
+        ops.push({ op: "load_fn", def, captures: [], pos: getPos(expr.line) });
+        break;
+      }
+      case "callIndirect": {
+        // The target is the first emitted operand for the callee. Keeping the instruction
+        // index explicit makes nested dynamic calls structurally inspectable without host
+        // closures or implicit compiler state.
+        const target = ops.length;
+        lowerExpr(expr.callee);
+        for (const arg of expr.args) lowerExpr(arg);
+        ops.push({ op: "call_indirect", target, argc: expr.args.length, pos: getPos(expr.line) });
+        break;
+      }
       case "object":
-      case "callIndirect":
-        // The parser accepts these forms (entry 18.2); the callable value model and their lowering
-        // are entry 18.3. Until then compiling one is a located refusal, never a silent no-op.
+        // Dictionary storage and its runtime instruction are owned by the object/runtime
+        // entries; do not silently discard this AST node while lowering invocation IR.
         throw new ScriptError(
           "syntax.unsupported",
-          `${expr.kind === "lambda" ? "a lambda" : expr.kind === "object" ? "a dictionary literal" : "a call through an expression"} parses but cannot run yet (entry 18.3 lowers it)`,
+          "a dictionary literal parses but its runtime storage is not available yet (object entry)",
           getPos(expr.line),
         );
+      }
     }
-  }
 
   /** Lower one statement and its trailing `pop`, recording its op range. */
   function emitStatement(statement: Statement, currentLabels: { [name: string]: number }): void {
@@ -450,6 +469,18 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
       if (method.name === `~${cls.name}` || method.name === `destructor`) destructor = info;
     }
     classes[cls.name] = { name: cls.name, bases: cls.bases, members: cls.members, methods, constructor, destructor, abstract };
+  }
+  // Lambdas are anonymous definitions with deterministic IDs. They are lowered after named
+  // functions and methods so a `load_fn` emitted in any body can point at a complete range.
+  for (let index = 0; index < lambdaDefs.length; index += 1) {
+    const lambda = lambdaDefs[index]!;
+    const lowered = lowerBody(lambda.expr.body, lambda.expr.line);
+    functions[lambda.def] = [
+      {
+        ...lowered,
+        params: lambda.expr.params.map((param) => ({ name: param.name, byRef: param.byRef })),
+      },
+    ];
   }
 
   return { ops, functions, classes, labels: topLabels, statements, defs };
