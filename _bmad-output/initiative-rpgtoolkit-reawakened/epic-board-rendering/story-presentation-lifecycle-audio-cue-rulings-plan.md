@@ -246,6 +246,7 @@ No package code, generated `catalogue-stubs.ts`, fixtures, images or goldens are
 ## Plan change log
 
 - 2026-10-17: Initial plan from `origin/main` `cf04834d`; mapped every entry-29 presentation, lifecycle, startup-port and audio-cue row to exact docs/spec anchors and recorded source conflicts.
+- 2026-10-17 (round-7 amendments): the owner relayed the TK-side engineer's round-7 answers (`docs/provenance/facts-round-7.md`). The P-1 to P-7 rules for message window (P-1), `msgBox` (P-2), fade (P-3), wipe (P-4), zoom (P-5), cursors (P-6) and `text` (P-7) are amended doc-first: the old defaults (80% × 24% window with 8-pixel margin and 60 glyphs per second; 60% × 22% `msgBox` with 16-pixel buttons; fade types 1 to 4; wipe effects 5 to 8 as centre-out and edges-in with default speed 4; zoom as a 1 to 400 scale; 16×16 cursors with the hand's hot spot (1,1); 8×16 zero-based `text` cells) are withdrawn, and the new rules, their per-row confidence and the owner-review flags are recorded in the Round 7 decision section of `facts-round-7.md`. Q8 (light boundary excluded, single clamp kept) amends E-17, and Q11 (iso2d averaging, 62-pixel diamond) is a recorded deferred decision with no rule change. Entries 4.21, 4.22, 4.24 and 4.25 and the new follow-up entry 4.34 were updated to match.
 
 ## Verification (after owner approval; not run by this plan worker)
 
