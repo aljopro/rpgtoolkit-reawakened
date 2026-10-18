@@ -1,7 +1,7 @@
 // Every catalogue name that is safe to stub responds (ticket 3.21; AD-8;
 // decision U1). The stub layer (`CATALOGUE_STUBS_PLUGIN`) sits above
 // `CORE_PLUGIN` and below caller plugins, so a real game script calling any of
-// the 176 `pure`, `state-write` or `draw-audio-cue` names resolves, validates
+// the `pure`, `state-write` or `draw-audio-cue` names resolves, validates
 // its arguments, returns the documented default, writes its by-reference
 // outputs back and stamps an `EffectRecord` into the `vm` section's effect log.
 //
@@ -20,11 +20,13 @@ import {
   drainEffects,
   EFFECT_LOG_CAP,
   hashState,
+  RENDER_PLUGIN,
   restoreGameState,
   snapshot,
   startProgram,
   type BuiltinSpec,
   type GameState,
+  WORLD_PLUGIN,
   type ScriptError,
 } from "../src/index.ts";
 import { advanceOrFail } from "./script-failures.ts";
@@ -126,8 +128,8 @@ function callArity(spec: BuiltinSpec): number {
 test("every catalogue stub name resolves to its own spec, folded to lower case", () => {
   const services = createScriptServices(createGameState({ seed: 0 }));
 
-  equal(COMMANDS.length, 108);
-  equal(new Set(COMMANDS.map((spec) => spec.name)).size, 108);
+  equal(COMMANDS.length, 61);
+  equal(new Set(COMMANDS.map((spec) => spec.name)).size, 61);
   for (const spec of COMMANDS) {
     equal(spec.name, spec.name.toLowerCase());
     const resolved = services.commands.get(spec.name);
@@ -136,15 +138,23 @@ test("every catalogue stub name resolves to its own spec, folded to lower case",
     deepEqual(spec.aliases, []);
     equal(rowByName.has(spec.name), true, `"${spec.name}" is not a stub-safe catalogue name`);
   }
+  // No stub shadows a first-party pack: the world, render, UI and graphics packs own their names (ticket 4.27).
+  for (const plugin of [WORLD_PLUGIN, RENDER_PLUGIN]) {
+    for (const pack of plugin.commands) {
+      for (const name of [pack.name.toLowerCase(), ...pack.aliases.map((alias) => alias.toLowerCase())]) {
+        equal(COMMANDS.some((spec) => spec.name === name), false, `a stub shadows the ${plugin.id} pack command "${name}"`);
+      }
+    }
+  }
   // No stub shadows the core pack.
   equal(services.commands.get("end")?.spec.name, "end");
   equal(services.commands.get("sleep")?.spec.name, "sleep");
 });
 
 test("the stub layer declares the catalogue's by-reference outputs", () => {
-  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 25);
+  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.byRef)).length, 19);
   // Variadic rows cannot fix an output position in their generated spec.
-  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.variadic)).length, 13);
+  equal(COMMANDS.filter((spec) => spec.params.some((param) => param.variadic)).length, 0);
   for (const spec of COMMANDS) {
     const row = rowByName.get(spec.name)!;
     const variadic = spec.params.some((param) => param.variadic);
@@ -227,8 +237,8 @@ test("a by-reference argument is written back and recorded by index", () => {
 });
 
 test("a literal in a by-reference position is refused", () => {
-  // `getColor` writes back parameters 1..3 (docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-6).
-  equal(errorOf(() => run("getColor(1, 2, 3)\n")).code, "builtin.out-not-by-ref");
+  // `mouseMove` writes back parameters 1..2 (docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-6).
+  equal(errorOf(() => run("mouseMove(1, 2)\n")).code, "builtin.out-not-by-ref");
 });
 
 test("the obsolete names raise builtin.obsolete and record nothing", () => {
@@ -243,7 +253,7 @@ test("the obsolete names raise builtin.obsolete and record nothing", () => {
 });
 
 test("the effect log is a ring capped at EFFECT_LOG_CAP", () => {
-  const state = run("mwincls()\n".repeat(300));
+  const state = run("mediastop()\n".repeat(300));
   equal(EFFECT_LOG_CAP, 256);
   equal(state.vm.effects.length, EFFECT_LOG_CAP);
   equal(state.vm.effectSeq, 300);
@@ -252,13 +262,13 @@ test("the effect log is a ring capped at EFFECT_LOG_CAP", () => {
 });
 
 test("drainEffects takes one section's records and leaves the rest", () => {
-  const state = run("mwincls()\nmwincls()\nmwincls()\neraseplayer(1)\neraseplayer(1)\n");
+  const state = run("mediastop()\nmediastop()\nmediastop()\neraseplayer(1)\neraseplayer(1)\n");
   equal(state.vm.effectSeq, 5);
   equal(state.vm.effects.length, 5);
 
-  const ui = drainEffects(state.vm, "ui");
+  const ui = drainEffects(state.vm, "audio");
   equal(ui.length, 3);
-  equal(ui.every((record) => record.patch?.section === "ui"), true);
+  equal(ui.every((record) => record.patch?.section === "audio"), true);
   equal(state.vm.effects.length, 2);
   equal(state.vm.effectSeq, 5, "draining never touches the sequence counter");
   deepEqual(state.vm.effects.map((record) => record.seq), [4, 5]);
@@ -272,7 +282,7 @@ test("drainEffects takes one section's records and leaves the rest", () => {
 });
 
 test("a snapshot with effects restores identically and keeps stamping monotonic seq", () => {
-  const state = run("mwincls()\neraseplayer(1)\n");
+  const state = run("mediastop()\neraseplayer(1)\n");
   equal(state.vm.effectSeq, 2);
 
   const json = snapshot(state);
@@ -281,7 +291,7 @@ test("a snapshot with effects restores identically and keeps stamping monotonic 
   equal(hashState(restored), hashState(state));
   deepEqual(restored.vm.effects, state.vm.effects);
 
-  startProgram(restored.vm, { kind: "inline", text: "mwincls()\n", compiler: "2" });
+  startProgram(restored.vm, { kind: "inline", text: "mediastop()\n", compiler: "2" });
   advanceScriptTick(restored, createScriptServices(restored));
   equal(restored.vm.effectSeq, 3);
   equal(restored.vm.effects[2]?.seq, 3);
@@ -289,14 +299,14 @@ test("a snapshot with effects restores identically and keeps stamping monotonic 
 
 test("a caller plugin overrides a stub and warns once", () => {
   const replacement: BuiltinSpec = {
-    name: "mwin",
+    name: "mediastop",
     aliases: [],
-    params: [{ name: "text", optional: false, byRef: false, variadic: false }],
-    call: () => ({ value: null, effects: [{ kind: "state-write", section: "ui" }] }),
+    params: [],
+    call: () => ({ value: null, effects: [{ kind: "state-write", section: "audio" }] }),
   };
   const warnings: string[] = [];
   const state = createGameState({ seed: 0 });
-  startProgram(state.vm, { kind: "inline", text: 'mwin("hi")\n', compiler: "2" });
+  startProgram(state.vm, { kind: "inline", text: "mediastop()\n", compiler: "2" });
   const services = createScriptServices(state, [
     { id: "game", version: "1.0.0", commands: [replacement] },
   ], {
@@ -306,7 +316,7 @@ test("a caller plugin overrides a stub and warns once", () => {
     error: () => {},
   });
 
-  equal(services.commands.get("mwin")?.spec, replacement);
+  equal(services.commands.get("mediastop")?.spec, replacement);
   advanceScriptTick(state, services);
   deepEqual(warnings, ["command.overridden"]);
 });

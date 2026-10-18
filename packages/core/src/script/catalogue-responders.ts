@@ -20,6 +20,7 @@ import type { SectionKey } from "../save/state.ts";
 import { effectCommand } from "./packs/common.ts";
 import { UI_COMMANDS } from "./packs/ui.ts";
 import { GRAPHICS_COMMANDS } from "./packs/graphics.ts";
+import { RENDER_PLUGIN } from "./packs/render.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
 
 const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
@@ -450,7 +451,12 @@ const PACK_CATALOGUE_FALLBACKS: readonly BuiltinSpec[] = [
   effectCommand("text", "ui"),
   effectCommand("msgbox", "ui", "mixed"),
   effectCommand("fade", "fx", "draw-audio-cue"),
-].map(fallbackDocumentation).concat(GRAPHICS_COMMANDS, UI_COMMANDS.filter((command) => ["createcursormap", "cursormapadd", "cursormaprun", "killcursormap", "cursormaphand", "mousecursor"].includes(command.name)));
+].map(fallbackDocumentation);
+
+/** Every command of the render owner pack (UI, effects, surfaces, animation) that the catalogue layer does not already supply. */
+const RENDER_PACK_FALLBACKS: readonly BuiltinSpec[] = RENDER_PLUGIN.commands.filter(
+  (command) => !PACK_CATALOGUE_FALLBACKS.some((fallback) => fallback.name === command.name),
+);
 
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
 
@@ -471,6 +477,6 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
       (command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name) && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
     ),
-    ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
+    ...[...PACK_CATALOGUE_FALLBACKS, ...RENDER_PACK_FALLBACKS].filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
   ],
 };
