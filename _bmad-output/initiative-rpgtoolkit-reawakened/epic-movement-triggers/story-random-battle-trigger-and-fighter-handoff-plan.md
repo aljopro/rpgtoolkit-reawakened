@@ -3,7 +3,7 @@ title: 'Random battle trigger and fighter handoff'
 type: 'feature'
 ticket: 11
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: '4e00c268219124233e37e27d7215225b48c87ca5'
 route: 'full'
 route_source: 'pinned'

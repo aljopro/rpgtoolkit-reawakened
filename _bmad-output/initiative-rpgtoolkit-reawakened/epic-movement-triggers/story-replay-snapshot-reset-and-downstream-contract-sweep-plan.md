@@ -3,7 +3,7 @@ title: 'Replay, snapshot, reset and downstream contract sweep'
 type: 'feature'
 ticket: 12
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: '8fabab911dd9905ac4235e3a97e22fe7cb879b9f'
 route: 'full'
 route_source: 'pinned'
