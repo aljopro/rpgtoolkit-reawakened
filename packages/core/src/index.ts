@@ -6,6 +6,7 @@ export * from "./formats/index.ts";
 export * from "./fmath/index.ts";
 export * from "./rng/index.ts";
 export * from "./time/index.ts";
+export * from "./input/index.ts";
 export * from "./script/index.ts";
 export * from "./save/index.ts";
 export * from "./world/index.ts";

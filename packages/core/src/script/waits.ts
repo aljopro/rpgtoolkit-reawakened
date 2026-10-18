@@ -27,9 +27,19 @@ export function pollSleep(view: WaitView, wait: Wait): WaitResult | null {
   return view.tick >= wait.until ? DONE : null;
 }
 
-/** `input.key`: resolved once the input owner has stored the key. */
-export function pollInputKey(_view: WaitView, wait: Wait): WaitResult | null {
-  if (wait.kind !== "input.key" || wait.key === null) return null;
+/** `input.key`: resolve with the lowest unclaimed key at or after parkSeq. */
+export function pollInputKey(view: WaitView, wait: Wait): WaitResult | null {
+  if (wait.kind !== "input.key") return null;
+  if (view.input !== undefined) {
+    const floor = wait.parkSeq ?? 0;
+    const claimed = new Set(view.claims ?? []);
+    for (const key of view.input.keys) {
+      if (key.seq < floor || claimed.has(key.seq)) continue;
+      return { value: key.name, ok: true, claim: key.seq };
+    }
+    return null;
+  }
+  if (wait.key === null) return null;
   return { value: wait.key, ok: true };
 }
 
