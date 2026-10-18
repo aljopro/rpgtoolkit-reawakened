@@ -422,7 +422,7 @@ function makeResponder(row: Row): BuiltinSpec {
   };
 }
 
-/** All 9.11 non-stub responders not already owned by CORE_PLUGIN. */
+
 export const CATALOGUE_RESPONDERS_PLUGIN: PluginDefinition = {
   id: "catalogue-responders",
   version: "1.0.0",
@@ -466,7 +466,13 @@ const CATALOGUE_OWNED_NAMES = new Set([
   ...CATALOGUE_RESPONDERS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
 ]);
 const CORE_FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
-
+const MOVEMENT_PACK_NAMES: Record<string, true> = {
+  push: true, pushitem: true, playerstep: true, itemstep: true, playerpath: true, itempath: true,
+  playerlocation: true, itemlocation: true, playergetpath: true, itemgetpath: true, activeplayer: true,
+  playerdirection: true, itemdirection: true, playerspeed: true, itemspeed: true, playerstance: true,
+  itemstance: true, wander: true, wait: true, get: true, clearbuffer: true, setbutton: true,
+  checkbutton: true, clearbuttons: true, mousemove: true, mouseclick: true,
+};
 /** The default catalogue layer combines safe stubs and responders not owned by CORE_PLUGIN. */
 const CORE_PURE_COMMANDS = new Set(PURE_SPECS.flatMap((command) => [command.name, ...command.aliases]));
 export const CATALOGUE_PLUGIN: PluginDefinition = {
@@ -475,7 +481,7 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
   commands: [
     ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name))),
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
-      (command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name) && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
+      (command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
     ),
     ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
     ...documentCommands(RENDER_PACK_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name))),

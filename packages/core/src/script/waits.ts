@@ -87,6 +87,14 @@ export function pollMovement(view: WaitView, wait: Wait): WaitResult | null {
   return DONE;
 }
 
+/** `sprite.stance`: resolve only from the animation owner completion result. */
+export function pollStance(view: WaitView, wait: Wait): WaitResult | null {
+  if (wait.kind !== "sprite.stance") return null;
+  const actor = view.sprites?.find((value) => value.id === wait.actor);
+  if (actor === undefined) return null;
+  return actor.stanceComplete || actor.stance !== wait.stance ? DONE : null;
+}
+
 /** `request` and `blob`: resolved by the stored reply, else by the tick deadline. */
 export function pollRequest(view: WaitView, wait: Wait): WaitResult | null {
   if (wait.kind !== "request" && wait.kind !== "blob") return null;
@@ -132,12 +140,11 @@ export const WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "sleep", poll: pollSleep },
   { kind: "input.key", poll: pollInputKey },
   { kind: "movement", poll: pollMovement },
+  { kind: "sprite.stance", poll: pollStance },
   { kind: "request", poll: pollRequest },
   { kind: "blob", poll: pollRequest },
 ];
-
-/**
- * Fold per-kind resolvers into the one `WaitPoll` (AD-9). Throws
+/** Fold per-kind resolvers into the one `WaitPoll` (AD-9). Throws
  * `wait.duplicate-kind` when two resolvers claim a kind.
  */
 export function createWaitPoll(resolvers: readonly WaitKindResolver[]): WaitPoll {
@@ -172,6 +179,8 @@ export function describeWait(wait: Wait): string {
       return "input.key";
     case "movement":
       return `movement(${wait.moves.length} move(s))`;
+    case "sprite.stance":
+      return `sprite.stance(${wait.actor})`;
     case "request":
     case "blob":
       return `${wait.kind}(reqId ${wait.reqId})`;

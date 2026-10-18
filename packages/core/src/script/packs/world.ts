@@ -6,6 +6,7 @@ import type { Arg, BuiltinDoc, BuiltinSpec } from "../builtins.ts";
 import type { CommandEffect, CommandResult, PluginDefinition } from "../plugin.ts";
 import { applyWorldEffect } from "../../world/effects.ts";
 import { applyCameraEffect } from "../../world/camera.ts";
+import { MOVEMENT_COMMANDS, applyInputEffect, applySpriteEffect } from "./movement.ts";
 
 function numberArg(args: readonly Arg[], index: number, fallback = 0): number {
   const value = args[index]?.value;
@@ -251,8 +252,10 @@ const WORLD_COMMANDS: readonly BuiltinSpec[] = [
   noArgs("setconstants", [{ name: "args", optional: true, byRef: false, variadic: true }]), noArgs("underarrow"),
   GET_CORNER, CAMERA_PAN_TO, CAMERA_FOLLOW, CAMERA_RESET, CAMERA_SHAKE, SEND,
   ...LIFECYCLE_COMMANDS,
+  ...MOVEMENT_COMMANDS,
 ];
 
-/** Apply a recorded world or camera effect; exported for engine and host-owned tests. */
-export { applyWorldEffect, applyCameraEffect };
+/** Apply the recorded owner effects for world and movement/input packs. */
+export { applyWorldEffect, applyCameraEffect, applyInputEffect, applySpriteEffect };
+
 export const WORLD_PLUGIN: PluginDefinition = { id: "world", version: "1.0.0", doc: { summary: "Board, layer, tile, vector and program operations.", groups: [] }, commands: WORLD_COMMANDS };

@@ -20,14 +20,14 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
 | `mwin` | `void mwin(string str)` | Show the message window. | Uses the logical-resolution message surface; the fixed 600×100 geometry, 50% default translucency and all-at-once text are defined below. |
-| `wait` | `string wait([string &ret])` | Wait for a key to be pressed, and return the key that was. |  |
+| `wait` | `string wait([string &ret])` | Wait for a key press. The lowest unclaimed input sequence resumes the thread and is optionally written to `ret`. |  |
 | `mwincls` | `void mwincls()` | Clear and hide the message window. |  |
 | `text` | `void text(double x, double y, string str, [canvas cnv])` | Displays text on the screen. | Uses square cells one current-font-size on a side with 1-based coordinates; non-integer cell coordinates are truncated. |
 | `pixeltext` | `void pixeltext(int x, int y, string str, [canvas cnv])` | Displays text on the screen using pixel coordinates. |  |
 | `mbox` | `void mbox(string str)` | Show the message window. | alias of `mwin` |
 | `font` | `void font(string font)` | Load a true type font. TK2 fonts are not supported. |  |
 | `fontsize` | `void fontsize(int size)` | Set the font size. |  |
-| `get` | `string get([string &ret])` | Get a key from the queue. |  |
+| `get` | `string get([string &ret])` | Read the next buffered key. It claims that key's monotonic input sequence and optionally writes the name to `ret`. |  |
 | `bold` | `void bold(bool enable)` | Toggle emboldening of text. |  |
 | `italics` | `void italics(bool enable)` | Toggle italicizing of text. |  |
 | `underline` | `void underline(bool enable)` | Toggle underlining of text. |  |
@@ -39,7 +39,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `prompt` | `string prompt(string question, [string &ret])` | Ask the player a question and return the result. |  |
 | `show` | `void show(string str)` | Show the message window. | alias of `mwin` |
 | `print` | `void print(string text)` | Write the specified string one line down from the last call to text(). |  |
-| `clearbuffer` | `void clearbuffer()` | Clear the keyboard buffer. |  |
+| `clearbuffer` | `void clearbuffer()` | Empty the keyboard buffer. It claims every currently buffered sequence and lets the input owner prune them at the phase boundary. |  |
 | `textspeed` | `void textspeed(int speed)` | Obsolete. | obsolete: raises an error on any argument and the statement is skipped |
 | `mwinsize` | `mwinsize(int percent)` | Obsolete. | obsolete: raises an error and the statement is skipped |
 | `getcolor` | `void getcolor(int &r, int &g, int &b)` | Get the current colour. |  |
@@ -224,27 +224,26 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `targethandle` | `string targethandle([string &ret])` | Get the handle of the target object. |  |
 | `sourcehandle` | `string sourcehandle([string &ret])` | Get the handle of the source object. |  |
 | `pathfind` | `string pathfind(int x1, int y1, int x2, int y2, string &ret [, int layer])` | Construct a directional string of the shortest tiled path from one location to the other. |  |
-| `playerstep` | `void playerstep(variant handle, int x, int y [, int flags])` | Causes the player to take one step in the direction of x, y following a route determined by pathFind. |  |
-| `gamespeed` | `void gamespeed(int speed)` | Set the overall walking speed. Changes the walking speed proportionally. |  |
-| `onboard` | `int onboard(variant handle)` | Return whether a player is being shown on the board. |  |
-| `pixelmovement` | `bool pixelmovement([bool pixelMovement [, bool pixelPush]])` | Toggles pixel movement and push() et al. in pixels. |  |
-| `playerspeed` | `void playerspeed(string handle, int speed)` | Set the delay in seconds between a player's steps. |  |
-| `playerstance` | `playerstance(handle player, string stance [, int flags])` | Animate a player's custom stance. |  |
-| `playerlocation` | `void playerlocation(variant handle, int &x, int &y, int &layer)` | Get the location of a player. |  |
-| `spritetranslucency` | `void spritetranslucency(int percent)` | int spriteTranslucency(void) Set the degree to which sprites drawn underneath other objects are visible. |  |
-| `activeplayer` | `void activeplayer(variant handle)` | handle activePlayer(void) Set or get the active player, by handle. |  |
-| `playerpath` | `void playerpath(variant handle, int flags, int x1, int y1, ... , int xn, int yn)` | void playerPath(variant handle, int flags tkMV_PATHFIND, int x1, int y1) void playerPath(variant handle, int flags tkMV_WAYPOINT_PATH, variant boardpath, int cycles)... |  |
-| `playergetpath` | `int playergetpath(variant handle)` | void playerGetPath(variant handle, int index, int &x, int &y) |  |
-| `playerdirection` | `int playerdirection(variant handle)` | void playerDirection(variant handle, int dir) |  |
-
+| `playerstep` | `void playerstep(variant handle, int x, int y [, int flags])` | Move a player to a board point. The engine queues a deterministic path to `(x,y)`; a blocking thread or `tkMV_PAUSE` waits for movement completion. |  |
+| `gamespeed` | `void gamespeed(int speed)` | Make all walking feel faster or slower. The value changes the fixed-tick cadence used by sprite movement. |  |
+| `onboard` | `int onboard(variant handle)` | Check whether a player is shown on the board. |  |
+| `pixelmovement` | `bool pixelmovement([bool pixelMovement [, bool pixelPush]])` | Choose whether movement and pushing use pixel steps. The setting is read by the deterministic movement phase. |  |
+| `playerspeed` | `void playerspeed(string handle, int speed)` | Set how quickly a player walks. The speed is stored on the actor and affects its fixed-tick step cadence. |  |
+| `playerstance` | `playerstance(handle player, string stance [, int flags])` | Play a player's stance animation. The command waits for the animation owner to report completion. |  |
+| `playerlocation` | `void playerlocation(variant handle, int &x, int &y, int &layer)` | Read where a player is now. Pixel x/y and the one-based layer are written through the references. |  |
+| `spritetranslucency` | `void spritetranslucency(int percent)` | Set how visible sprites remain under covered tiles. |  |
+| `activeplayer` | `void activeplayer(variant handle)` | Choose or read the active player. Selection is stored by stable player handle. |  |
+| `playerpath` | `void playerpath(variant handle, int flags, int x1, int y1, ... , int xn, int yn)` | Give a player one or more destinations. Points, path-find mode, and waypoint copy/link mode are queued deterministically; pause or blocking waits for completion. |  |
+| `playergetpath` | `int playergetpath(variant handle)` | Inspect a queued player destination. The indexed pixel point is returned through x/y references. |  |
+| `playerdirection` | `int playerdirection(variant handle)` | Read or set which way a player faces. The facing is one of the eight deterministic directions. |  |
 ## Items, inventory, shop & gold (28)
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
 | `giveitem` | `void giveitem(string itm)` | Add an item to the inventory. |  |
 | `takeitem` | `void takeitem(string itm)` | Remove an item from the inventory. |  |
-| `pushitem` | `void pushitem(variant item, string direction [, int flags])` | The first parameter accepts either a string that can be either "target" or "source" direction or the number of an item. The syntax of the directional string is the... |  |
-| `wander` | `void wander(variant target, [int restrict = 0])` | The first parameter accepts either a string that can be either "target" or "source" or the number of an item. The selected item will take a step in a random... |  |
+| `pushitem` | `void pushitem(variant item, string direction [, int flags])` | Push an item in a direction. Each direction queues a fixed movement target, and pause or blocking waits for completion. |  |
+| `wander` | `void wander(variant target, [int restrict = 0])` | Let an item take a deterministic random step. The injected seed controls the chosen direction and the optional restriction. |  |
 | `equip` | `void equip(variant handle, int location, string item)` | Equip an item from the inventory (by handle or filename) to a location on the player's body. |  |
 | `remove` | `void remove(variant handle, int location)` | Remove an equipped item and return it to the inventory. |  |
 | `givegp` | `void givegp(int gp)` | Give gold pieces. |  |
@@ -257,18 +256,18 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `destroyitem` | `void destroyitem(variant handle)` | Remove an item from memory. |  |
 | `itemwalkspeed` | `void itemwalkspeed()` | Obsolete. | obsolete: raises an error and the statement is skipped |
 | `itemcount` | `int itemcount(string fileName[, int &ret])` | Count the number of a certain item in the inventory. |  |
-| `itemlocation` | `void itemlocation(variant handle, int &x, int &y, int &layer)` | Get the location of an item. |  |
-| `itemstep` | `void itemstep(variant handle, int x, int y [, int flags])` | Causes the item to take one step in the direction of x, y following a route determined by pathFind. |  |
+| `itemlocation` | `void itemlocation(variant handle, int &x, int &y, int &layer)` | Read where an item is now. Pixel x/y and the one-based layer are written through the references. |  |
+| `itemstep` | `void itemstep(variant handle, int x, int y [, int flags])` | Move an item to a board point. The engine queues a deterministic path and pause or blocking waits for completion. |  |
 | `getitemname` | `string getitemname(string fileName[, string &ret])` | Get an item's handle. |  |
 | `getitemdesc` | `string getitemdesc(string fileName[, string &ret])` | Get an item's description. |  |
 | `getitemcost` | `int getitemcost(string fileName[, int &ret])` | Get an item's cost. |  |
 | `getitemsellprice` | `int getitemsellprice(string fileName[, int &ret])` | Get the price for which an item sells. |  |
-| `shopcolors` | `shopcolors(int index, int r, int g, int b)` | Set the colors used in CallShop(). This function is obsolete from 3.1.0. | obsolete: shows a warning (when warnings are on) and still runs |
-| `itemspeed` | `void itemspeed(variant handle, int speed)` | Set the delay in seconds between an item's steps. |  |
-| `itemstance` | `itemstance(handle item, string stance [, int flags])` | Animate an item's custom stance. |  |
-| `itempath` | `void itempath(variant handle, int flags, int x1, int y1, ... , int xn, int yn)` | void itemPath(variant handle, int flags tkMV_PATHFIND, int x1, int y1) void itemPath(variant handle, int flags tkMV_WAYPOINT_PATH, variant boardpath, int cycles) void... |  |
-| `itemgetpath` | `int itemgetpath(variant handle)` | void itemGetPath(variant handle, int index, int &x, int &y) |  |
-| `itemdirection` | `int itemdirection(variant handle)` | void itemDirection(variant handle, int dir) |  |
+| `shopcolors` | `shopcolors(int index, int r, int g, int b)` | Set shop colors. | obsolete: shows a warning (when warnings are on) and still runs |
+| `itemspeed` | `void itemspeed(variant handle, int speed)` | Set how quickly an item walks. The speed is stored on the actor and affects fixed-tick cadence. |  |
+| `itemstance` | `itemstance(handle item, string stance [, int flags])` | Play an item's stance animation. The command waits for the animation owner to report completion. |  |
+| `itempath` | `void itempath(variant handle, int flags, int x1, int y1, ... , int xn, int yn)` | Give an item destinations. Points, path-find mode, and waypoint copy/link mode are queued deterministically; pause or blocking waits for completion. |  |
+| `itemgetpath` | `int itemgetpath(variant handle)` | Inspect a queued item destination. The indexed pixel point is returned through x/y references. |  |
+| `itemdirection` | `int itemdirection(variant handle)` | Read or set which way an item faces. The facing is one of the eight deterministic directions. |  |
 
 <a id="e-31"></a>
 **E-31 Sprite translucency.** The parts of a sprite that are covered by higher content are drawn translucently (`SpriteTranslucency(%)`), so the player stays visible behind trees and roofs.
@@ -370,11 +369,11 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
-| `setbutton` | `setbutton(string file, int slot, int x, int y, int width, int height)` | Create and draw a clickable button at screen pixel co-ords x, y that persists until clearButtons() is called. |  |
-| `checkbutton` | `int = checkbutton(int x, int y)` | Check if any SetButton()s were clicked at screen pixel co-ords x, y. |  |
-| `clearbuttons` | `clearbuttons([int slot1, int slot2...])` | Clear buttons set by SetButton(). Clear specific slot(s) if supplied, else clear all slots. |  |
-| `mouseclick` | `mouseclick(int &x, int &y [, bool noWait])` | Wait for a mouseclick or immediately retrieve the last and return the x, y location (pixel values relative to the window). |  |
-| `mousemove` | `mousemove(int &x, int &y)` | Wait for the mouse to move and return the x,y location in pixels from the window corner. |  |
+| `setbutton` | `setbutton(string file, int slot, int x, int y, int width, int height)` | Create a clickable button. The slot is replaced at fixed pixel coordinates until clearButtons removes it. |  |
+| `checkbutton` | `int = checkbutton(int x, int y)` | Check whether a button covers a pixel. It returns 1 for an enabled slot and 0 otherwise without waiting. |  |
+| `clearbuttons` | `clearbuttons([int slot1, int slot2...])` | Remove selected button slots, or all slots when no slot is supplied. |  |
+| `mouseclick` | `mouseclick(int &x, int &y [, bool noWait])` | Wait for a click or read the current pointer position. Blocking mode resumes from the input event; noWait writes pixel x/y immediately. |  |
+| `mousemove` | `mousemove(int &x, int &y)` | Read the pointer position. The current window-relative pixel x/y are written by reference without waiting. |  |
 | `createcursormap` | `cursor_map createcursormap([cursor_map &ret])` | Create a cursor map. |  |
 | `killcursormap` | `void killcursormap(cursor_map map)` | Kill a cursor map. |  |
 | `cursormapadd` | `void cursormapadd(int x, int y, cursor_map map)` | Add a point to a cursor map. |  |
