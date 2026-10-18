@@ -8,6 +8,7 @@ import {
   shakeOffset,
   positionAt,
   realignCamera,
+  initCameraForBoard,
   updateCamera,
   createGameState,
   createScriptServices,
@@ -365,4 +366,10 @@ test("cameraShake validates arguments and rejects non-finite values", () => {
     args: ["shake", -1, 5],
   } as never);
   equal(state.camera.shake, null);
+});
+
+test("with no tracked sprite the camera centres on the board start, which is in pixels (E-53)", () => {
+  const board = { ...dummyBoard(2000, 2000), start: { x: 900, y: 700, layer: 1 } };
+  const camera = initCameraForBoard(createCameraSection(640, 480), board);
+  deepEqual({ x: camera.x, y: camera.y }, { x: 900 - 320, y: 700 - 240 });
 });
