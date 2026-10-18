@@ -30,6 +30,7 @@ import { applyInputEvent, createInputSection, inputView, pruneClaimed } from "..
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
 import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, realignCamera, updateCamera } from "../world/camera.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
+import { resetSpritesSection, type SpriteRuntime } from "../sprites/runtime.ts";
 import { EffectBus, type EffectApplier } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
 import type { EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
@@ -111,6 +112,7 @@ type EngineCommonInit = {
   readonly phaseRegistrations?: readonly EnginePhaseRegistration[];
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
   readonly cameraTarget?: CameraTarget;
+  readonly spriteRuntime?: SpriteRuntime;
   readonly include?: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean };
   /** Decoded image assets supplied by a host or deterministic scene runner. */
   readonly assets?: ReadonlyMap<AssetKey, DecodedTexture>;
@@ -603,6 +605,7 @@ export function createEngine(init: EngineInit): Engine {
     quitRequested = false;
     state.engine = mainKey === null ? { claims: [] } : { claims: [], boot: { stage: "assets", main: mainKey, fonts: [] } };
     for (const registration of [...(init.resetRegistrations ?? [])].sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0))) registration.reset(state);
+    if (init.spriteRuntime !== undefined) resetSpritesSection(init.spriteRuntime.section);
     if (nextMain !== undefined) {
       const found = index.byKey.get(assetKey(nextMain));
       if (found === undefined) {
@@ -678,7 +681,7 @@ export function createEngine(init: EngineInit): Engine {
   }
   /** The player's position when a sprites owner supplies one, else the arrival point converted by the board's own layout (E-11). */
   function cameraAim(board: WorldBoard, arrival: Arrival): CameraPoint {
-    const player = init.cameraTarget?.getPlayerPosition() ?? null;
+    const player = (init.cameraTarget ?? init.spriteRuntime)?.getPlayerPosition() ?? null;
     if (player !== null) return player;
     if (arrival.unit === "pixel") return { x: arrival.x, y: arrival.y };
     return tileToPixel(coordLayout(board.coordType), board.sizeX, arrival.x, arrival.y);
@@ -927,7 +930,7 @@ export function createEngine(init: EngineInit): Engine {
         runTimePhase(state.time);
         return;
       case "movement":
-        state.camera = updateCamera(state.camera, state.world.board ?? null, init.cameraTarget);
+        state.camera = updateCamera(state.camera, state.world.board ?? null, init.cameraTarget ?? init.spriteRuntime);
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
         return;
       case "edges":
@@ -983,6 +986,7 @@ export function createEngine(init: EngineInit): Engine {
     }
   }
   function currentDrawList(alpha = 0, include = init.include ?? { shading: false, images: false, sprites: false }): DrawList {
+    const spriteInput = init.spriteRuntime?.draws() ?? (presentation.sprites ?? []);
     const board: WorldBoard | null = state.world.board ?? null;
     const camera = positionAt(state.camera, Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0);
     const debugCommands = (): DrawList["commands"] => {
@@ -1004,7 +1008,7 @@ export function createEngine(init: EngineInit): Engine {
       };
       const flags = debug.drawVectorsFlags ?? 0;
       if ((flags & 1) !== 0) for (const vector of board?.vectors ?? []) linePoints(vector.points, colour, vector.closed !== 0);
-      if ((flags & 2) !== 0) for (const sprite of init.sprites ?? []) if (sprite.collisionBase !== undefined) linePoints(sprite.collisionBase, { r: 255, g: 128, b: 0 }, true);
+      if ((flags & 2) !== 0) for (const sprite of spriteInput) if (sprite.collisionBase !== undefined) linePoints(sprite.collisionBase, { r: 255, g: 128, b: 0 }, true);
       if ((flags & 4) !== 0 && debug.path !== undefined) linePoints(debug.path, colour);
       if ((flags & 8) !== 0 && debug.destination !== undefined) {
         const x = Math.round(debug.destination.x - camera.x);
@@ -1026,6 +1030,7 @@ export function createEngine(init: EngineInit): Engine {
         include,
         assets: decodedAssets(),
         ...presentation,
+        sprites: spriteInput,
       });
     const cursorMap = state.ui.activeCursorMap;
     const waitingCursor = cursorMap === undefined

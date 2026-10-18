@@ -44,12 +44,13 @@ import {
   type UiSection,
   type WorldSection,
 } from "./sections.ts";
+import { createSpritesSection } from "../sprites/model.ts";
 
 /** Every `GameState` section key (AD-10), i.e. the schema version map's keys. */
 export const SCHEMA_VERSIONS = {
   schema: 1,
   world: 1,
-  sprites: 1,
+  sprites: 2,
   party: 1,
   inventory: 1,
   triggers: 1,
@@ -148,7 +149,7 @@ export function createGameState(init: { seed: number }): GameState {
   return {
     schema: createSchemaState(),
     world: {},
-    sprites: {},
+    sprites: createSpritesSection(),
     party: {},
     inventory: {},
     triggers: {},
