@@ -454,7 +454,8 @@ export function createEngine(init: EngineInit): Engine {
     return assets;
   }
   function isBitmapKey(key: AssetKey): boolean {
-    return key.startsWith("bitmap/") || key.includes("/bitmap/");
+    const lower = key.toLowerCase();
+    return (lower.startsWith("bitmap/") || lower.includes("/bitmap/")) && !lower.endsWith(".tbm") && !lower.endsWith(".tan");
   }
   function requestKindFor(key: AssetKey): EngineRequestKind {
     return isBitmapKey(key) ? "image" : "tile";
