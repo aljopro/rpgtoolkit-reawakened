@@ -9,7 +9,15 @@
  */
 
 export type { WorldSection } from "./sections/world.ts";
-export type { CameraSection } from "./sections/camera.ts";
+export {
+  createCameraSection,
+  type CameraEasing,
+  type CameraPanState,
+  type CameraPoint,
+  type CameraSection,
+  type CameraShakeState,
+  type CameraTrackingTarget,
+} from "./sections/camera.ts";
 export type { UiSection } from "./sections/ui.ts";
 export type { FxSection } from "./sections/fx.ts";
 export type { RgbaSnapshot, SurfaceState, SurfacesSection } from "./sections/surfaces.ts";

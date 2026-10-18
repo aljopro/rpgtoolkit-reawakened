@@ -12,6 +12,8 @@ import { hydrateBoard } from "../world/hydrate.ts";
 import type { WorldBoard } from "../world/model.ts";
 import { applyInputEvent, createInputSection, inputView, pruneClaimed } from "../input/index.ts";
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
+import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt, updateCamera } from "../world/camera.ts";
+import type { CameraTarget } from "../ports/camera.ts";
 import { EffectBus, type EffectApplier } from "./effects.ts";
 import type { EngineSection } from "../save/sections/engine.ts";
 import {
@@ -69,6 +71,8 @@ export type EngineInit = {
   readonly plugins?: readonly ResolvedPlugin[];
   readonly phaseRegistrations?: readonly EnginePhaseRegistration[];
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
+  readonly cameraTarget?: CameraTarget;
+  readonly include?: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean };
 };
 type RequestEntry = { readonly reqId: number; readonly key: AssetKey; readonly kind: "board" | "tile" };
 type SourceLocation = { file: string; line: number };
@@ -104,6 +108,7 @@ export function createEngine(init: EngineInit): Engine {
   }
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
   bus.register("world", (effect) => applyWorldEffect(state, effect));
+  bus.register("camera", (effect) => applyCameraEffect(state, effect));
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
   let boardBytes: Uint8Array | null = null;
@@ -111,6 +116,7 @@ export function createEngine(init: EngineInit): Engine {
   let failed = false;
   let breakpoints: readonly Breakpoint[] = [];
   state.surfaces = createSurfacesSection(init.width, init.height);
+  state.camera = createCameraSection(init.width, init.height);
   const surfaceCache: SurfacePixelCache = new Map();
   let frameHash = hashDrawList({ tick: 0, width: init.width, height: init.height, commands: [] });
   if (!resolved.ok) diagnostics.push({ code: "asset.invalid", file: init.initialBoard, line: 0, message: resolved.error.message });
@@ -171,6 +177,7 @@ export function createEngine(init: EngineInit): Engine {
     }
     state.world = { board: result.value?.board ?? null };
     if (state.world.board === null) failed = true;
+    else state.camera = initCameraForBoard(state.camera, state.world.board ?? null, init.cameraTarget);
   }
   function consumeAsset(record: InputRecord, consumed: InputRecord[]): void {
     if (record.event.kind !== "asset") return;
@@ -223,6 +230,9 @@ export function createEngine(init: EngineInit): Engine {
         runTimePhase(state.time);
         return;
       case "movement":
+        state.camera = updateCamera(state.camera, state.world.board ?? null, init.cameraTarget);
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state);
+        return;
       case "edges":
       case "triggers":
       case "battle":
@@ -273,7 +283,17 @@ export function createEngine(init: EngineInit): Engine {
   function currentDrawList(alpha = 0): DrawList {
     const board: WorldBoard | null = state.world.board ?? null;
     if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
-    return composeBoard({ board, tick: state.time.tick, camera: { x: 0, y: 0 }, viewport: { width: init.width, height: init.height }, alpha, include: { shading: false, images: false, sprites: false } });
+    const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
+    const cameraPos = positionAt(state.camera, presentationAlpha);
+    const include = init.include ?? { shading: false, images: false, sprites: false };
+    return composeBoard({
+      board,
+      tick: state.time.tick,
+      camera: cameraPos,
+      viewport: { width: init.width, height: init.height },
+      alpha: presentationAlpha,
+      include,
+    });
   }
   function refreshFrame(): void {
     const list = currentDrawList(0);
@@ -400,10 +420,7 @@ export function createEngine(init: EngineInit): Engine {
       };
     },
     drawList(alpha = 0) {
-      const board: WorldBoard | null = state.world.board ?? null;
-      if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
-      const presentationAlpha = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0;
-      return composeBoard({ board, tick: state.time.tick, camera: { x: 0, y: 0 }, viewport: { width: init.width, height: init.height }, alpha: presentationAlpha, include: { shading: false, images: false, sprites: false } });
+      return currentDrawList(alpha);
     },
     surfacePixels(id: SurfaceId, rev: number): SurfacePixels | null {
       if (id === (0 as SurfaceId)) refreshFrame();

@@ -23,21 +23,22 @@ import { seedRng, type RngState } from "../rng/xoshiro.ts";
 import { COMPILER_VERSION } from "../script/program.ts";
 import { createVmState, type VmState } from "../script/state.ts";
 import { createTimeState, type TimeState } from "../time/time.ts";
-import type {
-  AudioSection,
-  BattleSection,
-  CameraSection,
-  EngineSection,
-  FxSection,
-  InputSection,
-  InventorySection,
-  MenuSection,
-  PartySection,
-  SpritesSection,
-  SurfacesSection,
-  TriggersSection,
-  UiSection,
-  WorldSection,
+import {
+  createCameraSection,
+  type AudioSection,
+  type BattleSection,
+  type CameraSection,
+  type EngineSection,
+  type FxSection,
+  type InputSection,
+  type InventorySection,
+  type MenuSection,
+  type PartySection,
+  type SpritesSection,
+  type SurfacesSection,
+  type TriggersSection,
+  type UiSection,
+  type WorldSection,
 } from "./sections.ts";
 
 /** Every `GameState` section key (AD-10), i.e. the schema version map's keys. */
@@ -152,7 +153,7 @@ export function createGameState(init: { seed: number }): GameState {
     menu: {},
     input: {} as InputSection,
     ui: {},
-    camera: {},
+    camera: {} as CameraSection,
     fx: {},
     audio: {},
     surfaces: {} as SurfacesSection,
