@@ -11,6 +11,7 @@ import {
   layoutText,
   emitText,
   rasterize,
+  getGlyphRaster,
   type AssetKey,
   type TrueTypeFont,
 } from "../src/index.ts";
@@ -24,6 +25,38 @@ function loadFont(relPath: string): TrueTypeFont {
   if (!res.ok) throw new Error(`${relPath}: ${res.error.message}`);
   return res.value;
 }
+
+function fakeFont(outlineX: number): TrueTypeFont {
+  const glyph = { id: 1, advance: 8 };
+  return {
+    kind: "truetype",
+    family: "Cache collision",
+    subfamily: "Regular",
+    unitsPerEm: 16,
+    ascent: 16,
+    descent: 0,
+    lineGap: 0,
+    charToGlyph: () => glyph,
+    glyphById: () => glyph,
+    getKerning: () => 0,
+    getCommands: () => [
+      { type: "M", x: outlineX, y: 0 },
+      { type: "L", x: outlineX + 8, y: 0 },
+      { type: "L", x: outlineX + 8, y: 8 },
+      { type: "L", x: outlineX, y: 8 },
+      { type: "Z" },
+    ],
+  };
+}
+
+test("glyph raster cache is isolated by font identity", () => {
+  const glyph = { id: 1, advance: 8 };
+  const first = getGlyphRaster(fakeFont(0), glyph, 16);
+  const second = getGlyphRaster(fakeFont(16), glyph, 16);
+  equal(first.offsetX, 0);
+  equal(second.offsetX, 16);
+});
+
 
 // -------------------------------------------------------------
 // 1. Input Gate Rejection Tests
