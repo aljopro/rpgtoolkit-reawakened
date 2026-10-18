@@ -109,7 +109,7 @@ test("cursor maps allocate points, claim keys and draw the hand last", () => {
     input: { keys: [{ seq: 1, name: "0", code: "Digit0", char: "0" }], focused: true },
     claims: [],
   }, wait);
-  deepEqual(result, { value: 1, ok: true, claim: 1 });
+  deepEqual(result, { value: 0, ok: true, claim: 1 });
   const commands = composeUi(state.ui, 100, 100);
   const hand = commands.at(-1);
   equal(hand?.kind, "blit");

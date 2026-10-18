@@ -49,7 +49,7 @@ export function pollInputKey(view: WaitView, wait: Wait): WaitResult | null {
         const candidate = dx * dx + dy * dy;
         if (candidate < distance) { distance = candidate; best = index; }
       }
-      return { value: best + 1, ok: true };
+      return { value: best, ok: true };
     }
     if (view.input !== undefined) {
       for (const key of view.input.keys) {
@@ -57,10 +57,10 @@ export function pollInputKey(view: WaitView, wait: Wait): WaitResult | null {
         const normalized = key.name.toLowerCase();
         if (normalized === "left" || normalized === "up") selected = (selected + count - 1) % count;
         else if (normalized === "right" || normalized === "down") selected = (selected + 1) % count;
-        else if (normalized === "enter" || normalized === "return" || normalized === "space") return { value: selected + 1, ok: true, claim: key.seq };
+        else if (normalized === "enter" || normalized === "return" || normalized === "space") return { value: selected, ok: true, claim: key.seq };
         else if (/^[0-9]+$/.test(normalized)) {
           const direct = Number(normalized);
-          if (direct >= 0 && direct < count) return { value: direct + 1, ok: true, claim: key.seq };
+          if (direct >= 0 && direct < count) return { value: direct, ok: true, claim: key.seq };
         } else continue;
         wait.cursorSelection = selected;
       }
