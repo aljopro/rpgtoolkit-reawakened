@@ -23,7 +23,7 @@ The window title is the game title. Tiles are 32×32 pixels and are drawn at 1:1
 **E-50 Screen.** Windowed or full screen at 640×480, 800×600, 1024×768 or a custom resolution; the colour depth applies only to full screen.
 
 <a id="e-53"></a>
-**E-53 Isometric drawing.** Diamond tiles are composited with masks, and the draw order is correct for both the staggered and the rotated layouts ([../formats/tiles.md](../formats/tiles.md#isometric-tiles)).
+**E-53 Isometric drawing.** Diamond tiles are composited with masks, and the draw order is correct for both the staggered and the rotated layouts ([../formats/tiles.md](../formats/tiles.md#isometric-tiles)). The order is the painter order of [board.md](../formats/board.md#drawing-order-and-effects) (isometric tile order), and the camera clamps to the isometric board's own pixel size ([board.md](../formats/board.md#board-pixel-dimensions)). With no tracked sprite the camera centres on the start tile converted by the board's own tile-to-pixel rule ([board.md](../formats/board.md#coordinates)).
 
 <a id="reawakened-iso2d-projection"></a>
 **Reawakened rule (OWNER; non-parity 2D-on-iso projection).** An ordinary 32×32 source tile is projected to a 64×32 diamond by a fixed nearest-neighbour affine map. Source coordinates use integer floor/round rules defined by the compositor, and pixels outside the exact diamond mask are transparent; the resulting `blit` sets `iso2d: true`. This is a Reawakened rule, not a legacy-parity claim.
