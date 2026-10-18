@@ -102,7 +102,6 @@ const BORDER_COLOR = effectCommand("bordercolor", "fx");
 
 /** Rendering owner pack: camera, UI, effects and surfaces are separate command layers. */
 export const RENDER_PLUGIN = pack("render", "Deterministic rendering, camera, UI and visual-effect commands.", [
-  effectCommand("clear", "surfaces"),
   FADE,
   WIPE,
   ZOOM,
