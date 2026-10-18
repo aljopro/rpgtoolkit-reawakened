@@ -1,0 +1,200 @@
+{
+  "scene": "board-entry-thread-lifecycle",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/movement, not by packages/core. No state or draw hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation (AD-26)",
+  "units": "board pixels; fractions are exact multiples of 1/256",
+  "spec": [
+    "movement-and-collision.md#e-19",
+    "movement-and-collision.md#reawakened-send-board",
+    "movement-and-collision.md#e-47",
+    "main-loop-and-startup.md#reawakened-board-entry"
+  ],
+  "proposed": ["P-11"],
+  "cases": [
+    {
+      "name": "send-from-blocking-thread",
+      "note": "Send parks the caller and swaps between ticks: board threads and the old items' threads stop, the persistent thread survives, the new board's threads start in board order, then the enter program runs as a board thread because the sender was the one blocking thread.",
+      "setup": {
+        "board": "town",
+        "boards": {
+          "town": {
+            "w": 320,
+            "h": 320,
+            "layers": 2,
+            "pixelMovement": 0,
+            "gameSpeed": 0,
+            "pfMode": 1,
+            "vectors": [],
+            "programs": [],
+            "items": [
+              {"id":"guard","x":112,"y":63,"layer":0,"speed":0.05,"facing":"S","thread":"guard.prg"},
+              {"id":"sign","x":176,"y":63,"layer":0,"speed":0.05,"facing":"S"}
+            ],
+            "links": {},
+            "threads": [{"id":"town.clock","kind":"board"},{"id":"town.crowd","kind":"board"},{"id":"party.timer","kind":"persistent"}],
+            "music": "town.mid"
+          },
+          "inn": {
+            "w": 320,
+            "h": 320,
+            "layers": 2,
+            "pixelMovement": 0,
+            "gameSpeed": 0,
+            "pfMode": 1,
+            "vectors": [],
+            "programs": [],
+            "items": [{"id":"innkeeper","x":112,"y":63,"layer":0,"speed":0.05,"facing":"S","thread":"keeper.prg"}],
+            "links": {},
+            "threads": [{"id":"inn.fire","kind":"board"},{"id":"party.timer","kind":"persistent"},{"id":"inn.bard","kind":"board"}],
+            "music": "inn.mid",
+            "enterProgram": "inn-enter.prg"
+          }
+        },
+        "players": [{"id":"hero","x":48,"y":63,"layer":0,"speed":0.05,"facing":"S","controlled":true}]
+      },
+      "script": [
+        {"t":2,"op":"send","board":"inn","x":3,"y":3,"layer":0,"caller":{"id":"story","kind":"blocking"}}
+      ],
+      "ticks": 6,
+      "boot": [
+        {"e":"board-install","board":"town"},
+        {"e":"hydrate","id":"hero","drawId":0,"index":0,"slot":0,"visible":true},
+        {"e":"hydrate","id":"guard","drawId":1,"index":0,"slot":0,"visible":true},
+        {"e":"hydrate","id":"sign","drawId":2,"index":1,"slot":1,"visible":true},
+        {"e":"threads-started","ids":["town.clock","town.crowd","party.timer","item:guard"]}
+      ],
+      "expect": [
+        {"t":0,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]]},
+        {"t":1,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]]},
+        {"t":2,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]],"ev":[{"e":"send-requested","board":"inn","x":3,"y":3,"layer":0}]},
+        {"t":3,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]],"ev":[{"e":"send-swap","board":"inn"},{"e":"threads-stopped","ids":["town.clock","town.crowd","item:guard"]},{"e":"board-install","board":"inn"},{"e":"hydrate","id":"innkeeper","drawId":1,"index":0,"slot":0,"visible":true},{"e":"place-player","x":80,"y":95,"layer":0},{"e":"camera-align","on":"player","smoothing":0},{"e":"trigger-deactivate","x":80,"y":95,"layer":0},{"e":"music","file":"inn.mid"},{"e":"threads-started","ids":["inn.fire","inn.bard","item:innkeeper"]},{"e":"enter-program","program":"inn-enter.prg","as":"board"},{"e":"cache-flushed"},{"e":"caller-resume","thread":"story"}]},
+        {"t":4,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]]},
+        {"t":5,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]]}
+      ]
+    },
+    {
+      "name": "send-from-board-thread",
+      "note": "A board thread of the old board that calls send dies with the board (it never resumes); with no blocking thread live the enter program runs as the blocking thread.",
+      "setup": {
+        "board": "town",
+        "boards": {
+          "town": {
+            "w": 320,
+            "h": 320,
+            "layers": 2,
+            "pixelMovement": 0,
+            "gameSpeed": 0,
+            "pfMode": 1,
+            "vectors": [],
+            "programs": [],
+            "items": [
+              {"id":"guard","x":112,"y":63,"layer":0,"speed":0.05,"facing":"S","thread":"guard.prg"},
+              {"id":"sign","x":176,"y":63,"layer":0,"speed":0.05,"facing":"S"}
+            ],
+            "links": {},
+            "threads": [{"id":"town.clock","kind":"board"},{"id":"town.crowd","kind":"board"},{"id":"party.timer","kind":"persistent"}],
+            "music": "town.mid"
+          },
+          "inn": {
+            "w": 320,
+            "h": 320,
+            "layers": 2,
+            "pixelMovement": 0,
+            "gameSpeed": 0,
+            "pfMode": 1,
+            "vectors": [],
+            "programs": [],
+            "items": [{"id":"innkeeper","x":112,"y":63,"layer":0,"speed":0.05,"facing":"S","thread":"keeper.prg"}],
+            "links": {},
+            "threads": [{"id":"inn.fire","kind":"board"},{"id":"party.timer","kind":"persistent"},{"id":"inn.bard","kind":"board"}],
+            "music": "inn.mid",
+            "enterProgram": "inn-enter.prg"
+          }
+        },
+        "players": [{"id":"hero","x":48,"y":63,"layer":0,"speed":0.05,"facing":"S","controlled":true}]
+      },
+      "script": [
+        {"t":2,"op":"send","board":"inn","x":3,"y":3,"layer":0,"caller":{"id":"town.clock","kind":"board"}}
+      ],
+      "ticks": 6,
+      "boot": [
+        {"e":"board-install","board":"town"},
+        {"e":"hydrate","id":"hero","drawId":0,"index":0,"slot":0,"visible":true},
+        {"e":"hydrate","id":"guard","drawId":1,"index":0,"slot":0,"visible":true},
+        {"e":"hydrate","id":"sign","drawId":2,"index":1,"slot":1,"visible":true},
+        {"e":"threads-started","ids":["town.clock","town.crowd","party.timer","item:guard"]}
+      ],
+      "expect": [
+        {"t":0,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]]},
+        {"t":1,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]]},
+        {"t":2,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]],"ev":[{"e":"send-requested","board":"inn","x":3,"y":3,"layer":0}]},
+        {"t":3,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]],"ev":[{"e":"send-swap","board":"inn"},{"e":"caller-killed","thread":"town.clock"},{"e":"threads-stopped","ids":["town.clock","town.crowd","item:guard"]},{"e":"board-install","board":"inn"},{"e":"hydrate","id":"innkeeper","drawId":1,"index":0,"slot":0,"visible":true},{"e":"place-player","x":80,"y":95,"layer":0},{"e":"camera-align","on":"player","smoothing":0},{"e":"trigger-deactivate","x":80,"y":95,"layer":0},{"e":"music","file":"inn.mid"},{"e":"threads-started","ids":["inn.fire","inn.bard","item:innkeeper"]},{"e":"enter-program","program":"inn-enter.prg","as":"blocking"},{"e":"cache-flushed"}]},
+        {"t":4,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]]},
+        {"t":5,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]]}
+      ]
+    },
+    {
+      "name": "second-send-replaces-first",
+      "note": "A second send posted in the same tick replaces the first (reawakened-send-board).",
+      "setup": {
+        "board": "town",
+        "boards": {
+          "town": {
+            "w": 320,
+            "h": 320,
+            "layers": 2,
+            "pixelMovement": 0,
+            "gameSpeed": 0,
+            "pfMode": 1,
+            "vectors": [],
+            "programs": [],
+            "items": [
+              {"id":"guard","x":112,"y":63,"layer":0,"speed":0.05,"facing":"S","thread":"guard.prg"},
+              {"id":"sign","x":176,"y":63,"layer":0,"speed":0.05,"facing":"S"}
+            ],
+            "links": {},
+            "threads": [{"id":"town.clock","kind":"board"},{"id":"town.crowd","kind":"board"},{"id":"party.timer","kind":"persistent"}],
+            "music": "town.mid"
+          },
+          "inn": {
+            "w": 320,
+            "h": 320,
+            "layers": 2,
+            "pixelMovement": 0,
+            "gameSpeed": 0,
+            "pfMode": 1,
+            "vectors": [],
+            "programs": [],
+            "items": [{"id":"innkeeper","x":112,"y":63,"layer":0,"speed":0.05,"facing":"S","thread":"keeper.prg"}],
+            "links": {},
+            "threads": [{"id":"inn.fire","kind":"board"},{"id":"party.timer","kind":"persistent"},{"id":"inn.bard","kind":"board"}],
+            "music": "inn.mid",
+            "enterProgram": "inn-enter.prg"
+          }
+        },
+        "players": [{"id":"hero","x":48,"y":63,"layer":0,"speed":0.05,"facing":"S","controlled":true}]
+      },
+      "script": [
+        {"t":2,"op":"send","board":"town","x":3,"y":3,"layer":0,"caller":{"id":"story","kind":"blocking"}},
+        {"t":2,"op":"send","board":"inn","x":3,"y":3,"layer":0,"caller":{"id":"story","kind":"blocking"}}
+      ],
+      "ticks": 6,
+      "boot": [
+        {"e":"board-install","board":"town"},
+        {"e":"hydrate","id":"hero","drawId":0,"index":0,"slot":0,"visible":true},
+        {"e":"hydrate","id":"guard","drawId":1,"index":0,"slot":0,"visible":true},
+        {"e":"hydrate","id":"sign","drawId":2,"index":1,"slot":1,"visible":true},
+        {"e":"threads-started","ids":["town.clock","town.crowd","party.timer","item:guard"]}
+      ],
+      "expect": [
+        {"t":0,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]]},
+        {"t":1,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]]},
+        {"t":2,"a":[["hero",48,63,0,"waiting","S"],["guard",112,63,0,"waiting","S"],["sign",176,63,0,"waiting","S"]],"ev":[{"e":"send-requested","board":"town","x":3,"y":3,"layer":0},{"e":"send-requested","board":"inn","x":3,"y":3,"layer":0}]},
+        {"t":3,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]],"ev":[{"e":"send-swap","board":"inn"},{"e":"threads-stopped","ids":["town.clock","town.crowd","item:guard"]},{"e":"board-install","board":"inn"},{"e":"hydrate","id":"innkeeper","drawId":1,"index":0,"slot":0,"visible":true},{"e":"place-player","x":80,"y":95,"layer":0},{"e":"camera-align","on":"player","smoothing":0},{"e":"trigger-deactivate","x":80,"y":95,"layer":0},{"e":"music","file":"inn.mid"},{"e":"threads-started","ids":["inn.fire","inn.bard","item:innkeeper"]},{"e":"enter-program","program":"inn-enter.prg","as":"board"},{"e":"cache-flushed"},{"e":"caller-resume","thread":"story"}]},
+        {"t":4,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]]},
+        {"t":5,"a":[["hero",80,95,0,"waiting","S"],["innkeeper",112,63,0,"waiting","S"]]}
+      ]
+    }
+  ]
+}

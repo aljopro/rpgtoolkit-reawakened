@@ -1,0 +1,79 @@
+{
+  "scene": "actor-hydration-item-multitask",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/movement, not by packages/core. No state or draw hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation (AD-26)",
+  "units": "board pixels; fractions are exact multiples of 1/256",
+  "spec": ["movement-and-collision.md#e-20","movement-and-collision.md#e-29","movement-and-collision.md#e-45"],
+  "proposed": ["P-9"],
+  "cases": [
+    {
+      "name": "hydrate-order-and-item-threads",
+      "note": "Players hydrate first, then items by compacted runtime index (raw slots 0, 2, 3, 5 become 0..3); a hidden item (E-45) starts no thread; removing an item stops its thread; showing a hidden item starts it (PROPOSED P-9).",
+      "setup": {
+        "board": "hall",
+        "boards": {
+          "hall": {
+            "w": 320,
+            "h": 320,
+            "layers": 2,
+            "pixelMovement": 0,
+            "gameSpeed": 0,
+            "pfMode": 1,
+            "vectors": [],
+            "programs": [],
+            "items": [
+              {"id":"clerk","x":112,"y":63,"layer":0,"speed":0.05,"facing":"S","slot":0,"thread":"clerk.prg"},
+              {"id":"statue","x":144,"y":95,"layer":0,"speed":0.05,"facing":"S","slot":2},
+              {
+                "id": "ghost",
+                "x": 176,
+                "y": 63,
+                "layer": 0,
+                "speed": 0.05,
+                "facing": "S",
+                "slot": 3,
+                "thread": "ghost.prg",
+                "loadCondition": {"var":"haunted","value":1}
+              },
+              {"id":"cat","x":208,"y":95,"layer":0,"speed":0.05,"facing":"S","slot":5,"thread":"cat.prg"}
+            ],
+            "links": {},
+            "threads": [{"id":"hall.ambience","kind":"board"}]
+          }
+        },
+        "players": [
+          {"id":"hero","x":48,"y":63,"layer":0,"speed":0.05,"facing":"S","controlled":true},
+          {"id":"ally","x":80,"y":63,"layer":0,"controlled":false}
+        ],
+        "vars": {"haunted":0}
+      },
+      "script": [
+        {"t":2,"op":"removeItem","item":"clerk"},
+        {"t":4,"op":"showItem","item":"ghost"},
+        {"t":6,"op":"hideItem","item":"ghost"}
+      ],
+      "ticks": 8,
+      "boot": [
+        {"e":"board-install","board":"hall"},
+        {"e":"hydrate","id":"hero","drawId":0,"index":0,"slot":0,"visible":true},
+        {"e":"hydrate","id":"ally","drawId":1,"index":1,"slot":1,"visible":true},
+        {"e":"hydrate","id":"clerk","drawId":2,"index":0,"slot":0,"visible":true},
+        {"e":"hydrate","id":"statue","drawId":3,"index":1,"slot":2,"visible":true},
+        {"e":"hydrate","id":"ghost","drawId":4,"index":2,"slot":3,"visible":false},
+        {"e":"hydrate","id":"cat","drawId":5,"index":3,"slot":5,"visible":true},
+        {"e":"threads-started","ids":["hall.ambience","item:clerk","item:cat"]}
+      ],
+      "expect": [
+        {"t":0,"a":[["hero",48,63,0,"waiting","S"],["ally",80,63,0,"waiting","S"],["clerk",112,63,0,"waiting","S"],["statue",144,95,0,"waiting","S"],["ghost",176,63,0,"hidden","S"],["cat",208,95,0,"waiting","S"]]},
+        {"t":1,"a":[["hero",48,63,0,"waiting","S"],["ally",80,63,0,"waiting","S"],["clerk",112,63,0,"waiting","S"],["statue",144,95,0,"waiting","S"],["ghost",176,63,0,"hidden","S"],["cat",208,95,0,"waiting","S"]]},
+        {"t":2,"a":[["hero",48,63,0,"waiting","S"],["ally",80,63,0,"waiting","S"],["clerk",112,63,0,"hidden","S"],["statue",144,95,0,"waiting","S"],["ghost",176,63,0,"hidden","S"],["cat",208,95,0,"waiting","S"]],"ev":[{"e":"thread-stop","id":"item:clerk","owner":"clerk"},{"e":"item-removed","item":"clerk"}]},
+        {"t":3,"a":[["hero",48,63,0,"waiting","S"],["ally",80,63,0,"waiting","S"],["clerk",112,63,0,"hidden","S"],["statue",144,95,0,"waiting","S"],["ghost",176,63,0,"hidden","S"],["cat",208,95,0,"waiting","S"]]},
+        {"t":4,"a":[["hero",48,63,0,"waiting","S"],["ally",80,63,0,"waiting","S"],["clerk",112,63,0,"hidden","S"],["statue",144,95,0,"waiting","S"],["ghost",176,63,0,"waiting","S"],["cat",208,95,0,"waiting","S"]],"ev":[{"e":"thread-start","id":"item:ghost","owner":"ghost"},{"e":"item-shown","item":"ghost"}]},
+        {"t":5,"a":[["hero",48,63,0,"waiting","S"],["ally",80,63,0,"waiting","S"],["clerk",112,63,0,"hidden","S"],["statue",144,95,0,"waiting","S"],["ghost",176,63,0,"waiting","S"],["cat",208,95,0,"waiting","S"]]},
+        {"t":6,"a":[["hero",48,63,0,"waiting","S"],["ally",80,63,0,"waiting","S"],["clerk",112,63,0,"hidden","S"],["statue",144,95,0,"waiting","S"],["ghost",176,63,0,"hidden","S"],["cat",208,95,0,"waiting","S"]],"ev":[{"e":"thread-stop","id":"item:ghost","owner":"ghost"},{"e":"item-hidden","item":"ghost"}]},
+        {"t":7,"a":[["hero",48,63,0,"waiting","S"],["ally",80,63,0,"waiting","S"],["clerk",112,63,0,"hidden","S"],["statue",144,95,0,"waiting","S"],["ghost",176,63,0,"hidden","S"],["cat",208,95,0,"waiting","S"]]}
+      ]
+    }
+  ]
+}

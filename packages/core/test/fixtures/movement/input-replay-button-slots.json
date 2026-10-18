@@ -1,0 +1,220 @@
+{
+  "scene": "input-replay-button-slots",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/movement, not by packages/core. No state or draw hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation (AD-26)",
+  "units": "board pixels; fractions are exact multiples of 1/256",
+  "spec": [
+    "display-input-audio.md#e-110",
+    "display-input-audio.md#e-112",
+    "display-input-audio.md#reawakened-gamepad-contract",
+    "movement-and-collision.md#e-24",
+    "movement-and-collision.md#e-25"
+  ],
+  "proposed": ["P-12","P-13","P-18"],
+  "cases": [
+    {
+      "name": "keyboard-diagonal-and-repeat",
+      "note": "E-24: two orthogonal keys give a diagonal only when diagonals are allowed; OS auto-repeat appends no queue entry; an unbound key is ignored; sequence numbers rise monotonically.",
+      "setup": {
+        "bindings": {
+          "keys": {"ArrowUp":"up","ArrowDown":"down","ArrowLeft":"left","ArrowRight":"right","Enter":"confirm","Escape":"cancel"}
+        },
+        "slots": [
+          {"id":"attack","x":16,"y":400,"w":64,"h":64,"action":"confirm","enabled":true},
+          {"id":"back","x":96,"y":400,"w":64,"h":64,"action":"cancel","enabled":true},
+          {"id":"menu","x":576,"y":16,"w":48,"h":48,"action":"menu","enabled":false}
+        ],
+        "camera": [160,96],
+        "allowDiagonals": true
+      },
+      "script": [
+        {"t":1,"ev":{"kind":"key","code":"ArrowUp","down":true}},
+        {"t":2,"ev":{"kind":"key","code":"ArrowRight","down":true}},
+        {"t":3,"ev":{"kind":"key","code":"ArrowRight","down":true,"repeat":true}},
+        {"t":4,"ev":{"kind":"key","code":"KeyQ","down":true}},
+        {"t":5,"ev":{"kind":"key","code":"Enter","down":true}},
+        {"t":6,"ev":{"kind":"key","code":"ArrowUp","down":false}},
+        {"t":7,"ev":{"kind":"key","code":"ArrowRight","down":false}},
+        {"t":8,"ev":{"kind":"key","code":"Enter","down":false}}
+      ],
+      "ticks": 10,
+      "expect": [
+        {"t":0,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":1,"held":["up"],"intent":"N","queue":[{"seq":1,"key":"up"}],"slots":["attack","back"]},
+        {"t":2,"held":["up","right"],"intent":"NE","queue":[{"seq":2,"key":"right"}],"slots":["attack","back"]},
+        {"t":3,"held":["up","right"],"intent":"NE","notes":["ignored:repeat:ArrowRight"],"slots":["attack","back"]},
+        {"t":4,"held":["up","right"],"intent":"NE","notes":["ignored:unbound:KeyQ"],"slots":["attack","back"]},
+        {"t":5,"held":["up","right","confirm"],"intent":"NE","queue":[{"seq":3,"key":"confirm"}],"slots":["attack","back"]},
+        {"t":6,"held":["right","confirm"],"intent":"E","slots":["attack","back"]},
+        {"t":7,"held":["confirm"],"intent":null,"slots":["attack","back"]},
+        {"t":8,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":9,"held":[],"intent":null,"slots":["attack","back"]}
+      ]
+    },
+    {
+      "name": "diagonals-disabled-last-press-wins",
+      "note": "PROPOSED P-12: with diagonals off, two orthogonal keys move along the most recently pressed axis only.",
+      "setup": {
+        "bindings": {
+          "keys": {"ArrowUp":"up","ArrowDown":"down","ArrowLeft":"left","ArrowRight":"right","Enter":"confirm","Escape":"cancel"}
+        },
+        "slots": [
+          {"id":"attack","x":16,"y":400,"w":64,"h":64,"action":"confirm","enabled":true},
+          {"id":"back","x":96,"y":400,"w":64,"h":64,"action":"cancel","enabled":true},
+          {"id":"menu","x":576,"y":16,"w":48,"h":48,"action":"menu","enabled":false}
+        ],
+        "camera": [160,96],
+        "allowDiagonals": false
+      },
+      "script": [
+        {"t":1,"ev":{"kind":"key","code":"ArrowUp","down":true}},
+        {"t":2,"ev":{"kind":"key","code":"ArrowRight","down":true}},
+        {"t":4,"ev":{"kind":"key","code":"ArrowUp","down":false}},
+        {"t":5,"ev":{"kind":"key","code":"ArrowRight","down":false}}
+      ],
+      "ticks": 7,
+      "expect": [
+        {"t":0,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":1,"held":["up"],"intent":"N","queue":[{"seq":1,"key":"up"}],"slots":["attack","back"]},
+        {"t":2,"held":["up","right"],"intent":"E","queue":[{"seq":2,"key":"right"}],"slots":["attack","back"]},
+        {"t":3,"held":["up","right"],"intent":"E","slots":["attack","back"]},
+        {"t":4,"held":["right"],"intent":"E","slots":["attack","back"]},
+        {"t":5,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":6,"held":[],"intent":null,"slots":["attack","back"]}
+      ]
+    },
+    {
+      "name": "gamepad-dead-zone-edges-and-merge",
+      "note": "Gamepad contract: axis magnitude 250 is active (below is 0), d-pad bits and axes merge, press edges append one entry each in ascending bit order, a held action adds none, and a held keyboard key plus a pad share one held state.",
+      "setup": {
+        "bindings": {
+          "keys": {"ArrowUp":"up","ArrowDown":"down","ArrowLeft":"left","ArrowRight":"right","Enter":"confirm","Escape":"cancel"}
+        },
+        "slots": [
+          {"id":"attack","x":16,"y":400,"w":64,"h":64,"action":"confirm","enabled":true},
+          {"id":"back","x":96,"y":400,"w":64,"h":64,"action":"cancel","enabled":true},
+          {"id":"menu","x":576,"y":16,"w":48,"h":48,"action":"menu","enabled":false}
+        ],
+        "camera": [160,96],
+        "allowDiagonals": true
+      },
+      "script": [
+        {"t":1,"ev":{"kind":"gamepad","device":0,"connected":true,"axes":{"x":249,"y":0},"buttons":0}},
+        {"t":2,"ev":{"kind":"gamepad","device":0,"connected":true,"axes":{"x":250,"y":0},"buttons":0}},
+        {"t":3,"ev":{"kind":"gamepad","device":0,"connected":true,"axes":{"x":250,"y":-1000},"buttons":16}},
+        {"t":4,"ev":{"kind":"key","code":"ArrowRight","down":true}},
+        {"t":5,"ev":{"kind":"gamepad","device":0,"connected":true,"axes":{"x":0,"y":0},"buttons":0}},
+        {"t":6,"ev":{"kind":"key","code":"ArrowRight","down":false}},
+        {"t":7,"ev":{"kind":"gamepad","device":0,"connected":true,"axes":{"x":0,"y":0},"buttons":64}}
+      ],
+      "ticks": 9,
+      "expect": [
+        {"t":0,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":1,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":2,"held":["right"],"intent":"E","queue":[{"seq":1,"key":"right"}],"slots":["attack","back"]},
+        {"t":3,"held":["up","right","confirm"],"intent":"NE","queue":[{"seq":2,"key":"up"},{"seq":3,"key":"confirm"}],"slots":["attack","back"]},
+        {"t":4,"held":["up","right","confirm"],"intent":"NE","slots":["attack","back"]},
+        {"t":5,"held":["right"],"intent":"E","slots":["attack","back"]},
+        {"t":6,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":7,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":8,"held":[],"intent":null,"slots":["attack","back"]}
+      ]
+    },
+    {
+      "name": "gamepad-disconnect-and-unknown-devices",
+      "note": "A disconnect releases what that device held; events for a device that never connected, or for a device outside 0..3, are ignored; two devices merge.",
+      "setup": {
+        "bindings": {
+          "keys": {"ArrowUp":"up","ArrowDown":"down","ArrowLeft":"left","ArrowRight":"right","Enter":"confirm","Escape":"cancel"}
+        },
+        "slots": [
+          {"id":"attack","x":16,"y":400,"w":64,"h":64,"action":"confirm","enabled":true},
+          {"id":"back","x":96,"y":400,"w":64,"h":64,"action":"cancel","enabled":true},
+          {"id":"menu","x":576,"y":16,"w":48,"h":48,"action":"menu","enabled":false}
+        ],
+        "camera": [160,96],
+        "allowDiagonals": true
+      },
+      "script": [
+        {"t":1,"ev":{"kind":"gamepad","device":1,"connected":false,"axes":{"x":0,"y":0},"buttons":1}},
+        {"t":2,"ev":{"kind":"gamepad","device":4,"connected":true,"axes":{"x":0,"y":0},"buttons":1}},
+        {"t":3,"ev":{"kind":"gamepad","device":0,"connected":true,"axes":{"x":0,"y":0},"buttons":8}},
+        {"t":4,"ev":{"kind":"gamepad","device":1,"connected":true,"axes":{"x":0,"y":0},"buttons":8}},
+        {"t":5,"ev":{"kind":"gamepad","device":0,"connected":false,"axes":{"x":0,"y":0},"buttons":0}},
+        {"t":6,"ev":{"kind":"gamepad","device":1,"connected":false,"axes":{"x":0,"y":0},"buttons":0}}
+      ],
+      "ticks": 8,
+      "expect": [
+        {"t":0,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":1,"held":[],"intent":null,"notes":["ignored:never-connected:1"],"slots":["attack","back"]},
+        {"t":2,"held":[],"intent":null,"notes":["ignored:device:4"],"slots":["attack","back"]},
+        {"t":3,"held":["right"],"intent":"E","queue":[{"seq":1,"key":"right"}],"slots":["attack","back"]},
+        {"t":4,"held":["right"],"intent":"E","slots":["attack","back"]},
+        {"t":5,"held":["right"],"intent":"E","notes":["disconnect:0"],"slots":["attack","back"]},
+        {"t":6,"held":[],"intent":null,"notes":["disconnect:1"],"slots":["attack","back"]},
+        {"t":7,"held":[],"intent":null,"slots":["attack","back"]}
+      ]
+    },
+    {
+      "name": "pointer-click-to-move-and-button-slots",
+      "note": "E-25 and 5.6 slot shape: a click outside every slot is a click-to-move request in logical pixels and board pixels (camera offset added); a click in an enabled slot is a key-queue entry for its action; a click on a disabled slot is swallowed; PROPOSED P-13: slot hit-test is [x, x+w) x [y, y+h).",
+      "setup": {
+        "bindings": {
+          "keys": {"ArrowUp":"up","ArrowDown":"down","ArrowLeft":"left","ArrowRight":"right","Enter":"confirm","Escape":"cancel"}
+        },
+        "slots": [
+          {"id":"attack","x":16,"y":400,"w":64,"h":64,"action":"confirm","enabled":true},
+          {"id":"back","x":96,"y":400,"w":64,"h":64,"action":"cancel","enabled":true},
+          {"id":"menu","x":576,"y":16,"w":48,"h":48,"action":"menu","enabled":false}
+        ],
+        "camera": [160,96],
+        "allowDiagonals": true
+      },
+      "script": [
+        {"t":1,"ev":{"kind":"pointer","phase":"down","x":100,"y":100}},
+        {"t":2,"ev":{"kind":"pointer","phase":"down","x":16,"y":400}},
+        {"t":3,"ev":{"kind":"pointer","phase":"down","x":79,"y":463}},
+        {"t":4,"ev":{"kind":"pointer","phase":"down","x":80,"y":463}},
+        {"t":5,"ev":{"kind":"pointer","phase":"down","x":600,"y":30}},
+        {"t":6,"ev":{"kind":"slot-enabled","id":"menu","enabled":true}},
+        {"t":7,"ev":{"kind":"pointer","phase":"down","x":600,"y":30}}
+      ],
+      "ticks": 9,
+      "expect": [
+        {"t":0,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":1,"click":{"logical":[100,100],"board":[260,196],"via":"pathfind"},"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":2,"slot":"attack","held":[],"intent":null,"queue":[{"seq":1,"key":"confirm","via":"slot:attack"}],"slots":["attack","back"]},
+        {"t":3,"slot":"attack","held":[],"intent":null,"queue":[{"seq":2,"key":"confirm","via":"slot:attack"}],"slots":["attack","back"]},
+        {"t":4,"click":{"logical":[80,463],"board":[240,559],"via":"pathfind"},"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":5,"held":[],"intent":null,"notes":["slot-disabled:menu"],"slots":["attack","back"]},
+        {"t":6,"held":[],"intent":null,"notes":["slot:menu:enabled"],"slots":["attack","back","menu"]},
+        {"t":7,"slot":"menu","held":[],"intent":null,"queue":[{"seq":3,"key":"menu","via":"slot:menu"}],"slots":["attack","back","menu"]},
+        {"t":8,"held":[],"intent":null,"slots":["attack","back","menu"]}
+      ]
+    },
+    {
+      "name": "gamepad-only-named-actions",
+      "note": "A gamepad adds nothing the bindings do not name: with no menu binding, the menu bit is ignored.",
+      "setup": {
+        "bindings": {"keys":{"Enter":"confirm"}},
+        "slots": [
+          {"id":"attack","x":16,"y":400,"w":64,"h":64,"action":"confirm","enabled":true},
+          {"id":"back","x":96,"y":400,"w":64,"h":64,"action":"cancel","enabled":true},
+          {"id":"menu","x":576,"y":16,"w":48,"h":48,"action":"menu","enabled":false}
+        ],
+        "camera": [160,96],
+        "allowDiagonals": true
+      },
+      "script": [
+        {"t":1,"ev":{"kind":"gamepad","device":0,"connected":true,"axes":{"x":0,"y":0},"buttons":80}}
+      ],
+      "ticks": 3,
+      "expect": [
+        {"t":0,"held":[],"intent":null,"slots":["attack","back"]},
+        {"t":1,"held":["confirm"],"intent":null,"queue":[{"seq":1,"key":"confirm"}],"slots":["attack","back"]},
+        {"t":2,"held":["confirm"],"intent":null,"slots":["attack","back"]}
+      ]
+    }
+  ]
+}
