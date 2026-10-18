@@ -1,0 +1,304 @@
+# tickets.toml — planned entries of epic-audio-synth, in build order. tickets.py reads it.
+# Table order is the build order; ids are stable names. Entries 1 to 3 are owner-approval docs checkpoints (pending).
+# The audio timeline oracle is authored from docs/spec and rulings; it is not a legacy-parity claim and holds no hashes.
+# Shared-seam owners: 6 owns the `audio` section type and the `core/audio` barrel, 7 adds voice, fade and sync
+# behaviour without changing the type, 8 owns the control pack and the `audio.track` wait, 9 owns the query pack and
+# legacy mapping, 10 owns the video pack, and 17 performs the final catalogue, barrel and stub-removal reconciliation.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Core audio rulings: tracks, time, cues and waits"
+description = "Doc-first (G7), docs only: writes the core audio rules into a new `docs/spec/engine/audio-media.md` and amends AD-16, AD-9 and AD-14 to settle the track-and-voice `GameState.audio` schema with the saved-state versus settings split (volumes are settings), the tick time model (end tick from asset length, catch-up for late starts, rounding, `audio.ended` demoted to advisory), generic per-track cues with a single `media.fade` cue, the `audio.track` wait with suspend-on-pause wake rules, and how Epic 4's `music.play` and `sfx.play` effect records map onto the `music` and `sfx` tracks."
+verify = "The commit changes only docs and the affected spine rows; each work-package rule P1, P2, P4 and P5 has an OWNER marker, evidence, a rejected alternative and a deterministic rule; the AD-9, AD-14 and AD-16 amendments name every producer, validator, port type and fixture they change; no later entry relies on an unruled audio observable; a person approves the checkpoint."
+covers = ["CAP-7"]
+after = ["3.9", "3.27", "4.29"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, findings F-01 to F-08, F-10",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-exploration.md, section 13 work packages P1, P2, P4, P5",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-9, AD-14, AD-16, AD-26",
+  "reference - docs/provenance/facts-round-8.md and facts-round-9.md (Q3 to Q13, M1 to M4)",
+  "handoff - epic-board-rendering/tickets.toml entries 4.20 and 4.23, audio effect records",
+]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Media commands, voices, layered audio and legacy parity rulings"
+description = "Doc-first (G7), docs only: rules the standard `media*` command family (control and query commands, `mediaTrack` creation, `tkMD_` constants, voice handles, errors, units and CLAUDE.md-style help text), the voice model (per-track voice counts, the 32-voice cap, the same-file rule, stealing order, the late-sound threshold in ticks), fades, synced starts and the ducking reservation, and the legacy parity ledger (every round-8 and round-9 fact once, the 3.1.0 version rule, obsolete marking as documentation only), rewriting the Audio table of `rpgcode-functions.md` and the affected catalogue rows."
+verify = "The commit changes only docs and the affected contract and catalogue rows; each P3, P6, P7 and P8 rule has an OWNER marker, evidence, a rejected alternative and a deterministic rule; every legacy audio fact is a ledger row with its disposition; `catalogue:check` and `command-docs:check` pass with the new names; a person approves the checkpoint."
+covers = ["CAP-7"]
+after = [1, "3.27", "3.29"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, findings F-08, F-10, F-13",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-exploration.md, section 13 work packages P3, P6, P7, P8",
+  "reference - docs/spec/engine/rpgcode-functions.md, Audio table and E-102",
+  "reference - docs/provenance/facts-round-8.md and facts-round-9.md",
+  "constraint - CLAUDE.md, help text rule",
+]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Platform rulings: SoundFont policy, sources, runner protocol and video"
+description = "Doc-first (G7), docs only: rules R-59 (audio routing and frame audio), MP3/OGG handling (transcode on import) and the tracker/XM policy, the XG/GS missing-bank fallback, music after load, the Path B bank choice and its provenance bar, `soundFont` and `soundFontReset` with the `soundfont.set` cue, the SoundFont layers (runner, author, player), the `AssetDecoder<AudioInfo>` and `AudioSource` seams (an AD-31 amendment), the runner audio protocol messages and voice state machine, the audio-contract handoff to epic 9 (autoplay unlock, focus, late sounds, prefetch, SoundFont cache), and the AVI import and request policy."
+verify = "The commit changes only docs and the affected spine and catalogue rows; each section 5 to 12 decision of the exploration and each inherited section 9 row has an OWNER marker, evidence, a rejected alternative and a deterministic rule or an explicit owner deferral; the runner protocol lists every message and event with fixed keys; a person approves the checkpoint."
+covers = ["CAP-7"]
+after = [1, "1.5", "3.14"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, findings F-05, F-07, F-09, F-11, F-12",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-exploration.md, sections 5 to 12 and work package P9",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-16, AD-30, AD-31",
+  "reference - docs/spec/engine/display-input-audio.md#e-103 and R-59, E-104",
+  "handoff - epic-web-runner-packaging/epic-web-runner-packaging.md, audio contract",
+]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Independent audio timeline oracle and authored audio fixtures"
+description = "Creates a docs/spec-derived, core-independent producer of named audio timeline scenes (`board-music-boot`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `voices-and-stealing`, `fades`, `synced-start`, `late-start-catch-up`, `media-wait-suspend`, `settings-versus-save`, `legacy-parity-ledger`, `video-restarts-music`) with expected per-tick track states, cues and end events, plus authored tiny WAV (PCM, MS-ADPCM, IMA-ADPCM) and MIDI (type 0 and 1, tempo changes) files with hand-worked lengths."
+verify = "The generator has a check mode, imports no `packages/core` code, and produces every named scene and audio file above with committed expected facts (track state, cues, end ticks, no hashes) and hand-worked lengths; a static import scan and a byte-determinism test pass."
+covers = ["CAP-7"]
+after = [1, 2, "1.9"]
+hitl = false
+risk = "medium"
+references = [
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, findings F-09, F-10",
+  "reference - docs/spec/engine/audio-media.md (written by entries 6.1 and 6.2)",
+  "pattern - tools/fixtures/movement/index.mjs and tools/fixtures/test/movement.test.mjs, the Epic 5 oracle",
+  "corpus - fixtures/legacy/.fetched.json, MIDI and WAV lengths pinned by SHA-256 and checked at test time only",
+]
+
+[[entry]]
+id = 5
+type = "story"
+title = "AudioInfo decoders for WAV and MIDI"
+description = "Implements pure core `AssetDecoder<AudioInfo>` decoders registered through `PluginDefinition.decoders` for WAV (PCM 8 and 16 bit, MS-ADPCM, IMA-ADPCM, mono and stereo) and Standard MIDI files type 0 and 1 (tempo-map length, loop point, bank-need flag for XG, GS and bank-select), reporting length in ticks per the entry 6.1 time model; an unsupported or malformed file returns a `FormatError` and the caller plays silence."
+verify = "Every authored file's `AudioInfo` equals the oracle's hand-worked length; the fetched corpus (182 MIDI, 66 WAV including 3 ADPCM) decodes without throwing and its lengths and bank flags are recorded in a committed table; malformed and truncated bytes return a typed error; no DOM, Node or clock API is used (G2, G3)."
+covers = ["CAP-7"]
+after = [3, 4, "2.10", "3.14"]
+hitl = false
+risk = "medium"
+references = [
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-31",
+  "code - packages/core/src/formats/registry/decoder.ts and core-decoders.ts",
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, finding F-05",
+  "fixture - entry 6.4 authored WAV and MIDI files",
+  "corpus - fixtures/legacy MIDI and WAV, checked at test time",
+]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Audio state section, track engine and cue emission"
+description = "Implements the tracer bullet: the `audio` section schema v2 per entry 6.1 (tracks, voices, fade fields, `cueId`, the current SoundFont setting, saved playback versus settings), the `audio` applier on the effect bus that maps Epic 4's `music.play` and `sfx.play` records onto the `music` and `sfx` tracks and drains the pending queue in order, end-tick and loop-pass computation on the fixed tick, play, stop, pause, resume, seek and loop semantics with the legacy rules (same-name, missing file, board entry, battle hand-off hooks, video restart), generic per-track `AudioCue` emission including `soundfont.set` in `TickReport.audioCues`, save and restore re-emission, and registration into the reset seam."
+verify = "The oracle scenes `board-music-boot`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `settings-versus-save` and `video-restarts-music` reproduce through the real core per tick; a snapshot restored mid-track gives equal later cues and hash; `reset()` and `load()` leave settings untouched; effects posted before the applier registered produce cues in post order."
+covers = ["CAP-7"]
+after = [1, 2, 4, 5, "3.11", "3.21", "4.11", "4.19", "4.20", "4.23", "4.31"]
+hitl = false
+risk = "high"
+references = [
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-10, AD-16, AD-26",
+  "code - packages/core/src/save/sections.ts, ports/audio.ts, engine/engine.ts, engine/effects.ts",
+  "handoff - epic-board-rendering.md, A-12 and the audio effect records of entries 4.20 and 4.23",
+  "fixture - entry 6.4 `board-music-boot`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `settings-versus-save`, `video-restarts-music`",
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, findings F-01 to F-04",
+]
+
+[[entry]]
+id = 7
+type = "story"
+title = "Voices, voice stealing, fades and synced starts"
+description = "Implements the voice pool per track with the 32-voice cap, voice handles, the stealing order (priority, then age, then voice index), the same-file rule by voice count, the late-sound threshold in ticks, fades as a pure function of one `media.fade` cue with fade clocks frozen by pause, and synced starts at another track's position modulo the new file's length."
+verify = "The oracle scenes `voices-and-stealing`, `fades`, `synced-start` and `late-start-catch-up` reproduce through the real core per tick; a snapshot restored mid-fade and mid-steal gives equal later behaviour; state hashes are equal under one-tick and batched advance."
+covers = ["CAP-7"]
+after = [2, 4, 6]
+hitl = false
+risk = "high"
+references = [
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-16, AD-25",
+  "reference - docs/spec/engine/audio-media.md voice, fade and sync rules (entry 6.2)",
+  "fixture - entry 6.4 `voices-and-stealing`, `fades`, `synced-start`, `late-start-catch-up`",
+]
+
+[[entry]]
+id = 8
+type = "story"
+title = "Media control built-ins and the track wait"
+description = "Registers the media control pack through the VM registry: `mediaTrack`, `mediaLoad`, `mediaPlay` (flags, sync, priority, voice handle by reference), `mediaStop`, `mediaPause`, `mediaResume`, `mediaSeek`, `mediaLoop`, `mediaVolume`, `mediaFade` and `mediaWait`, the Reawakened `soundFont` and `soundFontReset` commands, the `tkMD_` constants, and the `audio.track` wait kind that replaces the `audio.sfx` stub, with the ruled diagnostics (`tkMD_LOOP | tkMD_WAIT`, unknown track, wait on a loop) and help text in the CLAUDE.md style; commands act through recorded effects, never by writing the section directly."
+verify = "Script fixtures play then wait and resume on the exact end tick, suspend on pause and continue on resume, wake on stop or replace, restore mid-wait, and report each ruled diagnostic; the oracle scene `media-wait-suspend` reproduces per tick; `catalogue:check` and `command-docs:check` pass for every new name."
+covers = ["CAP-7"]
+after = [2, 6, 7, "2.10", "3.3", "3.9", "3.22", "3.25", "3.29"]
+hitl = false
+risk = "high"
+references = [
+  "reference - docs/spec/engine/audio-media.md and the rewritten Audio table of rpgcode-functions.md",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-8, AD-9, AD-10",
+  "code - packages/core/src/ports/wait.ts, script/waits.ts, script/catalogue-responders.ts, script/catalogue-stubs.ts",
+  "fixture - entry 6.4 `media-wait-suspend`, `track-transport`",
+]
+
+[[entry]]
+id = 9
+type = "story"
+title = "Media query built-ins, legacy command mapping and catalogue sweep"
+description = "Registers the media query pack (`mediaState`, `mediaFlags`, `mediaPlaying`, `mediaFile`, `mediaPosition`, `mediaLength`, `mediaVolume` reading form, `mediaTracks`, `getVolume`) and routes every legacy audio name to its standard equivalent while keeping legacy behaviour (music always loops, sound effects never do, replace rules), including `mp3pause` as play-once-then-wait on `sfx`, `setvolume`, and the `fademidiin`, `fademidiout` and `setmidivolume` plugin commands (mapped, or recorded as not reproduced); reconciles the `wav` and `mp3pause` catalogue rows with the ruling and rewrites the Audio table with the obsolete marks as documentation only."
+verify = "The oracle scene `legacy-parity-ledger` reproduces per tick through the legacy names; corpus programs that call legacy audio commands produce the same cue stream as their standard-command equivalents; `catalogue:check` and `command-docs:check` pass; the catalogue rows for `wav` and `mp3pause` agree with the ruled behaviour."
+covers = ["CAP-7"]
+after = [8, "3.17"]
+hitl = false
+risk = "medium"
+references = [
+  "reference - docs/spec/engine/rpgcode-functions.md Audio table",
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, finding F-08",
+  "code - packages/core/src/script/legacy-plugins.ts, catalogue-responders.ts, catalogue-stubs.ts",
+  "fixture - entry 6.4 `legacy-parity-ledger`",
+]
+
+[[entry]]
+id = 10
+type = "story"
+title = "Video built-ins and the video wait"
+description = "Registers `playavi` and `playavismall` with the `video` wait and the AD-5 request ruled in entry 6.3, stops music for the duration and restarts it from the beginning afterwards even if it had been stopped (Q16), makes the video unskippable, and resolves the wait on the `video.ended` input."
+verify = "A script plays a video request and the wait resolves only on `video.ended`; music stops during and restarts from the beginning after; the oracle scene `video-restarts-music` reproduces per tick; a snapshot restored mid-wait resumes; the headless runner replies after the declared duration."
+covers = ["CAP-7"]
+after = [3, 6, 8, "3.22"]
+hitl = false
+risk = "medium"
+references = [
+  "reference - docs/spec/engine/display-input-audio.md E-62, E-104 and the Reawakened import rule",
+  "reference - docs/provenance/facts-round-8.md Q16",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-5, AD-9, AD-14",
+  "fixture - entry 6.4 `video-restarts-music`",
+]
+
+[[entry]]
+id = 11
+type = "story"
+title = "synth: MidiSynth, the Null backend and the AudioSource seam"
+description = "Fills the empty `synth` package with the pure-TypeScript `MidiSynth` interface, `NullMidiSynth` (deterministic silence of the right length), the `AudioSource` interface and registry (MIDI and PCM are the first two sources on one seam), and the runner-side voice state machine ruled in entry 6.3, with no SoundFont or third-party dependency yet."
+verify = "Unit tests cover the interface, the Null backend's deterministic output and length, source registration and dispatch, and an unknown source giving a diagnostic plus silence; the dependency graph shows `synth` depending only on `core`; a custom test source registers without core changes."
+covers = ["CAP-7"]
+after = [3, "1.9"]
+hitl = false
+risk = "medium"
+references = [
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-30, AD-31",
+  "reference - docs/spec/engine/audio-media.md runner protocol and voice state machine (entry 6.3)",
+  "code - packages/synth/src/index.ts, the empty scaffold of entry 1.9",
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, finding F-07",
+]
+
+[[entry]]
+id = 12
+type = "story"
+title = "SpessaSynth backend, PCM sources, track buses and voice pool"
+description = "Adds the `spessasynth_core` MIDI backend behind `MidiSynth`, the PCM source (WAV PCM, MS-ADPCM, IMA-ADPCM decode and resampling), per-track mixer buses with volume and fade ramps, and a voice pool that honours the core voice cap, all rendering deterministically to PCM headlessly."
+verify = "Each source reports a length equal to the core `AudioInfo` of the same bytes; bus gain and fade ramps match the oracle ramps; a render of an authored WAV is non-silent with the expected sample count; the new dependency passes the licence gate and is pinned; the render path uses no DOM or clock API."
+covers = ["CAP-7"]
+after = [5, 7, 11, "1.5"]
+hitl = false
+risk = "high"
+references = [
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-30",
+  "reference - docs/architecture-options.md section 7.3",
+  "fixture - entry 6.4 authored WAV and ADPCM files and the `fades` ramps",
+  "constraint - docs/guardrails.md G6",
+]
+
+[[entry]]
+id = 13
+type = "story"
+title = "SoundFont bundling gate and the Path B bank"
+description = "Extends the licence gate to audit bundled SoundFonts (path, licence, ADR, SHA-256, notices entry, size ceiling) under `bundledAssets`, verifies the provenance of the chosen compact public-domain General MIDI bank (Florestan Basic or GMGSx, per entry 6.3), and ships it under `media/soundfonts/` with its `THIRD_PARTY_NOTICES` entry and a lazy-load note, leaving the user `.sf2` contract to the runner."
+verify = "`pnpm licence` fails when a bundled SoundFont is missing from config or notices or has a wrong hash and passes with the real bank; the provenance checklist from entry 6.3 is complete with evidence for the bank; the notice text matches the licence verbatim."
+covers = ["CAP-7"]
+after = [3, "1.5"]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+references = [
+  "code - tools/licences/check.mjs and tools/licences/config.json, bundledAssets fonts audit",
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, finding F-07",
+  "reference - docs/architecture-options.md section 7.3",
+  "constraint - docs/guardrails.md G6",
+]
+
+[[entry]]
+id = 14
+type = "story"
+title = "Path C: the authored TK-16 SoundFont"
+description = "Authors the project's own compact Super NES-flavoured General MIDI bank, `TK-16`, in Polyphone from CC0 or MIT sources with every sample's provenance recorded, ships it under the entry 6.13 gate, and makes it the default bank once the owner approves how it sounds."
+verify = "Every sample in the bank has a provenance record and licence; the bank passes the bundling gate; the offline render test plays an authored MIDI file through it non-silent; the owner approves the sound before it becomes the default."
+covers = ["CAP-7"]
+after = [13]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+references = [
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, finding F-07",
+  "reference - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-exploration.md, sections 3 and 4",
+  "constraint - docs/guardrails.md G6 and G7",
+]
+
+[[entry]]
+id = 15
+type = "story"
+title = "Runner audio protocol schema and conformance vectors"
+description = "Publishes the language-neutral runner audio protocol as a JSON Schema checked against the TypeScript types (messages in: `load`, `play`, `pause`, `resume`, `stop`, `seek`, `fade`, `setVolume`, `setBank`; events out: `ready`, `ended`, `error`, all with fixed keys) with the voice state machine, and data-driven conformance vectors (asset bytes plus message script to expected events, lengths and a non-silent render check) that any runner can replay, with the TypeScript binding as the reference."
+verify = "The schema validates every message and event the core and synth produce; the vectors replay through the Null and PCM sources in the reference binding with identical results; a check mode regenerates the vectors; the schema and the TypeScript types fail a consistency test when either changes alone."
+covers = ["CAP-7"]
+after = [3, 7, 11]
+hitl = false
+risk = "medium"
+references = [
+  "reference - docs/spec/engine/audio-media.md runner protocol (entry 6.3)",
+  "reference - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-exploration.md, section 12",
+  "pattern - the rasteriser conformance vectors of epic 4",
+  "handoff - epic-web-runner-packaging.md, runner-side audio responsibilities",
+]
+
+[[entry]]
+id = 16
+type = "story"
+title = "Headless null-audio cue goldens and the offline MIDI render test"
+description = "Adds cue-stream goldens for the sample games to the golden job (boot to the first board, battle start and end, video) under null audio in both Node and Bun, and an offline Node render test that plays an authored MIDI file through the bundled bank via the synth to PCM; the browser playback test is recorded as an epic 9 handoff because no browser harness exists in the repository."
+verify = "`pnpm golden` and `pnpm golden:bun` produce identical cue streams for the sample games; the render test is non-silent and within tolerance of the core `AudioInfo` length; golden changes are explained and pinned (G5); the browser-test handoff and the `wasm-unsafe-eval` CSP note are written in the epic envelope."
+covers = ["CAP-7"]
+after = [6, 7, 9, 10, 12, 13, 15, "1.9"]
+hitl = false
+risk = "medium"
+references = [
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, findings F-07, F-09",
+  "code - the golden job of entry 1.9 and `pnpm golden:bun`",
+  "handoff - epic-web-runner-packaging.md, browser playback",
+]
+
+[[entry]]
+id = 17
+type = "story"
+title = "Replay, reset and downstream contract sweep"
+description = "Closes Epic 6 with sample-game cue-stream replay under different advance batching, snapshots at several points, reset and load leaving settings untouched, catalogue ownership of every audio and video name, phase registration, removal of the replaced `audio.sfx` stub and other obsolete test doubles, a refactor sweep of the audio and synth barrels, and the written handoffs to epics 7, 8, 9 and the editors."
+verify = "Sample-game cue streams and state hashes are equal at one tick per step and in batches; snapshots restore identical later behaviour; every audio and video catalogue name resolves to one real responder; the epic 7 battle-music, epic 8 volume-settings and save-shape, epic 9 runner and editor audio-preview handoffs are written; typecheck, tests, lint, provenance, licence, golden, golden:bun, graph, catalogue and command-docs gates pass."
+covers = ["CAP-7"]
+after = [9, 10, 14, 15, 16, "3.11", "4.31"]
+hitl = false
+risk = "high"
+references = [
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md, findings F-01 to F-13",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-1, AD-9, AD-14, AD-16, AD-26",
+  "downstream - epic-battle.md, epic-menu-party-save.md, epic-web-runner-packaging.md and the editor epics",
+]
