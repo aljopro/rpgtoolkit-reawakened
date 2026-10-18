@@ -1,0 +1,533 @@
+{
+  "statements": [
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "literal",
+        "value": 0
+      }
+    },
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "literal",
+        "value": 0
+      }
+    },
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "assign",
+        "operator": "=",
+        "target": {
+          "kind": "decl",
+          "scope": "local",
+          "name": "panel"
+        },
+        "value": {
+          "kind": "call",
+          "name": "widget",
+          "args": [
+            {
+              "kind": "literal",
+              "value": 0
+            },
+            {
+              "kind": "literal",
+              "value": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "assign",
+        "operator": "=",
+        "target": {
+          "kind": "decl",
+          "scope": "local",
+          "name": "label"
+        },
+        "value": {
+          "kind": "call",
+          "name": "caption",
+          "args": [
+            {
+              "kind": "literal",
+              "value": 1
+            },
+            {
+              "kind": "literal",
+              "value": 2
+            },
+            {
+              "kind": "literal",
+              "value": "ready"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "expr",
+      "expr": {
+        "kind": "call",
+        "name": "compose",
+        "args": [
+          {
+            "kind": "variable",
+            "name": "panel",
+            "scope": null
+          },
+          {
+            "kind": "variable",
+            "name": "label",
+            "scope": null
+          }
+        ]
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "compose",
+      "params": [
+        {
+          "name": "panel",
+          "byRef": false,
+          "typeName": null
+        },
+        {
+          "name": "label",
+          "byRef": false,
+          "typeName": null
+        }
+      ],
+      "body": [
+        {
+          "kind": "expr",
+          "expr": {
+            "kind": "methodCall",
+            "receiver": {
+              "kind": "variable",
+              "name": "panel",
+              "scope": null
+            },
+            "name": "move",
+            "args": [
+              {
+                "kind": "literal",
+                "value": 2
+              },
+              {
+                "kind": "literal",
+                "value": 4
+              }
+            ]
+          }
+        },
+        {
+          "kind": "expr",
+          "expr": {
+            "kind": "methodCall",
+            "receiver": {
+              "kind": "variable",
+              "name": "label",
+              "scope": null
+            },
+            "name": "settext",
+            "args": [
+              {
+                "kind": "literal",
+                "value": "ready"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "return",
+          "value": {
+            "kind": "methodCall",
+            "receiver": {
+              "kind": "variable",
+              "name": "label",
+              "scope": null
+            },
+            "name": "position",
+            "args": []
+          },
+          "byRef": false
+        }
+      ],
+      "isInline": false
+    }
+  ],
+  "classes": [
+    {
+      "name": "widget",
+      "bases": [],
+      "members": [
+        {
+          "name": "x",
+          "arraySize": null,
+          "access": "private"
+        },
+        {
+          "name": "y",
+          "arraySize": null,
+          "access": "private"
+        }
+      ],
+      "methods": [
+        {
+          "name": "widget",
+          "params": [
+            {
+              "name": "left",
+              "byRef": false,
+              "typeName": null
+            },
+            {
+              "name": "top",
+              "byRef": false,
+              "typeName": null
+            }
+          ],
+          "body": [
+            {
+              "kind": "expr",
+              "expr": {
+                "kind": "assign",
+                "operator": "=",
+                "target": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "x"
+                },
+                "value": {
+                  "kind": "variable",
+                  "name": "left",
+                  "scope": null
+                }
+              }
+            },
+            {
+              "kind": "expr",
+              "expr": {
+                "kind": "assign",
+                "operator": "=",
+                "target": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "y"
+                },
+                "value": {
+                  "kind": "variable",
+                  "name": "top",
+                  "scope": null
+                }
+              }
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "widget"
+        },
+        {
+          "name": "move",
+          "params": [
+            {
+              "name": "left",
+              "byRef": false,
+              "typeName": null
+            },
+            {
+              "name": "top",
+              "byRef": false,
+              "typeName": null
+            }
+          ],
+          "body": [
+            {
+              "kind": "expr",
+              "expr": {
+                "kind": "assign",
+                "operator": "=",
+                "target": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "x"
+                },
+                "value": {
+                  "kind": "variable",
+                  "name": "left",
+                  "scope": null
+                }
+              }
+            },
+            {
+              "kind": "expr",
+              "expr": {
+                "kind": "assign",
+                "operator": "=",
+                "target": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "y"
+                },
+                "value": {
+                  "kind": "variable",
+                  "name": "top",
+                  "scope": null
+                }
+              }
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "widget"
+        },
+        {
+          "name": "position",
+          "params": [],
+          "body": [
+            {
+              "kind": "return",
+              "value": {
+                "kind": "binary",
+                "operator": "+",
+                "left": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "x"
+                },
+                "right": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "y"
+                }
+              },
+              "byRef": false
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "widget"
+        }
+      ],
+      "isStruct": false
+    },
+    {
+      "name": "caption",
+      "bases": [
+        "widget"
+      ],
+      "members": [
+        {
+          "name": "text",
+          "arraySize": null,
+          "access": "private"
+        }
+      ],
+      "methods": [
+        {
+          "name": "caption",
+          "params": [
+            {
+              "name": "left",
+              "byRef": false,
+              "typeName": null
+            },
+            {
+              "name": "top",
+              "byRef": false,
+              "typeName": null
+            },
+            {
+              "name": "value",
+              "byRef": false,
+              "typeName": null
+            }
+          ],
+          "body": [
+            {
+              "kind": "expr",
+              "expr": {
+                "kind": "assign",
+                "operator": "=",
+                "target": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "x"
+                },
+                "value": {
+                  "kind": "variable",
+                  "name": "left",
+                  "scope": null
+                }
+              }
+            },
+            {
+              "kind": "expr",
+              "expr": {
+                "kind": "assign",
+                "operator": "=",
+                "target": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "y"
+                },
+                "value": {
+                  "kind": "variable",
+                  "name": "top",
+                  "scope": null
+                }
+              }
+            },
+            {
+              "kind": "expr",
+              "expr": {
+                "kind": "assign",
+                "operator": "=",
+                "target": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "text"
+                },
+                "value": {
+                  "kind": "variable",
+                  "name": "value",
+                  "scope": null
+                }
+              }
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "caption"
+        },
+        {
+          "name": "settext",
+          "params": [
+            {
+              "name": "value",
+              "byRef": false,
+              "typeName": null
+            }
+          ],
+          "body": [
+            {
+              "kind": "expr",
+              "expr": {
+                "kind": "assign",
+                "operator": "=",
+                "target": {
+                  "kind": "member",
+                  "receiver": {
+                    "kind": "variable",
+                    "name": "this",
+                    "scope": null
+                  },
+                  "name": "text"
+                },
+                "value": {
+                  "kind": "variable",
+                  "name": "value",
+                  "scope": null
+                }
+              }
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "caption"
+        },
+        {
+          "name": "gettext",
+          "params": [],
+          "body": [
+            {
+              "kind": "return",
+              "value": {
+                "kind": "member",
+                "receiver": {
+                  "kind": "variable",
+                  "name": "this",
+                  "scope": null
+                },
+                "name": "text"
+              },
+              "byRef": false
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "caption"
+        },
+        {
+          "name": "position",
+          "params": [],
+          "body": [
+            {
+              "kind": "return",
+              "value": {
+                "kind": "methodCall",
+                "receiver": {
+                  "kind": "variable",
+                  "name": "this",
+                  "scope": null
+                },
+                "name": "gettext",
+                "args": []
+              },
+              "byRef": false
+            }
+          ],
+          "isPure": false,
+          "access": "public",
+          "owner": "caption"
+        }
+      ],
+      "isStruct": false
+    }
+  ],
+  "includes": []
+}
