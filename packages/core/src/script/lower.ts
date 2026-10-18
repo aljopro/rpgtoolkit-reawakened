@@ -232,6 +232,16 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
           ops.push({ op: "compound", operator: expr.operator, pos: getPos(expr.line) });
         }
         break;
+      case "lambda":
+      case "object":
+      case "callIndirect":
+        // The parser accepts these forms (entry 18.2); the callable value model and their lowering
+        // are entry 18.3. Until then compiling one is a located refusal, never a silent no-op.
+        throw new ScriptError(
+          "syntax.unsupported",
+          `${expr.kind === "lambda" ? "a lambda" : expr.kind === "object" ? "a dictionary literal" : "a call through an expression"} parses but cannot run yet (entry 18.3 lowers it)`,
+          getPos(expr.line),
+        );
     }
   }
 
