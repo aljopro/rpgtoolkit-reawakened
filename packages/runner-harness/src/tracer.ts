@@ -1,5 +1,5 @@
 import { assetKey, createAssetIndex, createEngine, expandTileToRgba, hashDrawList, readTileset, rasterize, tileDimensions, PACKAGE_ROOT } from "@tk-reawakened/core";
-import type { AssetKey, DecodedTexture, DrawList } from "@tk-reawakened/core";
+import type { AssetKey, DecodedTexture, DrawList, SpriteDraw } from "@tk-reawakened/core";
 import { encodeRgbaPng } from "./png.ts";
 
 export type TracerScene = {
@@ -9,6 +9,7 @@ export type TracerScene = {
   readonly ambient: readonly [number, number, number];
   readonly view: { readonly viewport: readonly [number, number]; readonly camera: readonly [number, number]; readonly include: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean } };
   readonly tick: number;
+  readonly sprites?: readonly SpriteDraw[];
 };
 export type TracerResult = { readonly scene: string; readonly drawList: DrawList; readonly drawHash: string; readonly stateHash: string; readonly pixels: Uint8Array; readonly png: Uint8Array; readonly error: string | null };
 
@@ -33,7 +34,23 @@ export function runTracerScene(scene: TracerScene, files: ReadonlyMap<string, Ui
     const source = files.get(scene.boardFiles[i] ?? "");
     if (source) available.set(assetKey(logicalPaths[i] ?? ""), new Uint8Array(source));
   }
-  const engine = createEngine({ seed: 0, assetIndex: index, assetRoot: PACKAGE_ROOT, initialBoard: logicalPaths[0] ?? "", width: scene.view.viewport[0], height: scene.view.viewport[1], maxTicks: 60 });
+  // The scene's camera is where the viewport's top-left should sit, so the tracked point is its centre; the engine clamps it to the board.
+  const cameraTarget = {
+    getPlayerPosition: () => ({ x: scene.view.camera[0] + Math.floor(scene.view.viewport[0] / 2), y: scene.view.camera[1] + Math.floor(scene.view.viewport[1] / 2) }),
+    getEntityPosition: () => null,
+  };
+  const engine = createEngine({
+    seed: 0,
+    assetIndex: index,
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: logicalPaths[0] ?? "",
+    width: scene.view.viewport[0],
+    height: scene.view.viewport[1],
+    maxTicks: 60,
+    cameraTarget,
+    globalAmbient: { r: scene.ambient[0], g: scene.ambient[1], b: scene.ambient[2] },
+    ...(scene.sprites === undefined ? {} : { sprites: scene.sprites }),
+  });
   let report = engine.advance(0, []);
   let guard = 0;
   while (report.loading && guard++ < scene.boardFiles.length + 16) {

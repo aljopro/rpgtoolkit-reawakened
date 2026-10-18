@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "docs" / "spec" / "tools"))
@@ -449,8 +449,23 @@ def render(scene: dict[str, Any]) -> Image.Image:
             draw_tiles.append(((layer, py, px, index), tile, tint, (px - 32, py - 16)))
         else:
             draw_tiles.append(((layer, y, x, index), tile, tint, (x * 32, y * 32)))
-    for _, tile, tint, position in sorted(draw_tiles, key=lambda item: item[0]):
-        board.alpha_composite(apply_tint(tile, tint), position)
+    # Layer order (board.md#drawing-order-and-effects): a sprite draws on its own layer, so
+    # it is already in place when the tiles of the next layer are painted.
+    sprites = sorted(scene["sprites"], key=lambda item: (item["layer"], item["y"], item["drawId"])) if include["sprites"] else []
+    draw = ImageDraw.Draw(board, "RGBA")
+    def draw_sprites(wanted: Any) -> None:
+        for sprite in sprites:
+            if wanted(sprite["layer"]):
+                x, y = sprite["x"] - 8, sprite["y"] - 16
+                colour = (64, 96, 224, 255) if sprite["key"] == "player" else (192, 128, 32, 255)
+                draw.rectangle((x, y, x + 15, y + 15), fill=colour)
+    ordered = sorted(draw_tiles, key=lambda item: item[0])
+    for tile_layer in range(model["sizeL"]):
+        for key, tile, tint, position in ordered:
+            if key[0] == tile_layer:
+                board.alpha_composite(apply_tint(tile, tint), position)
+        draw_sprites(lambda layer, number=tile_layer + 1: layer <= 1 if number == 1 else layer == number)
+    draw_sprites(lambda layer: layer > model["sizeL"])
     if include["images"]:
         for image in model["images"]:
             if image.get("file"):
@@ -461,12 +476,6 @@ def render(scene: dict[str, Any]) -> Image.Image:
             if bitmap:
                 if image["type"] == "stretch": bitmap = bitmap.resize(board.size, Image.Resampling.NEAREST)
                 board.alpha_composite(bitmap, (image.get("x", 0), image.get("y", 0)))
-    if include["sprites"]:
-        draw = ImageDraw.Draw(board, "RGBA")
-        for sprite in sorted(scene["sprites"], key=lambda item: (item["layer"], item["y"], item["drawId"])):
-            x, y = sprite["x"] - 8, sprite["y"] - 16
-            colour = (64, 96, 224, 255) if sprite["key"] == "player" else (192, 128, 32, 255)
-            draw.rectangle((x, y, x + 15, y + 15), fill=colour)
     for blit in scene["view"].get("blits", []):
         x, y, width, height = blit["rect"]
         alpha = blit.get("alpha", 255)
@@ -488,7 +497,9 @@ def render(scene: dict[str, Any]) -> Image.Image:
 
 
 def compare_pixels(actual: Image.Image, expected: Image.Image) -> bool:
-    return actual.mode == expected.mode and actual.size == expected.size and ImageChops.difference(actual, expected).getbbox() is None
+    # Compare every channel: `ImageChops.difference(...).getbbox()` on RGBA looks only at alpha,
+    # so two opaque images with different colours would compare equal.
+    return actual.mode == expected.mode and actual.size == expected.size and actual.tobytes() == expected.tobytes()
 
 
 def check() -> list[str]:
