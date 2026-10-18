@@ -167,11 +167,20 @@ const IMPLEMENTED_COMMANDS = new Set([
   "fileeof",
   "apppath",
 ]);
+/** Commands owned by first-party world/render packs; catalogue stubs must not shadow them. */
+const REAL_PACK_COMMANDS = new Set([
+  "camerapanto", "camerafollow", "camerareset", "camerashake",
+  "drawline", "drawrect", "fillrect", "text", "msgbox", "clear", "fade",
+  "viewbrd", "put", "layerput", "getboardtile", "boardgettile",
+  "setconstants", "animation",
+]);
 
 /** The stub-safe rows of the catalogue, in catalogue order. */
 export function stubRows(catalogue) {
   return catalogue.names.filter(
-    (row) => STUB_KINDS.has(row.effectKind) && !IMPLEMENTED_COMMANDS.has(row.name.toLowerCase()),
+    (row) => STUB_KINDS.has(row.effectKind)
+      && !IMPLEMENTED_COMMANDS.has(row.name.toLowerCase())
+      && !REAL_PACK_COMMANDS.has(row.name.toLowerCase()),
   );
 }
 

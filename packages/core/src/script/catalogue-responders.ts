@@ -17,6 +17,7 @@ import type { CommandEffect, PluginDefinition } from "./plugin.ts";
 import { CATALOGUE_STUBS_PLUGIN } from "./catalogue-stubs.ts";
 import { PURE_SPECS } from "./builtins/pure.ts";
 import type { SectionKey } from "../save/state.ts";
+import { effectCommand } from "./packs/common.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
 
 const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
@@ -371,7 +372,47 @@ export const CATALOGUE_RESPONDERS_PLUGIN: PluginDefinition = {
   commands: documentCommands(ROWS.map(makeResponder)),
 };
 
+function fallbackDocumentation(command: BuiltinSpec): BuiltinSpec {
+  const { doc: _doc, ...withoutDoc } = command;
+  if (command.name === "camerapanto" || command.name === "camerafollow" || command.name === "camerareset" || command.name === "camerashake") {
+    return { ...withoutDoc, doc: { summary: `${command.name} applies a deterministic camera effect.`, behaviour: "Records the camera effect immediately and does not wait.", groups: [] } };
+  }
+  if (command.name === "text") {
+    return { ...withoutDoc, doc: { summary: "Displays text on the screen.", behaviour: "Draws text using the fixed logical cell size and does not wait.", groups: ["message-window-text-fonts-30"] } };
+  }
+  if (command.name === "fade") {
+    return { ...withoutDoc, doc: { summary: "Perform a fade using the current colour. There are several different types of fades.", behaviour: "Records the selected deterministic fade effect and does not wait.", groups: ["board-tiles-vectors-screen-effects-33"] } };
+  }
+  return withoutDoc;
+}
+
+const PACK_CATALOGUE_FALLBACKS: readonly BuiltinSpec[] = [
+  effectCommand("camerapanto", "camera"),
+  effectCommand("camerafollow", "camera"),
+  effectCommand("camerareset", "camera"),
+  effectCommand("camerashake", "fx", "draw-audio-cue"),
+  effectCommand("drawline", "surfaces"),
+  effectCommand("drawrect", "surfaces"),
+  effectCommand("fillrect", "surfaces"),
+  effectCommand("text", "ui"),
+  effectCommand("msgbox", "ui", "mixed"),
+  effectCommand("clear", "surfaces"),
+  effectCommand("fade", "fx", "draw-audio-cue"),
+  effectCommand("viewbrd", "world"),
+  effectCommand("put", "world"),
+  effectCommand("layerput", "world"),
+  effectCommand("getboardtile", "world", "pure"),
+  effectCommand("boardgettile", "world", "pure"),
+  effectCommand("setconstants", "world"),
+  effectCommand("animation", "world"),
+].map(fallbackDocumentation);
+
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
+
+const CATALOGUE_OWNED_NAMES = new Set([
+  ...CATALOGUE_STUBS_PLUGIN.commands.map((command) => command.name),
+  ...CATALOGUE_RESPONDERS_PLUGIN.commands.map((command) => command.name),
+]);
 const CORE_FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
 
 /** The default catalogue layer combines safe stubs and responders not owned by CORE_PLUGIN. */
@@ -384,5 +425,6 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
       (command) => !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
     ),
+    ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
   ],
 };

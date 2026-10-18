@@ -36,22 +36,9 @@ export function snapshot(state: GameState): string {
 }
 
 /**
- * Migrate a snapshot's `vm` section forward to `SCHEMA_VERSIONS.vm` (AD-7's
- * migration chain), one version at a time:
- *
- * - v2 → v3 adds the effect log (`effects`, `effectSeq`).
- * - v3 → v4 adds the thread and wait fields of ticket 3.9: `block: null` and
- *   `requestSeq: 0` on the section; `queue`, `pending`, `detached` and
- *   `collect` on every thread; and `global` and `resumesCall` on a `sleep`
- *   wait. A v3 sleep came from the blocking `sleep(ticks)` command, so it
- *   becomes a global wait that resumes its call (R-32).
- * - v4 → v5 advances both ticket 3.8's optional module fields (`includes` and
- *   `redirects` on program references, and `file` on call instructions) and
- *   ticket 3.16's empty sandboxed file-handle table. Module fields are absent
- *   when empty, so only the section version moves for those fields; `files` is
- *   initialized as an empty table.
- *
- * A save already at the current version is left untouched.
+ * Migrate a snapshot's `vm` section to the current schema. Engine effect queues
+ * are optional and require no version bump because an empty engine section
+ * serialises identically before and after registration.
  */
 function migrateVm(record: Record<string, unknown>, schema: Record<string, unknown>): void {
   const version = schema.vm;
@@ -98,6 +85,28 @@ function migrateVm(record: Record<string, unknown>, schema: Record<string, unkno
     if (!Array.isArray(vmRecord.files)) vmRecord.files = [];
   }
   schema.vm = SCHEMA_VERSIONS.vm;
+}
+
+/** Advance engine effect-dispatch state to the bounded-queue schema. */
+function migrateEngine(record: Record<string, unknown>, schema: Record<string, unknown>): void {
+  const version = schema.engine;
+  if (typeof version !== "number") {
+    throw new ScriptError("restore.shape", "the snapshot's `schema` has no numeric `engine` version");
+  }
+  if (version >= SCHEMA_VERSIONS.engine) return;
+  const engine = recordAt(record.engine, "engine");
+  if (version < 2) {
+    if (engine.pendingEffects !== undefined && (typeof engine.pendingEffects !== "object" || engine.pendingEffects === null || Array.isArray(engine.pendingEffects))) {
+      throw new ScriptError("restore.shape", "the snapshot's engine.pendingEffects is not an object");
+    }
+    if (engine.effectDropped !== undefined && (typeof engine.effectDropped !== "object" || engine.effectDropped === null || Array.isArray(engine.effectDropped))) {
+      throw new ScriptError("restore.shape", "the snapshot's engine.effectDropped is not an object");
+    }
+    if (engine.effectDiagnostics !== undefined && !Array.isArray(engine.effectDiagnostics)) {
+      throw new ScriptError("restore.shape", "the snapshot's engine.effectDiagnostics is not an array");
+    }
+  }
+  schema.engine = SCHEMA_VERSIONS.engine;
 }
 
 function shapeError(message: string): never {
@@ -242,6 +251,7 @@ export function restoreGameState(json: string): GameState {
   }
 
   migrateVm(record, schema as Record<string, unknown>);
+  migrateEngine(record, schema as Record<string, unknown>);
 
   validateShape(record);
   return parsed as GameState;
