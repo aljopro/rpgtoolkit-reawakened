@@ -29,6 +29,7 @@ import { canon, reviveNonFinite, tagNonFinite } from "../canon/index.ts";
 import { ScriptError } from "../script/errors.ts";
 import { COMPILER_VERSION } from "../script/program.ts";
 import { SCHEMA_VERSIONS, type GameState } from "./state.ts";
+import { asSpritesSection, createSpritesSection, SPRITES_SCHEMA_VERSION } from "../sprites/model.ts";
 
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
@@ -107,6 +108,17 @@ function migrateEngine(record: Record<string, unknown>, schema: Record<string, u
     }
   }
   schema.engine = SCHEMA_VERSIONS.engine;
+}
+
+/** Migrate the old empty sprites placeholder to the versioned actor section. */
+function migrateSprites(record: Record<string, unknown>, schema: Record<string, unknown>): void {
+  const version = schema.sprites;
+  if (typeof version !== "number") shapeError("the snapshot's `schema` has no numeric `sprites` version");
+  if (version < SPRITES_SCHEMA_VERSION) {
+    const current = asSpritesSection(record.sprites);
+    record.sprites = current === null ? createSpritesSection() : current;
+    schema.sprites = SPRITES_SCHEMA_VERSION;
+  }
 }
 
 function shapeError(message: string): never {
@@ -227,6 +239,11 @@ function validateSurfacesShape(value: unknown): void {
   for (const colour of Object.keys(colours)) numberAt(colours[colour], `surfaces.colours.${colour}`);
 }
 
+function validateSpritesShape(value: unknown): void {
+  const sprites = asSpritesSection(value);
+  if (sprites === null || sprites.version !== SPRITES_SCHEMA_VERSION) shapeError("the snapshot's `sprites` section has an invalid schema");
+}
+
 function validateShape(record: Record<string, unknown>): void {
   const schema = recordAt(record.schema, "schema");
   for (const key of Object.keys(SCHEMA_VERSIONS)) numberAt(schema[key], `schema.${key}`);
@@ -234,6 +251,7 @@ function validateShape(record: Record<string, unknown>): void {
   for (const key of Object.keys(SCHEMA_VERSIONS)) {
     if (key === "schema" || key === "vm" || key === "rng" || key === "time") continue;
     recordAt(record[key], key);
+    if (key === "sprites") validateSpritesShape(record[key]);
   }
   const rng = recordAt(record.rng, "rng");
   for (const key of ["s0", "s1", "s2", "s3"]) numberAt(rng[key], `rng.${key}`);
@@ -274,6 +292,7 @@ export function restoreGameState(json: string): GameState {
   }
 
   migrateVm(record, schema as Record<string, unknown>);
+  migrateSprites(record, schema as Record<string, unknown>);
   migrateEngine(record, schema as Record<string, unknown>);
 
   validateShape(record);

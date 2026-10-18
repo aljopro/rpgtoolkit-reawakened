@@ -1,0 +1,59 @@
+import { deepEqual, equal } from "node:assert/strict";
+import { test } from "node:test";
+import {
+  createGameState,
+  createVmState,
+  hydrateSprites,
+  restoreGameState,
+  snapshot,
+  spriteDraws,
+  setItemVisible,
+  type WorldBoard,
+} from "../src/index.ts";
+
+function board(): WorldBoard {
+  return ({
+    key: "boards/hall.brd",
+    coordType: 0,
+    sizeX: 10,
+    sizeY: 10,
+    sizeL: 1,
+    width: 320,
+    height: 320,
+    background: { r: 0, g: 0, b: 0 },
+    ambient: { r: 0, g: 0, b: 0 },
+    layers: [],
+    items: [
+      { slot: 0, itemFile: "clerk", activationPrg: "", multitaskPrg: "clerk.prg", initialVar: "", initialValue: "", finalVar: "", finalValue: "", loadingVar: "", loadingValue: "", activate: 0, activationType: 0, x: 112, y: 63, layer: 1, reserved: 0 },
+      { slot: 2, itemFile: "ghost", activationPrg: "", multitaskPrg: "ghost.prg", initialVar: "", initialValue: "", finalVar: "", finalValue: "", loadingVar: "haunted", loadingValue: "1", activate: 0, activationType: 0, x: 176, y: 63, layer: 1, reserved: 0 },
+    ],
+  } as unknown) as WorldBoard;
+}
+
+test("hydrates compact actors, owns item threads, and keeps draw ids stable", () => {
+  const vm = createVmState();
+  const state = hydrateSprites({
+    board: board(),
+    variables: { haunted: 0 },
+    players: [{ id: "hero", kind: "player", source: "hero.tem", x: 48, y: 63, layer: 1, controlled: true }],
+    vm,
+    programRef: () => ({ kind: "inline", text: "end()\n", compiler: "2" }),
+  });
+  equal(state.items.length, 2);
+  equal(state.items[0]?.handle, 0);
+  equal(state.items[1]?.handle, 1);
+  equal(state.items[1]?.visible, false);
+  equal(vm.threads.length, 1);
+  deepEqual(spriteDraws(state).map((draw) => [draw.id, draw.drawId]), [["hero", 0], ["clerk", 1]]);
+  setItemVisible(state, "ghost", true, vm, () => ({ kind: "inline", text: "end()\n", compiler: "2" }));
+  equal(vm.threads.length, 2);
+  setItemVisible(state, "clerk", false, vm, null);
+  equal(vm.threads.length, 1);
+});
+
+test("sprites survive snapshot restore with an equal canonical hash", () => {
+  const game = createGameState({ seed: 7 });
+  game.sprites = hydrateSprites({ board: board(), players: [{ id: "hero", kind: "player", source: "hero.tem", x: 48, y: 63, layer: 1, controlled: true }] });
+  const json = snapshot(game);
+  equal(snapshot(restoreGameState(json)), json);
+});

@@ -36,8 +36,7 @@ export type { RgbaSnapshot, SurfaceState, SurfacesSection } from "./sections/sur
 export type { InputSection, InputButton } from "./sections/input.ts";
 export type { EngineSection } from "./sections/engine.ts";
 
-/** Owner: `core/sprites` (players, items, queues, facing). Filled by epic movement-triggers. */
-export type SpritesSection = Record<string, never>;
+export type { SpritesSection } from "../sprites/model.ts";
 
 /** Owner: `core/menu` (roster, selection, steps). Filled by epic menu-party-save. */
 export type PartySection = Record<string, never>;
