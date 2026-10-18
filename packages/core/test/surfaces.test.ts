@@ -47,12 +47,11 @@ test("screen capture and slots round-trip through the save shape", () => {
   const source = createSurface(state, 2, 1, new Uint8Array([1, 2, 3, 255, 4, 5, 6, 255]));
   const saved = saveScreen(state, 3, source);
   if (saved === null) throw new Error("expected saved slot");
-  const captured = canvasGetScreen(state, source);
-  if (captured === null) throw new Error("expected canvas capture");
-  equal(getPixel(state, captured, 1, 0)?.g, 5);
-  const destination = createSurface(state, 1, 1);
+  const destination = createSurface(state, 2, 1);
+  equal(canvasGetScreen(state, destination, source), 1);
+  equal(getPixel(state, destination, 1, 0)?.g, 5);
   equal(typeof restoreGameState(snapshot({ ...createGameState({ seed: 1 }), surfaces: state })), "object");
-  equal(replaceSurface(state, destination, 1, 1, new Uint8Array([0, 0, 0, 255])), 1);
+  equal(replaceSurface(state, destination, 2, 1, new Uint8Array([0, 0, 0, 255, 0, 0, 0, 255])), 2);
   equal((saved as SurfaceId) > source, true);
   notEqual(destination, saved);
 });

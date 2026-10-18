@@ -1,7 +1,7 @@
 import { hashDrawList, hashState } from "../canon/index.ts";
 import { resolveAsset } from "../formats/resolver/resolver.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
-import type { Engine, Diagnostic, Breakpoint, SurfacePixels } from "../ports/engine.ts";
+import type { DrawList } from "../ports/draw.ts";
 import type { InputRecord } from "../ports/input.ts";
 import type { RunnerRequest } from "../ports/requests.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
@@ -78,9 +78,9 @@ export function createEngine(init: EngineInit): Engine {
     if (state.world.board === null) failed = true;
   }
 
-  function currentDrawList(alpha = 0) {
+  function currentDrawList(alpha = 0): DrawList {
     const board: WorldBoard | null = state.world.board ?? null;
-    if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] as const };
+    if (board === null) return { tick: state.time.tick, width: init.width, height: init.height, commands: [] };
     return composeBoard({ board, tick: state.time.tick, camera: { x: 0, y: 0 }, viewport: { width: init.width, height: init.height }, alpha, include: { shading: false, images: false, sprites: false } });
   }
 

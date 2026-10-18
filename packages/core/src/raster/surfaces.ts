@@ -211,13 +211,13 @@ export function saveScreen(state: SurfacesSection, slot: number, source: Surface
   return id;
 }
 
-/** Read a pixel from a surface as straight RGBA, or `null` outside its bounds. */
-export function getPixel(state: SurfacesSection, id: SurfaceId, x: number, y: number, cache?: SurfacePixelCache): { r: number; g: number; b: number; a: number } | null {
+/** Read a pixel's RGB colour, or `null` outside its bounds (E-56). */
+export function getPixel(state: SurfacesSection, id: SurfaceId, x: number, y: number, cache?: SurfacePixelCache): Rgb | null {
   const current = entry(state, id);
   if (current === null || !Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= current.bitmap.w || y >= current.bitmap.h) return null;
   const rgba = decode(current, cache);
   const at = (y * current.bitmap.w + x) * 4;
-  return { r: rgba[at]!, g: rgba[at + 1]!, b: rgba[at + 2]!, a: rgba[at + 3]! };
+  return { r: rgba[at]!, g: rgba[at + 1]!, b: rgba[at + 2]! };
 }
 
 /** The snapshot shape used by save files, exposed for format and test callers. */
@@ -232,9 +232,13 @@ export function captureScreen(state: SurfacesSection, source: SurfaceId = 0 as S
   return createSurface(state, region.w, region.h, region.rgba);
 }
 
-/** `canvasGetScreen` read-back primitive: return a new canvas containing the screen pixels. */
-export function canvasGetScreen(state: SurfacesSection, source: SurfaceId = 0 as SurfaceId, cache?: SurfacePixelCache): SurfaceId | null {
-  return captureScreen(state, source, undefined, cache);
+/** `canvasGetScreen` copies the composed screen into an existing canvas (E-56). */
+export function canvasGetScreen(state: SurfacesSection, destination: SurfaceId, source: SurfaceId = 0 as SurfaceId, cache?: SurfacePixelCache): number | null {
+  const sourceEntry = entry(state, source);
+  if (sourceEntry === null) return null;
+  const region = copyRegion(state, source, { x: 0, y: 0, w: sourceEntry.bitmap.w, h: sourceEntry.bitmap.h }, cache);
+  if (region === null) return null;
+  return replaceSurface(state, destination, region.w, region.h, region.rgba);
 }
 
 /** Restore one numbered saved-screen slot into an existing destination surface. */
