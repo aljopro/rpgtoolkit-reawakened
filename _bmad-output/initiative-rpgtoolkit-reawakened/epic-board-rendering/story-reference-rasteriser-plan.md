@@ -3,7 +3,7 @@ title: 'Reference rasteriser: every draw command, AD-3 pixel pipeline and confor
 type: feature
 ticket: 6
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: '42816c2a'
 route: 'full'
 risk: 'medium'

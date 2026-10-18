@@ -7,6 +7,11 @@
     { "path": "golden/reference/S-01d.png", "scene": "S-01d", "class": "independent-reference", "gating": true, "producer": "4.4" },
     { "path": "golden/reference/S-ISO-STACKED.png", "scene": "S-ISO-STACKED", "class": "independent-reference", "gating": true, "producer": "4.17" },
     { "path": "golden/reference/S-ISO-ROTATED.png", "scene": "S-ISO-ROTATED", "class": "independent-reference", "gating": true, "producer": "4.17" },
+    { "path": "golden/reference/S-LIGHT-ELLIPSE.png", "scene": "S-LIGHT-ELLIPSE", "class": "independent-reference", "gating": true, "producer": "4.33" },
+    { "path": "golden/reference/S-LIGHT-GRADIENT.png", "scene": "S-LIGHT-GRADIENT", "class": "independent-reference", "gating": true, "producer": "4.33" },
+    { "path": "golden/reference/S-LIGHT-CLIPPED.png", "scene": "S-LIGHT-CLIPPED", "class": "independent-reference", "gating": true, "producer": "4.33" },
+    { "path": "golden/reference/S-LIGHT-OVERLAP.png", "scene": "S-LIGHT-OVERLAP", "class": "independent-reference", "gating": true, "producer": "4.33" },
+    { "path": "golden/reference/S-LIGHT-NIGHT.png", "scene": "S-LIGHT-NIGHT", "class": "independent-reference", "gating": true, "producer": "4.33" },
     { "path": "golden/reference/liberation-mono-pangram.png", "scene": "PANGRAM-TRUETYPE", "class": "regression-baseline", "gating": true, "producer": "4.9" }
   ]
 }

@@ -171,9 +171,10 @@ function sourceOffset(command: BlitCommand): number {
 function isoSource(command: BlitCommand, x: number, y: number): [number, number] | null {
   const k = y <= 15 ? y : 31 - y;
   if (x < 31 - 2 * k || x > 32 + 2 * k) return null;
-  // Inverse of the fixed 32x32 -> 64x32 affine map, with half-up rounding.
-  const sx = Math.floor((x - 31 + 2 * y + 1) / 2);
-  const sy = Math.floor((31 - x + 2 * y + 1) / 2);
+  // Inverse of the fixed 32x32 -> 64x32 affine map, with integer half-up rounding.
+  // round_half_up(n, 2) is floor((n + 1) / 2), including for negative n.
+  const sx = Math.floor((x - 32 + 2 * y + 1) / 2);
+  const sy = Math.floor((32 - x + 2 * y + 1) / 2);
   return [Math.max(0, Math.min(31, sx)), Math.max(0, Math.min(31, sy))];
 }
 
