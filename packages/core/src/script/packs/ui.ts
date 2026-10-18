@@ -1,0 +1,164 @@
+import { dosPaletteEntry } from "../../formats/tileset/dos-palette.ts";
+import { assetKey } from "../../formats/resolver/resolver.ts";
+import type { PlainData } from "../../ports/plain-data.ts";
+import type { Rgb } from "../../ports/draw.ts";
+import { colourSurface } from "../../raster/surfaces.ts";
+import type { Arg, BuiltinDoc, BuiltinSpec, ParamSpec } from "../builtins.ts";
+import { ScriptError } from "../errors.ts";
+import type { CommandEffect, CommandResult, CommandView, PluginDefinition } from "../plugin.ts";
+import type { UiSection } from "../../save/sections/ui.ts";
+import { createUiSection } from "../../save/sections/ui.ts";
+import type { SurfacesSection } from "../../save/sections/surfaces.ts";
+import { toNumberValue, toStringValue } from "../values.ts";
+import { layoutText } from "../../render/text.ts";
+
+const DEFAULT_FONT = "media/fonts/tkr-8x8.fnt";
+const WHITE: Rgb = { r: 255, g: 255, b: 255 };
+const BLACK: Rgb = { r: 0, g: 0, b: 0 };
+
+function values(args: readonly Arg[]): PlainData[] {
+  return args.map((arg) => arg.value as PlainData);
+}
+function number(args: readonly Arg[], index: number, fallback = 0): number {
+  const value = args[index]?.value;
+  return value === undefined ? fallback : toNumberValue(value as never);
+}
+function text(args: readonly Arg[], index: number): string {
+  return toStringValue(args[index]?.value as never ?? "");
+}
+function byRef(args: readonly Arg[], index: number, value: number | string): readonly (readonly [number, number | string])[] {
+  return args[index]?.ref === null || args[index]?.ref === undefined ? [] : [[index, value]];
+}
+function rgb(args: readonly Arg[], start: number): Rgb {
+  return {
+    r: Math.max(0, Math.min(255, Math.trunc(number(args, start)))),
+    g: Math.max(0, Math.min(255, Math.trunc(number(args, start + 1)))),
+    b: Math.max(0, Math.min(255, Math.trunc(number(args, start + 2)))),
+  };
+}
+function spliceVariables(value: string, view: CommandView): string {
+  const globals = view.state?.vm.globals ?? {};
+  return value.replace(/<([A-Za-z_][A-Za-z0-9_]*)>/g, (whole, name: string) => {
+    const found = globals[name];
+    return found === undefined ? whole : toStringValue(found as never);
+  });
+}
+function canonicalFont(value: string): string {
+  const lowered = value.trim().toLowerCase();
+  if (lowered === "" || lowered === "arial" || lowered === "sans-serif") return assetKey("media/fonts/liberation-sans.ttf");
+  if (lowered === "times new roman" || lowered === "serif") return assetKey("media/fonts/liberation-serif.ttf");
+  if (lowered === "courier new" || lowered === "monospace") return assetKey("media/fonts/liberation-mono.ttf");
+  return assetKey(value);
+}
+function effect(name: string, args: readonly PlainData[] = [], kind: CommandEffect["kind"] = "mixed"): CommandEffect {
+  void name;
+  return { kind, section: "ui", args: [...args] };
+}
+function uiCommand(
+  name: string,
+  params: readonly ParamSpec[],
+  doc: BuiltinDoc,
+  call: (view: CommandView, args: readonly Arg[]) => CommandResult,
+  aliases: readonly string[] = [],
+): BuiltinSpec {
+  return { name: name.toLowerCase(), aliases: aliases.map((alias) => alias.toLowerCase()), params, doc, call };
+}
+function plainDoc(summary: string, behaviour: string, waits: BuiltinDoc["waits"] = { kind: "never", summary: "Completes in the current script turn." }): BuiltinDoc {
+  return { summary, behaviour, groups: ["message-window-text-fonts-30"], waits };
+}
+
+const textParam: ParamSpec = { name: "text", optional: false, byRef: false, variadic: false };
+const NO_ARGS: readonly ParamSpec[] = [];
+const DIALOGUE = "message-window-text-fonts-30";
+
+export const UI_COMMANDS: readonly BuiltinSpec[] = [
+  uiCommand("mwin", [textParam], plainDoc("Show a line of dialogue.", "Shows the fixed 600×100 logical-pixel message window at the top, appending the text after `<var>` splicing and rendering all glyphs at once; it does not wait."), (view, args) => ({ value: null, effects: [effect("mwin", [spliceVariables(text(args, 0), view)])] })),
+  uiCommand("mwincls", NO_ARGS, plainDoc("Clear and hide the dialogue window.", "Hides the message window and clears all of its text immediately; it does not wait."), () => ({ value: null, effects: [effect("mwincls")] })),
+  uiCommand("mwinSize", [{ name: "percent", optional: true, byRef: false, variadic: true }], { summary: "Obsolete.", behaviour: "Raises the catchable obsolete-command error for every call; the fixed message-window geometry cannot be changed.", groups: [DIALOGUE], tags: ["obsolete"], waits: { kind: "never", summary: "Does not wait." } }, () => { throw new ScriptError("builtin.obsolete", '"mwinsize" is obsolete: the statement is skipped'); }),
+  uiCommand("show", [textParam], plainDoc("Show a line of dialogue.", "Acts exactly like `mwin`: appends the spliced text to the fixed message window and does not wait."), (view, args) => ({ value: null, effects: [effect("mwin", [spliceVariables(text(args, 0), view)])] })),
+  uiCommand("mbox", [textParam], plainDoc("Show a line of dialogue.", "Acts exactly like `mwin`: appends the spliced text to the fixed message window and does not wait."), (view, args) => ({ value: null, effects: [effect("mwin", [spliceVariables(text(args, 0), view)])] })),
+  uiCommand("winGraphic", [{ name: "file", optional: false, byRef: false, variadic: false }], plainDoc("Choose the message-window background image.", "Stores the supplied asset name as the message-window background; the next draw uses it and the call does not wait."), (_view, args) => ({ value: null, effects: [effect("wingraphic", [text(args, 0)])] })),
+  uiCommand("winColor", [{ name: "dos", optional: false, byRef: false, variadic: false }], plainDoc("Choose the message-window colour.", "Converts the DOS palette index to RGB and stores it as the window background; the call does not wait."), (_view, args) => ({ value: null, effects: [effect("wincolor", [Math.trunc(number(args, 0))])] })),
+  uiCommand("winColorRgb", [{ name: "r", optional: false, byRef: false, variadic: false }, { name: "g", optional: false, byRef: false, variadic: false }, { name: "b", optional: false, byRef: false, variadic: false }], plainDoc("Choose the message-window RGB colour.", "Clamps each channel to 0–255 and stores the resulting background colour; the call does not wait."), (_view, args) => ({ value: null, effects: [effect("wincolorrgb", [rgb(args, 0).r, rgb(args, 0).g, rgb(args, 0).b])] })),
+  uiCommand("setMwinTranslucency", [{ name: "percent", optional: false, byRef: false, variadic: false }], plainDoc("Set how see-through the message window is.", "Clamps the background blend to 0–100 percent (0 invisible, 100 opaque); the call does not wait."), (_view, args) => ({ value: null, effects: [effect("setmwintranslucency", [Math.max(0, Math.min(100, Math.trunc(number(args, 0))))])] })),
+  uiCommand("textSpeed", [{ name: "speed", optional: true, byRef: false, variadic: true }], { summary: "Obsolete.", behaviour: "Raises the catchable obsolete-command error for every call; message text is always shown all at once.", groups: [DIALOGUE], tags: ["obsolete"], waits: { kind: "never", summary: "Does not wait." } }, () => { throw new ScriptError("builtin.obsolete", '"textspeed" is obsolete: the statement is skipped'); }),
+  uiCommand("font", [{ name: "font", optional: false, byRef: false, variadic: false }], plainDoc("Choose the font for later text.", "Resolves the name case-insensitively, applying the documented Liberation family substitution when needed; later text uses that asset and the call does not wait."), (_view, args) => ({ value: null, effects: [effect("font", [canonicalFont(text(args, 0))])] })),
+  uiCommand("fontSize", [{ name: "size", optional: false, byRef: false, variadic: false }], plainDoc("Choose the font size in pixels.", "Stores a positive logical-pixel font size used for glyph metrics and square `text` cells; the call does not wait."), (_view, args) => ({ value: null, effects: [effect("fontsize", [Math.max(1, Math.min(256, Math.trunc(number(args, 0))))])] })),
+  uiCommand("bold", [{ name: "enable", optional: false, byRef: false, variadic: false }], plainDoc("Turn bold text on or off.", "Stores the boolean-style flag (zero is off, non-zero is on) in the current FontRef; the call does not wait."), (_view, args) => ({ value: null, effects: [effect("bold", [number(args, 0) === 0 ? 0 : 1])] })),
+  uiCommand("italics", [{ name: "enable", optional: false, byRef: false, variadic: false }], plainDoc("Turn italic text on or off.", "Stores the boolean-style flag (zero is off, non-zero is on) in the current FontRef; the call does not wait."), (_view, args) => ({ value: null, effects: [effect("italics", [number(args, 0) === 0 ? 0 : 1])] })),
+  uiCommand("underline", [{ name: "enable", optional: false, byRef: false, variadic: false }], plainDoc("Turn underlining on or off.", "Stores the boolean-style flag (zero is off, non-zero is on); underline is emitted as a separate line command and the call does not wait."), (_view, args) => ({ value: null, effects: [effect("underline", [number(args, 0) === 0 ? 0 : 1])] })),
+  uiCommand("color", [{ name: "dos", optional: false, byRef: false, variadic: false }], plainDoc("Choose a DOS text colour.", "Converts the DOS palette index to RGB and stores it as the active text colour; the call does not wait."), (_view, args) => ({ value: null, effects: [effect("color", [Math.trunc(number(args, 0))])] })),
+  uiCommand("colorRgb", [{ name: "r", optional: false, byRef: false, variadic: false }, { name: "g", optional: false, byRef: false, variadic: false }, { name: "b", optional: false, byRef: false, variadic: false }], plainDoc("Choose an RGB text colour.", "Clamps each channel to 0–255 and stores the resulting active text colour; the call does not wait."), (_view, args) => ({ value: null, effects: [effect("colorrgb", [rgb(args, 0).r, rgb(args, 0).g, rgb(args, 0).b])] })),
+  uiCommand("getColor", [{ name: "r", optional: false, byRef: true, variadic: false }, { name: "g", optional: false, byRef: true, variadic: false }, { name: "b", optional: false, byRef: true, variadic: false }], plainDoc("Read the active text colour.", "Writes the current RGB channels to the three references in order and returns immediately."), (view, args) => { const color = (view.state?.ui as UiSection | undefined)?.color ?? WHITE; return { value: color.r, out: [...byRef(args, 0, color.r), ...byRef(args, 1, color.g), ...byRef(args, 2, color.b)], effects: [effect("getcolor")] }; }),
+  uiCommand("getFontSize", [{ name: "ret", optional: true, byRef: true, variadic: false }], plainDoc("Read the active font size.", "Returns and optionally writes the current logical-pixel font size immediately."), (view, args) => { const size = (view.state?.ui as UiSection | undefined)?.font?.size ?? 8; return { value: size, out: byRef(args, 0, size), effects: [effect("getfontsize")] }; }),
+  uiCommand("getTextWidth", [{ name: "text", optional: false, byRef: false, variadic: false }, { name: "ret", optional: true, byRef: true, variadic: false }], plainDoc("Measure text width in pixels.", "Measures the spliced string using the active FontRef metrics, writes the optional result reference and does not wait."), (view, args) => { const ui = (view.state?.ui as UiSection | undefined); const ref = ui?.font ?? { asset: DEFAULT_FONT as never, size: 8, bold: false, italic: false }; const value = spliceVariables(text(args, 0), view); const result = layoutText(value, ref).width; return { value: result, out: byRef(args, 1, result), effects: [effect("gettextwidth", [value, result])] }; }),
+  uiCommand("getTextHeight", [{ name: "text", optional: false, byRef: false, variadic: false }, { name: "ret", optional: true, byRef: true, variadic: false }], plainDoc("Measure text height in pixels.", "Measures the spliced string using the active FontRef line height, writes the optional result reference and does not wait."), (view, args) => { const ui = (view.state?.ui as UiSection | undefined); const ref = ui?.font ?? { asset: DEFAULT_FONT as never, size: 8, bold: false, italic: false }; const value = spliceVariables(text(args, 0), view); const result = layoutText(value, ref).height; return { value: result, out: byRef(args, 1, result), effects: [effect("gettextheight", [value, result])] }; }),
+  uiCommand("print", [textParam], plainDoc("Print one line below the previous text.", "Draws the spliced text at the UI cursor, then advances the cursor by one active-font line; the call does not wait."), (view, args) => ({ value: null, effects: [effect("print", [spliceVariables(text(args, 0), view)])] })),
+  uiCommand("text", [{ name: "x", optional: false, byRef: false, variadic: false }, { name: "y", optional: false, byRef: false, variadic: false }, textParam, { name: "canvas", optional: true, byRef: false, variadic: false }], plainDoc("Draw text in square cells.", "Truncates 1-based cell coordinates and maps them to `((x - 1) × fontSize, (y - 1) × fontSize)`; newlines advance one cell row, glyphs are clipped and the call does not wait."), (view, args) => ({ value: null, effects: [effect("text", [Math.trunc(number(args, 0)), Math.trunc(number(args, 1)), spliceVariables(text(args, 2), view)])] })),
+  uiCommand("pixelText", [{ name: "x", optional: false, byRef: false, variadic: false }, { name: "y", optional: false, byRef: false, variadic: false }, textParam, { name: "canvas", optional: true, byRef: false, variadic: false }], plainDoc("Draw text at pixel coordinates.", "Uses the supplied logical-pixel origin, the active FontRef metrics and clipping; the call does not wait."), (view, args) => ({ value: null, effects: [effect("pixeltext", [Math.trunc(number(args, 0)), Math.trunc(number(args, 1)), spliceVariables(text(args, 2), view)])] })),
+  uiCommand("staticText", [{ name: "args", optional: true, byRef: false, variadic: true }], { summary: "Obsolete.", behaviour: "Raises the catchable obsolete-command error and skips the statement.", groups: [DIALOGUE], tags: ["obsolete"], waits: { kind: "never", summary: "Does not wait." } }, () => { throw new ScriptError("builtin.obsolete", '"statictext" is obsolete: the statement is skipped'); }),
+  uiCommand("prompt", [{ name: "question", optional: false, byRef: false, variadic: false }, { name: "ret", optional: true, byRef: true, variadic: false }], { summary: "Ask the player for text.", behaviour: "Shows a modal prompt and yields until the UI supplies a typed value; the value is returned and written to the optional reference.", groups: [DIALOGUE], waits: { kind: "until-input", summary: "Yields until the prompt is answered." } }, (view, args) => ({ value: null, effects: [effect("prompt", [spliceVariables(text(args, 0), view)])], wait: { kind: "render.msgbox", global: true, id: "prompt", payload: [spliceVariables(text(args, 0), view)], resumeRefs: args[1]?.ref === null || args[1]?.ref === undefined ? [] : [args[1].ref] } })),
+  uiCommand("msgBox", [{ name: "text", optional: false, byRef: false, variadic: false }, { name: "title", optional: true, byRef: false, variadic: false }, { name: "style", optional: true, byRef: false, variadic: false }, { name: "textColor", optional: true, byRef: false, variadic: false }, { name: "backColor", optional: true, byRef: false, variadic: false }, { name: "bitmap", optional: true, byRef: false, variadic: false }], { summary: "Ask a question with buttons.", behaviour: "Shows a centred wrapped panel, merges the title as its first body line, then yields until the first OK or Yes/No button is selected; it returns 1, 6 or 7.", groups: [DIALOGUE], waits: { kind: "until-input", summary: "Yields until a button is selected." } }, (_view, args) => { const style = Math.trunc(number(args, 2)); if (style !== 0 && style !== 1) throw new ScriptError("builtin.bad-arg", "msgbox: style must be 0 (OK) or 1 (Yes/No)"); return { value: 0, effects: [effect("msgbox", values(args))], wait: { kind: "render.msgbox", global: true, id: "msgbox", payload: values(args), resumeRefs: [] } }; }),
+];
+
+export const UI_PLUGIN: PluginDefinition = {
+  id: "ui",
+  version: "1.0.0",
+  doc: { summary: "Deterministic message-window, text and modal prompt commands.", groups: [{ id: DIALOGUE, name: "Message window, text and fonts", summary: "Dialogue, text layout and modal prompts." }] },
+  commands: UI_COMMANDS,
+};
+
+export function applyUiEffect(state: { ui: UiSection; surfaces?: SurfacesSection }, name: string, args: readonly PlainData[]): void {
+  const ui = state.ui;
+  if (ui.message === undefined) Object.assign(ui, createUiSection());
+  const first = args[0];
+  const stringArg = (value: PlainData | undefined): string => typeof value === "string" ? value : "";
+  const numberArg = (value: PlainData | undefined): number => typeof value === "number" ? value : 0;
+  const setBackground = (background: Rgb): void => {
+    ui.message = { ...ui.message, background };
+    if (state.surfaces !== undefined) ui.backgroundSurface = colourSurface(state.surfaces, background);
+  };
+  switch (name.toLowerCase()) {
+    case "mwin":
+    case "show":
+    case "mbox": {
+      const line = stringArg(first);
+      ui.message = { ...ui.message, visible: true, text: ui.message.text === "" ? line : `${ui.message.text}\n${line}` };
+      return;
+    }
+    case "mwincls": ui.message = { ...ui.message, visible: false, text: "" }; return;
+    case "wingraphic": ui.message = { ...ui.message, graphic: stringArg(first) }; return;
+    case "wincolor": setBackground(dosPaletteEntry(numberArg(first))); return;
+    case "wincolorrgb": setBackground({ r: numberArg(args[0]), g: numberArg(args[1]), b: numberArg(args[2]) }); return;
+    case "setmwintranslucency": ui.message = { ...ui.message, translucency: Math.max(0, Math.min(100, Math.trunc(numberArg(first)))) }; return;
+    case "font": ui.font = { ...ui.font, asset: assetKey(stringArg(first)) }; return;
+    case "fontsize": ui.font = { ...ui.font, size: Math.max(1, Math.min(256, Math.trunc(numberArg(first)))) }; return;
+    case "bold": ui.font = { ...ui.font, bold: numberArg(first) !== 0 }; return;
+    case "italics": ui.font = { ...ui.font, italic: numberArg(first) !== 0 }; return;
+    case "underline": ui.underline = numberArg(first) !== 0; return;
+    case "color": ui.color = dosPaletteEntry(numberArg(first)); ui.message = { ...ui.message, color: ui.color }; return;
+    case "colorrgb": ui.color = { r: numberArg(args[0]), g: numberArg(args[1]), b: numberArg(args[2]) }; ui.message = { ...ui.message, color: ui.color }; return;
+    case "text": {
+      const x = (numberArg(args[0]) - 1) * ui.font.size;
+      const y = (numberArg(args[1]) - 1) * ui.font.size;
+      ui.draws = [...ui.draws, { x, y, cell: true, text: stringArg(args[2]), font: ui.font, rgb: ui.color, underline: ui.underline }];
+      ui.cursorX = x; ui.cursorY = y;
+      return;
+    }
+    case "pixeltext": {
+      ui.draws = [...ui.draws, { x: numberArg(args[0]), y: numberArg(args[1]), cell: false, text: stringArg(args[2]), font: ui.font, rgb: ui.color, underline: ui.underline }];
+      ui.cursorX = numberArg(args[0]); ui.cursorY = numberArg(args[1]);
+      return;
+    }
+    case "print": {
+      ui.draws = [...ui.draws, { x: ui.cursorX, y: ui.cursorY + ui.font.size, cell: false, text: stringArg(first), font: ui.font, rgb: ui.color, underline: ui.underline }];
+      ui.cursorY += ui.font.size;
+      return;
+    }
+    case "prompt": ui.modal = { kind: "prompt", text: stringArg(first), title: "", style: 0, textColor: ui.color, background: ui.message.background, graphic: "", selected: 0, result: null }; return;
+    case "msgbox": ui.modal = { kind: "msgbox", text: stringArg(args[0]), title: stringArg(args[1]), style: numberArg(args[2]) === 1 ? 1 : 0, textColor: typeof args[3] === "number" ? dosPaletteEntry(numberArg(args[3])) : ui.color, background: typeof args[4] === "number" ? dosPaletteEntry(numberArg(args[4])) : ui.message.background, graphic: stringArg(args[5]), selected: 0, result: null }; return;
+    default: return;
+  }
+}
+
+export { BLACK, DEFAULT_FONT, WHITE };
