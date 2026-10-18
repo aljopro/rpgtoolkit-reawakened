@@ -66,8 +66,8 @@ export type NamedWait = {
   resumeRefs: string[];
 };
 
-/** A wait for a key; `key` is `null` until the input owner supplies it. */
-export type InputKeyWait = { kind: "input.key"; global: boolean; key: string | null; resumeRefs?: string[] };
+/** A wait for a key; parkSeq is the first input sequence it may claim. */
+export type InputKeyWait = { kind: "input.key"; global: boolean; key: string | null; parkSeq?: number; resumeRefs?: string[] };
 
 /** A wait for coupled sprite movement (`multiRun`, E-33). */
 export type MovementWait = { kind: "movement"; global: boolean; moves: WaitMove[] };
@@ -102,11 +102,23 @@ export type Wait = SleepWait | InputKeyWait | MovementWait | RequestWait | BlobW
 /** The wait kind names, namespaced where an owner part owns the kind. */
 export type WaitKind = Wait["kind"];
 
-/** What a poll may read of the world while deciding: the current tick. */
-export type WaitView = { readonly tick: number };
+/** Read-only state exposed to wait resolvers (AD-9; input is owned by core/input). */
+export type WaitInputView = {
+  readonly nextSeq?: number;
+  readonly keys: readonly { readonly seq: number; readonly name: string; readonly code: string; readonly char: string | null }[];
+  readonly focused: boolean;
+};
+export type WaitUiView = { readonly [name: string]: unknown };
 
-/** The value a resolved wait contributes to its call, and whether it succeeded (AD-8's `done`). */
-export type WaitResult = { readonly value: Value; readonly ok: boolean };
+/** What the waits phase may read while deciding. */
+export type WaitView = {
+  readonly tick: number;
+  readonly input?: WaitInputView;
+  readonly ui?: WaitUiView;
+  readonly claims?: readonly number[];
+};
+
+export type WaitResult = { readonly value: Value; readonly ok: boolean; readonly claim?: number };
 
 /** The one resolver signature: `null` means "not yet" (AD-9). */
 export type WaitPoll = (view: WaitView, wait: Wait) => WaitResult | null;

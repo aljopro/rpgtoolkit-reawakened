@@ -20,6 +20,8 @@ export type {
   MenuSection,
   PartySection,
   SpritesSection,
+  RgbaSnapshot,
+  SurfaceState,
   SurfacesSection,
   TriggersSection,
   UiSection,
