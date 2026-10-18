@@ -3,7 +3,7 @@ ticket: 26
 type: feature
 title: Golden scenes and replay gates
 created: '2026-10-17'
-status: built
+status: done
 ---
 
 # Plan: Golden scenes and replay gates

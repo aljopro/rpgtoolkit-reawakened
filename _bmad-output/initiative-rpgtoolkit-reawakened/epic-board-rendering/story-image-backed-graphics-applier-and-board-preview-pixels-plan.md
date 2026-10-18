@@ -1,7 +1,7 @@
 ---
 ticket: 35
 type: feature
-status: built
+status: done
 ---
 
 # Image-backed graphics applier and board preview pixels

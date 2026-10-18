@@ -2,7 +2,7 @@
 title: "Cursor maps, mouse cursor, overlay order and debug overlays"
 ticket: 25
 type: feature
-status: built
+status: done
 ---
 
 # Ticket 4.25 plan
