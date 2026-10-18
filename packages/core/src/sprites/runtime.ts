@@ -228,6 +228,7 @@ function drawFor(actor: SpriteActor, drawId: number): SpriteDraw {
     y: actor.y,
     drawId,
     phase: actor.visual.frame,
+    ...(actor.visual.file === null || actor.visual.file === undefined ? {} : { frame: { file: actor.visual.file } }),
     collisionBase: actor.collisionBase.points,
   };
   return actor.prev === null ? draw : { ...draw, prev: actor.prev };

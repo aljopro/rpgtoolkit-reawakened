@@ -3,3 +3,4 @@ export * from "./model.ts";
 export * from "./runtime.ts";
 export * from "./movement.ts";
 export * from "./pathfinding.ts";
+export * from "./animation.ts";
