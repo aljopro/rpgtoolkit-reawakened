@@ -3,7 +3,7 @@ title: 'Sprites in the compositor: strict layer and y order, under vectors, over
 type: feature
 ticket: 15
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: 'a9ac004c'
 route: full
 risk: high

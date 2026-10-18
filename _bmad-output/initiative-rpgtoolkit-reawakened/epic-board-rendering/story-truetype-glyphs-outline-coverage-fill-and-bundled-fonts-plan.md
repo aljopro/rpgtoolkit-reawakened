@@ -3,7 +3,7 @@ title: 'TrueType glyphs: the library entry 3 approves, outline coverage fill and
 type: feature
 ticket: 9
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: 'b8cc89e3'
 route: 'full'
 risk: 'high'

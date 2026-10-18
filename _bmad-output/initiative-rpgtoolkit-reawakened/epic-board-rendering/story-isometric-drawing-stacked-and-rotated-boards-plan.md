@@ -3,7 +3,7 @@ title: 'Isometric drawing: stacked and rotated boards'
 type: feature
 ticket: 18
 created: '2026-10-17'
-status: built
+status: done
 baseline_revision: '121c2515'
 route: full
 risk: high
