@@ -12,6 +12,13 @@
     { "path": "golden/reference/S-LIGHT-CLIPPED.png", "scene": "S-LIGHT-CLIPPED", "class": "independent-reference", "gating": true, "producer": "4.33" },
     { "path": "golden/reference/S-LIGHT-OVERLAP.png", "scene": "S-LIGHT-OVERLAP", "class": "independent-reference", "gating": true, "producer": "4.33" },
     { "path": "golden/reference/S-LIGHT-NIGHT.png", "scene": "S-LIGHT-NIGHT", "class": "independent-reference", "gating": true, "producer": "4.33" },
-    { "path": "golden/reference/S-LIGHT-BOUNDARY.png", "scene": "S-LIGHT-BOUNDARY", "class": "independent-reference", "gating": true, "producer": "4.34" }
+    { "path": "golden/reference/S-LIGHT-BOUNDARY.png", "scene": "S-LIGHT-BOUNDARY", "class": "independent-reference", "gating": true, "producer": "4.34" },
+    { "path": "golden/regression/closing/demo-title.png", "scene": "closing:demo:title", "suite": "closing", "class": "regression-baseline", "gating": true, "producer": "4.28" },
+    { "path": "golden/regression/closing/demo-board.png", "scene": "closing:demo:board", "suite": "closing", "class": "regression-baseline", "gating": true, "producer": "4.28" },
+    { "path": "golden/regression/closing/Basic-title.png", "scene": "closing:Basic:title", "suite": "closing", "class": "regression-baseline", "gating": true, "producer": "4.28" },
+    { "path": "golden/regression/closing/Basic-board.png", "scene": "closing:Basic:board", "suite": "closing", "class": "regression-baseline", "gating": true, "producer": "4.28" },
+    { "path": "golden/regression/closing/Caoquest-title.png", "scene": "closing:Caoquest:title", "suite": "closing", "class": "regression-baseline", "gating": true, "producer": "4.28" },
+    { "path": "golden/regression/closing/ChimeranEmpire-title.png", "scene": "closing:ChimeranEmpire:title", "suite": "closing", "class": "regression-baseline", "gating": true, "producer": "4.28" },
+    { "path": "golden/regression/closing/FinalDestiny-title.png", "scene": "closing:FinalDestiny:title", "suite": "closing", "class": "regression-baseline", "gating": true, "producer": "4.28" }
   ]
 }

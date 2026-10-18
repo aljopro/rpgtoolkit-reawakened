@@ -193,6 +193,27 @@
 
 - AD-8 in the architecture spine still lists `ParamSpec { optional?, byRef?, variadic? }`, `out?` and `resume?` while AD-14 and the code make every field required. Entry 3 rewrites AD-8 to the functional command contract (ADR 0004 decision 2) and must keep the `Arg = { value, ref: RefId | null }` clause; its doc-first commit should also fix these keys.
 
+## Deferred from: closing suite of epic board-rendering (ticket 4.28, 2026-10-18)
+
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/story-closing-suite-the-sample-games-boot-and-render-headlessly-plan.md`
+  summary: Script text and the message window drawn by a game's start-up program stay on screen over the first board, because nothing clears `ui.draws` or the message window when the engine enters the board.
+  evidence: `golden/regression/closing/demo-board.png` and `Basic-board.png` show "Test Game", "New Game", "Load Game", "Quit" and "Your story goes here..." over the board. docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry lists no screen clearing; the legacy engine redraws the whole screen each frame. Needs an owner ruling (does board entry clear script text?) before any code.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/story-closing-suite-the-sample-games-boot-and-render-headlessly-plan.md`
+  summary: A frame with no board is transparent (alpha 0) where the legacy screen is black, so title screens are white text on transparency.
+  evidence: `currentDrawList` uses an empty draw list when `state.world.board` is null (`packages/core/src/engine/engine.ts`); `golden/regression/closing/demo-title.png` is white text and the hand on alpha 0. Adding a black fill changes the draw hash of every no-board state, so it needs a ruling and a re-record.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/story-closing-suite-the-sample-games-boot-and-render-headlessly-plan.md`
+  summary: `font("Arial")`, `font("Times New Roman")` and `font("Courier New")` resolve to the keys `media/fonts/liberation-sans.ttf`, `liberation-serif.ttf` and `liberation-mono.ttf` (`canonicalFont` in `script/packs/ui.ts`), but the bundled files are `LiberationSans-Regular.ttf` and so on, and `resolveFont` (`render/text.ts`) is not called by the `font` built-in. A family-substituted font therefore never reaches a Liberation file; with entry 4.28's fallback it draws in the default bitmap font.
+  evidence: `assetKey("media/fonts/LiberationSans-Regular.ttf")` is `media/fonts/liberationsans-regular.ttf`, not the key the `font` effect stores; the bundled-assets rule in `docs/spec/engine/display-input-audio.md#reawakened-bundled-assets` records the fallback. Fix in a follow-up: make the `font` built-in resolve through `resolveFont` against the project fonts and the bundled Liberation files.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/story-closing-suite-the-sample-games-boot-and-render-headlessly-plan.md`
+  summary: `state.surfaces` holds the full-screen surface 0 bitmap from the moment the engine is created, so every `advance` hashes a 640×480 RGBA bitmap (1.2 MB): about 60 ms per `advance` at 640×480 against 0.3 ms at 32×32. One-tick batching over 600 ticks therefore takes about 40 s per game.
+  evidence: measured in entry 4.28 on an empty scene-mode engine (63.6 ms per `advance` at 640×480 before any frame is read, 0.33 ms at 32×32) and on the `demo` game (batch sizes 600, 7 and 1 took 1.3 s, 6.6 s and 38.4 s). The closing suite therefore checks batch sizes 600, 30 and 7. A hash that skips the derived screen bitmap (its `rev` already identifies it) would remove the cost; that is a state-contract change for the owner.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/story-closing-suite-the-sample-games-boot-and-render-headlessly-plan.md`
+  summary: A start-up program that fails to compile (every Toolkit 2 sample) does not stop boot: Caoquest, ChimeranEmpire and FinalDestiny report `syntax.error` and the engine still enters `initBoard` without running the program. Epic tk2-support decides whether that is wanted; the closing suite records it as their expected failure.
+  evidence: `golden/regression/closing.json`, the three games' `diagnostics` and `board` fields.
+- source_plan: `_bmad-output/initiative-rpgtoolkit-reawakened/epic-board-rendering/story-closing-suite-the-sample-games-boot-and-render-headlessly-plan.md`
+  summary: [INFERENCE, not run] docs/spec/formats/board.md says a board thread entry is a program file or inline code, but `arrive` in `engine.ts` starts every non-empty entry as a file program, so an inline-code entry would report `program.missing`. No sample game has one. Needs a test and a decision when a game does.
+  evidence: `docs/spec/formats/board.md` thread row (58) and `startFileProgram` in `packages/core/src/engine/engine.ts`.
+
 ## Resolved
 
 - `deferred-work` §2 (the ignored `fixtures/` folder missing from the provenance scan's `scope.skipRootPaths`) — resolved by entry 1.7; `tools/provenance/markers.json` lists `"fixtures"`.

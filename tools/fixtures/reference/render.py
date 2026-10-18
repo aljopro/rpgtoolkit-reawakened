@@ -548,6 +548,13 @@ def check() -> list[str]:
     for entry in entries:
         if not isinstance(entry, dict) or not all(k in entry for k in ("path", "class", "gating", "producer")):
             problems.append("malformed ledger row"); continue
+        if entry.get("suite") == "closing":
+            # The closing suite's frames are regression baselines of the whole engine, not independent-renderer scenes:
+            # `pnpm closing` replays them. They must be honest about that and stay out of golden/reference.
+            if entry["class"] != "regression-baseline": problems.append(f"closing row is not a regression-baseline: {entry}")
+            if not str(entry["path"]).startswith("golden/regression/closing/"): problems.append(f"closing row path is outside golden/regression/closing/: {entry}")
+            if not (ROOT / entry["path"]).is_file(): problems.append(f"{entry['path']}: committed PNG is missing")
+            continue
         path = Path(entry["path"]); listed.add(path.name)
         if entry["class"] not in {"independent-reference", "legacy-screenshot", "regression-baseline"}: problems.append(f"invalid class: {entry}")
         if not isinstance(entry["gating"], bool): problems.append(f"gating is not boolean: {entry}")

@@ -7,6 +7,7 @@ import { expandTileToRgba, readTileset, tileDimensions } from "../formats/tilese
 import { BinaryReader } from "../formats/binary/reader.ts";
 import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
+import { readLegacyFont } from "../formats/font/reader.ts";
 import { gateTrueType } from "../formats/font/truetype.ts";
 import type { AssetIndex, AssetRoot } from "../formats/resolver/model.ts";
 import type { DrawList, Rgb, Tint } from "../ports/draw.ts";
@@ -56,6 +57,7 @@ import {
   createVmState,
 } from "../script/index.ts";
 import type { Thread } from "../script/state.ts";
+import { DEFAULT_FONT } from "../script/packs/ui.ts";
 import type { WaitView } from "../ports/wait.ts";
 import { runTimePhase } from "../time/time.ts";
 import { blitTexture, rasterize, readSurfacePixels, replaceSurface, surfaceTextures, createSurfacesSection, type RasterAsset, type SurfacePixelCache } from "../raster/index.ts";
@@ -112,6 +114,8 @@ type EngineCommonInit = {
   readonly include?: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean };
   /** Decoded image assets supplied by a host or deterministic scene runner. */
   readonly assets?: ReadonlyMap<AssetKey, DecodedTexture>;
+  /** Files the host ships with the engine under `media/` (the default bitmap font, bundled TrueType fonts and cursor images), as bytes like every other asset. */
+  readonly bundled?: ReadonlyMap<AssetKey, Uint8Array>;
   /** Additional scene/editor image commands, kept as draw-list data. */
   readonly blits?: readonly BoardBlit[];
   /** Sprites composed over the board until the sprites section feeds the compositor (movement-triggers owns that). */
@@ -157,6 +161,7 @@ export function createEngine(init: EngineInit): Engine {
   const state: GameState = createGameState({ seed: init.seed });
   state.input = createInputSection();
   state.engine = { claims: [] };
+  const defaultFontAsset = assetKey(DEFAULT_FONT);
   let root: AssetRoot = init.assetRoot;
   let mainFile: MainFile | null = null;
   let loader: ProgramLoader | null = null;
@@ -166,6 +171,7 @@ export function createEngine(init: EngineInit): Engine {
   const cache = new Map<AssetKey, Uint8Array>();
   const decodedImages = new Map<AssetKey, DecodedTexture>();
   const decodedTiles = new Map<AssetKey, DecodedTexture>();
+  const decodedBundled = new Map<AssetKey, RasterAsset | null>();
   const pending = new Map<number, RequestEntry>();
   const pendingImageEffects: Array<{ readonly key: AssetKey; readonly effect: EffectRecord }> = [];
   const pendingBoardPreviews: Array<{ readonly key: AssetKey; readonly effect: EffectRecord }> = [];
@@ -433,6 +439,23 @@ export function createEngine(init: EngineInit): Engine {
       tileTexture(entry.key);
     }
   }
+  function bundledAsset(key: AssetKey, bytes: Uint8Array): RasterAsset | null {
+    const lower = key.toLowerCase();
+    if (lower.endsWith(".ttf")) return bytes;
+    if (lower.endsWith(".fnt")) {
+      const parsed = readLegacyFont(bytes, key);
+      if (parsed.ok) return parsed.value;
+      diagnostics.push({ code: "asset.invalid", file: key, line: parsed.error.offset, message: parsed.error.message });
+      return null;
+    }
+    if (lower.endsWith(".png")) {
+      const decoded = decodeTexture(bytes, key);
+      if (decoded.ok) return decoded.value;
+      diagnostics.push({ code: "asset.invalid", file: key, line: decoded.error.offset, message: decoded.error.message });
+      return null;
+    }
+    return null;
+  }
   function rasterAssets(): ReadonlyMap<AssetKey, RasterAsset> {
     for (const key of cache.keys()) {
       if (isBitmapKey(key)) imageTexture(key);
@@ -442,6 +465,11 @@ export function createEngine(init: EngineInit): Engine {
       }
     }
     const assets = new Map<AssetKey, RasterAsset>();
+    for (const [key, bytes] of init.bundled ?? []) {
+      if (!decodedBundled.has(key)) decodedBundled.set(key, bundledAsset(key, bytes));
+      const asset = decodedBundled.get(key);
+      if (asset !== undefined && asset !== null) assets.set(key, asset);
+    }
     for (const [key, bytes] of installedFonts) assets.set(key, bytes);
     for (const [key, texture] of decodedImages) assets.set(key, texture);
     for (const [key, texture] of decodedTiles) assets.set(key, texture);
@@ -664,7 +692,8 @@ export function createEngine(init: EngineInit): Engine {
     state.camera = realignCamera(state.camera, board, cameraAim(board, arrival));
     bus.postEffect("triggers", engineEffect("triggers", "deactivateat", placement));
     postBoardMusic(board);
-    for (const name of board.threads ?? []) startFileProgram(name, board.key, "board");
+    // An empty list is stored as one empty string and empty entries are ignored (docs/spec/formats/board.md#threads-constants-and-settings).
+    for (const name of board.threads ?? []) if (name !== "") startFileProgram(name, board.key, "board");
     if (board.enterPrg !== undefined && board.enterPrg !== "") startFileProgram(board.enterPrg, board.key, blockingAlive() ? "board" : "blocking");
   }
 
@@ -1011,7 +1040,13 @@ export function createEngine(init: EngineInit): Engine {
     const list = currentDrawList(0);
     const nextHash = hashDrawList(list);
     if (nextHash === frameHash) return;
-    const rendered = rasterize(list, rasterAssets(), surfaceTextures(state.surfaces, surfaceCache));
+    const assets = new Map(rasterAssets());
+    // A font the game does not ship (a legacy family name such as "Comic Sans MS") draws in the default bitmap font.
+    const fallbackFont = assets.get(defaultFontAsset);
+    if (fallbackFont !== undefined) for (const command of list.commands) if (command.kind === "text" && !assets.has(command.font.asset)) assets.set(command.font.asset, fallbackFont);
+    const rendered = rasterize(list, assets, surfaceTextures(state.surfaces, surfaceCache));
+    // A frame that could not be replayed is reported, never left as a silently blank or partial image.
+    if (rendered.error !== null) diagnostics.push({ code: "render.failed", file: state.world.board?.key ?? "", line: 0, message: rendered.error });
     replaceSurface(state.surfaces, 0 as SurfaceId, rendered.width, rendered.height, rendered.rgba);
     frameHash = nextHash;
   }

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { goldenJob, runFetchedCorpus } from "@tk-reawakened/runner-harness";
+import { runClosing } from "./closing.ts";
 import { runDump } from "./dump/cli.ts";
 
 function readFileOrUndefined(filePath: string): string | undefined {
@@ -150,7 +151,7 @@ function runCorpus(argv: string[]): number {
   }
 }
 
-/** The headless shell: `golden` replays the G5 suite, `dump` walks a legacy project. */
+/** The headless shell: `golden` replays the G5 suite, `closing` boots the sample games, `dump` walks a legacy project. */
 export function main(argv: string[]): number {
   const subcommand = argv[0];
 
@@ -165,7 +166,9 @@ export function main(argv: string[]): number {
   if (subcommand === "corpus") {
     return runCorpus(argv.slice(1));
   }
-
+  if (subcommand === "closing") {
+    return runClosing(argv.slice(1));
+  }
   if (subcommand === "dump") {
     try {
       return runDump(argv.slice(1));

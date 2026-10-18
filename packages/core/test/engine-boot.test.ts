@@ -248,6 +248,16 @@ test("boot is deterministic and independent of how ticks are batched", () => {
   equal(again.report.stateHash, wholeResult.report.stateHash);
 });
 
+test("a board whose thread list is the one empty string the editor writes starts no board thread and reports nothing", () => {
+  // The sample games' start boards carry exactly this list (docs/spec/formats/board.md: an empty list is one empty string, empty entries ignored).
+  const game = authorGame({ ...SCRIPTED, boards: { "start.brd": { music: "theme.mid", enter: "", threads: [""], tiles: [40, 30] } } });
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles), game.files, 30);
+  deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.code === "program.missing"), []);
+  equal(doubles.state().vm.threads.some((thread) => thread.kind === "board"), false);
+  equal(doubles.state().engine.boot?.stage, "running");
+});
+
 test("a game with no player stops with the ruled diagnostic and runs no board", () => {
   const game = authorGame({ ...SCRIPTED, initChar: "" });
   const doubles = makeDoubles();
