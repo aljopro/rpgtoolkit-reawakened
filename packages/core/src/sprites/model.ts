@@ -74,6 +74,10 @@ export type SpriteMovement = {
   readonly waitTicks: number;
   readonly pendingExit: Facing | null;
   readonly under: string[];
+  /** Tick at which the most recent movement target completed. */
+  readonly lastStepTick: number | null;
+  /** Euclidean distance of the most recent completed target, in pixels. */
+  readonly lastStepDistance: number;
 };
 
 /** One hydrated actor, shared by players and board items. */
@@ -215,7 +219,7 @@ export function actorFromSource(source: SpriteActorSource, board: WorldBoard, in
     activationBase: actorBase(actor, fallback.activation, 1),
     visual: actorVisual(source.character, source.item),
     queue: { moves: [], waypoint: null },
-    movement: { active: null, waitTicks: 0, pendingExit: null, under: [] },
+    movement: { active: null, waitTicks: 0, pendingExit: null, under: [], lastStepTick: null, lastStepDistance: 0 },
     prev: null,
     frozenUntil: null,
     multitaskProgram: multitask === "" ? null : multitask,

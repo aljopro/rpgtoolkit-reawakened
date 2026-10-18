@@ -1,0 +1,363 @@
+/** Deterministic trigger dispatch (E-40..E-45, R-52, AD-25/AD-26). */
+import type { EnginePhaseRegistration, EngineResetRegistration } from "../engine/engine.ts";
+import type { EffectRecord } from "../script/effects.ts";
+import type { ProgramRef } from "../script/program.ts";
+import { findThread, startThread } from "../script/state.ts";
+import type { GameState } from "../save/state.ts";
+import type { Facing, SpriteActor } from "../sprites/model.ts";
+import type { WorldItem, WorldProgram, WorldPoint } from "../world/model.ts";
+import { createTriggersSection, resetTriggersSection, type TriggerActive, type TriggersSection } from "./model.ts";
+
+const FP = 256;
+const FACING_VECTOR: Record<Facing, readonly [number, number]> = {
+  N: [0, -1], NE: [1, -1], E: [1, 0], SE: [1, 1], S: [0, 1], SW: [-1, 1], W: [-1, 0], NW: [-1, -1],
+};
+
+type Candidate = {
+  key: string;
+  source: "item" | "region";
+  index: number;
+  program: string;
+  initialVar: string;
+  initialValue: string;
+  finalVar: string;
+  finalValue: string;
+  activate: number;
+  activationType: number;
+  repeatDistance: number;
+  layer: number;
+  points: readonly WorldPoint[];
+  closed: number;
+  actor?: SpriteActor;
+};
+
+export type TriggerProgramResolver = (program: string) => ProgramRef | null;
+export type TriggerEvent = {
+  readonly type: "trigger-start" | "trigger-complete" | "trigger-skip" | "trigger-gone";
+  readonly tick: number;
+  readonly key: string;
+  readonly source?: "item" | "region";
+};
+export type TriggerPhaseOptions = {
+  readonly rank?: number;
+  readonly programRef?: TriggerProgramResolver | null;
+  readonly onEvent?: (event: TriggerEvent) => void;
+};
+
+function fixed(value: number): number {
+  return Math.floor(value * FP + 0.5);
+}
+function pointFixed(point: { readonly x: number; readonly y: number }): [number, number] {
+  return [fixed(point.x), fixed(point.y)];
+}
+function translate(points: readonly WorldPoint[], x: number, y: number): [number, number][] {
+  const fx = fixed(x);
+  const fy = fixed(y);
+  return points.map((point) => {
+    const [px, py] = pointFixed(point);
+    return [px + fx, py + fy];
+  });
+}
+function polygon(points: readonly WorldPoint[]): [number, number][] {
+  return points.map(pointFixed);
+}
+function cross(a: [number, number], b: [number, number], p: [number, number]): number {
+  return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+}
+function onSegment(a: [number, number], b: [number, number], p: [number, number]): boolean {
+  return p[0] >= Math.min(a[0], b[0]) && p[0] <= Math.max(a[0], b[0]) && p[1] >= Math.min(a[1], b[1]) && p[1] <= Math.max(a[1], b[1]);
+}
+function segmentsIntersect(a: [number, number], b: [number, number], c: [number, number], d: [number, number]): boolean {
+  const ab1 = cross(a, b, c);
+  const ab2 = cross(a, b, d);
+  const cd1 = cross(c, d, a);
+  const cd2 = cross(c, d, b);
+  if (ab1 === 0 && onSegment(a, b, c)) return true;
+  if (ab2 === 0 && onSegment(a, b, d)) return true;
+  if (cd1 === 0 && onSegment(c, d, a)) return true;
+  if (cd2 === 0 && onSegment(c, d, b)) return true;
+  return (ab1 < 0) !== (ab2 < 0) && (cd1 < 0) !== (cd2 < 0);
+}
+function inside(point: [number, number], shape: readonly [number, number][]): boolean {
+  let hit = false;
+  for (let i = 0, j = shape.length - 1; i < shape.length; j = i++) {
+    const a = shape[i]!;
+    const b = shape[j]!;
+    if (cross(a, b, point) === 0 && onSegment(a, b, point)) return true;
+    if ((a[1] > point[1]) !== (b[1] > point[1]) && point[0] < ((b[0] - a[0]) * (point[1] - a[1])) / (b[1] - a[1]) + a[0]) hit = !hit;
+  }
+  return hit;
+}
+function overlaps(left: readonly [number, number][], right: readonly [number, number][], closed = true): boolean {
+  if (left.length < 2 || right.length < 2) return false;
+  const leftEdges = left.length > 2 && closed;
+  const rightEdges = right.length > 2 && closed;
+  for (let i = 1; i < left.length; i += 1) {
+    const a = left[i - 1]!;
+    const b = left[i]!;
+    for (let j = 1; j < right.length; j += 1) if (segmentsIntersect(a, b, right[j - 1]!, right[j]!)) return true;
+    if (rightEdges && segmentsIntersect(a, b, right[right.length - 1]!, right[0]!)) return true;
+  }
+  if (leftEdges) {
+    const a = left[left.length - 1]!;
+    const b = left[0]!;
+    for (let j = 1; j < right.length; j += 1) if (segmentsIntersect(a, b, right[j - 1]!, right[j]!)) return true;
+    if (rightEdges && segmentsIntersect(a, b, right[right.length - 1]!, right[0]!)) return true;
+  }
+  return (leftEdges && inside(left[0]!, right)) || (rightEdges && inside(right[0]!, left));
+}
+function valueMatches(value: unknown, expected: string): boolean {
+  return String(value ?? "") === expected;
+}
+function conditionMatches(state: GameState, candidate: Candidate): boolean {
+  if (candidate.activate === 0 || candidate.initialVar === "") return true;
+  return valueMatches(state.vm.globals[candidate.initialVar], candidate.initialValue);
+}
+function regionCandidate(program: WorldProgram, index: number): Candidate {
+  return {
+    key: `region:${index}`,
+    source: "region",
+    index,
+    program: program.program,
+    initialVar: program.initialVar,
+    initialValue: program.initialValue,
+    finalVar: program.finalVar,
+    finalValue: program.finalValue,
+    activate: program.activate,
+    activationType: program.activationType,
+    repeatDistance: program.repeatDistance,
+    layer: program.layer,
+    points: program.points,
+    closed: program.closed,
+  };
+}
+function itemCandidate(item: WorldItem, actor: SpriteActor, index: number): Candidate {
+  return {
+    key: `item:${index}`,
+    source: "item",
+    index,
+    program: item.activationPrg,
+    initialVar: item.initialVar,
+    initialValue: item.initialValue,
+    finalVar: item.finalVar,
+    finalValue: item.finalValue,
+    activate: item.activate,
+    activationType: item.activationType,
+    repeatDistance: 0,
+    layer: item.layer,
+    points: actor.activationBase.points as WorldPoint[],
+    closed: 1,
+    actor,
+  };
+}
+function selectedPlayer(state: GameState): SpriteActor | null {
+  const id = state.sprites.selectedPlayer;
+  return state.sprites.players.find((actor) => actor.id === id) ?? state.sprites.players.find((actor) => actor.controlled) ?? state.sprites.players[0] ?? null;
+}
+function triggerTypeMatches(candidate: Candidate, kind: "step" | "key"): boolean {
+  const type = candidate.activationType & 3;
+  return kind === "key" ? type === 1 : type === 0 || type === 2;
+}
+function playerShape(player: SpriteActor): [number, number][] {
+  return translate(player.collisionBase.points as WorldPoint[], player.x, player.y);
+}
+function itemShape(candidate: Candidate): [number, number][] {
+  return translate(candidate.points, candidate.actor?.x ?? 0, candidate.actor?.y ?? 0);
+}
+function distanceSquared(a: SpriteActor, b: SpriteActor): number {
+  const dx = fixed(a.x) - fixed(b.x);
+  const dy = fixed(a.y) - fixed(b.y);
+  return dx * dx + dy * dy;
+}
+function frontness(player: SpriteActor, item: SpriteActor): number {
+  const vector = FACING_VECTOR[player.facing];
+  const dx = fixed(item.x) - fixed(player.x);
+  const dy = fixed(item.y) - fixed(player.y);
+  return (vector?.[0] ?? 0) * dx + (vector?.[1] ?? 0) * dy;
+}
+function facingToward(from: SpriteActor, to: SpriteActor): Facing {
+  const dx = fixed(to.x) - fixed(from.x);
+  const dy = fixed(to.y) - fixed(from.y);
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax === 0 && ay === 0) return from.facing;
+  if (ax * 2 < ay) return dy < 0 ? "N" : "S";
+  if (ay * 2 < ax) return dx < 0 ? "W" : "E";
+  if (dx < 0 && dy < 0) return "NW";
+  if (dx < 0) return "SW";
+  if (dy < 0) return "NE";
+  return "SE";
+}
+function stepDistance(player: SpriteActor): number {
+  const movement = player.movement as typeof player.movement & { readonly lastStepDistance?: number };
+  return movement.lastStepDistance ?? 0;
+}
+function stepTick(player: SpriteActor): number {
+  const movement = player.movement as typeof player.movement & { readonly lastStepTick?: number };
+  return movement.lastStepTick ?? -1;
+}
+function clearQueue(state: GameState, player: SpriteActor): void {
+  state.sprites.players = state.sprites.players.map((actor) => actor.id === player.id ? { ...actor, queue: { moves: [], waypoint: null } } : actor);
+}
+function currentThreadFinished(state: GameState, active: TriggerActive): boolean {
+  const thread = findThread(state.vm, active.thread);
+  return thread === undefined || thread.status === "finished";
+}
+function hasBlockingThread(state: GameState): boolean {
+  return state.vm.threads.some((thread) => thread.kind === "blocking" && thread.status !== "finished");
+}
+function programRef(name: string, resolver: TriggerProgramResolver | null | undefined): ProgramRef | null {
+  if (name === "") return null;
+  if (resolver !== undefined && resolver !== null) {
+    const resolved = resolver(name);
+    if (resolved !== null) return resolved;
+  }
+  if (name.toLowerCase().endsWith(".prg")) return null;
+  return { kind: "inline", text: name, compiler: "2", dialect: "tk3" };
+}
+function emit(events: TriggerEvent[], options: TriggerPhaseOptions, value: TriggerEvent): void {
+  events.push(value);
+  options.onEvent?.(value);
+}
+
+/** Apply the `triggers` effects emitted by the script pack and board entry. */
+export function applyTriggerEffect(state: GameState, effect: EffectRecord): void {
+  if (effect.name === "gone") {
+    const key = state.triggers.active?.key;
+    if (key !== undefined && !state.triggers.suppressed.includes(key)) state.triggers.suppressed = [...state.triggers.suppressed, key];
+    return;
+  }
+  if (effect.name === "deactivateat") {
+    const [x, y, layer] = effect.args;
+    if (typeof x === "number" && typeof y === "number" && typeof layer === "number") state.triggers.deactivateAt = { x, y, layer };
+  }
+}
+
+/** Dispatch one trigger phase after movement and before battle. */
+export function runTriggersPhase(state: GameState, options: TriggerPhaseOptions = {}): TriggerEvent[] {
+  const events: TriggerEvent[] = [];
+  const board = state.world.board ?? null;
+  const player = selectedPlayer(state);
+  if (board === null || player === null) return events;
+  const section = state.triggers;
+  if (section.version !== 2) resetTriggersSection(section);
+  if (section.boardKey !== board.key) {
+    section.boardKey = board.key;
+    section.fired = {};
+    section.repeat = {};
+    section.suppressed = [];
+    section.deactivated = [];
+    section.deactivateAt = null;
+    section.active = null;
+    section.silentUntilIdle = false;
+  }
+  if (section.deactivateAt !== null) {
+    const arrival = section.deactivateAt;
+    const atDestination = player.layer === arrival.layer && fixed(player.x) === fixed(arrival.x) && fixed(player.y) === fixed(arrival.y);
+    if (atDestination) {
+      const shape = playerShape(player);
+      for (const [index, program] of (board.programs ?? []).entries()) if (program.layer === player.layer && overlaps(shape, polygon(program.points), program.closed !== 0)) section.deactivated.push(`region:${index}`);
+      for (const [index, item] of (board.items ?? []).entries()) {
+        const actor = state.sprites.items.find((value) => value.index === index);
+        if (actor?.visible && item.layer === player.layer && overlaps(shape, itemShape(itemCandidate(item, actor, index)))) section.deactivated.push(`item:${index}`);
+      }
+    }
+    section.deactivateAt = null;
+  }
+  if (section.active !== null) {
+    if (!currentThreadFinished(state, section.active)) return events;
+    const active = section.active;
+    if (active.setVar !== "") state.vm.globals[active.setVar] = active.setValue;
+    emit(events, options, { type: "trigger-complete", tick: state.time.tick, key: active.key, source: active.source });
+    section.active = null;
+    if (active.silentMovement && (player.movement.active !== null || player.queue.moves.length > 0 || player.queue.waypoint !== null)) section.silentUntilIdle = true;
+  }
+  if (section.silentUntilIdle) {
+    if (player.movement.active !== null || player.queue.moves.length > 0 || player.queue.waypoint !== null) return events;
+    section.silentUntilIdle = false;
+    return events;
+  }
+  const step = stepTick(player) === state.time.tick;
+  const key = state.input.keys.some((entry) => entry.seq > section.lastKeySeq);
+  for (const entry of state.input.keys) if (entry.seq > section.lastKeySeq) section.lastKeySeq = entry.seq;
+  if (!step && !key) return events;
+  const kind = key ? "key" : "step";
+  const shape = playerShape(player);
+  const regions = (board.programs ?? []).map(regionCandidate);
+  const items: Candidate[] = [];
+  for (const [index, item] of (board.items ?? []).entries()) {
+    const actor = state.sprites.items.find((value) => value.index === index);
+    if (actor?.visible && item.layer === player.layer) items.push(itemCandidate(item, actor, index));
+  }
+  const all = [...regions, ...items];
+  for (const candidate of all) {
+    const inArea = candidate.layer === player.layer && !section.suppressed.includes(candidate.key) && !section.deactivated.includes(candidate.key)
+      && (candidate.source === "item" ? overlaps(shape, itemShape(candidate)) : overlaps(shape, polygon(candidate.points), candidate.closed !== 0));
+    if (!inArea) {
+      delete section.fired[candidate.key];
+      delete section.repeat[candidate.key];
+    }
+  }
+  const qualifying = all.filter((candidate) => {
+    if (!triggerTypeMatches(candidate, kind) || section.suppressed.includes(candidate.key) || section.deactivated.includes(candidate.key)) return false;
+    const inArea = candidate.source === "item" ? overlaps(shape, itemShape(candidate)) : overlaps(shape, polygon(candidate.points), candidate.closed !== 0);
+    if (!inArea || !conditionMatches(state, candidate) || candidate.program === "") return false;
+    if (kind === "key") return true;
+    const fired = section.fired[candidate.key] === true;
+    if (!fired) return true;
+    if ((candidate.activationType & 3) !== 2) return false;
+    const distance = candidate.repeatDistance;
+    if (distance <= 0) return false;
+    const next = (section.repeat[candidate.key] ?? 0) + stepDistance(player);
+    section.repeat[candidate.key] = next;
+    return next >= distance;
+  });
+  let winner: Candidate | undefined;
+  if (kind === "key") {
+    const itemCandidates = qualifying.filter((candidate) => candidate.source === "item");
+    itemCandidates.sort((left, right) => {
+      const leftActor = left.actor!;
+      const rightActor = right.actor!;
+      return frontness(player, rightActor) - frontness(player, leftActor) || distanceSquared(player, leftActor) - distanceSquared(player, rightActor) || leftActor.index - rightActor.index;
+    });
+    winner = itemCandidates[0] ?? qualifying.filter((candidate) => candidate.source === "region").at(-1);
+  } else {
+    const itemCandidates = qualifying.filter((candidate) => candidate.source === "item");
+    itemCandidates.sort((left, right) => {
+      const leftActor = left.actor!;
+      const rightActor = right.actor!;
+      return frontness(player, rightActor) - frontness(player, leftActor) || distanceSquared(player, leftActor) - distanceSquared(player, rightActor) || leftActor.index - rightActor.index;
+    });
+    winner = itemCandidates[0] ?? qualifying.filter((candidate) => candidate.source === "region").at(-1);
+  }
+  if (winner === undefined || hasBlockingThread(state)) return events;
+  if (winner.source === "item" && winner.actor !== undefined) {
+    state.sprites.items = state.sprites.items.map((actor) => actor.id === winner!.actor!.id ? { ...actor, facing: facingToward(actor, player) } : actor);
+    clearQueue(state, player);
+  } else if ((winner.activationType & 4) !== 0) clearQueue(state, player);
+  const ref = programRef(winner.program, options.programRef);
+  if (ref === null) return events;
+  const thread = startThread(state.vm, { ref, kind: "blocking", owner: "script", source: winner.source === "item" ? winner.actor?.id ?? null : winner.key, target: player.id });
+  const active: TriggerActive = {
+    key: winner.key,
+    thread: thread.id,
+    setVar: winner.finalVar,
+    setValue: winner.finalValue,
+    source: winner.source,
+    silentMovement: true,
+  };
+  section.active = active;
+  section.fired[winner.key] = true;
+  if ((winner.activationType & 3) === 2) section.repeat[winner.key] = 0;
+  emit(events, options, { type: "trigger-start", tick: state.time.tick, key: winner.key, source: winner.source });
+  return events;
+}
+
+export function triggerPhaseRegistration(options: TriggerPhaseOptions = {}): EnginePhaseRegistration {
+  return { phase: "triggers", rank: options.rank ?? 0, run: (state) => { runTriggersPhase(state, options); } };
+}
+export const triggersPhaseRegistration = triggerPhaseRegistration;
+export function triggerResetRegistration(rank = 0): EngineResetRegistration {
+  return { section: "triggers", rank, reset: (state) => resetTriggersSection(state.triggers) };
+}
+export { createTriggersSection };
