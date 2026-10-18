@@ -17,7 +17,7 @@ import type { RunnerRequest } from "../ports/requests.ts";
 import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
-import { composeBoard, type SpriteDraw } from "../render/compose.ts";
+import { composeBoard, type BoardBlit, type SpriteDraw } from "../render/compose.ts";
 import { composeUi, composeUiCursor } from "../render/ui.ts";
 import { applyFxDrawList, advanceFx, applyFxEffect } from "../render/fx.ts";
 import { advanceAnimations, loadAnimation } from "../render/animation.ts";
@@ -110,9 +110,13 @@ type EngineCommonInit = {
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
   readonly cameraTarget?: CameraTarget;
   readonly include?: { readonly shading: boolean; readonly images: boolean; readonly sprites: boolean };
+  /** Decoded image assets supplied by a host or deterministic scene runner. */
+  readonly assets?: ReadonlyMap<AssetKey, DecodedTexture>;
+  /** Additional scene/editor image commands, kept as draw-list data. */
+  readonly blits?: readonly BoardBlit[];
   /** Sprites composed over the board until the sprites section feeds the compositor (movement-triggers owns that). */
   readonly sprites?: readonly SpriteDraw[];
-  /** Script ambient summed with the board's once per tile blit (E-17). */
+  /** Script ambient summed with the board ambient once per tile blit (E-17). */
   readonly globalAmbient?: Tint;
   readonly debug?: DebugOverlayConfig;
 };
@@ -191,8 +195,10 @@ export function createEngine(init: EngineInit): Engine {
   state.camera = createCameraSection(init.width, init.height);
   const surfaceCache: SurfacePixelCache = new Map();
   let frameHash = hashDrawList({ tick: 0, width: init.width, height: init.height, commands: [] });
-  // Sprites and script ambient reach the compositor through the same plain-data view fields the editor and export use (AD-29).
+  // Presentation inputs are plain draw-list data; decoded textures remain runner-owned (AD-29).
   const presentation = {
+    ...(init.assets === undefined ? {} : { assets: init.assets }),
+    ...(init.blits === undefined ? {} : { blits: init.blits }),
     ...(init.sprites === undefined ? {} : { sprites: init.sprites }),
     ...(init.globalAmbient === undefined ? {} : { globalAmbient: init.globalAmbient }),
   };
@@ -448,7 +454,8 @@ export function createEngine(init: EngineInit): Engine {
     return assets;
   }
   function isBitmapKey(key: AssetKey): boolean {
-    return key.startsWith("bitmap/") || key.includes("/bitmap/");
+    const lower = key.toLowerCase();
+    return (lower.startsWith("bitmap/") || lower.includes("/bitmap/")) && !lower.endsWith(".tbm") && !lower.endsWith(".tan");
   }
   function requestKindFor(key: AssetKey): EngineRequestKind {
     return isBitmapKey(key) ? "image" : "tile";

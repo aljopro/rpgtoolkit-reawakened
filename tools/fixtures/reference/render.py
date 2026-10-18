@@ -415,10 +415,18 @@ def render(scene: dict[str, Any]) -> Image.Image:
     cells = model["cells"]
     include = scene["view"]["include"]
     ambient = tuple(scene["ambient"][i] + model.get(("ambient r", "ambient g", "ambient b")[i], 0) for i in range(3))
+    stored_shades = model["shades"]
+    dynamic_shades: list[list[int]] = []
     if include["shading"] and model["lights"]:
-        # Match the engine's load-time bake: source light objects disappear and
-        # their clamped additive contribution becomes shading layer zero.
-        model["shades"].extend(_baked_light_records(model, model["sizeX"], model["sizeY"]))
+        # Lights are a distinct cast-layer-zero shading layer. Stored shade
+        # layers retain their own cast-layer threshold rather than being
+        # flattened ahead of the newly baked light records.
+        dynamic_shades = _baked_light_records(model, model["sizeX"], model["sizeY"])
+        model["shades"] = dynamic_shades
+    elif not include["shading"]:
+        model["shades"] = []
+    else:
+        dynamic_shades = model["shades"]
     rotated = model["coordType"] & 3 == 2
     iso = model["coordType"] & 3 in (1, 2)
     grid_width = model["sizeX"] + model["sizeY"] if rotated else model["sizeX"]
@@ -442,6 +450,15 @@ def render(scene: dict[str, Any]) -> Image.Image:
             cursor = 0
             shade = (0, 0, 0)
             for count, r, g, b in model["shades"]:
+                if cursor <= shade_index < cursor + count:
+                    shade = (r, g, b)
+                    break
+                cursor += count
+            tint = tuple(tint[i] + shade[i] for i in range(3))
+        if include["shading"] and model["lights"] and layer < 2 and stored_shades:
+            cursor = 0
+            shade = (0, 0, 0)
+            for count, r, g, b in stored_shades:
                 if cursor <= shade_index < cursor + count:
                     shade = (r, g, b)
                     break
