@@ -3,7 +3,7 @@ title: 'Movement waits and movement and input built-ins'
 type: 'feature'
 ticket: 7
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: 'ebe6e0db'
 route: 'full'
 route_source: 'pinned'

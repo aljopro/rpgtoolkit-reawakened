@@ -3,7 +3,7 @@ title: 'Input bindings, click-to-move, gamepad and buttons'
 type: 'feature'
 ticket: 6
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: '811635d4'
 route: 'full'
 route_source: 'pinned'

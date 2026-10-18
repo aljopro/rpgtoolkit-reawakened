@@ -3,7 +3,7 @@ title: 'Independent movement oracle and authored fixtures'
 type: 'feature'
 ticket: 2
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: 'd53cdd804d5f93525c2aa4e444bc848e75f550a5'
 risk: 'medium'
 context:
