@@ -354,6 +354,7 @@ export function collectGarbage(vm: VmState): void {
  * always loads (`restore.callable-receiver`).
  */
 function collectObjects(vm: VmState): void {
+  if (vm.objects.length === 0) return;
   const reached = new Set<number>();
   const pending: number[] = [];
   const reach = (handle: number | null): void => {
@@ -520,6 +521,32 @@ function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base:
 function bindMemberValue(value: Value, handle: number): Value {
   if (!isCallableValue(value) || value.receiver !== null) return value;
   return { type: "callable", def: value.def, captures: value.captures, receiver: String(handle) };
+}
+
+/**
+ * The class a method frame finds its symbols through (OOP-10, "Two class
+ * identities"): the class of the object it runs on, read from the record, not the
+ * class of the running method. `frame.objectClass` stays the access context; it
+ * answers here only when the object was freed under the frame.
+ */
+function frameObjectClass(vm: VmState, frame: Frame): string | undefined {
+  if (frame.objectHandle === undefined) return undefined;
+  return findObject(vm, frame.objectHandle)?.className ?? frame.objectClass;
+}
+
+/**
+ * The bare name `name` as a `load` finds it, without creating it (OOP-6): a field
+ * of the object the running method is on, else a local of the frame, else a global.
+ * The qualifier of `eng.get()` is found this way, so it is the `eng` that `eng->get()` reads.
+ */
+function peekName(vm: VmState, thread: Thread, frameIndex: number, program: Program, name: string): Value | undefined {
+  const frame = thread.frames[frameIndex]!;
+  const ownClass = frameObjectClass(vm, frame);
+  if (frame.objectHandle !== undefined && ownClass !== undefined && findMember(program, ownClass, name) !== undefined) {
+    const record = findObject(vm, frame.objectHandle);
+    return record === undefined ? undefined : readMember(record, name);
+  }
+  return peekVariable(vm, thread, frameIndex, name);
 }
 
 /** The live object `value` names; `what` is the message when `value` is no object at all (OOP-3). */
@@ -1873,14 +1900,11 @@ export function stepThread(
         frame.ip += 1;
         break;
 
-      case "load":
-        if (
-          op.scope === undefined &&
-          frame.objectHandle !== undefined &&
-          frame.objectClass !== undefined &&
-          findMember(program, frame.objectClass, op.name) !== undefined
-        ) {
-          const ref = objectRef(frame.objectHandle, op.name);
+      case "load": {
+        const objectHandle = op.scope === undefined ? frame.objectHandle : undefined;
+        const ownClass = objectHandle === undefined ? undefined : frameObjectClass(vm, frame);
+        if (objectHandle !== undefined && ownClass !== undefined && findMember(program, ownClass, op.name) !== undefined) {
+          const ref = objectRef(objectHandle, op.name);
           frame.operands.push({ value: readRef(vm, thread, frameIndex, ref), ref });
         } else if (op.name === "this" && frame.objectHandle !== undefined && frame.objectClass !== undefined) {
           // The object's own class, not the class of the running method (OOP-10, two class identities).
@@ -1899,6 +1923,7 @@ export function stepThread(
         }
         frame.ip += 1;
         break;
+      }
 
       case "member":
       case "get_member_bound": {
@@ -2069,7 +2094,8 @@ export function stepThread(
           break;
         }
         const baseName = baseArg.ref !== null ? refName(baseArg.ref) : toStringValue(baseArg.value);
-        if (frame.objectHandle !== undefined && frame.objectClass !== undefined && findMember(program, frame.objectClass, baseName) !== undefined) {
+        const ownClass = frameObjectClass(vm, frame);
+        if (frame.objectHandle !== undefined && ownClass !== undefined && findMember(program, ownClass, baseName) !== undefined) {
           const memberRef = objectRef(frame.objectHandle, `${baseName}[${keyText}]`);
           frame.operands.push({ value: readRef(vm, thread, frameIndex, memberRef), ref: memberRef });
           frame.ip += 1;
@@ -2398,13 +2424,7 @@ export function stepThread(
           break;
         }
         if (op.file !== undefined) {
-          const slot = frame.locals[op.file];
-          const receiverValue =
-            slot === undefined
-              ? vm.globals[op.file]
-              : slot.ref === localRef(op.file)
-                ? slot.value ?? 0
-                : readRef(vm, thread, frameIndex, slot.ref);
+          const receiverValue = peekName(vm, thread, frameIndex, program, op.file);
           const record = isObjectValue(receiverValue) ? findObject(vm, receiverValue.handle) : undefined;
           if (record !== undefined) {
             if (invokeMember(thread, vm, services, program, frame, frameIndex, record, op.name, args, op.pos) === "yield") {
@@ -2419,14 +2439,15 @@ export function stepThread(
         const held = op.file === undefined ? heldCallable(vm, thread, frameIndex, op.name) : undefined;
         const resolved = resolveCall(op.name, op.argc, program, services.commands, op.file, held);
         if (resolved === undefined) {
-          if (frame.objectHandle !== undefined && frame.objectClass !== undefined) {
-            const ownMethod = findMethod(program, frame.objectClass, op.name, op.argc);
+          const ownClass = frameObjectClass(vm, frame);
+          if (frame.objectHandle !== undefined && ownClass !== undefined) {
+            const ownMethod = findMethod(program, ownClass, op.name, op.argc);
             if (ownMethod !== undefined && ownMethod.entry >= 0) {
               frame.ip += 1;
               thread.frames.push({
                 program: frame.program, ip: ownMethod.entry, locals: bindMethodLocals(ownMethod, args), operands: [],
                 errorHandler: null, autoLocal: frame.autoLocal, objectHandle: frame.objectHandle,
-                objectClass: ownMethod.className ?? frame.objectClass,
+                objectClass: ownMethod.className ?? ownClass,
               });
               break;
             }

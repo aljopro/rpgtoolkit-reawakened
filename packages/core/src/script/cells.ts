@@ -70,20 +70,21 @@ export function eachRootValue(
   onValue: (path: string, value: unknown) => void,
   onRef: (path: string, ref: unknown) => void,
 ): void {
-  walkRoots(vm, onValue, onRef, true);
+  walkRoots(vm, onValue, onRef, true, true);
 }
 
 /**
  * The same walk without the members of the objects: the places a running script
  * reaches an object from (R-34, entry 19.5), where the members of an object count
- * only once the object itself is reached.
+ * only once the object itself is reached. It runs every tick, so it names no place:
+ * every `path` it passes is `""`.
  */
 export function eachLiveRoot(
   vm: Readonly<Record<string, unknown>>,
   onValue: (path: string, value: unknown) => void,
   onRef: (path: string, ref: unknown) => void,
 ): void {
-  walkRoots(vm, onValue, onRef, false);
+  walkRoots(vm, onValue, onRef, false, false);
 }
 
 function walkRoots(
@@ -91,10 +92,11 @@ function walkRoots(
   onValue: (path: string, value: unknown) => void,
   onRef: (path: string, ref: unknown) => void,
   objectMembers: boolean,
+  paths: boolean,
 ): void {
   const table = (base: string, entries: unknown): void => {
     if (!isRecord(entries)) return;
-    for (const name of Object.keys(entries)) onValue(`${base}.${name}`, entries[name]);
+    for (const name of Object.keys(entries)) onValue(paths ? `${base}.${name}` : "", entries[name]);
   };
   table("vm.globals", vm.globals);
   if (objectMembers && Array.isArray(vm.objects)) {
@@ -105,36 +107,36 @@ function walkRoots(
   if (!Array.isArray(vm.threads)) return;
   vm.threads.forEach((thread: unknown, threadIndex) => {
     if (!isRecord(thread)) return;
-    const base = `vm.threads[${threadIndex}]`;
+    const base = paths ? `vm.threads[${threadIndex}]` : "";
     const wait = thread.wait;
     if (isRecord(wait)) {
       if (Array.isArray(wait.resumeRefs)) {
-        wait.resumeRefs.forEach((ref: unknown, index) => onRef(`${base}.wait.resumeRefs[${index}]`, ref));
+        wait.resumeRefs.forEach((ref: unknown, index) => onRef(paths ? `${base}.wait.resumeRefs[${index}]` : "", ref));
       }
       if (isRecord(wait.reply) && Object.hasOwn(wait.reply, "value")) {
-        onValue(`${base}.wait.reply.value`, wait.reply.value);
+        onValue(paths ? `${base}.wait.reply.value` : "", wait.reply.value);
       }
     }
     if (!Array.isArray(thread.frames)) return;
     thread.frames.forEach((frame: unknown, frameIndex) => {
       if (!isRecord(frame)) return;
-      const at = `${base}.frames[${frameIndex}]`;
+      const at = paths ? `${base}.frames[${frameIndex}]` : "";
       if (isRecord(frame.locals)) {
         for (const name of Object.keys(frame.locals)) {
           const slot = frame.locals[name];
           if (!isRecord(slot)) continue;
-          onValue(`${at}.locals.${name}.value`, slot.value);
-          onRef(`${at}.locals.${name}.ref`, slot.ref);
+          onValue(paths ? `${at}.locals.${name}.value` : "", slot.value);
+          onRef(paths ? `${at}.locals.${name}.ref` : "", slot.ref);
         }
       }
       if (Array.isArray(frame.operands)) {
         frame.operands.forEach((arg: unknown, index) => {
           if (!isRecord(arg)) return;
-          onValue(`${at}.operands[${index}].value`, arg.value);
-          onRef(`${at}.operands[${index}].ref`, arg.ref);
+          onValue(paths ? `${at}.operands[${index}].value` : "", arg.value);
+          onRef(paths ? `${at}.operands[${index}].ref` : "", arg.ref);
         });
       }
-      if (Object.hasOwn(frame, "returnValue")) onValue(`${at}.returnValue`, frame.returnValue);
+      if (Object.hasOwn(frame, "returnValue")) onValue(paths ? `${at}.returnValue` : "", frame.returnValue);
     });
   });
 }

@@ -30,7 +30,7 @@ context:
 
 **Always:** Preserve every OOP-1 to OOP-9 behaviour: only the named constructor runs, own-class-only destructor, the OOP-8 ancestor walk, access labels, `operator` dispatch, `return &` references and member arrays, handle numbering. State stays plain JSON (G1); no clock, randomness or unordered iteration (G3). `Frame.objectClass` stays the access (definer) context and is not merged into dispatch. Docs first (G7 rule 4).
 
-**Never:** New syntax; a second object table or representation; a schema bump or a migration shim for the old class-instance shape; changes to OOP-6 name resolution or the implicit-`this` method precedence; DeepSeek workers.
+**Never:** New syntax; a second object table or representation; a schema bump or a migration shim for the old class-instance shape; changes to the order of the OOP-6 lookup tiers (environment-table precedence) or to the OOP-9 access identity; changes to lifetime or receiver semantics (`release()`, receiver binding); DeepSeek workers.
 
 ## I/O & Edge-Case Matrix
 
@@ -39,6 +39,8 @@ context:
 | Instance shape | `class Leaf : Mid : Base` with fixed and growable arrays | Members are the declared fields (own class, then ancestors, nearest wins); `keys` lists them once each | n/a |
 | Dispatch | `this + o` in a method `A` defines, object of `C : A` overriding `operator+` | C's operator runs | no operator: `object.invalid` |
 | Call | `a.get()`, `a->get()`, `a.release()`, `a.cb()` on a class instance | Same call; a callable field is called with the object as receiver | non-callable: `callable.not-callable`; private: `object.inaccessible-member`; missing: `object.invalid` |
+| Implicit lookups | Inside `Base::run()`, bare `step()` and a bare field only `Kid` declares, on a `Kid` object | The override runs and the field is the member, as `this->step()` does | unknown name: `unknown.command` |
+| Dot qualifier | `eng.get()` inside a method where `eng` is a field | Same `eng` as `eng->get()`: field first, then local, then global | include fallback only when no object is found |
 | `kill` | `kill(a->x)` on an instance | Key removed, field stays declared, re-enters last | n/a |
 | Collection | Kept garbage cycle holding `q.f`; by-reference slot into a member | Receiver and referenced object survive; the save loads | `restore.callable-receiver` never raised for a kept holder |
 | Save shape | Old class record (no `keys`), class with null `program`, dictionary with a `program`, duplicate handle | Load refused, path named | `restore.shape` |
@@ -73,11 +75,28 @@ context:
 
 ## Implementation Notes
 
-Classes already lived in `vm.objects` (19.3 reused the table), so the cutover is the representation and the code paths, not a second table. Decisions: instances seed every declared field including ancestors' (reads were already `0`); a growable `var m[]` has `arraySize` `null` and stays one member; dot calls on class instances now dispatch like `->`; operators on a released handle fall back to handle comparison; no schema bump (old class records are refused with a path-naming `restore.shape`). Deviations found and fixed against the OOP-8 "actual class" rule: `this + x` in an inherited method used the defining class's operator; `kill(obj->field)` did nothing on instances; a kept garbage cycle freed the receiver of a callable it held.
+Classes already lived in `vm.objects` (19.3 reused the table), so the cutover is the representation and the code paths, not a second table. Decisions: instances seed every declared field including ancestors' (reads were already `0`); a growable `var m[]` has `arraySize` `null` and stays one member; dot calls on class instances now dispatch like `->`; operators on a released handle fall back to handle comparison; no schema bump (old class records are refused with a path-naming `restore.shape`). Deviations found and fixed against the OOP-8 "actual class" rule: `this + x` in an inherited method used the defining class's operator; a bare `step()` and a bare field name in a base method used the defining class's symbols; `eng.get()` did not see a field `eng`; `kill(obj->field)` did nothing on instances; a kept garbage cycle freed the receiver of a callable it held. `frameObjectClass` (record's class) finds symbols; `Frame.objectClass` (the class that defined the running method) still decides access.
+
+The object pass runs on `cells.eachLiveRoot`, which builds no path strings, and returns at once on an empty handle table.
 
 ## Plan Change Log
 
+- 2026-10-19 — Director triage of the review of `0a2e1826` renegotiated the frozen scope: the implicit bare-call and bare-field lookups inside a method (F2) and the dot-call qualifier (F8) belong to this story's object-first dispatch, not to a deferred OOP-6 change; the lookup-tier order and the access identity stay. The `Never` line and the I/O matrix above were amended to match; the spec rows were written first (`0c0a8cec`).
+
 ## Review Triage Log
+
+Independent review of `0a2e1826` (code identical to `16fd1163`): pass with findings, no blocker.
+
+| Finding | Verdict | Action |
+|---|---|---|
+| F1 docs: `kill(obj["field"])` and `obj["k"]` on a class instance | valid | `kill` row, KILL-1 and EXP-7 now say `dict["k"]` is the member and a class instance's `obj[i]` keeps OOP-7 |
+| F2 bare call / bare field use the defining class | valid (also on base) | fixed: `frameObjectClass` in `load`, member-array `index` and the implicit call; test `a bare call and a bare field name…` fails on base (`1 !== 2`) |
+| F3 explicit `release()` of a callable's receiver dangles it | valid, pre-existing, not a GC bug | not changed (lifetime/receiver semantics are not this ticket). Evidence on this head and on base `8d4868a5`: `k.cb = bindThis(() => this.n, r); r->release()` then save/restore gives `restore.callable-receiver`. The R-34 sentence now promises only that collection never frees a receiver a kept object's callable names, and states the limit |
+| F4 per-tick collector cost | valid | empty-table early return; `eachLiveRoot` builds no path strings |
+| F5 'deliberate re-record' claim | valid | reworded: no golden holds a live class instance, none re-recorded |
+| F6 'exactly these fields' / undocumented handle rule | valid | reworded to 'these fields'; positive distinct handles documented; no stricter reject policy added |
+| F7 private-field identity | pre-existing, out of scope | unchanged and pinned by a test. Evidence (same on base): in `Base`, a bare `secret` on a `Kid` object reads it, `this->secret` raises `object.inaccessible-member`, because the field check compares the running method's class with the object's class, not with the field's declaring class (methods compare with the method's definer). Owner question for the access policy; no follow-up promised here |
+| F8 `eng.get()` does not see a field `eng` | valid | fixed: the qualifier is found by `peekName` (field, then local, then global); test `the dot-call qualifier…` fails on base (`dot` 0 with `include.missing`) |
 
 ## Design Notes
 

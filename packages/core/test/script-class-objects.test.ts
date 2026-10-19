@@ -163,6 +163,85 @@ direct = c + d
   deepEqual(state.vm.globals.me, { kind: "object", handle: 1, className: "c" }, "`this` names the object's own class");
 });
 
+test("a bare call and a bare field name inside a method find the object's own class, not the defining class (OOP-6, OOP-8, OOP-10)", () => {
+  const state = runOnce(`
+class Base {
+  public:
+  method step() { return 1 }
+  method run() { return step() }
+  method viaThis() { return this->step() }
+  method writeKid() { kf = 9 }
+  method readKid() { return kf }
+}
+class Kid : Base {
+  public:
+  var kf
+  method step() { return 2 }
+}
+base = Base()
+kid = Kid()
+kr = kid->run()
+kt = kid->viaThis()
+kid->writeKid()
+kw = kid->readKid()
+br = base->run()
+`);
+  equal(state.vm.globals.kr, 2, "a bare step() reaches the override, as this->step() does");
+  equal(state.vm.globals.kt, 2);
+  equal(state.vm.globals.kw, 9, "a name only the object's class declares is that field");
+  equal(state.vm.objects.find((record) => record.className === "kid")!.members.kf, 9);
+  equal(state.vm.globals.kf, undefined, "and not a global");
+  equal(state.vm.globals.br, 1, "an object of the defining class still reaches its own method");
+});
+
+test("access still starts from the class of the running method: a base method cannot reach a private field through this-> on a derived object", () => {
+  // Preserved, pre-existing OOP-9 behaviour (entry 19.5 does not change access): the field check compares the running
+  // method's class with the object's class. A bare name is not an access check, so it still reads the field.
+  const bare = runOnce(`
+class Base { private: var secret; public: method Base() { secret = 5 } method peek() { return secret } }
+class Kid : Base { public: method Kid() { secret = 6 } }
+k = Kid()
+r = k->peek()
+`);
+  equal(bare.vm.globals.r, 6);
+  equal(
+    errorOf(`
+class Base { private: var secret; public: method Base() { secret = 5 } method peek() { return this->secret } }
+class Kid : Base { public: method Kid() { secret = 6 } }
+k = Kid()
+r = k->peek()
+`).code,
+    "object.inaccessible-member",
+  );
+});
+
+test("the dot-call qualifier is found like any bare name: a field of the running object first, else a local or a global", () => {
+  const state = runOnce(`
+class Engine {
+  public:
+  var power
+  method Engine(p) { power = p }
+  method get() { return power }
+}
+class Car {
+  public:
+  var eng
+  method Car() { eng = Engine(5) }
+  method viaDot() { return eng.get() }
+  method viaArrow() { return eng->get() }
+}
+eng = Engine(7)
+c = Car()
+dot = c->viaDot()
+arrow = c->viaArrow()
+outside = eng.get()
+`);
+  equal(state.vm.globals.dot, 5, "the field, not the global of the same name");
+  equal(state.vm.globals.arrow, 5);
+  equal(state.vm.globals.outside, 7, "outside any method the qualifier is the global");
+  equal(state.vm.globals.arrow, state.vm.globals.dot, "eng.get() reaches the same eng as eng->get()");
+});
+
 test("an operator compared on a released object's handle falls back to the handle comparison", () => {
   const state = runOnce(`
 class A { public: var x }
