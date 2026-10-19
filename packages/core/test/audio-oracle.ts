@@ -124,7 +124,7 @@ export function runCase(sceneCase: SceneCase, options: RunOptions = {}): SceneRu
       facts.push({ e: "diag", code: "media.asset-missing", op: "mediaPlay", file: key });
       return;
     }
-    const result = runtime.play({ track: trackName, asset: key, loop: (flags & MEDIA_LOOP) !== 0, restart: (flags & MEDIA_RESTART) !== 0, wait: (flags & MEDIA_WAIT) !== 0, priority: (op.priority as number | undefined) ?? 0 });
+    const result = runtime.play({ track: trackName, asset: key, loop: (flags & MEDIA_LOOP) !== 0, restart: (flags & MEDIA_RESTART) !== 0, wait: (flags & MEDIA_WAIT) !== 0, priority: (op.priority as number | undefined) ?? 0, voice: op.voice as number | undefined, syncTrack: op.sync as string | undefined });
     if (result.kind === "started" && result.wait !== null) park(op.thread as number, result.wait);
   };
 
@@ -182,6 +182,15 @@ export function runCase(sceneCase: SceneCase, options: RunOptions = {}): SceneRu
       case "mediaLoop":
         runtime.setLoop(String(op.track), op.on === true, op.voice as number | undefined);
         return;
+      case "mediaFade": {
+        const ms = op.ms as number;
+        if (!Number.isInteger(ms) || ms < 0) {
+          facts.push({ e: "diag", code: "media.invalid-time", op: "mediaFade", ms });
+          return;
+        }
+        runtime.fade(String(op.track), op.percent as number, ticksFromMs(ms), op.voice as number | undefined);
+        return;
+      }
       case "mediaVolume":
         if (op.voice === undefined) runtime.setTrackVolume(String(op.track), op.percent as number);
         else runtime.setVoiceVolume(String(op.track), op.voice as number, op.percent as number);

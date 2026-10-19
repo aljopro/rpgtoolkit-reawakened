@@ -4,8 +4,8 @@
  * #audio-core-pins; AD-10, AD-16).
  *
  * Everything here is plain data (G1): ordered arrays, integers, `null` for
- * absence, no `Map`, no handle. Time is the integer 60 Hz tick (AD-2). The
- * section's owner is `core/audio`; other modules read it through the runtime
+ * absence and no runtime handles in saved state. Time is the integer 60 Hz
+ * tick (AD-2). The section's owner is `core/audio`; other modules read it
  * and the pure helpers below.
  */
 
@@ -40,14 +40,30 @@ export const BUILTIN_TRACKS: readonly (readonly [string, number])[] = [
 
 /** A track name: 1 to 32 ASCII letters, digits, `_`, `.` and `-` (6.2 P3). */
 export const MEDIA_TRACK_NAME = /^[A-Za-z0-9_.-]{1,32}$/;
-
-/** A linear volume ramp over fixed ticks (6.2 P7); evaluated by the fade owner, entry 6.7. */
+/** A linear fade descriptor (6.2 P7); evaluated with integer half-up rounding. */
 export type AudioFadeState = {
   fromVolume: number;
   targetVolume: number;
   startTick: number;
   durationTicks: number;
 };
+
+/** A voice slot handle: the index is stable only while its cue id is current. */
+export type AudioVoiceHandle = {
+  track: string;
+  voice: number;
+  cueId: number;
+};
+
+/** Evaluate a fade at an integer tick, clamping elapsed time to its duration. */
+export function fadeValue(fade: AudioFadeState, tick: number, pausedTick?: number): number {
+  if (fade.durationTicks <= 0) return fade.targetVolume;
+  const at = pausedTick === undefined ? tick : pausedTick;
+  const elapsed = Math.min(Math.max(at - fade.startTick, 0), fade.durationTicks);
+  const numerator = fade.fromVolume * fade.durationTicks + (fade.targetVolume - fade.fromVolume) * elapsed;
+  return Math.floor((2 * numerator + fade.durationTicks) / (2 * fade.durationTicks));
+}
+
 
 /** One playback slot inside a track. */
 export type AudioVoiceState = {
