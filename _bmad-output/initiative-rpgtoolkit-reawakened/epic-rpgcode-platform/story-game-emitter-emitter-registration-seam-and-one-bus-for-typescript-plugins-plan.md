@@ -27,6 +27,7 @@ No board or actor event sources.
 ## Acceptance
 
 1. Cross-language delivery both ways, one queue.
+2. The game emitter fires the ruled non-cancelable `error` event for every runtime error (detail `{ code, message, file, line, handled }`), in addition to ERR-2 handling, with a test for a handled and an unhandled error.
 
 ## Verification
 
