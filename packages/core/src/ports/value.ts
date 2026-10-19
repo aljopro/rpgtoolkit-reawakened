@@ -33,8 +33,9 @@ export type ObjectValue = {
  * A first-class callable (ADR 0004 decision 8; docs/spec/engine/rpgcode-language.md#lexical-rules FUN-8).
  * A plain data record, never a host closure: `def` is the deterministic id of a
  * compiled definition, `captures` are the ids of the environment cells the
- * lambda captured (positionally matched to the definition's captured names in
- * `vm.cells`), and `receiver` is the object id `this` is bound to, or `null`.
+ * lambda captured (positionally matched to the definition's candidate names in
+ * `vm.cells`; "" marks a name that was not a local when the lambda was made, so
+ * it is read and written live like any global), and `receiver` is the object id `this` is bound to, or `null`.
  */
 export type CallableValue = {
   readonly type: "callable";

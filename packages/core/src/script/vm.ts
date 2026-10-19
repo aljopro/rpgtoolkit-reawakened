@@ -1029,6 +1029,7 @@ function performCallable(
     const name = names[index]!;
     if (Object.hasOwn(locals, name)) continue;
     const cell = value.captures[index]!;
+    if (cell === "") continue;
     setOwnSlot(locals, name, { value: vm.cells?.[cell] ?? 0, ref: cellRef(cell) });
   }
 
@@ -2043,16 +2044,23 @@ export function stepThread(
       case "load_fn": {
         // Capture resolution (FUN-8; ADR 0004 decision 8; entry 18.4). The
         // definition's captured names were worked out at lowering; each gets a
-        // fresh cell holding the enclosing variable's value now, and the handle
-        // records the cells in the same order. A fresh cell per execution is
-        // what keeps two closures built by two runs of the same code apart.
+        // fresh cell holding the enclosing local's value now, and the handle
+        // records the cells in the same order ("" for a name that is not a local).
+        // A fresh cell per execution keeps two closures built by two runs of the
+        // same code apart.
         const names = program.functions[op.def]?.[0]?.captures ?? [];
-        const cells = (vm.cells ??= {});
         const captures: string[] = [];
         for (const name of names) {
+          // Only a local of the creating frame (a parameter, a declared local, or a
+          // name the creating lambda captured) gets a cell. Any other name is a
+          // global, which every call reads and writes live, so it stays "" here.
+          if (!Object.hasOwn(frame.locals, name)) {
+            captures.push("");
+            continue;
+          }
           vm.cellSeq = (vm.cellSeq ?? 0) + 1;
           const id = `cell${vm.cellSeq}`;
-          setOwnValue(cells, id, loadArg(vm, thread, frameIndex, name, undefined, services.virtuals).value);
+          setOwnValue((vm.cells ??= {}), id, loadArg(vm, thread, frameIndex, name, undefined, services.virtuals).value);
           captures.push(id);
         }
         frame.operands.push({ value: { type: "callable", def: op.def, captures, receiver: null }, ref: null });

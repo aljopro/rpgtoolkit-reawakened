@@ -78,12 +78,12 @@ test("a lambda value is a plain-data callable, and a plain-name call runs it (FU
   deepEqual(state.vm.globals.f, {
     type: "callable",
     def: "<inline>#lambda_1",
-    captures: ["cell1"],
+    captures: [""],
     receiver: null,
   });
-  // One fresh cell holds the captured `x`, and the enclosing variable is untouched.
-  deepEqual(state.vm.cells, { cell1: 5 });
-  equal(state.vm.cellSeq, 1);
+  // `x` is a global, so it is not captured: no cell exists and every call reads it live.
+  equal(state.vm.cells, undefined);
+  equal(state.vm.cellSeq, undefined);
   equal(state.vm.globals.x, 5);
 });
 
@@ -109,28 +109,47 @@ test("a nested lambda captures from the frame that made it (FUN-8)", () => {
   deepEqual(state.vm.cells, { cell1: 2 });
 });
 
-test("a capture takes the value it had when the callable was created", () => {
+test("a global is read and written live, never captured (FUN-8)", () => {
   const state = runOnce("x = 10\nadd = (y) => y + x\nfirst = add(1)\nx = 100\nsecond = add(2)\n");
 
   equal(state.vm.globals.first, 11);
-  equal(state.vm.globals.second, 12);
-  equal(state.vm.globals.x, 100);
+  equal(state.vm.globals.second, 102);
+  deepEqual(state.vm.globals.add, {
+    type: "callable",
+    def: "<inline>#lambda_1",
+    captures: [""],
+    receiver: null,
+  });
+  equal(state.vm.cells, undefined, "no cell is allocated for a global");
+
+  const written = runOnce("n = 0\ncounter = () => { n = n + 1; return n }\na = counter()\nb = counter()\n");
+  equal(written.vm.globals.n, 2);
+  equal(written.vm.globals.b, 2);
 });
 
-test("a closure keeps its own state across calls, and its writes stay in its cell", () => {
-  const state = runOnce("counter = () => { n = n + 1; return n }\na = counter()\nb = counter()\n");
+test("a local of the creating function is captured into a private cell (FUN-8)", () => {
+  const state = runOnce(`
+function make() {
+  local(n)
+  n = 0
+  return () => { n = n + 1; return n }
+}
+c = make()
+a = c()
+b = c()
+`);
 
   equal(state.vm.globals.a, 1);
   equal(state.vm.globals.b, 2);
-  // The captured `n` was created as an unset global when the callable was built
-  // (SEM-4/SEM-5) and every later increment went to the cell instead.
-  equal(state.vm.globals.n, 0);
+  equal(state.vm.globals.n, undefined, "the closure's writes never create a global");
   deepEqual(state.vm.cells, { cell1: 2 });
 });
 
 test("two callables built by two runs of the same code get separate cells", () => {
   const state = runOnce(`
 function make(start) {
+  local(v)
+  v = 0
   return () => { v = v + 1; return v + start }
 }
 c1 = make(10)
@@ -179,11 +198,11 @@ test("the per-tick budget preempts in the middle of an indirect call and resumes
   equal(thread.frames.length, 2, "the callee frame survives the preemption");
   const parked = thread.frames[1]!.ip;
   equal(parked > 0, true);
-  const counted = state.vm.cells?.cell1 ?? 0;
+  const counted = Number(state.vm.globals.n ?? 0);
 
   equal(stepThread(thread, state.vm, services, STEP_BUDGET), STEP_BUDGET);
   equal(thread.status, "ready");
-  equal((state.vm.cells?.cell1 ?? 0) > counted, true, "the loop kept counting in its own cell");
+  equal(Number(state.vm.globals.n ?? 0) > counted, true, "the loop kept counting the live global");
 });
 
 test("calling a non-callable raises a located, catchable error (FUN-8)", () => {
@@ -277,7 +296,7 @@ test("a callable made in one program is callable from the program a run() starts
 });
 
 test("a state holding closures is plain data and round-trips (G1, G3)", () => {
-  const program = "x = 4\nf = (y) => y + x\nr = f(1)\n";
+  const program = "function make(x) {\n  return (y) => y + x\n}\nf = make(4)\nr = f(1)\n";
   const state = runOnce(program);
   const json = snapshot(state);
   const restored = restoreGameState(json);
