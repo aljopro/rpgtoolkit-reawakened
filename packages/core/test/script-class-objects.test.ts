@@ -215,7 +215,7 @@ r = k->peek()
   );
 });
 
-test("the dot-call qualifier is found like any bare name: a field of the running object first, else a local or a global", () => {
+test("the dot-call qualifier is found like any bare name: a field of the running object, else a local or a global (a parameter first, below)", () => {
   const state = runOnce(`
 class Engine {
   public:
@@ -240,6 +240,73 @@ outside = eng.get()
   equal(state.vm.globals.arrow, 5);
   equal(state.vm.globals.outside, 7, "outside any method the qualifier is the global");
   equal(state.vm.globals.arrow, state.vm.globals.dot, "eng.get() reaches the same eng as eng->get()");
+});
+
+test("a parameter of an inherited method shadows a field only the object's class declares: value, by-reference, closure, qualifier and index (OOP-6)", () => {
+  const state = runOnce(`
+class Part {
+  public:
+  var n
+  method Part(v) { n = v }
+  method get() { return n }
+}
+class Base {
+  public:
+  method run(x) { return x }
+  method inc(&x) { x = x + 1 }
+  method write(x) { x = 99; return x }
+  method close(x) { f = () => { x = x + 1; return x }; f(); return x }
+  method viaDot(eng) { return eng.get() }
+  method viaArrow(eng) { return eng->get() }
+  method indexed(x) { x[1] = 5; return x[1] }
+}
+class Kid : Base {
+  public:
+  var x
+  var eng
+  method Kid() { x = 5; eng = Part(8) }
+}
+k = Kid()
+v = 10
+byValue = k->run(42)
+k->inc(v)
+written = k->write(1)
+closed = k->close(10)
+viaDot = k->viaDot(Part(3))
+viaArrow = k->viaArrow(Part(3))
+indexed = k->indexed(0)
+`);
+  const kid = state.vm.objects.find((record) => record.className === "kid")!;
+  equal(state.vm.globals.byvalue, 42, "the parameter, not the field x");
+  equal(state.vm.globals.v, 11, "a by-reference parameter writes the caller's variable");
+  equal(state.vm.globals.written, 99);
+  equal(state.vm.globals.closed, 11, "a parameter a closure captures");
+  equal(state.vm.globals.viadot, 3, "the qualifier is the parameter eng, not the field eng");
+  equal(state.vm.globals.viaarrow, 3);
+  equal(state.vm.globals.indexed, 5);
+  equal(kid.members.x, 5, "no parameter write reached the field");
+  equal(Object.hasOwn(kid.members, "x[1]"), false, "and no element landed on the object");
+});
+
+test("a parameter shadows a field of the same name in the class that declares both; a field still comes before a local (OOP-6)", () => {
+  const state = runOnce(`
+class A {
+  public:
+  var v
+  method A() { v = 3 }
+  method read(v) { return v }
+  method bump(v) { v = v + 1; return v }
+  method viaLocal() { local(v); v = 4; return v }
+}
+a = A()
+read = a->read(7)
+bumped = a->bump(10)
+afterBump = a->viaLocal()
+`);
+  equal(state.vm.globals.read, 7, "the parameter, not the field");
+  equal(state.vm.globals.bumped, 11);
+  equal(state.vm.globals.afterbump, 4, "a local declared with a field's name does not hide the field");
+  equal(state.vm.objects[0]!.members.v, 4, "the write after local(v) reached the field");
 });
 
 test("an operator compared on a released object's handle falls back to the handle comparison", () => {

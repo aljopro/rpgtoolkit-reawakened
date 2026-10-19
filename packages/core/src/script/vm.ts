@@ -535,14 +535,33 @@ function frameObjectClass(vm: VmState, frame: Frame): string | undefined {
 }
 
 /**
- * The bare name `name` as a `load` finds it, without creating it (OOP-6): a field
- * of the object the running method is on, else a local of the frame, else a global.
- * The qualifier of `eng.get()` is found this way, so it is the `eng` that `eng->get()` reads.
+ * Whether the bare name `name` inside a method is a field of the object it runs on
+ * (OOP-6): a field the object's own class declares, unless `shadowed`, which the
+ * compiler sets on the op when the name is a parameter of the running function,
+ * because a parameter comes before a field.
  */
-function peekName(vm: VmState, thread: Thread, frameIndex: number, program: Program, name: string): Value | undefined {
-  const frame = thread.frames[frameIndex]!;
+function isImplicitField(vm: VmState, program: Program, frame: Frame, name: string, shadowed: boolean): boolean {
+  if (shadowed || frame.objectHandle === undefined) return false;
   const ownClass = frameObjectClass(vm, frame);
-  if (frame.objectHandle !== undefined && ownClass !== undefined && findMember(program, ownClass, name) !== undefined) {
+  return ownClass !== undefined && findMember(program, ownClass, name) !== undefined;
+}
+
+/**
+ * The bare name `name` as a `load` finds it, without creating it (OOP-6): a
+ * parameter or a local of the frame, a field of the object the running method is
+ * on, else a global. The qualifier of `eng.get()` is found this way, so it is the
+ * `eng` that `eng->get()` reads.
+ */
+function peekName(
+  vm: VmState,
+  thread: Thread,
+  frameIndex: number,
+  program: Program,
+  name: string,
+  shadowed: boolean,
+): Value | undefined {
+  const frame = thread.frames[frameIndex]!;
+  if (frame.objectHandle !== undefined && isImplicitField(vm, program, frame, name, shadowed)) {
     const record = findObject(vm, frame.objectHandle);
     return record === undefined ? undefined : readMember(record, name);
   }
@@ -1901,9 +1920,11 @@ export function stepThread(
         break;
 
       case "load": {
-        const objectHandle = op.scope === undefined ? frame.objectHandle : undefined;
-        const ownClass = objectHandle === undefined ? undefined : frameObjectClass(vm, frame);
-        if (objectHandle !== undefined && ownClass !== undefined && findMember(program, ownClass, op.name) !== undefined) {
+        const objectHandle =
+          op.scope === undefined && isImplicitField(vm, program, frame, op.name, op.param === true)
+            ? frame.objectHandle
+            : undefined;
+        if (objectHandle !== undefined) {
           const ref = objectRef(objectHandle, op.name);
           frame.operands.push({ value: readRef(vm, thread, frameIndex, ref), ref });
         } else if (op.name === "this" && frame.objectHandle !== undefined && frame.objectClass !== undefined) {
@@ -2094,8 +2115,7 @@ export function stepThread(
           break;
         }
         const baseName = baseArg.ref !== null ? refName(baseArg.ref) : toStringValue(baseArg.value);
-        const ownClass = frameObjectClass(vm, frame);
-        if (frame.objectHandle !== undefined && ownClass !== undefined && findMember(program, ownClass, baseName) !== undefined) {
+        if (frame.objectHandle !== undefined && isImplicitField(vm, program, frame, baseName, op.baseParam === true)) {
           const memberRef = objectRef(frame.objectHandle, `${baseName}[${keyText}]`);
           frame.operands.push({ value: readRef(vm, thread, frameIndex, memberRef), ref: memberRef });
           frame.ip += 1;
@@ -2424,7 +2444,7 @@ export function stepThread(
           break;
         }
         if (op.file !== undefined) {
-          const receiverValue = peekName(vm, thread, frameIndex, program, op.file);
+          const receiverValue = peekName(vm, thread, frameIndex, program, op.file, op.fileParam === true);
           const record = isObjectValue(receiverValue) ? findObject(vm, receiverValue.handle) : undefined;
           if (record !== undefined) {
             if (invokeMember(thread, vm, services, program, frame, frameIndex, record, op.name, args, op.pos) === "yield") {

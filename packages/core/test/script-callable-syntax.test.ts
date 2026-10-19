@@ -136,7 +136,7 @@ test("lowers lambdas to deterministic function handles and dynamic calls to expl
     { op: "storeRef", pos: { file: "<inline>", line: 1 } },
     { op: "pop", pos: { file: "<inline>", line: 1 } },
     { op: "return", pos: { file: "<inline>", line: 1 } },
-    { op: "load", name: "a", pos: { file: "<inline>", line: 1 } },
+    { op: "load", name: "a", param: true, pos: { file: "<inline>", line: 1 } },
   ]);
   equal(lambdaProgram.functions["<inline>#lambda_1"]?.[0]?.params[0]?.name, "a");
 

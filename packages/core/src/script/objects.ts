@@ -84,8 +84,14 @@ export function instantiate(
   return record;
 }
 
-/** The record the handle table holds under `handle`, or `undefined` when it was freed. */
+/**
+ * The record the handle table holds under `handle`, or `undefined` when it was
+ * freed. A table that has had no object freed holds handle `n` at index `n - 1`,
+ * so that slot is tried before the scan.
+ */
 export function findObject(vm: Pick<VmState, "objects">, handle: number): ObjectRecord | undefined {
+  const direct = vm.objects[handle - 1];
+  if (direct?.handle === handle) return direct;
   return vm.objects.find((item) => item.handle === handle);
 }
 
