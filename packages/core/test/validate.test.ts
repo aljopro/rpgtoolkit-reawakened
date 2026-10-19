@@ -28,7 +28,7 @@ test("validateInputEvent accepts one valid event of each kind", () => {
       { kind: "extension.result", reqId: 5, result: new Uint8Array([1]) },
     ],
     ["audio.ended", { kind: "audio.ended", cueId: 7 }],
-    ["video.ended", { kind: "video.ended" }],
+    ["video.ended", { kind: "video.ended", reqId: 1 }],
   ];
 
   for (const [label, event] of valid) {

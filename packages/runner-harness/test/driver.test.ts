@@ -142,7 +142,7 @@ test("runLog throws naming call and cause for engine violations", () => {
       name: "alters consumed record",
       modifier: (b) => ({
         ...b,
-        consumed: [{ tick: 0, event: { kind: "video.ended" } }],
+        consumed: [{ tick: 0, event: { kind: "video.ended", reqId: 1 } }],
       }),
       expectedSnippet: "consumed inputs do not match fed inputs",
     },

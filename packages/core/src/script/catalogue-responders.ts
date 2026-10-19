@@ -479,6 +479,7 @@ const MEDIA_PACK_NAMES: Record<string, true> = {
   medialength: true, mediatracks: true, getvolume: true,
   wav: true, mp3: true, wavstop: true, mp3pause: true, setvolume: true,
   soundfont: true, soundfontreset: true,
+  playavi: true, playavismall: true,
 };
 const CATALOGUE_GRAPHICS_NAMES = new Set(GRAPHICS_COMMANDS.flatMap((command) => [command.name, ...command.aliases]));
 const CATALOGUE_OWNED_NAMES = new Set([

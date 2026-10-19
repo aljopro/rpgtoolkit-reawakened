@@ -125,6 +125,8 @@ export type WaitAudioView = {
     }[];
   }[];
 };
+/** The video reply currently held by the engine. */
+export type WaitVideoView = { readonly reqId: number; readonly ended: boolean };
 
 /** What the waits phase may read while deciding. */
 export type WaitView = {
@@ -134,6 +136,7 @@ export type WaitView = {
   readonly sprites?: readonly WaitSpriteView[];
   readonly claims?: readonly number[];
   readonly audio?: WaitAudioView;
+  readonly video?: WaitVideoView;
 };
 
 export type WaitResult = { readonly value: Value; readonly ok: boolean; readonly claim?: number };

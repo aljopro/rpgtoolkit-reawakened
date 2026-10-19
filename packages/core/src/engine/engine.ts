@@ -287,7 +287,20 @@ export function createEngine(init: EngineInit): Engine {
 
   function makeServices(plugins: readonly ResolvedPlugin[], programLoader?: ProgramLoader): ScriptServices {
     audioDecoders = assembleAudioDecoders(plugins.map((plugin) => plugin.definition), decoderLogger);
-    return createScriptServices(state, plugins, undefined, undefined, programLoader, "engine", (section, effect) => bus.dispatchRecorded(section, effect));
+    return createScriptServices(
+      state,
+      plugins,
+      undefined,
+      undefined,
+      programLoader,
+      "engine",
+      (section, effect) => bus.dispatchRecorded(section, effect),
+      (request) => {
+        if (request.kind !== "playVideo" || typeof request.key !== "string" || (request.presentation !== "full" && request.presentation !== "small") || typeof request.reqId !== "number") return;
+        state.engine.video = { reqId: request.reqId, key: request.key, presentation: request.presentation, ended: false };
+        requestsOut.push({ kind: "playVideo", reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation });
+      },
+    );
   }
   let services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS);
   if (init.mainFile === undefined && init.program !== undefined) {
@@ -466,6 +479,7 @@ export function createEngine(init: EngineInit): Engine {
       failed,
       claims: state.engine.claims ?? [],
       ...(state.engine.phase === undefined ? {} : { phase: state.engine.phase }),
+      ...(state.engine.video === undefined ? {} : { video: state.engine.video }),
     };
     if (state.engine.openTick !== undefined) next.openTick = state.engine.openTick;
     if (state.engine.pendingEffects !== undefined) next.pendingEffects = state.engine.pendingEffects;
@@ -988,6 +1002,7 @@ export function createEngine(init: EngineInit): Engine {
   /** Ticks run once nothing is outstanding: a scene needs its board, boot needs the start-up program or the main loop. */
   function canTick(): boolean {
     if (failed || pending.size > 0 || state.engine.transition !== undefined) return false;
+    if (state.engine.video !== undefined && !state.engine.video.ended) return false;
     const boot = state.engine.boot;
     if (boot === undefined) return state.world.board !== undefined && state.world.board !== null;
     return boot.stage === "startup" || boot.stage === "running";
@@ -1004,6 +1019,7 @@ export function createEngine(init: EngineInit): Engine {
       })),
       claims: state.engine.claims ?? [],
       audio: state.audio,
+      ...(state.engine.video === undefined ? {} : { video: { reqId: state.engine.video.reqId, ended: state.engine.video.ended } }),
     };
   }
   function resolveAnimationFile(file: string): AssetKey | null {
@@ -1085,9 +1101,19 @@ export function createEngine(init: EngineInit): Engine {
           if (thread.wait?.kind === "input.key" && thread.wait.parkSeq === undefined) thread.wait.parkSeq = state.input.nextSeq;
         }
         state.engine.claims = [];
+        const videoBefore = state.engine.video;
         runWaitsPhase(state.vm, phaseView(), defaultWaitPoll, (seq) => {
           if (!(state.engine.claims ?? []).includes(seq)) (state.engine.claims ??= []).push(seq);
         });
+        if (videoBefore?.ended === true && state.engine.video?.reqId === videoBefore.reqId) {
+          const music = state.audio.tracks.find((track) => track.name === "music");
+          const file = music?.file;
+          if (music !== undefined && file !== undefined && file !== null) {
+            const voice = music.voices.find((item) => item.index === 0);
+            bus.postEffect("audio", engineEffect("audio", "music.play", [file, voice?.loop ?? false, true, "video"], "draw-audio-cue"));
+          }
+          delete state.engine.video;
+        }
         pruneClaimed(state.input, state.engine.claims ?? []);
         return;
       case "threads":
@@ -1153,6 +1179,9 @@ export function createEngine(init: EngineInit): Engine {
     for (const record of records) {
       if (record.event.kind === "asset") {
         consumeAsset(record, consumed);
+      } else if (record.event.kind === "video.ended") {
+        if (state.engine.video?.reqId === record.event.reqId) state.engine.video = { ...state.engine.video, ended: true };
+        consumed.push(record);
       } else if (record.event.kind === "focus") {
         applyInputEvent(state.input, record.event);
         consumed.push(record);

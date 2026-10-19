@@ -91,6 +91,31 @@ function mediaAsset(file: string): string {
   return assetKey(folded.startsWith("media/") ? folded : `media/${folded}`);
 }
 
+function video(name: "playavi" | "playavismall", presentation: "full" | "small"): BuiltinSpec {
+  const label = presentation === "full" ? "full screen" : "actual size, centred";
+  return {
+    name,
+    aliases: [],
+    params: [{ name: "file", optional: false, byRef: false, variadic: false }],
+    doc: {
+      summary: presentation === "full" ? "Play a movie full screen. Supported types are *.avi, *.mpg, and *.mov." : "Play a movie at actual size, centred.",
+      behaviour: `Resolves the Media-folder video key, stops music while the video plays, posts one ${presentation} video request, and waits unskippably for its matching video.ended reply. Music restarts from tick 0 after the reply.`,
+      groups: ["graphics-canvases-animation-video-31"],
+      waits: { kind: "other", summary: "The calling thread waits for the matching video.ended reply; game time does not advance while the video is held." },
+      see: ["docs/spec/engine/audio-media.md#video-wait-hold", "docs/spec/engine/audio-media.md#video-music"],
+    },
+    call: (view, args) => {
+      if (view.state?.engine.video !== undefined) throw new ScriptError("media.video-busy", `${name}: another video is already playing`);
+      const key = mediaAsset(stringArg(args, 0, name));
+      return {
+        value: null,
+        effects: [effect("media.stop", ["music", null])],
+        request: { kind: "playVideo", key, presentation },
+      };
+    },
+  };
+}
+
 function waitPayload(track: AudioTrackState, voice: AudioVoiceState, tick: number, pass: boolean): Record<string, string | number | boolean | null> {
   return {
     track: track.name,
@@ -585,6 +610,8 @@ function soundFontReset(): BuiltinSpec {
 export const MEDIA_COMMANDS: readonly BuiltinSpec[] = [
   mediaTrack(),
   mediaLoad(),
+  video("playavi", "full"),
+  video("playavismall", "small"),
   MEDIA_PLAY,
   MEDIA_STOP,
   mediaTransport("mediapause"),

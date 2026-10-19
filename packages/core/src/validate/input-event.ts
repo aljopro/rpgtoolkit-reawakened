@@ -57,7 +57,7 @@ const KEY_SETS: { readonly [kind in EventKind]: readonly string[] } = {
   "blob.listed": ["kind", "reqId", "names"],
   "extension.result": ["kind", "reqId", "result"],
   "audio.ended": ["kind", "cueId"],
-  "video.ended": ["kind"],
+  "video.ended": ["kind", "reqId"],
 };
 
 function isKnownKind(kind: string): kind is EventKind {
@@ -199,6 +199,11 @@ function validateAudioEnded(record: UnknownRecord): InputEventValidation {
   return accept(record);
 }
 
+function validateVideoEnded(record: UnknownRecord): InputEventValidation {
+  if (!isNonNegativeInteger(record["reqId"])) return invalid("reqId", "expected a non-negative integer");
+  return accept(record);
+}
+
 /**
  * Check one candidate against the `InputEvent` contract. Never throws — a
  * hostile value whose member reads (a throwing getter) or deep contents throw
@@ -251,7 +256,7 @@ export function validateInputEvent(raw: unknown): InputEventValidation {
       case "audio.ended":
         return validateAudioEnded(record);
       case "video.ended":
-        return accept(record);
+        return validateVideoEnded(record);
       default: {
         const exhaustive: never = kind;
         return invalid("kind", "unknown input event kind: " + String(exhaustive));

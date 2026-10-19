@@ -75,6 +75,7 @@ export type PlayVideoRequest = {
   readonly kind: "playVideo";
   readonly reqId: number;
   readonly key: AssetKey;
+  readonly presentation: "full" | "small";
 };
 
 /** The one published request union (AD-17). */
