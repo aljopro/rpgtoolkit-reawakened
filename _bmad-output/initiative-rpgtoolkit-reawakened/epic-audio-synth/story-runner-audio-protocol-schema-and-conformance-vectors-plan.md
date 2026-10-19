@@ -3,7 +3,7 @@ title: 'Runner audio protocol schema and conformance vectors'
 type: 'feature'
 ticket: 15
 created: '2026-10-18'
-status: built
+status: done
 baseline_revision: 'f212728587894ad87ae94de67ae14e31cb444a36'
 risk: 'medium'
 context:
