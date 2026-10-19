@@ -1,5 +1,5 @@
 ---
-title: "Actor, board and game events: fallen, status, level-up, enter and leave"
+title: "Actor, board and game events: fallen, status, leveledUp, enter and leave"
 type: 'feature'
 ticket: 9
 created: '2026-10-19'
