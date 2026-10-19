@@ -3,7 +3,7 @@ title: 'Platform rulings: SoundFont policy, sources, runner protocol and video'
 type: 'feature'
 ticket: 3
 created: '2026-10-18'
-status: 'draft'
+status: built
 baseline_revision: '22cd1db4'
 risk: 'high'
 context:
