@@ -34,6 +34,7 @@ import {
   COMPILER_VERSION,
   startProgram,
   STEP_BUDGET,
+  verifyRestoredHandles,
   type Breakpoint,
   type Diagnostic,
   type DrawList,
@@ -347,5 +348,8 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     init.loader,
     init.gameId ?? "default",
   );
+  // The compiled programs are not in the snapshot: check that every callable in it
+  // still resolves against the ones this host rebuilds (FUN-8; entry 18.6).
+  verifyRestoredHandles(gameState.vm, services);
   return createHost(gameState, services, resolution.diagnostics, init.blobs);
 }

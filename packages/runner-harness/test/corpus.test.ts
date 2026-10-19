@@ -96,16 +96,41 @@ test("verifyCatalogueCompleteness: missing mapped TK2 command throws with diagno
   );
 });
 
-test("corpus: all 20 programs run to completion and pass random-step snapshot restore", () => {
+test("corpus: all 21 programs run to completion and pass random-step snapshot restore", () => {
   const programs = buildCorpus();
-  equal(programs.length, 20);
+  equal(programs.length, 21);
 
   const results = runAllCorpusPrograms(42);
-  equal(results.length, 20);
+  equal(results.length, 21);
 
   for (const result of results) {
     equal(typeof result.stateHash === "string" && result.stateHash.length === 16, true);
     equal(result.ticks > 0, true);
+  }
+});
+
+test("corpus: synthetic-10-closures restores from a snapshot taken at every tick and finishes with the same state hash (entry 18.6)", () => {
+  const closures = buildCorpus().find((p) => p.id === "synthetic-10-closures");
+  if (!closures) throw new Error("synthetic-10-closures missing");
+
+  const straight = closures.createHost(0);
+  straight.advance(closures.ticks, []);
+  equal(straight.state().vm.globals.r, 42, "the lambda parked mid-call by sleep returned 21 * 2");
+  equal(straight.state().vm.globals.wrapped, 5, "the bindingOf wrapper added one to castint(4.75)");
+  equal(straight.state().vm.globals.late, 13, "lib.prg called a handle whose program had already ended");
+  equal(straight.state().vm.cellSeq, 11, "three captured locals and the eight loop closures were made");
+  equal(Object.keys(straight.state().vm.cells ?? {}).length, 4, "the seven abandoned loop closures' cells were freed");
+
+  for (let split = 0; split < closures.ticks; split += 1) {
+    const fresh = closures.createHost(0);
+    fresh.advance(split, []);
+    const restored = closures.restoreHost(fresh.snapshot());
+    equal(restored.stateHash(), fresh.stateHash(), `split ${split}`);
+    checkSnapshotRestore(
+      { fresh, fromSnapshot: restored },
+      { ticks: closures.ticks - split, split, inputsForTick: undefined },
+    );
+    equal(fresh.stateHash(), straight.stateHash(), `split ${split} ends where the straight run ends`);
   }
 });
 

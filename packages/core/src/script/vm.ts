@@ -36,6 +36,7 @@ import {
 } from "./errors.ts";
 import { NULL_LOGGER } from "./logging.ts";
 import { ENGINE_DEFAULT_MANIFEST } from "./manifest.ts";
+import { collectCells, recordOwner } from "./cells.ts";
 import { createProgramCache, type ProgramCache } from "./cache.ts";
 import { runModuleCommand } from "./modules.ts";
 import { MODULE_COMMANDS } from "./parse.ts";
@@ -306,6 +307,12 @@ export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: n
   refreshBlock(vm, services.view.clock.tick());
 }
 
+/**
+ * The end-of-tick object pass (R-34): an object no root names, and no other
+ * object's member names, is freed. The roots include the values of the closure
+ * cells that are still there, which is why `collectCells` runs first in the same
+ * tick (entry 18.6): a cell that nothing can reach no longer keeps an object alive.
+ */
 function collectObjects(vm: VmState): void {
   const roots: number[] = [];
   const visit = (value: Value): void => {
@@ -342,6 +349,7 @@ export function advanceScriptTick(
   runThreadsPhase(state.vm, services, budget);
   assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
+  collectCells(state.vm);
   collectObjects(state.vm);
   return scriptStatus(state.vm);
 }
@@ -847,11 +855,16 @@ function bindingOfCall(
     name,
     services.commands,
     heldCallable(vm, thread, frameIndex, name),
-    (candidate) => findDefinition(services, program, candidate)?.infos.some((info) => info.entry >= 0) ?? false,
+    (candidate) => findDefinition(vm, services, program, candidate)?.infos.some((info) => info.entry >= 0) ?? false,
   );
   if (handle === undefined) {
     throw new ScriptError("unknown.command", `no built-in or function named "${name}"`, pos);
   }
+  // A handle that names a script function is resolved by name from whichever
+  // compiled program defines it, and compiled programs are not saved: record
+  // that program so a restore can compile it (entry 18.6). A command has none.
+  const owner = findDefinition(vm, services, program, handle.def);
+  if (owner !== undefined) recordOwner(vm, handle.def, owner.program.ref);
   return handle;
 }
 
@@ -1001,20 +1014,33 @@ function liveTarget(vm: VmState, id: number, what: string, pos: SourcePos): Thre
 
 /**
  * The compiled definition `def` names: the running program first, then every
- * other compiled program in cache order (FUN-8; entry 18.4). A def is unique to
- * the unit that was lowered (`main.prg#lambda_1`), so the first program that
- * defines it owns it, and a handle made in one program is callable from another
- * — a lambda stored in a global and called by a `run()` program, for example.
- * `infos` holds one entry per parameter count, as `Program.functions` does.
+ * other compiled program in cache order (FUN-8; entry 18.4), then the program
+ * `vm.defOwners` records for it (entry 18.6). A def is unique to the unit that
+ * was lowered (`main.prg#lambda_1`), so the first program that defines it owns
+ * it, and a handle made in one program is callable from another — a lambda
+ * stored in a global and called by a `run()` program, for example. The recorded
+ * owner is what finds a program no frame is running after a restore, when the
+ * cache holds only what the frames compiled; a program whose source changed
+ * since the save is not an owner any more and the def is unknown. `infos` holds
+ * one entry per parameter count, as `Program.functions` does.
  */
 function findDefinition(
+  vm: VmState,
   services: ScriptServices,
   program: Program,
   def: string,
 ): { readonly program: Program; readonly infos: readonly FunctionInfo[] } | undefined {
   const local = program.functions[def];
   if (local !== undefined) return { program, infos: local };
-  const owner = services.programs.find(def);
+  let owner = services.programs.find(def);
+  const recorded = vm.defOwners !== undefined && Object.hasOwn(vm.defOwners, def) ? vm.defOwners[def] : undefined;
+  if (owner === undefined && recorded !== undefined && recorded.compiler === COMPILER_VERSION) {
+    try {
+      owner = services.programs.get(recorded);
+    } catch (error) {
+      if (mismatchCode(error) === null) throw error;
+    }
+  }
   const infos = owner === undefined ? undefined : owner.functions[def];
   return owner === undefined || infos === undefined ? undefined : { program: owner, infos };
 }
@@ -1056,7 +1082,7 @@ function performCallable(
       { kind: "command", command: builtin }, args, pos, true,
     );
   }
-  const found = findDefinition(services, program, value.def);
+  const found = findDefinition(vm, services, program, value.def);
   if (found === undefined) {
     const extension = services.commands.extension(value.def);
     if (extension === undefined) {
@@ -2156,6 +2182,7 @@ export function stepThread(
           captures.push(id);
           if (slot.ref === localRef(name)) slot.ref = cellRef(id);
         }
+        recordOwner(vm, op.def, frame.program);
         frame.operands.push({ value: { type: "callable", def: op.def, captures, receiver: null }, ref: null });
         frame.ip += 1;
         break;
