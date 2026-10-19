@@ -70,12 +70,34 @@ export function eachRootValue(
   onValue: (path: string, value: unknown) => void,
   onRef: (path: string, ref: unknown) => void,
 ): void {
+  walkRoots(vm, onValue, onRef, true);
+}
+
+/**
+ * The same walk without the members of the objects: the places a running script
+ * reaches an object from (R-34, entry 19.5), where the members of an object count
+ * only once the object itself is reached.
+ */
+export function eachLiveRoot(
+  vm: Readonly<Record<string, unknown>>,
+  onValue: (path: string, value: unknown) => void,
+  onRef: (path: string, ref: unknown) => void,
+): void {
+  walkRoots(vm, onValue, onRef, false);
+}
+
+function walkRoots(
+  vm: Readonly<Record<string, unknown>>,
+  onValue: (path: string, value: unknown) => void,
+  onRef: (path: string, ref: unknown) => void,
+  objectMembers: boolean,
+): void {
   const table = (base: string, entries: unknown): void => {
     if (!isRecord(entries)) return;
     for (const name of Object.keys(entries)) onValue(`${base}.${name}`, entries[name]);
   };
   table("vm.globals", vm.globals);
-  if (Array.isArray(vm.objects)) {
+  if (objectMembers && Array.isArray(vm.objects)) {
     vm.objects.forEach((record: unknown, index) => {
       if (isRecord(record)) table(`vm.objects[${index}].members`, record.members);
     });

@@ -36,13 +36,17 @@ import {
 } from "./errors.ts";
 import { NULL_LOGGER } from "./logging.ts";
 import { ENGINE_DEFAULT_MANIFEST } from "./manifest.ts";
-import { collectCells, recordOwner } from "./cells.ts";
+import { collectCells, eachLiveRoot, recordOwner } from "./cells.ts";
+import { classInfo, findMember, findMethod } from "./classes.ts";
 import {
-  allocateHandle,
-  createDictionary,
+  checkMemberAccess,
+  createObject,
   DICTIONARY_CLASS,
   findObject,
+  instantiate,
   isDictionary,
+  objectRef,
+  parseObjectRef,
   readMember,
   removeMember,
   writeMember,
@@ -333,62 +337,88 @@ export function collectGarbage(vm: VmState): void {
 }
 
 /**
- * The end-of-tick object pass (R-34): an object no root names, and no other
- * object's member names, is freed, and the count is taken again until nothing
- * more is freed, so an object only a freed object named goes in the same pass. The roots include the values of the closure
- * cells that are still there, which is why `collectCells` runs first in the same
- * tick (entry 18.6): a cell that nothing can reach no longer keeps an object alive.
+ * The end-of-tick object pass (R-34; OOP-5, entry 19.5): an object nothing names
+ * is freed. The roots are the places a running script reaches an object from
+ * (`eachLiveRoot`: the globals, every frame's locals, operands, return value and
+ * `this`, a wait's stored reply, and the object an operand or a by-reference slot
+ * holds a reference into) and the value of every closure cell still left, which is
+ * why `collectCells` runs first in the same tick (entry 18.6). A callable names
+ * its receiver, so a reached object's members reach their receivers too.
+ *
+ * An object named by a member of any remaining object is kept, a root or not
+ * (two objects that name each other are never freed), and the count is taken
+ * again until nothing more is freed, so an object only a freed object named goes
+ * in the same pass: dropping a dictionary frees the dictionaries nested in it. A
+ * kept object keeps the receiver of every callable it holds, so the table never
+ * holds a callable whose receiver was freed and a save taken after the pass
+ * always loads (`restore.callable-receiver`).
  */
 function collectObjects(vm: VmState): void {
-  const roots: number[] = [];
-  const visit = (value: Value): void => {
-    if (isObjectValue(value)) {
-      roots.push(value.handle);
-    } else if (isCallableValue(value) && value.receiver !== null) {
-      const handle = Number(value.receiver);
-      if (Number.isSafeInteger(handle)) roots.push(handle);
-    }
+  const reached = new Set<number>();
+  const pending: number[] = [];
+  const reach = (handle: number | null): void => {
+    if (handle === null || reached.has(handle)) return;
+    reached.add(handle);
+    pending.push(handle);
   };
-  for (const value of Object.values(vm.globals)) visit(value);
-  for (const value of Object.values(vm.cells ?? {})) visit(value);
+  const reachValue = (value: unknown): void => {
+    reach(objectHandleOf(value));
+    reach(receiverHandleOf(value));
+  };
+  eachLiveRoot(
+    vm,
+    (_path, value) => reachValue(value),
+    (_path, ref) => reach(typeof ref === "string" ? (parseObjectRef(ref)?.handle ?? null) : null),
+  );
+  for (const value of Object.values(vm.cells ?? {})) reachValue(value);
   for (const thread of vm.threads) {
-    if (thread.wait !== null && "reply" in thread.wait && thread.wait.reply !== null) {
-      visit(thread.wait.reply.value);
-    }
-    for (const frame of thread.frames) {
-      if (frame.objectHandle !== undefined) roots.push(frame.objectHandle);
-      for (const slot of Object.values(frame.locals)) visit(slot.value);
-      for (const arg of frame.operands) visit(arg.value);
-    }
+    for (const frame of thread.frames) reach(frame.objectHandle ?? null);
   }
-  const rootSet: { [handle: string]: true } = {};
-  for (const handle of roots) rootSet[String(handle)] = true;
-  // A reachable object can contain a callback whose receiver must also be a root.
-  for (;;) {
-    const before = Object.keys(rootSet).length;
-    for (const record of vm.objects) {
-      if (rootSet[String(record.handle)] !== true) continue;
-      for (const value of Object.values(record.members)) visit(value);
-    }
-    for (const handle of roots) rootSet[String(handle)] = true;
-    if (Object.keys(rootSet).length === before) break;
+  const byHandle = new Map(vm.objects.map((record) => [record.handle, record]));
+  for (let handle = pending.pop(); handle !== undefined; handle = pending.pop()) {
+    for (const value of Object.values(byHandle.get(handle)?.members ?? {})) reachValue(value);
   }
-  // An object only a freed object named is unreferenced too, so the count is taken again until
-  // nothing more is freed: dropping a dictionary frees the dictionaries nested in it in this
-  // same pass. Two objects that name each other still keep each other (R-34).
-  for (;;) {
-    const incoming: { [handle: string]: number } = {};
-    for (const record of vm.objects) {
+  for (let alive = vm.objects; ; ) {
+    const named = new Set<number>();
+    for (const record of alive) {
       for (const value of Object.values(record.members)) {
-        if (isObjectValue(value)) incoming[String(value.handle)] = (incoming[String(value.handle)] ?? 0) + 1;
+        const handle = objectHandleOf(value);
+        if (handle !== null) named.add(handle);
       }
     }
-    const kept = vm.objects.filter(
-      (record) => rootSet[String(record.handle)] === true || (incoming[String(record.handle)] ?? 0) > 0,
-    );
-    if (kept.length === vm.objects.length) return;
-    vm.objects = kept;
+    const kept = new Set<number>();
+    for (const record of alive) {
+      if (reached.has(record.handle) || named.has(record.handle)) kept.add(record.handle);
+    }
+    const table = new Map(alive.map((record) => [record.handle, record]));
+    const holders = [...kept];
+    for (let handle = holders.pop(); handle !== undefined; handle = holders.pop()) {
+      for (const value of Object.values(table.get(handle)?.members ?? {})) {
+        const receiver = receiverHandleOf(value);
+        if (receiver === null || !table.has(receiver) || kept.has(receiver)) continue;
+        kept.add(receiver);
+        holders.push(receiver);
+      }
+    }
+    const next = alive.filter((record) => kept.has(record.handle));
+    if (next.length === alive.length) return;
+    vm.objects = next;
+    alive = next;
   }
+}
+
+/** The handle an object value names, or `null` when `value` is not one. */
+function objectHandleOf(value: unknown): number | null {
+  if (typeof value !== "object" || value === null || !("kind" in value) || value.kind !== "object") return null;
+  return "handle" in value && typeof value.handle === "number" ? value.handle : null;
+}
+
+/** The handle a callable's receiver names (OOP-11), or `null` for any other value and for a callable with none. */
+function receiverHandleOf(value: unknown): number | null {
+  if (typeof value !== "object" || value === null || !("type" in value) || value.type !== "callable") return null;
+  if (!("receiver" in value) || typeof value.receiver !== "string") return null;
+  const handle = Number(value.receiver);
+  return Number.isSafeInteger(handle) ? handle : null;
 }
 
 export function advanceScriptTick(
@@ -462,19 +492,6 @@ function isObjectValue(value: Value | undefined): value is ObjectValue {
   return typeof value === "object" && value !== null && "kind" in value && value.kind === "object";
 }
 
-function objectRef(handle: number, name: string): RefId {
-  return `object:${handle}:${name}` as RefId;
-}
-
-function parseObjectRef(ref: RefId): { handle: number; name: string } | null {
-  if (!ref.startsWith("object:")) return null;
-  const separator = ref.indexOf(":", 7);
-  if (separator < 0) return null;
-  const handle = Number(ref.slice(7, separator));
-  if (!Number.isInteger(handle)) return null;
-  return { handle, name: ref.slice(separator + 1) };
-}
-
 /**
  * The variable `name` as a read of it from the running frame would find it,
  * without creating it: a local of the running frame, else the global, else
@@ -503,6 +520,76 @@ function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base:
 function bindMemberValue(value: Value, handle: number): Value {
   if (!isCallableValue(value) || value.receiver !== null) return value;
   return { type: "callable", def: value.def, captures: value.captures, receiver: String(handle) };
+}
+
+/** The live object `value` names; `what` is the message when `value` is no object at all (OOP-3). */
+function liveObject(vm: VmState, value: Value | undefined, pos: SourcePos, what: string): ObjectRecord {
+  if (!isObjectValue(value)) throw new ScriptError("object.invalid", what, pos);
+  const record = findObject(vm, value.handle);
+  if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${value.handle}`, pos);
+  return record;
+}
+
+/**
+ * Call member `name` of `record` (OOP-10, "Calls through a name"; OOP-11): the one
+ * path behind `obj->name(args)`, `obj.name(args)` and `a.b.name(args)`. An object
+ * with a class runs the method of that name and parameter count that its class or
+ * an ancestor defines, `release()` being the built-in of OOP-5, and otherwise a
+ * callable stored in a member of that name; a dictionary calls its callable member.
+ * The callee's `this` is the object, and a stored callable keeps the receiver it has.
+ */
+function invokeMember(
+  thread: Thread,
+  vm: VmState,
+  services: ScriptServices,
+  program: Program,
+  frame: Frame,
+  frameIndex: number,
+  record: ObjectRecord,
+  name: string,
+  args: Arg[],
+  pos: SourcePos,
+): CallOutcome {
+  if (!isDictionary(record)) {
+    if (name === "release") {
+      const info = classInfo(program, record.className);
+      frame.ip += 1;
+      if (info?.destructor !== null && info?.destructor !== undefined) {
+        thread.frames.push({
+          program: frame.program, ip: info.destructor.entry, locals: bindMethodLocals(info.destructor, args), operands: [],
+          errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
+          objectClass: record.className, releaseHandle: record.handle,
+        });
+      } else {
+        vm.objects = vm.objects.filter((item) => item.handle !== record.handle);
+        frame.operands.push({ value: 0, ref: null });
+      }
+      return "continue";
+    }
+    const method = findMethod(program, record.className, name, args.length);
+    if (method !== undefined && method.entry >= 0) {
+      if (method.access === "private" && frame.objectClass !== method.className) {
+        throw new ScriptError("object.inaccessible-member", `method ${name} is private`, pos);
+      }
+      frame.ip += 1;
+      thread.frames.push({
+        program: frame.program, ip: method.entry, locals: bindMethodLocals(method, args), operands: [],
+        errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
+        objectClass: method.className ?? record.className,
+      });
+      return "continue";
+    }
+    if (findMember(program, record.className, name) === undefined) {
+      throw new ScriptError("object.invalid", `method ${name} not found`, pos);
+    }
+    checkMemberAccess(program, record, name, frame.objectClass, pos);
+  }
+  const member = bindMemberValue(readMember(record, name), record.handle);
+  if (!isCallableValue(member)) {
+    const kind = isDictionary(record) ? "dictionary member" : "member";
+    throw new ScriptError(CALLABLE_NOT_CALLABLE, `${kind} "${name}" is not callable`, pos);
+  }
+  return performCallable(thread, vm, services, program, frame, frameIndex, member, args, pos);
 }
 
 function setOwnValue(record: { [name: string]: Value }, name: string, value: Value): void {
@@ -1008,37 +1095,6 @@ function applyOut(
   }
 }
 
-function classInfo(program: Program, name: string) {
-  return program.classes[name];
-}
-
-function classWalk(program: Program, name: string, seen: string[] = []): string[] {
-  if (seen.includes(name)) return seen;
-  seen.push(name);
-  const info = classInfo(program, name);
-  if (info !== undefined) {
-    for (const base of info.bases) classWalk(program, base, seen);
-  }
-  return seen;
-}
-
-function findMethod(program: Program, className: string, name: string, argc: number) {
-  for (const current of classWalk(program, className)) {
-    const list = classInfo(program, current)?.methods[name];
-    const method = list?.find((candidate) => candidate.params.length === argc);
-    if (method !== undefined) return method;
-  }
-  return undefined;
-}
-
-function findMember(program: Program, className: string, name: string) {
-  for (const current of classWalk(program, className)) {
-    const member = classInfo(program, current)?.members.find((candidate) => candidate.name === name);
-    if (member !== undefined) return member;
-  }
-  return undefined;
-}
-
 function bindMethodLocals(
   method: { readonly params: readonly { readonly name: string; readonly byRef: boolean }[] },
   args: readonly Arg[],
@@ -1406,7 +1462,7 @@ function dispatchResolved(
           // `kill(obj.field)` and `kill(obj["field"])` remove the key from a dictionary (KILL-1).
           const member = parseObjectRef(target.ref as RefId);
           const record = member === null ? undefined : findObject(vm, member.handle);
-          if (member !== null && record !== undefined && isDictionary(record)) removeMember(record, member.name);
+          if (member !== null && record !== undefined) removeMember(record, member.name);
         }
       }
       if (action === "split") {
@@ -1827,8 +1883,13 @@ export function stepThread(
           const ref = objectRef(frame.objectHandle, op.name);
           frame.operands.push({ value: readRef(vm, thread, frameIndex, ref), ref });
         } else if (op.name === "this" && frame.objectHandle !== undefined && frame.objectClass !== undefined) {
+          // The object's own class, not the class of the running method (OOP-10, two class identities).
           frame.operands.push({
-            value: { kind: "object", handle: frame.objectHandle, className: frame.objectClass },
+            value: {
+              kind: "object",
+              handle: frame.objectHandle,
+              className: findObject(vm, frame.objectHandle)?.className ?? frame.objectClass,
+            },
             ref: null,
           });
         } else if (op.name === "this") {
@@ -1839,56 +1900,22 @@ export function stepThread(
         frame.ip += 1;
         break;
 
-      case "member": {
-        const receiver = frame.operands.pop();
-        const receiverValue = receiver?.value;
-        if (!isObjectValue(receiverValue)) {
-          throw new ScriptError("object.invalid", "member access requires a live object", op.pos);
-        }
-        const record = vm.objects.find((item) => item.handle === receiverValue.handle);
-        if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${receiverValue.handle}`, op.pos);
-        if (isDictionary(record)) {
-          // A dictionary member is always public and a missing key reads as unset (OOP-10).
-          frame.operands.push({ value: readMember(record, op.name), ref: objectRef(record.handle, op.name) });
-          frame.ip += 1;
-          break;
-        }
-        const member = findMember(program, record.className, op.name);
-        if (member === undefined) throw new ScriptError("object.invalid", `unknown member ${op.name}`, op.pos);
-        if (member.access === "private" && frame.objectClass !== record.className) {
-          throw new ScriptError("object.inaccessible-member", `member ${op.name} is private`, op.pos);
-        }
-        const ref = objectRef(record.handle, op.name);
-        frame.operands.push({ value: record.members[op.name] ?? 0, ref });
-        frame.ip += 1;
-        break;
-      }
+      case "member":
       case "get_member_bound": {
         const receiver = frame.operands.pop();
-        const receiverValue = receiver?.value;
-        if (!isObjectValue(receiverValue)) {
-          throw new ScriptError("object.invalid", "member access requires a live object", op.pos);
-        }
-        const record = findObject(vm, receiverValue.handle);
-        if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${receiverValue.handle}`, op.pos);
-        if (isDictionary(record)) {
-          frame.operands.push({ value: bindMemberValue(readMember(record, op.name), record.handle), ref: objectRef(record.handle, op.name) });
-          frame.ip += 1;
-          break;
-        }
-        const member = findMember(program, record.className, op.name);
-        if (member === undefined) throw new ScriptError("object.invalid", `unknown member ${op.name}`, op.pos);
-        if (member.access === "private" && frame.objectClass !== record.className) {
-          throw new ScriptError("object.inaccessible-member", `member ${op.name} is private`, op.pos);
-        }
-        const ref = objectRef(record.handle, op.name);
-        frame.operands.push({ value: bindMemberValue(record.members[op.name] ?? 0, record.handle), ref });
+        const record = liveObject(vm, receiver?.value, op.pos, "member access requires a live object");
+        checkMemberAccess(program, record, op.name, frame.objectClass, op.pos);
+        const value = readMember(record, op.name);
+        frame.operands.push({
+          value: op.op === "get_member_bound" ? bindMemberValue(value, record.handle) : value,
+          ref: objectRef(record.handle, op.name),
+        });
         frame.ip += 1;
         break;
       }
 
       case "newObject": {
-        const record = createDictionary(vm);
+        const record = createObject(vm, null);
         frame.operands.push({
           value: { kind: "object", handle: record.handle, className: DICTIONARY_CLASS },
           ref: null,
@@ -1901,7 +1928,7 @@ export function stepThread(
         const valueArg = frame.operands.pop();
         const objectArg = frame.operands[frame.operands.length - 1];
         const target = isObjectValue(objectArg?.value) ? findObject(vm, objectArg.value.handle) : undefined;
-        if (valueArg === undefined || target === undefined || !isDictionary(target)) {
+        if (valueArg === undefined || target === undefined) {
           throw new ScriptError("vm.stack-underflow", "initMember: no dictionary below the value", op.pos);
         }
         writeMember(target, op.key, valueArg.value === null ? 0 : valueArg.value);
@@ -2076,21 +2103,14 @@ export function stepThread(
         const info = classInfo(program, op.className);
         if (info === undefined) throw new ScriptError("object.invalid", `unknown class ${op.className}`, op.pos);
         if (info.abstract) throw new ScriptError("object.abstract-class", `class ${op.className} is abstract`, op.pos);
-        const handle = allocateHandle(vm);
-        const members: { [name: string]: Value } = {};
-        for (const member of info.members) {
-          if (member.arraySize !== null) {
-            for (let index = 0; index < member.arraySize; index += 1) members[`${member.name}[${index}]`] = 0;
-          } else members[member.name] = 0;
-        }
-        const value: ObjectValue = { kind: "object", handle, className: op.className };
-        vm.objects.push({ handle, className: op.className, program: frame.program, members });
+        const record = instantiate(vm, program, frame.program, op.className);
+        const value: ObjectValue = { kind: "object", handle: record.handle, className: op.className };
         const constructor = findMethod(program, op.className, op.className, op.argc);
         frame.ip += 1;
         if (constructor !== undefined && constructor.entry >= 0) {
           thread.frames.push({
             program: frame.program, ip: constructor.entry, locals: bindMethodLocals(constructor, args), operands: [],
-            errorHandler: null, autoLocal: frame.autoLocal, objectHandle: handle,
+            errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
             objectClass: op.className, returnValue: value,
           });
         } else frame.operands.push({ value, ref: null });
@@ -2100,45 +2120,10 @@ export function stepThread(
       case "methodCall": {
         const args = takeArgs(frame, op.argc, op.pos);
         const receiver = frame.operands.pop();
-        const receiverValue = receiver?.value;
-        if (!isObjectValue(receiverValue)) throw new ScriptError("object.invalid", "method receiver is not an object", op.pos);
-        const record = vm.objects.find((item) => item.handle === receiverValue.handle);
-        if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${receiverValue.handle}`, op.pos);
-        if (isDictionary(record)) {
-          const member = bindMemberValue(readMember(record, op.name), record.handle);
-          if (!isCallableValue(member)) {
-            throw new ScriptError(CALLABLE_NOT_CALLABLE, `dictionary member "${op.name}" is not callable`, op.pos);
-          }
-          if (performCallable(thread, vm, services, program, frame, frameIndex, member, args, op.pos) === "yield") return finish();
-          break;
+        const record = liveObject(vm, receiver?.value, op.pos, "method receiver is not an object");
+        if (invokeMember(thread, vm, services, program, frame, frameIndex, record, op.name, args, op.pos) === "yield") {
+          return finish();
         }
-        if (op.name === "release") {
-          const info = classInfo(program, record.className);
-          if (info?.destructor !== null && info?.destructor !== undefined) {
-            frame.ip += 1;
-            thread.frames.push({
-              program: frame.program, ip: info.destructor.entry, locals: bindMethodLocals(info.destructor, args), operands: [],
-              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
-              objectClass: record.className, releaseHandle: record.handle,
-            });
-          } else {
-            vm.objects = vm.objects.filter((item) => item.handle !== record.handle);
-            frame.ip += 1;
-            frame.operands.push({ value: 0, ref: null });
-          }
-          break;
-        }
-        const method = findMethod(program, record.className, op.name, op.argc);
-        if (method === undefined || method.entry < 0) throw new ScriptError("object.invalid", `method ${op.name} not found`, op.pos);
-        if (method.access === "private" && frame.objectClass !== method.className) {
-          throw new ScriptError("object.inaccessible-member", `method ${op.name} is private`, op.pos);
-        }
-        frame.ip += 1;
-        thread.frames.push({
-          program: frame.program, ip: method.entry, locals: bindMethodLocals(method, args), operands: [],
-          errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
-          objectClass: method.className ?? record.className,
-        });
         break;
       }
       case "dup": {
@@ -2162,13 +2147,15 @@ export function stepThread(
           throw new ScriptError("vm.stack-underflow", "unop: operand stack underflow", op.pos);
         }
         if (isObjectValue(operand.value)) {
-          const method = findMethod(program, operand.value.className, `operator${op.operator}`, 0);
+          // The object's own class answers, wherever the value came from (OOP-7, OOP-10).
+          const className = findObject(vm, operand.value.handle)?.className ?? DICTIONARY_CLASS;
+          const method = findMethod(program, className, `operator${op.operator}`, 0);
           if (method === undefined) throw new ScriptError("object.invalid", `operator${op.operator} not found`, op.pos);
           frame.ip += 1;
           thread.frames.push({
             program: frame.program, ip: method.entry, locals: bindMethodLocals(method, []), operands: [],
             errorHandler: null, autoLocal: frame.autoLocal, objectHandle: operand.value.handle,
-            objectClass: method.className ?? operand.value.className,
+            objectClass: method.className ?? className,
           });
           break;
         }
@@ -2205,13 +2192,14 @@ export function stepThread(
           throw new ScriptError("vm.stack-underflow", "binop: operand stack underflow", op.pos);
         }
         if (isObjectValue(leftArg.value)) {
-          const method = findMethod(program, leftArg.value.className, `operator${op.operator}`, 1);
+          const className = findObject(vm, leftArg.value.handle)?.className ?? DICTIONARY_CLASS;
+          const method = findMethod(program, className, `operator${op.operator}`, 1);
           if (method !== undefined) {
             frame.ip += 1;
             thread.frames.push({
               program: frame.program, ip: method.entry, locals: bindMethodLocals(method, [rightArg]), operands: [],
               errorHandler: null, autoLocal: frame.autoLocal, objectHandle: leftArg.value.handle,
-              objectClass: method.className ?? leftArg.value.className,
+              objectClass: method.className ?? className,
             });
             break;
           }
@@ -2418,12 +2406,8 @@ export function stepThread(
                 ? slot.value ?? 0
                 : readRef(vm, thread, frameIndex, slot.ref);
           const record = isObjectValue(receiverValue) ? findObject(vm, receiverValue.handle) : undefined;
-          if (record !== undefined && isDictionary(record)) {
-            const member = bindMemberValue(readMember(record, op.name), record.handle);
-            if (!isCallableValue(member)) {
-              throw new ScriptError(CALLABLE_NOT_CALLABLE, `dictionary member "${op.name}" is not callable`, op.pos);
-            }
-            if (performCallable(thread, vm, services, program, frame, frameIndex, member, args, op.pos) === "yield") {
+          if (record !== undefined) {
+            if (invokeMember(thread, vm, services, program, frame, frameIndex, record, op.name, args, op.pos) === "yield") {
               return finish();
             }
             break;
