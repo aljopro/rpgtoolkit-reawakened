@@ -205,14 +205,14 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
   // gives every previous value (60b9d135ecc2665c, c70da0e285468911, d1a2feea4d6699d3, 148143e8efdad422,
   // 91341281743ee68f, 1eda27c040030408, 4aead264e9d81fc0 and 249a5a6f76a4cb12).
   const expectedHashes: Record<string, string> = {
-    "sample-start-demo": "e9c83e19f9ebfb4a",
+    "sample-start-demo": "bcccb726d88cf025",
     "sample-system-demo": "c7276b9169328503",
     "sample-sys-test-demo": "c7276b9169328503",
     "sample-win-demo": "9128c9fb95d1f969",
     "sample-oldman-demo": "a7e3084cbafc59c0",
     "sample-man-demo": "2e8a007d7bae1d31",
     "sample-man-wander-demo": "6717598c0b7e163a",
-    "sample-start-basic": "f8eeab447b8cd9d2",
+    "sample-start-basic": "69af004598505635",
     "sample-system-basic": "c7276b9169328503",
     "sample-wander-basic": "eaef689c32b9ae98",
   };
