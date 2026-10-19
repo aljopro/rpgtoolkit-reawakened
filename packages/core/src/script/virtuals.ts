@@ -1,5 +1,6 @@
 /** E-92 engine-backed virtual variables, including board data (R-37). */
 import type { Value } from "../ports/value.ts";
+import { musicFile } from "../audio/model.ts";
 import type { GameState } from "../save/state.ts";
 import { TICKS_PER_SECOND } from "../time/time.ts";
 import { ScriptError } from "./errors.ts";
@@ -22,8 +23,7 @@ export function createDefaultVirtuals(state: GameState): VirtualVariablePort {
     read(rawName: string): Value | undefined {
       const name = rawName.toLowerCase();
       if (name === "gametime") return Math.floor(state.time.tick / TICKS_PER_SECOND);
-      const audio = asRecord(state.audio);
-      if (name === "music") return typeof audio?.music === "string" ? audio.music : "";
+      if (name === "music") return musicFile(state.audio) ?? "";
       const world = asRecord(state.world);
       const board = asRecord(world?.board);
       if (requiresBoard(name) && board === undefined) throw new ScriptError("world.no-board", `virtual variable "${rawName}" requires a loaded board`);

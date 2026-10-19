@@ -28,7 +28,10 @@
  * request fields of ticket 3.9, v4 → v5 advances both ticket 3.8 module
  * metadata and ticket 3.16's sandboxed file-handle table, then the section
  * version is set to the current one. The chain is keyed by the per-section
- * numbers (AD-23).
+ * numbers (AD-23). A save whose `schema.audio` is 1 carried the empty
+ * placeholder; it is replaced by a fresh schema-2 audio section
+ * (docs/spec/engine/audio-media.md#audio-state), because a placeholder held no
+ * playback to keep.
  *
  * AD-10 (the state tree) and AD-11 (the canonical form); docs/spec/formats/save-game.md#layout-minor-4 (the
  * saved game).
@@ -48,6 +51,7 @@ import { asSpritesSection, createSpritesSection, SPRITES_SCHEMA_VERSION } from "
 import { createInputSection } from "../input/input.ts";
 import { createTriggersSection, TRIGGERS_SCHEMA_VERSION } from "../triggers/model.ts";
 import { INPUT_SCHEMA_VERSION } from "./sections/input.ts";
+import { AUDIO_SCHEMA_VERSION, createAudioSection } from "../audio/model.ts";
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
   return canon(tagNonFinite(state) as never);
@@ -188,6 +192,15 @@ function migrateInput(record: Record<string, unknown>, schema: Record<string, un
   if (typeof oldRecord.focused === "boolean") current.focused = oldRecord.focused;
   record.input = current;
   schema.input = INPUT_SCHEMA_VERSION;
+}
+
+/** Migrate the empty audio placeholder (schema 1) to the track-and-voice section (schema 2; docs/spec/engine/audio-media.md#audio-state). */
+function migrateAudio(record: Record<string, unknown>, schema: Record<string, unknown>): void {
+  const version = schema.audio;
+  if (typeof version !== "number") shapeError("the snapshot's `schema` has no numeric `audio` version");
+  if (version >= SCHEMA_VERSIONS.audio) return;
+  record.audio = createAudioSection();
+  schema.audio = SCHEMA_VERSIONS.audio;
 }
 
 function shapeError(message: string): never {
@@ -418,6 +431,56 @@ function validateTriggersShape(value: unknown): void {
   recordAt(triggers.fired, "triggers.fired");
   recordAt(triggers.repeat, "triggers.repeat");
 }
+
+/** One fade descriptor or `null` (docs/spec/engine/audio-media.md#audio-state). */
+function validateAudioFade(value: unknown, path: string): void {
+  if (value === null) return;
+  const fade = recordAt(value, path);
+  for (const key of ["fromVolume", "targetVolume", "startTick", "durationTicks"]) numberAt(fade[key], `${path}.${key}`);
+}
+
+function validateNullableNumber(value: unknown, path: string): void {
+  if (value !== null) numberAt(value, path);
+}
+
+/** The `audio` section's shape, schema v2 (docs/spec/engine/audio-media.md#audio-state). */
+function validateAudioShape(value: unknown): void {
+  const audio = recordAt(value, "audio");
+  if (numberAt(audio.schema, "audio.schema") !== AUDIO_SCHEMA_VERSION) shapeError(`the snapshot's audio.schema must be ${AUDIO_SCHEMA_VERSION}`);
+  if (numberAt(audio.cueId, "audio.cueId") < 1) shapeError("the snapshot's audio.cueId must be at least 1");
+  if (audio.soundFont !== null) stringAt(audio.soundFont, "audio.soundFont");
+  for (const [index, trackValue] of arrayAt(audio.tracks, "audio.tracks").entries()) {
+    const path = `audio.tracks[${index}]`;
+    const track = recordAt(trackValue, path);
+    stringAt(track.name, `${path}.name`);
+    if (numberAt(track.voiceCount, `${path}.voiceCount`) < 1) shapeError(`the snapshot's ${path}.voiceCount must be at least 1`);
+    if (!["stopped", "playing", "paused"].includes(stringAt(track.state, `${path}.state`))) shapeError(`the snapshot's ${path}.state is invalid`);
+    numberAt(track.flags, `${path}.flags`);
+    numberAt(track.positionTicks, `${path}.positionTicks`);
+    if (track.file !== null) stringAt(track.file, `${path}.file`);
+    validateNullableNumber(track.lengthTicks, `${path}.lengthTicks`);
+    validateAudioFade(track.fade, `${path}.fade`);
+    for (const [voiceIndex, voiceValue] of arrayAt(track.voices, `${path}.voices`).entries()) {
+      const voicePath = `${path}.voices[${voiceIndex}]`;
+      const voice = recordAt(voiceValue, voicePath);
+      for (const key of ["index", "cueId", "priority", "volume", "startTick", "positionTicks"]) numberAt(voice[key], `${voicePath}.${key}`);
+      if (!["playing", "paused"].includes(stringAt(voice.state, `${voicePath}.state`))) shapeError(`the snapshot's ${voicePath}.state is invalid`);
+      stringAt(voice.file, `${voicePath}.file`);
+      if (typeof voice.loop !== "boolean") shapeError(`the snapshot's ${voicePath}.loop must be a boolean`);
+      for (const key of ["lengthTicks", "endTick", "pausedTick"]) validateNullableNumber(voice[key], `${voicePath}.${key}`);
+      validateAudioFade(voice.fade, `${voicePath}.fade`);
+    }
+  }
+  const settings = recordAt(audio.settings, "audio.settings");
+  numberAt(settings.masterVolume, "audio.settings.masterVolume");
+  for (const [index, entryValue] of arrayAt(settings.trackVolumes, "audio.settings.trackVolumes").entries()) {
+    const path = `audio.settings.trackVolumes[${index}]`;
+    const entry = recordAt(entryValue, path);
+    stringAt(entry.name, `${path}.name`);
+    numberAt(entry.volume, `${path}.volume`);
+    validateAudioFade(entry.fade, `${path}.fade`);
+  }
+}
 function validateShape(record: Record<string, unknown>): void {
   const schema = recordAt(record.schema, "schema");
   for (const key of Object.keys(SCHEMA_VERSIONS)) numberAt(schema[key], `schema.${key}`);
@@ -427,6 +490,7 @@ function validateShape(record: Record<string, unknown>): void {
     recordAt(record[key], key);
     if (key === "sprites") validateSpritesShape(record[key]);
     if (key === "triggers") validateTriggersShape(record[key]);
+    if (key === "audio") validateAudioShape(record[key]);
   }
   const rng = recordAt(record.rng, "rng");
   for (const key of ["s0", "s1", "s2", "s3"]) numberAt(rng[key], `rng.${key}`);
@@ -470,6 +534,7 @@ export function restoreGameState(json: string): GameState {
   migrateSprites(record, schema as Record<string, unknown>);
   migrateInput(record, schema as Record<string, unknown>);
   migrateTriggers(record, schema as Record<string, unknown>);
+  migrateAudio(record, schema as Record<string, unknown>);
   validateShape(record);
   return parsed as GameState;
 }

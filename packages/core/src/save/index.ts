@@ -9,6 +9,7 @@
 export { createGameState, createSchemaState, SCHEMA_VERSIONS } from "./state.ts";
 export type { GameState, GameStateIsPlainData, SchemaState, SectionKey } from "./state.ts";
 export { restoreGameState, snapshot } from "./snapshot.ts";
+export { hashGameState } from "./hash.ts";
 export {
   createFxSection,
   type AudioSection,

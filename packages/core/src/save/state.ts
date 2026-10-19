@@ -5,8 +5,9 @@
  * `schema` (here), `vm` (`core/script`), `rng` (`core/rng`) and `time`
  * (`core/time`); of the other fourteen, seven are real sections declared under
  * `save/sections/` (`world`, `camera`, `ui`, `fx`, `surfaces`, `input`,
- * `engine`) and seven are the `Record<string, never>` placeholders of
- * `sections.ts` that later epics fill. `SchemaState` is AD-23's per-section version
+ * `engine`), three are owned by their own modules (`sprites`, `triggers` and
+ * `audio`, schema v2, `core/audio`) and four are the `Record<string, never>`
+ * placeholders of `sections.ts` that later epics fill. `SchemaState` is AD-23's per-section version
  * map plus the compiler version, and `SCHEMA_VERSIONS` is the current version
  * of every section, each starting at 1.
  *
@@ -47,6 +48,7 @@ import {
 import { createTriggersSection } from "../triggers/model.ts";
 import { createSpritesSection } from "../sprites/model.ts";
 import { createInputSection } from "../input/input.ts";
+import { createAudioSection } from "../audio/model.ts";
 
 /** Every `GameState` section key (AD-10), i.e. the schema version map's keys. */
 export const SCHEMA_VERSIONS = {
@@ -63,7 +65,7 @@ export const SCHEMA_VERSIONS = {
   ui: 1,
   camera: 1,
   fx: 1,
-  audio: 1,
+  audio: 2,
   surfaces: 1,
   rng: 1,
   time: 1,
@@ -162,7 +164,7 @@ export function createGameState(init: { seed: number }): GameState {
     ui: {} as UiSection,
     camera: {} as CameraSection,
     fx: {} as FxSection,
-    audio: {},
+    audio: createAudioSection(),
     surfaces: {} as SurfacesSection,
     rng: seedRng(init.seed),
     time: createTimeState(),

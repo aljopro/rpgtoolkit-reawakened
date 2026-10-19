@@ -20,8 +20,8 @@ export type OpenTickCursor = {
   skip?: { file: string; line: number };
 };
 
-/** What an outstanding host request is for (AD-17); boot adds the main file, fonts and programs. */
-export type EngineRequestKind = "main" | "font" | "program" | "board" | "tile" | "animation" | "image" | "board-preview";
+/** What an outstanding host request is for (AD-17); boot adds the main file, fonts and programs; `audio` fetches a file only to learn its length. */
+export type EngineRequestKind = "main" | "font" | "program" | "board" | "tile" | "animation" | "image" | "board-preview" | "audio";
 
 /** Boot progress (E-02): `main` and `assets` load files, `startup` runs the start-up program, `board` loads `initBoard`. */
 export type BootStage = "main" | "assets" | "startup" | "board" | "running" | "stopped";
@@ -57,6 +57,4 @@ export type EngineSection = {
   boot?: BootState;
   /** The `send` the engine will perform before the next tick. */
   transition?: BoardTransition;
-  /** The board music asset last posted as an `audio` effect; same-file arrivals post nothing (E-16). */
-  musicAsset?: string;
 };

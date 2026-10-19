@@ -610,7 +610,10 @@ test("E-92 virtual gametime reads tick elapsed and assignment breaks link", () =
 test("E-92 virtual variables read engine state sections", () => {
   const state = createGameState({ seed: 0 });
   // Set mock engine state on sections
-  (state.audio as { music?: string }).music = "town.mid";
+  // The `music` virtual reads the music track's file, which stop keeps (docs/spec/engine/audio-media.md#audio-lifecycle, Q19).
+  const musicTrack = state.audio.tracks.find((track) => track.name === "music");
+  if (musicTrack === undefined) throw new Error("the audio section has no music track");
+  musicTrack.file = "media/town.mid" as never;
   type LegacyWorldSection = { board?: { background?: string; skill?: number; constants?: Record<number, number> } };
   // This test exercises the legacy virtual-variable shape, not the tracer board state.
   const legacyWorld = state.world as unknown as LegacyWorldSection;
@@ -643,7 +646,7 @@ test("E-92 virtual variables read engine state sections", () => {
   });
   advanceScriptTick(state, createScriptServices(state));
 
-  equal(state.vm.globals.m, "town.mid");
+  equal(state.vm.globals.m, "media/town.mid");
   equal(state.vm.globals.bg, "forest.png");
   equal(state.vm.globals.sk, 5);
   equal(state.vm.globals.cnv, 7);

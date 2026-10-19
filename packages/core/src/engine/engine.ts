@@ -1,4 +1,4 @@
-import { hashDrawList, hashState } from "../canon/index.ts";
+import { hashDrawList } from "../canon/index.ts";
 import { resolveAsset, assetKey, resolveTileReference } from "../formats/resolver/resolver.ts";
 import { classifyImageReference } from "../formats/animation/image-reference.ts";
 import { decodeTexture, type DecodedTexture } from "../formats/image/index.ts";
@@ -20,6 +20,12 @@ import type { RunnerRequest } from "../ports/requests.ts";
 import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
+import { hashGameState } from "../save/hash.ts";
+import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
+import { createAudioRuntime } from "../audio/runtime.ts";
+import type { AudioInfo } from "../formats/audio/model.ts";
+import type { AssetDecoder } from "../formats/registry/decoder.ts";
+import type { Logger } from "../ports/logger.ts";
 import { composeBoard, type BoardBlit, type SpriteDraw } from "../render/compose.ts";
 import { composeUi, composeUiCursor } from "../render/ui.ts";
 import { applyFxDrawList, advanceFx, applyFxEffect } from "../render/fx.ts";
@@ -124,6 +130,8 @@ type EngineCommonInit = {
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
   readonly cameraTarget?: CameraTarget;
   readonly spriteRuntime?: SpriteRuntime;
+  /** The author's default SoundFont (docs/spec/engine/audio-media.md#soundfont-layers rank 3); `null` or absent for none. */
+  readonly defaultSoundFont?: AssetKey | null;
   readonly input?: InputConfig;
   readonly include?: DrawListInclude;
   /** Decoded image assets supplied by a host or deterministic scene runner. */
@@ -215,6 +223,36 @@ export function createEngine(init: EngineInit): Engine {
     applySpriteEffect(state, effect.name, values);
   });
   bus.register("triggers", (effect) => applyTriggerEffect(state, effect));
+  // The audio track engine owns `state.audio`: it applies the `audio` effects and asks for a file's bytes only to
+  // learn its length (docs/spec/engine/audio-media.md#audio-core-pins), then drops them.
+  let audioDecoders: readonly AssetDecoder[] = [];
+  const audioInfo = new Map<AssetKey, AudioInfo | null>();
+  const decoderLogger: Logger = {
+    debug: () => undefined,
+    info: () => undefined,
+    warn: (record) => void diagnostics.push({ code: record.code, file: "", line: 0, message: record.message }),
+    error: (record) => void diagnostics.push({ code: record.code, file: "", line: 0, message: record.message }),
+  };
+  let defaultSoundFont = init.defaultSoundFont ?? null;
+  if (defaultSoundFont !== null && !index.byKey.has(defaultSoundFont)) {
+    diagnostics.push({ code: "media.soundfont-missing", file: defaultSoundFont, line: 0, message: `default SoundFont "${defaultSoundFont}" is not in the asset index` });
+    defaultSoundFont = null;
+  }
+  const audio = createAudioRuntime(state, {
+    lookup: (key) => {
+      const info = audioInfo.get(key);
+      return info === undefined ? { kind: "pending" } : info === null ? { kind: "unsupported" } : { kind: "known", lengthTicks: info.lengthTicks };
+    },
+    need: (key) => request(key, "audio"),
+    defaultSoundFont,
+    notify: (note) => {
+      if (note.kind !== "diag") return;
+      const file = note.detail.file;
+      const detail = Object.entries(note.detail).map(([name, value]) => `${name}=${String(value)}`).join(" ");
+      diagnostics.push({ code: note.code, file: typeof file === "string" ? file : "", line: 0, message: `${note.op}: ${note.code} ${detail}`.trimEnd() });
+    },
+  });
+  audio.register(bus);
   for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
   let nextRequestId = 1;
   let failed = false;
@@ -248,6 +286,7 @@ export function createEngine(init: EngineInit): Engine {
   }
 
   function makeServices(plugins: readonly ResolvedPlugin[], programLoader?: ProgramLoader): ScriptServices {
+    audioDecoders = assembleAudioDecoders(plugins.map((plugin) => plugin.definition), decoderLogger);
     return createScriptServices(state, plugins, undefined, undefined, programLoader, "engine", (section, effect) => bus.dispatchRecorded(section, effect));
   }
   let services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS);
@@ -434,8 +473,16 @@ export function createEngine(init: EngineInit): Engine {
     if (state.engine.effectDiagnostics !== undefined) next.effectDiagnostics = state.engine.effectDiagnostics;
     if (state.engine.boot !== undefined) next.boot = state.engine.boot;
     if (state.engine.transition !== undefined) next.transition = state.engine.transition;
-    if (state.engine.musicAsset !== undefined) next.musicAsset = state.engine.musicAsset;
     state.engine = next;
+  }
+  /** Learn an audio file's length from its reply and drop the bytes; no bytes, or bytes no decoder accepts, is an unknown length. */
+  function rememberAudio(key: AssetKey, bytes: Uint8Array | null): void {
+    if (bytes === null) {
+      diagnostics.push({ code: "asset.missing", file: key, line: 0, message: `asset not found: ${key}` });
+      audioInfo.set(key, null);
+      return;
+    }
+    audioInfo.set(key, decodeAudioInfo(audioDecoders, bytes, key, { index, root }));
   }
   function consumeAsset(record: InputRecord, consumed: InputRecord[]): void {
     if (record.event.kind !== "asset") return;
@@ -443,6 +490,11 @@ export function createEngine(init: EngineInit): Engine {
     if (entry === undefined) return;
     pending.delete(entry.reqId);
     consumed.push(record);
+    if (entry.kind === "audio") {
+      rememberAudio(entry.key, record.event.bytes);
+      audio.retry();
+      return;
+    }
     if (record.event.bytes === null) {
       diagnostics.push({ code: "asset.missing", file: entry.key, line: 0, message: `asset not found: ${entry.key}` });
       failed = true;
@@ -611,7 +663,6 @@ export function createEngine(init: EngineInit): Engine {
     state.ui = fresh.ui;
     state.camera = createCameraSection(init.width, init.height);
     state.fx = fresh.fx;
-    state.audio = fresh.audio;
     state.surfaces = createSurfacesSection(init.width, init.height);
     state.rng = rng;
     state.time = time;
@@ -641,6 +692,7 @@ export function createEngine(init: EngineInit): Engine {
       }
     }
     services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS, loader ?? undefined);
+    audio.retry();
   }
   function fail(diagnostic: Diagnostic): void {
     diagnostics.push(diagnostic);
@@ -688,17 +740,16 @@ export function createEngine(init: EngineInit): Engine {
       diagnostics.push({ code: error.code, file: error.pos?.file ?? owner, line: error.pos?.line ?? 0, message: error.message });
     }
   }
+  /**
+   * Board entry always posts one `music.play` carrying the resolved key, or `null` for an empty or missing name; the
+   * audio applier decides same-file carry-on, replacement and silence (docs/spec/engine/audio-media.md#board-effect-mapping,
+   * Q5 to Q8). A missing file is silence, not an error (Q6).
+   */
   function postBoardMusic(board: WorldBoard): void {
     const name = board.backgroundMusic ?? "";
-    if (name === "") return;
-    const music = resolveAsset(index, root, "media", name);
-    if (!music.ok) {
-      diagnostics.push({ code: "asset.missing", file: board.key, line: 0, message: `board music "${name}" is not in the asset index` });
-      return;
-    }
-    if (state.engine.musicAsset === music.value) return;
-    state.engine.musicAsset = music.value;
-    bus.postEffect("audio", engineEffect("audio", "music.play", [music.value, true, null, board.key], "draw-audio-cue"));
+    const music = name === "" ? null : resolveAsset(index, root, "media", name);
+    const asset = music !== null && music.ok ? music.value : null;
+    bus.postEffect("audio", engineEffect("audio", "music.play", [asset, true, null, board.key], "draw-audio-cue"));
   }
   /** The player's position when a sprites owner supplies one, else the arrival point converted by the board's own layout (E-11). */
   function cameraAim(board: WorldBoard, arrival: Arrival): CameraPoint {
@@ -1008,7 +1059,7 @@ export function createEngine(init: EngineInit): Engine {
         diagnostics.push({ code: "asset.missing", file: sound.sound, line: 0, message: `animation sound "${sound.sound}" is not in the asset index` });
         continue;
       }
-      bus.postEffect("audio", engineEffect("audio", "sfx.play", [resolved.value, false, null, sound.file], "draw-audio-cue"));
+      bus.postEffect("audio", engineEffect("audio", "sfx.play", [resolved.value, false, null, "frame"], "draw-audio-cue"));
     }
   }
   function runPhase(phase: EnginePhase, consumed: InputRecord[]): void {
@@ -1075,6 +1126,7 @@ export function createEngine(init: EngineInit): Engine {
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       case "audio":
+        audio.phase();
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       default: {
@@ -1294,12 +1346,12 @@ export function createEngine(init: EngineInit): Engine {
         ticksRun,
         tickAfter: state.time.tick,
         consumed,
-        audioCues: [],
+        audioCues: audio.drain(),
         requests: [...requestsOut],
         diagnostics: reportDiagnostics,
         loading: !failed && pending.size > 0,
         paused,
-        stateHash: hashState(state),
+        stateHash: hashGameState(state),
       };
     },
     drawList(alpha = 0, include: DrawListInclude = { shading: false, images: false, sprites: false }) {
