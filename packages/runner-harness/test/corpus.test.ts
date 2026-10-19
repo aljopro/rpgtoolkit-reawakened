@@ -96,12 +96,12 @@ test("verifyCatalogueCompleteness: missing mapped TK2 command throws with diagno
   );
 });
 
-test("corpus: all 21 programs run to completion and pass random-step snapshot restore", () => {
+test("corpus: all 22 programs run to completion and pass random-step snapshot restore", () => {
   const programs = buildCorpus();
-  equal(programs.length, 21);
+  equal(programs.length, 22);
 
   const results = runAllCorpusPrograms(42);
-  equal(results.length, 21);
+  equal(results.length, 22);
 
   for (const result of results) {
     equal(typeof result.stateHash === "string" && result.stateHash.length === 16, true);
@@ -129,6 +129,38 @@ test("corpus: synthetic-10-closures restores from a snapshot taken at every tick
     checkSnapshotRestore(
       { fresh, fromSnapshot: restored },
       { ticks: closures.ticks - split, split, inputsForTick: undefined },
+    );
+    equal(fresh.stateHash(), straight.stateHash(), `split ${split} ends where the straight run ends`);
+  }
+});
+
+test("corpus: synthetic-11-middleware layers wrap mwin and sleep, and restores from every tick finish with the same state hash (entry 18.7)", () => {
+  const middleware = buildCorpus().find((p) => p.id === "synthetic-11-middleware");
+  if (!middleware) throw new Error("synthetic-11-middleware missing");
+
+  const straight = middleware.createHost(0);
+  straight.advance(middleware.ticks, []);
+  const globals = straight.state().vm.globals;
+  equal(
+    globals.trace,
+    "hud>audio>weather><weather<audio<hud" + "pace><pace" + "hud>audio>weather><weather<audio<hud",
+    "hud is the outermost layer, weather the innermost, and pace waits inside its own call",
+  );
+  const lines = straight
+    .state()
+    .vm.effects.filter((effect) => effect.name === "mwin")
+    .map((effect) => effect.args[0]);
+  equal(lines.join("|"), "weather:audio:hud:hello|weather:audio:hud:again");
+  equal(globals.seen, 2, "the counter's two handles shared one cell");
+
+  for (let split = 0; split < middleware.ticks; split += 1) {
+    const fresh = middleware.createHost(0);
+    fresh.advance(split, []);
+    const restored = middleware.restoreHost(fresh.snapshot());
+    equal(restored.stateHash(), fresh.stateHash(), `split ${split}`);
+    checkSnapshotRestore(
+      { fresh, fromSnapshot: restored },
+      { ticks: middleware.ticks - split, split, inputsForTick: undefined },
     );
     equal(fresh.stateHash(), straight.stateHash(), `split ${split} ends where the straight run ends`);
   }
