@@ -45,6 +45,7 @@ import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveM
 import type { EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
 import {
   COMPILER_VERSION,
+  collectGarbage,
   createScriptServices,
   defaultWaitPoll,
   drainDiagnostics,
@@ -1043,6 +1044,7 @@ export function createEngine(init: EngineInit): Engine {
         return;
       case "time":
         runTimePhase(state.time);
+        collectGarbage(state.vm);
         return;
       case "movement":
         state.camera = updateCamera(state.camera, state.world.board ?? null, init.cameraTarget ?? init.spriteRuntime);

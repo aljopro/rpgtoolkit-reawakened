@@ -308,6 +308,17 @@ export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: n
 }
 
 /**
+ * The end-of-tick pass (R-34; FUN-8, entry 18.6): the last step of every tick,
+ * after the `time` phase, run by `advanceScriptTick` and by the engine's `time`
+ * phase alike. It frees the closure cells no script can reach, then runs the
+ * object pass, so a cell that only a dead cell named no longer keeps an object alive.
+ */
+export function collectGarbage(vm: VmState): void {
+  collectCells(vm);
+  collectObjects(vm);
+}
+
+/**
  * The end-of-tick object pass (R-34): an object no root names, and no other
  * object's member names, is freed. The roots include the values of the closure
  * cells that are still there, which is why `collectCells` runs first in the same
@@ -349,8 +360,7 @@ export function advanceScriptTick(
   runThreadsPhase(state.vm, services, budget);
   assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
-  collectCells(state.vm);
-  collectObjects(state.vm);
+  collectGarbage(state.vm);
   return scriptStatus(state.vm);
 }
 
