@@ -23,6 +23,11 @@ export const MEDIA_LOOP = 1;
 export const MEDIA_WAIT = 2;
 /** `tkMD_RESTART`: restart a same-file voice from zero instead of carrying on. */
 export const MEDIA_RESTART = 4;
+/** Public RPGCode spellings for the media flag bits. */
+export const tkMD_ONCE = MEDIA_ONCE;
+export const tkMD_LOOP = MEDIA_LOOP;
+export const tkMD_WAIT = MEDIA_WAIT;
+export const tkMD_RESTART = MEDIA_RESTART;
 
 /** At most this many named tracks, the five built-ins included. */
 export const MAX_TRACKS = 16;

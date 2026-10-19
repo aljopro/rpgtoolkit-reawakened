@@ -51,6 +51,7 @@ export type PluginManifestParseResult = {
 /** The engine's current packs, in command-layer order. */
 export const ENGINE_DEFAULT_MANIFEST: PluginManifest = [
   { id: "core" },
+  { id: "media" },
   { id: "catalogue" },
   { id: "world" },
   { id: "render" },

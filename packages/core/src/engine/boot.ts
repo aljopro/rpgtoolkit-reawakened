@@ -16,6 +16,7 @@ import type { SectionKey } from "../save/state.ts";
 import {
   CATALOGUE_PLUGIN,
   CORE_PLUGIN,
+  MEDIA_PLUGIN,
   ENGINE_DEFAULT_MANIFEST,
   NATIVE_PACK_TABLE,
   getDeclinedPluginDiagnostic,
@@ -101,7 +102,7 @@ export function resolveManifestPlugins(manifest: PluginManifest, file = ""): { r
   const diagnostics: Diagnostic[] = [];
   for (const entry of manifest) {
     if (!isPluginManifestEntryEnabled(entry)) continue;
-    const definition = entry.id === "core" ? CORE_PLUGIN : entry.id === "catalogue" ? CATALOGUE_PLUGIN : NATIVE_PACK_TABLE[entry.id];
+    const definition = entry.id === "core" ? CORE_PLUGIN : entry.id === "media" ? MEDIA_PLUGIN : entry.id === "catalogue" ? CATALOGUE_PLUGIN : NATIVE_PACK_TABLE[entry.id];
     if (definition === undefined) {
       diagnostics.push({ code: "plugin.unresolved", file, line: 0, message: `manifest id "${entry.id}" has no engine definition` });
       continue;

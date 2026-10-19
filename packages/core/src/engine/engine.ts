@@ -1003,6 +1003,7 @@ export function createEngine(init: EngineInit): Engine {
         stanceComplete: actor.visual.stanceComplete,
       })),
       claims: state.engine.claims ?? [],
+      audio: state.audio,
     };
   }
   function resolveAnimationFile(file: string): AssetKey | null {

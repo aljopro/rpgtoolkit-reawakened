@@ -329,10 +329,94 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
   function makeWait(track: AudioTrackState, voice: AudioVoiceState, pass: boolean): AudioWait {
     return { track: track.name, voice: voice.index, cueId: voice.cueId, endTick: voice.endTick, pass, passIndex: pass ? voicePass(voice, host.time.tick) : null };
   }
+  let runtime: AudioRuntime;
 
   /** Decide one effect: `pending` when its file's length is not known yet and nothing was changed. */
   function applyEffect(effect: EffectRecord): "applied" | "pending" {
     const args = effect.args;
+    if (effect.name === "media.track") {
+      if (typeof args[0] !== "string" || typeof args[1] !== "number") {
+        diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        return "applied";
+      }
+      runtime.configureTrack(args[0], args[1]);
+      return "applied";
+    }
+    if (effect.name === "media.load") {
+      const trackName = args[0];
+      const asset = args[1];
+      if (typeof trackName !== "string" || typeof asset !== "string") {
+        diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        return "applied";
+      }
+      const track = findTrack(host.audio, trackName);
+      if (track === undefined) {
+        diag("media.unknown-track", effect.name, { track: trackName });
+        return "applied";
+      }
+      const info = options.lookup(asset as AssetKey);
+      if (info.kind === "pending") {
+        options.need?.(asset as AssetKey);
+        return "pending";
+      }
+      for (const voice of [...track.voices]) stopVoice(track, voice);
+      track.file = asset as AssetKey;
+      refresh(track);
+      emit("media.load", { track: track.name, asset: track.file });
+      return "applied";
+    }
+    if (effect.name === "media.play") {
+      const asset = args[0];
+      const track = args[1];
+      const loop = args[2];
+      const restart = args[3];
+      const priority = args[4];
+      const syncTrack = args[5];
+      const voice = args[6];
+      if (typeof asset !== "string" || typeof track !== "string" || typeof loop !== "boolean" || typeof restart !== "boolean" || typeof priority !== "number" || (syncTrack !== null && typeof syncTrack !== "string") || (voice !== null && typeof voice !== "number")) {
+        diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        return "applied";
+      }
+      const result = runtime.play({
+        asset: asset as AssetKey,
+        track,
+        loop,
+        restart,
+        priority,
+        ...(syncTrack === null || syncTrack === "" ? {} : { syncTrack }),
+        ...(voice === null ? {} : { voice }),
+      });
+      return result.kind === "pending" ? "pending" : "applied";
+    }
+    if (effect.name === "media.stop" || effect.name === "media.pause" || effect.name === "media.resume") {
+      const track = args[0];
+      const voice = args[1];
+      if (typeof track !== "string" || (voice !== null && typeof voice !== "number")) {
+        diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        return "applied";
+      }
+      if (effect.name === "media.stop") runtime.stop(track, voice === null ? undefined : voice);
+      else if (effect.name === "media.pause") runtime.pause(track, voice === null ? undefined : voice);
+      else runtime.resume(track, voice === null ? undefined : voice);
+      return "applied";
+    }
+    if (effect.name === "media.seek" || effect.name === "media.loop" || effect.name === "media.fade" || effect.name === "media.volume") {
+      const track = args[0];
+      if (typeof track !== "string") {
+        diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        return "applied";
+      }
+      const second = args[1];
+      const third = args[2];
+      if (effect.name === "media.seek" && typeof second === "number" && (third === null || typeof third === "number")) runtime.seek(track, second, third === null ? undefined : third);
+      else if (effect.name === "media.loop" && typeof second === "boolean" && (third === null || typeof third === "number")) runtime.setLoop(track, second, third === null ? undefined : third);
+      else if (effect.name === "media.fade" && typeof second === "number" && typeof third === "number" && (args[3] === null || typeof args[3] === "number")) runtime.fade(track, second, third, args[3] === null ? undefined : args[3] as number);
+      else if (effect.name === "media.volume" && typeof second === "number" && (third === null || typeof third === "number")) {
+        if (third === null) runtime.setTrackVolume(track, second);
+        else runtime.setVoiceVolume(track, third, second);
+      } else diag("audio.effect", effect.name, { reason: "malformed arguments" });
+      return "applied";
+    }
     if (effect.name === "soundfont.set") {
       const asset = args[0] ?? null;
       if (asset !== null && typeof asset !== "string") {
@@ -410,7 +494,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     if (applyEffect(effect) === "pending") hold(effect);
   }
 
-  return {
+  const runtimeApi: AudioRuntime = {
     register(bus) {
       emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
       bus.register("audio", apply);
@@ -739,4 +823,6 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       host.audio.tracks = tracks;
     },
   };
+  runtime = runtimeApi;
+  return runtimeApi;
 }

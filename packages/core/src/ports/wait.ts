@@ -7,30 +7,13 @@
  *
  * - `sleep` stores the absolute end tick `T + ticks`; `until: null` is the
  *   indefinite sleep (`threadSleep(id, 0)`) that only `threadWake` ends.
- *   `resumesCall` says whether the woken thread is waiting on its own call,
- *   which then contributes the wake value to its operands. A sleep imposed on
- *   another thread from outside leaves the stack alone.
- * - `input.key` waits for a key; the input owner stores the key name into
- *   `key`, and the poll then resolves.
- * - `movement` waits for the coupled movement of several sprites: one wait
- *   holds every move that `multiRun` collected, each with its absolute end tick.
-- `request` waits for a host reply (AD-5). The host stores the reply into
-  `reply`; a tick `deadline` bounds the wait inside the deterministic tick
-  clock (a wall-clock timeout stays the host's). `then` is the named
-  continuation that runs with the reply prepended (ADR 0004 decision 7).
-- `blob` is the file-I/O-owned request wait (AD-9/AD-17). It has the same
-  reply shape as `request`, but is separately registered so file operations can
-  be extended without claiming the generic request kind.
+ * - `input.key` waits for a key; the input owner stores the key name into `key`.
+ * - `movement` waits for coupled sprite movement.
+ * - `request` waits for a host reply, while `blob` is the file-I/O request wait.
+ * - `audio.track` waits on a saved track/voice cue and is polled from core audio state.
  *
- * `global` marks a blocking command (R-32): while one waits, every other
- * script thread, movement and frame update stands still. A cooperative wait
- * (`global: false`) parks only its own thread.
- *
- * `WaitView` is the small read-only view a poll sees — the tick counter the
- * `time` phase advances. `WaitResult` carries the value the woken call
- * contributes and whether it succeeded. `WaitPoll` is the resolver signature
- * AD-9 rules the only one; `createWaitPoll` builds it from per-kind resolvers
- * and refuses a duplicate kind.
+ * `global` marks a blocking command (R-32). A cooperative wait parks only its
+ * own thread. Wait payloads are plain data so a save can restore them exactly.
  */
 
 import type { PlainData } from "./plain-data.ts";
@@ -53,8 +36,8 @@ export type SleepWait = {
   resumesCall: boolean;
 };
 
-/** A named plugin-owned wait. Its payload and output references are saveable data. */
-export type NamedWaitKind = "render.msgbox" | "input.mouse" | "menu.screen" | "audio.sfx" | "video";
+/** One owner-registered named wait kind. */
+export type NamedWaitKind = "render.msgbox" | "input.mouse" | "menu.screen" | "audio.track" | "video";
 
 export type NamedWait = {
   kind: NamedWaitKind;
@@ -66,7 +49,7 @@ export type NamedWait = {
   resumeRefs: string[];
 };
 
-/** A key wait may carry cursor-map navigation state while retaining the input.key wait kind. */
+/** A key wait may carry cursor-map navigation/selection state. */
 export type InputKeyWait = {
   kind: "input.key";
   global: boolean;
@@ -126,6 +109,23 @@ export type WaitSpriteView = {
   readonly stance: string | null;
   readonly stanceComplete: boolean;
 };
+
+/** The read-only audio state needed by `audio.track` polling. */
+export type WaitAudioView = {
+  readonly tracks: readonly {
+    readonly name: string;
+    readonly voices: readonly {
+      readonly index: number;
+      readonly state: "playing" | "paused";
+      readonly cueId: number;
+      readonly loop: boolean;
+      readonly startTick: number;
+      readonly lengthTicks: number | null;
+      readonly endTick: number | null;
+    }[];
+  }[];
+};
+
 /** What the waits phase may read while deciding. */
 export type WaitView = {
   readonly tick: number;
@@ -133,6 +133,7 @@ export type WaitView = {
   readonly ui?: WaitUiView;
   readonly sprites?: readonly WaitSpriteView[];
   readonly claims?: readonly number[];
+  readonly audio?: WaitAudioView;
 };
 
 export type WaitResult = { readonly value: Value; readonly ok: boolean; readonly claim?: number };

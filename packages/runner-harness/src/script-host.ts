@@ -19,6 +19,7 @@ import {
   applyPluginManifestPatch,
   parsePluginManifest,
   CORE_PLUGIN,
+  MEDIA_PLUGIN,
   CATALOGUE_PLUGIN,
   NATIVE_PACK_TABLE,
   createLogger,
@@ -112,6 +113,7 @@ function resolveHostPlugins(
 ): HostResolution {
   const table: Record<string, PluginDefinition> = {
     core: CORE_PLUGIN,
+    media: MEDIA_PLUGIN,
     catalogue: CATALOGUE_PLUGIN,
     tk2: TK2_COMPAT_PLUGIN,
     ...NATIVE_PACK_TABLE,

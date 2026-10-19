@@ -460,6 +460,12 @@ const RENDER_PACK_FALLBACKS: readonly BuiltinSpec[] = RENDER_PLUGIN.commands.fil
 
 /** File commands are implemented by CORE_PLUGIN's sandboxed pack (ticket 3.16). */
 
+const MEDIA_PACK_NAMES: Record<string, true> = {
+  mediatrack: true, mediaload: true, mediaplay: true, midiplay: true, playmidi: true,
+  mediastop: true, mediarest: true, midirest: true, mediapause: true, mediaresume: true,
+  mediaseek: true, medialoop: true, mediafade: true, mediawait: true, mediavolume: true,
+  soundfont: true, soundfontreset: true,
+};
 const CATALOGUE_GRAPHICS_NAMES = new Set(GRAPHICS_COMMANDS.flatMap((command) => [command.name, ...command.aliases]));
 const CATALOGUE_OWNED_NAMES = new Set([
   ...CATALOGUE_STUBS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
@@ -479,9 +485,9 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
   commands: [
-    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name))),
+    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true)),
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
-      (command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
+      (command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
     ),
     ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
     ...documentCommands(RENDER_PACK_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name))),

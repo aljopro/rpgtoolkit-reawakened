@@ -29,10 +29,10 @@ import type { CommandHandler, PluginDefinition } from "./plugin.ts";
 import { CONVERSION_SPECS } from "./builtins/conversions.ts";
 import { ERROR_SPECS } from "./builtins/errors.ts";
 import { FILE_SPECS } from "./builtins/files.ts";
+import { PURE_SPECS } from "./builtins/pure.ts";
 import { SCOPE_SPECS } from "./builtins/scope.ts";
 import { STRING_SPECS } from "./builtins/strings.ts";
 import { THREAD_SPECS } from "./builtins/threads.ts";
-import { PURE_SPECS } from "./builtins/pure.ts";
 export type DocTag = "legacy" | "alias" | "deprecated" | "obsolete" | "experimental";
 
 export type RunnerSupport = {
