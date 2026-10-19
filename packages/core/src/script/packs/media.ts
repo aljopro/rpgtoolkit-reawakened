@@ -14,6 +14,7 @@ import {
   asciiFold,
   findTrack,
   voicePass,
+  voicePosition,
   type AudioStateV2,
   type AudioTrackState,
   type AudioVoiceState,
@@ -25,6 +26,10 @@ import { ScriptError } from "../errors.ts";
 import type { CommandEffect, CommandView, PluginDefinition } from "../plugin.ts";
 import { truthy } from "../values.ts";
 
+/** Query state constants (distinct from the media flag bits). */
+export const tkMD_STOPPED = 0;
+export const tkMD_PLAYING = 1;
+export const tkMD_PAUSED = 2;
 /** The four flags exposed by the TK media API. */
 export const tkMD_ONCE = MEDIA_ONCE;
 export const tkMD_LOOP = MEDIA_LOOP;
@@ -33,7 +38,7 @@ export const tkMD_RESTART = MEDIA_RESTART;
 /** Sync is a request bit accepted by the media family. */
 export const tkMD_SYNC = 8;
 
-/** A read-only structural view reused by later media query commands. */
+/** A read-only structural view reused by media query commands. */
 export type AudioReadView = Readonly<AudioStateV2>;
 
 /** Return the audio state without giving a command a writable section handle. */
@@ -164,7 +169,7 @@ function mediaLoad(): BuiltinSpec {
 function mediaPlay(): BuiltinSpec {
   return {
     name: "mediaplay",
-    aliases: ["midiplay", "playmidi"],
+    aliases: [],
     params: [
       { name: "file", optional: false, byRef: false, variadic: false },
       { name: "track", optional: true, byRef: false, variadic: false },
@@ -194,10 +199,10 @@ function mediaPlay(): BuiltinSpec {
   };
 }
 
-function mediaTransport(name: string, aliases: readonly string[] = []): BuiltinSpec {
+function mediaTransport(name: string): BuiltinSpec {
   return {
     name,
-    aliases,
+    aliases: [],
     params: [
       { name: "track", optional: true, byRef: false, variadic: false },
       { name: "voice", optional: true, byRef: false, variadic: false },
@@ -314,6 +319,244 @@ function mediaVolume(): BuiltinSpec {
   };
 }
 
+function queryTrack(view: CommandView, name: string, trackName: string): AudioTrackState {
+  const audio = readAudioView(view);
+  const track = audio === undefined ? undefined : findTrack(audio, trackName);
+  if (track === undefined) throw new ScriptError("media.unknown-track", `${name}: unknown track "${trackName}"`);
+  return track;
+}
+
+function queryVoice(track: AudioTrackState, voice: number, name: string): AudioVoiceState | undefined {
+  if (voice < 0 || voice >= track.voiceCount) throw new ScriptError("media.unknown-voice", `${name}: unknown voice ${voice} on track "${track.name}"`);
+  return track.voices.find((item) => item.index === voice);
+}
+
+function queryOutput(args: readonly Arg[], index: number, value: string | number): { value: string | number; out?: readonly (readonly [number, string | number])[] } {
+  const ref = args[index]?.ref;
+  return ref === undefined || ref === null ? { value } : { value, out: [[index, value]] };
+}
+
+function queryDoc(summary: string, behaviour: string): BuiltinDoc {
+  return {
+    ...doc(summary, behaviour),
+    returns: { summary: "The requested value; a by-reference ret argument receives the same value." },
+  };
+}
+
+function mediaState(): BuiltinSpec {
+  return {
+    name: "mediastate",
+    aliases: [],
+    params: [
+      { name: "track", optional: false, byRef: false, variadic: false },
+      { name: "voice", optional: true, byRef: false, variadic: false },
+      { name: "ret", optional: true, byRef: true, variadic: false },
+    ],
+    doc: queryDoc("Read whether a media track is stopped, playing or paused.", "Returns tkMD_PLAYING when any voice is playing, tkMD_PAUSED when none is playing but a voice is paused, otherwise tkMD_STOPPED. With an explicit voice, only that voice is considered; it never waits."),
+    call: (view, args) => {
+      const trackName = asciiFold(stringArg(args, 0, "mediaState"));
+      const track = queryTrack(view, "mediaState", trackName);
+      const voice = args.length > 1 ? optionalVoice(args, 1, "mediaState") : undefined;
+      const selected = voice === undefined ? undefined : queryVoice(track, voice, "mediaState");
+      const value = voice === undefined ? track.state === "playing" ? tkMD_PLAYING : track.state === "paused" ? tkMD_PAUSED : tkMD_STOPPED : selected?.state === "playing" ? tkMD_PLAYING : selected?.state === "paused" ? tkMD_PAUSED : tkMD_STOPPED;
+      return queryOutput(args, 2, value);
+    },
+  };
+}
+
+function mediaFlags(): BuiltinSpec {
+  return {
+    name: "mediaflags",
+    aliases: [],
+    params: [
+      { name: "track", optional: false, byRef: false, variadic: false },
+      { name: "voice", optional: true, byRef: false, variadic: false },
+      { name: "ret", optional: true, byRef: true, variadic: false },
+    ],
+    doc: queryDoc("Read the playback flags for a media voice.", "Returns the selected voice's loop bit and preserves the last voice-0 flags after a stop; it never waits."),
+    call: (view, args) => {
+      const track = queryTrack(view, "mediaFlags", asciiFold(stringArg(args, 0, "mediaFlags")));
+      const voice = args.length > 1 ? optionalVoice(args, 1, "mediaFlags") : 0;
+      const selected = queryVoice(track, voice ?? 0, "mediaFlags");
+      const value = voice === 0 ? track.flags : selected?.loop ? MEDIA_LOOP : MEDIA_ONCE;
+      return queryOutput(args, 2, value);
+    },
+  };
+}
+
+function mediaPlaying(): BuiltinSpec {
+  return {
+    name: "mediaplaying",
+    aliases: [],
+    params: [
+      { name: "track", optional: false, byRef: false, variadic: false },
+      { name: "voice", optional: true, byRef: false, variadic: false },
+      { name: "ret", optional: true, byRef: true, variadic: false },
+    ],
+    doc: queryDoc("Check whether a media voice is playing.", "Returns 1 for a playing selected voice and 0 otherwise; it never waits."),
+    call: (view, args) => {
+      const track = queryTrack(view, "mediaPlaying", asciiFold(stringArg(args, 0, "mediaPlaying")));
+      const voice = args.length > 1 ? optionalVoice(args, 1, "mediaPlaying") : 0;
+      const value = queryVoice(track, voice ?? 0, "mediaPlaying")?.state === "playing" ? 1 : 0;
+      return queryOutput(args, 2, value);
+    },
+  };
+}
+
+function mediaFile(): BuiltinSpec {
+  return {
+    name: "mediafile",
+    aliases: [],
+    params: [
+      { name: "track", optional: false, byRef: false, variadic: false },
+      { name: "voice", optional: true, byRef: false, variadic: false },
+      { name: "ret", optional: true, byRef: true, variadic: false },
+    ],
+    doc: queryDoc("Read the current or last file for a media voice.", "Returns the selected voice file, or the track's last file when no voice is active; stopped tracks return an empty string when no file is retained."),
+    call: (view, args) => {
+      const track = queryTrack(view, "mediaFile", asciiFold(stringArg(args, 0, "mediaFile")));
+      const voice = args.length > 1 ? optionalVoice(args, 1, "mediaFile") : 0;
+      const value = queryVoice(track, voice ?? 0, "mediaFile")?.file ?? track.file ?? "";
+      return queryOutput(args, 2, value);
+    },
+  };
+}
+
+function mediaPosition(): BuiltinSpec {
+  return {
+    name: "mediaposition",
+    aliases: [],
+    params: [
+      { name: "track", optional: false, byRef: false, variadic: false },
+      { name: "voice", optional: true, byRef: false, variadic: false },
+      { name: "ret", optional: true, byRef: true, variadic: false },
+    ],
+    doc: queryDoc("Read a media voice position in seconds.", "Converts the fixed 60 Hz position ticks of the selected voice to seconds; it never waits."),
+    call: (view, args) => {
+      const track = queryTrack(view, "mediaPosition", asciiFold(stringArg(args, 0, "mediaPosition")));
+      const voice = args.length > 1 ? optionalVoice(args, 1, "mediaPosition") : 0;
+      const selected = queryVoice(track, voice ?? 0, "mediaPosition");
+      return queryOutput(args, 2, selected === undefined ? track.positionTicks / 60 : voicePosition(selected, view.clock.tick()) / 60);
+    },
+  };
+}
+
+function mediaLength(): BuiltinSpec {
+  return {
+    name: "medialength",
+    aliases: [],
+    params: [
+      { name: "trackOrFile", optional: false, byRef: false, variadic: false },
+      { name: "ret", optional: true, byRef: true, variadic: false },
+    ],
+    doc: queryDoc("Read the known length of a media track or file in seconds.", "Returns fixed 60 Hz metadata for the named track or currently loaded file, or zero when no length is known; it never waits."),
+    call: (view, args) => {
+      const query = stringArg(args, 0, "mediaLength");
+      const audio = readAudioView(view);
+      let ticks: number | null = null;
+      const track = audio === undefined ? undefined : findTrack(audio, asciiFold(query));
+      if (track !== undefined) {
+        ticks = track.lengthTicks ?? track.voices.find((item) => item.index === 0)?.lengthTicks ?? null;
+      } else if (audio !== undefined) {
+        const file = mediaAsset(query);
+        for (const item of audio.tracks) {
+          if (item.file === file) {
+            ticks = item.lengthTicks;
+            break;
+          }
+          const voice = item.voices.find((candidate) => candidate.file === file);
+          if (voice !== undefined) {
+            ticks = voice.lengthTicks;
+            break;
+          }
+        }
+      }
+      const value = ticks === null ? 0 : ticks / 60;
+      return queryOutput(args, 1, value);
+    },
+  };
+}
+
+function mediaTracks(): BuiltinSpec {
+  return {
+    name: "mediatracks",
+    aliases: [],
+    params: [{ name: "ret", optional: true, byRef: true, variadic: false }],
+    doc: {
+      ...doc("List the ordered media track names.", "Returns the number of configured tracks and writes their ordered names to the optional string-array ret output; it never waits."),
+      returns: { summary: "The number of configured tracks." },
+    },
+    call: (view, args) => {
+      const names = readAudioView(view)?.tracks.map((track) => track.name) ?? [];
+      if (args[0]?.ref === undefined || args[0]?.ref === null) return { value: names.length };
+      return { value: names.length, effects: [{ kind: "vm.control", args: ["split", args[0].ref, ...names] }] };
+    },
+  };
+}
+
+function getVolume(): BuiltinSpec {
+  return {
+    name: "getvolume",
+    aliases: [],
+    params: [{ name: "ret", optional: true, byRef: true, variadic: false }],
+    doc: queryDoc("Read the master music and sound volume.", "Returns the master volume from 0 through 100 and optionally writes it by reference; it never waits."),
+    call: (view, args) => queryOutput(args, 0, readAudioView(view)?.settings.masterVolume ?? 100),
+  };
+}
+
+function legacyDoc(summary: string, behaviour: string, waits?: BuiltinDoc["waits"]): BuiltinDoc {
+  return {
+    ...doc(summary, behaviour, waits),
+    tags: ["deprecated"],
+    replacedBy: { kind: "command", name: "mediaplay" },
+    reason: "Retained so existing Toolkit 3.1 games continue to run; use the standard media command in new code.",
+  };
+}
+const MEDIA_PLAY = mediaPlay();
+const MEDIA_STOP = mediaTransport("mediastop");
+
+
+function legacyPlay(name: string, track: string, flags: number, summary: string, waits?: BuiltinDoc["waits"]): BuiltinSpec {
+  return {
+    name,
+    aliases: [],
+    params: [{ name: "file", optional: false, byRef: false, variadic: false }],
+    doc: legacyDoc(summary, `Maps to mediaplay on the ${track} track with the legacy playback flags; it preserves the original command's loop and wait behavior.`, waits),
+    call: (view, args, next) => MEDIA_PLAY.call(view, [
+      args[0]!,
+      { value: track, ref: null },
+      { value: flags, ref: null },
+    ], next),
+  };
+}
+
+function legacyStop(name: string, track: string, summary: string): BuiltinSpec {
+  return {
+    name,
+    aliases: [],
+    params: [],
+    doc: {
+      ...legacyDoc(summary, `Maps to mediastop for the ${track} track and never waits.`),
+      replacedBy: { kind: "command", name: "mediastop" },
+    },
+    call: (view, _args, next) => MEDIA_STOP.call(view, [{ value: track, ref: null }], next),
+  };
+}
+
+function setVolume(): BuiltinSpec {
+  return {
+    name: "setvolume",
+    aliases: [],
+    params: [{ name: "percent", optional: false, byRef: false, variadic: false }],
+    doc: doc("Set the volume of all music and sound using a value between 0 and 100.", "Validates the master volume percentage and posts one master-volume effect; it is immediate and never waits."),
+    call: (_view, args) => {
+      const percent = wholeArg(args, 0, "setVolume");
+      if (percent < 0 || percent > 100) throw new ScriptError("media.invalid-volume", "setVolume: percent must be between 0 and 100");
+      return { value: null, effects: [effect("media.volume", [null, percent, null])] };
+    },
+  };
+}
+
 function soundFont(): BuiltinSpec {
   return {
     name: "soundfont",
@@ -342,8 +585,8 @@ function soundFontReset(): BuiltinSpec {
 export const MEDIA_COMMANDS: readonly BuiltinSpec[] = [
   mediaTrack(),
   mediaLoad(),
-  mediaPlay(),
-  mediaTransport("mediastop", ["mediarest", "midirest"]),
+  MEDIA_PLAY,
+  MEDIA_STOP,
   mediaTransport("mediapause"),
   mediaTransport("mediaresume"),
   mediaSeek(),
@@ -351,6 +594,23 @@ export const MEDIA_COMMANDS: readonly BuiltinSpec[] = [
   mediaFade(),
   mediaWait(),
   mediaVolume(),
+  mediaState(),
+  mediaFlags(),
+  mediaPlaying(),
+  mediaFile(),
+  mediaPosition(),
+  mediaLength(),
+  mediaTracks(),
+  getVolume(),
+  legacyPlay("midiplay", "music", MEDIA_LOOP, "Play a media file on a named track."),
+  legacyPlay("playmidi", "music", MEDIA_LOOP, "Play a media file on a named track."),
+  legacyPlay("wav", "sfx", MEDIA_ONCE, "Play a wave file (e.g. a sound effect)."),
+  legacyPlay("mp3", "sfx", MEDIA_ONCE, "Play a wave file (e.g. a sound effect)."),
+  legacyStop("mediarest", "music", "Stop a track or voice."),
+  legacyStop("midirest", "music", "Stop a track or voice."),
+  legacyStop("wavstop", "sfx", "Stop the current sound effect."),
+  legacyPlay("mp3pause", "sfx", MEDIA_ONCE | MEDIA_WAIT, "Play a sound effect and pause the engine until it finishes.", { kind: "other", summary: "The calling thread waits on audio.track until the sound effect ends." }),
+  setVolume(),
   soundFont(),
   soundFontReset(),
 ];

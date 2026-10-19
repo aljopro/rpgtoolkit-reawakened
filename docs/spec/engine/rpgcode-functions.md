@@ -397,15 +397,15 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
 | `sound` | `void sound()` | Obsolete. | obsolete: raises an error and the statement is skipped |
-| `wav` | `void wav(string file)` | Play a wave file (e.g. a sound effect). |  |
-| `midiplay` | `void midiplay(string file)` | Play a media file on a named track. | alias of `mediaplay` |
-| `playmidi` | `void playmidi(string file)` | Play a media file on a named track. | alias of `mediaplay` |
+| `wav` | `void wav(string file)` | Play a wave file (e.g. a sound effect). | deprecated; replaced by `mediaplay` |
+| `midiplay` | `void midiplay(string file)` | Play a media file on a named track. | deprecated; replaced by `mediaplay`; music loops |
+| `playmidi` | `void playmidi(string file)` | Play a media file on a named track. | deprecated; replaced by `mediaplay`; music loops |
 | `mediaplay` | `void mediaplay(string file[, string track[, int flags[, int priority[, string syncTrack[, int &voice]]]])` | Play a media file on a named track. | tkMD_WAIT waits for the finite track end; tkMD_LOOP and tkMD_WAIT conflict. |
 | `mediatrack` | `void mediatrack(string name[, int voices])` | Create or resize a named audio track. |  |
 | `mediaload` | `void mediaload(string track, string file)` | Load a media file for a track without starting it. |  |
 | `mediastop` | `void mediastop([string track[, int voice]])` | Stop a track or voice. |  |
-| `mediarest` | `void mediarest([string track[, int voice]])` | Stop a track or voice. | alias of `mediastop` |
-| `midirest` | `void midirest([string track[, int voice]])` | Stop a track or voice. | alias of `mediastop` |
+| `mediarest` | `void mediarest([string track[, int voice]])` | Stop a track or voice. | deprecated; replaced by `mediastop` |
+| `midirest` | `void midirest([string track[, int voice]])` | Stop a track or voice. | deprecated; replaced by `mediastop` |
 | `mediapause` | `void mediapause([string track[, int voice]])` | Pause a track or voice. |  |
 | `mediaresume` | `void mediaresume([string track[, int voice]])` | Resume a paused track or voice. |  |
 | `mediaseek` | `void mediaseek(string track, number seconds[, int voice])` | Move a track or voice to a time position. |  |
@@ -415,10 +415,10 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `mediavolume` | `int mediavolume(string track[, int voice[, int &percent]])` | Set or read a track or voice volume. |  |
 | `soundfont` | `void soundfont(string file)` | Choose the SoundFont used by MIDI music. |  |
 | `soundfontreset` | `void soundfontreset()` | Return MIDI music to the game's default SoundFont. |  |
-| `wavstop` | `void wavstop()` | Stop the current sound effect. |  |
-| `mp3` | `void mp3(string file)` | Play a wave file (e.g. a sound effect). | alias of `wav` |
-| `mp3pause` | `void mp3pause()` | Play a sound effect and pause the engine until it finishes. |  |
-| `setvolume` | `void setvolume(int percent)` | Set the volume of all music and sound using a value between 0 and 100. |  |
+| `wavstop` | `void wavstop()` | Stop the current sound effect. | deprecated; replaced by `mediastop` |
+| `mp3` | `void mp3(string file)` | Play a wave file (e.g. a sound effect). | deprecated; replaced by `mediaplay`; sound effects play once |
+| `mp3pause` | `void mp3pause(string file)` | Play a sound effect and pause the engine until it finishes. | deprecated; replaced by `mediaplay`; plays once, then waits on `audio.track` |
+| `setvolume` | `void setvolume(int percent)` | Set the volume of all music and sound using a value between 0 and 100. | master volume |
 
 <a id="e-102"></a>
 **E-102 Volume.** A master volume as a percentage, applied to all music and sound.
