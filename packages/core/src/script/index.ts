@@ -22,10 +22,17 @@ export {
   OBJECT_INACCESSIBLE_MEMBER,
   OBJECT_INVALID,
   PROGRAM_COMPILED,
+  RESTORE_CALLABLE_CAPTURES,
+  RESTORE_CALLABLE_MALFORMED,
+  RESTORE_CALLABLE_UNKNOWN_DEF,
+  RESTORE_CELL_MISSING,
+  RESTORE_CELL_SEQ,
   ScriptError,
   toDiagnostic,
 } from "./errors.ts";
 export type { FailureClass } from "./errors.ts";
+export { verifyRestoredHandles } from "./restore-check.ts";
+export type { RestoreCheckServices } from "./restore-check.ts";
 export type { BinaryOp, SourcePos, StepOp, UnaryOp } from "./ops.ts";
 export type {
   Ast,

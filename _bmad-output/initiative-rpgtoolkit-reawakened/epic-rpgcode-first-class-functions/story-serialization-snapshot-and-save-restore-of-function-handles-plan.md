@@ -3,7 +3,7 @@ title: 'Serialization, snapshot, and save/restore of function handles'
 type: 'feature'
 ticket: 6
 created: '2026-10-18'
-status: 'draft'
+status: built
 baseline_revision: 'f212728587894ad87ae94de67ae14e31cb444a36'
 risk: 'high'
 context:
