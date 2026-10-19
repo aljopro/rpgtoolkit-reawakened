@@ -32,6 +32,14 @@
  * decision 8, entry 18.5). Redirects are not an entry: a redirect substitutes
  * the name while the program is parsed, before a call reaches the table.
  *
+ * **Namespaces (PKG-4, entry 19.7).** A package entry also owns a namespace, and
+ * `namespace.name(args)` runs that package's own layer of `name` with `next`
+ * reaching the layer below it. The namespace is a view over the same layer
+ * stacks, built from the resolved list and holding no state, so it needs no
+ * table of its own and nothing in a save: dropping a package from the list drops
+ * its layers and its namespace together, and the binding below it is the one the
+ * plain call reaches again.
+ *
  * docs/spec/engine/rpgcode-language.md#plugin-commands.
  */
 
@@ -42,6 +50,7 @@ import type { FunctionInfo, ParamInfo } from "./lower.ts";
 import type { CommandHandler, CommandResult, ResolvedPlugin } from "./plugin.ts";
 import type { Program, ProgramRef } from "./program.ts";
 import { INCLUDE_MISSING, ScriptError } from "./errors.ts";
+import { foldNamespace } from "./manifest.ts";
 
 /** One layer of one name: the plugin that contributed it and its spec. */
 type CommandLayer = {
@@ -72,10 +81,23 @@ export type CommandRegistry = {
   keys(): readonly string[];
   /** The ids of the plugins that define `name`, bottom layer first (empty when none). */
   layerPlugins(name: string): readonly string[];
+  /** True when `namespace` (ASCII-folded) is the namespace of a package in the list (PKG-4). */
+  hasNamespace(namespace: string): boolean;
+  /**
+   * `name` as the package of `namespace` supplies it: that package's own layer, with
+   * `next` the layer below it (PKG-4), or `undefined` when the namespace or the name is unknown.
+   */
+  getIn(namespace: string, name: string): ResolvedCommand | undefined;
 };
 
 /** A resolver over one source of commands: a name in, a command out or `undefined` (AD-8). */
 export type CommandSource = (name: string) => ResolvedCommand | undefined;
+
+/** The package namespaces of one resolved list (PKG-4); a lookup built without packages has none. */
+export type NamespaceSource = {
+  readonly has: (namespace: string) => boolean;
+  readonly get: (namespace: string, name: string) => ResolvedCommand | undefined;
+};
 
 /**
  * The commands the engine itself binds, as two sources (AD-8; the VM and the
@@ -89,18 +111,26 @@ export type CommandLookup = {
   extension: CommandSource;
   /** The built-in if there is one, else the extension: every command `name` can name. */
   get: CommandSource;
+  /** The package namespaces: `namespace.name` reaches that package's own layer (PKG-4). */
+  namespace: NamespaceSource;
 };
 
 /** Build the command lookup from its two sources; a source left out resolves nothing. */
 export function createCommandLookup(
-  sources: { readonly builtin?: CommandSource; readonly extension?: CommandSource },
+  sources: {
+    readonly builtin?: CommandSource;
+    readonly extension?: CommandSource;
+    readonly namespace?: NamespaceSource;
+  },
 ): CommandLookup {
   const builtin = sources.builtin ?? (() => undefined);
   const extension = sources.extension ?? (() => undefined);
+  const namespace = sources.namespace ?? { has: () => false, get: () => undefined };
   return {
     builtin,
     extension,
     get: (name) => builtin(name) ?? extension(name),
+    namespace,
   };
 }
 
@@ -185,6 +215,28 @@ export function resolveCall(
 }
 
 /**
+ * Resolve `namespace.name` (PKG-4): the command the package of `namespace` supplies
+ * under `name`, or `undefined` when `namespace` names no package, so the caller falls
+ * through to a file. A package that supplies nothing under `name` is the
+ * `unknown.command` failure; the call never falls back to a file, another package or
+ * the unqualified table, since that would let one spelling reach different code.
+ * The qualifier is ASCII-folded here, as the manifest folds namespaces.
+ */
+export function resolveNamespaced(
+  namespace: string,
+  name: string,
+  commands: CommandLookup,
+): CallResolution | undefined {
+  const folded = foldNamespace(namespace);
+  if (!commands.namespace.has(folded)) return undefined;
+  const command = commands.namespace.get(folded, name);
+  if (command === undefined) {
+    throw new ScriptError("unknown.command", `the package namespace "${folded}" supplies no command "${name}"`);
+  }
+  return { kind: "command", command };
+}
+
+/**
  * The callable value `bindingOf(name)` answers with (FUN-8; entry 18.5): what a
  * call of `name` would run from this scope right now. `held`, the callable the
  * scope holds under `name`, is answered as a copy. Otherwise the answer is a
@@ -221,6 +273,7 @@ export function assembleCommands(
 ): CommandRegistry {
   const layers = new Map<string, CommandLayer[]>();
   const pluginIds = new Set<string>();
+  const namespaces = new Map<string, string>();
 
   for (const resolved of plugins) {
     const plugin = resolved.definition;
@@ -228,6 +281,14 @@ export function assembleCommands(
       throw new Error(`plugin "${plugin.id}" appears more than once in the resolved manifest`);
     }
     pluginIds.add(plugin.id);
+    if (resolved.namespace !== undefined) {
+      const key = foldNamespace(resolved.namespace);
+      const owner = namespaces.get(key);
+      if (owner !== undefined) {
+        throw new Error(`plugin "${plugin.id}" uses the namespace "${key}", already used by "${owner}"`);
+      }
+      namespaces.set(key, plugin.id);
+    }
     const claimed = new Set<string>();
     for (const spec of plugin.commands) {
       for (const key of [spec.name, ...spec.aliases]) {
@@ -261,10 +322,9 @@ export function assembleCommands(
     }
   }
 
-  // `next` with nothing below (decision U4): one no-op handler per such name.
+  // `next` with nothing below (decision U4): one no-op handler per name, for the bottom layer.
   const noNext = new Map<string, CommandHandler>();
-  for (const [key, stack] of layers) {
-    if (stack.length !== 1) continue;
+  for (const [key] of layers) {
     noNext.set(key, (): CommandResult => {
       logger.warn({
         level: "warn",
@@ -283,18 +343,31 @@ export function assembleCommands(
     return (view, args, next) => layer.spec.call({ ...view, options }, args, next);
   }
 
+  /** The layer at `index` of `name`'s stack as a command, with `next` the layer below it. */
+  function commandAt(name: string, stack: readonly CommandLayer[], index: number): ResolvedCommand | undefined {
+    const layer = stack[index];
+    if (layer === undefined) return undefined;
+    const next = index === 0 ? noNext.get(name) : handlerAt(stack, index - 1);
+    if (next === undefined) return undefined;
+    const call = handlerAt(stack, index);
+    const spec = call === layer.spec.call ? layer.spec : { ...layer.spec, call };
+    return { spec, next };
+  }
+
   return {
     get(name) {
       const stack = layers.get(name);
-      if (stack === undefined) return undefined;
-      const top = stack[stack.length - 1];
-      if (top === undefined) return undefined;
-      const below = stack[stack.length - 2];
-      const next = below === undefined ? noNext.get(name) : handlerAt(stack, stack.length - 2);
-      if (next === undefined) return undefined;
-      const call = handlerAt(stack, stack.length - 1);
-      const spec = call === top.spec.call ? top.spec : { ...top.spec, call };
-      return { spec, next };
+      return stack === undefined ? undefined : commandAt(name, stack, stack.length - 1);
+    },
+    hasNamespace(namespace) {
+      return namespaces.has(namespace);
+    },
+    getIn(namespace, name) {
+      const owner = namespaces.get(namespace);
+      const stack = layers.get(name);
+      if (owner === undefined || stack === undefined) return undefined;
+      const index = stack.findIndex((layer) => layer.plugin === owner);
+      return index < 0 ? undefined : commandAt(name, stack, index);
     },
     keys() {
       return [...layers.keys()];

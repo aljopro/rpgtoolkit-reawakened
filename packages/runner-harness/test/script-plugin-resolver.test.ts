@@ -57,3 +57,14 @@ test("a package resolves like a native entry; a missing or other-version package
   deepEqual(result.plugins.map((item) => item.definition.id), ["core", "pkg_a"]);
   deepEqual(result.diagnostics.map((d) => [d.code, d.index]), [["plugin.unresolved", 2], ["plugin.version-mismatch", 3]]);
 });
+
+test("a package entry resolves with its namespace (declared, else its name); a native entry has none", () => {
+  const named: PluginDefinition = { id: "pkg_a", version: "1", commands: [] };
+  const declared: PluginDefinition = { id: "pkg_b", version: "1", commands: [] };
+  const result = resolvePluginManifest([
+    { id: "core" },
+    { id: "pkg_a", version: "1" },
+    { id: "pkg_b", version: "1", namespace: "Bee" },
+  ], { core: CORE, pkg_a: named, pkg_b: declared });
+  deepEqual(result.plugins.map((item) => item.namespace), [undefined, "pkg_a", "Bee"]);
+});

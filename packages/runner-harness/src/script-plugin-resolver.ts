@@ -1,5 +1,7 @@
 import {
+  isPackageManifestEntry,
   isPluginManifestEntryEnabled,
+  packageNamespace,
   type PluginDefinition,
   type PluginManifest,
   type PluginManifestDiagnostic,
@@ -55,8 +57,11 @@ export function resolvePluginManifest(
       });
       continue;
     }
-    const resolved: ResolvedPlugin =
-      entry.options === undefined ? { definition } : { definition, options: entry.options };
+    const resolved: ResolvedPlugin = {
+      definition,
+      ...(entry.options === undefined ? {} : { options: entry.options }),
+      ...(isPackageManifestEntry(entry) ? { namespace: packageNamespace(entry) } : {}),
+    };
     plugins.push(resolved);
   }
   return { plugins, diagnostics };
