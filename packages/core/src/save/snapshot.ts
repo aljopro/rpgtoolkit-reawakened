@@ -13,6 +13,15 @@
  * Two errors are pinned: a different `schema.compiler` is
  * `restore.compiler-mismatch`, and a missing section is `restore.shape`.
  *
+ * **Callable handles and closure cells (FUN-8; entry 18.6).** `restoreGameState`
+ * also checks, with no program to hand, that every callable is a whole record,
+ * that `vm.cells` and `vm.cellSeq` agree, and that every cell a handle or a frame
+ * names exists (`restore.callable-malformed`, `restore.cell-seq`,
+ * `restore.cell-missing`). Whether a handle's definition is still defined needs
+ * the compiled programs, so a host runs `verifyRestoredHandles` after it has
+ * rebuilt its services. No schema or compiler version moves: the new fields are
+ * optional and absent from every state with no closure in it.
+ *
  * **Migration (AD-7's migration chain).** A save whose `schema.vm` is behind
  * `SCHEMA_VERSIONS.vm` is migrated forward before it is returned: v2 → v3 adds
  * the effect log that ticket 3.21 introduced, v3 → v4 the thread, wait and
@@ -26,7 +35,13 @@
  */
 
 import { canon, reviveNonFinite, tagNonFinite } from "../canon/index.ts";
-import { ScriptError } from "../script/errors.ts";
+import { cellIdOfRef, cellNumber, eachRootValue, isRecord } from "../script/cells.ts";
+import {
+  RESTORE_CALLABLE_MALFORMED,
+  RESTORE_CELL_MISSING,
+  RESTORE_CELL_SEQ,
+  ScriptError,
+} from "../script/errors.ts";
 import { COMPILER_VERSION } from "../script/program.ts";
 import { SCHEMA_VERSIONS, type GameState } from "./state.ts";
 import { asSpritesSection, createSpritesSection, SPRITES_SCHEMA_VERSION } from "../sprites/model.ts";
@@ -269,6 +284,101 @@ function validateVmShape(vm: Record<string, unknown>): void {
       if (typeof frame.autoLocal !== "boolean") shapeError(`the snapshot's vm.threads[${index}].frames[${frameIndex}].autoLocal is invalid`);
     }
   }
+  validateVmHandles(vm);
+}
+
+/** A typed restore failure whose message names the place in the save (entry 18.6). */
+function restoreError(code: string, message: string): never {
+  throw new ScriptError(code, `the snapshot's ${message}`);
+}
+
+/**
+ * Check one script value at `path` (FUN-8; entry 18.6): a number, a string, null, an
+ * object handle or a whole callable record, and a callable's `captures` all name
+ * cells that exist. A malformed callable is `restore.callable-malformed`; a
+ * missing cell is `restore.cell-missing`; any other value is `restore.shape`.
+ */
+function checkValue(path: string, value: unknown, cells: Readonly<Record<string, unknown>>): void {
+  if (value === null || typeof value === "number" || typeof value === "string") return;
+  if (!isRecord(value)) {
+    return shapeError(`the snapshot's ${path} is not a script value (a number, a string, null, an object handle or a callable)`);
+  }
+  if (value.kind === "object") {
+    if (!Number.isInteger(value.handle) || typeof value.className !== "string" || Object.keys(value).length !== 3) {
+      shapeError(`the snapshot's ${path} is not a whole object handle`);
+    }
+    return;
+  }
+  if (value.type !== "callable") {
+    return shapeError(`the snapshot's ${path} is not a script value (a number, a string, null, an object handle or a callable)`);
+  }
+  const { def, captures, receiver } = value;
+  if (
+    Object.keys(value).length !== 4 ||
+    typeof def !== "string" ||
+    def === "" ||
+    !Array.isArray(captures) ||
+    !captures.every((entry) => typeof entry === "string") ||
+    (receiver !== null && typeof receiver !== "string")
+  ) {
+    restoreError(
+      RESTORE_CALLABLE_MALFORMED,
+      `${path} is not a whole callable: it must be { type, def, captures, receiver } with a def text, a list of cell ids and a receiver that is text or null`,
+    );
+  }
+  for (const [index, id] of (captures as string[]).entries()) {
+    if (id !== "" && !Object.hasOwn(cells, id)) {
+      restoreError(RESTORE_CELL_MISSING, `${path}.captures[${index}] names cell "${id}", which is not in vm.cells`);
+    }
+  }
+}
+
+/**
+ * The shape check of callable handles and closure cells (FUN-8; entry 18.6),
+ * which needs no compiled program: `vm.cells` and `vm.cellSeq` agree and no id
+ * is above the counter, every value and `vm.defOwners` entry is whole, and every
+ * cell a handle, a frame slot, an operand or a wait names is in `vm.cells`.
+ * The checks that need the compiled programs are `verifyRestoredHandles`.
+ */
+function validateVmHandles(vm: Record<string, unknown>): void {
+  const cells = vm.cells;
+  const seq = vm.cellSeq;
+  if (cells === undefined) {
+    if (seq !== undefined) restoreError(RESTORE_CELL_SEQ, "vm.cellSeq is present but vm.cells is not");
+  } else {
+    if (!isRecord(cells)) return shapeError("the snapshot's vm.cells must be an object");
+    if (typeof seq !== "number" || !Number.isSafeInteger(seq) || seq < 0) {
+      restoreError(RESTORE_CELL_SEQ, "vm.cellSeq must be a whole number of at least 0 beside vm.cells");
+    }
+    for (const id of Object.keys(cells)) {
+      const number = cellNumber(id);
+      if (number === null) {
+        restoreError(RESTORE_CELL_SEQ, `vm.cells has the id "${id}", which is not a cell id (cell1, cell2, …)`);
+      }
+      if (number > seq) {
+        restoreError(
+          RESTORE_CELL_SEQ,
+          `vm.cells.${id} is above vm.cellSeq ${seq}, so a later cell would be issued the id of an existing cell`,
+        );
+      }
+    }
+  }
+  const table: Readonly<Record<string, unknown>> = isRecord(cells) ? cells : {};
+  if (vm.defOwners !== undefined) {
+    const owners = recordAt(vm.defOwners, "vm.defOwners");
+    for (const def of Object.keys(owners)) validateProgramRef(owners[def], `vm.defOwners.${def}`);
+  }
+  for (const id of Object.keys(table)) checkValue(`vm.cells.${id}`, table[id], table);
+  eachRootValue(
+    vm,
+    (path, value) => checkValue(path, value, table),
+    (path, ref) => {
+      const id = cellIdOfRef(ref);
+      if (id !== null && !Object.hasOwn(table, id)) {
+        restoreError(RESTORE_CELL_MISSING, `${path} names cell "${id}", which is not in vm.cells`);
+      }
+    },
+  );
 }
 
 function validateSurfacesShape(value: unknown): void {

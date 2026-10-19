@@ -290,3 +290,56 @@ test("writes binary bytes with filePut through the sandbox blob port", () => {
   host.advance(12, []);
   deepEqual([...(blobs.blobs["saves:game/saved/binary.dat"] ?? [])], [65, 66]);
 });
+
+const CLOSURES = [
+  "function make() {",
+  "  local(n)",
+  "  n = 1",
+  "  return () => { n = n + 1; sleep(2); n = n + 10; return n }",
+  "}",
+  "f = make()",
+  "r = f()",
+  "after = r + 1",
+  "end()",
+  "",
+].join("\n");
+
+test("a host restored while a closure is parked mid-call finishes with the same state hash (entry 18.6)", () => {
+  const host = createScriptHost({ program: CLOSURES, seed: 0 });
+  host.advance(1, []);
+  equal(host.state().vm.threads[0]!.status, "waiting");
+  equal(host.state().vm.threads[0]!.frames.length, 2, "the closure's frame is parked on the stack");
+
+  const restored = restoreScriptHost(host.snapshot(), {});
+  equal(restored.stateHash(), host.stateHash());
+  host.advance(4, []);
+  restored.advance(4, []);
+  equal(restored.stateHash(), host.stateHash());
+  equal(restored.state().vm.globals.r, 12);
+  equal(restored.state().vm.globals.after, 13);
+});
+
+test("restoreScriptHost refuses a snapshot whose closure data is damaged, with a typed error naming the place", () => {
+  const host = createScriptHost({ program: CLOSURES, seed: 0 });
+  host.advance(1, []);
+  const snap = host.snapshot();
+
+  const refused = (text: string): { code: string; message: string } => {
+    try {
+      restoreScriptHost(text, {});
+    } catch (error) {
+      const failure = error as { code: string; message: string };
+      return { code: failure.code, message: failure.message };
+    }
+    throw new Error("expected restoreScriptHost to refuse the snapshot");
+  };
+
+  const missingCell = refused(snap.replace('"cells":{"cell1":2}', '"cells":{}'));
+  equal(missingCell.code, "restore.cell-missing");
+  equal(missingCell.message.includes("vm.globals.f.captures[0]"), true, missingCell.message);
+
+  // The shape is whole but the definition is gone: only the program-aware check can see it.
+  const gone = refused(snap.replaceAll("<inline>#lambda_1", "<inline>#lambda_7"));
+  equal(gone.code, "restore.callable-unknown-def");
+  equal(gone.message.includes("<inline>#lambda_7"), true);
+});

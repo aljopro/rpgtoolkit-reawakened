@@ -1,0 +1,129 @@
+/**
+ * The program-aware half of a restored save's callable check (FUN-8; entry 18.6,
+ * docs/spec/engine/rpgcode-language.md#keywords-and-structure).
+ *
+ * `restoreGameState` checks a snapshot's shape with no program to hand. A
+ * callable names its definition by `def` only, and compiled programs are not
+ * saved, so whether the game still has that definition, and how many names it
+ * captures, can be answered only once the host has rebuilt its services. This
+ * function answers it: it compiles the program of every frame and the owner of
+ * every definition in `vm.defOwners`, then checks each callable against what it
+ * found. Every failure is a typed `ScriptError` whose message names the place in
+ * the save; nothing is repaired, and a state with no callable is not checked and
+ * compiles nothing.
+ */
+
+import type { CallableValue } from "../ports/value.ts";
+import type { ProgramCache } from "./cache.ts";
+import { eachRootValue, isCallableRecord } from "./cells.ts";
+import { RESTORE_CALLABLE_CAPTURES, RESTORE_CALLABLE_UNKNOWN_DEF, ScriptError } from "./errors.ts";
+import { COMPILER_VERSION, programKey, type Program, type ProgramRef } from "./program.ts";
+import type { CommandLookup } from "./registry.ts";
+import type { VmState } from "./state.ts";
+
+/** What the check needs of the host's services. */
+export type RestoreCheckServices = {
+  readonly programs: ProgramCache;
+  readonly commands: CommandLookup;
+};
+
+/** A short name for a program in a message: its path, or `<inline>`. */
+function describeProgram(ref: ProgramRef): string {
+  return ref.kind === "file" ? ref.path : "<inline>";
+}
+
+/**
+ * Check every callable in `vm` against the programs and commands the host has
+ * (entry 18.6). The definition must be defined by a compiled program or be a
+ * command, its capture count must equal the handle's (a command captures none),
+ * and each `vm.defOwners` entry's program must define the `def` it is recorded
+ * for. A program whose source changed since the save, or that an older compiler
+ * built, is skipped: its thread restarts from source on its next turn, so a
+ * definition only that program had is reported unknown, with the program named.
+ */
+export function verifyRestoredHandles(vm: VmState, services: RestoreCheckServices): void {
+  const callables: Array<{ readonly path: string; readonly value: CallableValue }> = [];
+  const collect = (path: string, value: unknown): void => {
+    if (isCallableRecord(value)) callables.push({ path, value });
+  };
+  eachRootValue(vm, collect, () => undefined);
+  for (const id of Object.keys(vm.cells ?? {})) collect(`vm.cells.${id}`, vm.cells?.[id]);
+  const owners = vm.defOwners ?? {};
+  const ownerDefs = Object.keys(owners);
+  if (callables.length === 0 && ownerDefs.length === 0) return;
+
+  // Compile every program the state names, in a fixed order: the frames of each
+  // thread in turn, then the owners by definition.
+  const refs = new Map<string, ProgramRef>();
+  for (const thread of vm.threads) {
+    for (const frame of thread.frames) refs.set(programKey(frame.program), frame.program);
+  }
+  for (const def of ownerDefs) refs.set(programKey(owners[def]!), owners[def]!);
+  const compiled: Program[] = [];
+  const skipped = new Set<string>();
+  const changed: string[] = [];
+  for (const [key, ref] of refs) {
+    if (ref.compiler !== COMPILER_VERSION) {
+      skipped.add(key);
+      changed.push(describeProgram(ref));
+      continue;
+    }
+    try {
+      compiled.push(services.programs.get(ref));
+    } catch (error) {
+      if (!(error instanceof ScriptError) || error.code !== "restore.source-changed") throw error;
+      skipped.add(key);
+      changed.push(describeProgram(ref));
+    }
+  }
+  const hint = changed.length === 0 ? "" : ` (changed since the save and not compiled: ${changed.join(", ")})`;
+
+  for (const def of ownerDefs) {
+    const ref = owners[def]!;
+    if (skipped.has(programKey(ref))) continue;
+    if (!Object.hasOwn(services.programs.get(ref).functions, def)) {
+      throw new ScriptError(
+        RESTORE_CALLABLE_UNKNOWN_DEF,
+        `the snapshot's vm.defOwners.${def} names the program "${describeProgram(ref)}", which does not define "${def}"`,
+      );
+    }
+  }
+
+  for (const { path, value } of callables) {
+    // Every compiled program that defines the name, not only the first: two inline
+    // programs can share a lambda's `def`, and a handle is valid when its own
+    // program's definition agrees with it.
+    const candidates = compiled.filter((program) => Object.hasOwn(program.functions, value.def));
+    const found = services.programs.find(value.def);
+    if (found !== undefined && !candidates.includes(found)) candidates.push(found);
+    if (candidates.length > 0) {
+      const infos = candidates.flatMap((program) => program.functions[value.def]!.filter((info) => info.entry >= 0));
+      if (infos.length === 0) {
+        throw new ScriptError(
+          RESTORE_CALLABLE_UNKNOWN_DEF,
+          `the snapshot's ${path} names "${value.def}", which no compiled program defines with a body${hint}`,
+        );
+      }
+      if (!infos.some((info) => (info.captures?.length ?? 0) === value.captures.length)) {
+        throw new ScriptError(
+          RESTORE_CALLABLE_CAPTURES,
+          `the snapshot's ${path} names ${value.captures.length} cell(s), but the definition "${value.def}" captures ${infos[0]!.captures?.length ?? 0} name(s); the handle was made by an older build`,
+        );
+      }
+      continue;
+    }
+    if (services.commands.get(value.def) !== undefined) {
+      if (value.captures.length !== 0) {
+        throw new ScriptError(
+          RESTORE_CALLABLE_CAPTURES,
+          `the snapshot's ${path} names ${value.captures.length} cell(s), but "${value.def}" is a command and captures nothing`,
+        );
+      }
+      continue;
+    }
+    throw new ScriptError(
+      RESTORE_CALLABLE_UNKNOWN_DEF,
+      `the snapshot's ${path} names "${value.def}", which is defined by no compiled program and is no command${hint}`,
+    );
+  }
+}
