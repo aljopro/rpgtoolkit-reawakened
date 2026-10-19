@@ -3,9 +3,9 @@
 This page is the normative Reawakened contract for the core audio model. It is
 implementation-neutral: `core` describes the game state and the decisions that
 a runner must replay, while `synth` and a runner provide decoding and sound
-output. The page is a docs-first checkpoint for Epic 6.1; the rulings marked
-**Proposed ruling (pending owner review)** are the material in the 6.1 pull
-request and must be approved before the implementation entries start.
+output. The page is the docs-first checkpoint for Epic 6.1 and 6.2; every
+rule marked **Proposed ruling (pending owner review)** must be approved before
+the implementation entries start.
 
 ## What an author sees
 
