@@ -281,10 +281,10 @@ test("a restored saved game skips initBoard and its board entry", () => {
   equal(doubles.audio.length, 0);
 });
 
-test("a main file's plugin list reports declined and unknown plugins and keeps booting", () => {
+test("a main file's legacy plugin rows remain data and do not map to the manifest", () => {
   const game = authorGame({ ...SCRIPTED, plugins: ["no-such-plugin.dll"] });
   const result = run(bootEngine(game, makeDoubles()), game.files, 10);
-  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved" && diagnostic.message.includes("no-such-plugin.dll")), true);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved" && diagnostic.message.includes("no-such-plugin.dll")), false);
 });
 
 test("a game-folder root takes its project path from the main file", () => {
