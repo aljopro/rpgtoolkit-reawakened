@@ -3,7 +3,7 @@ title: 'Main-file plugins list: read, write and feed the manifest'
 type: 'feature'
 ticket: 9
 created: '2026-10-19'
-status: 'built'
+status: done
 baseline_revision: 'd5564edfe11da102e931151de74c34e47ee3ab8e'
 route: 'full'
 route_source: 'auto'
@@ -55,10 +55,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Update `docs/spec/formats/main-file.md` with the TKR extension byte convention and bounds before implementation.
-- [ ] Extend the main-file model, reader, and writer with package-list read/write and validation.
-- [ ] Feed package names into the existing engine manifest assembly as ordered append patch entries.
-- [ ] Add tests for legacy/missing/empty/nonempty/invalid lists, preservation, and boot selection order.
+- [x] Update `docs/spec/formats/main-file.md` with the TKR extension byte convention and bounds before implementation.
+- [x] Extend the main-file model, reader, and writer with package-list read/write and validation.
+- [x] Feed package names into the existing engine manifest assembly as ordered append patch entries.
+- [x] Add tests for legacy/missing/empty/nonempty/invalid lists, preservation, and boot selection order.
 
 **Acceptance Criteria:**
 - Given a legacy fixture, when read then written, then bytes including plugin rows are identical.
@@ -72,6 +72,10 @@ context:
 
 ## Review Triage Log
 
+- 2026-10-19 — Independent final review at `4930efe2bf0eeef3670c1fd33b0933f830917fab`: **PASS, no findings**. The complete delta from the prior reviewed `d90ce2554e20f0e0fc1b45c17434b72fcd8b4dff` is two equivalent literal-byte fixture replacements in `packages/core/test/format-main-file.test.ts`; no source or golden changes.
+- Parent runtime smoke (carried by the final head) proved legacy byte-identical round-trip, ordered `quests`/`weather` extension decoding with the manifest tail, NUL rejection, and a truncated extension diagnostic at absolute offset `1906`. Actual engine boot retained both names as `plugin.unresolved` because external package definitions are not implemented yet; that is outside this ticket's scope.
+- PR #293 merged normally at `a36a7e2926a7ee8ce0ed3221b96bed113feab116`; no admin bypass or rebase.
+
 ## Design Notes
 
 The extension uses the existing residue boundary: ASCII tag `TKRPLUG\0`, unsigned little-endian `u16` true count, then `count` NUL-terminated Windows-1252 strings. The reader recognizes only this exact tag at the start of trailing bytes; any other residue remains opaque. A maximum of 256 names and 255 encoded bytes per name keeps allocations bounded. The writer emits the tag even for an explicitly authored empty list and appends opaque residue after it.
@@ -82,3 +86,6 @@ The extension uses the existing residue boundary: ASCII tag `TKRPLUG\0`, unsigne
 - `pnpm install` -- dependencies install successfully.
 - `pnpm fixtures:fetch` -- legacy fixtures available.
 - `pnpm typecheck`, `pnpm lint`, `pnpm test:strict`, `pnpm golden`, `pnpm golden:bun`, `pnpm graph`, `pnpm licence`, `pnpm provenance`, `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm oracle:check` -- all pass; the closing golden deliberately drops the legacy DLL diagnostic because legacy rows are now data-only.
+- Final local evidence: `pnpm build` and `pnpm typecheck` passed; focused format/engine smoke passed 59 tests; the focused main-file suite passed 45 tests; `pnpm test:strict` passed 1467 tests with 0 skipped; `pnpm golden:bun` passed with Node/Bun golden and closing output byte-identical.
+- GitHub Actions run `39292142248` passed `gate`, `typecheck`, `lint`, `unit`, `golden`, `golden-bun`, `graph`, `licence`, and `provenance`.
+- Acceptance closure: legacy plugin rows remain data and round-trip unchanged; authored ordered and explicit-empty TKR lists round-trip; package names append after defaults without DLL interpretation; malformed, duplicate, NUL-containing, over-limit, and truncated extensions return located diagnostics.
