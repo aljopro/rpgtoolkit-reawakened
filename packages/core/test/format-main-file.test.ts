@@ -514,8 +514,8 @@ test("TKR package extension enforces independent count, empty, duplicate, and 25
     return out;
   };
   equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(0)]))).ok, false);
-  equal(readMainFile(new BinaryReader(append(2, [new TextEncoder().encode("x")]))).ok, false);
-  equal(readMainFile(new BinaryReader(append(2, [new TextEncoder().encode("x"), new TextEncoder().encode("X")]))).ok, false);
+  equal(readMainFile(new BinaryReader(append(2, [new Uint8Array([0x78])]))).ok, false);
+  equal(readMainFile(new BinaryReader(append(2, [new Uint8Array([0x78]), new Uint8Array([0x58])]))).ok, false);
   equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(255).fill(0x61)]))).ok, true);
   equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(256).fill(0x61)]))).ok, false);
 });
