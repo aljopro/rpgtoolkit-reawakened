@@ -569,7 +569,8 @@ end()
   equal(state.vm.cellSeq, 600, "600 lambdas were made");
   deepEqual(cellIds(state), ["cell600"], "only the one f still holds is left");
   ok(most <= 2, `at most two cells exist at a tick boundary, saw ${most}`);
-  ok(snapshot(state).length < 2000, "the save stays small");
+  // 2000 before the audio section (five stopped tracks, about 800 bytes) joined the state tree.
+  ok(snapshot(state).length < 3000, "the save stays small");
 });
 
 test("a recursive local lambda, whose cell captures itself, is freed when its function returns", () => {

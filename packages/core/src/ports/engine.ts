@@ -53,8 +53,11 @@ export type SurfacePixels = {
 
 /**
  * The result of one `advance` batch (AD-1, AD-14). `consumed` is the canonical
- * input log written by the core; `loading` is set while a blocking request
- * freezes time; `paused` is set when a breakpoint hit mid-tick.
+ * input log written by the core; `audioCues` are the cues emitted during the
+ * batch, in emission order, so the concatenation over batches does not depend
+ * on how ticks were batched; `loading` is set while a blocking request
+ * freezes time; `paused` is set when a breakpoint hit mid-tick; `stateHash` is
+ * the state hash without the script volume settings (`hashGameState`).
  */
 export type TickReport = {
   readonly ticksRun: number;

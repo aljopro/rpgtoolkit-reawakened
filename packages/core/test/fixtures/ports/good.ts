@@ -185,13 +185,16 @@ export function checkDrawCommandExhaustive(kind: DrawCommand["kind"]): void {
 
 export function checkAudioCueKindExhaustive(kind: AudioCueKind): void {
   switch (kind) {
-    case "music.play":
-    case "music.stop":
-    case "music.pause":
-    case "music.resume":
-    case "sfx.play":
-    case "sfx.stop":
-    case "volume.set":
+    case "media.load":
+    case "media.play":
+    case "media.stop":
+    case "media.pause":
+    case "media.resume":
+    case "media.seek":
+    case "media.volume":
+    case "media.fade":
+    case "media.flags":
+    case "soundfont.set":
       return;
     default: {
       const _exhaustiveCheck: never = kind;
@@ -256,10 +259,17 @@ export const pinTickReport: TickReport = {
   audioCues: [
     {
       cueId: 1,
-      kind: "music.play",
+      tick: 0,
+      kind: "soundfont.set",
+      track: null,
+      voice: null,
       asset: null,
       loop: null,
+      flags: null,
+      positionTicks: null,
       volume: null,
+      targetVolume: null,
+      durationTicks: null,
     },
   ],
   requests: [
@@ -305,18 +315,32 @@ export const pinSurfacePixels: SurfacePixels = {
 
 export const pinAudioCueWithOptionals: AudioCue = {
   cueId: 1,
-  kind: "music.play",
-  asset: "music/track.ogg" as AssetKey,
+  tick: 0,
+  kind: "media.play",
+  track: "music",
+  voice: 0,
+  asset: "music/track.wav" as AssetKey,
   loop: true,
+  flags: 1,
+  positionTicks: 0,
   volume: 80,
+  targetVolume: null,
+  durationTicks: null,
 };
 
 export const pinAudioCueWithoutOptionals: AudioCue = {
   cueId: 2,
-  kind: "music.stop",
+  tick: 12,
+  kind: "media.stop",
+  track: "music",
+  voice: 0,
   asset: null,
   loop: null,
+  flags: null,
+  positionTicks: null,
   volume: null,
+  targetVolume: null,
+  durationTicks: null,
 };
 
 export const pinAssetRequest: AssetRequest = {

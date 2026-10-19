@@ -33,10 +33,17 @@ test("test double executes key down, pointer, key up and matches literals", () =
   equal(report.audioCues.length, 1);
   deepEqual(report.audioCues[0], {
     cueId: 1,
-    kind: "volume.set",
+    tick: 0,
+    kind: "media.volume",
+    track: null,
+    voice: null,
     asset: null,
     loop: null,
+    flags: null,
+    positionTicks: null,
     volume: 100,
+    targetVolume: null,
+    durationTicks: null,
   });
 
   const dl = engine.drawList(0);

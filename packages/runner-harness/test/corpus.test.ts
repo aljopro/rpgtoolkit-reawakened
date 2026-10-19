@@ -200,17 +200,21 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
   const results = runFetchedCorpus(fetchedCorpus, 0);
   equal(results.length, 10);
 
+  // Re-pinned by ticket 6.6: the `audio` section grew from the empty placeholder to schema v2 (five stopped tracks,
+  // the cue counter, the script bank). Nothing else moved: hashing each final state with the placeholder put back
+  // gives every previous value (60b9d135ecc2665c, c70da0e285468911, d1a2feea4d6699d3, 148143e8efdad422,
+  // 91341281743ee68f, 1eda27c040030408, 4aead264e9d81fc0 and 249a5a6f76a4cb12).
   const expectedHashes: Record<string, string> = {
-    "sample-start-demo": "60b9d135ecc2665c",
-    "sample-system-demo": "c70da0e285468911",
-    "sample-sys-test-demo": "c70da0e285468911",
-    "sample-win-demo": "d1a2feea4d6699d3",
-    "sample-oldman-demo": "148143e8efdad422",
-    "sample-man-demo": "91341281743ee68f",
-    "sample-man-wander-demo": "1eda27c040030408",
-    "sample-start-basic": "4aead264e9d81fc0",
-    "sample-system-basic": "c70da0e285468911",
-    "sample-wander-basic": "249a5a6f76a4cb12",
+    "sample-start-demo": "e9c83e19f9ebfb4a",
+    "sample-system-demo": "c7276b9169328503",
+    "sample-sys-test-demo": "c7276b9169328503",
+    "sample-win-demo": "9128c9fb95d1f969",
+    "sample-oldman-demo": "a7e3084cbafc59c0",
+    "sample-man-demo": "2e8a007d7bae1d31",
+    "sample-man-wander-demo": "6717598c0b7e163a",
+    "sample-start-basic": "f8eeab447b8cd9d2",
+    "sample-system-basic": "c7276b9169328503",
+    "sample-wander-basic": "eaef689c32b9ae98",
   };
 
   for (const res of results) {
@@ -233,7 +237,7 @@ test("corpus: defined finish line for programs that never end (Basic/Prg/wander.
   const hash2 = host2.stateHash();
 
   equal(hash1, hash2);
-  equal(hash1, "249a5a6f76a4cb12");
+  equal(hash1, "eaef689c32b9ae98");
 
   for (let split = 0; split <= 5; split++) {
     const fresh = wander.createHost(0);

@@ -71,7 +71,11 @@ corpus cannot supply them (ticket 2.22):
   with a hand-worked length in ticks and the arithmetic behind it; they are written
   from the public layouts and rule F4, so there is nothing to license. Corpus WAV
   and MIDI lengths are pinned by SHA-256 and checked by an independent reader only
-  when the corpus is fetched; the files are never committed.
+  when the corpus is fetched; the files are never committed. Eight scenes run through
+  the real core, tick by tick, in `packages/core/test/audio-scenes.test.ts` (ticket 6.6,
+  driver in `audio-oracle.ts`): `board-music-boot`, `animation-frame-sfx`,
+  `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `settings-versus-save`,
+  `soundfont-setting` and `battle-music-handoff`.
 - `real/` — tiny files an editor produced: a detail-1, a detail-2 and a detail-3
   tileset, plus a `.tan` and a `.gph` held for ticket 16.7.
 - `anonymised/` — derivatives of real legacy samples, produced by

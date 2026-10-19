@@ -223,20 +223,22 @@ test("runLog forwards report.audioCues to audio.handle", () => {
   const audio = createNullAudio();
   runLog(engine, run, 2, audio);
   equal(audio.cues.length, 2);
-  deepEqual(audio.cues[0], {
-    cueId: 1,
-    kind: "volume.set",
+  const volumeCue = (cueId: number, tick: number) => ({
+    cueId,
+    tick,
+    kind: "media.volume",
+    track: null,
+    voice: null,
     asset: null,
     loop: null,
+    flags: null,
+    positionTicks: null,
     volume: 100,
+    targetVolume: null,
+    durationTicks: null,
   });
-  deepEqual(audio.cues[1], {
-    cueId: 2,
-    kind: "volume.set",
-    asset: null,
-    loop: null,
-    volume: 100,
-  });
+  deepEqual(audio.cues[0], volumeCue(1, 0));
+  deepEqual(audio.cues[1], volumeCue(2, 1));
 });
 
 test("runLog accepts non-empty requests and diagnostics and hands them to the observer", () => {

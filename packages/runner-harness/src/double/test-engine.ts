@@ -87,10 +87,17 @@ export function createTestEngine(): Engine {
               state.cueId++;
               audioCues.push({
                 cueId: state.cueId,
-                kind: "volume.set",
+                tick: record.tick,
+                kind: "media.volume",
+                track: null,
+                voice: null,
                 asset: null,
                 loop: null,
+                flags: null,
+                positionTicks: null,
                 volume: 100,
+                targetVolume: null,
+                durationTicks: null,
               });
             } else {
               const index = state.keys.indexOf(event.name);

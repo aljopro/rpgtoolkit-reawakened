@@ -337,8 +337,11 @@ test("send leaves the ruled state: old board threads dead, a persistent thread a
   deepEqual({ x: state.camera.x, y: state.camera.y, prevX: state.camera.prevX, prevY: state.camera.prevY }, { x: 784, y: 519, prevX: 784, prevY: 519 });
   deepEqual(doubles.sprites.map((effect) => [effect.name, ...effect.args]).slice(-1), [["placeplayer", 30, 20, 1, "tile"]]);
   deepEqual(doubles.triggers.map((effect) => [effect.name, ...effect.args]).slice(-1), [["deactivateat", 30, 20, 1, "tile"]]);
-  // Both boards name theme.mid, so the second arrival posts no replacement music record (E-16).
-  equal(doubles.audio.length, 1);
+  // Both boards name theme.mid and every arrival posts its music; the audio applier, not the engine, decides to carry on (E-16).
+  deepEqual(doubles.audio.map((effect) => [effect.name, ...effect.args]), [
+    ["music.play", "media/theme.mid", true, null, "boards/start.brd"],
+    ["music.play", "media/theme.mid", true, null, "boards/other.brd"],
+  ]);
 });
 
 test("send resumes the caller on the next tick and a different board music posts one replacement", () => {

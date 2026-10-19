@@ -27,7 +27,7 @@ import {
   drainDiagnostics,
   ENGINE_DEFAULT_MANIFEST,
   fnv1a64,
-  hashState,
+  hashGameState,
   replyToRequest,
   restoreGameState,
   snapshot,
@@ -265,7 +265,7 @@ function createHost(
         diagnostics,
         loading: false,
         paused: null,
-        stateHash: hashState(gameState),
+        stateHash: hashGameState(gameState),
       };
     },
 
@@ -287,7 +287,7 @@ function createHost(
     },
 
     stateHash(): string {
-      return hashState(gameState);
+      return hashGameState(gameState);
     },
 
     state(): GameState {

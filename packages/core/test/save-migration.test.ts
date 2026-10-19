@@ -5,13 +5,14 @@
 // sleeping thread with the old wait shape) gains the thread, wait and request
 // fields of ticket 3.9; v4 (`fixtures/save/v4-vm.json`) gains only the section
 // version for the module fields of ticket 3.8. All end at the current section version.
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, ok } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   canon,
+  createAudioSection,
   createGameState,
   restoreGameState,
   SCHEMA_VERSIONS,
@@ -102,4 +103,47 @@ test("restore refuses a snapshot whose vm section is not an object", () => {
   json.schema.vm = 2;
   json.vm = 7;
   equal(errorOf(() => restoreGameState(JSON.stringify(json))).code, "restore.shape");
+});
+
+// The audio section (ticket 6.6; docs/spec/engine/audio-media.md#audio-state): schema 1 was the empty placeholder
+// every committed save fixture carries; schema 2 is the track-and-voice section.
+test("a save from audio schema 1 (the empty placeholder) restores as a fresh schema-2 audio section", () => {
+  for (const name of ["v2-vm.json", "v3-vm.json", "v4-vm.json", "compiler-1-snapshot.json"]) {
+    const raw = JSON.parse(fixtureText(name)) as { audio: unknown; schema: { audio: number; compiler: string } };
+    equal(SCHEMA_VERSIONS.audio, 2);
+    equal(raw.schema.audio, 1, `${name} is a schema 1 save`);
+    deepEqual(raw.audio, {}, `${name} carries the empty placeholder`);
+    if (raw.schema.compiler !== "2") continue;
+    const restored = restoreGameState(fixtureText(name));
+    equal(restored.schema.audio, SCHEMA_VERSIONS.audio);
+    deepEqual(restored.audio, createAudioSection());
+    equal(canon(restoreGameState(snapshot(restored))), canon(restored));
+  }
+});
+
+/** A snapshot read back as loose JSON so a test can break one field of its audio section. */
+type RawAudioSnapshot = {
+  audio: {
+    schema: number;
+    cueId: number;
+    tracks: { voices: Record<string, unknown>[]; state: string; voiceCount: number }[];
+    settings: { masterVolume: unknown; trackVolumes: unknown[] };
+  };
+};
+
+test("restore refuses an audio section whose shape is wrong, naming the place", () => {
+  const refused = (edit: (json: RawAudioSnapshot) => void, where: string): void => {
+    const json = JSON.parse(snapshot(createGameState({ seed: 0 }))) as RawAudioSnapshot;
+    edit(json);
+    const error = errorOf(() => restoreGameState(JSON.stringify(json)));
+    equal(error.code, "restore.shape");
+    ok(error.message.includes(where), `${where}: ${error.message}`);
+  };
+  refused((json) => { json.audio.schema = 1; }, "audio.schema");
+  refused((json) => { json.audio.cueId = 0; }, "audio.cueId");
+  refused((json) => { json.audio.tracks[0]!.state = "buzzing"; }, "audio.tracks[0].state");
+  refused((json) => { json.audio.tracks[1]!.voiceCount = 0; }, "audio.tracks[1].voiceCount");
+  refused((json) => { json.audio.tracks[0]!.voices.push({ index: 0, state: "playing", file: "media/a.wav", cueId: 1, priority: 0, volume: 100, startTick: 0, positionTicks: 0, lengthTicks: null, endTick: null, pausedTick: null, fade: null }); }, "audio.tracks[0].voices[0].loop");
+  refused((json) => { json.audio.settings.masterVolume = "loud"; }, "audio.settings.masterVolume");
+  refused((json) => { json.audio.settings.trackVolumes.push({ name: "music", volume: 5, fade: { fromVolume: 1 } }); }, "audio.settings.trackVolumes[0].fade");
 });
