@@ -4,6 +4,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#444"
 type = "story"
 title = "Rulings: Function handles, address-of syntax, invocation, and environment table"
 description = "Doc-first (G7), docs only: amends RPGCode language specification and ADR-0004 to define first-class function values (`FunctionValue` in `Value`), the address-of operator `&fn`, dynamic invocation syntax `f(args)`, global symbol reassignment for command overriding, and the unification of the 4-tier resolution pipeline into a single deterministic environment table with transparent built-in fallback."
@@ -22,6 +23,7 @@ references = [
 
 [[entry]]
 id = 2
+tracker_id = "#445"
 type = "story"
 title = "Parser and AST support for function references and anonymous methods"
 description = "Extends the RPGCode parser and AST to parse `&identifier` (address-of function/command) and anonymous methods (`method(params) { ... }`), outputting typed AST nodes while maintaining 100% compatibility with legacy parameter and reference syntax."
@@ -37,6 +39,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#446"
 type = "story"
 title = "Lowering and IR bytecode instructions for dynamic invocation"
 description = "Extends the AST lowerer to emit instructions for loading function handles (`load_fn`) and dynamic indirect calling (`call_indirect`) when a call expression targets a variable or expression rather than a fixed identifier."
@@ -52,6 +55,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#447"
 type = "story"
 title = "VM runtime execution of dynamic function handles and step budget"
 description = "Implements `call_indirect` execution in the step-machine VM: resolves function handles to executable program/frame targets or built-in handlers, enforces arity bounds, consumes VM steps deterministically against `Thread.budget`, and propagates returns/yields."
@@ -67,6 +71,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#448"
 type = "story"
 title = "Unified environment table and global symbol reassignment"
 description = "Refactors command and function resolution into a unified environment table: global symbol assignments (`mediaPlay = myHook`) override active bindings; unassigned symbols fall back directly to core built-in handlers; `#redirect` compiles directly to environment assignments."
@@ -82,6 +87,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#449"
 type = "story"
 title = "Serialization, snapshot, and save/restore of function handles"
 description = "Implements deterministic serialization of function handles and environment reassignments in `GameState.vm` (`save/sections/vm.ts`), ensuring games with active overrides save and restore bit-identically across snapshots and disk saves."
@@ -97,6 +103,7 @@ references = [
 
 [[entry]]
 id = 7
+tracker_id = "#450"
 type = "story"
 title = "Pure-RPGCode middleware plugin fixtures and legacy golden verification"
 description = "Validates the complete pure-RPGCode plugin architecture: authors multi-plugin middleware fixtures (`weather-system.prg`, `audio-stems.prg`) demonstrating chained command wrapping, verifies zero regressions across all legacy sample games (demo, Basic), and closes Epic 18."

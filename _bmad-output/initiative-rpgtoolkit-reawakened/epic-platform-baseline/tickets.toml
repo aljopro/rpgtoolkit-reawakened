@@ -2,6 +2,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#300"
 type = "story"
 title = "ADR 0002 and the doc amendments"
 description = "Writes ADR 0002 (core rasteriser and glyph rasterisation, the `Math` allowlist and `**` ban, the `ovsx` exemption) and amends architecture-options section 2, the spec companion packages.md seam section, guardrails G3 enforcement and G4 rule 1 wording in one doc-only commit, so the scaffold in later entries implements accepted rules."
@@ -13,6 +14,7 @@ risk = "medium"
 
 [[entry]]
 id = 2
+tracker_id = "#301"
 type = "story"
 title = "Monorepo tracer: core, harness and shell through a green CI run"
 description = "Creates the pnpm workspace with the TypeScript 6 alias pair, the `node:test` runner and tsconfig bases, one tested `core` function called by an empty `runner-harness` that `runner-headless` runs, and a minimal GitHub Actions setup with one workflow file per check and one root script per check, so later entries add files and do not edit shared ones. A person creates the GitHub repository, adds the remote and enables Actions."
@@ -24,6 +26,7 @@ risk = "low"
 
 [[entry]]
 id = 3
+tracker_id = "#302"
 type = "story"
 title = "Guard-rail lint and type rules for core"
 description = "Adds the workspace ESLint base and its CI workflow, and for `core` the ESLint and tsconfig rules of G1 to G3, AD-13 and AD-24 (no DOM or Node types, generator/async/Promise ban in the VM scope, `Date`/`Intl`/`Math` allowlist, `**`, `console`, the bare `fflate` specifier), the `PlainData` JSON-value type in `core/ports` with its type-level constraint, the check that `core`'s runtime dependencies equal its allowlist, and a lint rule rejecting guard-rail suppressions without a `guardrail-exception: Gx ADR-NNNN` marker."
@@ -35,6 +38,7 @@ risk = "high"
 
 [[entry]]
 id = 4
+tracker_id = "#303"
 type = "story"
 title = "Dependency edge list and graph check"
 description = "Adds `tools/deps/edges.json` with every planned package edge, a generator that writes the dependency-cruiser rules and the spine's mermaid diagram, a check that the committed diagram matches, and the G4 rule that third-party engine imports (Phaser, PixiJS, Excalibur) are allowed only under `runner-*/src/render/**`. It adds its own workflow file."
@@ -46,6 +50,7 @@ risk = "medium"
 
 [[entry]]
 id = 5
+tracker_id = "#304"
 type = "story"
 title = "Licence gate and THIRD_PARTY_NOTICES"
 description = "Adds the G6 job (its own workflow file) that lists every production dependency licence across workspaces, compares each with a pinned Blue Oak Council list (Bronze or better) and an exception list that starts with MS-PL (ADR 0003), fails on any that does not pass, runs the audit, pins the lockfile, records the `ovsx` dev-only exemption, and adds `THIRD_PARTY_NOTICES` (G6 rule 3)."
@@ -57,6 +62,7 @@ risk = "medium"
 
 [[entry]]
 id = 6
+tracker_id = "#305"
 type = "story"
 title = "Provenance scan"
 description = "Adds the G7 scan (its own workflow file) with the legacy-marker list kept in the repo, and a cite-the-docs checkbox in the existing PR template."
@@ -68,6 +74,7 @@ risk = "low"
 
 [[entry]]
 id = 7
+tracker_id = "#306"
 type = "story"
 title = "Sample-game fixture fetch"
 description = "Adds the script and CI step that fetch the legacy `demo` and `Basic` games at a pinned revision into an ignored folder that the golden job of entry 9 reads, and verify nothing from them is tracked."
@@ -80,6 +87,7 @@ unknown = "The source location and pinned revision of the demo and Basic sample 
 
 [[entry]]
 id = 8
+tracker_id = "#307"
 type = "story"
 title = "Contract types, canonical form and hashes"
 description = "Adds the runner-facing Engine contract types every CAP-12 runner drives (Engine, StepReport, InputRecord, requests; AD-1, AD-14), built on entry 3's `PlainData`, in `core/ports`, and `core/canon`: RFC 8785 canonical JSON and FNV-1a 64-bit hashes."
@@ -91,6 +99,7 @@ risk = "medium"
 
 [[entry]]
 id = 9
+tracker_id = "#308"
 type = "story"
 title = "runner-harness driver, synth scaffold and the golden job"
 description = "Adds to `runner-harness` the input-log driver, the null audio port and golden compare (the CAP-12 headless runner skeleton; web, desktop, mobile and packaging are epic web-runner-packaging), an empty `synth` package (public `src/index.ts` only, typechecked, linted and on the edge list), and the golden CI job, which runs entry 7's fetch, asserts the hash vectors and replays an input log against a test-double engine. Each new package has build, typecheck, lint and test commands."
@@ -102,6 +111,7 @@ risk = "medium"
 
 [[entry]]
 id = 10
+tracker_id = "#309"
 type = "story"
 title = "Required CI checks, branch protection and contributor docs"
 description = "Makes typecheck, lint, unit, golden, licence, provenance and graph required checks with no `if:` conditions or path filters on required jobs and a final gate job (`if: always()`) that fails unless every `needs.*.result` is `success`, so a skipped job cannot merge, and documents the commands in CONTRIBUTING. A person sets branch protection."
@@ -113,6 +123,7 @@ risk = "medium"
 
 [[entry]]
 id = 12
+tracker_id = "#310"
 type = "story"
 title = "Make absent values explicit in the ports contract"
 description = "Replaces the optional fields and the two reply unions of the ports contract with required fields that hold `null` when empty, so every event and cue has one fixed set of keys. Adds one validator in core that checks an event against the contract and names the failing field, and makes entry 9's `parseRun` call it. The compiler flag `exactOptionalPropertyTypes` stays on as a backstop. Why: `undefined` and an absent key are different values across the Worker boundary and in a hash, and the difference first surfaced as a late `canon` throw (entry 8 review F1, R2-1)."
@@ -136,6 +147,7 @@ notes = [
 
 [[entry]]
 id = 11
+tracker_id = "#311"
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
@@ -147,6 +159,7 @@ risk = "low"
 
 [[entry]]
 id = 13
+tracker_id = "#312"
 type = "story"
 title = "ADR 0007: docs/spec is the normative specification"
 description = "Writes ADR 0007 in its own doc-only commit, recording the owner's decision of 2026-10-15 that `docs/spec/` replaces `docs/format-spec.md` and `docs/engine-features.md` (`docs/editor-features.md` stays). The ADR fixes: (1) `docs/spec/` describes Toolkit 3.1, and every Reawakened departure or addition sits beside the legacy behaviour as a marked Reawakened rule block; (2) real archive files beat prose, so a page the corpus contradicts is corrected and cites the files; (3) the citation form `docs/spec/<path>#<anchor>`, with E-xx IDs carried as labels on the `docs/spec/engine/` pages; (4) the two old files become redirect stubs until entry 3.28 re-points every citation and deletes them. It amends CLAUDE.md (Working notes), guardrails G5 and G7, ADR 0006's context, README, CONTRIBUTING, the PR template and the spine's format-spec references to name `docs/spec/`."
@@ -163,6 +176,7 @@ references = [
 
 [[entry]]
 id = 14
+tracker_id = "#313"
 type = "story"
 title = "Migrate engine-features.md into docs/spec/engine with its E-xx IDs"
 description = "Moves every E-xx capability of `docs/`docs/spec/engine/`.md` onto the `docs/spec/engine/` page that covers it, keeping each ID as a label so the epics' citations survive. The rebuild guidance (\"a rebuild should…\") becomes Reawakened rule blocks. Where an E-xx statement contradicts `docs/spec/` (R-50 to R-61 of the reconciliation), the page records both sides as an open conflict naming its owner epic, which rules it at inception; this entry rules none of them. Doc-only, in its own commit (G7)."

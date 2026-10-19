@@ -321,7 +321,7 @@ def load_folder(folder: Path, problems: list[str]) -> list[dict]:
             "id": n,
             "file": None,
             "type": kind,
-            "tracker_id": "",
+            "tracker_id": str(e.get("tracker_id", "") or ""),
             "title": str(e.get("title", "")),
             "status": "",
             "tracker_status": "",
