@@ -279,7 +279,8 @@ scenes of entry 6.4 (whose `P-1` to `P-18` proposals these adopt, listed in
    answer is the file's `AudioInfo` length (which may be `null`), "unsupported"
    (no audio decoder accepted the bytes; length unknown, one
    `media.asset-format` at the play) or "not fetched yet". For the last, the
-   applier holds that effect and every later `audio` effect, in post order, and
+   applier holds that effect and every later `audio` effect, in post order, in the
+   engine section's pending queue for `audio` (so a snapshot keeps them), and
    asks the engine for the file through the blocking `asset` request of AD-5; the
    world stalls as for a board's tile and the held effects apply, in order, when
    the reply is consumed. Audio bytes are decoded at once and dropped; the engine
