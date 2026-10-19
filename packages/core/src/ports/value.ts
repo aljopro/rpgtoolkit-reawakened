@@ -29,8 +29,22 @@ export type ObjectValue = {
   readonly className: string;
 };
 
+/**
+ * A first-class callable (ADR 0004 decision 8; docs/spec/engine/rpgcode-language.md#lexical-rules FUN-8).
+ * A plain data record, never a host closure: `def` is the deterministic id of a
+ * compiled definition, `captures` are the ids of the environment cells the
+ * lambda captured (positionally matched to the definition's captured names in
+ * `vm.cells`), and `receiver` is the object id `this` is bound to, or `null`.
+ */
+export type CallableValue = {
+  readonly type: "callable";
+  readonly def: string;
+  readonly captures: string[];
+  readonly receiver: string | null;
+};
+
 /** A script value: a double, string, or a tagged live object handle. */
-export type Value = number | string | ObjectValue | null;
+export type Value = number | string | ObjectValue | CallableValue | null;
 
 /** Which variable table a `RefId` names (docs/spec/formats/rpgcode-program.md#text-form SEM-4). */
 export type VarScope = "global" | "local";

@@ -16,6 +16,15 @@ import { compileProgram, programKey, type CompileContext, type Program, type Pro
 export type ProgramCache = {
   /** The compiled program of `ref`, compiling it on first request. */
   get(ref: ProgramRef): Program;
+  /**
+   * The first compiled program that defines `def` (FUN-8; entry 18.4), in
+   * compile order, or `undefined` when no compiles so far defines it. The
+   * caller looks in the running program first, so this only answers for a
+   * handle made somewhere else — a lambda stored in a global and called from a
+   * program another thread is running. Compile order is deterministic, so which
+   * owner answers is deterministic too.
+   */
+  find(def: string): Program | undefined;
   /** How many compiles this cache has run (tests and diagnostics). */
   readonly compiles: number;
 };
@@ -41,6 +50,12 @@ export function createProgramCache(
       programs.set(key, compiled);
       if (compiled.notices.length > 0) report(compiled.notices);
       return compiled;
+    },
+    find(def) {
+      for (const program of programs.values()) {
+        if (Object.hasOwn(program.functions, def)) return program;
+      }
+      return undefined;
     },
     get compiles() {
       return compiles;
