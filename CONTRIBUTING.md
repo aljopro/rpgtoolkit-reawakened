@@ -1,6 +1,31 @@
 # Contributing
 
-Thanks for helping reawaken RPG Toolkit.
+Thanks for helping reawaken RPG Toolkit. This page gets you from a fresh clone to a pull request that can merge, and then keeps the detailed rules (clean-room, fixtures, golden files) below for reference.
+
+The short version:
+
+1. Read [AGENTS.md](AGENTS.md) and [docs/guardrails.md](docs/guardrails.md). Seven rules (G1 to G7) apply to every change, and CI checks them.
+2. Set up, then run the first-run check below so you know your machine works.
+3. Pick a ticket (or file an issue), and say you are on it.
+4. Work in your own git worktree, from the docs, with tests.
+5. Run the checks, open a pull request with the template filled in, and get an independent review.
+
+## What this project is
+
+TK Reawakened is its own product. It is not RPG Toolkit v3.x and not v4, and its first release will be v1.0 ([ADR 0005](docs/adr/0005-independent-product-v1-and-native-format.md)). It plays and imports RPG Toolkit 3 games, and it is free to have its own native format when the old one gets in the way.
+
+Toolkit 3.1 behaviour is a compatibility layer, not the model ([ADR 0009](docs/adr/0009-compatibility-layer-not-the-model.md)): the core is built on objects and forward design, and the legacy 3.1 names, commands and data shapes are aliases and adapters onto it. Reason: a design that copies the old limits would keep them. Do not describe the project as a Toolkit version in code, docs or pull requests.
+
+## Ways to help
+
+- **Report a bug or ask a question.** Open an issue at <https://github.com/tk-reawakened/rpgtoolkit-reawakened/issues>. Say what you did, what you expected, what happened, and the exact commands and versions (`node -v`, `pnpm -v`). Never paste credentials or legacy source code.
+- **Fix or extend the specification.** [docs/spec/](docs/spec/README.md) is the normative description of what Toolkit 3.1 does ([ADR 0007](docs/adr/0007-docs-spec-is-the-normative-specification.md)). A wrong or missing spec page is a documentation pull request, and it lands before the code that depends on it (G7).
+- **Write code or tests.** Pick a ticket (see "Pick and claim a ticket").
+- **Review.** Read someone else's pull request against the checklist in [.github/pull_request_template.md](.github/pull_request_template.md) and run its checks. See "Open the pull request, review and merge".
+
+Code and contributions are licensed under the [MIT license](LICENSE).
+
+## The rules
 
 1. **Read [docs/guardrails.md](docs/guardrails.md).** Rules G1–G7 are binding and CI-enforced. Pull requests that break one are not merged unless an ADR approves an exception.
 2. **Clean-room (G7).** Work only from `docs/`. Do not consult, copy or translate the legacy GPL-2 RPG Toolkit source. If a spec is unclear or wrong, open a docs PR first.
@@ -8,14 +33,257 @@ Thanks for helping reawaken RPG Toolkit.
 4. **Dependencies (G6).** New runtime dependencies must use an allowlisted licence. Say in the PR why the dependency is needed.
 5. **Architecture changes** go through an ADR in `docs/adr/`.
 
-Code is licensed under the [MIT license](LICENSE).
+Also see [docs/architecture-options.md](docs/architecture-options.md) and the [editor feature list](docs/editor-features.md) for background.
+
+## Set up
+
+You need:
+
+- **git**.
+- **Node 24.21.0.** It is pinned in `.node-version`, and CI uses the same version. Use any version manager that reads `.node-version`, or install that version yourself.
+- **pnpm 12.10.1.** It is pinned in `packageManager` in `package.json`. Run `corepack enable` and the right version is picked up.
+- **Network access** for `pnpm fixtures:fetch` (the legacy sample games) and `pnpm audit --prod`.
+
+Only some commands need more:
+
+| Tool | Needed only for |
+|---|---|
+| Bun 1.4.2 (the version CI pins) | `pnpm golden:bun`, which runs the golden and closing suites under Bun as well as Node |
+| Python 3 with Pillow | `pnpm oracle:check`, which compares against the independent reference renderer; use the virtual environment below |
+| uv | the BMad ticket scripts under `_bmad/scripts/` and the `bmad-ticket` tool (see "Pick and claim a ticket") |
+| GitHub CLI (`gh`) | optional: opening and checking pull requests from a terminal |
+
+### First run on a clean clone
+
+```sh
+git clone https://github.com/tk-reawakened/rpgtoolkit-reawakened.git
+cd rpgtoolkit-reawakened
+corepack enable
+pnpm install --frozen-lockfile   # install from the committed lockfile
+pnpm build                       # tsc -b
+pnpm dump docs/spec/examples     # parse the small example game in the spec and print one line per file
+```
+
+`pnpm dump` needs no sample games, because the example game ships inside `docs/spec/examples/`. A working setup prints one line per file, which starts like this (the `skipped` lines are normal: they name files that have no readable legacy format):
+
+```text
+README.md  skipped  unrecognised extension: no legacy data format here is read under this extension
+files/example_game.tpk  skipped  unrecognised extension: no legacy data format here is read under this extension
+files/flower.gph  single-tile  single tile 2.0, detail 1, 32×32, 1024 pixels  digest=9131ae96648d8338
+```
+
+Then run one test file, so you know the test loop works:
+
+```sh
+node --test packages/core/test/fmath.test.ts   # prints "pass 20", "fail 0" at the end
+```
+
+If those work, your setup is fine. Real fixtures and the full gates come later (see "Commands").
+
+### Optional Python tools
+
+For `pnpm oracle:check`, install Pillow in a virtual environment rather than changing your system Python. Keep the environment outside the checkout so it cannot accidentally enter a commit:
+
+```sh
+python3 -m venv "$HOME/.venvs/tkr-tools"
+. "$HOME/.venvs/tkr-tools/bin/activate"
+python -m pip install Pillow
+pnpm oracle:check
+deactivate
+```
+
+While the environment is active, `pnpm oracle:check` finds its `python3` through `PATH`. On Windows, activate the environment with its `Scripts/Activate.ps1` instead. The other shell examples on this page use a POSIX shell, such as Bash or Git Bash.
+
+## Where things are
+
+These packages exist today (`packages/`):
+
+| Package | What it holds |
+|---|---|
+| `core` | The deterministic engine: file-format readers and writers, the RPGCode script VM, the reference rasteriser, deterministic maths (`fmath`), saves, input, audio rules. It touches no DOM, Node, I/O or timers (G2, G3). |
+| `synth` | Audio synthesis: MIDI and PCM playback, mixer and voice pool. |
+| `plugin-tk2-compat` | The Toolkit 2 compatibility command pack for RPGCode (deterministic adapters only). |
+| `runner-harness` | Shared headless runner logic: the scripted driver, golden, closing and corpus jobs. |
+| `runner-headless` | The Node/Bun command line (`golden`, `closing`, `corpus`, `dump`); `pnpm golden`, `pnpm closing` and `pnpm dump` call it. |
+
+Outside `packages/`: `docs/` (spec, ADRs, guard-rails), `tools/` (the checks and generators CI runs), `golden/` (committed reference output), `fixtures/` (fetched sample games, never committed), `media/`, and `_bmad-output/` (tickets and plans, see below).
+
+The editor, its hosts (`editor-ui`, `host-vscode`, `host-web`, `host-desktop`), the language and debug servers and a web runner are **planned** and do not exist in this repository yet. The dependency direction they must follow is in G2.
+
+## Pick and claim a ticket
+
+Planned work is tracked as files in this repository (the BMad "repo store"), under `_bmad-output/initiative-rpgtoolkit-reawakened/`. The initiative is described in [initiative-rpgtoolkit-reawakened.md](_bmad-output/initiative-rpgtoolkit-reawakened/initiative-rpgtoolkit-reawakened.md). Each epic is a folder with a `tickets.toml` (its tickets in build order, each with a stable id and an `after` list of prerequisites) and one `*-plan.md` per started ticket, whose `status` says where it stands. A ticket is named `<epic id>.<entry id>`, for example `19.5`.
+
+You do not need an AI agent or BMad installation to contribute:
+
+1. Open the initiative's `tickets.toml` to find an epic and its id, then that epic's `tickets.toml` to find a ticket. Read the epic's description and the ticket's `description`, `verify`, `references` and `after` prerequisites.
+2. Read its story file when one exists, and its `*-plan.md` for progress. A ticket with no plan has not been started in the store; still check open branches and pull requests before claiming it.
+3. Plans with `in-progress` or `blocked` are already being worked on. `in-review` or `built` means implementation is awaiting acceptance; `done` means accepted. Do not infer that a review happened from the status alone: read the review evidence.
+4. Agree the scope with the maintainer through an issue or draft pull request. For a code change, record the implementation plan, acceptance criteria and verification evidence alongside the ticket. Keep its plan status current; the maintainer or orchestrator marks it `done` after acceptance.
+
+If you already use the **external `bmad-ticket` skill**, its `scripts/tickets.py` computes readiness from dependencies, statuses and checkpoints. It is not shipped in this repository. Replace `/path/to/bmad-ticket` below with your installed skill directory; these optional commands require `uv`:
+
+```sh
+uv run /path/to/bmad-ticket/scripts/tickets.py --project-root . next initiative-rpgtoolkit-reawakened
+uv run /path/to/bmad-ticket/scripts/tickets.py --project-root . find initiative-rpgtoolkit-reawakened 19.5
+uv run /path/to/bmad-ticket/scripts/tickets.py --project-root . --help
+```
+
+Name the initiative explicitly. The optional active-initiative setting lives in a git-ignored `_bmad/custom/config.user.toml` that fresh clones and worktrees do not have; copying someone else's personal configuration is not required.
+
+Before you take a ticket:
+
+1. Run `git fetch origin`, then check that nobody already has it: `git branch -r`, `git worktree list`, and the open pull requests (`gh pr list`). A ticket can look ready on `main` while a branch for it is still in flight.
+2. Read the ticket, its epic, and the spec pages it cites.
+3. Check for `hitl = true` or a plan or done checkpoint on the ticket. Those need the owner's approval at a set point, so ask first.
+4. Say you are on it: comment on an issue, or open a draft pull request early that names the ticket id.
+
+No ticket fits what you want to do? Open an issue describing it, so it can be sized and put in the right epic.
+
+Name branches `<type>/<ticket>-<short-name>`, with the types used in recent history: `feat`, `fix`, `docs`, `test`, `chore` (for example `feat/19-5-class-dictionaries`). Commit subjects follow the same `type(scope): subject` style, for example `docs(spec): ...`. Cite the spec pages you implement in commits and pull requests.
+
+## Doing the work
+
+1. **Docs first.** If the spec is wrong or silent, fix it in its own commit first (G7). Then write the code from the spec.
+2. **Respect the model boundaries.** Dependencies flow `core ← synth ← runners ← hosts`. Keep `core` free of DOM, Node, I/O, timers, `Math.random`, `Date` and unlisted `Math` functions (G2, G3). `pnpm lint` and `pnpm graph` check this. A legacy 3.1 name is an alias onto the object model, not the model itself.
+3. **Test behaviour.** Test what the engine does (state, draw lists, hashes, diagnostics), not how a function is written. Put tests in `packages/<name>/test/` as `*.test.ts`. Never add a skipped test to dodge a failure: `pnpm test:strict` fails on any skip.
+4. **Golden files are a record, not a convenience.** A golden is committed output that the suite compares against (G5). `pnpm golden:record`, `pnpm closing:record`, `pnpm dump:record`, `pnpm dump:record:examples` and `pnpm fixtures:author` rewrite them; run one only on purpose, never in CI and never as a side effect, and explain every changed golden in the pull request. If a golden changes and you cannot say why the new output is correct, the code is wrong, not the golden.
+5. **Help text.** Command and help descriptions first say what the command does in plain terms for someone making a game, then describe it exactly (units, ticks, order, whether the script waits). See the working notes in [AGENTS.md](AGENTS.md).
+
+## Work in a worktree
+
+Do each piece of work in its own git worktree (a second folder checked out from the same repository). Reason: several people or agents can then work at once without overwriting each other's files, and the checkout you cloned stays exactly as it was.
+
+Run this from any checkout of the repository, on any branch. It does not switch branches or touch files in the checkout you run it from:
+
+```sh
+git fetch origin
+git worktree list                                        # see what others have open
+git worktree add -b <type>/<ticket>-<short-name> ../rpgtoolkit-reawakened.worktrees/<short-name> origin/main
+cd ../rpgtoolkit-reawakened.worktrees/<short-name>
+pnpm install --frozen-lockfile   # dependencies link from the shared pnpm store
+pnpm fixtures:fetch              # only when you need the sample games (see "Commands")
+```
+
+A new worktree starts without the files git ignores. That is why it needs `pnpm install` (for `node_modules/`) and, when you need them, `pnpm fixtures:fetch` (for the sample games under `fixtures/`). You do not need to copy any personal configuration: the ticket tool works when you give it the initiative folder, as shown above. (Worktrees under the repository's own `.worktrees/` folder also work; git ignores that folder.)
+
+Work only in your own worktree. Never edit, reset, stash or switch branches in someone else's checkout or worktree.
+
+## Commands
+
+Run them from the repository root, in this order, before you open a pull request. The CI job each one runs in is in brackets. Docs-only change? Run at least `pnpm provenance` and `pnpm lint`, and `pnpm catalogue:check` and `pnpm command-docs:check` when you touched command documentation or the catalogue.
+
+```sh
+pnpm install --frozen-lockfile   # install from the committed lockfile
+pnpm build                       # tsc -b: a quick incremental build
+pnpm typecheck                   # tsc -b, then each package's tsconfig.test.json [typecheck]
+pnpm lint                        # the core dependency check, then ESLint [lint]
+pnpm test                        # tsc -b, then node --test; sample-game cases skip without fixtures [unit]
+pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
+pnpm fixtures:check              # fail if anything under fixtures/ is tracked [golden]
+pnpm test:strict                 # as `test`, but any skipped test fails; needs fixtures:fetch [golden]
+pnpm golden                      # the headless golden suite (G5) [golden]
+pnpm closing                     # boot every fetched sample game through the real engine; needs fixtures:fetch [golden]
+pnpm dump:check                  # compare the dump of the sample games and the spec examples with the committed digests; needs fixtures:fetch [golden]
+pnpm oracle:check                # independent-reference drift checks; needs python3 with Pillow [golden]
+pnpm graph:test && pnpm graph    # the dependency-edge tool's tests, then the check (G2, G4) [graph]
+pnpm licence:test && pnpm licence  # the licence tool's tests, then the licence gate (G6) [licence]
+pnpm audit --prod                # dependency vulnerability audit (network) [licence]
+pnpm provenance:test && pnpm provenance  # the scan's tests, then the clean-room provenance scan (G7) [provenance]
+pnpm fixtures:test               # the fixture tools' own tests [unit]
+pnpm catalogue:check             # the generated catalogue stubs match the catalogue [unit]
+pnpm command-docs:test && pnpm command-docs:check  # command documentation tool tests, then the check [unit]
+pnpm no-skips:test               # the no-skips guard's own tests [unit]
+pnpm icons:test                  # the icon builder's own tests [unit]
+pnpm golden:bun                  # golden and closing suites under Node and Bun must give identical output; needs Bun and fixtures:fetch [golden-bun]
+```
+
+Other commands:
+
+```sh
+pnpm dump <path>                 # parse a legacy project and print it (see "The dump tool" below), e.g. `pnpm dump fixtures/legacy/demo` after fixtures:fetch
+pnpm corpus                      # run every fetched sample program headlessly (needs fixtures:fetch)
+pnpm fixtures:author             # rewrite the authored fixtures (deliberate, see "Committed fixtures")
+pnpm fixtures:author:check       # fail if those committed fixtures drift from the generator, or an oracle imports core
+pnpm audio-protocol:check        # the audio protocol fixtures match their generator
+pnpm catalogue:generate          # rewrite the catalogue stubs (deliberate); `font:generate` and `font:check` do the same for the project font
+pnpm icons                       # rebuild media/icons from media/tkr.png (the logo's icon set)
+pnpm graph:write                 # dev aid: write the dependency-graph inputs; CI never runs it
+```
+
+`pnpm license` and `pnpm license:test` are aliases of `licence` and `licence:test`. The `*:test` scripts are the tool self-tests that CI also runs, so run them when you touch `tools/`.
+
+`pnpm golden:record` rewrites the golden and is the only writer of it. Never run it in CI. A golden change is a reviewed behaviour change (G5), so explain it in the pull request.
+
+`pnpm closing` boots all eight fetched sample games through the real engine and compares their frames, hashes and diagnostics with the baselines committed under `golden/regression/` (it needs `fixtures:fetch`, runs in the `golden` job and again under Bun in `golden-bun`, and takes about a minute). `pnpm closing:record` rewrites those baselines and the closing rows of `golden/ledger.json`; like `golden:record` it is a deliberate act and never runs in CI. The scripted run and each game's expected outcome live in `golden/closing/plan.json`; a Toolkit 2 game that cannot boot yet is listed there as an expected failure with its epic and reason, and fails the suite as soon as it starts to boot, so the entry is removed on purpose.
+
+### The loop while you work
+
+```sh
+pnpm build                                                  # rebuild what changed
+node --test packages/core/test/<file>.test.ts               # one test file
+node --test --test-name-pattern="<words>" packages/core/test/<file>.test.ts   # tests whose name matches
+pnpm test                                                   # all package tests
+```
+
+Run `pnpm build` first because packages import each other's built output. Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `core`, `plugin-tk2-compat`, `runner-harness` and `runner-headless` expose `typecheck:tests` only, and their tests run through the root `pnpm test`. Some tests skip their sample-game cases until you run `pnpm fixtures:fetch`; run `pnpm test:strict` before you push so that none of them silently skip.
+
+## Open the pull request, review and merge
+
+1. Push your branch and open a pull request **against `tk-reawakened/rpgtoolkit-reawakened:main`**. Collaborators with write access can use `git push -u origin <branch>`; everyone else should use [a fork](#contribute-through-a-fork). Fill in [the template](.github/pull_request_template.md): the guard-rail checklist, the spec sections you implement, and any golden changes with the reason.
+2. **CI.** [.github/workflows/ci.yml](.github/workflows/ci.yml) defines nine jobs: `typecheck`, `lint`, `unit`, `golden`, `golden-bun`, `licence`, `provenance`, `graph`, and `gate`. `gate` fails unless the other eight all succeeded, so a skipped or cancelled job cannot pass. Each job installs with `pnpm install --frozen-lockfile`. The sample-game fetch and `fixtures:check` run inside `golden` (there is no separate `fixtures` job), and the fixture, catalogue, command-docs, no-skips and icon tool tests run in `unit`. `pnpm test` there runs without the sample games, where the format tests skip their sample-game cases, so `golden` runs the whole suite again after the fetch as `pnpm test:strict`: those cases run against the real files, and any skipped test fails the job, so a sample-game case cannot pass by skipping. Renaming a job id means updating the `gate` job and the ruleset's required checks in the same change.
+3. **Green before merge.** All required checks, including `gate`, must pass. `gate` includes the Bun comparison job, so that comparison must succeed even when a ruleset names only `gate` rather than `golden-bun` separately. Every change goes through a reviewed pull request; never push changes straight to `main`.
+4. **Independent review.** Someone other than the author reviews the diff. They read it against the checklist, run the commands that matter for the change, and check that any changed golden is explained. A reviewer who is an AI agent must not be the session that wrote the change.
+5. **Behind `main`?** If GitHub says the branch can merge cleanly and checks are green, do not rebase or force-push just to catch up. Merge `origin/main` into your branch only when there is a conflict or `main` changed something your change depends on. Pull requests are merged with a merge commit, which keeps history intact.
+
+### Contribute through a fork
+
+If you cannot push to this repository, fork it using GitHub's **Fork** button. Keep `origin` pointing at the upstream repository used by the setup commands, and add your fork as another remote. Check `git remote -v` first so you do not add a duplicate. Replace `YOUR-USERNAME` and the branch name with your own:
+
+```sh
+git remote add fork https://github.com/YOUR-USERNAME/rpgtoolkit-reawakened.git
+git push -u fork <branch>
+```
+
+Open the pull request from your fork's branch to **`tk-reawakened/rpgtoolkit-reawakened:main`**, not to your fork's `main`. GitHub's web interface works without `gh`. Continue fetching `origin/main` for upstream changes. If you originally cloned your fork instead, add the original repository as an `upstream` remote and use `upstream/main` wherever this guide uses `origin/main`.
+
+## Clean up after a merge
+
+Run cleanup from a checkout other than the worktree you are removing. Confirm that GitHub shows your pull request merged and that the worktree has no uncommitted work. Set these variables to your own branch and worktree:
+
+```sh
+branch='feat/TICKET-short-name'
+worktree='../rpgtoolkit-reawakened.worktrees/short-name'
+git fetch origin
+git merge-base --is-ancestor "$branch" origin/main
+```
+
+**Proceed only if the ancestry check succeeds.** If it fails, the branch may contain work that has not landed, or the merge may have used a different history shape: keep it and ask before deleting anything. For a merged branch, remove the clean worktree and delete the branch without forcing:
+
+```sh
+git worktree remove "$worktree"
+git branch --set-upstream-to=origin/main "$branch"
+git branch -d "$branch"
+```
+
+The upstream setting makes `-d` check the merged branch against `origin/main`, even when your current checkout is on another branch. These commands affect only your worktree and branch. Do not force removal, discard uncommitted files or switch someone else's checkout.
+
+There is no need to move a local `main` to start the next task: fetch and create the next worktree from `origin/main`. Update a checkout's local `main` with `git merge --ff-only origin/main` only when you own that checkout and it is already on `main`.
+
+## If you are an AI agent
+
+Read [AGENTS.md](AGENTS.md) first (`CLAUDE.md` imports it, so there is one set of instructions). The rules, the checks and the review are the same as for a person. Work only in your own worktree, run the commands that apply, and say in the pull request what you ran and what you did not. If you do not know something, ask the person driving the work or open an issue; do not invent a requirement, a command or a policy.
+
+## If you are stuck
+
+Ask. Open an issue, or comment on your draft pull request, and describe what you tried. If a task seems to need breaking a guard-rail, stop and ask: exceptions need an ADR. If the docs and the code disagree, fix the doc first (G7) or say so in the issue.
 
 ## Clean-room provenance
 
 RPG Toolkit Reawakened is a clean-room rebuild. The legacy RPG Toolkit engine and editor are GPL-2, so none of that source may enter this repository.
 
 - The documents in `docs/` describe legacy behaviour and file layouts in our own words. They are the only source for implementation work.
-- Do not open, copy, paraphrase or translate the legacy source while writing code. Contributors and AI agents follow the same rule (see [CLAUDE.md](CLAUDE.md)).
+- Do not open, copy, paraphrase or translate the legacy source while writing code. Contributors and AI agents follow the same rule (see [AGENTS.md](AGENTS.md)).
 - If `docs/` is wrong or missing something, fix the doc first in its own commit, then the code.
 - Whole legacy sample games are test fixtures fetched at CI time. Never commit them. Small anonymised or authored fixtures may be committed (see "Committed fixtures" below).
 - The full rule and its checks are G7 in [docs/guardrails.md](docs/guardrails.md).
@@ -102,70 +370,6 @@ corpus cannot supply them (ticket 2.22):
 
 `pnpm fixtures:check` fails when anything under the root `fixtures/` is tracked,
 so a fetched file can never be committed by mistake.
-
-## Work in a worktree
-
-Do each piece of work in its own git worktree (a second folder checked out from the same repository), and leave the main checkout on `main`, unedited. Reason: several people or agents can then work at the same time without overwriting each other's files, and `main` only moves when a tested pull request lands.
-
-```sh
-git fetch origin
-git worktree add -b <type>/<short-name> ../rpgtoolkit-reawakened.worktrees/<short-name> origin/main
-cd ../rpgtoolkit-reawakened.worktrees/<short-name>
-pnpm install --frozen-lockfile   # about a second: dependencies link from the shared pnpm store
-pnpm fixtures:fetch              # about a second; only needed before `pnpm golden`
-```
-
-A new worktree starts without the files git ignores, which is why the last two commands are needed (`node_modules/` and the sample games under `fixtures/`). If you use the BMAD ticket tools, also copy `_bmad/custom/config.user.toml` from the main checkout into the same place in the worktree: it names the active initiative, and the tools read no tickets without it.
-
-When the work is done, push the branch and open a pull request. `main` accepts only a commit whose eight required checks have already passed, so a direct push of a new commit is refused. After it lands, bring the main checkout up to date and remove the worktree:
-
-```sh
-git switch main && git merge --ff-only origin/main   # run in the main checkout
-git worktree remove ../rpgtoolkit-reawakened.worktrees/<short-name>
-git branch -d <type>/<short-name>
-```
-
-## Commands
-
-Node 24.21.0 (see `.node-version`) and pnpm 12.10.1 (`corepack enable` picks it up from `packageManager`).
-
-CI runs these commands. The seven required jobs are in `.github/workflows/ci.yml` — the fixture tool's, the no-skips guard's and the icon builder's own tests (`pnpm fixtures:test`, `pnpm no-skips:test`, `pnpm icons:test`) run in its `unit` job, and `pnpm build` is the same `tsc -b` that `typecheck` and `test` already run, kept here for a first local build. Run them locally in this order before you open a pull request.
-
-```sh
-pnpm install --frozen-lockfile   # install from the committed lockfile
-pnpm build                       # tsc -b
-pnpm typecheck                   # tsc -b, then each package's tsconfig.test.json
-pnpm test                        # tsc -b, then node --test
-pnpm test:strict                 # tsc -b, then node --test, failing if any test was skipped (needs fixtures:fetch; runs in the golden job)
-pnpm lint                        # the core dependency check, then ESLint
-pnpm graph:test                  # the dependency-edge tool's own tests
-pnpm graph                       # the dependency-edge check
-pnpm licence:test                # the licence tool's own tests
-pnpm licence                     # the licence gate (G6)
-pnpm audit --prod                # dependency vulnerability audit (network)
-pnpm provenance:test             # the provenance scan's own tests
-pnpm provenance                  # the clean-room provenance scan (G7)
-pnpm fixtures:test               # the fixture tool's own tests
-pnpm no-skips:test               # the no-skips guard's own tests
-pnpm icons:test                  # the icon builder's own tests
-pnpm icons                       # rebuild media/icons from media/tkr.png (the logo's icon set)
-pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
-pnpm fixtures:check              # fail if anything under fixtures/ is tracked
-pnpm fixtures:author              # rewrite packages/core/test/fixtures/authored, .../movement and .../audio (deliberate, see below)
-pnpm fixtures:author:check       # fail if those committed fixtures drift from the generator, or an oracle imports core
-pnpm golden                      # the headless golden suite (G5)
-pnpm dump fixtures/legacy/demo   # parse a legacy project and print it (needs fixtures:fetch)
-```
-
-The `*:test` scripts are the tool self-tests that CI also runs, so run them when you touch `tools/`. `pnpm graph:write` is a dev aid that CI never runs. `pnpm license` and `pnpm license:test` are aliases of `licence` and `licence:test`.
-
-`pnpm golden:record` rewrites the golden and is the only writer of it. Never run it in CI. A golden change is a reviewed behaviour change (G5), so explain it in the pull request.
-
-`pnpm closing` boots all eight fetched sample games through the real engine and compares their frames, hashes and diagnostics with the baselines committed under `golden/regression/` (it needs `fixtures:fetch`, runs in the `golden` job and again under Bun in `golden-bun`, and takes about a minute). `pnpm closing:record` rewrites those baselines and the closing rows of `golden/ledger.json`; like `golden:record` it is a deliberate act and never runs in CI. The scripted run and each game's expected outcome live in `golden/closing/plan.json`; a Toolkit 2 game that cannot boot yet is listed there as an expected failure with its epic and reason, and fails the suite as soon as it starts to boot, so the entry is removed on purpose.
-
-Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `core`, `runner-harness` and `runner-headless` expose `typecheck:tests` only, and their tests run through the root `pnpm test`.
-
-**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's and the no-skips guard's own tests run in `unit`; there is no separate `fixtures` check. `pnpm test` runs in `unit` without the sample games, where the format tests skip their sample-game cases. The `golden` job runs the whole suite again after the fetch as `pnpm test:strict`: those cases run against the real files, and any skipped test fails the job, so a sample-game case cannot pass by skipping. Renaming a job id means updating branch protection and the gate in the same change.
 
 ## The dump tool and the corpus digest gate
 
