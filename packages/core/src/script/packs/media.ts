@@ -45,7 +45,7 @@ function doc(summary: string, behaviour: string, waits?: BuiltinDoc["waits"]): B
   return {
     summary,
     behaviour,
-    groups: ["audio"],
+    groups: ["audio-23"],
     ...(waits === undefined ? {} : { waits }),
     see: ["docs/spec/engine/audio-media.md#media-command-family"],
   };
@@ -360,7 +360,7 @@ export const MEDIA_PLUGIN: PluginDefinition = {
   version: "1.0.0",
   doc: {
     summary: "Deterministic media tracks, voices and SoundFont controls.",
-    groups: [{ id: "audio", name: "Audio", summary: "Track-based audio control at the fixed simulation tick." }],
+    groups: [{ id: "audio-23", name: "Audio", summary: "Track-based audio control at the fixed simulation tick." }],
   },
   commands: MEDIA_COMMANDS,
 };
