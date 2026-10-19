@@ -262,6 +262,7 @@ potion = {
 
 **The rule, precisely.**
 
+* **Auto-binding on member access.** The step IR has `OP_GET_MEMBER_BOUND { prop }` ([ADR 0004, decision 8](../../adr/0004-script-ast-step-ir-and-plugins.md)). A `.` or `->` read of a member that holds a callable pushes a new callable record with the same `def` and `captures` and `receiver` set to the object's handle (a read of a non-callable member is unchanged). The compiler emits it for every such read; it is not simulated later.
 * **Object/file call precedence.** A call written `d.f()` first checks whether `d` is a live object. When it is, the call is `d->f()` of OOP-10 (an object with a class runs its method of that name; a dictionary invokes its callable member) using OOP-11 receiver binding. Only when no object binding exists does the legacy `d.prg` file-qualified fallback apply (MOD-2). This is the same explicit-object-over-implicit-file principle as PKG-4's namespace rule; the rejected file-first alternative would let an asset silently hijack an object method.
 * **Preserved receiver on tear-off.** The bound callable is an ordinary value: storing it, passing it or returning it keeps its receiver.
   ```rpgcode
