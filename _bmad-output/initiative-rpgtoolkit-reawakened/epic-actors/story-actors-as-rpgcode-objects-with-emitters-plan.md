@@ -27,7 +27,7 @@ Binding layer plus the virtual-variable write path for legacy stat aliases (`scr
 ## Acceptance
 
 1. Read/write through owner; methods; emitter.
-2. `virtuals.ts` gains a write path; `HP!`/`Level!`-style `.tem` globals read and write the actor stat live; `kill()` on an alias resets to the .tem default.
+2. `virtuals.ts` gains a write path; `HP!`/`Level!`-style `.tem` globals read and write the actor stat live; `kill()` on an alias (or any system-controlled name) is a located diagnostic and a no-op, value and link untouched; writes to an alias write through and never break the link.
 
 ## Verification
 

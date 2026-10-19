@@ -24,6 +24,8 @@ No ATB, no damage formulas, no AI (Epic 7). No behaviour registration (7).
 
 1. R-16 (resolved, owner 2026-10-19): level and experience are stats; level-up and the other abilities are standard equations in code with defaults, overridable by behaviours. The default level-up equation is the one 20.1 rules; Epic 7 inherits it.
 
+2. Fallen is a state, never a removal (owner, 2026-10-19): default HP <= 0, behaviour-overridable; the actor stays in the party; revival is the state changing back (HP raised or a behaviour-defined revive); both `fallen` and `revived` events fire (emitted by 20.9).
+
 ## Acceptance
 
 1. Four defaults implemented as hooks.
