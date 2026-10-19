@@ -127,7 +127,7 @@ export { UI_COMMANDS, UI_PLUGIN, applyUiEffect } from "./packs/ui.ts";
 export { GRAPHICS_COMMANDS, GRAPHICS_PLUGIN } from "./packs/graphics.ts";
 export { WORLD_PLUGIN } from "./packs/world.ts";
 export { MOVEMENT_COMMANDS, MOVEMENT_PLUGIN, applyInputEffect, applySpriteEffect } from "./packs/movement.ts";
-export { MEDIA_COMMANDS, MEDIA_PLUGIN, readAudioView, tkMD_LOOP, tkMD_ONCE, tkMD_RESTART, tkMD_SYNC, tkMD_WAIT } from "./packs/media.ts";
+export { MEDIA_COMMANDS, MEDIA_PLUGIN, readAudioView, tkMD_LOOP, tkMD_ONCE, tkMD_RESTART, tkMD_SYNC, tkMD_WAIT, tkMD_STOPPED, tkMD_PLAYING, tkMD_PAUSED } from "./packs/media.ts";
 export type { Arg, BuiltinDoc, BuiltinSpec, DocExample, DocReturns, DocTag, DocThrow, DocWait, ParamDoc, ParamDocValue, ParamSpec, RunnerSupport } from "./builtins.ts";
 export {
   commandDocumentation,

@@ -3,7 +3,7 @@ title: 'Media query built-ins, legacy command mapping and catalogue sweep'
 type: 'feature'
 ticket: 9
 created: '2026-10-18'
-status: 'draft'
+status: built
 baseline_revision: 'f212728587894ad87ae94de67ae14e31cb444a36'
 risk: 'medium'
 context:

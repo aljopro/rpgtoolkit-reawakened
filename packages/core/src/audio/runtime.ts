@@ -402,13 +402,13 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     }
     if (effect.name === "media.seek" || effect.name === "media.loop" || effect.name === "media.fade" || effect.name === "media.volume") {
       const track = args[0];
-      if (typeof track !== "string") {
-        diag("audio.effect", effect.name, { reason: "malformed arguments" });
-        return "applied";
-      }
       const second = args[1];
       const third = args[2];
-      if (effect.name === "media.seek" && typeof second === "number" && (third === null || typeof third === "number")) runtime.seek(track, second, third === null ? undefined : third);
+      if (effect.name === "media.volume" && track === null && typeof second === "number" && third === null) runtime.setMasterVolume(second);
+      else if (typeof track !== "string") {
+        diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        return "applied";
+      } else if (effect.name === "media.seek" && typeof second === "number" && (third === null || typeof third === "number")) runtime.seek(track, second, third === null ? undefined : third);
       else if (effect.name === "media.loop" && typeof second === "boolean" && (third === null || typeof third === "number")) runtime.setLoop(track, second, third === null ? undefined : third);
       else if (effect.name === "media.fade" && typeof second === "number" && typeof third === "number" && (args[3] === null || typeof args[3] === "number")) runtime.fade(track, second, third, args[3] === null ? undefined : args[3] as number);
       else if (effect.name === "media.volume" && typeof second === "number" && (third === null || typeof third === "number")) {

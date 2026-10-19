@@ -11,7 +11,7 @@
 import { encodeCp1252 } from "../formats/binary/cp1252.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 import type { Value } from "../ports/value.ts";
-import type { Arg } from "./builtins.ts";
+import type { Arg, BuiltinDoc } from "./builtins.ts";
 import { ScriptError } from "./errors.ts";
 import type { PluginManifestDiagnostic } from "./manifest.ts";
 import type { CommandEffect, CommandRequest, CommandResult, CommandView, PluginDefinition } from "./plugin.ts";
@@ -1257,18 +1257,45 @@ export const KAIMU_PLUGIN: PluginDefinition = {
         { name: "file", optional: false, byRef: false, variadic: false },
         { name: "speed", optional: true, byRef: false, variadic: false },
       ],
+      doc: {
+        summary: "Fade MIDI music in.",
+        behaviour: "Retains the legacy command as a deprecated audio cue without inventing a replacement mapping; it never raises a runtime error or waits.",
+        groups: ["audio-23"],
+        see: ["docs/spec/engine/audio-media.md#legacy-audio-command-mapping"],
+        tags: ["deprecated"],
+        replacedBy: { kind: "syntax", text: "No verified standard replacement; retain this command for compatibility." },
+        reason: "Toolkit 3.1 exposes the command, but its fade timing semantics are not specified by the compatibility contract.",
+      } satisfies BuiltinDoc,
       call: (_view, args) => effect(args, "audio"),
     },
     {
       name: "fademidiout",
       aliases: [],
       params: [{ name: "speed", optional: true, byRef: false, variadic: false }],
+      doc: {
+        summary: "Fade MIDI music out.",
+        behaviour: "Retains the legacy command as a deprecated audio cue without inventing a replacement mapping; it never raises a runtime error or waits.",
+        groups: ["audio-23"],
+        see: ["docs/spec/engine/audio-media.md#legacy-audio-command-mapping"],
+        tags: ["deprecated"],
+        replacedBy: { kind: "syntax", text: "No verified standard replacement; retain this command for compatibility." },
+        reason: "Toolkit 3.1 exposes the command, but its fade timing semantics are not specified by the compatibility contract.",
+      } satisfies BuiltinDoc,
       call: (_view, args) => effect(args, "audio"),
     },
     {
       name: "setmidivolume",
       aliases: [],
       params: [{ name: "volume", optional: false, byRef: false, variadic: false }],
+      doc: {
+        summary: "Set the legacy MIDI music volume.",
+        behaviour: "Retains the legacy command as a deprecated audio cue without inventing a replacement mapping; it never raises a runtime error or waits.",
+        groups: ["audio-23"],
+        see: ["docs/spec/engine/audio-media.md#legacy-audio-command-mapping"],
+        tags: ["deprecated"],
+        replacedBy: { kind: "syntax", text: "No verified standard replacement; retain this command for compatibility." },
+        reason: "Toolkit 3.1 exposes the command, but its independent MIDI-volume semantics are not specified by the compatibility contract.",
+      } satisfies BuiltinDoc,
       call: (_view, args) => effect(args, "audio"),
     },
     {

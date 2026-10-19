@@ -298,9 +298,9 @@ const ROWS: readonly Row[] = [
   { name: "fightmenugraphic", kind: "mixed", params: "file", sections: ["ui","battle"], wait: null, obsolete: false, byRefOut: false },
   { name: "menugraphic", kind: "mixed", params: "file", sections: ["ui"], wait: null, obsolete: false, byRefOut: false },
   { name: "mediaplay", kind: "mixed", params: "file", sections: ["audio"], wait: null, obsolete: false, byRefOut: false },
-  { name: "wav", kind: "mixed", params: "file[,block]", sections: ["audio"], wait: "audio.sfx", obsolete: false, byRefOut: false },
-  { name: "sound", kind: "mixed", params: "file[,block]", sections: ["audio"], wait: "audio.sfx", obsolete: false, byRefOut: false },
-  { name: "mp3pause", kind: "mixed", params: "file", sections: ["audio"], wait: null, obsolete: false, byRefOut: false },
+  { name: "wav", kind: "mixed", params: "file", sections: ["audio"], wait: null, obsolete: false, byRefOut: false },
+  { name: "sound", kind: "mixed", params: "", sections: [], wait: null, obsolete: true, byRefOut: false },
+  { name: "mp3pause", kind: "mixed", params: "file", sections: ["audio"], wait: "audio.track", obsolete: false, byRefOut: false },
   { name: "playavi", kind: "mixed", params: "file", sections: ["engine"], wait: "video", obsolete: false, byRefOut: false },
   { name: "playavismall", kind: "mixed", params: "file", sections: ["engine"], wait: "video", obsolete: false, byRefOut: false },
   { name: "midiplay", kind: "mixed", params: "file", sections: ["audio"], wait: null, obsolete: false, byRefOut: false },
@@ -406,6 +406,17 @@ function makeResponder(row: Row): BuiltinSpec {
     name: row.name,
     aliases: [],
     params: declared,
+    ...(row.name === "sound" ? {
+      doc: {
+        summary: "Obsolete.",
+        behaviour: "Raises builtin.obsolete and skips the statement without producing an audio cue.",
+        groups: ["audio-23"],
+        see: ["docs/spec/engine/audio-media.md#legacy-audio-command-mapping"],
+        tags: ["obsolete"],
+        replacedBy: { kind: "syntax", text: "No supported replacement; the statement is skipped." },
+        reason: "Toolkit 3.1's sound command has no supported Reawakened behavior.",
+      },
+    } : {}),
     call: (view, args) => {
       if (row.obsolete) throw new ScriptError("builtin.obsolete", `"${row.name}" is obsolete: the statement is skipped`);
       const out: (readonly [number, number])[] = [];
@@ -464,6 +475,9 @@ const MEDIA_PACK_NAMES: Record<string, true> = {
   mediatrack: true, mediaload: true, mediaplay: true, midiplay: true, playmidi: true,
   mediastop: true, mediarest: true, midirest: true, mediapause: true, mediaresume: true,
   mediaseek: true, medialoop: true, mediafade: true, mediawait: true, mediavolume: true,
+  mediastate: true, mediaflags: true, mediaplaying: true, mediafile: true, mediaposition: true,
+  medialength: true, mediatracks: true, getvolume: true,
+  wav: true, mp3: true, wavstop: true, mp3pause: true, setvolume: true,
   soundfont: true, soundfontreset: true,
 };
 const CATALOGUE_GRAPHICS_NAMES = new Set(GRAPHICS_COMMANDS.flatMap((command) => [command.name, ...command.aliases]));

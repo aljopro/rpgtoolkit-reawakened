@@ -63,7 +63,7 @@ test("all non-core catalogue responders have a lower-case command and a recorded
     equal(spec.name, spec.name.toLowerCase());
     const state = createGameState({ seed: 0 });
     startProgram(state.vm, { kind: "inline", text: callText(spec), compiler: "2" });
-    if (["godos", "start", "win"].includes(spec.name)) {
+    if (["godos", "sound", "start", "win"].includes(spec.name)) {
       throws(() => advanceOrFail(state, createScriptServices(state, [CATALOGUE_RESPONDERS_PLUGIN])), /obsolete/);
       equal(state.vm.effects.length, 0);
       continue;
