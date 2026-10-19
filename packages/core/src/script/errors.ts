@@ -68,6 +68,8 @@ export const RESTORE_CELL_SEQ = "restore.cell-seq";
 export const RESTORE_CALLABLE_UNKNOWN_DEF = "restore.callable-unknown-def";
 /** A callable's `captures` count differs from its definition's capture count. */
 export const RESTORE_CALLABLE_CAPTURES = "restore.callable-captures";
+/** A callable receiver does not name a live object handle in the restored object table. */
+export const RESTORE_CALLABLE_RECEIVER = "restore.callable-receiver";
 
 /**
  * The family of a catchable runtime failure (ERR-2's failure table).

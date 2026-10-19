@@ -58,6 +58,8 @@ export type StepOp =
   | { readonly op: "storeRef"; readonly pos: SourcePos }
   | { readonly op: "index"; readonly pos: SourcePos }
   | { readonly op: "member"; readonly name: string; readonly pos: SourcePos }
+  /** Read a member and bind a receiver-less callable to the owning object (OOP-11). */
+  | { readonly op: "get_member_bound"; readonly name: string; readonly pos: SourcePos }
   /**
    * Make an empty dictionary object in the handle table and push its handle
    * (OOP-10, entry 19.3). A dictionary literal is this op, then one value

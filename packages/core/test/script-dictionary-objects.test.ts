@@ -8,16 +8,20 @@ import { test } from "node:test";
 import {
   advanceScriptTick,
   canon,
+  collectGarbage,
   createGameState,
   dictionaryKeys,
   hashState,
   isDictionary,
+  replyToRequest,
   restoreGameState,
   snapshot,
   startProgram,
   verifyRestoredHandles,
+  type BuiltinSpec,
   type GameState,
   type ObjectRecord,
+  type ResolvedPlugin,
   type ScriptError,
   type ScriptServices,
 } from "../src/index.ts";
@@ -271,6 +275,102 @@ r = fn(21)
   equal(state.vm.globals.r, 42);
   const stored = only(state).members.double;
   deepEqual(stored, { type: "callable", def: "<inline>#lambda_1", captures: [], receiver: null });
+});
+
+test("dictionary callable members bind this for direct calls, tear-offs and arrows, while bindThis rebinds a copy", () => {
+  const state = runOnce(`
+d = { n: 2, f: () => this.n }
+direct = d.f()
+arrow = d->f()
+bracket = d["f"]()
+tear = d.f
+fromTear = tear()
+e = { n: 9 }
+rebound = bindThis(tear, e)
+fromRebound = rebound()
+original = tear()
+`);
+  deepEqual(
+    ["direct", "arrow", "bracket", "fromtear", "fromrebound", "original"].map((name) => state.vm.globals[name]),
+    [2, 2, 2, 2, 9, 2],
+  );
+  const stored = state.vm.objects.find((record) => Object.hasOwn(record.members, "f"))?.members.f;
+  deepEqual(stored, { type: "callable", def: "<inline>#lambda_1", captures: [], receiver: null });
+});
+
+test("standalone lambda this is null and member access fails as a located catchable error", () => {
+  const error = errorOf("f = () => this.n\nr = f()\n");
+  equal(error.code, "object.invalid");
+  equal(error.pos?.line, 1);
+});
+
+test("bindThis rejects a non-callable or non-object with a located catchable error", () => {
+  equal(errorOf("d = {}\nr = bindThis(1, d)\n").code, "callable.not-callable");
+  const badObject = errorOf("f = () => 1\nr = bindThis(f, 1)\n");
+  equal(badObject.code, "object.invalid");
+  equal(badObject.pos?.line, 2);
+});
+
+test("a bound callable keeps its receiver alive and survives JSON restore", () => {
+  const state = runOnce(`
+d = { n: 7, f: () => this.n }
+f = d.f
+kill(d)
+`);
+  equal(state.vm.objects.length, 1, "the callable is the sole receiver root");
+  const saved = snapshot(state);
+  const restored = restoreChecked(saved);
+  equal(restored.state.vm.objects.length, 1);
+  startProgram(restored.state.vm, { kind: "inline", text: "r = f()\n", compiler: "2" });
+  runToRest(restored.state, restored.services);
+  equal(restored.state.vm.globals.r, 7);
+});
+
+test("a suspended callable frame keeps its receiver alive through a mid-wait snapshot", () => {
+  const state = makeState(`
+d = { n: 7, f: () => { kill(d); sleep(2); return this.n } }
+r = d.f()
+`);
+  const services = createScriptServices(state);
+  advanceOrFail(state, services);
+  equal(state.vm.threads[0]!.status, "waiting");
+  equal(state.vm.objects.length, 1, "the suspended receiver frame is an object root");
+  equal(state.vm.threads[0]!.frames.at(-1)?.objectHandle, 1);
+
+  const restored = restoreChecked(snapshot(state));
+  runToRest(restored.state, restored.services);
+  equal(restored.state.vm.globals.r, 7);
+});
+
+test("a callable receiver in a request reply stays alive through collection and restore", () => {
+  const ask2: BuiltinSpec = {
+    name: "ask2",
+    aliases: [],
+    params: [],
+    call: () => ({ value: null, request: { kind: "asset", name: "reply" } }),
+  };
+  const plugins: ResolvedPlugin[] = [{ definition: { id: "test.receiver-wait", version: "1.0.0", commands: [ask2] } }];
+  const state = makeState(`
+d = { n: 7, f: () => this.n }
+f = d.f
+kill(d)
+r = ask2()
+result = r()
+`);
+  const services = createScriptServices(state, plugins);
+  advanceOrFail(state, services);
+  const request = state.vm.threads[0]!.wait;
+  if (request?.kind !== "request") throw new Error("expected a request wait");
+  const callable = state.vm.globals.f;
+  if (callable === undefined) throw new Error("expected callable global");
+  replyToRequest(state.vm, request.reqId, { ok: true, value: callable });
+  delete state.vm.globals.f;
+  collectGarbage(state.vm);
+  equal(state.vm.objects.length, 1, "the reply value is the receiver root");
+
+  const restored = restoreChecked(snapshot(state));
+  runToRest(restored.state, restored.services);
+  equal(restored.state.vm.globals.result, 7);
 });
 
 test("a read of a member of something that is not an object is a located, catchable error", () => {
