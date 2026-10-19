@@ -392,18 +392,29 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 <a id="reawakened-default-cursors"></a>
 **Reawakened rule (OWNER; adopts the owner-relayed round-7 legacy facts; the unanswered parts are unverified defaults).** An author can restore a deterministic cursor with `mousecursor("TK DEFAULT",...)` or an empty file, rather than using a host cursor. The bundled arrow and the bundled cursor-map hand are both 32×32 with a transparent background. The arrow's hot spot stays (0,0) because the answer does not cover it. The hand has no hot spot: it is drawn with its top-left corner at `(mapX − 40, mapY − 10)`, where `(mapX, mapY)` is the cursor-map point; this offset is applied to every hand image drawn at a cursor-map point, bundled or supplied (an assumption). `cursormaphand(...,true)` scales a supplied hand image to 32×32 with nearest-neighbour sampling and `false` keeps its own size; for the bundled 32×32 hand the stretch changes nothing (the stretch option was not covered by the answer). Asset keys, dimensions and hot spots are part of UI state. The earlier 16×16 assets and the hand's hot spot (1,1) are withdrawn; the evidence is the owner-relayed round-7 answer to Q7.
 
-## Audio (12)
+## Audio (23)
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
 | `sound` | `void sound()` | Obsolete. | obsolete: raises an error and the statement is skipped |
 | `wav` | `void wav(string file)` | Play a wave file (e.g. a sound effect). |  |
-| `midiplay` | `void midiplay(string file)` | Play the specified file as the background music. |  |
-| `playmidi` | `void playmidi(string file)` | Play the specified file as the background music. | alias of `midiplay` |
-| `mediaplay` | `void mediaplay(string file)` | Play the specified file as the background music. | alias of `midiplay` |
-| `mediastop` | `void mediastop()` | Stop the background music. |  |
-| `mediarest` | `void mediarest()` | Stop the background music. | alias of `mediastop` |
-| `midirest` | `void midirest()` | Stop the background music. | alias of `mediastop` |
+| `midiplay` | `void midiplay(string file)` | Play a media file on a named track. | alias of `mediaplay` |
+| `playmidi` | `void playmidi(string file)` | Play a media file on a named track. | alias of `mediaplay` |
+| `mediaplay` | `void mediaplay(string file[, string track[, int flags[, int priority[, string syncTrack[, int &voice]]]])` | Play a media file on a named track. | tkMD_WAIT waits for the finite track end; tkMD_LOOP and tkMD_WAIT conflict. |
+| `mediatrack` | `void mediatrack(string name[, int voices])` | Create or resize a named audio track. |  |
+| `mediaload` | `void mediaload(string track, string file)` | Load a media file for a track without starting it. |  |
+| `mediastop` | `void mediastop([string track[, int voice]])` | Stop a track or voice. |  |
+| `mediarest` | `void mediarest([string track[, int voice]])` | Stop a track or voice. | alias of `mediastop` |
+| `midirest` | `void midirest([string track[, int voice]])` | Stop a track or voice. | alias of `mediastop` |
+| `mediapause` | `void mediapause([string track[, int voice]])` | Pause a track or voice. |  |
+| `mediaresume` | `void mediaresume([string track[, int voice]])` | Resume a paused track or voice. |  |
+| `mediaseek` | `void mediaseek(string track, number seconds[, int voice])` | Move a track or voice to a time position. |  |
+| `medialoop` | `void medialoop(string track, bool on[, int voice])` | Turn looping on or off for a track or voice. |  |
+| `mediafade` | `void mediafade(string track, int percent, number seconds[, int voice])` | Fade a track or voice to a volume percentage. |  |
+| `mediawait` | `void mediawait([string track[, int voice]])` | Wait until a track or voice finishes its current sound. | waits on `audio.track`; pause suspends and stop or replacement wakes it |
+| `mediavolume` | `int mediavolume(string track[, int voice[, int &percent]])` | Set or read a track or voice volume. |  |
+| `soundfont` | `void soundfont(string file)` | Choose the SoundFont used by MIDI music. |  |
+| `soundfontreset` | `void soundfontreset()` | Return MIDI music to the game's default SoundFont. |  |
 | `wavstop` | `void wavstop()` | Stop the current sound effect. |  |
 | `mp3` | `void mp3(string file)` | Play a wave file (e.g. a sound effect). | alias of `wav` |
 | `mp3pause` | `void mp3pause()` | Play a sound effect and pause the engine until it finishes. |  |

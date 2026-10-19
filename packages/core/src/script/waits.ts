@@ -99,9 +99,7 @@ export function pollStance(view: WaitView, wait: Wait): WaitResult | null {
 export function pollRequest(view: WaitView, wait: Wait): WaitResult | null {
   if (wait.kind !== "request" && wait.kind !== "blob") return null;
   if (wait.reply !== null) return { value: wait.reply.value, ok: wait.reply.ok };
-  if (wait.deadline !== null && view.tick >= wait.deadline) {
-    return { value: REQUEST_TIMEOUT_TEXT, ok: false };
-  }
+  if (wait.deadline !== null && view.tick >= wait.deadline) return { value: REQUEST_TIMEOUT_TEXT, ok: false };
   return null;
 }
 
@@ -130,6 +128,28 @@ export function pollRenderMsgBox(view: WaitView, wait: Wait): WaitResult | null 
   return null;
 }
 
+/** The audio owner resolver for finite-end and loop-pass waits. */
+export function pollAudioTrack(view: WaitView, wait: Wait): WaitResult | null {
+  if (wait.kind !== "audio.track") return null;
+  const raw = wait.payload[0];
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const trackName = raw.track;
+  const voiceIndex = raw.voice;
+  const cueId = raw.cueId;
+  const pass = raw.pass;
+  const passIndex = raw.passIndex;
+  if (typeof trackName !== "string" || typeof voiceIndex !== "number" || typeof cueId !== "number" || typeof pass !== "boolean" || (passIndex !== null && typeof passIndex !== "number")) return null;
+  const track = view.audio?.tracks.find((item) => item.name === trackName);
+  const voice = track?.voices.find((item) => item.index === voiceIndex && item.cueId === cueId);
+  if (voice === undefined) return DONE;
+  if (voice.state === "paused") return null;
+  if (pass && voice.loop && voice.lengthTicks !== null && passIndex !== null) {
+    const currentPass = Math.floor((view.tick - voice.startTick) / voice.lengthTicks);
+    return currentPass > passIndex ? DONE : null;
+  }
+  return voice.endTick !== null && view.tick >= voice.endTick ? DONE : null;
+}
+
 /** UI-owned wait kinds, kept separate so hosts can extend the VM registry without duplicate registration. */
 export const UI_WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "render.msgbox", poll: pollRenderMsgBox },
@@ -143,7 +163,9 @@ export const WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "sprite.stance", poll: pollStance },
   { kind: "request", poll: pollRequest },
   { kind: "blob", poll: pollRequest },
+  { kind: "audio.track", poll: pollAudioTrack },
 ];
+
 /** Fold per-kind resolvers into the one `WaitPoll` (AD-9). Throws
  * `wait.duplicate-kind` when two resolvers claim a kind.
  */
@@ -151,18 +173,13 @@ export function createWaitPoll(resolvers: readonly WaitKindResolver[]): WaitPoll
   const byKind = new Map<string, WaitPoll>();
   for (const resolver of resolvers) {
     if (byKind.has(resolver.kind)) {
-      throw new ScriptError(
-        "wait.duplicate-kind",
-        `the wait kind "${resolver.kind}" is registered twice (AD-9)`,
-      );
+      throw new ScriptError("wait.duplicate-kind", `the wait kind "${resolver.kind}" is registered twice (AD-9)`);
     }
     byKind.set(resolver.kind, resolver.poll);
   }
   return (view, wait) => {
     const resolve = byKind.get(wait.kind);
-    if (resolve === undefined) {
-      throw new ScriptError("wait.unknown-kind", `no resolver is registered for wait kind "${wait.kind}"`);
-    }
+    if (resolve === undefined) throw new ScriptError("wait.unknown-kind", `no resolver is registered for wait kind "${wait.kind}"`);
     return resolve(view, wait);
   };
 }
