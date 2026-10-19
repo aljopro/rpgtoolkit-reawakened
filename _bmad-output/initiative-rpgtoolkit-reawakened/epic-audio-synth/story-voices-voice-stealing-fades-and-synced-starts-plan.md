@@ -3,7 +3,7 @@ title: 'Voices, voice stealing, fades and synced starts'
 type: 'feature'
 ticket: 7
 created: '2026-10-18'
-status: built
+status: done
 baseline_revision: 'f212728587894ad87ae94de67ae14e31cb444a36'
 risk: 'high'
 context:
