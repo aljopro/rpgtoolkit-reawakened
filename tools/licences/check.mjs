@@ -374,6 +374,154 @@ export function auditBundledFonts(root, config, noticesContent, noticesFilePrese
 
   return { violations, warnings, count: fontRecords.length };
 }
+/**
+ * Audits bundled SoundFont assets against config records, on-disk files, and notices.
+ *
+ * Bundled banks are deliberately kept separate from the font audit because they
+ * have a stricter, fixed 8 MiB ceiling and must be runner-side SoundFont files.
+ */
+export function auditBundledSoundFonts(root, config, noticesContent, noticesFilePresent, policy = config) {
+  const violations = [];
+  const warnings = [];
+  const soundfontRecords = config.bundledAssets?.soundfonts || [];
+  const recordedPaths = new Set(soundfontRecords.map((record) => record.path));
+  const hardCeiling = 8 * 1024 * 1024;
+
+  for (const record of soundfontRecords) {
+    const path = record.path;
+    const isSafePath =
+      typeof path === "string" &&
+      path.startsWith("media/soundfonts/") &&
+      !path.includes("..") &&
+      !path.endsWith("/");
+    const extension = typeof path === "string" ? path.slice(path.lastIndexOf(".")).toLowerCase() : "";
+    if (!isSafePath || ![".sf2", ".sf3"].includes(extension)) {
+      violations.push({
+        type: "invalid-bundled-soundfont-path",
+        path,
+        message: `Bundled SoundFont path '${path}' must be an .sf2 or .sf3 file below media/soundfonts`,
+      });
+      continue;
+    }
+
+    const configuredCeiling = record.sizeCeiling ?? record.maxBytes ?? hardCeiling;
+    if (!Number.isInteger(configuredCeiling) || configuredCeiling <= 0 || configuredCeiling > hardCeiling) {
+      violations.push({
+        type: "invalid-soundfont-size-ceiling",
+        path,
+        sizeCeiling: configuredCeiling,
+        message: `Bundled SoundFont '${path}' has an invalid size ceiling; it must be at most ${hardCeiling} bytes`,
+      });
+    }
+
+    if (typeof record.license !== "string" || record.license.length === 0) {
+      violations.push({
+        type: "missing-soundfont-license",
+        path,
+        message: `Bundled SoundFont '${path}' is missing a licence identifier`,
+      });
+    } else {
+      const licenseResult = evaluateLicense(record.license, policy);
+      if (!licenseResult.pass) {
+        violations.push({
+          type: "unapproved-soundfont-license",
+          path,
+          license: record.license,
+          message: `Bundled SoundFont '${path}' with license '${record.license}' rejected: ${licenseResult.reason}`,
+        });
+      }
+    }
+
+    if (typeof record.adr !== "string" || record.adr.length === 0) {
+      violations.push({
+        type: "missing-soundfont-adr",
+        path,
+        message: `Bundled SoundFont '${path}' is missing its ADR reference`,
+      });
+    }
+
+    const fullPath = join(root, path);
+    if (!existsSync(fullPath)) {
+      violations.push({
+        type: "missing-bundled-soundfont",
+        path,
+        message: `Bundled SoundFont asset missing at ${path}`,
+      });
+      continue;
+    }
+
+    const bytes = readFileSync(fullPath);
+    const actualHash = createHash("sha256").update(bytes).digest("hex");
+    if (actualHash !== record.sha256) {
+      violations.push({
+        type: "bundled-soundfont-hash-mismatch",
+        path,
+        expectedHash: record.sha256,
+        actualHash,
+        message: `Bundled SoundFont '${path}' SHA-256 mismatch (expected ${record.sha256}, got ${actualHash})`,
+      });
+    }
+
+    const sizeCeiling = Math.min(configuredCeiling, hardCeiling);
+    if (bytes.length > sizeCeiling) {
+      violations.push({
+        type: "bundled-soundfont-too-large",
+        path,
+        size: bytes.length,
+        sizeCeiling,
+        message: `Bundled SoundFont '${path}' is ${bytes.length} bytes, over the ${sizeCeiling}-byte ceiling`,
+      });
+    }
+
+    if (bytes.length < 12 || bytes.toString("ascii", 0, 4) !== "RIFF" || bytes.toString("ascii", 8, 12) !== "sfbk") {
+      violations.push({
+        type: "invalid-bundled-soundfont-container",
+        path,
+        message: `Bundled SoundFont '${path}' is not an RIFF sfbk SoundFont container`,
+      });
+    }
+
+    if (noticesFilePresent) {
+      const fileName = path.slice(path.lastIndexOf("/") + 1);
+      const hasFileName = noticesContent.includes(fileName) || noticesContent.includes(path);
+      const hasHash = typeof record.sha256 === "string" && noticesContent.includes(record.sha256);
+      const hasLicense = typeof record.license === "string" && noticesContent.includes(record.license);
+      const hasNoticeText = !record.notice || noticesContent.includes(record.notice);
+      if (!hasFileName || !hasHash || !hasLicense || !hasNoticeText) {
+        violations.push({
+          type: "missing-soundfont-notice",
+          path,
+          message: `Bundled SoundFont '${path}' needs a THIRD_PARTY_NOTICES entry containing its path, SHA-256, licence, and notice text`,
+        });
+      }
+    }
+  }
+
+  const mediaSoundfonts = join(root, "media", "soundfonts");
+  const visit = (directory, prefix) => {
+    if (!existsSync(directory)) return;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = join(directory, entry.name);
+      const relativePath = `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) {
+        visit(entryPath, relativePath);
+        continue;
+      }
+      const extension = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
+      if ([".sf2", ".sf3"].includes(extension) && !recordedPaths.has(relativePath)) {
+        violations.push({
+          type: "unlisted-bundled-soundfont",
+          path: relativePath,
+          message: `SoundFont file '${relativePath}' found on disk but is not recorded in bundledAssets.soundfonts config`,
+        });
+      }
+    }
+  };
+  visit(mediaSoundfonts, "media/soundfonts");
+
+  return { violations, warnings, count: soundfontRecords.length };
+}
+
 
 /**
  * Audits licenses and notices for a workspace.
@@ -524,11 +672,21 @@ export function checkLicences(root = repoRoot, options = {}) {
     fontCount = fontAudit.count;
   }
 
+  // 7. Audit bundled SoundFont assets
+  let soundfontCount = 0;
+  if (config.bundledAssets?.soundfonts || existsSync(join(root, "media", "soundfonts"))) {
+    const soundfontAudit = auditBundledSoundFonts(root, config, noticesContent, noticesFilePresent, policy);
+    violations.push(...soundfontAudit.violations);
+    warnings.push(...soundfontAudit.warnings);
+    soundfontCount = soundfontAudit.count;
+  }
+
   return {
     pass: violations.length === 0,
     prodCount: prodPackages.size,
     allCount: allPackages.size,
     fontCount,
+    soundfontCount,
     violations,
     warnings,
   };
@@ -592,6 +750,9 @@ if (isMain) {
       console.log(`  Total (prod + dev) packages checked: ${result.allCount}`);
       if (result.fontCount !== undefined) {
         console.log(`  Bundled fonts checked: ${result.fontCount}`);
+      }
+      if (result.soundfontCount !== undefined) {
+        console.log(`  Bundled SoundFonts checked: ${result.soundfontCount}`);
       }
       console.log(`  0 violations found.`);
       process.exit(0);

@@ -49,7 +49,7 @@ function withTempWorkspace(fn) {
           },
           {
             name: "Bronze",
-            licenses: [{ id: "0BSD" }, { id: "BSD-3-Clause" }],
+            licenses: [{ id: "0BSD" }, { id: "BSD-3-Clause" }, { id: "CC0-1.0" }],
           },
           {
             name: "Lead",
@@ -572,5 +572,103 @@ test("bundled font: font licence failing Blue Oak without ADR exception fails", 
     const res = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
     assert.equal(res.pass, false);
     assert.ok(res.violations.some((v) => v.type === "unapproved-font-license" && v.path === fontRel));
+  });
+});
+
+// -------------------------------------------------------------
+// Bundled SoundFont Asset Tests (G6, Audio Path B PB-8)
+// -------------------------------------------------------------
+
+test("bundled SoundFont: configured CC0 fixture passes with hash, notice, and size ceiling", () => {
+  withTempWorkspace((dir) => {
+    const soundfontRel = "media/soundfonts/test-minimal.sf2";
+    const fixture = readFileSync(join(repoRoot, "packages", "synth", "test", "fixtures", "test-minimal.sf2"));
+    const destination = join(dir, soundfontRel);
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, fixture);
+    const hash = createHash("sha256").update(fixture).digest("hex");
+    const config = {
+      ...baseConfig,
+      bundledAssets: {
+        fonts: [],
+        soundfonts: [{
+          path: soundfontRel,
+          license: "CC0-1.0",
+          adr: "ADR-0003",
+          sha256: hash,
+          sizeCeiling: 8 * 1024 * 1024,
+          notice: "CC0-1.0 dedication",
+        }],
+      },
+    };
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(config, null, 2));
+    writeFileSync(
+      join(dir, "THIRD_PARTY_NOTICES"),
+      `# Notices\n${soundfontRel}\n${hash}\nCC0-1.0\nCC0-1.0 dedication\n`,
+    );
+
+    const result = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
+    assert.equal(result.pass, true);
+    assert.equal(result.soundfontCount, 1);
+    assert.equal(result.violations.length, 0);
+  });
+});
+
+test("bundled SoundFont: missing notice and wrong hash fail the gate", () => {
+  withTempWorkspace((dir) => {
+    const soundfontRel = "media/soundfonts/test-minimal.sf2";
+    const fixture = readFileSync(join(repoRoot, "packages", "synth", "test", "fixtures", "test-minimal.sf2"));
+    const destination = join(dir, soundfontRel);
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, fixture);
+    const hash = createHash("sha256").update(fixture).digest("hex");
+    const config = {
+      ...baseConfig,
+      bundledAssets: {
+        fonts: [],
+        soundfonts: [{
+          path: soundfontRel,
+          license: "CC0-1.0",
+          adr: "ADR-0003",
+          sha256: hash,
+          sizeCeiling: 8 * 1024 * 1024,
+        }],
+      },
+    };
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(config, null, 2));
+    writeFileSync(join(dir, "THIRD_PARTY_NOTICES"), "# Notices without SoundFont\n");
+    let result = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
+    assert.equal(result.pass, false);
+    assert.ok(result.violations.some((violation) => violation.type === "missing-soundfont-notice"));
+
+    config.bundledAssets.soundfonts[0].sha256 = "0".repeat(64);
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(config, null, 2));
+    writeFileSync(
+      join(dir, "THIRD_PARTY_NOTICES"),
+      `# Notices\n${soundfontRel}\n${hash}\nCC0-1.0\n`,
+    );
+    result = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
+    assert.equal(result.pass, false);
+    assert.ok(result.violations.some((violation) => violation.type === "bundled-soundfont-hash-mismatch"));
+  });
+});
+
+test("bundled SoundFont: an on-disk bank missing from config fails", () => {
+  withTempWorkspace((dir) => {
+    const soundfontRel = "media/soundfonts/unlisted.sf2";
+    const destination = join(dir, soundfontRel);
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, Buffer.from("RIFF\x00\x00\x00\x00sfbk"));
+    const config = {
+      ...baseConfig,
+      bundledAssets: { fonts: [], soundfonts: [] },
+    };
+    writeFileSync(join(dir, "tools", "licences", "config.json"), JSON.stringify(config, null, 2));
+    writeFileSync(join(dir, "THIRD_PARTY_NOTICES"), "# Notices\n");
+
+    const result = checkLicences(dir, { prodLicensesJson: {}, allLicensesJson: {} });
+    assert.equal(result.pass, false);
+    assert.ok(result.violations.some((violation) =>
+      violation.type === "unlisted-bundled-soundfont" && violation.path === soundfontRel));
   });
 });
