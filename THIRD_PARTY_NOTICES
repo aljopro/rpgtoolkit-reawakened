@@ -69,6 +69,21 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
+## Production Dependencies (continued)
+
+### spessasynth_core 4.3.22 — Apache-2.0
+The MIDI synthesizer backend is provided by `spessasynth_core` 4.3.22
+(<https://github.com/spessasus/spessasynth_core>, Apache-2.0). The complete
+license text is distributed in the dependency's `LICENSE` file and is also
+available at <https://www.apache.org/licenses/LICENSE-2.0>.
+
+### stb-vorbis 0.0.6 — Apache-2.0
+
+`spessasynth_core` depends on `stb-vorbis` 0.0.6
+(<https://github.com/spessasus/stb-vorbis>, Apache-2.0). The complete license
+text is distributed in the dependency's `LICENSE` file and is also available
+at <https://www.apache.org/licenses/LICENSE-2.0>.
+
 ## Bundled Assets
 
 Assets (SoundFonts, fonts, sample art) distributed with the engine or editor are recorded here with their licence and copyright notice.
