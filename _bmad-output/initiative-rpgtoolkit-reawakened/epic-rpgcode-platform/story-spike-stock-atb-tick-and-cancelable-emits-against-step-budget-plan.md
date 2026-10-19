@@ -3,7 +3,7 @@ title: "Spike: stock ATB tick and cancelable emits against STEP_BUDGET"
 type: 'feature'
 ticket: 2
 created: '2026-10-19'
-status: draft
+status: built
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "high"
 context:
@@ -37,3 +37,7 @@ Measures with what exists after Epic 18 (callables, cells, waits) and a minimal 
 ## Verification
 
 `pnpm test` runs the benchmark; the owner reads discovery/step-budget-spike.md.
+
+## Result
+
+Go with two conditions; the naive one-thread battle is no-go. Full numbers, method, headroom, risks and recommendations: [discovery/step-budget-spike.md](discovery/step-budget-spike.md). The benchmark is `packages/core/test/step-budget-spike.test.ts` (kept: it is the regression guard entries 19.10 to 19.12 re-run against the real emitter). Headlines: a fighter on its own thread peaks at 565 steps with three inline listeners (435 spare); one thread running all four fighters needs 1389 steps in the all-act tick with no events at all; a cancelable emit parks its emitter about two ticks (1.97 measured); a save at every step of a parked dispatch restores to the same state at every step (no G1 issue shown for the queued rule).

@@ -53,3 +53,11 @@ declare const process: { execPath: string };
 interface ImportMeta {
   readonly url: string;
 }
+
+declare module "node:process" {
+  export const env: Record<string, string | undefined>;
+}
+
+declare module "node:console" {
+  export function log(...data: unknown[]): void;
+}
