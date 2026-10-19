@@ -352,7 +352,11 @@ function collectObjects(vm: VmState): void {
   for (const value of Object.values(vm.globals)) visit(value);
   for (const value of Object.values(vm.cells ?? {})) visit(value);
   for (const thread of vm.threads) {
+    if (thread.wait !== null && "reply" in thread.wait && thread.wait.reply !== null) {
+      visit(thread.wait.reply.value);
+    }
     for (const frame of thread.frames) {
+      if (frame.objectHandle !== undefined) roots.push(frame.objectHandle);
       for (const slot of Object.values(frame.locals)) visit(slot.value);
       for (const arg of frame.operands) visit(arg.value);
     }
@@ -498,7 +502,7 @@ function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base:
 /** Copy a callable with the target as receiver unless it already has one (OOP-11). */
 function bindMemberValue(value: Value, handle: number): Value {
   if (!isCallableValue(value) || value.receiver !== null) return value;
-  return { type: "callable", def: value.def, captures: [...value.captures], receiver: String(handle) };
+  return { type: "callable", def: value.def, captures: value.captures, receiver: String(handle) };
 }
 
 function setOwnValue(record: { [name: string]: Value }, name: string, value: Value): void {

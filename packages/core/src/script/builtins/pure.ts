@@ -277,7 +277,7 @@ const BINDING_SPECS: readonly BuiltinSpec[] = [
         value: {
           type: "callable",
           def: fn.def,
-          captures: [...fn.captures],
+          captures: fn.captures,
           receiver: String(objectHandle.handle),
         },
       };
