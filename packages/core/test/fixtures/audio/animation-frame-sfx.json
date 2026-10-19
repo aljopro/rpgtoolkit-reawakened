@@ -1,0 +1,219 @@
+{
+  "scene": "animation-frame-sfx",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/audio, not by packages/core. No state or cue hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation, audio, time (AD-26). A row is the state at the end of the audio phase of its tick.",
+  "units": "ticks (1/60 s); volumes are integer percentages; seconds in scripts are whole milliseconds",
+  "row": "t tick; cfg [track, configured voices] (first tick and on change); tr [track, state, flags, file, positionTicks, lengthTicks, voices] for each track with a file or a voice; voice [index, state, cueId, priority, volume, startTick, positionTicks, endTick, loop, fade [from, to, start, duration] or null]; bus [track, volume, fade]; master; sf (script bank); cues (the 12-key AudioCue records emitted this tick); ev (facts: wait, wake, finished, steal, same-file, diag, legacy, video ...)",
+  "spec": [
+    "docs/spec/engine/audio-media.md#r-59-routing",
+    "docs/spec/engine/audio-media.md#board-effect-mapping",
+    "docs/spec/engine/audio-media.md#audio-lifecycle",
+    "docs/spec/engine/audio-media.md#media-command-family"
+  ],
+  "proposed": ["P-2","P-10","P-13","P-18"],
+  "cases": [
+    {
+      "name": "frame-sounds-replace-on-the-one-voice-sfx-track",
+      "note": "Each visible frame sound is one sfx.play effect on the one-voice sfx track: a different file replaces (stop then play), the same file while it plays is ignored, and once it finished it plays again. Two frame sounds in one tick apply in post order.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/step.wav": {"format":"audio.wav","lengthTicks":10},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":6},
+          "media/blip.wav": {"format":"audio.wav","lengthTicks":4}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":2,"op":"effect","kind":"sfx.play","asset":"media/step.wav","source":"frame"},
+        {"t":5,"op":"effect","kind":"sfx.play","asset":"media/hit.wav","source":"frame"},
+        {"t":7,"op":"effect","kind":"sfx.play","asset":"media/hit.wav","source":"frame"},
+        {"t":14,"op":"effect","kind":"sfx.play","asset":"media/hit.wav","source":"frame"},
+        {"t":20,"op":"effect","kind":"sfx.play","asset":"media/step.wav","source":"frame"},
+        {"t":20,"op":"effect","kind":"sfx.play","asset":"media/hit.wav","source":"frame"}
+      ],
+      "ticks": 28,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[]},
+        {"t":2,"tr":[["sfx","playing",0,"media/step.wav",0,10,[[0,"playing",2,0,100,2,0,12,0,null]]]],"cues":[{"cueId":2,"tick":2,"kind":"media.play","track":"sfx","voice":0,"asset":"media/step.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["sfx","playing",0,"media/step.wav",1,10,[[0,"playing",2,0,100,2,1,12,0,null]]]]},
+        {"t":4,"tr":[["sfx","playing",0,"media/step.wav",2,10,[[0,"playing",2,0,100,2,2,12,0,null]]]]},
+        {"t":5,"tr":[["sfx","playing",0,"media/hit.wav",0,6,[[0,"playing",4,0,100,5,0,11,0,null]]]],"cues":[{"cueId":3,"tick":5,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":4,"tick":5,"kind":"media.play","track":"sfx","voice":0,"asset":"media/hit.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":6,"tr":[["sfx","playing",0,"media/hit.wav",1,6,[[0,"playing",4,0,100,5,1,11,0,null]]]]},
+        {"t":7,"tr":[["sfx","playing",0,"media/hit.wav",2,6,[[0,"playing",4,0,100,5,2,11,0,null]]]],"ev":[{"e":"same-file","track":"sfx","file":"media/hit.wav","action":"ignored"}]},
+        {"t":8,"tr":[["sfx","playing",0,"media/hit.wav",3,6,[[0,"playing",4,0,100,5,3,11,0,null]]]]},
+        {"t":9,"tr":[["sfx","playing",0,"media/hit.wav",4,6,[[0,"playing",4,0,100,5,4,11,0,null]]]]},
+        {"t":10,"tr":[["sfx","playing",0,"media/hit.wav",5,6,[[0,"playing",4,0,100,5,5,11,0,null]]]]},
+        {"t":11,"tr":[["sfx","stopped",0,"media/hit.wav",0,null,[]]],"cues":[{"cueId":5,"tick":11,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":4,"endTick":11}]},
+        {"t":12,"tr":[["sfx","stopped",0,"media/hit.wav",0,null,[]]]},
+        {"t":13,"tr":[["sfx","stopped",0,"media/hit.wav",0,null,[]]]},
+        {"t":14,"tr":[["sfx","playing",0,"media/hit.wav",0,6,[[0,"playing",6,0,100,14,0,20,0,null]]]],"cues":[{"cueId":6,"tick":14,"kind":"media.play","track":"sfx","voice":0,"asset":"media/hit.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":15,"tr":[["sfx","playing",0,"media/hit.wav",1,6,[[0,"playing",6,0,100,14,1,20,0,null]]]]},
+        {"t":16,"tr":[["sfx","playing",0,"media/hit.wav",2,6,[[0,"playing",6,0,100,14,2,20,0,null]]]]},
+        {"t":17,"tr":[["sfx","playing",0,"media/hit.wav",3,6,[[0,"playing",6,0,100,14,3,20,0,null]]]]},
+        {"t":18,"tr":[["sfx","playing",0,"media/hit.wav",4,6,[[0,"playing",6,0,100,14,4,20,0,null]]]]},
+        {"t":19,"tr":[["sfx","playing",0,"media/hit.wav",5,6,[[0,"playing",6,0,100,14,5,20,0,null]]]]},
+        {"t":20,"tr":[["sfx","playing",0,"media/hit.wav",0,6,[[0,"playing",10,0,100,20,0,26,0,null]]]],"cues":[{"cueId":7,"tick":20,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":8,"tick":20,"kind":"media.play","track":"sfx","voice":0,"asset":"media/step.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":9,"tick":20,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":10,"tick":20,"kind":"media.play","track":"sfx","voice":0,"asset":"media/hit.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":21,"tr":[["sfx","playing",0,"media/hit.wav",1,6,[[0,"playing",10,0,100,20,1,26,0,null]]]]},
+        {"t":22,"tr":[["sfx","playing",0,"media/hit.wav",2,6,[[0,"playing",10,0,100,20,2,26,0,null]]]]},
+        {"t":23,"tr":[["sfx","playing",0,"media/hit.wav",3,6,[[0,"playing",10,0,100,20,3,26,0,null]]]]},
+        {"t":24,"tr":[["sfx","playing",0,"media/hit.wav",4,6,[[0,"playing",10,0,100,20,4,26,0,null]]]]},
+        {"t":25,"tr":[["sfx","playing",0,"media/hit.wav",5,6,[[0,"playing",10,0,100,20,5,26,0,null]]]]},
+        {"t":26,"tr":[["sfx","stopped",0,"media/hit.wav",0,null,[]]],"cues":[{"cueId":11,"tick":26,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":10,"endTick":26}]},
+        {"t":27,"tr":[["sfx","stopped",0,"media/hit.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":12,"soundFont":null,"master":100}
+    },
+    {
+      "name": "wavstop-stops-a-frame-sound",
+      "note": "A frame sound is an sfx voice, so wavstop (mediaStop sfx) stops it (6.3 A5 amends Q14).",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/step.wav": {"format":"audio.wav","lengthTicks":10},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":6},
+          "media/blip.wav": {"format":"audio.wav","lengthTicks":4}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":1,"op":"effect","kind":"sfx.play","asset":"media/step.wav","source":"frame"},
+        {"t":3,"op":"legacy","name":"wavstop"}
+      ],
+      "ticks": 8,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["sfx","playing",0,"media/step.wav",0,10,[[0,"playing",2,0,100,1,0,11,0,null]]]],"cues":[{"cueId":2,"tick":1,"kind":"media.play","track":"sfx","voice":0,"asset":"media/step.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":2,"tr":[["sfx","playing",0,"media/step.wav",1,10,[[0,"playing",2,0,100,1,1,11,0,null]]]]},
+        {"t":3,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]]],"cues":[{"cueId":3,"tick":3,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"legacy","name":"wavstop","as":"mediaStop(\"sfx\")"}]},
+        {"t":4,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]]]},
+        {"t":5,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]]]},
+        {"t":6,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]]]},
+        {"t":7,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":4,"soundFont":null,"master":100}
+    },
+    {
+      "name": "script-wav-and-frame-sound-replace-each-other",
+      "note": "A script wav and a frame sound share the one sfx voice: the later one replaces the earlier.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/step.wav": {"format":"audio.wav","lengthTicks":10},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":6},
+          "media/blip.wav": {"format":"audio.wav","lengthTicks":4}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":1,"op":"legacy","name":"wav","file":"hit.wav"},
+        {"t":3,"op":"effect","kind":"sfx.play","asset":"media/step.wav","source":"frame"}
+      ],
+      "ticks": 8,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["sfx","playing",0,"media/hit.wav",0,6,[[0,"playing",2,0,100,1,0,7,0,null]]]],"cues":[{"cueId":2,"tick":1,"kind":"media.play","track":"sfx","voice":0,"asset":"media/hit.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"legacy","name":"wav","as":"mediaPlay(file, \"sfx\", tkMD_ONCE)"}]},
+        {"t":2,"tr":[["sfx","playing",0,"media/hit.wav",1,6,[[0,"playing",2,0,100,1,1,7,0,null]]]]},
+        {"t":3,"tr":[["sfx","playing",0,"media/step.wav",0,10,[[0,"playing",4,0,100,3,0,13,0,null]]]],"cues":[{"cueId":3,"tick":3,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":4,"tick":3,"kind":"media.play","track":"sfx","voice":0,"asset":"media/step.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":4,"tr":[["sfx","playing",0,"media/step.wav",1,10,[[0,"playing",4,0,100,3,1,13,0,null]]]]},
+        {"t":5,"tr":[["sfx","playing",0,"media/step.wav",2,10,[[0,"playing",4,0,100,3,2,13,0,null]]]]},
+        {"t":6,"tr":[["sfx","playing",0,"media/step.wav",3,10,[[0,"playing",4,0,100,3,3,13,0,null]]]]},
+        {"t":7,"tr":[["sfx","playing",0,"media/step.wav",4,10,[[0,"playing",4,0,100,3,4,13,0,null]]]]}
+      ],
+      "end": {"cueId":5,"soundFont":null,"master":100}
+    },
+    {
+      "name": "menu-sounds-go-to-ui-and-overlap",
+      "note": "Menu and cursor sounds are sfx.play with source ui and land on the four-voice ui track, so wavstop does not stop them and the same file overlaps on the next free voice.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/step.wav": {"format":"audio.wav","lengthTicks":10},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":6},
+          "media/blip.wav": {"format":"audio.wav","lengthTicks":4}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":1,"op":"effect","kind":"sfx.play","asset":"media/blip.wav","source":"ui"},
+        {"t":1,"op":"effect","kind":"sfx.play","asset":"media/step.wav","source":"frame"},
+        {"t":2,"op":"effect","kind":"sfx.play","asset":"media/blip.wav","source":"ui"},
+        {"t":3,"op":"legacy","name":"wavstop"}
+      ],
+      "ticks": 8,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["sfx","playing",0,"media/step.wav",0,10,[[0,"playing",3,0,100,1,0,11,0,null]]],["ui","playing",0,"media/blip.wav",0,4,[[0,"playing",2,0,100,1,0,5,0,null]]]],"cues":[{"cueId":2,"tick":1,"kind":"media.play","track":"ui","voice":0,"asset":"media/blip.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":3,"tick":1,"kind":"media.play","track":"sfx","voice":0,"asset":"media/step.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":2,"tr":[["sfx","playing",0,"media/step.wav",1,10,[[0,"playing",3,0,100,1,1,11,0,null]]],["ui","playing",0,"media/blip.wav",1,4,[[0,"playing",2,0,100,1,1,5,0,null],[1,"playing",4,0,100,2,0,6,0,null]]]],"cues":[{"cueId":4,"tick":2,"kind":"media.play","track":"ui","voice":1,"asset":"media/blip.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]],["ui","playing",0,"media/blip.wav",2,4,[[0,"playing",2,0,100,1,2,5,0,null],[1,"playing",4,0,100,2,1,6,0,null]]]],"cues":[{"cueId":5,"tick":3,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"legacy","name":"wavstop","as":"mediaStop(\"sfx\")"}]},
+        {"t":4,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]],["ui","playing",0,"media/blip.wav",3,4,[[0,"playing",2,0,100,1,3,5,0,null],[1,"playing",4,0,100,2,2,6,0,null]]]]},
+        {"t":5,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]],["ui","playing",0,"media/blip.wav",0,null,[[1,"playing",4,0,100,2,3,6,0,null]]]],"cues":[{"cueId":6,"tick":5,"kind":"media.stop","track":"ui","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"ui","voice":0,"cueId":2,"endTick":5}]},
+        {"t":6,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]],["ui","stopped",0,"media/blip.wav",0,null,[]]],"cues":[{"cueId":7,"tick":6,"kind":"media.stop","track":"ui","voice":1,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"ui","voice":1,"cueId":4,"endTick":6}]},
+        {"t":7,"tr":[["sfx","stopped",0,"media/step.wav",0,null,[]],["ui","stopped",0,"media/blip.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":8,"soundFont":null,"master":100}
+    },
+    {
+      "name": "two-sfx-voices-when-the-author-raises-the-count",
+      "note": "mediaTrack(\"sfx\", 2) lets a frame sound and a script sound play at once: the lowest free voice is taken, then a third play steals the oldest.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/step.wav": {"format":"audio.wav","lengthTicks":10},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":6},
+          "media/blip.wav": {"format":"audio.wav","lengthTicks":4}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"mediaTrack","name":"sfx","voices":2},
+        {"t":1,"op":"effect","kind":"sfx.play","asset":"media/step.wav","source":"frame"},
+        {"t":2,"op":"mediaPlay","file":"hit.wav","track":"sfx"},
+        {"t":3,"op":"effect","kind":"sfx.play","asset":"media/blip.wav","source":"frame"}
+      ],
+      "ticks": 10,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",2],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"track","name":"sfx","voices":2}]},
+        {"t":1,"tr":[["sfx","playing",0,"media/step.wav",0,10,[[0,"playing",2,0,100,1,0,11,0,null]]]],"cues":[{"cueId":2,"tick":1,"kind":"media.play","track":"sfx","voice":0,"asset":"media/step.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":2,"tr":[["sfx","playing",0,"media/hit.wav",1,10,[[0,"playing",2,0,100,1,1,11,0,null],[1,"playing",3,0,100,2,0,8,0,null]]]],"cues":[{"cueId":3,"tick":2,"kind":"media.play","track":"sfx","voice":1,"asset":"media/hit.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["sfx","playing",0,"media/blip.wav",0,4,[[0,"playing",5,0,100,3,0,7,0,null],[1,"playing",3,0,100,2,1,8,0,null]]]],"cues":[{"cueId":4,"tick":3,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":5,"tick":3,"kind":"media.play","track":"sfx","voice":0,"asset":"media/blip.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"steal","track":"sfx","voice":0,"cueId":2}]},
+        {"t":4,"tr":[["sfx","playing",0,"media/blip.wav",1,4,[[0,"playing",5,0,100,3,1,7,0,null],[1,"playing",3,0,100,2,2,8,0,null]]]]},
+        {"t":5,"tr":[["sfx","playing",0,"media/blip.wav",2,4,[[0,"playing",5,0,100,3,2,7,0,null],[1,"playing",3,0,100,2,3,8,0,null]]]]},
+        {"t":6,"tr":[["sfx","playing",0,"media/blip.wav",3,4,[[0,"playing",5,0,100,3,3,7,0,null],[1,"playing",3,0,100,2,4,8,0,null]]]]},
+        {"t":7,"tr":[["sfx","playing",0,"media/blip.wav",0,null,[[1,"playing",3,0,100,2,5,8,0,null]]]],"cues":[{"cueId":6,"tick":7,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":5,"endTick":7}]},
+        {"t":8,"tr":[["sfx","stopped",0,"media/blip.wav",0,null,[]]],"cues":[{"cueId":7,"tick":8,"kind":"media.stop","track":"sfx","voice":1,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":1,"cueId":3,"endTick":8}]},
+        {"t":9,"tr":[["sfx","stopped",0,"media/blip.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":8,"soundFont":null,"master":100}
+    },
+    {
+      "name": "track-volume-scales-frame-sounds",
+      "note": "The sfx track volume (a script setting) is a bus volume the runner applies; a frame sound's own play cue still carries its voice volume 100.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/step.wav": {"format":"audio.wav","lengthTicks":10},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":6},
+          "media/blip.wav": {"format":"audio.wav","lengthTicks":4}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":1,"op":"mediaVolume","track":"sfx","percent":50},
+        {"t":2,"op":"effect","kind":"sfx.play","asset":"media/step.wav","source":"frame"}
+      ],
+      "ticks": 6,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[],"bus":[["sfx",50,null]],"cues":[{"cueId":2,"tick":1,"kind":"media.volume","track":"sfx","voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":50,"targetVolume":null,"durationTicks":null}]},
+        {"t":2,"tr":[["sfx","playing",0,"media/step.wav",0,10,[[0,"playing",3,0,100,2,0,12,0,null]]]],"bus":[["sfx",50,null]],"cues":[{"cueId":3,"tick":2,"kind":"media.play","track":"sfx","voice":0,"asset":"media/step.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["sfx","playing",0,"media/step.wav",1,10,[[0,"playing",3,0,100,2,1,12,0,null]]]],"bus":[["sfx",50,null]]},
+        {"t":4,"tr":[["sfx","playing",0,"media/step.wav",2,10,[[0,"playing",3,0,100,2,2,12,0,null]]]],"bus":[["sfx",50,null]]},
+        {"t":5,"tr":[["sfx","playing",0,"media/step.wav",3,10,[[0,"playing",3,0,100,2,3,12,0,null]]]],"bus":[["sfx",50,null]]}
+      ],
+      "end": {"cueId":4,"soundFont":null,"master":100}
+    }
+  ]
+}

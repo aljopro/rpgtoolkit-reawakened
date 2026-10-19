@@ -1,0 +1,347 @@
+{
+  "scene": "loop-and-end-ticks",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/audio, not by packages/core. No state or cue hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation, audio, time (AD-26). A row is the state at the end of the audio phase of its tick.",
+  "units": "ticks (1/60 s); volumes are integer percentages; seconds in scripts are whole milliseconds",
+  "row": "t tick; cfg [track, configured voices] (first tick and on change); tr [track, state, flags, file, positionTicks, lengthTicks, voices] for each track with a file or a voice; voice [index, state, cueId, priority, volume, startTick, positionTicks, endTick, loop, fade [from, to, start, duration] or null]; bus [track, volume, fade]; master; sf (script bank); cues (the 12-key AudioCue records emitted this tick); ev (facts: wait, wake, finished, steal, same-file, diag, legacy, video ...)",
+  "spec": [
+    "docs/spec/engine/audio-media.md#audio-time-model",
+    "docs/spec/engine/audio-media.md#audio-lifecycle",
+    "docs/spec/engine/audio-media.md#audio-track-wait",
+    "docs/spec/engine/audio-media.md#audio-wav-midi-length"
+  ],
+  "proposed": ["P-2","P-3","P-8","P-14"],
+  "cases": [
+    {
+      "name": "one-shot-end-tick",
+      "note": "A one-shot started at tick 10 with length 25 has endTick 35; its position is tick minus 10 until it finishes; the audio phase of tick 35 emits media.stop and records the finish once.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/shot.wav": {"format":"audio.wav","lengthTicks":25},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/half.wav": {"format":"audio.wav","lengthTicks":2,"authored":"files/pcm8-half-tick.wav"},
+          "media/one.wav": {"format":"audio.wav","lengthTicks":1,"authored":"files/pcm8-min-one-tick.wav"}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":10,"op":"mediaPlay","file":"shot.wav","track":"sfx"}
+      ],
+      "ticks": 40,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[]},
+        {"t":2,"tr":[]},
+        {"t":3,"tr":[]},
+        {"t":4,"tr":[]},
+        {"t":5,"tr":[]},
+        {"t":6,"tr":[]},
+        {"t":7,"tr":[]},
+        {"t":8,"tr":[]},
+        {"t":9,"tr":[]},
+        {"t":10,"tr":[["sfx","playing",0,"media/shot.wav",0,25,[[0,"playing",2,0,100,10,0,35,0,null]]]],"cues":[{"cueId":2,"tick":10,"kind":"media.play","track":"sfx","voice":0,"asset":"media/shot.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":11,"tr":[["sfx","playing",0,"media/shot.wav",1,25,[[0,"playing",2,0,100,10,1,35,0,null]]]]},
+        {"t":12,"tr":[["sfx","playing",0,"media/shot.wav",2,25,[[0,"playing",2,0,100,10,2,35,0,null]]]]},
+        {"t":13,"tr":[["sfx","playing",0,"media/shot.wav",3,25,[[0,"playing",2,0,100,10,3,35,0,null]]]]},
+        {"t":14,"tr":[["sfx","playing",0,"media/shot.wav",4,25,[[0,"playing",2,0,100,10,4,35,0,null]]]]},
+        {"t":15,"tr":[["sfx","playing",0,"media/shot.wav",5,25,[[0,"playing",2,0,100,10,5,35,0,null]]]]},
+        {"t":16,"tr":[["sfx","playing",0,"media/shot.wav",6,25,[[0,"playing",2,0,100,10,6,35,0,null]]]]},
+        {"t":17,"tr":[["sfx","playing",0,"media/shot.wav",7,25,[[0,"playing",2,0,100,10,7,35,0,null]]]]},
+        {"t":18,"tr":[["sfx","playing",0,"media/shot.wav",8,25,[[0,"playing",2,0,100,10,8,35,0,null]]]]},
+        {"t":19,"tr":[["sfx","playing",0,"media/shot.wav",9,25,[[0,"playing",2,0,100,10,9,35,0,null]]]]},
+        {"t":20,"tr":[["sfx","playing",0,"media/shot.wav",10,25,[[0,"playing",2,0,100,10,10,35,0,null]]]]},
+        {"t":21,"tr":[["sfx","playing",0,"media/shot.wav",11,25,[[0,"playing",2,0,100,10,11,35,0,null]]]]},
+        {"t":22,"tr":[["sfx","playing",0,"media/shot.wav",12,25,[[0,"playing",2,0,100,10,12,35,0,null]]]]},
+        {"t":23,"tr":[["sfx","playing",0,"media/shot.wav",13,25,[[0,"playing",2,0,100,10,13,35,0,null]]]]},
+        {"t":24,"tr":[["sfx","playing",0,"media/shot.wav",14,25,[[0,"playing",2,0,100,10,14,35,0,null]]]]},
+        {"t":25,"tr":[["sfx","playing",0,"media/shot.wav",15,25,[[0,"playing",2,0,100,10,15,35,0,null]]]]},
+        {"t":26,"tr":[["sfx","playing",0,"media/shot.wav",16,25,[[0,"playing",2,0,100,10,16,35,0,null]]]]},
+        {"t":27,"tr":[["sfx","playing",0,"media/shot.wav",17,25,[[0,"playing",2,0,100,10,17,35,0,null]]]]},
+        {"t":28,"tr":[["sfx","playing",0,"media/shot.wav",18,25,[[0,"playing",2,0,100,10,18,35,0,null]]]]},
+        {"t":29,"tr":[["sfx","playing",0,"media/shot.wav",19,25,[[0,"playing",2,0,100,10,19,35,0,null]]]]},
+        {"t":30,"tr":[["sfx","playing",0,"media/shot.wav",20,25,[[0,"playing",2,0,100,10,20,35,0,null]]]]},
+        {"t":31,"tr":[["sfx","playing",0,"media/shot.wav",21,25,[[0,"playing",2,0,100,10,21,35,0,null]]]]},
+        {"t":32,"tr":[["sfx","playing",0,"media/shot.wav",22,25,[[0,"playing",2,0,100,10,22,35,0,null]]]]},
+        {"t":33,"tr":[["sfx","playing",0,"media/shot.wav",23,25,[[0,"playing",2,0,100,10,23,35,0,null]]]]},
+        {"t":34,"tr":[["sfx","playing",0,"media/shot.wav",24,25,[[0,"playing",2,0,100,10,24,35,0,null]]]]},
+        {"t":35,"tr":[["sfx","stopped",0,"media/shot.wav",0,null,[]]],"cues":[{"cueId":3,"tick":35,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":2,"endTick":35}]},
+        {"t":36,"tr":[["sfx","stopped",0,"media/shot.wav",0,null,[]]]},
+        {"t":37,"tr":[["sfx","stopped",0,"media/shot.wav",0,null,[]]]},
+        {"t":38,"tr":[["sfx","stopped",0,"media/shot.wav",0,null,[]]]},
+        {"t":39,"tr":[["sfx","stopped",0,"media/shot.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":4,"soundFont":null,"master":100}
+    },
+    {
+      "name": "loop-pass-boundaries",
+      "note": "A looping voice has pass boundaries at start + n x length (15, 27, 39 for start 3 and length 12), its position wraps, and it never finishes. A mediaWait on a loop waits for the next pass boundary only: thread 1 (asked at tick 5) wakes at 15, thread 2 (asked at tick 15 exactly on a boundary) wakes at 27.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/shot.wav": {"format":"audio.wav","lengthTicks":25},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/half.wav": {"format":"audio.wav","lengthTicks":2,"authored":"files/pcm8-half-tick.wav"},
+          "media/one.wav": {"format":"audio.wav","lengthTicks":1,"authored":"files/pcm8-min-one-tick.wav"}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":3,"op":"mediaPlay","file":"loop.wav","track":"ambience","flags":1},
+        {"t":5,"op":"mediaWait","thread":1,"track":"ambience"},
+        {"t":15,"op":"mediaWait","thread":2,"track":"ambience"}
+      ],
+      "ticks": 42,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[]},
+        {"t":2,"tr":[]},
+        {"t":3,"tr":[["ambience","playing",1,"media/loop.wav",0,12,[[0,"playing",2,0,100,3,0,null,1,null]]]],"cues":[{"cueId":2,"tick":3,"kind":"media.play","track":"ambience","voice":0,"asset":"media/loop.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":4,"tr":[["ambience","playing",1,"media/loop.wav",1,12,[[0,"playing",2,0,100,3,1,null,1,null]]]]},
+        {"t":5,"tr":[["ambience","playing",1,"media/loop.wav",2,12,[[0,"playing",2,0,100,3,2,null,1,null]]]],"ev":[{"e":"wait","thread":1,"track":"ambience","voice":0,"cueId":2,"endTick":null,"pass":true}]},
+        {"t":6,"tr":[["ambience","playing",1,"media/loop.wav",3,12,[[0,"playing",2,0,100,3,3,null,1,null]]]]},
+        {"t":7,"tr":[["ambience","playing",1,"media/loop.wav",4,12,[[0,"playing",2,0,100,3,4,null,1,null]]]]},
+        {"t":8,"tr":[["ambience","playing",1,"media/loop.wav",5,12,[[0,"playing",2,0,100,3,5,null,1,null]]]]},
+        {"t":9,"tr":[["ambience","playing",1,"media/loop.wav",6,12,[[0,"playing",2,0,100,3,6,null,1,null]]]]},
+        {"t":10,"tr":[["ambience","playing",1,"media/loop.wav",7,12,[[0,"playing",2,0,100,3,7,null,1,null]]]]},
+        {"t":11,"tr":[["ambience","playing",1,"media/loop.wav",8,12,[[0,"playing",2,0,100,3,8,null,1,null]]]]},
+        {"t":12,"tr":[["ambience","playing",1,"media/loop.wav",9,12,[[0,"playing",2,0,100,3,9,null,1,null]]]]},
+        {"t":13,"tr":[["ambience","playing",1,"media/loop.wav",10,12,[[0,"playing",2,0,100,3,10,null,1,null]]]]},
+        {"t":14,"tr":[["ambience","playing",1,"media/loop.wav",11,12,[[0,"playing",2,0,100,3,11,null,1,null]]]]},
+        {"t":15,"tr":[["ambience","playing",1,"media/loop.wav",0,12,[[0,"playing",2,0,100,3,0,null,1,null]]]],"ev":[{"e":"wake","thread":1,"kind":"audio.track","track":"ambience","voice":0,"cueId":2,"why":"pass"},{"e":"wait","thread":2,"track":"ambience","voice":0,"cueId":2,"endTick":null,"pass":true}]},
+        {"t":16,"tr":[["ambience","playing",1,"media/loop.wav",1,12,[[0,"playing",2,0,100,3,1,null,1,null]]]]},
+        {"t":17,"tr":[["ambience","playing",1,"media/loop.wav",2,12,[[0,"playing",2,0,100,3,2,null,1,null]]]]},
+        {"t":18,"tr":[["ambience","playing",1,"media/loop.wav",3,12,[[0,"playing",2,0,100,3,3,null,1,null]]]]},
+        {"t":19,"tr":[["ambience","playing",1,"media/loop.wav",4,12,[[0,"playing",2,0,100,3,4,null,1,null]]]]},
+        {"t":20,"tr":[["ambience","playing",1,"media/loop.wav",5,12,[[0,"playing",2,0,100,3,5,null,1,null]]]]},
+        {"t":21,"tr":[["ambience","playing",1,"media/loop.wav",6,12,[[0,"playing",2,0,100,3,6,null,1,null]]]]},
+        {"t":22,"tr":[["ambience","playing",1,"media/loop.wav",7,12,[[0,"playing",2,0,100,3,7,null,1,null]]]]},
+        {"t":23,"tr":[["ambience","playing",1,"media/loop.wav",8,12,[[0,"playing",2,0,100,3,8,null,1,null]]]]},
+        {"t":24,"tr":[["ambience","playing",1,"media/loop.wav",9,12,[[0,"playing",2,0,100,3,9,null,1,null]]]]},
+        {"t":25,"tr":[["ambience","playing",1,"media/loop.wav",10,12,[[0,"playing",2,0,100,3,10,null,1,null]]]]},
+        {"t":26,"tr":[["ambience","playing",1,"media/loop.wav",11,12,[[0,"playing",2,0,100,3,11,null,1,null]]]]},
+        {"t":27,"tr":[["ambience","playing",1,"media/loop.wav",0,12,[[0,"playing",2,0,100,3,0,null,1,null]]]],"ev":[{"e":"wake","thread":2,"kind":"audio.track","track":"ambience","voice":0,"cueId":2,"why":"pass"}]},
+        {"t":28,"tr":[["ambience","playing",1,"media/loop.wav",1,12,[[0,"playing",2,0,100,3,1,null,1,null]]]]},
+        {"t":29,"tr":[["ambience","playing",1,"media/loop.wav",2,12,[[0,"playing",2,0,100,3,2,null,1,null]]]]},
+        {"t":30,"tr":[["ambience","playing",1,"media/loop.wav",3,12,[[0,"playing",2,0,100,3,3,null,1,null]]]]},
+        {"t":31,"tr":[["ambience","playing",1,"media/loop.wav",4,12,[[0,"playing",2,0,100,3,4,null,1,null]]]]},
+        {"t":32,"tr":[["ambience","playing",1,"media/loop.wav",5,12,[[0,"playing",2,0,100,3,5,null,1,null]]]]},
+        {"t":33,"tr":[["ambience","playing",1,"media/loop.wav",6,12,[[0,"playing",2,0,100,3,6,null,1,null]]]]},
+        {"t":34,"tr":[["ambience","playing",1,"media/loop.wav",7,12,[[0,"playing",2,0,100,3,7,null,1,null]]]]},
+        {"t":35,"tr":[["ambience","playing",1,"media/loop.wav",8,12,[[0,"playing",2,0,100,3,8,null,1,null]]]]},
+        {"t":36,"tr":[["ambience","playing",1,"media/loop.wav",9,12,[[0,"playing",2,0,100,3,9,null,1,null]]]]},
+        {"t":37,"tr":[["ambience","playing",1,"media/loop.wav",10,12,[[0,"playing",2,0,100,3,10,null,1,null]]]]},
+        {"t":38,"tr":[["ambience","playing",1,"media/loop.wav",11,12,[[0,"playing",2,0,100,3,11,null,1,null]]]]},
+        {"t":39,"tr":[["ambience","playing",1,"media/loop.wav",0,12,[[0,"playing",2,0,100,3,0,null,1,null]]]]},
+        {"t":40,"tr":[["ambience","playing",1,"media/loop.wav",1,12,[[0,"playing",2,0,100,3,1,null,1,null]]]]},
+        {"t":41,"tr":[["ambience","playing",1,"media/loop.wav",2,12,[[0,"playing",2,0,100,3,2,null,1,null]]]]}
+      ],
+      "end": {"cueId":3,"soundFont":null,"master":100}
+    },
+    {
+      "name": "loop-off-finishes-the-current-pass",
+      "note": "mediaLoop(false) changes the flag in place (a media.flags cue, no restart): the voice now ends at the end of its current pass, tick 12.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/shot.wav": {"format":"audio.wav","lengthTicks":25},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/half.wav": {"format":"audio.wav","lengthTicks":2,"authored":"files/pcm8-half-tick.wav"},
+          "media/one.wav": {"format":"audio.wav","lengthTicks":1,"authored":"files/pcm8-min-one-tick.wav"}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"mediaPlay","file":"loop.wav","track":"ambience","flags":1},
+        {"t":4,"op":"mediaLoop","track":"ambience","on":false}
+      ],
+      "ticks": 16,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["ambience","playing",1,"media/loop.wav",0,12,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"ambience","voice":0,"asset":"media/loop.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["ambience","playing",1,"media/loop.wav",1,12,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["ambience","playing",1,"media/loop.wav",2,12,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":3,"tr":[["ambience","playing",1,"media/loop.wav",3,12,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":4,"tr":[["ambience","playing",0,"media/loop.wav",4,12,[[0,"playing",2,0,100,0,4,12,0,null]]]],"cues":[{"cueId":3,"tick":4,"kind":"media.flags","track":"ambience","voice":0,"asset":null,"loop":false,"flags":0,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":5,"tr":[["ambience","playing",0,"media/loop.wav",5,12,[[0,"playing",2,0,100,0,5,12,0,null]]]]},
+        {"t":6,"tr":[["ambience","playing",0,"media/loop.wav",6,12,[[0,"playing",2,0,100,0,6,12,0,null]]]]},
+        {"t":7,"tr":[["ambience","playing",0,"media/loop.wav",7,12,[[0,"playing",2,0,100,0,7,12,0,null]]]]},
+        {"t":8,"tr":[["ambience","playing",0,"media/loop.wav",8,12,[[0,"playing",2,0,100,0,8,12,0,null]]]]},
+        {"t":9,"tr":[["ambience","playing",0,"media/loop.wav",9,12,[[0,"playing",2,0,100,0,9,12,0,null]]]]},
+        {"t":10,"tr":[["ambience","playing",0,"media/loop.wav",10,12,[[0,"playing",2,0,100,0,10,12,0,null]]]]},
+        {"t":11,"tr":[["ambience","playing",0,"media/loop.wav",11,12,[[0,"playing",2,0,100,0,11,12,0,null]]]]},
+        {"t":12,"tr":[["ambience","stopped",0,"media/loop.wav",0,null,[]]],"cues":[{"cueId":4,"tick":12,"kind":"media.stop","track":"ambience","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"ambience","voice":0,"cueId":2,"endTick":12}]},
+        {"t":13,"tr":[["ambience","stopped",0,"media/loop.wav",0,null,[]]]},
+        {"t":14,"tr":[["ambience","stopped",0,"media/loop.wav",0,null,[]]]},
+        {"t":15,"tr":[["ambience","stopped",0,"media/loop.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":5,"soundFont":null,"master":100}
+    },
+    {
+      "name": "loop-on-extends-a-one-shot",
+      "note": "mediaLoop(true) on a one-shot clears its end tick: pass boundaries continue at start + n x length, so it wraps at tick 25 instead of finishing.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/shot.wav": {"format":"audio.wav","lengthTicks":25},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/half.wav": {"format":"audio.wav","lengthTicks":2,"authored":"files/pcm8-half-tick.wav"},
+          "media/one.wav": {"format":"audio.wav","lengthTicks":1,"authored":"files/pcm8-min-one-tick.wav"}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"mediaPlay","file":"shot.wav","track":"sfx"},
+        {"t":10,"op":"mediaLoop","track":"sfx","on":true}
+      ],
+      "ticks": 30,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["sfx","playing",0,"media/shot.wav",0,25,[[0,"playing",2,0,100,0,0,25,0,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"sfx","voice":0,"asset":"media/shot.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["sfx","playing",0,"media/shot.wav",1,25,[[0,"playing",2,0,100,0,1,25,0,null]]]]},
+        {"t":2,"tr":[["sfx","playing",0,"media/shot.wav",2,25,[[0,"playing",2,0,100,0,2,25,0,null]]]]},
+        {"t":3,"tr":[["sfx","playing",0,"media/shot.wav",3,25,[[0,"playing",2,0,100,0,3,25,0,null]]]]},
+        {"t":4,"tr":[["sfx","playing",0,"media/shot.wav",4,25,[[0,"playing",2,0,100,0,4,25,0,null]]]]},
+        {"t":5,"tr":[["sfx","playing",0,"media/shot.wav",5,25,[[0,"playing",2,0,100,0,5,25,0,null]]]]},
+        {"t":6,"tr":[["sfx","playing",0,"media/shot.wav",6,25,[[0,"playing",2,0,100,0,6,25,0,null]]]]},
+        {"t":7,"tr":[["sfx","playing",0,"media/shot.wav",7,25,[[0,"playing",2,0,100,0,7,25,0,null]]]]},
+        {"t":8,"tr":[["sfx","playing",0,"media/shot.wav",8,25,[[0,"playing",2,0,100,0,8,25,0,null]]]]},
+        {"t":9,"tr":[["sfx","playing",0,"media/shot.wav",9,25,[[0,"playing",2,0,100,0,9,25,0,null]]]]},
+        {"t":10,"tr":[["sfx","playing",1,"media/shot.wav",10,25,[[0,"playing",2,0,100,0,10,null,1,null]]]],"cues":[{"cueId":3,"tick":10,"kind":"media.flags","track":"sfx","voice":0,"asset":null,"loop":true,"flags":1,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":11,"tr":[["sfx","playing",1,"media/shot.wav",11,25,[[0,"playing",2,0,100,0,11,null,1,null]]]]},
+        {"t":12,"tr":[["sfx","playing",1,"media/shot.wav",12,25,[[0,"playing",2,0,100,0,12,null,1,null]]]]},
+        {"t":13,"tr":[["sfx","playing",1,"media/shot.wav",13,25,[[0,"playing",2,0,100,0,13,null,1,null]]]]},
+        {"t":14,"tr":[["sfx","playing",1,"media/shot.wav",14,25,[[0,"playing",2,0,100,0,14,null,1,null]]]]},
+        {"t":15,"tr":[["sfx","playing",1,"media/shot.wav",15,25,[[0,"playing",2,0,100,0,15,null,1,null]]]]},
+        {"t":16,"tr":[["sfx","playing",1,"media/shot.wav",16,25,[[0,"playing",2,0,100,0,16,null,1,null]]]]},
+        {"t":17,"tr":[["sfx","playing",1,"media/shot.wav",17,25,[[0,"playing",2,0,100,0,17,null,1,null]]]]},
+        {"t":18,"tr":[["sfx","playing",1,"media/shot.wav",18,25,[[0,"playing",2,0,100,0,18,null,1,null]]]]},
+        {"t":19,"tr":[["sfx","playing",1,"media/shot.wav",19,25,[[0,"playing",2,0,100,0,19,null,1,null]]]]},
+        {"t":20,"tr":[["sfx","playing",1,"media/shot.wav",20,25,[[0,"playing",2,0,100,0,20,null,1,null]]]]},
+        {"t":21,"tr":[["sfx","playing",1,"media/shot.wav",21,25,[[0,"playing",2,0,100,0,21,null,1,null]]]]},
+        {"t":22,"tr":[["sfx","playing",1,"media/shot.wav",22,25,[[0,"playing",2,0,100,0,22,null,1,null]]]]},
+        {"t":23,"tr":[["sfx","playing",1,"media/shot.wav",23,25,[[0,"playing",2,0,100,0,23,null,1,null]]]]},
+        {"t":24,"tr":[["sfx","playing",1,"media/shot.wav",24,25,[[0,"playing",2,0,100,0,24,null,1,null]]]]},
+        {"t":25,"tr":[["sfx","playing",1,"media/shot.wav",0,25,[[0,"playing",2,0,100,0,0,null,1,null]]]]},
+        {"t":26,"tr":[["sfx","playing",1,"media/shot.wav",1,25,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":27,"tr":[["sfx","playing",1,"media/shot.wav",2,25,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":28,"tr":[["sfx","playing",1,"media/shot.wav",3,25,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":29,"tr":[["sfx","playing",1,"media/shot.wav",4,25,[[0,"playing",2,0,100,0,4,null,1,null]]]]}
+      ],
+      "end": {"cueId":4,"soundFont":null,"master":100}
+    },
+    {
+      "name": "end-ticks-from-authored-files",
+      "note": "Lengths come from the authored files' hand-worked tick counts: a half-tick WAV rounds up to 2 and ends at 5, a one-frame WAV is raised to 1 and ends at 11. Four ambience voices end in ascending voice order when they share a tick.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/shot.wav": {"format":"audio.wav","lengthTicks":25},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/half.wav": {"format":"audio.wav","lengthTicks":2,"authored":"files/pcm8-half-tick.wav"},
+          "media/one.wav": {"format":"audio.wav","lengthTicks":1,"authored":"files/pcm8-min-one-tick.wav"},
+          "media/pcm.wav": {"format":"audio.wav","lengthTicks":30,"authored":"files/pcm8-mono-8000.wav"},
+          "media/ima.wav": {"format":"audio.wav","lengthTicks":15,"authored":"files/ima-adpcm-mono-8000.wav"},
+          "media/ms-fact.wav": {"format":"audio.wav","lengthTicks":14,"authored":"files/msadpcm-mono-8000-fact.wav"},
+          "media/ms.wav": {"format":"audio.wav","lengthTicks":15,"authored":"files/msadpcm-mono-8000.wav"}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"mediaPlay","file":"pcm.wav","track":"ambience"},
+        {"t":0,"op":"mediaPlay","file":"ima.wav","track":"ambience"},
+        {"t":0,"op":"mediaPlay","file":"ms-fact.wav","track":"ambience"},
+        {"t":0,"op":"mediaPlay","file":"ms.wav","track":"ambience"},
+        {"t":3,"op":"mediaPlay","file":"half.wav","track":"sfx"},
+        {"t":10,"op":"mediaPlay","file":"one.wav","track":"sfx"}
+      ],
+      "ticks": 32,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["ambience","playing",0,"media/ms.wav",0,30,[[0,"playing",2,0,100,0,0,30,0,null],[1,"playing",3,0,100,0,0,15,0,null],[2,"playing",4,0,100,0,0,14,0,null],[3,"playing",5,0,100,0,0,15,0,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"ambience","voice":0,"asset":"media/pcm.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":3,"tick":0,"kind":"media.play","track":"ambience","voice":1,"asset":"media/ima.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":4,"tick":0,"kind":"media.play","track":"ambience","voice":2,"asset":"media/ms-fact.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":5,"tick":0,"kind":"media.play","track":"ambience","voice":3,"asset":"media/ms.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["ambience","playing",0,"media/ms.wav",1,30,[[0,"playing",2,0,100,0,1,30,0,null],[1,"playing",3,0,100,0,1,15,0,null],[2,"playing",4,0,100,0,1,14,0,null],[3,"playing",5,0,100,0,1,15,0,null]]]]},
+        {"t":2,"tr":[["ambience","playing",0,"media/ms.wav",2,30,[[0,"playing",2,0,100,0,2,30,0,null],[1,"playing",3,0,100,0,2,15,0,null],[2,"playing",4,0,100,0,2,14,0,null],[3,"playing",5,0,100,0,2,15,0,null]]]]},
+        {"t":3,"tr":[["sfx","playing",0,"media/half.wav",0,2,[[0,"playing",6,0,100,3,0,5,0,null]]],["ambience","playing",0,"media/ms.wav",3,30,[[0,"playing",2,0,100,0,3,30,0,null],[1,"playing",3,0,100,0,3,15,0,null],[2,"playing",4,0,100,0,3,14,0,null],[3,"playing",5,0,100,0,3,15,0,null]]]],"cues":[{"cueId":6,"tick":3,"kind":"media.play","track":"sfx","voice":0,"asset":"media/half.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":4,"tr":[["sfx","playing",0,"media/half.wav",1,2,[[0,"playing",6,0,100,3,1,5,0,null]]],["ambience","playing",0,"media/ms.wav",4,30,[[0,"playing",2,0,100,0,4,30,0,null],[1,"playing",3,0,100,0,4,15,0,null],[2,"playing",4,0,100,0,4,14,0,null],[3,"playing",5,0,100,0,4,15,0,null]]]]},
+        {"t":5,"tr":[["sfx","stopped",0,"media/half.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",5,30,[[0,"playing",2,0,100,0,5,30,0,null],[1,"playing",3,0,100,0,5,15,0,null],[2,"playing",4,0,100,0,5,14,0,null],[3,"playing",5,0,100,0,5,15,0,null]]]],"cues":[{"cueId":7,"tick":5,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":6,"endTick":5}]},
+        {"t":6,"tr":[["sfx","stopped",0,"media/half.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",6,30,[[0,"playing",2,0,100,0,6,30,0,null],[1,"playing",3,0,100,0,6,15,0,null],[2,"playing",4,0,100,0,6,14,0,null],[3,"playing",5,0,100,0,6,15,0,null]]]]},
+        {"t":7,"tr":[["sfx","stopped",0,"media/half.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",7,30,[[0,"playing",2,0,100,0,7,30,0,null],[1,"playing",3,0,100,0,7,15,0,null],[2,"playing",4,0,100,0,7,14,0,null],[3,"playing",5,0,100,0,7,15,0,null]]]]},
+        {"t":8,"tr":[["sfx","stopped",0,"media/half.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",8,30,[[0,"playing",2,0,100,0,8,30,0,null],[1,"playing",3,0,100,0,8,15,0,null],[2,"playing",4,0,100,0,8,14,0,null],[3,"playing",5,0,100,0,8,15,0,null]]]]},
+        {"t":9,"tr":[["sfx","stopped",0,"media/half.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",9,30,[[0,"playing",2,0,100,0,9,30,0,null],[1,"playing",3,0,100,0,9,15,0,null],[2,"playing",4,0,100,0,9,14,0,null],[3,"playing",5,0,100,0,9,15,0,null]]]]},
+        {"t":10,"tr":[["sfx","playing",0,"media/one.wav",0,1,[[0,"playing",8,0,100,10,0,11,0,null]]],["ambience","playing",0,"media/ms.wav",10,30,[[0,"playing",2,0,100,0,10,30,0,null],[1,"playing",3,0,100,0,10,15,0,null],[2,"playing",4,0,100,0,10,14,0,null],[3,"playing",5,0,100,0,10,15,0,null]]]],"cues":[{"cueId":8,"tick":10,"kind":"media.play","track":"sfx","voice":0,"asset":"media/one.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":11,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",11,30,[[0,"playing",2,0,100,0,11,30,0,null],[1,"playing",3,0,100,0,11,15,0,null],[2,"playing",4,0,100,0,11,14,0,null],[3,"playing",5,0,100,0,11,15,0,null]]]],"cues":[{"cueId":9,"tick":11,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":8,"endTick":11}]},
+        {"t":12,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",12,30,[[0,"playing",2,0,100,0,12,30,0,null],[1,"playing",3,0,100,0,12,15,0,null],[2,"playing",4,0,100,0,12,14,0,null],[3,"playing",5,0,100,0,12,15,0,null]]]]},
+        {"t":13,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",13,30,[[0,"playing",2,0,100,0,13,30,0,null],[1,"playing",3,0,100,0,13,15,0,null],[2,"playing",4,0,100,0,13,14,0,null],[3,"playing",5,0,100,0,13,15,0,null]]]]},
+        {"t":14,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",14,30,[[0,"playing",2,0,100,0,14,30,0,null],[1,"playing",3,0,100,0,14,15,0,null],[3,"playing",5,0,100,0,14,15,0,null]]]],"cues":[{"cueId":10,"tick":14,"kind":"media.stop","track":"ambience","voice":2,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"ambience","voice":2,"cueId":4,"endTick":14}]},
+        {"t":15,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",15,30,[[0,"playing",2,0,100,0,15,30,0,null]]]],"cues":[{"cueId":11,"tick":15,"kind":"media.stop","track":"ambience","voice":1,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":12,"tick":15,"kind":"media.stop","track":"ambience","voice":3,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"ambience","voice":1,"cueId":3,"endTick":15},{"e":"finished","track":"ambience","voice":3,"cueId":5,"endTick":15}]},
+        {"t":16,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",16,30,[[0,"playing",2,0,100,0,16,30,0,null]]]]},
+        {"t":17,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",17,30,[[0,"playing",2,0,100,0,17,30,0,null]]]]},
+        {"t":18,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",18,30,[[0,"playing",2,0,100,0,18,30,0,null]]]]},
+        {"t":19,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",19,30,[[0,"playing",2,0,100,0,19,30,0,null]]]]},
+        {"t":20,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",20,30,[[0,"playing",2,0,100,0,20,30,0,null]]]]},
+        {"t":21,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",21,30,[[0,"playing",2,0,100,0,21,30,0,null]]]]},
+        {"t":22,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",22,30,[[0,"playing",2,0,100,0,22,30,0,null]]]]},
+        {"t":23,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",23,30,[[0,"playing",2,0,100,0,23,30,0,null]]]]},
+        {"t":24,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",24,30,[[0,"playing",2,0,100,0,24,30,0,null]]]]},
+        {"t":25,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",25,30,[[0,"playing",2,0,100,0,25,30,0,null]]]]},
+        {"t":26,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",26,30,[[0,"playing",2,0,100,0,26,30,0,null]]]]},
+        {"t":27,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",27,30,[[0,"playing",2,0,100,0,27,30,0,null]]]]},
+        {"t":28,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",28,30,[[0,"playing",2,0,100,0,28,30,0,null]]]]},
+        {"t":29,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","playing",0,"media/ms.wav",29,30,[[0,"playing",2,0,100,0,29,30,0,null]]]]},
+        {"t":30,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","stopped",0,"media/ms.wav",0,null,[]]],"cues":[{"cueId":13,"tick":30,"kind":"media.stop","track":"ambience","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"ambience","voice":0,"cueId":2,"endTick":30}]},
+        {"t":31,"tr":[["sfx","stopped",0,"media/one.wav",0,null,[]],["ambience","stopped",0,"media/ms.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":14,"soundFont":null,"master":100}
+    },
+    {
+      "name": "unknown-length-never-ends",
+      "note": "A voice with an unknown length has no end tick: its position is the elapsed ticks and only an explicit stop ends it.",
+      "setup": {"defaultSoundFont":null,"assets":{"media/song.xm":{"format":"unsupported","lengthTicks":null}},"videos":[]},
+      "script": [
+        {"t":2,"op":"mediaPlay","file":"song.xm","track":"sfx"},
+        {"t":12,"op":"mediaStop","track":"sfx"}
+      ],
+      "ticks": 14,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[]},
+        {"t":2,"tr":[["sfx","playing",0,"media/song.xm",0,null,[[0,"playing",2,0,100,2,0,null,0,null]]]],"cues":[{"cueId":2,"tick":2,"kind":"media.play","track":"sfx","voice":0,"asset":"media/song.xm","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"diag","code":"media.asset-format","op":"mediaPlay","file":"media/song.xm"}]},
+        {"t":3,"tr":[["sfx","playing",0,"media/song.xm",1,null,[[0,"playing",2,0,100,2,1,null,0,null]]]]},
+        {"t":4,"tr":[["sfx","playing",0,"media/song.xm",2,null,[[0,"playing",2,0,100,2,2,null,0,null]]]]},
+        {"t":5,"tr":[["sfx","playing",0,"media/song.xm",3,null,[[0,"playing",2,0,100,2,3,null,0,null]]]]},
+        {"t":6,"tr":[["sfx","playing",0,"media/song.xm",4,null,[[0,"playing",2,0,100,2,4,null,0,null]]]]},
+        {"t":7,"tr":[["sfx","playing",0,"media/song.xm",5,null,[[0,"playing",2,0,100,2,5,null,0,null]]]]},
+        {"t":8,"tr":[["sfx","playing",0,"media/song.xm",6,null,[[0,"playing",2,0,100,2,6,null,0,null]]]]},
+        {"t":9,"tr":[["sfx","playing",0,"media/song.xm",7,null,[[0,"playing",2,0,100,2,7,null,0,null]]]]},
+        {"t":10,"tr":[["sfx","playing",0,"media/song.xm",8,null,[[0,"playing",2,0,100,2,8,null,0,null]]]]},
+        {"t":11,"tr":[["sfx","playing",0,"media/song.xm",9,null,[[0,"playing",2,0,100,2,9,null,0,null]]]]},
+        {"t":12,"tr":[["sfx","stopped",0,"media/song.xm",0,null,[]]],"cues":[{"cueId":3,"tick":12,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":13,"tr":[["sfx","stopped",0,"media/song.xm",0,null,[]]]}
+      ],
+      "end": {"cueId":4,"soundFont":null,"master":100}
+    },
+    {
+      "name": "loop-plus-wait-is-diagnosed",
+      "note": "mediaPlay with tkMD_LOOP | tkMD_WAIT is a located diagnostic at the call: nothing plays and no thread parks (a loop cannot be waited to its end).",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/shot.wav": {"format":"audio.wav","lengthTicks":25},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/half.wav": {"format":"audio.wav","lengthTicks":2,"authored":"files/pcm8-half-tick.wav"},
+          "media/one.wav": {"format":"audio.wav","lengthTicks":1,"authored":"files/pcm8-min-one-tick.wav"}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":1,"op":"mediaPlay","file":"loop.wav","track":"ambience","flags":3,"thread":1}
+      ],
+      "ticks": 4,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[],"ev":[{"e":"diag","code":"media.wait-loop","op":"mediaPlay","track":"ambience"}]},
+        {"t":2,"tr":[]},
+        {"t":3,"tr":[]}
+      ],
+      "end": {"cueId":2,"soundFont":null,"master":100}
+    }
+  ]
+}
