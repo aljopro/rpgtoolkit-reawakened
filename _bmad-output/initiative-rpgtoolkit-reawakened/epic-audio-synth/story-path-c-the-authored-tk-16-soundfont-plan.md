@@ -3,7 +3,7 @@ title: 'Path C: the authored TK-16 SoundFont'
 type: 'feature'
 ticket: 14
 created: '2026-10-18'
-status: built
+status: done
 baseline_revision: '1431e9a89427145104f44cfd1f359cb36080fd71'
 route: 'oneshot'
 route_source: 'auto'
