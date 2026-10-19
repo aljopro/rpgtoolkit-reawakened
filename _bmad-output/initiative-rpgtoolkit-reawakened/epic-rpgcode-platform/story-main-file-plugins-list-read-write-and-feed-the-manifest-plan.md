@@ -3,7 +3,7 @@ title: 'Main-file plugins list: read, write and feed the manifest'
 type: 'feature'
 ticket: 9
 created: '2026-10-19'
-status: 'ready-for-dev'
+status: 'built'
 baseline_revision: 'd5564edf'
 route: 'full'
 route_source: 'auto'
