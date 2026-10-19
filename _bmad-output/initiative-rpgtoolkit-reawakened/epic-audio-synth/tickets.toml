@@ -10,6 +10,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#427"
 type = "story"
 title = "Core audio rulings: tracks, time, cues and waits"
 description = "Doc-first (G7), docs only: creates `docs/spec/engine/audio-media.md` with the core audio rules and amends AD-16, AD-9 and AD-14 to settle the track-and-voice `GameState.audio` schema with the saved-state versus settings split (volumes are settings; script-set volume versus the player's mix is ruled here), music after load, the tick time model (end tick from asset length, catch-up for late starts, rounding, `audio.ended` demoted to advisory), generic per-track cues with a single `media.fade` cue, the `audio.track` wait with suspend-on-pause wake rules, and how Epic 4's `music.play` and `sfx.play` effect records map onto the `music` and `sfx` tracks, including which side decides same-file and silence at board entry (the applier, not `engine.musicAsset`) and where the `music` virtual variable (Q19) now reads from."
@@ -30,6 +31,7 @@ references = [
 
 [[entry]]
 id = 2
+tracker_id = "#428"
 type = "story"
 title = "Media commands, voices, layered audio and legacy parity rulings"
 description = "Doc-first (G7), docs only: extends `docs/spec/engine/audio-media.md` with the standard `media*` command family (`mediaPlay` and `mediaStop` are the existing `mediaplay` and `mediastop` names extended with optional arguments, not obsolete) (control and query commands, `mediaTrack` creation, `tkMD_` constants, voice handles, errors, units and CLAUDE.md-style help text), the voice model (per-track voice counts, the 32-voice cap, the same-file rule, stealing order, the late-sound threshold in ticks), fades, synced starts and the ducking reservation, and the legacy parity ledger (every round-8 and round-9 fact once, the 3.1.0 version rule); it names the documentation-only marker for the old audio commands (the command-docs `deprecated` tag with `replacedBy`; never the catalogue `obsolete` field and never the word `obsolete` in a spec-table Notes cell, which the parsers turn into `builtin.obsolete` and a skipped statement). It does not edit the Audio table of `rpgcode-functions.md` or the catalogue; entries 6.8 and 6.9 own those edits for their names."
@@ -51,6 +53,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#429"
 type = "story"
 title = "Platform rulings: SoundFont policy, sources, runner protocol and video"
 description = "Doc-first (G7), docs only: extends `docs/spec/engine/audio-media.md` and rules R-59 (audio routing and frame audio), MP3/OGG handling (transcode on import) and the tracker/XM policy, the XG/GS missing-bank fallback, the Path B bank choice and its provenance bar, `soundFont` and `soundFontReset` with the `soundfont.set` cue (the commands are ruled in `audio-media.md`; entry 6.8 adds their Audio-table and catalogue rows), the SoundFont layers (runner, author, player), the `AssetDecoder<AudioInfo>` and `AudioSource` seams (an AD-31 amendment), the runner audio protocol messages and voice state machine, the audio-contract handoff to epic 9 (autoplay unlock, focus, late sounds, prefetch, SoundFont cache, the user `.sf2` contract, the browser playback test and the CSP note), and the AVI import and request policy; the owner confirms here that the envelope's Done-when item 2 (browser test) moves to epic 9 and that item 3 (user `.sf2`) is delivered by the epic 9 runner against this contract."
@@ -71,6 +74,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#430"
 type = "story"
 title = "Independent audio timeline oracle and authored audio fixtures"
 description = "Creates a docs/spec-derived, core-independent producer of named audio timeline scenes (`board-music-boot`, `animation-frame-sfx`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`, `voices-and-stealing`, `fades`, `synced-start`, `late-start-catch-up`, `media-wait-suspend`, `settings-versus-save`, `soundfont-setting`, `battle-music-handoff`, `legacy-parity-ledger`, `video-restarts-music`) with expected per-tick track states, cues and end events, plus authored tiny WAV (PCM, MS-ADPCM, IMA-ADPCM) and MIDI (type 0 and 1, tempo changes) files with hand-worked lengths."
@@ -89,6 +93,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#431"
 type = "story"
 title = "AudioInfo decoders for WAV and MIDI"
 description = "Implements pure core `AssetDecoder<AudioInfo>` decoders registered through `PluginDefinition.decoders` for WAV (PCM 8 and 16 bit, MS-ADPCM, IMA-ADPCM, mono and stereo) and Standard MIDI files type 0 and 1 (tempo-map length, loop point, bank-need flag for XG, GS and bank-select), reporting length in ticks per the entry 6.1 time model; an unsupported or malformed file returns a `FormatError` and the caller plays silence."
@@ -107,6 +112,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#432"
 type = "story"
 title = "Audio state section, track engine and cue emission"
 description = "Implements the tracer bullet: the `audio` section schema v2 per entry 6.1 (tracks, voices, fade fields, `cueId`, the current SoundFont setting, saved playback versus settings), the `audio` applier on the effect bus that maps Epic 4's `music.play` and `sfx.play` records onto the `music` and `sfx` tracks and drains the pending queue in order, the board-music path (the applier decides same-file and silence at board entry per Q5 to Q8, replacing the engine's own `musicAsset` check and the silent early returns in `postBoardMusic`), the `music` virtual variable read from the music track (Q19), end-tick and loop-pass computation on the fixed tick, play, stop, pause, resume, seek and loop semantics with the legacy rules (missing file, battle hand-off, a restart hook for later video end), generic per-track `AudioCue` emission including `soundfont.set` in `TickReport.audioCues`, save and restore re-emission, and registration into the reset seam."
@@ -125,6 +131,7 @@ references = [
 
 [[entry]]
 id = 7
+tracker_id = "#433"
 type = "story"
 title = "Voices, voice stealing, fades and synced starts"
 description = "Implements the voice pool per track with the 32-voice cap, voice handles, the stealing order (priority, then age, then voice index), the same-file rule by voice count, the late-sound threshold in ticks, fades as a pure function of one `media.fade` cue with fade clocks frozen by pause, and synced starts at another track's position modulo the new file's length."
@@ -141,6 +148,7 @@ references = [
 
 [[entry]]
 id = 8
+tracker_id = "#434"
 type = "story"
 title = "Media control built-ins and the track wait"
 description = "Registers the media control pack through the VM registry: `mediaTrack`, `mediaLoad`, `mediaPlay` (the existing `mediaplay` extended with optional arguments, not deprecated; flags, sync, priority, voice handle by reference), `mediaStop` (likewise the existing `mediastop`), `mediaPause`, `mediaResume`, `mediaSeek`, `mediaLoop`, `mediaFade`, `mediaWait` and `mediaVolume` in both its set and read forms, a read-only audio view for built-ins that entry 6.9's queries reuse, the Reawakened `soundFont` and `soundFontReset` commands, the `tkMD_` constants, and the `audio.track` wait kind that replaces the unresolved `audio.sfx` wait the catalogue responder creates today, with the ruled diagnostics (`tkMD_LOOP | tkMD_WAIT`, unknown track, wait on a loop), help text in the CLAUDE.md style, and the Audio-table and catalogue rows for these names; commands act through recorded effects, never by writing the section directly."
@@ -158,6 +166,7 @@ references = [
 
 [[entry]]
 id = 9
+tracker_id = "#435"
 type = "story"
 title = "Media query built-ins, legacy command mapping and catalogue sweep"
 description = "Registers the media query pack (`mediaState`, `mediaFlags`, `mediaPlaying`, `mediaFile`, `mediaPosition`, `mediaLength`, `mediaTracks`, `getVolume`) on entry 6.8's audio view and routes the obsolete legacy names `midiplay`, `playmidi`, `mediarest`, `midirest`, `wav`, `mp3`, `wavstop` and `mp3pause` to their standard equivalents while keeping legacy behaviour (music always loops, sound effects never do, replace rules), tagging them `deprecated` with `replacedBy`; `mp3pause` is play-once-then-wait on `sfx`; `setvolume` stays the master volume; `sound` is owned here and reconciled with the spec row (R-36: raises `builtin.obsolete` and skips the statement; its catalogue row gains `obsolete: true` and loses the unresolved `audio.sfx` wait); the `fademidiin`, `fademidiout` and `setmidivolume` plugin commands are mapped, or recorded as not reproduced; it reconciles the `wav` and `mp3pause` catalogue rows with the ruling and edits the Audio table only for these names; `mediaplay` and `mediastop` are entry 6.8's and are not deprecated."
@@ -175,6 +184,7 @@ references = [
 
 [[entry]]
 id = 10
+tracker_id = "#436"
 type = "story"
 title = "Video built-ins and the video wait"
 description = "Registers `playavi` and `playavismall` with the `video` wait and the AD-5 request ruled in entry 6.3, stops music for the duration and restarts it from the beginning afterwards even if it had been stopped (Q16), makes the video unskippable, and resolves the wait on the `video.ended` input."
@@ -192,6 +202,7 @@ references = [
 
 [[entry]]
 id = 11
+tracker_id = "#437"
 type = "story"
 title = "synth: MidiSynth, the Null backend and the AudioSource seam"
 description = "Fills the empty `synth` package with the pure-TypeScript `MidiSynth` interface, `NullMidiSynth` (deterministic silence of the right length), the `AudioSource` interface and registry (MIDI and PCM are the first two sources on one seam), and the runner-side voice state machine ruled in entry 6.3, with no SoundFont or third-party dependency yet."
@@ -209,6 +220,7 @@ references = [
 
 [[entry]]
 id = 12
+tracker_id = "#438"
 type = "story"
 title = "SpessaSynth backend, PCM sources, track buses and voice pool"
 description = "Adds the `spessasynth_core` MIDI backend behind `MidiSynth`, the PCM source (WAV PCM, MS-ADPCM, IMA-ADPCM decode and resampling), per-track mixer buses with volume and fade ramps, and a voice pool that honours the core voice cap, all rendering deterministically to PCM headlessly."
@@ -226,6 +238,7 @@ references = [
 
 [[entry]]
 id = 13
+tracker_id = "#439"
 type = "story"
 title = "SoundFont bundling gate and the Path B bank"
 description = "Extends the licence gate to audit bundled SoundFonts (path, licence, ADR, SHA-256, notices entry, size ceiling) under `bundledAssets`, verifies the provenance of the chosen compact public-domain General MIDI bank (Florestan Basic or GMGSx, per entry 6.3), and ships it under `media/soundfonts/` with its `THIRD_PARTY_NOTICES` entry and a lazy-load note, leaving the user `.sf2` contract to the runner."
@@ -244,6 +257,7 @@ references = [
 
 [[entry]]
 id = 14
+tracker_id = "#440"
 type = "story"
 title = "Path C: the authored TK-16 SoundFont"
 description = "Authors the project's own compact Super NES-flavoured General MIDI bank, `TK-16`, in Polyphone from CC0 or MIT sources with every sample's provenance recorded, ships it under the entry 6.13 gate, and makes it the default bank once the owner approves how it sounds."
@@ -262,6 +276,7 @@ references = [
 
 [[entry]]
 id = 15
+tracker_id = "#441"
 type = "story"
 title = "Runner audio protocol schema and conformance vectors"
 description = "Publishes the language-neutral runner audio protocol as a JSON Schema checked against the TypeScript types (messages in: `load`, `play`, `pause`, `resume`, `stop`, `seek`, `fade`, `setVolume`, `setBank`; events out: `ready`, `ended`, `error`, all with fixed keys) with the voice state machine, and data-driven conformance vectors (asset bytes plus message script to expected events, lengths and a non-silent render check) that any runner can replay, with the TypeScript binding as the reference."
@@ -279,6 +294,7 @@ references = [
 
 [[entry]]
 id = 16
+tracker_id = "#442"
 type = "story"
 title = "Headless null-audio cue goldens and the offline MIDI render test"
 description = "Adds cue-stream goldens for the sample games to the golden job (boot to the first board and a synthetic battle-music effect with source `battle`, since no battle runtime exists yet) under null audio in both Node and Bun, and an offline Node render test that plays an authored MIDI file through the bundled bank via the synth to PCM; the browser playback test is recorded as an epic 9 handoff because no browser harness exists in the repository."
@@ -295,6 +311,7 @@ references = [
 
 [[entry]]
 id = 17
+tracker_id = "#443"
 type = "story"
 title = "Replay, reset and downstream contract sweep"
 description = "Closes Epic 6 with sample-game cue-stream replay under different advance batching, snapshots at several points, reset and load leaving settings untouched, catalogue ownership of every audio and video name, phase registration, removal of the replaced `audio.sfx` stub and other obsolete test doubles, a refactor sweep of the audio and synth barrels, and the written handoffs to epics 7, 8, 9 and the editors."

@@ -6,6 +6,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#415"
 type = "story"
 title = "Movement, collision, trigger and gamepad rulings"
 description = "Doc-first (G7), docs only: amends the existing movement and input specification and affected architecture/catalogue rows to settle R-50 speed/game-speed conversion, R-51 sprite collision versus diversion, R-52 candidate precedence, R-53 edge-arrival alignment, R-54 wall-sliding thresholds, and the bounded E-112 gamepad addition; ratifies fixed-tick timing, actor geometry/fallbacks, key claims, trigger condition order, and the numeric VM-budget ownership boundary."
@@ -24,6 +25,7 @@ references = [
 
 [[entry]]
 id = 2
+tracker_id = "#416"
 type = "story"
 title = "Independent movement oracle and authored fixtures"
 description = "Creates a docs/spec-derived, core-independent fixture producer with stable named scenes: `movement-tile-pixel`, `collision-solid-stairs-under`, `collision-sprite-blocking`, `edges-board-link-program`, `board-entry-thread-lifecycle`, `triggers-precedence`, `actor-hydration-item-multitask`, `pathfinding-axial-diagonal-vector`, `input-replay-button-slots`, `movement-waits`, `animation-fallback-stance`, `random-encounter`, `demo-npc-pathfinding` and `demo-npc-battle-trigger`; it records expected per-tick outcome facts without claiming legacy pixel parity."
@@ -40,6 +42,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#417"
 type = "story"
 title = "Unified actor and sprite runtime state"
 description = "Implements the AD-32 Unified Actor runtime in core/sprites: player and item hydration, item multitask-thread start/stop ownership, transform/facing/visual state, collision and activation bases, movement queues and waypoint links, selected-player identity, compact runtime item handles, plain-data schema/migration, SpriteDraw production, CameraTarget and PlayerPresencePort."
@@ -58,6 +61,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#418"
 type = "story"
 title = "Movement stepping and board and sprite collision"
 description = "Registers the movement phase and implements tile/pixel queues, deterministic speed conversion, direct and waypoint movement, collision-base tests, solids, stairs, under behavior, wall sliding, direct sprite collision (winner/loser, frozen, wait/stop), frozen and stance transitions, and movement event records using the approved R-50, R-51 and R-54 rules. Path-following diversion around a blocking sprite is owned by entry 5."
@@ -74,6 +78,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#419"
 type = "story"
 title = "Axial, diagonal and vector pathfinding"
 description = "Implements axial A*, diagonal A* and vector visibility-graph search with the documented 1000-expansion cap, nearest-free blocked-goal fallback, actor-geometry checks, deterministic tie order, board/vector cache invalidation and no host-dependent geometry, plus path-following diversion around a blocking sprite per approved R-51 with entry 4's freeze/stop result as the fallback."
@@ -90,6 +95,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#420"
 type = "story"
 title = "Input bindings, click-to-move, gamepad and buttons"
 description = "Extends the existing raw input section with configured eight-way movement bindings, held-key diagonals, activation/menu/runtime key separation, pointer click-to-move, normalized E-112 gamepad controls and the plain-data button-slot shape consumed by Epic 4's overlay (`id`, logical `x/y/w/h`, action, enabled) while preserving monotonic sequence numbers and the shared key claim/prune protocol."
@@ -108,6 +114,7 @@ references = [
 ]
 [[entry]]
 id = 10
+tracker_id = "#421"
 type = "story"
 title = "Actor animation and presentation integration"
 description = "Completes actor-facing animation state: directional walk/idle fallbacks, frame timing, facing and prior positions for presentation alpha, then connects the existing SpriteDraw and animation phase without duplicating compositor or camera state. Actor stance commands and completion waits are owned here for entry 7 to consume."
@@ -126,6 +133,7 @@ references = [
 
 [[entry]]
 id = 7
+tracker_id = "#422"
 type = "story"
 title = "Movement waits and movement and input built-ins"
 description = "Replaces movement test doubles with real movement waits and registers the movement/input catalogue surface through the VM pack: Push, PlayerPath, ItemPath, waypoint operations, player/item steps and locations, active-player operations, wander, wait, get, clearBuffer and button operations, including multiRun coupling and by-reference outputs. Actor stance commands and their completion waits are owned by entry 10."
@@ -143,6 +151,7 @@ references = [
 
 [[entry]]
 id = 8
+tracker_id = "#423"
 type = "story"
 title = "Trigger state and activation dispatch"
 description = "Implements the triggers section and trigger phase: board step-on/key-press/repeat activation, item activation and facing, item-before-region and board-order selection, layer matching, loading/conditional checks, stop-movement, run-once re-arm, gone suppression, global/runtime keys and silent movement inside a running trigger."
@@ -161,6 +170,7 @@ references = [
 
 [[entry]]
 id = 9
+tracker_id = "#424"
 type = "story"
 title = "Board edges and transitions"
 description = "Implements the edges phase for no-link blocking, board links, program links, approved opposite-edge arrival alignment, blocked-arrival refusal, Send integration, old-board board/item thread lifecycle, persistent threads, destination trigger deactivation, board-entry trigger reload, camera handoff, music effects and path-cache clearing."
@@ -178,6 +188,7 @@ references = [
 
 [[entry]]
 id = 11
+tracker_id = "#425"
 type = "story"
 title = "Random battle trigger and fighter handoff"
 description = "Adds the movement-owned random encounter boundary: battle-enabled board checks after activation, at-most-once-per-tile sampling, deterministic shared-RNG draw order, encounter selection and a plain-data fighter/trigger handoff for Epic 7, without implementing battle charge, damage, statuses or UI."
@@ -195,6 +206,7 @@ references = [
 
 [[entry]]
 id = 12
+tracker_id = "#426"
 type = "story"
 title = "Replay, snapshot, reset and downstream contract sweep"
 description = "Closes Epic 5 with recorded-input corpus replay, state/draw hash and batching checks, movement-wait restore, cache-flush replay, catalogue ownership checks, phase registration and reset-seam reconciliation, movement-facing VM-budget verification, and documented handoffs for battle, menu/save, web runner and tooling."

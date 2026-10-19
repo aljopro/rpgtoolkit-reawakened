@@ -5,6 +5,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#466"
 type = "story"
 title = "Rulings: actor boundary, behaviours, save rule and hydration"
 description = "Doc-first (G7), docs only: settles in docs/spec the core-versus-battle boundary (core owns actor data and the interpretation rules true for any game; the stock battle package owns ATB, damage, AI and UI), the behaviour pattern (data gives the default, a behaviour overrides it), the save rule (data and a behaviour name, never callables), hydration by name with a diagnostic on a missing behaviour, and how actors own stats and legacy stat globals alias them (amending AD-10 and removing StatsPort's vm.globals-owner wording) and AD-32's Unified Actor, and the built-in event names and detail fields of the EMIT-13 standard-events table (fallen, revived, status, leveledUp, entered, left, beforeEnter)."
@@ -25,6 +26,7 @@ references = [
 
 [[entry]]
 id = 2
+tracker_id = "#467"
 type = "story"
 title = "Actor model inventory: every stat and state, its source, type, writer and rule owner"
 description = "Writes the inventory table in docs/spec (owner column = actor section, alias column = legacy global name such as `HP!`; level and experience listed as stats; each ability, such as derived values, level-up, the experience curve and damage taken, listed as a standard equation with a code default that a behaviour may override) for character (.tem), enemy (.ene), item (.itm), status (.ste) and NPC/board sprites: for each stat or state its source field, type, who may write it (core, battle script, any script), whether it is a core-rule or battle-rule value, and evidence (file, offset or spec row)."
@@ -44,6 +46,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#468"
 type = "story"
 title = "Actor store: party members, enemies and NPCs as plain-data actors"
 description = "Builds the core actor data model per the 20.2 inventory: one plain-data record shape for party members, enemies and NPCs with stats, status counters and a behaviour name, a deterministic id/handle scheme, an owned state section with schema, snapshot/restore and hash, extending the AD-32 Unified Actor without a second actor type."
@@ -61,6 +64,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#469"
 type = "story"
 title = "Actors as RPGCode objects with emitters"
 description = "Exposes each actor to RPGCode as an object and adds the write path to the virtual-variable port (`script/virtuals.ts`, read-only today) so legacy `.tem` stat globals (`HP!`, `Level!`) are live read/write aliases of the actor stat, with `kill()` on an alias a catchable runtime error with code `kill.system-owned` (system-controlled names are never killed; a write to a read-only alias is `assign.read-only`) and writes never breaking the link: stat reads and writes that go through the owner, `advanceStatus` and the other core operations as methods, and the actor as a built-in emitter using the entries 19.4 and 19.10 machinery."
@@ -77,6 +81,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#470"
 type = "story"
 title = "Load actors from character, enemy, item and status data"
 description = "Hydrates actor records from the Epic 2 readers' data: character .tem (and the player), enemy .ene, item .itm and status .ste definitions, filling the stats and state columns of the 20.2 inventory and nothing else."
@@ -93,6 +98,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#471"
 type = "story"
 title = "Core interpretation rules: fallen, status countdown, equipment bonuses, level-up"
 description = "Implements the core defaults ruled in 20.1: an actor is fallen when HP <= 0 unless a behaviour says otherwise (fallen is a state, never a removal: the actor stays in the party, and revival is the state changing back by HP being raised or a behaviour-defined revive, firing `fallen` and `revived` events; `fallen` fires only on the transition into the fallen state, with `cause` (damage, status, script) and `source` (responsible actor or null); `defeated` is not core, it belongs to the battle package), status effects count down through `advanceStatus(n)` with the battle script choosing when a round passes, equipment bonuses apply from item data, and level-up default derives from character data; each is a hook with a core default. Level and experience are stats; the level-up default is the equation ruled in 20.1 (a standard equation defined in code, overridable by behaviours)."
@@ -109,6 +115,7 @@ references = [
 
 [[entry]]
 id = 7
+tracker_id = "#472"
 type = "story"
 title = "Behaviour registration and override precedence"
 description = "Adds named behaviours: a package registers a behaviour (a dictionary of hook callables) under a namespaced name such as `stock-rpg/hero`; an actor carries only the name; the hook resolution order is behaviour override first, core default second."
@@ -125,6 +132,7 @@ references = [
 
 [[entry]]
 id = 8
+tracker_id = "#473"
 type = "story"
 title = "Save and hydrate actors by behaviour name"
 description = "Saves actors as data only and, on load, re-attaches behaviours by name from the installed packages; a missing behaviour becomes the core default plus a located diagnostic, never a refused load."
@@ -141,6 +149,7 @@ references = [
 
 [[entry]]
 id = 9
+tracker_id = "#474"
 type = "story"
 title = "Actor, board and game events: fallen, status, leveledUp, enter and leave"
 description = "Creates the per-board emitters through 19.12's seam and emits the ruled events: actors emit `fallen` and `revived` (fallen is a state, so the actor stays in the party and revival is the state changing back), status changes and `leveledUp` from the core defaults; board `beforeEnter` (cancelable, the step does not happen), `entered` and `left` come from the board-edge transitions, and names follow EMIT-13 (past tense notifications, `before` plus present for cancelable); the entry also owns dialogue events such as `talked`; stock actor code re-emits `fallen` on the game emitter so quest scripts can listen globally."
@@ -157,6 +166,7 @@ references = [
 
 [[entry]]
 id = 10
+tracker_id = "#475"
 type = "story"
 title = "NPCs and board sprites as actors with behaviours"
 description = "Unifies board NPC/item sprites with the actor model (AD-32): a board sprite is an actor, so the same stats, hooks and behaviour name apply, with its movement, collision and trigger behaviour from Epic 5 unchanged."
@@ -173,6 +183,7 @@ references = [
 
 [[entry]]
 id = 11
+tracker_id = "#476"
 type = "story"
 title = "stock-battle and stock-menu package scaffolds"
 description = "Creates the `stock-battle` and `stock-menu` RPGCode packages as loadable, versioned, namespaced packages with real manifests and declared host requests whose only behaviour is the spec's no-plugin one (a battle ends immediately, the menu key does nothing), ready for Epic 7 and Epic 8 to fill."
@@ -189,6 +200,7 @@ references = [
 
 [[entry]]
 id = 12
+tracker_id = "#477"
 type = "story"
 title = ".gam plugins mapping: stock packages in templates and legacy DLL names"
 description = "New-project templates list `stock-battle` and `stock-menu` in the `.gam` plugins; legacy `fightPlugin = tk3fight.dll` and `menuPlugin = tk3menu.dll` map in memory to the stock packages and are written to the file only when saved from the editor."
@@ -205,6 +217,7 @@ references = [
 
 [[entry]]
 id = 13
+tracker_id = "#478"
 type = "story"
 title = "Two battle scripts over one actor model, with goldens"
 description = "Proves the boundary: two small authored battle scripts (a Zelda-style real-time game with 12 hearts and an FF-style game with 9999 HP) run over the same actor model, with a save mid-fight, restore and replay, pinned in headless goldens, and all legacy goldens unchanged."
@@ -220,6 +233,7 @@ references = [
 
 [[entry]]
 id = 14
+tracker_id = "#479"
 type = "story"
 title = "Refactor sweep"
 description = "Reconciles shared seams touched here (actors barrel, section list, built-in registrations, catalogue and command docs), removes the old parallel actor representation made obsolete, and closes the epic against its Done when."

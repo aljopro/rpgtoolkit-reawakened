@@ -5,6 +5,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#480"
 type = "story"
 title = "Rulings: the media object, its events, the game-file audio settings and the retired surface"
 description = "Doc-first (G7), docs only: amends docs/spec/engine/audio-media.md so the author surface is the media object (voice and track objects returned by `mediaPlay` and reached through `media`), its past-tense events and fields, the cancelable `beforePlay` with its source field, the game-file audio settings block, the stale-voice rule and the list of removed procedural commands; records the engine-phase cancelable-emit rule with Epic 19.11; keeps the playback, cue, wait and fade rules."
@@ -25,6 +26,7 @@ references = [
 
 [[entry]]
 id = 2
+tracker_id = "#481"
 type = "story"
 title = "Game-file audio settings: tracks, voice counts, voice cap and default SoundFont"
 description = "Adds the additive audio settings block to the main file reader and writer (named tracks with voice counts, the global voice cap, the default SoundFont name) using the 19.9 mechanism, feeds it to the audio core at startup in place of the `defaultSoundFont` startup value and runtime `mediaTrack`, and checks the voice cap once at load with a diagnostic on overflow."
@@ -41,6 +43,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#482"
 type = "story"
 title = "Audio events from core state: started, stopped, ended, looped, paused, resumed, faded"
 description = "Emits a plain-data event for each voice transition from core audio state, at the point the transition is decided (end ticks at the waits phase), through the 19.12 emitter registration seam, with the fields the 21.1 ruling lists; a runner's `audio.ended` report never produces an event."
@@ -57,6 +60,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#483"
 type = "story"
 title = "Cancelable beforePlay for script and engine-originated audio"
 description = "Adds one cancelable `beforePlay` step in front of every voice start at the audio applier, so a script call, a board arrival, an animation frame sound, a battle, a menu cue and a video's music change are all observable; listeners may cancel it or change file, volume or loop; the event carries its source."
@@ -73,6 +77,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#484"
 type = "story"
 title = "The media object: media, track and voice objects, and mediaPlay returning a voice"
 description = "Builds the global `media` object, track objects and voice objects over core audio state: `mediaPlay(file[, options])` returns a voice; voices and tracks read their core state and control themselves (stop, pause, resume, seek, loop, fade, volume, wait); the voice object holds data only (track, slot, cueId) with its methods supplied by the 19.1 host-provided method mechanism; a stale voice diagnoses and does nothing."
@@ -89,6 +94,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#485"
 type = "story"
 title = "Retire the procedural media surface and migrate every caller"
 description = "Removes `mediaTrack`, `mediaLoad`, the other net-new `media*` commands and queries, `&voice`, the `tkMD_*` constants and the `priority` and `syncTrack` arguments, and migrates every fixture, golden, catalogue row, command-doc, spec page and Epic 6 note to the media object, with no shim or alias left."
@@ -105,6 +111,7 @@ references = [
 
 [[entry]]
 id = 7
+tracker_id = "#486"
 type = "story"
 title = "Pure-RPGCode media package fixtures and legacy golden verification"
 description = "Authors fixture packages in pure RPGCode (a ducking package that fades `music` while any voice on `ui` plays, a stems package that starts layers on `ended`, a region-music package that replaces board music through `beforePlay`) and pins them in headless goldens, with the legacy audio goldens unchanged."
@@ -120,6 +127,7 @@ references = [
 
 [[entry]]
 id = 8
+tracker_id = "#487"
 type = "story"
 title = "Refactor sweep"
 description = "Reconciles the shared seams this epic touched (audio built-in registration, the phase list, the catalogue and command docs), removes dead code made obsolete by the cutover and closes the epic against its Done when."

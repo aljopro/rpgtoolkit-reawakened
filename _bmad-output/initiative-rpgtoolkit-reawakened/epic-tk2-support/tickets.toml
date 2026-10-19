@@ -2,6 +2,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#340"
 type = "story"
 title = "Write the extraction question list"
 description = "Writes the numbered question list (ADR 0006 is Accepted): every TK2 layout or rule that the archive evidence and the allowed data files cannot answer (text .brd, .gam, .itm, .tem; the .gam 2.2 and .tem 3 to 4 field sets; .fnt; the 3.x update wizard conversion rules). Questions the data can answer are listed as derived, not asked."
@@ -15,6 +16,7 @@ done_checkpoint = true
 references = ["adr - docs/adr/0006-clean-room-spec-extraction.md", "research - _bmad-output/initiative-rpgtoolkit-reawakened/epic-tk2-support/discovery/tk2-formats-research.md, Unknowns"]
 [[entry]]
 id = 2
+tracker_id = "#341"
 type = "story"
 title = "Extraction round: answer the question list from the legacy source"
 description = "A disposable extractor subagent, which never writes code for this epic, reads the legacy source only to answer entry 1 questions and writes prose facts (layouts, tables, rules in its own words) to a staging file; a second, separate agent session reviews it for copied expression and reports its findings, and the assistant writes the audit entry and tells the user. May close with no source read if entry 1 lists no questions."
@@ -27,6 +29,7 @@ plan_checkpoint = true
 done_checkpoint = true
 [[entry]]
 id = 3
+tracker_id = "#342"
 type = "story"
 title = "Format-spec amendment for TK2 (2.x) formats"
 description = "Extends docs/format-spec.md, in its own commit (G7), with the text layouts of .brd, .gam, .itm and .tem, the corrected .gam 2.2 and .tem 3 to 4 branches, the verified .anm, .ene, .spc, .ste and .bkg text forms, the .tan, .gph v2 and new .fnt sections, and the TST 8-bit detail palette from the official 2.0 tileset spec; each section cites its evidence and the question it answers."
@@ -40,6 +43,7 @@ done_checkpoint = true
 notes = ["2026-10-15: the §15 amendment is already committed to docs/format-spec.md (988a87f) and the plan awaits its checkpoint. It stays as written; ADR 0007 makes docs/spec normative, and entry 13 merges §15 into docs/spec/formats/legacy."]
 [[entry]]
 id = 13
+tracker_id = "#343"
 type = "story"
 title = "Migrate section 15 into docs/spec/formats/legacy and rule its conflicts"
 description = "Under ADR 0007, merges `docs/format-spec.md` §15 into `docs/spec/formats/legacy/` (text-formats, older-binary-versions, conversion) in its own doc-only commit (G7), keeping §15's corpus evidence, file counts and worked examples (R-26), and moving the text `.brd` layout in whole (R-23). A person rules the conflicts of the reconciliation's section B: the text `.anm` frame-count line (R-17, the corpus wins), the binary `.gam` minor < 3 field widths (R-18, `i16` from 15 real files, and the generated `main_minor1/2.gam` examples regenerated to match), the text `.gam` header (R-19), the text `.ene` 19 × 7 block (R-20), the text `.ste` layout (R-21), the text `.tem` minor-1 rows and the `-2` marker (R-22). §15.15's open questions 1, 4 and 7 close where `docs/spec/` answers them."
@@ -56,6 +60,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#344"
 type = "story"
 title = "TK2 text readers: .brd, .tem, .itm, .gam"
 description = "Adds text-form branches to the board, character, item and main-file readers for the layouts entry 3 documents, selected by the spec detection byte; text boards convert to the vector model through the pre-vector path, and zero-byte placeholder files are tolerated or skipped as decided here."
@@ -67,6 +72,7 @@ risk = "high"
 
 [[entry]]
 id = 5
+tracker_id = "#345"
 type = "story"
 title = "TK2 text readers: .ene, .anm, .spc, .ste, .bkg"
 description = "Adds text-form branches for the minor-0 text enemies (the fixed 19 by 7 rest-image block, R-20), the .anm text form (currently a generic read error), the .spc and .ste text forms (the .ste layout as entry 13 rules it, R-21) and the 19 by 11 .bkg grid, with a clear message for forms the spec leaves optional."
@@ -78,6 +84,7 @@ risk = "medium"
 
 [[entry]]
 id = 6
+tracker_id = "#346"
 type = "story"
 title = "Correct the TK2-era binary .gam 2.2 and .tem 3 to 4 layouts"
 description = "Fixes the .gam minor-2 record list (1506 residue bytes on BusDriver, an EOF failure on FinalDestiny) and the .tem minor 3 to 4 field set (407 to 797 residue bytes) to the layouts entry 3 records."
@@ -89,6 +96,7 @@ risk = "high"
 
 [[entry]]
 id = 7
+tracker_id = "#347"
 type = "story"
 title = "Readers for .tan, .gph v2 and .fnt"
 description = "Adds readers for animated tiles .tan (binary 2.0), single tiles .gph v2 and the .fnt font file (RPGTLKIT FONT), using the sections entry 3 adds, so boards and animations that reference them resolve."
@@ -100,6 +108,7 @@ risk = "medium"
 
 [[entry]]
 id = 11
+tracker_id = "#348"
 type = "story"
 title = "BMP decoder"
 description = "Adds a BMP reader to core/formats/image behind decodeTexture (AD-28), dispatched by the BM signature as `docs/spec/formats/images.md` will rule in entry 2.19: straight RGBA out, the located-error and 100 megapixel refusal contract shared with PNG and JPEG, no Node or DOM."
@@ -112,6 +121,7 @@ references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; ima
 
 [[entry]]
 id = 12
+tracker_id = "#349"
 type = "story"
 title = "GIF decoder, still and animated"
 description = "Adds a GIF87a and GIF89a reader to core/formats/image: LZW, global and local colour tables, interlace, and the graphic-control extension (transparent index, delay, disposal). A still GIF decodes to one RGBA frame through decodeTexture; an animated GIF yields frames and delays for the animation path (section 7.2, E-54)."
@@ -124,6 +134,7 @@ references = ["research - epic-rpgcode-vm and epic-legacy-formats discovery; ima
 
 [[entry]]
 id = 8
+tracker_id = "#350"
 type = "story"
 title = "Register the TK2 decoders in the format registry"
 description = "Registers the entry 4 to 7 decoders through the AssetDecoder interface and core format registry that epic legacy-formats entry 2.13 delivers, dispatching by extension and magic (AD-31), and moves the dump rows onto it."
@@ -136,6 +147,7 @@ notes = ["2026-10-16: completed in feat/register-tk2-decoders. Registry and dump
 
 [[entry]]
 id = 9
+tracker_id = "#351"
 type = "story"
 title = "Corpus gate over the six TK2 games"
 description = "Fetches the six TK2 games as CI fixtures at test time (never committed), extends the dump corpus expectation so FinalDestiny, LittleMan, BusDriver, Caoquest, School2Demo and ChimeranEmpire must reach 0 failures and 0 residue, records pinned hashes, and flips the TK2 expected-failure rows of the committed docs/spec examples gate (entry 2.26) to passing."
@@ -146,6 +158,7 @@ hitl = false
 risk = "medium"
 [[entry]]
 id = 10
+tracker_id = "#352"
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."

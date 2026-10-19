@@ -8,6 +8,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#380"
 type = "story"
 title = "Core rendering rulings: R-55 key, R-15, effects, waits, compositor inputs, FontRef and metrics"
 description = "Doc-first (G7), docs only: writes Reawakened rule blocks in `docs/spec/engine/` and `docs/spec/formats/` and amends the spine, ratifying the owner's rulings (R-55 fixed; R-15 pre-shade, with the sub-rule that it applies only under a non-zero tint; R-01 and R-06 as landed; R-56 no cap under the fixed 60 Hz tick; presentation `alpha` distinct from simulation; the legacy-screenshot rule: such goldens are reported with a stated metric and never gate) and ruling what the oracles, tracer, rasteriser, compositor, camera, effects and waits need: the sprite sort key (screen-space reference-point y after projection, then a single `drawId` with players before items, each by index) and iso y; the AD-3/AD-15 `FontRef` that carries size, bold and italic; TrueType metrics (advance scaling and rounding, kerning, line height from ascent, descent and line gap) and font-name substitution by family; light falloff; the 2D-on-iso projection; the ellipse algorithm; the under-vector attribute flags and span-blit method; camera defaults and the `cameraPanTo`, `cameraFollow`, `cameraReset` and `cameraShake` signatures and easing set as Reawakened catalogue additions with effect kind `mixed`, so the catalogue generator stubs none of them and `pnpm catalogue:check` is unaffected; effect dispatch (one engine-side bus, `postEffect`, is the only route to a section owner: a built-in's effects reach it through a hook right after the VM records them, phases such as boot and the animation phase post directly, and the owner's applier runs at once in post order so a later getter in the same turn sees the write; `vm.effects` stays a bounded audit log that nothing depends on; a record for a section with no registered owner waits in a bounded per-section pending queue in the `engine` section, with its cap, its eviction rule and a dropped counter reported as a diagnostic, and drains in order when the owner registers); how waits read input and UI state and consume keys (AD-9 `WaitView` becomes a read-only state view; an `input.key` wait stores the input sequence number at park, its poll returns the lowest unclaimed key at or after that number, the engine records the claim in the `engine` section, where the rest of the same waits phase sees it and where neither `input` nor `vm` is written, and the input owner prunes claimed keys; `get` and `clearBuffer` of movement-triggers use the same protocol; so two waiters and two keys resolve once each); the open-tick cursor, the resume modes (`continue` and a one-instruction `step`) and the `ticksRun` count of `setBreakpoints`; the AD-16 change that this epic posts `audio` effects instead of emitting `AudioCue`s; and the inputs of `composeBoard` (the world view with run-time edits, sprites, tick, `alpha`). Amends AD-1, AD-3, AD-8, AD-9, AD-10, AD-15, AD-16, AD-27, AD-29 and AD-33 only where a ruling needs it."
@@ -27,6 +28,7 @@ references = [
 
 [[entry]]
 id = 29
+tracker_id = "#381"
 type = "story"
 title = "Presentation, lifecycle and audio-cue rulings"
 description = "Doc-first (G7), docs only, after entry 1: writes Reawakened rule blocks for the rows entries 20 to 25 and 31 need, each marked unverified where docs/spec is silent: message-window geometry, margins, colours and text speed, the `msgBox` layout, transition defaults (fade types, wipe effects 1 to 12 and speeds, `zoom`; `earthquake` is ruled from an owner-relayed legacy fact, see entry 22), the default cursor arrow and the cursor hand, the `text` cell size, `drawEnemy`; the ownership of `reset`, `mainFile`, `win`, `gone` and `over` against the command-effect catalogue (corrected in the JSON); `dos`, `windows` and `godos` (`dos` and `windows` are legacy aliases of a new Reawakened built-in `quitGame()`, which asks the host to end the whole game by emitting one `quit` request (the host decides what that means: the desktop closes its window, the VS Code host stops the session, the web host shows an ended screen); the spec describes all three as that request and drops the \"exit to windows\" wording; `end()`, `done` and `stop` stay program-only; the alias rule is ruled from corpus evidence: both 3.1 sample games call `windows()` from their start menus (`fixtures/legacy/demo/Prg/start.prg:73`, `fixtures/legacy/Basic/Prg/start.prg:77`) and five `dos()` calls appear in the legacy fixtures; the \"obsolete and dropped\" bullet of the ownership map in `docs/spec/engine/rpgcode-functions.md` is corrected in this commit; `godos` stays the obsolete error); `start` (\"Open a file with the shell\"), which the owner dropped on 2026-10-17 as an obsolete error like `godos`, because a web host cannot shell-open a file and no fixture game calls it (the spec's table row and the JSON row are marked obsolete, and the ownership map's lifecycle list no longer names it); the `reset` row's `sectionsWrite` in the JSON (it lists `rng` and `time`, which E-06 does not clear) corrected to the section-by-section ruling; the `gone` effect on `triggers`; reset section by section (variables, redirects, threads, plugins and the board reload clear; what happens to `time`, `rng`, `ui`, `fx`, `camera`, `input` and `surfaces`); the names of the ports movement-triggers and menu-party-save implement later for first-player creation, the no-player check and the saved-game branch; and that cues from this epic (board music, per-frame `.anm` sounds) are `audio` effect records that epic audio-synth turns into cues, because `cueId` belongs to its section."
@@ -43,6 +45,7 @@ references = [
 
 [[entry]]
 id = 2
+tracker_id = "#382"
 type = "story"
 title = "Extraction questions for the rendering rows docs/spec cannot answer"
 description = "Writes `docs/provenance/questions-round-7.md`, a numbered list of the rows no available document fixes (fade types and ramps, wipe effects 1 to 12 and speeds, zoom, earthquake intensity (answered by the owner-relayed fact, logged here as answered), message window geometry and text speed, `msgBox` layout, the `text` cell size, light falloff, the cursor hand), each with what it affects and the Reawakened default entries 1 and 29 rule meanwhile, for the owner to relay to the TK-side engineer as rounds 5 and 6 were; answers land as `facts-round-7.md` and an extraction-log row. No later entry waits for them: an answer that changes a default is a doc-first amendment plus a deliberate golden change (G5)."
@@ -57,6 +60,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#383"
 type = "spike"
 title = "Font strategy spike: which pure TypeScript or JavaScript font library, if any, may enter core"
 description = "Research-gated (AD-15, G2, G3, G6), after entry 1's `FontRef` and metrics rulings: tests the candidates of discovery/render-readiness.md F-14 to F-17, opentype.js 2.0.0 first (a first probe passed; Typr, fontkit and fonteditor-core are recorded as weaker), against a written checklist: the Blue Oak rating of the package and anything it bundles, a pinned version, loading and parsing under `core`'s tsconfig (the tarball ships no type declarations, so a local one is needed) with no host global touched, a log of every `Math` member executed, a static census of every `Math` member, every `**` and every host global in the shipped bundle with its reachability from the exact API the wrapper would call (the wrapper must avoid the unvetted paths, or a vendored subset removes them), identical outline hashes on V8 and JavaScriptCore for the bundled test fonts, and the size cost. It also owns the bundled font files: reads the licence terms of the candidate default fonts (the owner chose Liberation Sans as the default font on 2026-10-17, with Liberation Serif and Liberation Mono as the Times New Roman and Courier New substitutes unless the owner says Sans only; the family is licensed OFL-1.1 with the Reserved Font Name \"Liberation\" (and Arimo, Tinos and Cousine for the digitised data), so a modified or subset file must be renamed, which entry 9 avoids by shipping unmodified files; the pinned `tools/licences/blue-oak-list.json` has no OFL entry; the owner ruled on 2026-10-17 that the bundled fonts are the upstream OFL-1.1 Liberation releases, so this entry writes the ADR 0003 amendment admitting OFL-1.1 for font assets the project itself bundles and for nothing else (any other open font licence is judged case by case under ADR 0003 rule 2, as an exception in its own pull request; fonts as data, never linked into code; the licence text and any Reserved Font Name terms honoured in `THIRD_PARTY_NOTICES`; a user's own fonts are unaffected) and the gate change that entry 9 makes when it adds the files), settles the TrueType default and test fonts and the bundled bitmap fallback font (authored in this repository or licensed), with their licence text; writes the verdict and the owner's choice (library, vendored subset, or hand-written parser) to `discovery/font-library-spike.md` and adds the library note to AD-15. It adds nothing to the `core` allowlist."
@@ -74,6 +78,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#384"
 type = "story"
 title = "Reference oracle for 2D boards: independent renderer, scene schema, authored scenes and the golden ledger"
 description = "The producer of every 2D expected image, before any consumer. It defines the scene description (JSON: board files, sprite list with the `SpriteDraw` fields, global ambient, view with its viewport size, tick) that entries 13, 15 and 16 consume, authors scenes from `docs/spec` alone through `tools/fixtures/author` (no import from `packages/core`) — tiles with a key colour, a 16×16 doubled tileset, `.tan` and `.tbm` layer cells, animated tiles at fixed ticks, layer images (normal, parallax, stretch), shade layers, board and global ambient, lights, translucent and additive blits, sprites in layer and y order from fixture sprites, a sprite inside an `under` vector for each attribute flag, a 2×2 `.tbm` frame, camera views including a board smaller than the screen — and renders each with an independent Python reference under `tools/fixtures/reference/` that reads files through `docs/spec/tools/rpgtk_formats.py` and implements the AD-3 pixel pipeline and entry 1's rules from the spec text. The village board of `docs/spec/examples` gives four pinned scenes: S-01 matches the in-spec render (shading, images and sprites off, viewport equal to the 512×384 board, camera 0,0, tick 0); S-01b is the full pipeline without sprites in the same view (checked by entry 14); S-01c adds the board's item sprite in that view (entry 15); S-01d is S-01b's content, sprites off, in a 640×480 viewport (the example main file's `mainResolution` 0, written into the scene description) with centring (entry 16). Commits the PNGs and `golden/ledger.json`, which gives every golden an oracle class (`independent-reference`, `legacy-screenshot` or `regression-baseline`), whether it gates, and the entry that produces it."
@@ -88,6 +93,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#385"
 type = "story"
 title = "Tracer bullet: createEngine, a 2D board, composeBoard and the rasteriser to a golden PNG"
 description = "The thinnest path through every layer: `createEngine` with a minimal `input` phase (asset replies only) and the `time` phase; the AD-5 asset loop (the engine requests the board and each tile asset it composes, freezes with `loading` until the harness replies, and keeps decoded assets in a cache outside state); `core/world` hydrating a loaded 2D board model (tiles and layers, no shading); `composeBoard` emitting background and tile blits; a `core/raster` that replays `fill` and normal `blit` with the AD-3 key test; a `runner-harness` PNG encoder and compare step; and a pinned Bun lane (script and CI step) that later entries use for their cross-engine hash checks. It also splits `save/sections.ts` so each of the seven sections this epic fills sits in its AD-10 owner module (`world` and `camera` in `core/world`, `ui` and `fx` in `core/render`, `surfaces` in `core/raster`, `input` in `core/input`, `engine` in `core/engine`), corrects the file's stale owner comments, and owns that seam. What someone sees: `pnpm golden` rasterises the village board of `docs/spec/examples` and the PNG matches scene S-01 (its pinned view of entry 4)."
@@ -103,6 +109,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#386"
 type = "story"
 title = "Reference rasteriser: every draw command, the AD-3 pixel pipeline and per-command conformance vectors"
 description = "Completes `core/raster` for `blit` (colour key on the untinted source, tint once, normal, translucent and additive blends with the AD-3 integer formulas, nearest-neighbour scaling, the `iso2d` projection of entry 1), `fill`, `line` (1 px, inclusive endpoints), `rect`, `ellipse` (the integer algorithm entry 1 rules), `pushTarget` and `popTarget` over frame-scoped scratch targets, and writes the per-command fixture vectors that epic web-runner-packaging replays against WebGL2 (exact match for key and tint); entries 8 and 9 add the text vectors to the same directory. The `text` replay is entry 8's. A gap in AD-3 found while building this goes to the owner as a new doc-first entry before entries 13 to 25 build on it; none is known beyond entry 1's `FontRef` amendment."
@@ -117,6 +124,7 @@ references = [
 
 [[entry]]
 id = 7
+tracker_id = "#387"
 type = "story"
 title = "Persistent surfaces, rev, colour surfaces and read-back"
 description = "Implements the `surfaces` section (AD-27): core-owned bitmaps in `GameState.surfaces` mutated only by `core/raster`, a monotonic never-reused `SurfaceId` counter, `rev` incremented on every mutation, surface 0 as the composed frame, numbered saved-screen slots, the snapshot form `{ t: 'rgba', w, h, b64 }`, `engine.surfacePixels(id, rev)` returning an owned copy or `null`, the read-back primitives (`getPixel`, whole-screen capture) that `canvasGetScreen` and `saveScreen` use, and `colourSurface(rgb)`, the one-pixel colour surface that the `ui` and `fx` sections request for translucent windows and fades; the decoded-pixel cache lives outside state, keyed by `rev`."
@@ -131,6 +139,7 @@ references = [
 
 [[entry]]
 id = 32
+tracker_id = "#388"
 type = "story"
 title = "Authored default bitmap font: a project-owned .fnt"
 description = "Authors the project's deterministic 8x8 bitmap fallback in the TK2 .fnt layout that entry 16.7 reads: a small plain-text glyph source and reproducible generator are committed, with ASCII code points 32 through 126 plus an explicit replacement glyph. The design brief is a generic retro 8-bit game font with a loose stylised, classic small-screen console feel, upper/lower case and 1px strokes, similar in spirit to legacy BASE.FNT for readable small-screen game text but not identical to it. The glyphs are original work drawn from scratch under the project's MIT licence, never traced or derived from any existing font, game or game screenshot. A provenance notice records the author, date and 'original work, no third-party glyph data'. The fallback serves missing-glyph and no-TrueType cases and gives entry 4.8 a project-owned font; it does not replace fetched TK2 BASE.FNT fixtures."
@@ -145,6 +154,7 @@ references = [
 ]
 [[entry]]
 id = 8
+tracker_id = "#389"
 type = "story"
 title = "Text layout, bitmap fonts and the text command"
 description = "Delivers core-owned text (AD-15) without a vector font: the `FontRef` with size and style as entry 1 amends it, a font service resolving a name to a font asset (project `Font\\` assets, entry 1's substitution by family, the fallback role and licence from entry 3, and the authored asset from entry 4.32), line breaking and word wrap, per-glyph advances, `getTextWidth` and `getTextHeight` metrics, synthetic bold and italic, underline as a `line` command, `text` emission and its replay in `core/raster`, and the Toolkit 2 `.fnt` reader of 16.7 as a second glyph source so TK2 games' `Font\\BASE.FNT` draws. It exports text vectors into entry 6's conformance directory. The glyph-source seam is what entry 9 fills with TrueType outlines."
@@ -160,6 +170,7 @@ references = [
 
 [[entry]]
 id = 9
+tracker_id = "#390"
 type = "story"
 title = "TrueType glyphs: the library entry 3 approves, outline coverage fill and bundled fonts"
 description = "Wires the font path entry 3 approved (or the owner's fallback) behind entry 8's glyph source, adds the bundled OFL-1.1 fonts to the licence gate as ADR 0003's amendment (entry 3) allows: parses project TTFs and the bundled default fonts, derives advances, kerning and line height as entry 1 rules, flattens outlines with `+ - * /` and `sqrt` only, fills them with a nonzero-winding coverage rasteriser in `core/raster` on fixed-point integers so edge pixels match on every engine, caches glyphs outside state, adds the library to `packages/core/dependency-allowlist.json` and `THIRD_PARTY_NOTICES`, ships the bundled default and test fonts with their licence text, and adds TrueType text and metric vectors to entry 6's conformance directory. A wrapper module is the only importer of the library and calls only the functions entry 3 vetted."
@@ -177,6 +188,7 @@ references = [
 
 [[entry]]
 id = 10
+tracker_id = "#391"
 type = "story"
 title = "World model: boards hydrate into the world section"
 description = "Implements `core/world` (the AD-10 `world` section): hydrates a board model of any `coordType`, including the pre-vector converter's output and the TK2 text boards, into plain-data state: layers and the effective grid, tile LUT expansion with animated tiles through `core/time` `frameAt` (origin 0, added here), layer images and background, vectors and programs, item placements kept as data for movement-triggers with the ruled run-time compaction of empty slots (R-05, R-06), constants and titles, board ambient, the start position with the per-axis fallback (R-07), the 16×16 pixel-doubling tileset cache, the schema entry and the snapshot round trip. No drawing."
@@ -192,6 +204,7 @@ references = [
 
 [[entry]]
 id = 11
+tracker_id = "#392"
 type = "story"
 title = "Built-in packs seam: render and world packs, same-statement effect application, catalogue stub replacement"
 description = "The shared seam for this epic's built-ins and effects: a `render` and a `world` `PluginDefinition` in the engine's default manifest (3.25), each with one command module per consuming entry so entries 12, 16, 21, 22, 24 and 25 never edit one command array; the effect bus of entry 1's ruling in `core/engine` (`postEffect(section, effect)` stamps `seq` and `tick`, runs the registered section applier at once in post order, or holds the record in a bounded per-section pending queue with a dropped counter that drains when an owner registers; a built-in's effects reach it through a hook the VM calls right after it records them, so a getter later in the same turn sees the write; `vm.effects` stays the bounded audit log; phases such as boot and the animation phase call `postEffect` directly); the rule by which a real definition replaces a catalogue stub without an override warning (the catalogue generator skips names a real pack registers, so `pnpm catalogue:check` stays the guard); the one-owner table of this epic's 92 catalogue names plus the lifecycle names and `camera*` additions; and a test that each name resolves exactly once to a real built-in or its catalogue responder. This entry makes the first of the `core/script` edits this epic needs (the hook); entry 19 edits `waits.ts` and the wait view argument, and entries 12 and 24 the `virtuals.ts` reads."
@@ -208,6 +221,7 @@ references = [
 
 [[entry]]
 id = 19
+tracker_id = "#393"
 type = "story"
 title = "Engine loop: phases, catch-up, the input section, waits, focus pause and presentation alpha"
 description = "Completes `core/engine` (AD-1, AD-5, AD-9, AD-14, AD-26) apart from breakpoints: `createEngine(init)` with the fixed named phase list and the registration seam later epics use, `advance` over whole 60 Hz ticks, the `maxTicks` catch-up cap, a new `core/input` module and `input` section whose `input` phase applies AD-14 events (key queue with a monotonic sequence number, held keys, pointer state, replies) and which movement-triggers extends with bindings, click-to-move, gamepad and buttons, the waits phase reading input and UI state through entry 1's read-only state view (it changes `pollInputKey` in `script/waits.ts` and the view argument of `runWaitsPhase`: an `input.key` wait stores the sequence at park, the poll returns the lowest unclaimed key at or after it, the engine claims it and the input owner prunes claimed keys; the input owner never writes into `vm`), input queuing and the `loading` freeze, `TickReport` with `stateHash`, diagnostics and the pending-queue dropped counter, the E-03 pause on `focus.lost`, `drawList(alpha)` as a pure function of state with `alpha` 0 in tests, the wiring of epic 3's `waits` and `threads` phase handlers, registering each owned section's applier with entry 11's bus at `createEngine` (application timing is entry 11's alone), and the harness driver moving from its VM-only host to this engine."
@@ -225,6 +239,7 @@ references = [
 
 [[entry]]
 id = 30
+tracker_id = "#394"
 type = "story"
 title = "Breakpoints: the open-tick cursor, pause and resume"
 description = "Implements `setBreakpoints` and the `paused { thread, frame, line }` stop on entry 19's engine as entry 1 rules them: the engine single-steps the VM with `stepThread` at budget 1 only while breakpoints exist, stores an open-tick cursor in the `engine` section (the ready-thread list snapshotted at phase start, the current thread, the steps used) so a snapshot taken at the stop resumes, the next `advance` finishes the open tick first, counted in `ticksRun` as entry 1 rules, and a resume mode `step` that runs exactly one instruction and pauses again (step over, in and out are built by epic rpgcode-tooling from `step` and the frame depth); debug hooks read state and never write it."
@@ -240,6 +255,7 @@ references = [
 
 [[entry]]
 id = 12
+tracker_id = "#395"
 type = "story"
 title = "Board edit and board-read built-ins, with the board virtual variables"
 description = "Registers the `world` pack's board built-ins: `getBoardName`, `put`, `layerPut` (a `put` lasts until the program ends, a `layerPut` until the board is left), `getBoardTile` and `boardGetTile`, `getBoardTileType`, `tileType`, `animatedTiles`, `parallax` (obsolete error), `setAmbientLevel`, `boardGetVector`, `boardSetVector` and the vector point pair, `boardGetProgram`, `boardSetProgram` and the program point pair, `prg`, `setConstants` (obsolete error) and `underarrow` (obsolete error), plus the virtual variables `boardBackground`, `boardSkill`, `boardTitle[i]`, `constant[i]`, `ambientRed`, `ambientGreen` and `ambientBlue` with the read-write set 3.27 ruled. It replaces the world reads in `packages/core/src/script/virtuals.ts` (`createDefaultVirtuals` guesses `world.board.*` and `world.ambient` and falls back silently) with reads of the real section and no silent fallback. Edits are `world` effects applied under entry 11's same-statement rule, and an applied vector edit raises the path-finding invalidation that movement-triggers will consume."
@@ -255,6 +271,7 @@ references = [
 
 [[entry]]
 id = 13
+tracker_id = "#396"
 type = "story"
 title = "Shading, ambient and lights"
 description = "Implements `core/render/shade.ts`, the only place a tint is computed: per-cell shade layers cast onto every layer at or below their `layer`, board ambient plus the script's global ambient pre-summed into one `Tint` per blit (±1020), R-15's pre-shade of pure white and black under a non-zero tint, light rasterisation of the three types (ellipse, gradient, clipped gradient) into shading layer 0 once at load by entry 1's formulas, the pre-vector shade rule of 2.8 consumed as data, and the lint rule AD-3 requires so that no other module sums tint. It reads the scene description entry 4 defines."
@@ -270,6 +287,7 @@ references = [
 
 [[entry]]
 id = 14
+tracker_id = "#397"
 type = "story"
 title = "composeBoard for 2D boards: layers, images, parallax, animated tiles"
 description = "Builds `composeBoard` for 2D boards as entry 1 rules its inputs (AD-29: the world view with run-time edits, sprites, tick and `alpha`, and `view`): background colour, then the background image (normal, stretch, or parallax with `scroll = (imageSize − screenSize) / (boardPixelSize − screenSize)`), then each layer's tiles (shaded by entry 13, animated frames by tick, `.tbm` and `.tan` resolved to tile references plus per-cell tint) and the layer's images with colour-key transparency and translucent or additive blends, culled to the viewport. `view.include` switches sprites, images and shading for the editor and `viewBrd`; the same function backs `Engine.drawList`."
@@ -285,6 +303,7 @@ references = [
 
 [[entry]]
 id = 15
+tracker_id = "#398"
 type = "story"
 title = "Sprites in the compositor: strict layer and y order, under vectors, overlap redraw"
 description = "Adds sprites to `composeBoard` through a plain-data `SpriteDraw` input that movement-triggers' `sprites` section will fill (`id` and `key` for the total order of entry 1, reference point, layer, frame texture, animation phase, translucency, an optional previous position for presentation `alpha`): strict layer, then screen-space y, then `drawId` order that fixes R-55 with no re-insertion by last mover; each layer's tiles redrawn over lower-layer sprites; `under` vectors honoured by redrawing the covered tiles over sprites inside the polygon with per-row span blits and the three attribute flags; sprite frames from `.anm`, `.tbm` and tile references with their own transparent colour; ambient applied to frames. The E-05 debug overlays stay with entry 25."
@@ -299,6 +318,7 @@ references = [
 
 [[entry]]
 id = 16
+tracker_id = "#399"
 type = "story"
 title = "Camera: tracking, deadzone, centring, scripted pans and the camera built-ins"
 description = "Implements the `camera` section in `core/world` (AD-33): position and clamp, follow-player default, track entity, focus point and waypoint path, tick-based smoothing and deadzone (defaults ruled in entry 1), `clamp-to-scene` and `center-if-small`, scripted pans with plain-JSON easing curves, shake (the shared `shake(amplitude, ticks)` primitive: corner-cycle offsets, no RNG, plus `cameraShake`; entry 22's `earthquake` sequences it), re-alignment on `send`, `positionAt(alpha)` for presentation, and the built-ins `cameraPanTo`, `cameraFollow`, `cameraReset`, `cameraShake` and `getCorner` through the `world` pack. It reads the followed position through a `CameraTarget` port that movement-triggers' `sprites` section will implement (tests supply a double) and gives `composeBoard` its `view.camera`; camera scenes use the scene description entry 4 defines."
@@ -314,6 +334,7 @@ references = [
 
 [[entry]]
 id = 17
+tracker_id = "#400"
 type = "story"
 title = "Reference oracle for isometric boards: stacked and rotated scenes"
 description = "The producer of every isometric expected image, before its consumer: authors from `docs/spec` alone, in entry 4's scene schema, a small iso-stacked board (`coordType` 1) and a small iso-rotated board (`coordType` 2, effective grid `(sizeX + sizeY)` square) with an `.iso` tileset, a 2D tileset tile on an iso board (the `iso2d` projection of entry 1), layered tiles, a sprite pair for draw order, shading and a camera clamp case; extends entry 4's Python reference with tile-to-pixel conversion, the diamond pour, board pixel sizes and both draw orders; commits the PNGs and ledger rows. No sample game has an iso board (every corpus board is `coordType` 0 or 4), so these scenes are the only iso oracle."
@@ -327,6 +348,7 @@ references = [
 ]
 [[entry]]
 id = 33
+tracker_id = "#401"
 type = "story"
 title = "Reference oracle for lights and shading: lit scenes"
 description = "Extends the 4.4/4.17 independent oracle (`golden/scenes`, `golden/reference`, `golden/ledger.json`, `tools/fixtures/reference/render.py` and `SCHEMA.md`, and the authored fixture generator) with lit scenes so 4.13's light and shading arithmetic has a second, independent opinion. The independent Python renderer paints expected pixels from the normative wording alone (`docs/spec/formats/tiles.md#shading`, `docs/spec/formats/board.md#lights` and shading, and `docs/spec/engine/display-input-audio.md#reawakened-light-and-raster-arithmetic` E-17); the core engine's output must match exactly. The authored board is mid-grey rather than white, with a coloured tile strip and no transparent-key pixels, and covers an ellipse falloff, a gradient, a clipped gradient, overlapping lights including a very bright light that exercises the final clamp, and a night look with strongly negative board ambient plus one centred ellipse light; all lights are static baked board data, with no runtime or sprite-attached light. This checks conformance to the Reawakened specification wording, not legacy parity; round-7 question 8 covers the original's falloff."
@@ -343,6 +365,7 @@ references = [
 
 [[entry]]
 id = 34
+tracker_id = "#402"
 type = "story"
 title = "Ellipse light boundary exclusion: code and independent oracle"
 description = "Brings 4.13's ellipse light and the independent `S-LIGHT-ELLIPSE` oracle (and any other lit scene whose ellipse boundary pixels change) into line with the round-7 ruling in `docs/spec/engine/display-input-audio.md#reawakened-light-and-raster-arithmetic` and `docs/spec/formats/board.md#lights`: the ellipse boundary is excluded, so only pixels strictly inside the ellipse (normalized elliptical radius below 1) are lit, and the midpoint-ellipse fill runs strictly between its paired extrema. The single final clamp stays. Both the core `ellipseWeight` and the Python reference renderer change together; the changed oracle PNGs and `hash-vectors.json` rows are deliberate G5 changes recorded in the ledger with the reason (owner-relayed round-7 answer to Q8, `docs/provenance/facts-round-7.md`)."
@@ -360,6 +383,7 @@ references = [
 
 [[entry]]
 id = 18
+tracker_id = "#403"
 type = "story"
 title = "Isometric drawing: stacked and rotated boards"
 description = "Adds both iso layouts to the compositor: the tile-to-pixel and inverse conversions of `docs/spec/formats/board.md#coordinates`, `.iso` diamond tiles composited through the 64×32 mask, 2D tiles projected with `iso2d`, board pixel dimensions, draw order for the staggered and rotated layouts, sprite placement at the tile-centre reference, camera clamping on the iso board size, and depth sorting with entry 15's key (screen-space y after projection)."
@@ -374,6 +398,7 @@ references = [
 
 [[entry]]
 id = 20
+tracker_id = "#404"
 type = "story"
 title = "Boot and send"
 description = "Implements boot and `send` on entry 19's engine (E-01, E-02, E-10, E-19, E-47, AD-17): the start-up sequence from a loaded main file (private fonts, plugin manifest, the first player through an effect that test doubles apply until movement-triggers does, the start-up program run to completion as the blocking thread, the no-player check through the presence port entry 29 names, `initBoard` unless the saved-game port says one was loaded, board threads and `enterPrg`, the board music posted as an `audio` effect through entry 11's `postEffect`), board entry on every arrival, and `send` (loads the board, positions the player, re-aligns the camera, kills the old board's threads and keeps persistent ones, rebuilds draw order, deactivates the program the player lands on) with the `send` built-in. Reset, quit and the other lifecycle names are entry 31's; program test mode stays with the editor epics (R-60)."
@@ -389,6 +414,7 @@ references = [
 
 [[entry]]
 id = 31
+tracker_id = "#405"
 type = "story"
 title = "Reset, quit and the lifecycle built-ins, with the per-section reset seam"
 description = "Implements reset and quit on entry 20's boot (E-06, AD-17): `reset` clears globals, redirects and threads, restarts the manifest's plugins and reruns start-up from step 3, and resets the other sections exactly as entry 29 rules (what happens to `time`, `rng`, `ui`, `fx`, `camera`, `input` and `surfaces`); the per-section reset seam that entries 21, 22, 24 and 25 register into; the `quit` request; and the built-ins `reset`, `mainFile`, `win` (obsolete error), `over`, `gone`, `quitGame` (new), `dos` and `windows` (its aliases) and `godos` as entry 29 assigns them (`gone` is an effect on `triggers`), and `start` as the obsolete error entry 29 rules; it also removes the `obsolete: true` flags on `dos` and `windows` from the catalogue stubs, and sets it on `start`, in `packages/core/src/script/catalogue-responders.ts`, which today make the Quit option of the sample games' start menus raise an error."
@@ -403,6 +429,7 @@ references = [
 
 [[entry]]
 id = 21
+tracker_id = "#406"
 type = "story"
 title = "Message window, text built-ins and modal prompts"
 description = "Implements the `ui` section's message window (E-55) and the dialogue group's 27 built-ins: `mwin`, `mwinCls`, `mwinSize` (obsolete error), `show`, `mbox`, `winGraphic`, `winColor`, `winColorRgb`, `setMwinTranslucency`, `textSpeed` (obsolete error on any argument since the round-7 ruling), `font`, `fontSize`, `bold`, `italics`, `underline`, `color`, `colorRgb`, `getColor`, `getFontSize`, `getTextWidth`, `getTextHeight`, `print`, `text`, `pixelText`, `staticText` (obsolete error), `prompt` and `msgBox`, with `<var>` splicing, geometry, background colour or image and translucency (entry 7's `colourSurface`, no new draw command) as entry 29 rules them and the round-7 amendments of 2026-10-17 refine them (message window fixed 600 × 100 pixels, centred at the top, no margin, 50% default translucency, text all at once; `msgBox` sized from the wrapped text with 80 × 28 `OK` or `Yes`/`No` buttons, the title merged into the body and return codes 1, 6 and 7; `text` on square cells one font size wide with 1-based coordinates, which the round-7 follow-up has already applied to entry 4.8's shipped `text`), and the `render.msgbox` wait kind registered with epic 3's wait registry and polled through entry 1's state view of the `ui` and `input` sections; it registers `ui` into entry 31's reset seam."
@@ -417,6 +444,7 @@ references = [
 
 [[entry]]
 id = 22
+tracker_id = "#407"
 type = "story"
 title = "Transitions and screen effects: fade, wipe, zoom, earthquake"
 description = "Implements the `fx` section's screen effects (E-59): `fade` types (the round-7 ruling: types 0 to 5 are stepped effects, 0 when the argument is omitted, 30 fixed ticks, blocking, other types a no-op; the per-step geometry and end state are unverified and the owner settles them in this entry's plan before it builds), `wipe` effects and speeds (effects 1 to 4 reveals, 5 to 8 diagonals, 9 to 12 push slides, default speed 1 pixel per tick, speed 0 and below `builtin.bad-arg`, ending on exactly the new image), `zoom` (LOW confidence: `percent` is a shrink amount, 0 to 75, each call blocking a bounded 30 ticks), `earthquake` (`i` clamped to 1 to 10, then `i` consecutive `shake(amplitudeForIntensity(p), 4)` calls from entry 16's shared primitive, `p` = 1 to `i`, where tick `t` shows the corner offset `(±a, ±a)` cycling up-left, up-right, down-left, down-right with no RNG draw and `amplitudeForIntensity(p) = p × PX_PER_INTENSITY`, `PX_PER_INTENSITY = 1`, so `4·i` ticks; it blocks through the `sleep` wait; its help text (the `docs/spec` table row and the editor's help entry, as for `cameraShake`) describes intensity twice, once for the author in plain words (how strong the shaking feels from 1 to 10) and once in game terms (`i` passes, each pass moving the screen `p` px toward the four corners, `4·i` ticks or `4·i / 60` s, the script waiting until it ends), with the wording written by this entry and approved by the owner; an owner-relayed legacy fact that entry 2 logs as round 7), `borderColor` (obsolete error) and `forceRedraw` as tick-driven plain-data state emitting draw commands (entry 7's `colourSurface` with a translucent blend, scaled blits, offset destination rectangles) with entry 29's default behaviour and timings as the round-7 amendments of 2026-10-17 refine them, blocking until done through epic 3's `sleep` wait, an effect in progress that survives snapshot and restore, and `fx` registered into entry 31's reset seam."
@@ -431,6 +459,7 @@ references = [
 
 [[entry]]
 id = 23
+tracker_id = "#408"
 type = "story"
 title = "Script animations and per-frame audio effects"
 description = "Implements E-54 for scripts: `animation`, `sizedAnimation` and `endAnimation` playing `.anm` files and animated GIFs (R-10 reading) at their delay in ticks through `frameAt`, loop and persistent modes with ids, per-frame transparent colour, resizing, drawing from the `fx` section over the board, and per-frame sounds posted as `audio` effects through entry 11's `postEffect` from the `animation` phase (epic audio-synth turns them into cues; `cueId` is its counter)."
@@ -445,6 +474,7 @@ references = [
 
 [[entry]]
 id = 24
+tracker_id = "#409"
 type = "story"
 title = "Canvases, drawing and image built-ins, screen save and board preview"
 description = "Registers the graphics group's 27 names on entry 7's surfaces: `createCanvas`, `killCanvas`, `drawCanvas`, `drawCanvasTransparent`, `canvasDrawPart`, `canvasGetScreen`, `clear`, `bitmap`, `setImage`, `setImageTransparent`, `setImageTranslucent`, `setImageAdditive`, `drawLine`, `drawRect`, `fillRect`, `drawCircle`, `fillCircle`, `setPixel`, `getPixel`, `saveScreen`, `restoreScreen`, `restoreScreenArray` and its alias, `renderNow` (the reserved `cnvRenderNow` canvas), `viewBrd` (E-63: any board, iso included, to the screen or a canvas through `composeBoard`), `getRes` and `drawEnemy` (as entry 29 rules it), with by-reference outputs written back, the `cnvRenderNow` read in `packages/core/src/script/virtuals.ts` replaced by a read of `surfaces`, and `surfaces` registered into entry 31's reset seam. The optional canvas argument of `text` and `pixelText` follows the round-7 text rule (square cells one font size wide, 1-based coordinates, `docs/spec/engine/rpgcode-functions.md#reawakened-text-cell-size`), not the 8×16 zero-based cell of the original entry 29 ruling."
@@ -460,6 +490,7 @@ references = [
 
 [[entry]]
 id = 35
+tracker_id = "#410"
 type = "story"
 title = "Image-backed graphics applier and board preview pixels"
 description = "Completes the image-backed side of the graphics seam for `image`, `drawImage`, `drawImagePart`, `imagePut`, `imageLoad` and board-preview image paths. Decoded image assets arrive through the deterministic engine asset cache and are applied to core-owned surfaces as RGBA pixels; no host decoder enters core. The applier preserves surface revisions, reset safety and replayable draw-list sources."
@@ -475,6 +506,7 @@ references = [
 
 [[entry]]
 id = 25
+tracker_id = "#411"
 type = "story"
 title = "Cursor maps, mouse cursor, overlay order and debug overlays"
 description = "Implements cursor maps (`createCursorMap`, `cursorMapAdd`, `cursorMapRun` with the `input.key` wait polled through entry 1's state view, `killCursorMap`, `cursorMapHand`), the mouse cursor (`mouseCursor`, E-61: the default arrow entry 29 rules, none, or an image with hot spot and key) drawn as the last command, the E-57 render-now overlay ordering of surface 0 (board composite, script screen, overlay), the on-screen button slots of movement-triggers' `input` section drawn in the overlay through a read-only view, and the E-05 debug overlays (FPS readout, board and sprite vectors, paths) behind `RunConfig`; cursor state registers into entry 31's reset seam. The round-7 ruling of 2026-10-17 sets the bundled arrow and hand to 32×32, the hand with no hot spot drawn at (−40, −10) from the cursor-map point, and the arrow's hot spot (0,0) kept."
@@ -489,6 +521,7 @@ references = [
 
 [[entry]]
 id = 26
+tracker_id = "#412"
 type = "story"
 title = "Golden scenes and replay gates"
 description = "Wires every ledger scene into `pnpm golden` and CI through the real engine, replacing the harness double for rendering: rasterises each scene to PNG and compares it with its oracle by class (exact for independent-reference and regression-baseline; a `legacy-screenshot` is reported with the metric entry 1 states and never gates), covering camera tracking, small-scene centring, parallax, both iso modes, text, the message window and transitions, records per-tick state and draw-list hashes for the G3 replay on Node and under the Bun lane, adds the cache-flush replay (Done when 6) and the AD-1 Worker transfer contract test, and adds the ledger check that fails when a golden has no class, gating flag or producer."
@@ -504,6 +537,7 @@ references = [
 
 [[entry]]
 id = 27
+tracker_id = "#413"
 type = "story"
 title = "Refactor sweep"
 description = "Cleanup only, with its scope set when it starts from the plans and the review findings deferred during the epic: reconciles the shared seams (the `save/sections.ts` partition, the pack command modules, the catalogue stub filters, the phase list, the reset seam), deletes scaffolds and duplicated helpers, and confirms that no stub still answers this epic's names."
@@ -515,6 +549,7 @@ risk = "low"
 
 [[entry]]
 id = 28
+tracker_id = "#414"
 type = "story"
 title = "Closing suite: the sample games boot and render headlessly"
 description = "One job over the fetched corpus (both 3.1 games and the six TK2 games): boots each through the real engine, advances a defined number of ticks with scripted input, rasterises the first board and a later frame to PNG, records state and draw-list hashes with epic 3's finish line (same state hash after N ticks), and files each PNG in the ledger as regression-baseline, offering the owner the chance to upgrade named frames to legacy-screenshot (reported, non-gating)."

@@ -2,6 +2,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#314"
 type = "story"
 title = "Binary read and write primitives"
 description = "Adds pure, deterministic little-endian binary reader and writer utilities in `core/formats/binary` for i8, u8, i16, u16, i32, u32, f64, NUL-terminated Windows-1252 strings, COLORREF, and upper-bound array loops per `docs/spec/formats/README.md#header-and-version`. Built with zero Node or DOM dependencies (G2), deterministic maths (G3)."
@@ -13,6 +14,7 @@ risk = "low"
 
 [[entry]]
 id = 2
+tracker_id = "#315"
 type = "story"
 title = "Tileset (.tst) reader and writer"
 description = "Adds reader and writer for Toolkit tileset files (.tst) supporting version 20 (24-bit column-major RGB pixels) and version 30, with true-count handling per `docs/spec/formats/tiles.md#tileset-tst-and-isometric-tileset-iso`. Adds transparent key detection (0,1,2)."
@@ -24,6 +26,7 @@ risk = "low"
 
 [[entry]]
 id = 3
+tracker_id = "#316"
 type = "story"
 title = "Texture decoders: PNG and JPEG"
 description = "Adds `core/formats/image` with `decodeTexture` (AD-28), returning pure RGBA Uint8Array. Decodes 8-bit palette Adam7 PNG (using fflate/browser unzlibSync for deflate decompression, manual filter and palette expansion) and baseline 4:2:0 JPEG (evaluating jpeg-js with useTArray: true vs integer baseline decoder per G2/G3)."
@@ -35,6 +38,7 @@ risk = "medium"
 
 [[entry]]
 id = 4
+tracker_id = "#317"
 type = "story"
 title = "Animation (.anm) reader and writer"
 description = "Adds reader and writer for animation files (.anm), parsing major 2 / minor 3 binary format per `docs/spec/formats/animation.md#layout`: 51 frame slots, tile references (set.tstN), frame transparent color, audio cues, and frame delay seconds."
@@ -46,6 +50,7 @@ risk = "low"
 
 [[entry]]
 id = 5
+tracker_id = "#318"
 type = "story"
 title = "Board (.brd) minor 4 reader and writer"
 description = "Adds reader and writer for modern vector boards (minor 4) per `docs/spec/formats/board.md#vector-layout-minor-4-and-later`: coordinate types, tile matrix RLE decompression (wrapping rows/layers), tile shading layers with run-length encoding, vectors (solid, passage, under, stairs), board programs, sprites, and background settings."
@@ -57,6 +62,7 @@ risk = "medium"
 
 [[entry]]
 id = 6
+tracker_id = "#319"
 type = "story"
 title = "Actor definitions: Character, Item, Enemy (.tem, .itm, .ene)"
 description = "Adds readers and writers for player characters (.tem, minor 8, section 6.1), items and board NPCs (.itm, minor 7, section 6.2), and enemies (.ene, minor 1, section 6.3), including their 2 vector bases (collision and activation polygons), 7 body slots, stats, and stance lists."
@@ -68,6 +74,7 @@ risk = "medium"
 
 [[entry]]
 id = 7
+tracker_id = "#320"
 type = "story"
 title = "Battle definitions (.bkg, .spc, .ste)"
 description = "Adds binary readers and writers for battle backgrounds (.bkg, section 8.3), special moves (.spc, section 8.1), and status effects (.ste, section 8.2), with RPGTLKIT magic and major/minor headers."
@@ -79,6 +86,7 @@ risk = "low"
 
 [[entry]]
 id = 8
+tracker_id = "#321"
 type = "story"
 title = "Pre-vector board converter"
 description = "Adds converter from pre-vector binary boards (minors 2–3) to vector boards (minor 4) per `docs/spec/formats/legacy/older-binary-versions.md#board-minor-2-and-3-pre-vector`: tile type vectorization (solid, under, passages, stairs 1..8), program trigger 32x32 bounding boxes, shading flattening, and tile-to-pixel coordinate conversion."
@@ -90,6 +98,7 @@ risk = "medium"
 
 [[entry]]
 id = 9
+tracker_id = "#322"
 type = "story"
 title = "Main game file (.gam) reader and project layout"
 description = "Adds parser for <root>/Main/<game>.gam across minor versions 0–9 (section 2), reading the 43-row table with version-dependent fields. Implements project layout resolution (section 1.5) pairing the main file with <root>/Game/<project>/ assets."
@@ -101,6 +110,7 @@ risk = "medium"
 
 [[entry]]
 id = 10
+tracker_id = "#323"
 type = "story"
 title = "Asset resolver and package loader (.tpk, appended-ZIP EXE)"
 description = "Adds case-insensitive asset resolver (section 1.5) and package loader for loose folders, .tpk ZIP archives, and standalone EXEs with CMP1 trailers (section 13). Enforces untrusted package limits (max entries, max sizes, zip-slip protection, CRC-32 validation)."
@@ -112,6 +122,7 @@ risk = "high"
 
 [[entry]]
 id = 11
+tracker_id = "#324"
 type = "story"
 title = "Headless project dump tool (runner-headless dump)"
 description = "Adds a CLI command to `packages/runner-headless` that opens a legacy project (extracted directory or .tpk), parses every data file using the readers, and prints human-readable verification data (Done-when #1)."
@@ -123,6 +134,7 @@ risk = "low"
 
 [[entry]]
 id = 12
+tracker_id = "#325"
 type = "story"
 title = "Distribution package writer with manifest"
 description = "Adds the writer for the project's own distribution package (AD-6): a .tpk-compatible ZIP containing manifest.json { schema, main, index } plus the game files, so a built game round-trips through the package reader. Completes the epic's Done-when 5, 'the distribution package round-trips with its manifest'."
@@ -134,6 +146,7 @@ risk = "medium"
 
 [[entry]]
 id = 13
+tracker_id = "#326"
 type = "story"
 title = "AssetDecoder interface and core format registry (AD-31)"
 description = "Adds the `AssetDecoder` interface of AD-31 and a core format registry that dispatches bytes to a decoder by file extension and magic header, wraps every landed reader as a decoder, and moves the dump command's data-format rows onto the registry so the project has one dispatch. Registration through ADR 0004's `PluginDefinition` is not part of this epic."
@@ -145,6 +158,7 @@ risk = "medium"
 
 [[entry]]
 id = 15
+tracker_id = "#327"
 type = "story"
 title = "Format-spec section 4.8 amendment: pre-vector conversion rules"
 description = "Applies, in its own commit (G7), the rules the entry 2.8 converter had to guess, each recorded in deferred-work.md: the default vector bases for pre-vector items, the sizeX by sizeY to (sizeX+sizeY) squared mapping and rotated program regions, how per-layer shades combine, geometry for empty program and sprite slots, activationType with repeatDistance, unclamped shade sums, tile types 5 to 10 and above 18, dropped fields, the numeric-constant and layer-title mappings, the cell polygon, PRG_STOPS_MOVEMENT on old programs, backgroundDrawType and the (64,64) start fallback. A person rules each; where the sample corpus has no minor 2 to 3 board, the ruling says so."
@@ -156,6 +170,7 @@ risk = "medium"
 plan_checkpoint = true
 [[entry]]
 id = 16
+tracker_id = "#328"
 type = "story"
 title = "Align the pre-vector converter with the amended section 4.8"
 description = "Changes the converter to the entry 15 rules: generate or omit bases as ruled, convert or keep refusing rotated boards, apply the shade rule, handle empty slots, fix the repeat-distance passthrough, and warn on dropped tile types, so Done-when 4 is met as section 4.8 states."
@@ -167,6 +182,7 @@ risk = "medium"
 
 [[entry]]
 id = 17
+tracker_id = "#329"
 type = "story"
 title = "Format-spec precision amendment: boards, actors, battle files and the main file"
 description = "Applies, in its own commit (G7), the rules the reviews found missing: section 4.2 and 14 (a run marker followed by a negative LUT index, the overrun-warning policy, the empty-LUT contradiction between 1.2 and 4.2, isometric detection bit 1 or 2), the accepted minor ranges of sections 6.1 and 6.2 and of 8.1 to 8.3 that section 1.4 requires, and the section 2 row numbering collisions."
@@ -178,6 +194,7 @@ risk = "medium"
 plan_checkpoint = true
 [[entry]]
 id = 18
+tracker_id = "#330"
 type = "story"
 title = "Enforce the amended boards, actors and battle rules in the readers"
 description = "Makes the board reader refuse or warn as entry 17 rules, makes the actor and battle readers validate the stated minor ranges, and makes the .ste and .bkg readers report a short read before probing the detection byte, as the .spc reader now does."
@@ -189,6 +206,7 @@ risk = "low"
 
 [[entry]]
 id = 19
+tracker_id = "#331"
 type = "story"
 title = "Format-spec section 10 and the image kinds"
 description = "Extends section 10, in its own commit (G7), with what the PNG and JPEG decoders implement (chunk and CRC structure, filters, Adam7, palette and tRNS, bit-depth scaling, the baseline-only JPEG boundary, the 100 megapixel refusal) and rules on BMP, GIF, ICO and WMF: implement them, in which entry, or remove them from the table."
@@ -200,6 +218,7 @@ risk = "medium"
 
 [[entry]]
 id = 20
+tracker_id = "#332"
 type = "story"
 title = "Format-spec section 13 and the feature catalogues: packages and the manifest"
 description = "Extends section 13, in its own commit (G7), with the loose-folder package form, the L1 to L26 limits the loader enforces, and the in-package layout of a .tpk, and adds the distribution manifest to docs/editor-features.md T-70 to T-74 and docs/spec/engine/main-loop-and-startup.md#e-131."
@@ -211,6 +230,7 @@ risk = "medium"
 
 [[entry]]
 id = 21
+tracker_id = "#333"
 type = "story"
 title = "Rule the path case-fold: AD-5 against the foldPath helper"
 description = "Decides whether path lookup folds ASCII only (restrict foldPath) or full Unicode (amend AD-5), then makes code and spine agree: today K.brd and k.brd collide and U+0130 folds to two code points."
@@ -222,6 +242,7 @@ risk = "low"
 
 [[entry]]
 id = 22
+tracker_id = "#334"
 type = "story"
 title = "Fixtures that exercise the untested paths"
 description = "Sources or synthesises samples the corpus lacks, through the fixture tool and never committed if they are legacy files: isometric and detail 2, 4 and 6 tilesets, a palette tileset, .spc and .ste files, and a real .tpk, EXE and Setup ZIP, then replaces the self-built test buffers that pass by sharing the writer primitives. The archived Toolkit 2 games are candidate sources."
@@ -233,6 +254,7 @@ risk = "medium"
 
 [[entry]]
 id = 23
+tracker_id = "#335"
 type = "story"
 title = "Migrate format-spec sections 1 to 14 into docs/spec/formats and rule the conflicts"
 description = "Under ADR 0007, moves into `docs/spec/formats/`, in its own doc-only commit (G7), everything §1–§14 hold that `docs/spec/` lacks (R-25: the code-page round trip, bounds checks, the ASCII fold, residue, size limits, the §4.8 rulings, the §10 PNG and JPEG decoding rules and image-kind rulings, the §13 loose folder, L1–L26, the distribution manifest and the L21 TK2 Pro refusal), each as a Reawakened rule block. It records the owner's R-01 ruling (2026-10-15: adopt `dos-palette.json`). A person rules each other format conflict of the reconciliation, R-02 to R-16: pre-vector shading, background image, minor-2 `coordType` (checked against the 144 TK2 minor-2 boards), empty program and item slots, per-axis start fallback, `.tpk` separators, the standalone-EXE trailer tolerance and what T-70 appends (R-27), default polygons, the animated-GIF rule, the `.spc` flag note, compiled `.prg`, `.sav`, the white/black pre-tint and levelling. It leaves a map from each old § to its new anchor for entry 3.28."
@@ -249,6 +271,7 @@ references = [
 
 [[entry]]
 id = 24
+tracker_id = "#336"
 type = "story"
 title = "Align the readers and the dump with docs/spec"
 description = "Changes the code to entry 23's rulings: replaces the VGA table with `docs/spec/formats/dos-palette.json` for 8-bit tiles (R-01), applies the ruled pre-vector shading, background image, minor-2 `coordType`, empty-slot and per-axis start rules (R-02 to R-05, R-07), uses the exact default polygons wherever a reader supplies them (R-09), and makes the dump report a `.prg` whose first byte is `00` as compiled, not as text (R-12). A test loads a legacy `\\`-separated `.tpk` (R-08)."
@@ -260,6 +283,7 @@ risk = "medium"
 
 [[entry]]
 id = 25
+tracker_id = "#337"
 type = "story"
 title = "Tile bitmap (.tbm) reader and writer"
 description = "Adds a reader and writer for `TK3 TILEBITMAP` per `docs/spec/formats/tiles.md#tile-bitmap-tbm`: width and height, then (width + 1) × (height + 1) cells, x outer, each a tile reference and an RGB tint, with the extra row and column read, kept and written back. Registers it in the format registry (AD-31) and moves the dump's `.tbm` row from skipped to parsed. Tile bitmaps are what converted TK2 sprites, battle backgrounds and many frames point to, and no entry owned them."
@@ -272,6 +296,7 @@ references = ["discovery - _bmad-output/initiative-rpgtoolkit-reawakened/discove
 
 [[entry]]
 id = 26
+tracker_id = "#338"
 type = "story"
 title = "The docs/spec example corpus in the dump gate"
 description = "Adds a committed dump expectation over `docs/spec/examples/game`, `docs/spec/examples/files` and `docs/spec/examples/versions`: authored files (G7), already committed, one for every version of every format. Current formats must parse with 0 failures and 0 residue. The Toolkit 1/2 text forms and the TK2 binary minors are recorded as expected failures, each naming the tk2-support entry that clears it, so those entries flip a row instead of adding a gate."
@@ -284,6 +309,7 @@ notes = ["Measured 2026-10-15: versions/ gives 43 parsed, 12 failed (every text 
 
 [[entry]]
 id = 14
+tracker_id = "#339"
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts, from their plans and the deferred review findings. It takes cleanup only."

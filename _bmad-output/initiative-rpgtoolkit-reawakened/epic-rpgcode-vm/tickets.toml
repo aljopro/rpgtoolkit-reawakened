@@ -3,6 +3,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#353"
 type = "story"
 title = "RPGCode §9 doc amendments and dialect rulings"
 description = "Applies the discovery's 12 `docs/spec/engine/rpgcode-language.md` doc-fix proposals and the TK2 RPGCode gaps (the `< >` inline-block form is TK 1.x only while 2.x uses `{ }`; `#x! = 1` assignment lines; labels with #Branch and #FBranch; #Method and #ReturnMethod; includes and namespace includes; the `=`-as-comparison set; #For and one-line blocks; `<var>` interpolation), ratifies the 14 corpus-settled rows, rules the lexical, expression, statement, function and program rows (LEX, EXP, STX, FUN, PRG) the grammar needs, and settles the 9.11 ownership gaps, in one docs-only commit (G7). The semantic rows (OOP, ERR, THR, SEM, MOD) are ruled by a doc-first step inside the entry that implements them. Also records the shapes the community survey found missing from section 9: inline trailing `*` comments, `#` before any statement, `#if(cond)` without spaces, `!=` and `=` as equality, `#RPGCode` as runtime eval, `<var>` splicing in message text, `#redirect(#a,#b.c)` and the `system.*` namespace."
@@ -22,6 +23,7 @@ references = [
 
 [[entry]]
 id = 27
+tracker_id = "#354"
 type = "story"
 title = "Migrate section 9 into docs/spec/engine and rule the RPGCode conflicts"
 description = "Under ADR 0007, moves `docs/format-spec.md` §9 (lexical rules, values, operators, statements, modules, objects, errors, dialects, engine variables, the catalogue and the rulings of §9.12 to §9.17) into `docs/spec/engine/rpgcode-language.md` and `rpgcode-functions.md` in its own doc-only commit (G7): our rulings become Reawakened rule blocks beside the legacy behaviour they keep or change. A person rules the reconciliation's section C: `^` precedence and associativity (R-30), `!=` (R-31, ruled by the owner 2026-10-15: keep LEX-3 as a Reawakened rule), blocking commands inside threads (R-32), the thread budget formula as input to entry 9 (R-33), object members as globals and collection timing (R-34), built-in vs same-named script method (R-35), the 8 catalogue names ours lacks (R-36), virtual variables and the 24 compile-time constants (R-37), the prepended line, continue-after-error, `FileInput` and no-reload rules (R-38) and string truthiness (R-39). It also updates `discovery/command-effect-catalogue.json` to the 282 names."
@@ -39,6 +41,7 @@ notes = ["R-30 and R-31 change rows EXP-2 and LEX-3 of the §9.12 rulings, which
 
 [[entry]]
 id = 26
+tracker_id = "#355"
 type = "story"
 title = "Rename step to tick: spine, ports, engine contract and goldens"
 description = "Jensen, 2026-10-12: the unit of simulation time is a tick, not a step. It runs before entry 2 so the tracer and every later entry are written with tick from the start. Doc-first (G7): amend the architecture spine (AD-2 and every AD that says step, including AD-9's wait payload, AD-26's phase list and the step budget wording), `docs/engine-features.md`, `docs/format-spec.md` and `docs/guardrails.md` wherever they use step for the simulation unit, in their own commit. Then rename in code: the `Engine` contract (`advance(steps, ...)`, `StepReport`, `stepsRun`, `stepAfter`), the log and golden formats that carry those names, and the harness driver. The `core/time` names (`TimeState`, `ClockPort`, `WaitView`) do not exist yet; entry 2 writes them as tick from the start. Changing a golden or a recorded-log field name is a deliberate G5 change: each regenerated golden is explained in the commit. Leave alone any use of step that means something else (a build step, a migration step, a path-finding step, `playerStep`/`itemStep` movement commands)."
@@ -57,6 +60,7 @@ notes = ["Ruled by Jensen, 2026-10-12: the simulation unit is called a tick, and
 
 [[entry]]
 id = 2
+tracker_id = "#356"
 type = "story"
 title = "Tracer bullet: source text to a restored snapshot through the harness"
 description = "Parses one inline program (`ProgramRef` kind inline, AD-7), lowers it to linear Step IR, registers `end` and `sleep` in a provisional built-in registry, steps it through one AD-9 yield, takes a snapshot mid-run that restores into a fresh VM, and runs it through a VM-backed test host in `runner-harness`; also creates the `GameState`/`VmState` shell (with per-section slots that entries 6, 7, 9 and 10 fill and entry 11 reconciles), `core/rng` (AD-12: xoshiro128** with SplitMix32 seed expansion, `RngPort`, `GameState.rng`), variable read/assign and call-site argument and lvalue binding at the call boundary, and the shared random-step snapshot-restore-hash test helper later entries reuse."
@@ -75,6 +79,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#357"
 type = "story"
 title = "PluginDefinition (commands only) and the built-in registry assembly"
 description = "Defines `PluginDefinition` as `{ id, version, commands }` (ADR 0004 decisions 2 and 6), where a command is an AD-8 `BuiltinSpec` with a functional contract: `(read-only view, args, next) -> { out, effects, wait? }`, `next` being the definition of the same name in the layer below (command middleware, so a name is a stack of layers); commands never mutate state and the VM and owning modules apply their effects (amends AD-8 and AD-10 doc-first, including its duplicate rule). A result may also carry an AD-9 `wait`, or an AD-17 `request` with a `then` continuation (AD-8's `resume`, a named command plus plain-data args) (ADR 0004 decision 7; the VM side is entry 9). Adds a pure assembly function over an ordered list of `PluginDefinition`s (the manifest that selects and orders them is entry 25): the later layer runs first with `next` reaching the one below, the first definition's layer being the built-in `core` pack, and a warning diagnostic for a repeated name or alias (replacing AD-8's duplicate rejection, which stays only as a lint for one plugin repeating itself), by-reference `out` write-back sharing the call and lvalue machinery entry 2 built, and the four-tier lookup skeleton (redirect, script function, built-in, empty extension tier). Replaces the tracer's provisional registry. Other fields (`subsystems`, `decoders`, a dialect hook) are added by the entry that first needs them; not `createEngine`, which epic 4 owns (D12). The override warning goes through the AD-24 `Logger` port, which this entry defines minimally (levels and plain-data records) and entry 7 extends: a warn record with code `command.overridden` and data { name, kind (plugin or script), previous, replacement }."
@@ -93,6 +98,7 @@ plan_checkpoint = true
 
 [[entry]]
 id = 25
+tracker_id = "#358"
 type = "story"
 title = "Plugin manifest and the engine's default manifest"
 description = "Defines the plugin manifest as plain data (ADR 0004 decision 6): an ordered list of entries `{ id, enabled?, options? }` that selects and orders the `PluginDefinition`s entry 3's assembly function layers, with the engine's own default manifest listing the built-in `core` pack (pinned: it can be wrapped but not removed or disabled) and growing as optional packs land. A game or user manifest is a patch over the default (add, remove, disable, reorder or replace by id; replacing everything is removing every default id). The host resolves each `id` to a loadable definition and hands the resolved list to core; core loads nothing (G2), and an unresolvable id is a located diagnostic, not a crash. `options` is passed to the plugin and read by the VM for the request timeout default (entry 9). The engine's own wiring reads the default through this same path, with no private route. It is distinct from the distribution package's `manifest.json` (`docs/spec/formats/packaging-and-paths.md`)."
@@ -108,6 +114,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#359"
 type = "story"
 title = "core/fmath: deterministic maths with cross-engine vectors"
 description = "Adds `core/fmath` — `sin`, `cos`, `tan`, `atan2`, `exp`, `log`, `pow` and the rest built from only `+ − × ÷` and `Math.sqrt`, with integer `pow` exact by repeated multiplication and the G3 `Math` allowlist enforced around it (ADR 0002, AD-13) — as its own lane with no VM code, so it runs beside the parser and VM entries."
@@ -125,6 +132,7 @@ references = [
 
 [[entry]]
 id = 21
+tracker_id = "#360"
 type = "story"
 title = "Effect records and generic command stubs: every catalogue name responds"
 description = "Defines the plain-data effect record (seq, tick, thread, name, kind, args, out, result, patch, wait, request) stored in the `vm` section behind an AD-23 schema entry, and registers one generic stub per catalogue name that is safe to stub (170 of the 271 names in `docs/spec/engine/rpgcode-functions.md`; entry 27 brings the catalogue to the 282 of docs/spec/engine/rpgcode-functions.md and assigns the 8 new names to the stub or wait sets) through `PluginDefinition.commands`: it validates args against the name's `ParamSpec`, records its side effect as an effect record naming the owning state section, writes by-reference outputs, and returns a documented default. Owner epics later replace a stub with real behaviour and apply its effects to their section. Log growth is bounded (drained per tick by the owning module, ring-capped in headless runs)."
@@ -140,6 +148,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#361"
 type = "story"
 title = "Statements, control flow, functions, expressions and the operand stack"
 description = "Extends the parser and lowering to the full TK3 grammar: `if`/`elseif`/`else`, `while`, `until`, `for`, `switch`/`case`/`default`, functions and overload by arity, `local(x) = v` / `global(x) = v` declaration forms, labels, the precedence and associativity table, `return &` operands (with `^` lowered to `fmath.pow`), the operand stack and jump semantics snapshotted in `Frame.operands`, and the source-position (file, line) mapping every IR instruction carries — the single owner of that mapping, which entries 7 and 10 read."
@@ -158,6 +167,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#362"
 type = "story"
 title = "Classes, objects and operator dispatch"
 description = "First step, doc-first (G7): a person rules OOP-4 to OOP-9 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Delivers the class and object slice end-to-end: in-class method bodies, `var x[]`, typed and `&` parameters, `this`, `operator=` and `operator[]` dispatch (read and write), constructors, the destructor and `release()`, and the object handle table in `VmState.objects` that snapshots (AD-7); its synthetic program uses the statements, functions and expressions entry 5 delivers."
@@ -177,6 +187,7 @@ notes = ["Doc-first step done 2026-10-12: OOP-4 to OOP-9 are ruled in `docs/spec
 
 [[entry]]
 id = 7
+tracker_id = "#363"
 type = "story"
 title = "Error handling, located diagnostics, Logger and the harness report change"
 description = "First step, doc-first (G7): a person rules ERR-1 and ERR-2 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Implements `setErrorHandler`, `setResumeNextHandler`, `resumeNext` and the legacy `on error goto` / `on error resume next` forms inside functions, with handler state in `Frame.errorHandler`, `debugger(msg)` and `debug`, the `core` `Logger` port with levels and plain-data records (AD-24), every runtime error reported as a `TickReport` diagnostic `{ code, file, line, message }`, and the entry-1.9 harness driver change so a tick report may carry non-empty requests and diagnostics (`docs/spec/engine/rpgcode-errors-and-threads.md#error-handling`, E-98, `deferred-work.md`, audit row 3). Extends the entry 3 `Logger` port with the remaining levels and sinks."
@@ -197,6 +208,7 @@ notes = ["Doc-first step done 2026-10-12: ERR-1 and ERR-2 are ruled in `docs/spe
 
 [[entry]]
 id = 8
+tracker_id = "#364"
 type = "story"
 title = "Modules: includes, implicit includes, redirects, hoisting, program cache"
 description = "First step, doc-first (G7): a person rules MOD-2 and MOD-3 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Implements `#include` and `include()`, implicit include `file.func(args)`, `redirect`/`killRedirect`/`killAllRedirects` with their `redirects` state section, per-file hoisting and visibility after include, `Prg/` path resolution through the epic-2 asset resolver, `ProgramCache` keyed by `sourceHash` (E-91), and the refusal of a pre-compiled `.prg` (first byte `0x00`) with the section 9.1 message. Function names clash across files in real code (two queue and stack libraries both define AddLit and PopLit, told apart only by the `file.` prefix), and the unqualified-after-first-use rule is claimed by one community tutorial but not seen across files, so this entry's doc-first ruling decides it. A script function replaced by a later include or definition raises a `command.overridden` warn record and a located `TickReport` diagnostic { code, file, line, message } so script authors and handlers can see it."
@@ -216,6 +228,7 @@ notes = ["#Include gives access to that file's functions under a namespace-like 
 
 [[entry]]
 id = 9
+tracker_id = "#365"
 type = "story"
 title = "Threads and waits: kinds, sleep, wake, tellThread, multiRun, tick budget"
 description = "First step, doc-first (G7): a person rules THR-1 to THR-3 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Implements the four thread kinds (`blocking`, `board`, `persistent`, `item`) with `thread(file,persist)` and the E-93 operations (`threadSleep`, `threadWake`, `threadSleepRemaining`, `killThread`, `getThreadId`, `tellThread`) registered through entry 3's registry, the AD-9 wait registry with `poll`-only resolution and duplicate rejection, the VM-owned `input.key` and `sleep` kinds plus a test-double `movement` kind that movement-triggers takes over, per-thread source and target context, `multiRun` movement coupling, and the per-tick budget tuned with movement-triggers (E-33, E-95, AD-26; spine Deferred, D10). Implements ADR 0004 decision 7 on the VM side, on AD-5's existing request and reply inputs: running a command's `then` continuation with the reply prepended; a tick-counted timeout for AD-9 waits (layered engine default, plugin `options`, the wait's own value, harness override; zero means none) that resumes the thread with an error result and a located diagnostic; a failure reply delivered as an ordinary input for a frozen request, whose wall-clock timeout the host owns; deadlock detection (every live thread parked on another parked thread, no reply outstanding) reported with the stuck threads and what they wait on, a hard failure in headless runs; and scripted replies in the harness. Exposes the VM's `waits` and `threads` phase handlers and an instruction-granular resumable step for epic 4's `createEngine` to register (AD-26); the open-tick cursor and pause state belong to `core/engine` (AD-10), so the breakpoint hook and the E-03 pause are epic 4's."
@@ -234,6 +247,7 @@ notes = ["THR-1 starting point (Jensen, 2026-10-12): legacy `threadSleep(id, sec
 
 [[entry]]
 id = 22
+tracker_id = "#366"
 type = "story"
 title = "Waiting, requesting and mixed commands respond with recorded effects"
 description = "Gives the other 101 catalogue names a minimal responding behaviour through the same `PluginDefinition.commands`: wait commands yield their named AD-9 kind (render.msgbox, input.key, input.mouse, menu.screen, movement, sleep, audio.sfx, video) and resume from a test-double resolver, request commands emit their AD-17 request, spawn and flow commands use the thread and flow machinery, and mixed commands record each part as effect records; the 24 names with no single owner get one named here."
@@ -245,6 +259,7 @@ risk = "high"
 
 [[entry]]
 id = 11
+tracker_id = "#367"
 type = "story"
 title = "Snapshot and restore hardening: state shape, hashState, bounds, mismatch policy"
 description = "Completes the AD-7 `VmState`/`Thread`/`Frame` shape for every construct above, implements the compiler and `sourceHash` mismatch policy as restart-the-thread confirmed against `docs/spec/formats/save-game.md#layout-minor-4`, wires `hashState` into `advance` with the deferred-work fixes (a fixed explicit `canon` depth bound, and the density-check and per-property allocation cost), and bounds script-created nesting well below the about 3,900-level `RangeError` depth (AD-17)."
@@ -262,6 +277,7 @@ references = [
 
 [[entry]]
 id = 12
+tracker_id = "#368"
 type = "story"
 title = "Pure built-ins: scope, variables, arrays, maps, strings and conversions"
 description = "First step, doc-first (G7): a person rules SEM-3 to SEM-6 from the discovery's ambiguity list in `docs/spec/engine/` in its own commit. Registers the language-only built-ins through entry 3's registry: scope (`local`, `global`, `autoLocal`, `kill` in its element and variadic forms), the E-92 engine-backed virtual variables through their ports, sparse arrays and maps, and the string and conversion set (`len`/`length`, `left`, `right`, `mid`, `inStr`, `replace`, `regExpReplace`, `split`, `trim`, `lcase`, `ucase`, `asc`, `chr`, `charAt`, `castLit`, `castNum`, `castInt`, `spliceVariables`) (`docs/spec/engine/rpgcode-functions.md`)."
@@ -280,6 +296,7 @@ notes = ["Doc-first step done 2026-10-12: SEM-3 to SEM-6 are ruled in `docs/spec
 
 [[entry]]
 id = 13
+tracker_id = "#369"
 type = "story"
 title = "Pure built-ins: maths, seeded random and flow"
 description = "Registers the maths names (`sin`, `cos`, `tan`, `sqrt`, `log` and the rest) by consuming `core/fmath` (entry 4), draws `random` through entry 2's single seeded RNG with the draw order fixed by the tick pipeline, and registers the flow built-ins `run`, `change`, `rpgCode`, `delay`, `end`/`done`/`stop`, `branch`, `iif` and `getTickCount` (AD-12, AD-13)."
@@ -296,6 +313,7 @@ references = [
 
 [[entry]]
 id = 23
+tracker_id = "#370"
 type = "spike"
 title = "PluginDefinition beyond commands: trust model, subsystems, decoders, dialect hook, extension.call"
 description = "Research, producing a written proposal: how the rest of PluginDefinition should look once commands work (entry 3). Covers the trust model for third-party plugins (in-process first-party versus the sandboxed E-99 mechanism and its capability model over AD-17 requests), the `subsystems` field (battle, menu, dialogue), `decoders` (entry 14), a dialect hook for frontends, event hooks, lifecycle and activation from the .gam plugin list, and how it reconciles ADR 0004 with AD-17. Each field is later added by the entry that first needs it."
@@ -308,6 +326,7 @@ notes = ["We do not have to define all of E-99, only the commands part first; th
 
 [[entry]]
 id = 14
+tracker_id = "#371"
 type = "story"
 title = "AssetDecoder wiring: add `decoders` to PluginDefinition"
 description = "Adds the `decoders` field to `PluginDefinition`, resolves the AD-31 vs ADR 0004 conflict by amending one document in a doc-first commit (G7), and wires it to the `AssetDecoder` registry that epic-2 entry 2.13 delivers, closing the hand-off epic 2 left unwired. In-process like every plugin (ADR 0004 decision 6); decoders are pure over bytes (G2). Entry 2.13's registry refuses a duplicate decoder id or extension, whereas commands layer with last-registered-wins; this entry rules which applies to decoders (recommended: later layer wins with a warning, matching commands) and amends the registry if so."
@@ -326,6 +345,7 @@ references = [
 
 [[entry]]
 id = 15
+tracker_id = "#372"
 type = "story"
 title = "TK2 dialect frontend, command coverage and the TK2 compatibility plugin"
 description = "Adds a non-destructive TK2 grammar frontend (`{ }` blocks, `#` as statement introducer including `#x! = 1` assignments, labels with #Branch and #FBranch, #Method and #ReturnMethod, namespace includes, `=` as comparison) that emits raw argument text and lets lowering bind it through each command's `ParamSpec`, mapping TK2 commands onto the same `commands` as TK3: 141 of 301 observed commands already have a 3.1 name, 2 are compat-only (#Empty, #FBranch), 39 are unmapped plugin or library names, and 119 are user-defined #Method commands; signature adapters (#SetImage 5-arg, #WalkSpeed and #ItemWalkSpeed string to number, #NewPlyr to newPlayer) live in `@tk-reawakened/plugin-tk2-compat`, a `PluginDefinition` from entry 3. TK 1.x (RPGCode v1, the `< >` inline-block form) is out of the MVP by decision. Of the 39 unmapped TK2 commands, 24 are plugin commands (FTP.dll: #httpRead and #ftp*; filereadwrite.dll: #fileRead; GsMiscPlugins.dll, proplug.dll, TWButton, XFMWin, multip.dll), 11 are implicit-include libraries, 1 is the `system.*` namespace and 3 are undocumented (addplyr, cntrtext, sell); each plugin command answers through a recorded-effect stub in the compat plugin with a failure default and no real network or file access (AD-17) until entry 24's native packs replace it; the plugin is activated by a manifest entry read from the `.gam` plugin list (ADR 0004 decision 6)."
@@ -343,6 +363,7 @@ notes = ["We should support TK2 games and TK3 games on launch. There are so many
 
 [[entry]]
 id = 16
+tracker_id = "#373"
 type = "story"
 title = "Sandboxed file I/O built-ins through the AD-17 requests"
 description = "Registers `openFileInput`/`Output`/`Append`/`Binary`, `closeFile`, `fileInput`, `filePrint`, `fileGet`, `filePut`, `fileEof` and `appPath` as blocking built-ins that read through `asset` requests (saves first, then shipped folders, read-only), write only to the `saves` and `files` blob areas, register the `blob` wait kind (AD-9), key the save area by the core-derived `GameId`, and reuse entry 7's harness report change (E-97, AD-17). This is the first real pack written against the request, `then` and timeout contract of ADR 0004 decision 7; if the two-step split is painful, report it before more packs are written."
@@ -360,6 +381,7 @@ references = [
 
 [[entry]]
 id = 17
+tracker_id = "#374"
 type = "story"
 title = "Corpus, catalogue completeness and golden-job wiring"
 description = "Collects the nine synthetic programs the discovery requires, runs `system.prg`, `start.prg` and the TK2 programs of the archived games headlessly against the stubs of entries 21 and 22 (no hand-written domain doubles), asserts that every catalogue name (all 282 of docs/spec/engine/rpgcode-functions.md) and every mapped TK2 command resolves, and wires the set into the golden job's hash comparison."
@@ -376,6 +398,7 @@ references = [
 
 [[entry]]
 id = 24
+tracker_id = "#375"
 type = "story"
 title = "Native packs for the most-used legacy plugins and the legacy-name table"
 description = "Adds a static table mapping each legacy plugin identity (the `tkplug0` to `tkplug4` slots and file names in the `.gam` plugin list, plus Multi-Plug `plugins.ini` entries) to a native pack or to a declined diagnostic, and the packs themselves as `PluginDefinition`s in the default manifest, replacing entry 15's recorded-effect stubs: GsMiscPlugins, the Triuken pack, `filereadwrite` (file I/O through host requests), `proplug` string and math helpers, then XFMWin and Kaimu as aliases. Ranked by occurrences in the 2,783 archived units (discovery/plugin-definition-spike.md). FTP, E-Mail, sockets (multip), DragSound, Flash and anything needing Win32 handles are declined with a located not-supported diagnostic. Packs record their effects for the domain epics to apply; domain behaviour stays with those epics."
@@ -392,6 +415,7 @@ references = [
 
 [[entry]]
 id = 28
+tracker_id = "#376"
 type = "story"
 title = "Re-point citations and retire format-spec.md and engine-features.md"
 description = "Rewrites every `format-spec §x` and `engine-features` citation in `packages/`, `tools/`, CONTRIBUTING and the open epics' tickets to its `docs/spec/` anchor, using the section map entries 2.23, 27 and 16.13 leave, then deletes the two stubs. Reader error messages that cite a section change text, so the dump expectation (`golden/legacy-corpus.json`) is re-recorded deliberately (G5) with the reason in the commit. Done plans and reviews are history and keep their old citations."
@@ -404,6 +428,7 @@ notes = ["Placed in this epic because it is the last, in build order, of the thr
 
 [[entry]]
 id = 18
+tracker_id = "#377"
 type = "story"
 title = "Refactor sweep"
 description = "Cleans up what the earlier entries and their reviews deferred; scope is set when it starts."
@@ -415,6 +440,7 @@ risk = "low"
 
 [[entry]]
 id = 19
+tracker_id = "#378"
 type = "story"
 title = "End-to-end corpus suite"
 description = "Offered closing suite: one job that runs the whole fetched corpus (both games) headlessly with scripted input, using a defined finish line for programs that never end (`same state hash after N ticks`, per the discovery)."
@@ -430,6 +456,7 @@ references = [
 
 [[entry]]
 id = 29
+tracker_id = "#379"
 type = "story"
 title = "Command documentation in code: a `doc` on every plugin command"
 description = "Doc-first, then code. First an ADR 0004 amendment that adds an optional plain-data `doc` to `BuiltinSpec`: `summary` (what the command does, in simple terms, for someone writing a game), `behaviour` (the action described technically and deterministically: units, ticks, order, whether the script waits), an optional `unit` and `doc` string on each `ParamSpec`, optional `examples` (RPGCode snippets) and `status` (`current`, `legacy-alias` or `obsolete`); it follows the owner's help-text standard (CLAUDE.md, 2026-10-17). The plan decides how `docs/spec` and `doc` relate for native commands (recommended: the spec row stays normative and a check fails when a native command's `summary` differs from its row; plugins outside the spec carry their own `doc`) and which commands must carry one. Then adds the field to `core/script`, a pure function that turns an assembled plugin list into plain-data command documentation (no I/O, G2), and a check in the style of `pnpm catalogue:check` that fails on a command with no `summary` or `behaviour`. The documentation site (epic 17) and the language server (epic rpgcode-tooling) consume the output; neither is built here."

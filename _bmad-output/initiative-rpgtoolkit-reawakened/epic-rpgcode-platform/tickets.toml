@@ -5,6 +5,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#451"
 type = "story"
 title = "Rulings: objects, receivers, packages, emitters and the trust baseline"
 description = "Doc-first (G7), docs only: settles in docs/spec the dictionary/object runtime and receiver rules (OOP-10, OOP-11, `bindThis`), RPGCode packages on the single shared plugin manifest (name, version, namespace, declared host requests, AD-8 later-wins), `registerPlugin` as a thin layer over the 18.5 environment table, emitter semantics including cancelable emits, the plugin-language guidance and the trust baseline ADR, a host-provided (hydrated) method mechanism so a built-in object type such as an actor or a Media voice carries data only and no closures in a save, and amends AD-32 to the queued (asynchronous) event-bus model with an explicit G1 check (parked plain-JSON dispatch, saveable mid-dispatch, deterministic registration order), rewrites the E-99 Reawakened rule (RPGCode packages are trusted because the VM contains them; ADR 0008 states this), writes the initiative principle \"3.1 is a compatibility layer, not the model\" into docs/adr/0009-compatibility-layer-not-the-model.md (consistent with ADR 0005) and the CLAUDE.md working notes, and rules `kill()` (deletes only storage the script owns; system-controlled names, `tk*` constants, engine virtual variables and actor stat aliases, are a catchable runtime error with code `kill.system-owned`, ERR-2 gains that row; `kill(obj.field)` removes the key) and the virtual-variable write rule (write through where writable, otherwise a catchable runtime error `assign.read-only`, also an ERR-2 row; the 3.1 broken-link quirk is not reproduced) in the `kill` row of docs/spec rpgcode-functions.md and rpgcode-language.md, rules the game-emitter `error` event (type `error`, detail `{ code, message, file, line, handled }`, non-cancelable, fired in addition to ERR-2 handling whether or not a handler caught the error), and confirms the emitter names `on`, `off`, `once`, `emit`, `emitCancelable`."
@@ -26,6 +27,7 @@ references = [
 
 [[entry]]
 id = 2
+tracker_id = "#452"
 type = "story"
 title = "Spike: stock ATB tick and cancelable emits against STEP_BUDGET"
 description = "Writes a throwaway-free, committed benchmark in pure RPGCode (authored from the E-72 to E-75 numbers) that runs a stock ATB tick for four fighters with statuses ticking and events per hit, plus a cancelable-emit model (parked thread, N listeners in order, event mutation), and measures VM steps per tick against `STEP_BUDGET` (1000) and the 19.1 emitter rules."
@@ -46,6 +48,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#453"
 type = "story"
 title = "Dictionary object runtime: literals, member access and storage"
 description = "Gives dictionary literals runtime storage in plain-data VM state: create, read, write and delete members via `obj.prop`, `obj->prop` and `obj[\"prop\"]`, nesting, handles in the object table, reachability collection and save/restore, replacing the 'runtime storage is not available yet' refusal."
@@ -62,6 +65,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#454"
 type = "story"
 title = "Receiver auto-binding, this and bindThis"
 description = "Builds the `OP_GET_MEMBER_BOUND` opcode named in ADR 0004 decision 8 (member access that auto-binds the receiver, on `.` and `->`): reading a callable member binds `CallableValue.receiver` to the object, tear-offs keep it, standalone lambdas have `this = null`, and the built-in `bindThis(fn, obj)` returns a rebound callable; `this` resolves from the receiver."
@@ -78,6 +82,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#455"
 type = "story"
 title = "Legacy classes on the dictionary runtime"
 description = "Re-founds legacy `class` instances on the dictionary storage (OOP-10: declared fields, access metadata, ancestor links) so there is one object runtime, with every 3.1 class behaviour (handles, operators, destructors, inheritance, access labels, `this`) unchanged."
@@ -93,6 +98,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#456"
 type = "story"
 title = "RPGCode package manifest: name, version, namespace and declared host requests"
 description = "Extends the single plugin manifest (`PluginManifestEntry`) and `PluginDefinition` for RPGCode packages: package name, version, namespace, entry program and declared host-request kinds, with parse/patch validation, located diagnostics and a read API a runner can show; core loads nothing (G2)."
@@ -109,6 +115,7 @@ references = [
 
 [[entry]]
 id = 7
+tracker_id = "#457"
 type = "story"
 title = "Package namespaces and name resolution"
 description = "Makes a package's namespace real: its exported commands and objects resolve as `namespace.name` and unqualified through the AD-8 manifest order (later wins), inside the 18.5 environment table, with warnings on cross-package override as AD-8 requires."
@@ -125,6 +132,7 @@ references = [
 
 [[entry]]
 id = 8
+tracker_id = "#458"
 type = "story"
 title = "registerPlugin as a layer over the environment table"
 description = "Builds `registerPlugin(definition)` (ADR 0004 decision 8; it must exist after this entry): a dictionary of commands whose lambdas take `(args..., next)` is installed as ordered interceptors by storing callables through the 18.5 environment-table interception and `bindingOf`, never as a second dispatch mechanism."
@@ -141,6 +149,7 @@ references = [
 
 [[entry]]
 id = 9
+tracker_id = "#459"
 type = "story"
 title = "Main-file plugins list: read, write and feed the manifest"
 description = "Reads and writes the `.gam` plugins list as package names and feeds it to the manifest as the game's patch, keeping legacy `menuPlugin`, `fightPlugin` and command-plugin rows as data without interpreting them (that mapping is Epic 20's)."
@@ -157,6 +166,7 @@ references = [
 
 [[entry]]
 id = 10
+tracker_id = "#460"
 type = "story"
 title = "First-class emitter: on, off, once and queued emit"
 description = "Adds the emitter object capability in core: `on`, `off`, `once` and a plain `emit` that is queued while the emitter continues, with full listener add/remove semantics (`off(type, fn)`, removing a `once` listener before it fires, removing all listeners for a type, removal during dispatch by a deterministic rule, listeners added during a dispatch not running in that dispatch); listeners are saved callables in registration order; delivery happens at a named tick phase; state lives in one owned plain-data section; no bubbling or capture."
@@ -174,6 +184,7 @@ references = [
 
 [[entry]]
 id = 11
+tracker_id = "#461"
 type = "story"
 title = "Cancelable emit: parked dispatch, cancel and event mutation"
 description = "Implements the opt-in cancelable emit: the emitting thread parks on a plain-data `event.dispatch` wait until every listener ran in registration order, then resumes with the event object; listeners may `cancel()` or change fields (a shield halves damage); a save taken mid-dispatch restores and finishes identically."
@@ -191,6 +202,7 @@ references = [
 
 [[entry]]
 id = 12
+tracker_id = "#462"
 type = "story"
 title = "Game emitter, emitter registration seam and one bus for TypeScript plugins"
 description = "Makes the game a built-in emitter, fires the ruled `error` event on it for every runtime error, adds the registration seam by which boards and actors become emitters (Epic 20 uses it), and exposes the same bus to TypeScript plugins through plain-data effects and the plugin view, so there is one bus and no synchronous side door."
@@ -207,6 +219,7 @@ references = [
 
 [[entry]]
 id = 13
+tracker_id = "#463"
 type = "story"
 title = "Per-package VM step counters"
 description = "Counts VM steps per owning package as plain data in the vm section (the data only; the debug adapter view is Epic 10), with the state-hash treatment the 19.1 ruling decides."
@@ -223,6 +236,7 @@ references = [
 
 [[entry]]
 id = 14
+tracker_id = "#464"
 type = "story"
 title = "Pure-RPGCode package fixtures and legacy golden verification"
 description = "Authors fixture packages in pure RPGCode (an object-model package, an emitter package with a shield that halves damage, two namespaced packages with an override) and pins them in headless goldens, with all legacy goldens unchanged."
@@ -238,6 +252,7 @@ references = [
 
 [[entry]]
 id = 15
+tracker_id = "#465"
 type = "story"
 title = "Refactor sweep"
 description = "Reconciles the shared seams this epic touched (phase list, `GameState` section list, built-in registration barrels, catalogue and command docs), removes dead code made obsolete by the object cutover and closes the epic against its Done when."
