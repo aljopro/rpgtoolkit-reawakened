@@ -16,5 +16,8 @@
     "typecheck:tests": "tsc -p tsconfig.test.json",
     "lint": "eslint .",
     "test": "tsc -b && node --test \"test/*.test.ts\""
+  },
+  "dependencies": {
+    "@tk-reawakened/core": "workspace:*"
   }
 }
