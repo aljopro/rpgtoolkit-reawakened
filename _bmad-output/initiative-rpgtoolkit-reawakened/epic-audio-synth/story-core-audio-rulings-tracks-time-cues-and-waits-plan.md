@@ -3,7 +3,7 @@ title: 'Core audio rulings: tracks, time, cues and waits'
 type: 'feature'
 ticket: 1
 created: '2026-10-18'
-status: 'built'
+status: done
 baseline_revision: '38e899fd'
 risk: 'high'
 context:
