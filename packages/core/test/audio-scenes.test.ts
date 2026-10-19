@@ -16,6 +16,10 @@ const SCENES = [
   "settings-versus-save",
   "soundfont-setting",
   "battle-music-handoff",
+  "voices-and-stealing",
+  "fades",
+  "synced-start",
+  "late-start-catch-up",
 ];
 
 for (const name of SCENES) {

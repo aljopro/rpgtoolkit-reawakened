@@ -7,7 +7,7 @@ import { deepEqual, equal, ok } from "node:assert/strict";
 import { EffectBus } from "../src/engine/effects.ts";
 import { engineEffect } from "../src/engine/boot.ts";
 import { createAudioRuntime, audioSaveProjection, type AudioLookup, type AudioNote, type AudioRuntime, type AudioWait } from "../src/audio/index.ts";
-import { createGameState, type GameState } from "../src/save/index.ts";
+import { createGameState, restoreGameState, snapshot, type GameState } from "../src/save/index.ts";
 import type { AssetKey } from "../src/ports/keys.ts";
 
 const key = (name: string): AssetKey => `media/${name}` as AssetKey;
@@ -96,6 +96,62 @@ test("a full multi-voice track steals the lowest priority, then the oldest start
   tie.runtime.pause("voice", 0);
   tie.runtime.play({ track: "voice", asset: key("a.wav"), loop: false });
   deepEqual(steals(tie.notes).map((note) => note.voice), [0]);
+});
+
+test("explicit slots replace, and cue-checked handles never control a later occupant", () => {
+  const { state, runtime } = rig({ "a.wav": 100, "b.wav": 100 });
+  state.time.tick = 1;
+  const first = runtime.play({ track: "voice", asset: key("a.wav"), loop: false, voice: 0 });
+  equal(first.kind, "started");
+  if (first.kind !== "started") return;
+  runtime.drain();
+  state.time.tick = 2;
+  const oldHandle = { track: "voice", voice: first.voice, cueId: first.cueId };
+  const second = runtime.play({ track: "voice", asset: key("b.wav"), loop: false, voice: 0 });
+  equal(second.kind, "started");
+  deepEqual(runtime.drain().map((cue) => [cue.kind, cue.voice]), [["media.stop", 0], ["media.play", 0]]);
+  equal(runtime.stop("voice", oldHandle), false);
+  equal(state.audio.tracks.find((track) => track.name === "voice")?.voices[0]?.file, key("b.wav"));
+  const current = state.audio.tracks.find((track) => track.name === "voice")?.voices[0];
+  ok(current !== undefined);
+  equal(runtime.stop("voice", { track: "voice", voice: 0, cueId: current?.cueId ?? 0 }), true);
+});
+
+test("snapshot restore preserves later fade and steal behavior", () => {
+  const fadeRig = rig({ "song.wav": 30 });
+  fadeRig.runtime.play({ track: "sfx", asset: key("song.wav"), loop: false });
+  fadeRig.state.time.tick = 2;
+  fadeRig.runtime.fade("sfx", 20, 8, 0);
+  fadeRig.state.time.tick = 4;
+  fadeRig.runtime.phase();
+  fadeRig.runtime.drain();
+  const restoredFade = restoreGameState(snapshot(fadeRig.state));
+  const restoredFadeRuntime = createAudioRuntime(restoredFade, { lookup: () => ({ kind: "known", lengthTicks: 30 }) });
+  restoredFadeRuntime.drain();
+  for (let tick = 5; tick < 14; tick += 1) {
+    fadeRig.state.time.tick = tick;
+    restoredFade.time.tick = tick;
+    fadeRig.runtime.phase();
+    restoredFadeRuntime.phase();
+    deepEqual(restoredFade.audio, fadeRig.state.audio, `fade snapshot tick ${tick}`);
+  }
+
+  const stealRig = rig({ "a.wav": 100, "b.wav": 100, "c.wav": 100 });
+  stealRig.runtime.configureTrack("voice", 2);
+  stealRig.state.time.tick = 0;
+  stealRig.runtime.play({ track: "voice", asset: key("a.wav"), loop: false });
+  stealRig.state.time.tick = 1;
+  stealRig.runtime.play({ track: "voice", asset: key("b.wav"), loop: false });
+  stealRig.runtime.drain();
+  const restoredSteal = restoreGameState(snapshot(stealRig.state));
+  const restoredStealRuntime = createAudioRuntime(restoredSteal, { lookup: (asset) => ({ kind: "known", lengthTicks: asset === key("c.wav") ? 100 : 100 }) });
+  restoredStealRuntime.drain();
+  stealRig.state.time.tick = 2;
+  restoredSteal.time.tick = 2;
+  stealRig.runtime.play({ track: "voice", asset: key("c.wav"), loop: false });
+  restoredStealRuntime.play({ track: "voice", asset: key("c.wav"), loop: false });
+  deepEqual(restoredSteal.audio, stealRig.state.audio);
+  deepEqual(restoredStealRuntime.drain(), stealRig.runtime.drain());
 });
 
 test("pause holds the position, the end tick and a running fade, and resume adds the paused span to each", () => {

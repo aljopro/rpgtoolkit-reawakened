@@ -14,6 +14,7 @@ export {
   asciiFold,
   createAudioSection,
   createTrack,
+  fadeValue,
   findTrack,
   musicFile,
   voicePass,
@@ -25,6 +26,7 @@ export {
   type AudioStateV2,
   type AudioTrackState,
   type AudioTrackVolume,
+  type AudioVoiceHandle,
   type AudioVoiceState,
 } from "./model.ts";
 export { AUDIO_HEADER_BYTES, assembleAudioDecoders, decodeAudioInfo } from "./info.ts";
@@ -39,6 +41,7 @@ export {
   type AudioPlayResult,
   type AudioRuntime,
   type AudioRuntimeOptions,
+  type AudioVoiceSelector,
   type AudioWait,
   type AudioWaitState,
 } from "./runtime.ts";
