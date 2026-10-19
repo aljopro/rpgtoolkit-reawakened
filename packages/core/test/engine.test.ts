@@ -309,3 +309,45 @@ test("the end-of-tick object pass runs in the engine as it does in the script ho
   engine.advance(1, []);
   equal(latest!.vm.objects.length, 0, "the tick that dropped the last reference frees it");
 });
+
+test("the engine frees a closure cell no script can reach, then the objects it alone kept (R-34, FUN-8)", () => {
+  const board = writeBoard(createEmptyBoard());
+  if (!board.ok) throw new Error(board.error.message);
+  let latest: GameState | null = null;
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    phaseRegistrations: [{ phase: "audio", run: (state) => { latest = state; } }],
+    program: [
+      "class Box {",
+      "  public:",
+      "  var v",
+      "  method Box(x) { v = x }",
+      "}",
+      "function mk() {",
+      "  local(o)",
+      "  o = Box(1)",
+      "  return () => o",
+      "}",
+      "f = mk()",
+      "sleep(1)",
+      "f = 0",
+      "sleep(1)",
+      "end()",
+      "",
+    ].join("\n"),
+  });
+  const request = engine.advance(0, []).requests[0];
+  if (request?.kind !== "asset") throw new Error("expected board asset request");
+  engine.advance(1, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: board.value } }]);
+  deepEqual(Object.keys(latest!.vm.cells ?? {}), ["cell1"], "the closure's cell is reachable through f");
+  equal(latest!.vm.objects.length, 1);
+  engine.advance(1, []);
+  deepEqual(Object.keys(latest!.vm.cells ?? {}), [], "the tick that dropped f frees its cell");
+  equal(latest!.vm.objects.length, 0, "and the object only that cell named, in the same pass");
+});

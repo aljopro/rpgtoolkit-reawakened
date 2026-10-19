@@ -240,6 +240,40 @@ y = 2
 end()
 `;
 
+// 10. First-class callables saved and restored (FUN-8, entry 18.6): captured cells shared with a
+// frame, a lambda parked mid-call by sleep, a bindingOf wrapper chain, lambdas made on every pass of
+// a loop (their cells are freed), and a lambda stored in a global that the program which made it
+// outlives (lib.prg calls it after main.prg has ended).
+const SYNTHETIC_10_MAIN = `function make(start) {
+  local(n)
+  n = start
+  return () => { n = n + 1; return n }
+}
+function slow(x) {
+  return () => { sleep(1); return x * 2 }
+}
+function wrap() {
+  local(original)
+  original = bindingOf("castint")
+  castint = (x) => original(x) + 1
+}
+counter = make(10)
+c1 = counter()
+c2 = counter()
+parked = slow(21)
+handler = (v) => v + c2
+wrap()
+for (local(i) = 0; i < 8; ++i) { scratch = make(i); total = scratch() }
+r = parked()
+wrapped = castint(4.75)
+run("lib.prg")
+`;
+
+const SYNTHETIC_10_LIB = `sleep(1)
+late = handler(1)
+end()
+`;
+
 // -------------------------------------------------------------------
 // Synthetic TK2 Program (dialect, # prefixes, sigils, loose dialogue, methods)
 // -------------------------------------------------------------------
@@ -748,6 +782,22 @@ export function buildCorpus(): readonly CorpusProgram[] {
       },
       restoreHost: (json) => {
         const loader = createMemoryLoader({ "main.prg": SYNTHETIC_9_V1 });
+        return restoreScriptHost(json, { loader });
+      },
+    },
+    {
+      id: "synthetic-10-closures",
+      name: "Synthetic 10 (Closures, Cells & Save/Restore)",
+      description:
+        "Lambdas with captured cells, a lambda parked mid-call by sleep, a bindingOf wrapper, lambdas made in a loop (their cells freed), and a handle that outlives the program that made it",
+      ticks: 6,
+      createHost: (seed) => {
+        const loader = createMemoryLoader({ "main.prg": SYNTHETIC_10_MAIN, "lib.prg": SYNTHETIC_10_LIB });
+        const ref = fileProgramRef(loader, "main.prg");
+        return createScriptHost({ program: ref, loader, seed });
+      },
+      restoreHost: (json) => {
+        const loader = createMemoryLoader({ "main.prg": SYNTHETIC_10_MAIN, "lib.prg": SYNTHETIC_10_LIB });
         return restoreScriptHost(json, { loader });
       },
     },
