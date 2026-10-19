@@ -3,7 +3,7 @@ title: 'Replay, reset and downstream contract sweep'
 type: 'feature'
 ticket: 17
 created: '2026-10-18'
-status: built
+status: done
 baseline_revision: 'f212728587894ad87ae94de67ae14e31cb444a36'
 risk: 'high'
 context:
