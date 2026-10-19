@@ -201,6 +201,7 @@ export type {
 } from "./registry.ts";
 export {
   advanceScriptTick,
+  collectGarbage,
   drainDiagnostics,
   createScriptServices,
   replyToRequest,

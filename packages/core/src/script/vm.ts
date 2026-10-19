@@ -306,6 +306,14 @@ export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: n
   refreshBlock(vm, services.view.clock.tick());
 }
 
+/**
+ * The end-of-tick pass (R-34): the last step of every tick, after the `time`
+ * phase, run by `advanceScriptTick` and by the engine's `time` phase alike.
+ */
+export function collectGarbage(vm: VmState): void {
+  collectObjects(vm);
+}
+
 function collectObjects(vm: VmState): void {
   const roots: number[] = [];
   const visit = (value: Value): void => {
@@ -342,7 +350,7 @@ export function advanceScriptTick(
   runThreadsPhase(state.vm, services, budget);
   assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
-  collectObjects(state.vm);
+  collectGarbage(state.vm);
   return scriptStatus(state.vm);
 }
 

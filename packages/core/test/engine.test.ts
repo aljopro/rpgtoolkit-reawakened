@@ -1,6 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import { ENGINE_PHASES, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board } from "../src/index.ts";
+import { ENGINE_PHASES, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board, type GameState } from "../src/index.ts";
 
 function boardBytes(board: Board): Uint8Array {
   const encoded = writeBoard(board);
@@ -285,4 +285,27 @@ test("engine classifies .tan tile-animation dependencies as tile requests", () =
   const animationRequest = loaded.requests[0];
   if (animationRequest?.kind !== "asset") throw new Error("expected tile animation request");
   equal(animationRequest.key, "tiles/anim.tan");
+});
+
+test("the end-of-tick object pass runs in the engine as it does in the script host (R-34)", () => {
+  const board = writeBoard(createEmptyBoard());
+  if (!board.ok) throw new Error(board.error.message);
+  let latest: GameState | null = null;
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    phaseRegistrations: [{ phase: "audio", run: (state) => { latest = state; } }],
+    program: "class Box {\n  public:\n  var v\n  method Box(x) { v = x }\n}\na = Box(1)\nsleep(1)\na = 0\nsleep(1)\nend()\n",
+  });
+  const request = engine.advance(0, []).requests[0];
+  if (request?.kind !== "asset") throw new Error("expected board asset request");
+  engine.advance(1, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: board.value } }]);
+  equal(latest!.vm.objects.length, 1, "the object is referenced by a global");
+  engine.advance(1, []);
+  equal(latest!.vm.objects.length, 0, "the tick that dropped the last reference frees it");
 });
