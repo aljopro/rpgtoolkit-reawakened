@@ -1,6 +1,7 @@
 /**
- * The command registry: pure assembly of an ordered resolved-plugin list and
- * the four-tier lookup (AD-8; ADR 0004 decisions 2 and 6).
+ * The command registry: pure assembly of an ordered resolved-plugin list, and
+ * the environment table that resolves a call (AD-8; ADR 0004 decisions 2, 6
+ * and 8).
  *
  * **Layer order.** Registration order is layer order. Where two plugins define
  * the same command name or alias, the later plugin's handler runs first and its
@@ -15,21 +16,27 @@
  * frontend (docs/spec/engine/rpgcode-functions.md#rpgcode-built-in-commands LEX-10), so this module keys on the string as
  * given and does no folding of its own.
  *
- * **Tiers.** AD-8's lookup precedence is redirect, script function, built-in,
- * extension, and the VM and the LSP share it. `createCommandLookup` is that
- * skeleton: the registry supplies the built-in tier, and the redirect, script
- * function and extension tiers are stubs until entries 8, 5/6 and 21/22 fill
- * them (a stub resolves nothing, so an unknown name still reaches
- * `unknown.command`). The extension tier is the seam the legacy engine had —
- * an unknown call is offered to each plugin by name, first claim wins
- * (`docs/spec/engine/plugins-and-battle.md#plugin-roles`, "RPGCode command plugins";
- * `docs/spec/engine/rpgcode-language.md#plugin-commands`, "Plugin commands") — kept here so
- * entries 21/22 register the catalogue and the stub set through it.
+ * **The environment table.** A plain-name call resolves through one table with
+ * one function, `resolveCall`, first match wins: (1) the running scope's own
+ * symbol, a variable that currently holds a callable value, which the VM
+ * supplies because only it can see frames; (2) a built-in command; (3) a
+ * script function of the program, by name and parameter count; (4) a command a
+ * plugin claims (`docs/spec/engine/plugins-and-battle.md#plugin-roles`, "RPGCode
+ * command plugins"; `docs/spec/engine/rpgcode-language.md#plugin-commands`,
+ * "Plugin commands"). Entry 1 is what lets a script intercept a command by
+ * assigning a callable to its name; nothing else changes, because a variable
+ * that holds anything but a callable is not an entry. The table is not
+ * materialised: its lower layers are this registry and the program's functions,
+ * read where they live, so no save gains a field
+ * (docs/spec/engine/rpgcode-language.md#keywords-and-structure, FUN-8; ADR 0004
+ * decision 8, entry 18.5). Redirects are not an entry: a redirect substitutes
+ * the name while the program is parsed, before a call reaches the table.
  *
  * docs/spec/engine/rpgcode-language.md#plugin-commands.
  */
 
 import type { Logger } from "../ports/logger.ts";
+import type { CallableValue } from "../ports/value.ts";
 import type { BuiltinSpec } from "./builtins.ts";
 import type { FunctionInfo, ParamInfo } from "./lower.ts";
 import type { CommandHandler, CommandResult, ResolvedPlugin } from "./plugin.ts";
@@ -67,50 +74,33 @@ export type CommandRegistry = {
   layerPlugins(name: string): readonly string[];
 };
 
-/** A tier's resolver: a name in, a command out or `undefined` (AD-8). */
-export type TierLookup = (name: string) => ResolvedCommand | undefined;
-
-/** The four AD-8 tiers, in precedence order. */
-export type CommandTiers = {
-  readonly redirect: TierLookup;
-  readonly scriptFunction: TierLookup;
-  readonly builtin: TierLookup;
-  readonly extension: TierLookup;
-};
-
-/** The tier order AD-8 fixes; the first tier that resolves a name wins. */
-export const TIER_ORDER: readonly (keyof CommandTiers)[] = [
-  "redirect",
-  "scriptFunction",
-  "builtin",
-  "extension",
-];
-
-/** The name/alias lookup over the four tiers (AD-8; the VM and the LSP share it). */
-export type CommandLookup = {
-  /** The first tier that resolves `name`. */
-  get(name: string): ResolvedCommand | undefined;
-  /** What one tier alone resolves for `name` (R-35: built-ins bind ahead of script functions). */
-  getTier(tier: keyof CommandTiers, name: string): ResolvedCommand | undefined;
-};
+/** A resolver over one source of commands: a name in, a command out or `undefined` (AD-8). */
+export type CommandSource = (name: string) => ResolvedCommand | undefined;
 
 /**
- * Build the four-tier lookup (AD-8). Any tier left out is a stub that resolves
- * nothing, so the caller wires only the tiers it owns.
+ * The commands the engine itself binds, as two sources (AD-8; the VM and the
+ * LSP share it): a built-in, which binds ahead of a script function (R-35), and
+ * an extension, a plugin's command that no built-in or script function claims.
  */
-export function createCommandLookup(tiers: Partial<CommandTiers>): CommandLookup {
-  const ordered = TIER_ORDER.map((tier) => tiers[tier] ?? (() => undefined));
+export type CommandLookup = {
+  /** The built-in engine command `name` names (R-35), if any. */
+  builtin: CommandSource;
+  /** The command any plugin claims for `name`, if any (reached after the script functions). */
+  extension: CommandSource;
+  /** The built-in if there is one, else the extension: every command `name` can name. */
+  get: CommandSource;
+};
+
+/** Build the command lookup from its two sources; a source left out resolves nothing. */
+export function createCommandLookup(
+  sources: { readonly builtin?: CommandSource; readonly extension?: CommandSource },
+): CommandLookup {
+  const builtin = sources.builtin ?? (() => undefined);
+  const extension = sources.extension ?? (() => undefined);
   return {
-    get(name) {
-      for (const tier of ordered) {
-        const hit = tier(name);
-        if (hit !== undefined) return hit;
-      }
-      return undefined;
-    },
-    getTier(tier, name) {
-      return (tiers[tier] ?? (() => undefined))(name);
-    },
+    builtin,
+    extension,
+    get: (name) => builtin(name) ?? extension(name),
   };
 }
 
@@ -121,8 +111,9 @@ export type FunctionTarget = {
   readonly params: readonly ParamInfo[];
 };
 
-/** The outcome of AD-8 call resolution: either a script function target or a command. */
+/** The outcome of call resolution: a callable the scope holds, a script function target, or a command. */
 export type CallResolution =
+  | { readonly kind: "callable"; readonly value: CallableValue }
   | { readonly kind: "function"; readonly target: FunctionTarget }
   | { readonly kind: "command"; readonly command: ResolvedCommand };
 
@@ -143,15 +134,20 @@ function functionTarget(
 }
 
 /**
- * Resolve a call (docs/spec/engine/rpgcode-modules-and-objects.md#modules MOD-1/MOD-2,
- * docs/spec/engine/rpgcode-functions.md R-35). Redirects were applied where the
- * call site was parsed, so the name here is already substituted. Then:
+ * Resolve a call through the environment table (docs/spec/engine/rpgcode-modules-and-objects.md#modules MOD-1/MOD-2,
+ * docs/spec/engine/rpgcode-functions.md R-35, docs/spec/engine/rpgcode-language.md
+ * FUN-8). Redirects were applied where the call site was parsed, so the name here
+ * is already substituted. Then:
  *
  * 1. a `file.`-qualified call reaches that file's own definition of the name and
  *    arity first, and raises `include.missing` when the file could not be loaded;
- * 2. a built-in binds ahead of a script function of the same name (R-35);
- * 3. the flat list of script functions, where the last definition added won (R-41);
- * 4. the extension tier: a plugin command that no built-in or script function claims.
+ * 2. `held`, the callable the running scope holds under `name`, when there is one
+ *    (the VM reads it from the running frame's locals and the globals; a
+ *    qualified call never has one, and neither does a call through a handle,
+ *    which runs the binding it names);
+ * 3. a built-in binds ahead of a script function of the same name (R-35);
+ * 4. the flat list of script functions, where the last definition added won (R-41);
+ * 5. the extension: a plugin command that no built-in or script function claims.
  *
  * A script function resolves by name and parameter count (FUN-1); a wrong count
  * falls through to the next step.
@@ -162,6 +158,7 @@ export function resolveCall(
   program: Program,
   commands: CommandLookup,
   file?: string,
+  held?: CallableValue,
 ): CallResolution | undefined {
   if (file !== undefined) {
     const path = `${file}.prg`;
@@ -171,18 +168,43 @@ export function resolveCall(
     }
     const own = functionTarget(program.files[key], name, argc, program);
     if (own !== undefined) return own;
+  } else if (held !== undefined) {
+    return { kind: "callable", value: held };
   }
 
   // R-35: a built-in binds ahead of a script function of the same name.
-  const builtin = commands.getTier("builtin", name);
+  const builtin = commands.builtin(name);
   if (builtin !== undefined) return { kind: "command", command: builtin };
 
   const script = functionTarget(program.functions, name, argc, program);
   if (script !== undefined) return script;
 
   // A plugin's own command is reached only after the script functions (docs/spec OOP-6 call order).
-  const extension = commands.getTier("extension", name);
+  const extension = commands.extension(name);
   return extension === undefined ? undefined : { kind: "command", command: extension };
+}
+
+/**
+ * The callable value `bindingOf(name)` answers with (FUN-8; entry 18.5): what a
+ * call of `name` would run from this scope right now. `held`, the callable the
+ * scope holds under `name`, is answered as a copy. Otherwise the answer is a
+ * handle named for the first engine binding there is — a built-in, a script
+ * function (`defines` says whether any compiled program has one of that name,
+ * whatever its parameter count) or a plugin command — and `undefined` when
+ * nothing of that name exists. The handle's `def` is the name, so a call
+ * through it resolves the built-in, script-function and extension steps of
+ * `resolveCall` and never the scope's own symbol, which is why a later
+ * reassignment of the name does not change what the handle runs.
+ */
+export function bindingOf(
+  name: string,
+  commands: CommandLookup,
+  held: CallableValue | undefined,
+  defines: (name: string) => boolean,
+): CallableValue | undefined {
+  if (held !== undefined) return { type: "callable", def: held.def, captures: [...held.captures], receiver: held.receiver };
+  const defined = commands.builtin(name) !== undefined || defines(name) || commands.extension(name) !== undefined;
+  return defined ? { type: "callable", def: name, captures: [], receiver: null } : undefined;
 }
 
 /**

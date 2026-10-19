@@ -1,8 +1,9 @@
 // The plugin registry and the functional command contract (AD-8; ADR 0004
 // decisions 2 and 6): layer order with `next`, the override and no-next
-// warnings, the one rejection, the four tiers, by-ref write-back through a
-// program and a restored snapshot, purity, the stamped effect log and the
-// request handling (entry 9: the VM parks the thread and records the request).
+// warnings, the one rejection, the environment table's resolution order (entry
+// 18.5), by-ref write-back through a program and a restored snapshot, purity,
+// the stamped effect log and the request handling (entry 9: the VM parks the
+// thread and records the request).
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -14,8 +15,9 @@ import {
   restoreGameState,
   snapshot,
   startProgram,
-  TIER_ORDER,
+  resolveCall,
   type Arg,
+  type CallResolution,
   type BuiltinSpec,
   type CommandView,
   type GameState,
@@ -25,7 +27,6 @@ import {
   type ResolvedCommand,
   type ResolvedPlugin,
   type ScriptError,
-  type TierLookup,
 } from "../src/index.ts";
 import { advanceOrFail } from "./script-failures.ts";
 import { createScriptServices } from "./script-test-services.ts";
@@ -165,35 +166,31 @@ test("one plugin repeating a name or alias within itself is rejected, naming the
   equal(message.includes("more than once"), true);
 });
 
-test("the tiers resolve in AD-8's order: redirect, script function, built-in, extension", () => {
-  deepEqual([...TIER_ORDER], ["redirect", "scriptFunction", "builtin", "extension"]);
-  const seen: string[] = [];
-  const tierFor = (first: string, tier: string): TierLookup => {
-    return (name) => {
-      seen.push(tier);
-      if (tier !== first) return undefined;
-      return {
-        spec: noParamsSpec(name, () => ({ value: tier })),
-        next: () => ({ value: null }),
-      };
-    };
-  };
+test("the environment table resolves in order: the scope's callable, built-in, script function, plugin command (FUN-8)", () => {
+  const command = (tag: string): ResolvedCommand => ({
+    spec: noParamsSpec("each", () => ({ value: tag })),
+    next: () => ({ value: null }),
+  });
+  /** What a resolution picked: the command's own tag, or the kind of target. */
+  const picked = (hit: CallResolution | undefined): unknown =>
+    hit?.kind === "command" ? hit.command.spec.call(FIXTURE_VIEW, [], hit.command.next).value : hit?.kind;
+  const state = makeState("function each() { return 1 }\n");
+  const program = createScriptServices(state).programs.get(state.vm.threads[0]!.frames[0]!.program);
 
-  for (const first of TIER_ORDER) {
-    seen.length = 0;
-    const lookup = createCommandLookup({
-      redirect: tierFor(first, "redirect"),
-      scriptFunction: tierFor(first, "scriptFunction"),
-      builtin: tierFor(first, "builtin"),
-      extension: tierFor(first, "extension"),
-    });
-    const hit = lookup.get("each");
-    equal(hit!.spec.call(FIXTURE_VIEW, [], hit!.next).value, first);
-    deepEqual(seen, [...TIER_ORDER].slice(0, TIER_ORDER.indexOf(first) + 1));
-  }
+  const both = createCommandLookup({ builtin: () => command("builtin"), extension: () => command("extension") });
+  const held = { type: "callable" as const, def: "<inline>#lambda_1", captures: [], receiver: null };
+  equal(picked(resolveCall("each", 0, program, both, undefined, held)), "callable");
+  equal(picked(resolveCall("each", 0, program, both)), "builtin");
 
-  // The stubs the VM leaves unwired resolve nothing, so entry 8, 5/6 and 21/22
-  // can fill them without changing the order.
+  const pluginOnly = createCommandLookup({ extension: () => command("extension") });
+  equal(picked(resolveCall("each", 0, program, pluginOnly)), "function");
+  // A script function answers by parameter count, so a call with another count falls through to the plugin.
+  equal(picked(resolveCall("each", 1, program, pluginOnly)), "extension");
+  equal(resolveCall("each", 1, program, createCommandLookup({})), undefined);
+
+  // `get` is the built-in, else the plugin command; a source left out resolves nothing.
+  equal(both.get("each")?.spec.call(FIXTURE_VIEW, [], () => ({ value: null })).value, "builtin");
+  equal(pluginOnly.get("each")?.spec.call(FIXTURE_VIEW, [], () => ({ value: null })).value, "extension");
   equal(createCommandLookup({}).get("each"), undefined);
 });
 
@@ -337,7 +334,7 @@ test("a request is accepted by the registry unmodified and parked by the VM", ()
   });
 });
 
-test("a name no tier resolves is still unknown.command, and core stays the default pack", () => {
+test("a name the environment table cannot resolve is still unknown.command, and core stays the default pack", () => {
   const unknown = makeState("nope()\n");
   equal(
     errorOf(() => advanceOrFail(unknown, createScriptServices(unknown))).code,

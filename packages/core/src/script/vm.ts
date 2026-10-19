@@ -54,8 +54,10 @@ import {
 import { resolveProgram } from "./loader.ts";
 import {
   assembleCommands,
+  bindingOf,
   createCommandLookup,
   resolveCall,
+  type CallResolution,
   type CommandLookup,
 } from "./registry.ts";
 import {
@@ -76,6 +78,7 @@ import { defaultWaitPoll, describeWait } from "./waits.ts";
 import {
   compareEqual,
   compareRelational,
+  foldAscii,
   indexKey,
   isCallableValue,
   toInt32,
@@ -156,7 +159,7 @@ export function createScriptServices(
   const programs = createProgramCache(
     {
       ...(loader === undefined ? {} : { loader }),
-      isBuiltin: (name) => commands.getTier("builtin", name) !== undefined,
+      isBuiltin: (name) => commands.builtin(name) !== undefined,
     },
     (notices) => {
       for (const notice of notices) {
@@ -787,11 +790,15 @@ function loadArg(
 }
 
 /**
- * The callable a plain-name call found in a variable, or `undefined` when the
- * name holds anything else or nothing (FUN-8; entry 18.4). A search that finds
- * no variable name is not a call, and a read never creates one here: unlike a
- * read of an unset variable, this lookup must not define a global while it
- * decides, so an unmatched call keeps the legacy `unknown.command` failure.
+ * The callable the running scope holds under `name`, or `undefined` when the
+ * name holds anything else or nothing — entry 1 of the environment table
+ * (FUN-8; entries 18.4 and 18.5). The scope is the variable a read of `name`
+ * reaches: a local of the running frame (a parameter, a declared local or a
+ * captured name), else the global. A local that holds a non-callable hides a
+ * callable global of the same name, as it hides it for a read, and the caller's
+ * locals are never consulted. A lookup that finds no variable is not a call
+ * and, unlike a read of an unset variable, never defines a global, so an
+ * unmatched call keeps the legacy `unknown.command` failure.
  */
 function heldCallable(
   vm: VmState,
@@ -799,14 +806,53 @@ function heldCallable(
   frameIndex: number,
   name: string,
 ): CallableValue | undefined {
-  for (let index = frameIndex; index >= 0; index -= 1) {
-    const slot = thread.frames[index]?.locals[name];
-    if (slot === undefined) continue;
-    const value = readRef(vm, thread, index, slot.ref);
+  const frame = thread.frames[frameIndex]!;
+  if (Object.hasOwn(frame.locals, name)) {
+    const value = readRef(vm, thread, frameIndex, frame.locals[name]!.ref);
     return isCallableValue(value) ? value : undefined;
   }
   const global = Object.hasOwn(vm.globals, name) ? vm.globals[name] : undefined;
   return isCallableValue(global) ? global : undefined;
+}
+
+/** The call name of the VM-owned `bindingOf` command (FUN-8; entry 18.5), as the lexer folds it. */
+const BINDING_OF = "bindingof";
+
+/**
+ * `bindingOf(name)` (FUN-8; entry 18.5): the callable a call of `name` would run
+ * from the running scope right now. The name is a string and is folded like any
+ * name (LEX-10); a script function counts when any compiled program defines
+ * one. It changes no variable and does not wait, so it is not a command of the
+ * registry: it needs the running frame and the compiled programs, which a
+ * command never sees.
+ */
+function bindingOfCall(
+  vm: VmState,
+  thread: Thread,
+  frameIndex: number,
+  services: ScriptServices,
+  program: Program,
+  args: readonly Arg[],
+  pos: SourcePos,
+): CallableValue {
+  if (args.length !== 1) {
+    throw new ScriptError("arity.mismatch", `"bindingOf" takes 1 argument(s), got ${args.length}`, pos);
+  }
+  const given = args[0]!.value;
+  if (typeof given !== "string") {
+    throw new ScriptError("builtin.bad-arg", `"bindingOf" takes the name as a string`, pos);
+  }
+  const name = foldAscii(given);
+  const handle = bindingOf(
+    name,
+    services.commands,
+    heldCallable(vm, thread, frameIndex, name),
+    (candidate) => findDefinition(services, program, candidate)?.infos.some((info) => info.entry >= 0) ?? false,
+  );
+  if (handle === undefined) {
+    throw new ScriptError("unknown.command", `no built-in or function named "${name}"`, pos);
+  }
+  return handle;
 }
 
 function takeArgs(frame: Frame, argc: number, pos: SourcePos): Arg[] {
@@ -974,13 +1020,18 @@ function findDefinition(
 }
 
 /**
- * Dispatch one indirect call (FUN-8; ADR 0004 decision 8; entry 18.4). The
- * callable's definition is either a script function or lambda — a new frame is
- * pushed exactly as a direct call pushes one, bound to the program that defines
- * it — or a command name, whose handle runs that command so a handle can hold
- * either kind. A lambda frame binds its captured names to the cells named in
- * `value.captures` first, then its parameters as usual: a capture is never a
- * parameter, because lowering leaves parameters out of the capture list.
+ * Dispatch one indirect call (FUN-8; ADR 0004 decision 8; entries 18.4 and
+ * 18.5). A handle runs the binding it names through the environment table's
+ * lower entries only — an engine command first (R-35), then a compiled
+ * definition, then a command a plugin claims — and never asks the running scope
+ * for a symbol, so a handle `bindingOf` made keeps running the binding it named
+ * after the name has been reassigned, and a wrapper that calls it cannot
+ * recurse into itself. A script function or lambda definition pushes a new
+ * frame exactly as a direct call pushes one, bound to the program that defines
+ * it; a command name runs that command, so a handle can hold either kind. A
+ * lambda frame binds its captured names to the cells named in `value.captures`
+ * first, then its parameters as usual: a capture is never a parameter, because
+ * lowering leaves parameters out of the capture list.
  *
  * The same thread and the same frame stack carry the call, so a wait inside the
  * callee parks the caller, `end()` unwinds it, returns come back to the caller's
@@ -998,16 +1049,27 @@ function performCallable(
   args: Arg[],
   pos: SourcePos,
 ): CallOutcome {
+  const builtin = services.commands.builtin(value.def);
+  if (builtin !== undefined) {
+    return dispatchResolved(
+      thread, vm, services, program, frame, frameIndex, value.def,
+      { kind: "command", command: builtin }, args, pos, true,
+    );
+  }
   const found = findDefinition(services, program, value.def);
   if (found === undefined) {
-    if (services.commands.get(value.def) === undefined) {
+    const extension = services.commands.extension(value.def);
+    if (extension === undefined) {
       throw new ScriptError(
         CALLABLE_UNKNOWN_DEF,
         `the callable's definition "${value.def}" is in no compiled program`,
         pos,
       );
     }
-    return performCall(thread, vm, services, program, frame, frameIndex, value.def, args, pos, true);
+    return dispatchResolved(
+      thread, vm, services, program, frame, frameIndex, value.def,
+      { kind: "command", command: extension }, args, pos, true,
+    );
   }
 
   const info = found.infos.find((entry) => entry.entry >= 0 && entry.params.length === args.length);
@@ -1046,13 +1108,13 @@ function performCallable(
 }
 
 /**
- * Dispatch one resolved call: a script function pushes a frame, a command runs
- * and its effects are applied (control effects, the effect log, thread
- * operations), then the call parks the thread (a wait, a request, a self-sleep,
- * a movement), or pushes its value. `advance` is false for a request
- * continuation, whose call site was already passed.
+ * Run a request continuation's command (a call site that was already passed, so
+ * the instruction pointer does not advance). The command resolves through the
+ * engine's own bindings only — the environment table without the running
+ * scope's symbol — because the continuation belongs to the command that asked
+ * for it: a script that has reassigned the name does not intercept it.
  */
-function performCall(
+function performContinuation(
   thread: Thread,
   vm: VmState,
   services: ScriptServices,
@@ -1062,14 +1124,34 @@ function performCall(
   name: string,
   args: Arg[],
   pos: SourcePos,
-  advance: boolean,
-  file?: string,
 ): CallOutcome {
-  const resolved = resolveCall(name, args.length, program, services.commands, file);
-  if (resolved === undefined) {
+  const resolved = resolveCall(name, args.length, program, services.commands);
+  if (resolved === undefined || resolved.kind === "callable") {
     throw new ScriptError("unknown.command", `no built-in or function named "${name}"`, pos);
   }
+  return dispatchResolved(thread, vm, services, program, frame, frameIndex, name, resolved, args, pos, false);
+}
 
+/**
+ * Dispatch one resolved call: a script function pushes a frame, a command runs
+ * and its effects are applied (control effects, the effect log, thread
+ * operations), then the call parks the thread (a wait, a request, a self-sleep,
+ * a movement), or pushes its value. `advance` is false for a request
+ * continuation, whose call site was already passed.
+ */
+function dispatchResolved(
+  thread: Thread,
+  vm: VmState,
+  services: ScriptServices,
+  program: Program,
+  frame: Frame,
+  frameIndex: number,
+  name: string,
+  resolved: Exclude<CallResolution, { readonly kind: "callable" }>,
+  args: Arg[],
+  pos: SourcePos,
+  advance: boolean,
+): CallOutcome {
   if (resolved.kind === "function") {
     if (advance) frame.ip += 1;
     const target = resolved.target;
@@ -1536,7 +1618,7 @@ export function stepThread(
       steps += 1;
       const pos: SourcePos = { file: pending.file, line: pending.line };
       const args = pending.args.map((value) => continuationArg(value, pos));
-      const outcome = performCall(
+      const outcome = performContinuation(
         thread,
         vm,
         services,
@@ -1546,7 +1628,6 @@ export function stepThread(
         pending.command,
         args,
         pos,
-        false,
       );
       if (outcome === "yield") return finish();
       continue;
@@ -1643,7 +1724,9 @@ export function stepThread(
             setOwnSlot(frame.locals, op.name, { value: 0, ref: localRef(op.name) });
           }
           const slot = frame.locals[op.name]!;
-          frame.operands.push({ value: slot.value ?? 0, ref: slot.ref });
+          // A slot redirected to a cell (a captured local, FUN-8) or aliasing another variable holds a stale copy: read through it.
+          const current = slot.ref === localRef(op.name) ? slot.value ?? 0 : readRef(vm, thread, frameIndex, slot.ref);
+          frame.operands.push({ value: current, ref: slot.ref });
         } else {
           if (!Object.hasOwn(vm.globals, op.name)) {
             setOwnValue(vm.globals, op.name, 0);
@@ -2042,26 +2125,36 @@ export function stepThread(
       }
 
       case "load_fn": {
-        // Capture resolution (FUN-8; ADR 0004 decision 8; entry 18.4). The
-        // definition's captured names were worked out at lowering; each gets a
-        // fresh cell holding the enclosing local's value now, and the handle
-        // records the cells in the same order ("" for a name that is not a local).
-        // A fresh cell per execution keeps two closures built by two runs of the
-        // same code apart.
+        // Capture resolution (FUN-8; ADR 0004 decision 8; entries 18.4 and 18.5).
+        // The definition's captured names were worked out at lowering, and the
+        // handle records one cell per name in that order ("" for a name that is not
+        // a local of this frame, which every call reads and writes live as a global).
+        // A captured local's cell is that local's storage: the first closure to
+        // capture the name moves the value into a fresh cell and redirects the
+        // frame's slot to it, so the frame and every closure read and write one
+        // slot, and a later closure from this frame takes the same cell. A fresh
+        // cell per frame keeps two runs of the same code apart. A slot that is
+        // already a cell (an enclosing lambda's capture, or a by-reference
+        // parameter that aliases a captured variable) is shared as it stands; a
+        // slot that aliases some other variable (a by-reference parameter) cannot
+        // become a cell, so the closure takes a by-value copy in a cell of its own.
         const names = program.functions[op.def]?.[0]?.captures ?? [];
         const captures: string[] = [];
         for (const name of names) {
-          // Only a local of the creating frame (a parameter, a declared local, or a
-          // name the creating lambda captured) gets a cell. Any other name is a
-          // global, which every call reads and writes live, so it stays "" here.
           if (!Object.hasOwn(frame.locals, name)) {
             captures.push("");
             continue;
           }
+          const slot = frame.locals[name]!;
+          if (slot.ref.startsWith("cell:")) {
+            captures.push(slot.ref.slice(5));
+            continue;
+          }
           vm.cellSeq = (vm.cellSeq ?? 0) + 1;
           const id = `cell${vm.cellSeq}`;
-          setOwnValue((vm.cells ??= {}), id, loadArg(vm, thread, frameIndex, name, undefined, services.virtuals).value);
+          setOwnValue((vm.cells ??= {}), id, readRef(vm, thread, frameIndex, slot.ref));
           captures.push(id);
+          if (slot.ref === localRef(name)) slot.ref = cellRef(id);
         }
         frame.operands.push({ value: { type: "callable", def: op.def, captures, receiver: null }, ref: null });
         frame.ip += 1;
@@ -2101,41 +2194,38 @@ export function stepThread(
           frame.operands.push({ value: 0, ref: null });
           break;
         }
-        const resolved = resolveCall(op.name, op.argc, program, services.commands, op.file);
-        if (resolved === undefined && frame.objectHandle !== undefined && frame.objectClass !== undefined) {
-          const ownMethod = findMethod(program, frame.objectClass, op.name, op.argc);
-          if (ownMethod !== undefined && ownMethod.entry >= 0) {
-            frame.ip += 1;
-            thread.frames.push({
-              program: frame.program, ip: ownMethod.entry, locals: bindMethodLocals(ownMethod, args), operands: [],
-              errorHandler: null, autoLocal: frame.autoLocal, objectHandle: frame.objectHandle,
-              objectClass: ownMethod.className ?? frame.objectClass,
-            });
-            break;
-          }
+        if (op.file === undefined && op.name === BINDING_OF) {
+          frame.operands.push({ value: bindingOfCall(vm, thread, frameIndex, services, program, args, op.pos), ref: null });
+          frame.ip += 1;
+          break;
         }
-        if (resolved === undefined && op.file === undefined) {
-          // A plain-name call binds a built-in or script function first (R-35);
-          // only when nothing of that name exists does a variable holding a
-          // callable answer the call (FUN-8; entry 18.4).
-          const held = heldCallable(vm, thread, frameIndex, op.name);
-          if (held !== undefined) {
-            if (performCallable(thread, vm, services, program, frame, frameIndex, held, args, op.pos) === "yield") {
-              return finish();
+        // The environment table (FUN-8; entry 18.5): the running scope's own
+        // callable under this name first, then a built-in, a script function and a
+        // plugin command. A `file.`-qualified call never asks the scope.
+        const held = op.file === undefined ? heldCallable(vm, thread, frameIndex, op.name) : undefined;
+        const resolved = resolveCall(op.name, op.argc, program, services.commands, op.file, held);
+        if (resolved === undefined) {
+          if (frame.objectHandle !== undefined && frame.objectClass !== undefined) {
+            const ownMethod = findMethod(program, frame.objectClass, op.name, op.argc);
+            if (ownMethod !== undefined && ownMethod.entry >= 0) {
+              frame.ip += 1;
+              thread.frames.push({
+                program: frame.program, ip: ownMethod.entry, locals: bindMethodLocals(ownMethod, args), operands: [],
+                errorHandler: null, autoLocal: frame.autoLocal, objectHandle: frame.objectHandle,
+                objectClass: ownMethod.className ?? frame.objectClass,
+              });
+              break;
             }
-            break;
           }
+          throw new ScriptError("unknown.command", `no built-in or function named "${op.name}"`, op.pos);
         }
-        if (
-          performCall(thread, vm, services, program, frame, frameIndex, op.name, args, op.pos, true, op.file) ===
-          "yield"
-        ) {
-          return finish();
-        }
-
-      }
-
+        const outcome =
+          resolved.kind === "callable"
+            ? performCallable(thread, vm, services, program, frame, frameIndex, resolved.value, args, op.pos)
+            : dispatchResolved(thread, vm, services, program, frame, frameIndex, op.name, resolved, args, op.pos, true);
+        if (outcome === "yield") return finish();
         break;
+      }
       case "return": {
         const returnArg =
           frame.returnValue !== undefined
