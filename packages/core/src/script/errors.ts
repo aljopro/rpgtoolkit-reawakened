@@ -48,6 +48,13 @@ export const INCLUDE_CYCLE = "include.cycle";
 /** A run-time `include()` names a file that is indexed but cannot be read or compiled (compiled `.prg`, syntax error). */
 export const INCLUDE_REFUSED = "include.refused";
 
+/** A `call_indirect` (or a plain-name call of a variable) found a value that is not a callable (FUN-8, 18.4). */
+export const CALLABLE_NOT_CALLABLE = "callable.not-callable";
+/** A callable names a definition that is in no compiled program: a stale handle or a source that changed (FUN-8, 18.4). */
+export const CALLABLE_UNKNOWN_DEF = "callable.unknown-def";
+/** A callable was invoked with a different number of arguments than its definition takes (FUN-8, 18.4, FUN-1). */
+export const CALLABLE_ARITY = "callable.arity";
+
 /**
  * The family of a catchable runtime failure (ERR-2's failure table).
  * `internal` marks a fault in the host/plugin contract rather than in the
@@ -84,6 +91,9 @@ const CATCHABLE: { readonly [code: string]: FailureClass } = {
   [HANDLER_NOT_HANDLING]: "handler",
   [INCLUDE_MISSING]: "call",
   [INCLUDE_REFUSED]: "call",
+  [CALLABLE_NOT_CALLABLE]: "call",
+  [CALLABLE_UNKNOWN_DEF]: "call",
+  [CALLABLE_ARITY]: "arity",
 };
 
 /** Code prefixes that are load-time or restore failures: reported once, never caught. */

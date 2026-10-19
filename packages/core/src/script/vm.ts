@@ -13,7 +13,7 @@ import { pow } from "../fmath/index.ts";
 import type { Diagnostic } from "../ports/engine.ts";
 import type { Logger } from "../ports/logger.ts";
 import type { PlainData } from "../ports/plain-data.ts";
-import type { ObjectValue, RefId, Value, VarScope } from "../ports/value.ts";
+import type { CallableValue, ObjectValue, RefId, Value, VarScope } from "../ports/value.ts";
 import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
@@ -22,6 +22,9 @@ import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
 import { recordDiagnostic, recordEffect, type EffectRecord } from "./effects.ts";
 import {
+  CALLABLE_ARITY,
+  CALLABLE_NOT_CALLABLE,
+  CALLABLE_UNKNOWN_DEF,
   failureClass,
   HANDLER_NOT_HANDLING,
   HANDLER_TOP_LEVEL,
@@ -56,6 +59,7 @@ import {
   type CommandLookup,
 } from "./registry.ts";
 import {
+  cellRef,
   findBlockingThread,
   findThread,
   globalRef,
@@ -73,6 +77,7 @@ import {
   compareEqual,
   compareRelational,
   indexKey,
+  isCallableValue,
   toInt32,
   toNumberValue,
   toStringValue,
@@ -304,6 +309,7 @@ function collectObjects(vm: VmState): void {
     if (isObjectValue(value)) roots.push(value.handle);
   };
   for (const value of Object.values(vm.globals)) visit(value);
+  for (const value of Object.values(vm.cells ?? {})) visit(value);
   for (const thread of vm.threads) {
     for (const frame of thread.frames) {
       for (const slot of Object.values(frame.locals)) visit(slot.value);
@@ -391,7 +397,7 @@ function refName(ref: RefId): string {
   return sep >= 0 ? ref.slice(sep + 1) : ref;
 }
 function isObjectValue(value: Value | undefined): value is ObjectValue {
-  return typeof value === "object" && value !== null && value.kind === "object";
+  return typeof value === "object" && value !== null && "kind" in value && value.kind === "object";
 }
 
 function objectRef(handle: number, name: string): RefId {
@@ -616,6 +622,11 @@ function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId): V
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
+  // A closure cell belongs to the callable value that captured the name, not to
+  // any frame: every call of the closure reads and writes this one slot (FUN-8).
+  if (scope === "cell") {
+    return vm.cells?.[name] ?? 0;
+  }
   if (scope === "object") {
     const object = parseObjectRef(ref);
     const record = object === null ? undefined : vm.objects.find((item) => item.handle === object.handle);
@@ -646,6 +657,10 @@ function writeRef(
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
+  if (scope === "cell") {
+    setOwnValue((vm.cells ??= {}), name, stored);
+    return;
+  }
   if (scope === "object") {
     const object = parseObjectRef(ref);
     const record = object === null ? undefined : vm.objects.find((item) => item.handle === object.handle);
@@ -681,7 +696,15 @@ function deleteVariable(vm: VmState, thread: Thread, frameIndex: number, target:
   for (let i = frameIndex; i >= 0; i--) {
     const f = thread.frames[i];
     if (f) {
-      delete f.locals[target];
+      const slot = f.locals[target];
+      // A captured name is bound to a cell, which has no "unset" state: `kill`
+      // empties the cell and keeps the binding, so the closure's next read
+      // still reaches its own storage instead of creating a global (FUN-8).
+      if (slot !== undefined && slot.ref.startsWith("cell:")) {
+        setOwnValue((vm.cells ??= {}), slot.ref.slice(5), 0);
+      } else {
+        delete f.locals[target];
+      }
       if (isWholeArray) {
         for (const key of Object.keys(f.locals)) {
           if (key.startsWith(prefix)) {
@@ -761,6 +784,29 @@ function loadArg(
   // SEM-4/SEM-5: Read creates the variable as global (unset -> 0)
   setOwnValue(vm.globals, name, 0);
   return { value: 0, ref: globalRef(name) };
+}
+
+/**
+ * The callable a plain-name call found in a variable, or `undefined` when the
+ * name holds anything else or nothing (FUN-8; entry 18.4). A search that finds
+ * no variable name is not a call, and a read never creates one here: unlike a
+ * read of an unset variable, this lookup must not define a global while it
+ * decides, so an unmatched call keeps the legacy `unknown.command` failure.
+ */
+function heldCallable(
+  vm: VmState,
+  thread: Thread,
+  frameIndex: number,
+  name: string,
+): CallableValue | undefined {
+  for (let index = frameIndex; index >= 0; index -= 1) {
+    const slot = thread.frames[index]?.locals[name];
+    if (slot === undefined) continue;
+    const value = readRef(vm, thread, index, slot.ref);
+    return isCallableValue(value) ? value : undefined;
+  }
+  const global = Object.hasOwn(vm.globals, name) ? vm.globals[name] : undefined;
+  return isCallableValue(global) ? global : undefined;
 }
 
 function takeArgs(frame: Frame, argc: number, pos: SourcePos): Arg[] {
@@ -905,6 +951,97 @@ function liveTarget(vm: VmState, id: number, what: string, pos: SourcePos): Thre
     throw new ScriptError("thread.finished", `${what}: thread ${id} has finished`, pos);
   }
   return target;
+}
+
+/**
+ * The compiled definition `def` names: the running program first, then every
+ * other compiled program in cache order (FUN-8; entry 18.4). A def is unique to
+ * the unit that was lowered (`main.prg#lambda_1`), so the first program that
+ * defines it owns it, and a handle made in one program is callable from another
+ * — a lambda stored in a global and called by a `run()` program, for example.
+ * `infos` holds one entry per parameter count, as `Program.functions` does.
+ */
+function findDefinition(
+  services: ScriptServices,
+  program: Program,
+  def: string,
+): { readonly program: Program; readonly infos: readonly FunctionInfo[] } | undefined {
+  const local = program.functions[def];
+  if (local !== undefined) return { program, infos: local };
+  const owner = services.programs.find(def);
+  const infos = owner === undefined ? undefined : owner.functions[def];
+  return owner === undefined || infos === undefined ? undefined : { program: owner, infos };
+}
+
+/**
+ * Dispatch one indirect call (FUN-8; ADR 0004 decision 8; entry 18.4). The
+ * callable's definition is either a script function or lambda — a new frame is
+ * pushed exactly as a direct call pushes one, bound to the program that defines
+ * it — or a command name, whose handle runs that command so a handle can hold
+ * either kind. A lambda frame binds its captured names to the cells named in
+ * `value.captures` first, then its parameters as usual: a capture is never a
+ * parameter, because lowering leaves parameters out of the capture list.
+ *
+ * The same thread and the same frame stack carry the call, so a wait inside the
+ * callee parks the caller, `end()` unwinds it, returns come back to the caller's
+ * operand stack, and each instruction spends one step of the same budget: an
+ * indirect call is a direct call with the definition chosen at run time.
+ */
+function performCallable(
+  thread: Thread,
+  vm: VmState,
+  services: ScriptServices,
+  program: Program,
+  frame: Frame,
+  frameIndex: number,
+  value: CallableValue,
+  args: Arg[],
+  pos: SourcePos,
+): CallOutcome {
+  const found = findDefinition(services, program, value.def);
+  if (found === undefined) {
+    if (services.commands.get(value.def) === undefined) {
+      throw new ScriptError(
+        CALLABLE_UNKNOWN_DEF,
+        `the callable's definition "${value.def}" is in no compiled program`,
+        pos,
+      );
+    }
+    return performCall(thread, vm, services, program, frame, frameIndex, value.def, args, pos, true);
+  }
+
+  const info = found.infos.find((entry) => entry.entry >= 0 && entry.params.length === args.length);
+  if (info === undefined) {
+    const takes = found.infos.filter((entry) => entry.entry >= 0).map((entry) => entry.params.length);
+    throw new ScriptError(CALLABLE_ARITY, `"${value.def}" takes ${takes.join(" or ")} argument(s), got ${args.length}`, pos);
+  }
+
+  const locals = bindMethodLocals(info, args);
+  const names = info.captures ?? [];
+  if (names.length !== value.captures.length) {
+    throw new ScriptError(
+      CALLABLE_UNKNOWN_DEF,
+      `the callable's definition "${value.def}" captures ${names.length} name(s), but the handle names ${value.captures.length}`,
+      pos,
+    );
+  }
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    if (Object.hasOwn(locals, name)) continue;
+    const cell = value.captures[index]!;
+    setOwnSlot(locals, name, { value: vm.cells?.[cell] ?? 0, ref: cellRef(cell) });
+  }
+
+  frame.ip += 1;
+  thread.frames.push({
+    program: found.program.ref,
+    ip: info.entry,
+    locals,
+    operands: [],
+    errorHandler: null,
+    autoLocal: frame.autoLocal,
+  });
+  return "continue";
 }
 
 /**
@@ -1903,6 +2040,51 @@ export function stepThread(
         break;
       }
 
+      case "load_fn": {
+        // Capture resolution (FUN-8; ADR 0004 decision 8; entry 18.4). The
+        // definition's captured names were worked out at lowering; each gets a
+        // fresh cell holding the enclosing variable's value now, and the handle
+        // records the cells in the same order. A fresh cell per execution is
+        // what keeps two closures built by two runs of the same code apart.
+        const names = program.functions[op.def]?.[0]?.captures ?? [];
+        const cells = (vm.cells ??= {});
+        const captures: string[] = [];
+        for (const name of names) {
+          vm.cellSeq = (vm.cellSeq ?? 0) + 1;
+          const id = `cell${vm.cellSeq}`;
+          setOwnValue(cells, id, loadArg(vm, thread, frameIndex, name, undefined, services.virtuals).value);
+          captures.push(id);
+        }
+        frame.operands.push({ value: { type: "callable", def: op.def, captures, receiver: null }, ref: null });
+        frame.ip += 1;
+        break;
+      }
+
+      case "call_indirect": {
+        // The callee is below its arguments on the stack (18.3): pop the
+        // arguments, then the callable itself.
+        const args = takeArgs(frame, op.argc, op.pos);
+        const callee = frame.operands.pop();
+        if (callee === undefined) {
+          throw new ScriptError(
+            "vm.stack-underflow",
+            "call_indirect: the operand stack is missing the callable",
+            op.pos,
+          );
+        }
+        if (!isCallableValue(callee.value)) {
+          throw new ScriptError(
+            CALLABLE_NOT_CALLABLE,
+            "call_indirect: the value below the arguments is not a callable",
+            op.pos,
+          );
+        }
+        if (performCallable(thread, vm, services, program, frame, frameIndex, callee.value, args, op.pos) === "yield") {
+          return finish();
+        }
+        break;
+      }
+
       case "call": {
         const args = takeArgs(frame, op.argc, op.pos);
         if (op.file === undefined && Object.hasOwn(MODULE_COMMANDS, op.name)) {
@@ -1921,6 +2103,18 @@ export function stepThread(
               errorHandler: null, autoLocal: frame.autoLocal, objectHandle: frame.objectHandle,
               objectClass: ownMethod.className ?? frame.objectClass,
             });
+            break;
+          }
+        }
+        if (resolved === undefined && op.file === undefined) {
+          // A plain-name call binds a built-in or script function first (R-35);
+          // only when nothing of that name exists does a variable holding a
+          // callable answer the call (FUN-8; entry 18.4).
+          const held = heldCallable(vm, thread, frameIndex, op.name);
+          if (held !== undefined) {
+            if (performCallable(thread, vm, services, program, frame, frameIndex, held, args, op.pos) === "yield") {
+              return finish();
+            }
             break;
           }
         }

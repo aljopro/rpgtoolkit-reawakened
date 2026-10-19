@@ -151,6 +151,16 @@ export type VmState = {
   effectSeq: number;
   block: GlobalBlock | null;
   requestSeq: number;
+  /**
+   * The closure cells named by a callable's `captures` (FUN-8), by cell id.
+   * One cell is the private storage of one captured name of one callable
+   * value, so a closure keeps its own state between calls. Absent until the
+   * first lambda value is created, matching `messagesOff`: a state with no
+   * closure in it keeps the shape it had before cells existed. `cellSeq` is the
+   * id counter (`cell1`, `cell2`, …) and is present exactly when `cells` is.
+   */
+  cells?: { [id: string]: Value };
+  cellSeq?: number;
   /** Present and true only while debug(false) has switched messages off. */
   messagesOff?: true;
 };
@@ -181,6 +191,15 @@ export function globalRef(name: string): RefId {
 /** Build a local-scope variable reference (AD-8's `Arg.ref`). */
 export function localRef(name: string): RefId {
   return `local:${name}` as RefId;
+}
+
+/**
+ * Build a closure-cell reference: the binding a lambda frame gives a captured
+ * name, so its reads and writes reach the callable value's own cell (FUN-8)
+ * rather than the frame's local table or the global one.
+ */
+export function cellRef(id: string): RefId {
+  return `cell:${id}` as RefId;
 }
 
 /** The id the next thread gets: `max(id) + 1` (a killed highest id is reused). */

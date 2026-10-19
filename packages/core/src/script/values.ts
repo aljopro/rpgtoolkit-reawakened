@@ -10,7 +10,7 @@
  * docs/spec/engine/rpgcode-runtime.md#sem-5--unset-variables-and-array-elements
  */
 
-import type { Value } from "../ports/value.ts";
+import type { CallableValue, Value } from "../ports/value.ts";
 
 /**
  * ASCII-only case fold (LEX-10): `A`–`Z` to `a`–`z`, every other code point
@@ -26,9 +26,19 @@ export function foldAscii(text: string): string {
 }
 
 /**
+ * Whether `v` is a first-class callable (FUN-8). A callable is the fourth
+ * member of `Value` alongside the object handle, which shares `typeof v ===
+ * "object"`, so every reading of a live object checks the tag it wants.
+ */
+export function isCallableValue(v: Value | undefined): v is CallableValue {
+  return typeof v === "object" && v !== null && "type" in v && v.type === "callable";
+}
+
+/**
  * RPGCode truthiness (R-39, docs/spec/engine/rpgcode-runtime.md#sem-3--comparison-and-conversion SEM-3:14):
  * A string is true unless it folds to "off" (case-insensitive); "" is true.
  * A number is true when it is not zero. `null` counts as unset (0) -> false.
+ * A callable is true (docs/spec/engine/rpgcode-language.md#lexical-rules); an object handle is false.
  */
 export function truthy(v: Value): boolean {
   if (typeof v === "string") {
@@ -37,7 +47,7 @@ export function truthy(v: Value): boolean {
   if (typeof v === "number") {
     return v !== 0;
   }
-  return false;
+  return isCallableValue(v);
 }
 
 /**
@@ -145,10 +155,14 @@ export function stringToNumber(text: string): number {
   return Number.isFinite(val) ? val : 0;
 }
 
-/** Convert any Value to its string representation (SEM-3). */
+/**
+ * Convert any Value to its string representation (SEM-3). A callable's form is
+ * `[Function: <def>]` (docs/spec/engine/rpgcode-language.md#lexical-rules).
+ */
 export function toStringValue(v: Value): string {
   if (typeof v === "string") return v;
   if (typeof v === "number") return numberToString(v);
+  if (isCallableValue(v)) return `[Function: ${v.def}]`;
   return "";
 }
 

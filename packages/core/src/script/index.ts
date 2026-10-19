@@ -7,6 +7,9 @@
  */
 
 export {
+  CALLABLE_ARITY,
+  CALLABLE_NOT_CALLABLE,
+  CALLABLE_UNKNOWN_DEF,
   failureClass,
   HANDLER_NOT_HANDLING,
   HANDLER_TOP_LEVEL,
@@ -75,6 +78,7 @@ export {
   endItemThreads,
   findBlockingThread,
   findThread,
+  cellRef,
   globalRef,
   killThread,
   localRef,
@@ -102,6 +106,7 @@ export {
   compareEqual,
   compareRelational,
   indexKey,
+  isCallableValue,
   numberToString,
   stringToNumber,
   toInt32,

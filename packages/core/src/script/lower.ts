@@ -30,6 +30,13 @@ export type FunctionInfo = {
   readonly labels: { readonly [name: string]: number };
   readonly className?: string;
   readonly access?: "public" | "private";
+  /**
+   * The enclosing names a lambda reads, in first-use order (FUN-8; entry 18.4).
+   * The VM allocates one cell per name when it runs the matching `load_fn` and
+   * binds those cells back to these names, in this order, on every call. Absent
+   * on a named function or method, which captures nothing.
+   */
+  readonly captures?: readonly string[];
 };
 
 export type CompiledClass = {
@@ -58,6 +65,27 @@ export type LowerResult = {
   /** Each function definition in source order, for clash warnings (MOD-1). */
   readonly defs: readonly FunctionDefInfo[];
 };
+
+/**
+ * The enclosing names a lambda body reads, in first-use order — what the lambda
+ * captures (FUN-8; docs/spec/engine/rpgcode-language.md#lexical-rules; entry
+ * 18.4). The body's own `load`s with no explicit scope are exactly its free
+ * variable reads, so a parameter (which the body reads without a scope but
+ * which shadows the outer name), `this`, a scoped read (`local(x)`,
+ * `global(x)`) and an array element are not captures; an array element never
+ * appears as a `load` at all, because only its index expression does.
+ */
+function capturedNames(body: readonly StepOp[], params: readonly ParamInfo[]): string[] {
+  const seen = new Set<string>(["this"]);
+  for (const param of params) seen.add(param.name);
+  const names: string[] = [];
+  for (const op of body) {
+    if (op.op !== "load" || op.scope !== undefined || seen.has(op.name)) continue;
+    seen.add(op.name);
+    names.push(op.name);
+  }
+  return names;
+}
 
 /** Lower an AST to the flat Step IR array and function tables. */
 export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<string>): LowerResult {
@@ -471,10 +499,16 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
   for (let index = 0; index < lambdaDefs.length; index += 1) {
     const lambda = lambdaDefs[index]!;
     const lowered = lowerBody(lambda.expr.body, lambda.expr.line);
+    const params = lambda.expr.params.map((param) => ({ name: param.name, byRef: param.byRef }));
+    // The captures are worked out here, once per definition, because the load
+    // site and the call site must agree on the order without either embedding
+    // the list: `load_fn` fills the cells, and the frame bind reads them back in
+    // this order (18.4; ADR 0004 decision 8).
     functions[lambda.def] = [
       {
         ...lowered,
-        params: lambda.expr.params.map((param) => ({ name: param.name, byRef: param.byRef })),
+        params,
+        captures: capturedNames(ops.slice(lowered.entry, lowered.end), params),
       },
     ];
   }
