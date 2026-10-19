@@ -4,6 +4,9 @@ import {
   applyPluginManifestPatch,
   assembleCommands,
   ENGINE_DEFAULT_MANIFEST,
+  HOST_REQUEST_KINDS,
+  isPackageManifestEntry,
+  listPackageDeclarations,
   parsePluginManifest,
   type BuiltinSpec,
   type Logger,
@@ -115,4 +118,70 @@ test("resolved layer options are injected only into the owning command view", ()
   ], logger).get("probe")!;
   configured.spec.call({ rng: { nextUint32: () => 0 }, clock: { tick: () => 0 } }, [], configured.next);
   deepEqual(seen, { core: true });
+});
+
+test("a package entry parses with name, version, default namespace and declared requests", () => {
+  const result = parsePluginManifest([
+    { id: "core" },
+    { id: "stock_battle", version: "1.2.0", requests: ["saveBlob", "playVideo"] },
+    { id: "extras", version: "0.1", namespace: "Ex" },
+  ]);
+  deepEqual(result.diagnostics, []);
+  deepEqual(listPackageDeclarations(result.manifest!), [
+    { name: "stock_battle", version: "1.2.0", namespace: "stock_battle", requests: ["saveBlob", "playVideo"], enabled: true },
+    { name: "extras", version: "0.1", namespace: "Ex", requests: [], enabled: true },
+  ]);
+  equal(isPackageManifestEntry(result.manifest![0]!), false);
+});
+
+test("package fields are validated with located diagnostics", () => {
+  const cases: readonly [unknown, string][] = [
+    [{ id: "p", version: "" }, "manifest.version"],
+    [{ id: "p", version: 3 }, "manifest.version"],
+    [{ id: "P", version: "1" }, "manifest.package-name"],
+    [{ id: "p", version: "1", namespace: "a.b" }, "manifest.namespace"],
+    [{ id: "p", version: "1", requests: "saveBlob" }, "manifest.requests"],
+    [{ id: "p", version: "1", requests: ["teleport"] }, "manifest.request-kind"],
+    [{ id: "p", version: "1", requests: ["quit", "quit"] }, "manifest.request-kind"],
+    [{ id: "p", namespace: "x" }, "manifest.package-version"],
+    [{ id: "p", requests: [] }, "manifest.package-version"],
+  ];
+  for (const [entry, code] of cases) {
+    const result = parsePluginManifest([{ id: "core" }, entry]);
+    equal(result.manifest, null);
+    deepEqual(result.diagnostics.map((d) => [d.code, d.index]), [[code, 1]], code);
+  }
+});
+
+test("a duplicate namespace is a located diagnostic, defaulted or declared, case-folded", () => {
+  const result = parsePluginManifest([
+    { id: "core" },
+    { id: "alpha", version: "1" },
+    { id: "beta", version: "1", namespace: "ALPHA" },
+  ]);
+  equal(result.manifest, null);
+  deepEqual(result.diagnostics.map((d) => [d.code, d.index]), [["manifest.duplicate-namespace", 2]]);
+});
+
+test("package entries patch and order exactly like native entries", () => {
+  const base = parsePluginManifest([{ id: "core" }, { id: "catalogue" }]).manifest!;
+  const result = applyPluginManifestPatch(base, [
+    { op: "append", entry: { id: "pkg_a", version: "1", requests: ["asset"] } },
+    { op: "append", entry: { id: "pkg_b", version: "2" } },
+    { op: "reorder", ids: ["core", "pkg_b", "catalogue", "pkg_a"] },
+    { op: "disable", id: "pkg_b" },
+  ]);
+  deepEqual(result.diagnostics, []);
+  deepEqual(result.manifest.map((e) => e.id), ["core", "pkg_b", "catalogue", "pkg_a"]);
+  deepEqual(listPackageDeclarations(result.manifest).map((d) => [d.name, d.enabled]), [["pkg_b", false], ["pkg_a", true]]);
+  const clash = applyPluginManifestPatch(result.manifest, [
+    { op: "append", entry: { id: "pkg_c", version: "1", namespace: "pkg_a" } },
+    { op: "replace", id: "pkg_b", entry: { id: "pkg_b", version: "3", namespace: "pkg_a" } },
+  ]);
+  deepEqual(clash.diagnostics.map((d) => [d.code, d.index]), [["manifest.duplicate-namespace", 0], ["manifest.duplicate-namespace", 1]]);
+  deepEqual(clash.manifest, result.manifest);
+});
+
+test("every runner request kind is declarable", () => {
+  deepEqual([...HOST_REQUEST_KINDS].sort(), ["asset", "extension.call", "listBlobs", "loadBlob", "openUrl", "playVideo", "quit", "saveBlob"]);
 });

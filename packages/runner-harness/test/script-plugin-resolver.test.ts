@@ -45,3 +45,15 @@ test("duplicate ids produce a located diagnostic and only one definition", () =>
     message: 'duplicate plugin id "core"',
   }]);
 });
+
+test("a package resolves like a native entry; a missing or other-version package is a located diagnostic", () => {
+  const pkg: PluginDefinition = { id: "pkg_a", version: "2.0", commands: [] };
+  const result = resolvePluginManifest([
+    { id: "core" },
+    { id: "pkg_a", version: "2.0", requests: ["asset"] },
+    { id: "pkg_b", version: "1" },
+    { id: "pkg_a2", version: "9" },
+  ], { core: CORE, pkg_a: pkg, pkg_a2: pkg });
+  deepEqual(result.plugins.map((item) => item.definition.id), ["core", "pkg_a"]);
+  deepEqual(result.diagnostics.map((d) => [d.code, d.index]), [["plugin.unresolved", 2], ["plugin.version-mismatch", 3]]);
+});

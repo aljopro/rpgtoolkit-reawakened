@@ -3,7 +3,7 @@ title: "RPGCode package manifest: name, version, namespace and declared host req
 type: 'feature'
 ticket: 6
 created: '2026-10-19'
-status: draft
+status: built
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "high"
 context:
