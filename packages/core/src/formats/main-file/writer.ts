@@ -21,9 +21,13 @@ import {
   MAIN_MAGIC,
   MAIN_MAX_MINOR,
   MAIN_MIN_MINOR,
+  MAIN_PACKAGE_EXTENSION_TAG,
+  MAIN_PACKAGE_MAX_BYTES,
+  MAIN_PACKAGE_MAX_COUNT,
   MAIN_SECTION,
   type MainFile,
 } from "./model.ts";
+import { asciiLower } from "./layout.ts";
 
 /** The signed 16-bit range every `i16` field must fit (docs/spec/formats/README.md#primitive-encoding). */
 const I16_MIN = -32_768;
@@ -291,6 +295,19 @@ function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | unde
     return runs;
   }
 
+  const packagePlugins = model.packagePlugins ?? [];
+  if (packagePlugins.length > MAIN_PACKAGE_MAX_COUNT) {
+    return fail(writer, `TKR package list has ${packagePlugins.length} names; maximum is ${MAIN_PACKAGE_MAX_COUNT} (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+  }
+  const seen = new Set<string>();
+  for (const name of packagePlugins) {
+    if (name.length === 0 || name.length > MAIN_PACKAGE_MAX_BYTES) {
+      return fail(writer, `TKR package name must be 1–${MAIN_PACKAGE_MAX_BYTES} bytes (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    }
+    const folded = asciiLower(name);
+    if (seen.has(folded)) return fail(writer, `duplicate TKR package name "${name}" (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    seen.add(folded);
+  }
   return undefined;
 }
 
@@ -513,6 +530,15 @@ export function writeMainFile(model: MainFile): Result<Uint8Array> {
     }
   }
 
+  const packagePlugins = model.packagePlugins ?? [];
+  if (packagePlugins.length > 0 || model.packagePluginsExtension === true) {
+    writer.writeBytes(MAIN_PACKAGE_EXTENSION_TAG);
+    writer.u16(packagePlugins.length);
+    for (const name of packagePlugins) {
+      const encoded = writer.str(name);
+      if (!encoded.ok) return encoded;
+    }
+  }
   writer.writeBytes(model.residue);
   return ok(writer.toBytes());
 }

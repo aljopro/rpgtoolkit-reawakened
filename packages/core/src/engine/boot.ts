@@ -19,11 +19,10 @@ import {
   MEDIA_PLUGIN,
   ENGINE_DEFAULT_MANIFEST,
   NATIVE_PACK_TABLE,
-  getDeclinedPluginDiagnostic,
   isPluginManifestEntryEnabled,
-  lookupLegacyPlugin,
   type EffectKind,
   type PluginManifest,
+  type PluginManifestPatch,
   type ResolvedPlugin,
 } from "../script/index.ts";
 import type { PostEffect } from "./effects.ts";
@@ -56,44 +55,26 @@ export function programKeys(index: AssetIndex, root: AssetRoot): AssetKey[] {
   return keysUnder(index, root, "programs", () => true);
 }
 
-/** The plugin names the main file lists (E-02 step 3): file names at minor 3 and later, `tkplug<N>` slots before. */
+/** The ordered TKR package names from the main file's native extension. */
 export function mainFilePluginNames(main: MainFile): string[] {
-  const names: string[] = [];
-  main.plugins.forEach((entry, slot) => {
-    if (main.minor >= 3) {
-      if (entry.pluginFile !== "") names.push(entry.pluginFile);
-    } else if (entry.enabled !== 0) {
-      names.push(`tkplug${slot}`);
-    }
-  });
-  return names;
+  return [...(main.packagePlugins ?? [])];
+}
+
+/** Convert the main file package list into the existing manifest patch seam. */
+export function mainFilePluginPatch(main: MainFile): PluginManifestPatch {
+  return mainFilePluginNames(main).map((id) => ({ op: "append", entry: { id } }));
 }
 
 /**
- * E-02 step 3: the engine default manifest plus the native packs the main
- * file's plugin list names. A declined or unknown name is a located
- * diagnostic; menu and battle plugins are those subsystems', not manifest
- * entries (`subsystem` and `loader` rows add nothing here).
+ * E-02 step 3: the engine default manifest plus the package entries named by
+ * the main file. Legacy DLL rows are retained as data and never interpreted.
  */
-export function pluginManifestFor(main: MainFile, mainKeyForDiagnostics: string): { readonly manifest: PluginManifest; readonly diagnostics: Diagnostic[] } {
+export function pluginManifestFor(main: MainFile, _mainKeyForDiagnostics: string): { readonly manifest: PluginManifest; readonly diagnostics: Diagnostic[] } {
   const manifest: { id: string }[] = ENGINE_DEFAULT_MANIFEST.map((entry) => ({ id: entry.id }));
-  const diagnostics: Diagnostic[] = [];
-  mainFilePluginNames(main).forEach((name, slot) => {
-    const entry = lookupLegacyPlugin(name);
-    if (entry === undefined) {
-      diagnostics.push({ code: "plugin.unresolved", file: mainKeyForDiagnostics, line: 0, message: `plugin "${name}" is not a known legacy plugin and was not loaded` });
-      return;
-    }
-    if (entry.status === "declined") {
-      const declined = getDeclinedPluginDiagnostic(name, "main-file", slot);
-      if (declined !== undefined) diagnostics.push({ code: declined.code, file: mainKeyForDiagnostics, line: 0, message: declined.message });
-      return;
-    }
-    if (entry.status === "native" && entry.packId !== undefined && !manifest.some((existing) => existing.id === entry.packId)) {
-      manifest.push({ id: entry.packId });
-    }
-  });
-  return { manifest, diagnostics };
+  for (const operation of mainFilePluginPatch(main)) {
+    if (operation.op === "append") manifest.push(operation.entry);
+  }
+  return { manifest, diagnostics: [] };
 }
 
 /** Resolve manifest ids to the engine's own definitions; a disabled entry is skipped and an unknown id is a diagnostic. */
