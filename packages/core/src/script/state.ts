@@ -157,10 +157,20 @@ export type VmState = {
    * value, so a closure keeps its own state between calls. Absent until the
    * first lambda value is created, matching `messagesOff`: a state with no
    * closure in it keeps the shape it had before cells existed. `cellSeq` is the
-   * id counter (`cell1`, `cell2`, …) and is present exactly when `cells` is.
+   * number of the last id issued (`cell1`, `cell2`, …), is present exactly when
+   * `cells` is, and never goes back when a cell is freed (entry 18.6).
    */
   cells?: { [id: string]: Value };
   cellSeq?: number;
+  /**
+   * The program that owns each definition a live callable names (FUN-8; entry
+   * 18.6): `def` to the reference of the program that defines it, written when
+   * the callable is made. Compiled programs are not saved, so this is what lets
+   * a restore compile the program a handle's `def` lives in even when no frame
+   * is running it. A callable naming a command has no entry. Absent until the
+   * first callable is made; an entry is dropped when no live callable names its `def`.
+   */
+  defOwners?: { [def: string]: ProgramRef };
   /** Present and true only while debug(false) has switched messages off. */
   messagesOff?: true;
 };

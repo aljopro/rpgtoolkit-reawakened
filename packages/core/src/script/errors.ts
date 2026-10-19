@@ -55,6 +55,20 @@ export const CALLABLE_UNKNOWN_DEF = "callable.unknown-def";
 /** A callable was invoked with a different number of arguments than its definition takes (FUN-8, 18.4, FUN-1). */
 export const CALLABLE_ARITY = "callable.arity";
 
+// Load-time failures of a saved game's function values (FUN-8, entry 18.6). They are
+// `restore.` codes, so a script's error handler never sees them: a host catches the
+// `ScriptError` and the message names the place in the save.
+/** A value whose `type` is `"callable"` is not exactly `{ type, def, captures, receiver }`. */
+export const RESTORE_CALLABLE_MALFORMED = "restore.callable-malformed";
+/** A `captures` entry, a slot's or operand's `cell:` reference or a wait's resume reference names a cell that is not in `vm.cells`. */
+export const RESTORE_CELL_MISSING = "restore.cell-missing";
+/** `vm.cells` and `vm.cellSeq` disagree, a cell id is not one the VM issues, or an id is above `vm.cellSeq` so the next id would collide. */
+export const RESTORE_CELL_SEQ = "restore.cell-seq";
+/** A callable's `def` is defined by no compiled program and is no command, or its recorded owner does not define it. */
+export const RESTORE_CALLABLE_UNKNOWN_DEF = "restore.callable-unknown-def";
+/** A callable's `captures` count differs from its definition's capture count. */
+export const RESTORE_CALLABLE_CAPTURES = "restore.callable-captures";
+
 /**
  * The family of a catchable runtime failure (ERR-2's failure table).
  * `internal` marks a fault in the host/plugin contract rather than in the
