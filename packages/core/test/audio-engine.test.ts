@@ -166,22 +166,30 @@ test("a file no decoder accepts plays with an unknown length and one asset-forma
   ok(second.report.ticksRun > 0 || gone.state().time.tick > 0, "the game goes on ticking");
 });
 
-test("the cue stream and the state hash do not depend on how the ticks are batched", () => {
-  const game = authorGame();
-  const program = sends("b", "d", "e");
-  const whole = startEngine(game, program);
-  const all = run(whole.engine, game.files, 60);
-  const stepped = startEngine(game, program);
-  const cues: AudioCue[] = [];
-  let last: TickReport | null = null;
-  for (let step = 0; step < 60; step += 1) {
-    const result = run(stepped.engine, game.files, 1);
-    cues.push(...result.cues);
-    last = result.report;
-  }
-  deepEqual(cues, all.cues);
-  equal(last?.stateHash, all.report.stateHash);
-  ok(all.cues.length > 3);
+test("sample-game replay is invariant under 1-, 5- and 20-tick advance batching", () => {
+  const game = authorGame({ "Boards/a.brd": boardBytes("town.mid") });
+  const program = 'sleep(3)\nwav("step.wav")\nsleep(60)\nend()\n';
+  const runBatches = (batch: number): { readonly cues: AudioCue[]; readonly report: TickReport } => {
+    const host = startEngine(game, program);
+    const cues: AudioCue[] = run(host.engine, game.files, 0).cues;
+    let remaining = 60;
+    let last: TickReport | null = null;
+    while (remaining > 0) {
+      const result = run(host.engine, game.files, Math.min(batch, remaining));
+      cues.push(...result.cues);
+      remaining -= result.report.ticksRun;
+      last = result.report;
+    }
+    if (last === null) throw new Error(`batch ${batch} did not run`);
+    return { cues, report: host.engine.advance(0, []) };
+  };
+  const one = runBatches(1);
+  const five = runBatches(5);
+  const twenty = runBatches(20);
+  deepEqual(five.cues, one.cues, "five-tick batches preserve the cue stream");
+  deepEqual(twenty.cues, one.cues, "twenty-tick batches preserve the cue stream");
+  equal(five.report.stateHash, one.report.stateHash, "five-tick batches preserve the final state hash");
+  equal(twenty.report.stateHash, one.report.stateHash, "twenty-tick batches preserve the final state hash");
 });
 
 test("an animation frame's sound is an sfx cue after the length is learned, and it ends on its end tick", () => {
