@@ -274,6 +274,56 @@ late = handler(1)
 end()
 `;
 
+// 11. Pure-RPGCode middleware (entry 18.7; the authored libraries under
+// packages/core/test/fixtures/plugins/ in short): four layers wrap mwin through the one
+// function that installs a layer, so each layer's tag is a captured cell of its own; a
+// fifth wraps sleep, so a wrapper waits inside its call; the start-up program ends with
+// run() and the game program uses layers that program made. The layer installed last runs
+// first, so the engine sees the tags in reverse install order.
+const SYNTHETIC_11_BOOT = `function layer(tag) {
+  local(original)
+  original = bindingOf("mwin")
+  mwin = (text) => {
+    trace = trace + tag + ">"
+    r = original(tag + ":" + text)
+    trace = trace + "<" + tag
+    return r
+  }
+}
+function pace() {
+  local(original)
+  original = bindingOf("sleep")
+  sleep = (ticks) => {
+    trace = trace + "pace>"
+    original(ticks * 2)
+    trace = trace + "<pace"
+    return 0
+  }
+}
+function counter() {
+  local(n)
+  n = 0
+  bump = () => { n = n + 1; return n }
+  total = () => n
+}
+trace = ""
+layer("weather")
+layer("audio")
+layer("hud")
+pace()
+counter()
+run("game.prg")
+`;
+
+const SYNTHETIC_11_GAME = `mwin("hello")
+sleep(1)
+bump()
+mwin("again")
+bump()
+seen = total()
+end()
+`;
+
 // -------------------------------------------------------------------
 // Synthetic TK2 Program (dialect, # prefixes, sigils, loose dialogue, methods)
 // -------------------------------------------------------------------
@@ -798,6 +848,22 @@ export function buildCorpus(): readonly CorpusProgram[] {
       },
       restoreHost: (json) => {
         const loader = createMemoryLoader({ "main.prg": SYNTHETIC_10_MAIN, "lib.prg": SYNTHETIC_10_LIB });
+        return restoreScriptHost(json, { loader });
+      },
+    },
+    {
+      id: "synthetic-11-middleware",
+      name: "Synthetic 11 (Pure-RPGCode Middleware)",
+      description:
+        "Three layers wrapping mwin and one wrapping sleep through bindingOf, closure cells shared by a counter's handles, and a game program that uses layers its start-up program installed and ended",
+      ticks: 10,
+      createHost: (seed) => {
+        const loader = createMemoryLoader({ "main.prg": SYNTHETIC_11_BOOT, "game.prg": SYNTHETIC_11_GAME });
+        const ref = fileProgramRef(loader, "main.prg");
+        return createScriptHost({ program: ref, loader, seed });
+      },
+      restoreHost: (json) => {
+        const loader = createMemoryLoader({ "main.prg": SYNTHETIC_11_BOOT, "game.prg": SYNTHETIC_11_GAME });
         return restoreScriptHost(json, { loader });
       },
     },

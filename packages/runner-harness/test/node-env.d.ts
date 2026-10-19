@@ -17,3 +17,7 @@ declare module "node:url" {
 interface ImportMeta {
   readonly url: string;
 }
+
+declare module "node:util" {
+  export const TextEncoder: typeof globalThis.TextEncoder;
+}
