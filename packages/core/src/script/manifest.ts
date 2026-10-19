@@ -2,18 +2,60 @@
  * The engine plugin manifest: plain-data selection and ordering for plugin
  * layers (ADR 0004 decision 6; docs/spec/engine/plugins-and-battle.md#e-99).
  *
- * The manifest deliberately has no version field. A host resolves ids to code;
- * core only validates and patches the data, so it never loads a module or
- * touches a host API.
+ * One list serves native packs and RPGCode packages (PKG-1; ADR 0008): a
+ * package is an entry that also carries `version`, and optionally `namespace`
+ * and `requests` (PKG-2). A host resolves ids to code; core only validates and
+ * patches the data, so it never loads a module or touches a host API.
  */
 
+import type { RunnerRequest } from "../ports/requests.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 
-/** One manifest entry. `core` is the first (bottom) pinned layer. */
+/**
+ * The host-request kinds a package may declare (AD-17, PKG-6). Declarations are
+ * informational: nothing is refused for an undeclared request (ADR 0008).
+ */
+export const HOST_REQUEST_KINDS = [
+  "asset",
+  "loadBlob",
+  "saveBlob",
+  "listBlobs",
+  "extension.call",
+  "quit",
+  "openUrl",
+  "playVideo",
+] as const satisfies readonly RunnerRequest["kind"][];
+
+// Compile-time exhaustiveness: a new RunnerRequest kind must be listed above.
+type _MissingKinds = Exclude<RunnerRequest["kind"], (typeof HOST_REQUEST_KINDS)[number]>;
+const _kindsAreExhaustive: [_MissingKinds] extends [never] ? true : never = true;
+void _kindsAreExhaustive;
+
+export type HostRequestKind = (typeof HOST_REQUEST_KINDS)[number];
+
+/**
+ * One manifest entry. `core` is the first (bottom) pinned layer. The entry is a
+ * package entry exactly when `version` is present (PKG-2): `id` is the package
+ * name (a folded identifier), `version` is compared for equality only,
+ * `namespace` defaults to the id, and `requests` lists declared host-request
+ * kinds for a runner to show.
+ */
 export type PluginManifestEntry = {
   readonly id: string;
   readonly enabled?: boolean;
   readonly options?: PlainData;
+  readonly version?: string;
+  readonly namespace?: string;
+  readonly requests?: readonly HostRequestKind[];
+};
+
+/** A package's declaration as plain data, for a runner to show. */
+export type PackageDeclaration = {
+  readonly name: string;
+  readonly version: string;
+  readonly namespace: string;
+  readonly requests: readonly HostRequestKind[];
+  readonly enabled: boolean;
 };
 
 /** The ordered, data-only plugin selection. */
@@ -100,6 +142,11 @@ function isPlainData(value: unknown, seen: Set<object> = new Set()): value is Pl
   return true;
 }
 
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
+const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const FOLDED_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
+
 function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   const allowed = new Set(keys);
   return Object.keys(value).every((key) => allowed.has(key));
@@ -114,7 +161,7 @@ function parseEntry(
     return { entry: null, diagnostic: diagnostic("manifest.entry", path, index, "entry must be an object") };
   }
   const record = value as Record<string, unknown>;
-  if (!hasOnlyKeys(record, ["id", "enabled", "options"])) {
+  if (!hasOnlyKeys(record, ["id", "enabled", "options", "version", "namespace", "requests"])) {
     return {
       entry: null,
       diagnostic: diagnostic("manifest.unknown-field", path, index, "entry contains an unknown field"),
@@ -129,10 +176,98 @@ function parseEntry(
   if (record.options !== undefined && !isPlainData(record.options)) {
     return { entry: null, diagnostic: diagnostic("manifest.options", path, index, "entry options must be plain JSON data") };
   }
-  const entry: { id: string; enabled?: boolean; options?: PlainData } = { id: record.id };
+  const entry: Mutable<PluginManifestEntry> = { id: record.id };
   if (record.enabled !== undefined) entry.enabled = record.enabled;
   if (record.options !== undefined) entry.options = record.options;
+  const isPackage = record.version !== undefined;
+  if (!isPackage && (record.namespace !== undefined || record.requests !== undefined)) {
+    return {
+      entry: null,
+      diagnostic: diagnostic("manifest.package-version", path, index, "namespace and requests belong to a package entry, which needs a version"),
+    };
+  }
+  if (isPackage) {
+    if (typeof record.version !== "string" || record.version.length === 0) {
+      return { entry: null, diagnostic: diagnostic("manifest.version", path, index, "package version must be a non-empty string") };
+    }
+    if (!FOLDED_IDENTIFIER.test(record.id)) {
+      return {
+        entry: null,
+        diagnostic: diagnostic("manifest.package-name", path, index, `package name "${record.id}" must be a lower-case ASCII identifier`),
+      };
+    }
+    entry.version = record.version;
+    if (record.namespace !== undefined) {
+      if (typeof record.namespace !== "string" || !IDENTIFIER.test(record.namespace)) {
+        return { entry: null, diagnostic: diagnostic("manifest.namespace", path, index, "package namespace must be an ASCII identifier") };
+      }
+      entry.namespace = record.namespace;
+    }
+    if (record.requests !== undefined) {
+      if (!Array.isArray(record.requests)) {
+        return { entry: null, diagnostic: diagnostic("manifest.requests", path, index, "package requests must be an array of host-request kinds") };
+      }
+      const kinds: HostRequestKind[] = [];
+      for (const kind of record.requests as unknown[]) {
+        if (typeof kind !== "string" || !(HOST_REQUEST_KINDS as readonly string[]).includes(kind)) {
+          return {
+            entry: null,
+            diagnostic: diagnostic("manifest.request-kind", path, index, `unknown host-request kind ${JSON.stringify(kind)}`),
+          };
+        }
+        if (kinds.includes(kind as HostRequestKind)) {
+          return { entry: null, diagnostic: diagnostic("manifest.request-kind", path, index, `host-request kind "${kind}" is declared twice`) };
+        }
+        kinds.push(kind as HostRequestKind);
+      }
+      entry.requests = kinds;
+    }
+  }
   return { entry };
+}
+
+/** True for a package entry (PKG-2): one that carries a version. */
+export function isPackageManifestEntry(entry: PluginManifestEntry): boolean {
+  return entry.version !== undefined;
+}
+
+/** A package's namespace: the declared one, else its name (the folded id). */
+export function packageNamespace(entry: PluginManifestEntry): string {
+  return entry.namespace ?? entry.id;
+}
+
+/** The comparison key of a namespace: ASCII-only case fold, never a locale fold. */
+function namespaceKey(entry: PluginManifestEntry): string {
+  const text = packageNamespace(entry);
+  let out = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    out += code >= 0x41 && code <= 0x5a ? String.fromCharCode(code + 0x20) : text.charAt(index);
+  }
+  return out;
+}
+
+/** The index of an earlier package entry that already owns this entry's namespace, or -1. */
+function namespaceTakenAt(entries: readonly PluginManifestEntry[], entry: PluginManifestEntry, ignore = -1): number {
+  if (!isPackageManifestEntry(entry)) return -1;
+  const key = namespaceKey(entry);
+  return entries.findIndex((other, at) => at !== ignore && isPackageManifestEntry(other) && namespaceKey(other) === key);
+}
+
+/** The declarations of every package entry, in manifest order, as plain data a runner can show. */
+export function listPackageDeclarations(manifest: PluginManifest): readonly PackageDeclaration[] {
+  const out: PackageDeclaration[] = [];
+  for (const entry of manifest) {
+    if (entry.version === undefined) continue;
+    out.push({
+      name: entry.id,
+      version: entry.version,
+      namespace: packageNamespace(entry),
+      requests: entry.requests === undefined ? [] : [...entry.requests],
+      enabled: isPluginManifestEntryEnabled(entry),
+    });
+  }
+  return out;
 }
 
 /** Validate untrusted manifest data and report every located error. */
@@ -154,6 +289,11 @@ export function parsePluginManifest(input: unknown, path = "manifest"): PluginMa
       diagnostics.push(diagnostic("manifest.duplicate-id", path, index, `duplicate plugin id "${entry.id}"`));
       continue;
     }
+    const takenAt = namespaceTakenAt(entries, entry);
+    if (takenAt >= 0) {
+      diagnostics.push(diagnostic("manifest.duplicate-namespace", path, index, `namespace "${packageNamespace(entry)}" is already used by package "${entries[takenAt]!.id}"`));
+      continue;
+    }
     ids.add(entry.id);
     entries.push(entry);
   }
@@ -161,9 +301,12 @@ export function parsePluginManifest(input: unknown, path = "manifest"): PluginMa
 }
 
 function cloneEntry(entry: PluginManifestEntry): PluginManifestEntry {
-  const copy: { id: string; enabled?: boolean; options?: PlainData } = { id: entry.id };
+  const copy: Mutable<PluginManifestEntry> = { id: entry.id };
   if (entry.enabled !== undefined) copy.enabled = entry.enabled;
   if (entry.options !== undefined) copy.options = entry.options;
+  if (entry.version !== undefined) copy.version = entry.version;
+  if (entry.namespace !== undefined) copy.namespace = entry.namespace;
+  if (entry.requests !== undefined) copy.requests = [...entry.requests];
   return copy;
 }
 
@@ -184,6 +327,10 @@ export function applyPluginManifestPatch(
     const entry = entries[index]!;
     if (seen.has(entry.id)) {
       diagnostics.push(diagnostic("manifest.duplicate-id", path, index, `duplicate plugin id "${entry.id}"`));
+    }
+    const takenAt = namespaceTakenAt(entries, entry, index);
+    if (takenAt >= 0 && takenAt < index) {
+      diagnostics.push(diagnostic("manifest.duplicate-namespace", path, index, `namespace "${packageNamespace(entry)}" is already used by package "${entries[takenAt]!.id}"`));
     }
     seen.add(entry.id);
     if (entry.id === "core" && (index !== 0 || entry.enabled === false)) {
@@ -213,6 +360,11 @@ export function applyPluginManifestPatch(
       }
       if (locate(entries, entry.id) >= 0) {
         reject("manifest.duplicate-id", index, `duplicate plugin id "${entry.id}"`);
+        continue;
+      }
+      const takenAt = namespaceTakenAt(entries, entry);
+      if (takenAt >= 0) {
+        reject("manifest.duplicate-namespace", index, `namespace "${packageNamespace(entry)}" is already used by package "${entries[takenAt]!.id}"`);
         continue;
       }
       entries.push(cloneEntry(entry));
@@ -251,6 +403,11 @@ export function applyPluginManifestPatch(
       const duplicateAt = locate(entries, entry.id);
       if (duplicateAt >= 0 && duplicateAt !== at) {
         reject("manifest.duplicate-id", index, `duplicate plugin id "${entry.id}"`);
+        continue;
+      }
+      const takenAt = namespaceTakenAt(entries, entry, at);
+      if (takenAt >= 0) {
+        reject("manifest.duplicate-namespace", index, `namespace "${packageNamespace(entry)}" is already used by package "${entries[takenAt]!.id}"`);
         continue;
       }
       entries[at] = cloneEntry(entry);

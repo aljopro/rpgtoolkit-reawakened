@@ -46,6 +46,15 @@ export function resolvePluginManifest(
       });
       continue;
     }
+    if (entry.version !== undefined && definition.version !== entry.version) {
+      diagnostics.push({
+        code: "plugin.version-mismatch",
+        path,
+        index,
+        message: `package "${entry.id}" is declared at version "${entry.version}" but the installed definition is "${definition.version}"`,
+      });
+      continue;
+    }
     const resolved: ResolvedPlugin =
       entry.options === undefined ? { definition } : { definition, options: entry.options };
     plugins.push(resolved);

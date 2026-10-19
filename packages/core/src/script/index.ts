@@ -161,6 +161,8 @@ export type {
   ResolvedPlugin,
 } from "./plugin.ts";
 export type {
+  HostRequestKind,
+  PackageDeclaration,
   PluginManifest,
   PluginManifestDiagnostic,
   PluginManifestEntry,
@@ -173,7 +175,11 @@ export {
   applyPluginManifestPatch,
   DEFAULT_PLUGIN_MANIFEST,
   ENGINE_DEFAULT_MANIFEST,
+  HOST_REQUEST_KINDS,
+  isPackageManifestEntry,
   isPluginManifestEntryEnabled,
+  listPackageDeclarations,
+  packageNamespace,
   parsePluginManifest,
 } from "./manifest.ts";
 export {
