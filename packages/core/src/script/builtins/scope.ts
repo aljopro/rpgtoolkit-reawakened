@@ -25,9 +25,12 @@ export const SCOPE_SPECS: readonly BuiltinSpec[] = [
     aliases: [],
     params: [{ name: "var", optional: false, byRef: false, variadic: true }],
     call: (_view, args) => {
-      const names: string[] = [];
+      const names: Array<string | { readonly ref: string }> = [];
       for (const arg of args) {
-        if (arg.ref !== null) {
+        if (arg.ref !== null && arg.ref.startsWith("object:")) {
+          // An object member (`obj.field`, `obj["field"]`) is named by its whole reference (KILL-1).
+          names.push({ ref: arg.ref });
+        } else if (arg.ref !== null) {
           const sep = arg.ref.indexOf(":");
           names.push(sep >= 0 ? arg.ref.slice(sep + 1) : arg.ref);
         } else if (typeof arg.value === "string") {

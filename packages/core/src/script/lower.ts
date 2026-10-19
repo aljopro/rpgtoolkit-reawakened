@@ -285,13 +285,14 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
         break;
       }
       case "object":
-        // Dictionary storage and its runtime instruction are owned by the object/runtime
-        // entries; do not silently discard this AST node while lowering invocation IR.
-        throw new ScriptError(
-          "syntax.unsupported",
-          "a dictionary literal parses but its runtime storage is not available yet (object entry)",
-          getPos(expr.line),
-        );
+        // A dictionary literal makes its object first and then evaluates the values in
+        // the order written, so a nested literal's handle is allocated after its parent's (OOP-10).
+        ops.push({ op: "newObject", pos: getPos(expr.line) });
+        for (const entry of expr.entries) {
+          lowerExpr(entry.value);
+          ops.push({ op: "initMember", key: entry.key, pos: getPos(entry.line) });
+        }
+        break;
       }
     }
 

@@ -1,6 +1,6 @@
 // Callable and dictionary syntax in the parser (docs/spec/engine/rpgcode-language.md FUN-8, EXP-7;
 // docs/spec/engine/rpgcode-modules-and-objects.md OOP-10, OOP-11; entry 18.2). The parser builds the
-// nodes; lowering and running them is entry 18.3, so compiling one is a located refusal.
+// nodes; entry 18.3 lowers the callables and entry 19.3 the dictionary literal.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import { compileInline, parse, type ScriptError } from "../src/index.ts";
@@ -150,14 +150,8 @@ test("lowers lambdas to deterministic function handles and dynamic calls to expl
   ]);
 });
 
-test("dictionary literals remain a located refusal until object storage is implemented", () => {
-  let thrown: ScriptError | undefined;
-  try {
-    compileInline("\n\nd = { k: 1 }");
-  } catch (error) {
-    thrown = error as ScriptError;
-  }
-  if (thrown === undefined) throw new Error("expected dictionary lowering refusal");
-  equal(thrown.code, "syntax.unsupported");
-  equal(thrown.pos?.line, 3);
+test("a dictionary literal lowers to newObject, then each value and an initMember in the order written (OOP-10)", () => {
+  const compiled = compileInline("d = { k: 1, \"s\": 2 }");
+  const names = compiled.ops.map((step) => (step.op === "initMember" ? `initMember:${step.key}` : step.op));
+  deepEqual(names, ["load", "newObject", "push", "initMember:k", "push", "initMember:s", "storeRef", "pop", "return"]);
 });

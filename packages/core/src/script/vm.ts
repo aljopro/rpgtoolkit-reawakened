@@ -37,6 +37,16 @@ import {
 import { NULL_LOGGER } from "./logging.ts";
 import { ENGINE_DEFAULT_MANIFEST } from "./manifest.ts";
 import { collectCells, recordOwner } from "./cells.ts";
+import {
+  allocateHandle,
+  createDictionary,
+  DICTIONARY_CLASS,
+  findObject,
+  isDictionary,
+  readMember,
+  removeMember,
+  writeMember,
+} from "./objects.ts";
 import { createProgramCache, type ProgramCache } from "./cache.ts";
 import { runModuleCommand } from "./modules.ts";
 import { MODULE_COMMANDS } from "./parse.ts";
@@ -72,6 +82,7 @@ import {
   startThread,
   type Frame,
   type LocalSlot,
+  type ObjectRecord,
   type Thread,
   type VmState,
 } from "./state.ts";
@@ -323,7 +334,8 @@ export function collectGarbage(vm: VmState): void {
 
 /**
  * The end-of-tick object pass (R-34): an object no root names, and no other
- * object's member names, is freed. The roots include the values of the closure
+ * object's member names, is freed, and the count is taken again until nothing
+ * more is freed, so an object only a freed object named goes in the same pass. The roots include the values of the closure
  * cells that are still there, which is why `collectCells` runs first in the same
  * tick (entry 18.6): a cell that nothing can reach no longer keeps an object alive.
  */
@@ -340,17 +352,24 @@ function collectObjects(vm: VmState): void {
       for (const arg of frame.operands) visit(arg.value);
     }
   }
-  const incoming: { [handle: string]: number } = {};
-  for (const record of vm.objects) {
-    for (const value of Object.values(record.members)) {
-      if (isObjectValue(value)) incoming[String(value.handle)] = (incoming[String(value.handle)] ?? 0) + 1;
-    }
-  }
   const rootSet: { [handle: string]: true } = {};
   for (const handle of roots) rootSet[String(handle)] = true;
-  vm.objects = vm.objects.filter(
-    (record) => rootSet[String(record.handle)] === true || (incoming[String(record.handle)] ?? 0) > 0,
-  );
+  // An object only a freed object named is unreferenced too, so the count is taken again until
+  // nothing more is freed: dropping a dictionary frees the dictionaries nested in it in this
+  // same pass. Two objects that name each other still keep each other (R-34).
+  for (;;) {
+    const incoming: { [handle: string]: number } = {};
+    for (const record of vm.objects) {
+      for (const value of Object.values(record.members)) {
+        if (isObjectValue(value)) incoming[String(value.handle)] = (incoming[String(value.handle)] ?? 0) + 1;
+      }
+    }
+    const kept = vm.objects.filter(
+      (record) => rootSet[String(record.handle)] === true || (incoming[String(record.handle)] ?? 0) > 0,
+    );
+    if (kept.length === vm.objects.length) return;
+    vm.objects = kept;
+  }
 }
 
 export function advanceScriptTick(
@@ -437,6 +456,30 @@ function parseObjectRef(ref: RefId): { handle: number; name: string } | null {
   return { handle, name: ref.slice(separator + 1) };
 }
 
+/**
+ * The variable `name` as a read of it from the running frame would find it,
+ * without creating it: a local of the running frame, else the global, else
+ * `undefined`.
+ */
+function peekVariable(vm: VmState, thread: Thread, frameIndex: number, name: string): Value | undefined {
+  const frame = thread.frames[frameIndex]!;
+  if (Object.hasOwn(frame.locals, name)) return readRef(vm, thread, frameIndex, frame.locals[name]!.ref);
+  return Object.hasOwn(vm.globals, name) ? vm.globals[name] : undefined;
+}
+
+/**
+ * The dictionary a `base[key]` indexes, or `undefined` when the base is not
+ * one. A plain variable base arrives as its name (the `name` op), so the name
+ * is looked up without creating it; any other base arrives as the value.
+ */
+function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base: Arg): ObjectRecord | undefined {
+  const value =
+    base.ref === null && typeof base.value === "string" ? peekVariable(vm, thread, frameIndex, base.value) : base.value;
+  if (!isObjectValue(value)) return undefined;
+  const record = findObject(vm, value.handle);
+  return record !== undefined && isDictionary(record) ? record : undefined;
+}
+
 function setOwnValue(record: { [name: string]: Value }, name: string, value: Value): void {
   Object.defineProperty(record, name, {
     value,
@@ -510,6 +553,7 @@ function stackEffect(op: StepOp): { readonly pops: number; readonly pushes: numb
     case "load":
     case "declRef":
     case "load_fn":
+    case "newObject":
     case "dup":
       return { pops: 0, pushes: 1 };
     case "storeRef":
@@ -530,6 +574,7 @@ function stackEffect(op: StepOp): { readonly pops: number; readonly pushes: numb
     case "call":
       return { pops: op.argc, pushes: 1 };
     case "pop":
+    case "initMember":
     case "jumpIfFalse":
       return { pops: 1, pushes: 0 };
     case "jump":
@@ -653,8 +698,8 @@ function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId): V
   }
   if (scope === "object") {
     const object = parseObjectRef(ref);
-    const record = object === null ? undefined : vm.objects.find((item) => item.handle === object.handle);
-    return record?.members[object?.name ?? name] ?? 0;
+    const record = object === null ? undefined : findObject(vm, object.handle);
+    return record === undefined || object === null ? 0 : readMember(record, object.name);
   }
   if (scope === "global") {
     return vm.globals[name] ?? 0;
@@ -687,8 +732,8 @@ function writeRef(
   }
   if (scope === "object") {
     const object = parseObjectRef(ref);
-    const record = object === null ? undefined : vm.objects.find((item) => item.handle === object.handle);
-    if (record !== undefined && object !== null) record.members[object.name] = stored;
+    const record = object === null ? undefined : findObject(vm, object.handle);
+    if (record !== undefined && object !== null) writeMember(record, object.name, stored);
     return;
   }
   if (scope === "global") {
@@ -1314,9 +1359,16 @@ function dispatchResolved(
         frame.autoLocal = Boolean(effect.args?.[1]);
       }
       if (action === "kill") {
-        const targets = (effect.args?.slice(1) ?? []) as string[];
+        const targets = (effect.args?.slice(1) ?? []) as Array<string | { readonly ref: string }>;
         for (const target of targets) {
-          deleteVariable(vm, thread, frameIndex, target);
+          if (typeof target === "string") {
+            deleteVariable(vm, thread, frameIndex, target);
+            continue;
+          }
+          // `kill(obj.field)` and `kill(obj["field"])` remove the key from a dictionary (KILL-1).
+          const member = parseObjectRef(target.ref as RefId);
+          const record = member === null ? undefined : findObject(vm, member.handle);
+          if (member !== null && record !== undefined && isDictionary(record)) removeMember(record, member.name);
         }
       }
       if (action === "split") {
@@ -1755,6 +1807,12 @@ export function stepThread(
         }
         const record = vm.objects.find((item) => item.handle === receiverValue.handle);
         if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${receiverValue.handle}`, op.pos);
+        if (isDictionary(record)) {
+          // A dictionary member is always public and a missing key reads as unset (OOP-10).
+          frame.operands.push({ value: readMember(record, op.name), ref: objectRef(record.handle, op.name) });
+          frame.ip += 1;
+          break;
+        }
         const member = findMember(program, record.className, op.name);
         if (member === undefined) throw new ScriptError("object.invalid", `unknown member ${op.name}`, op.pos);
         if (member.access === "private" && frame.objectClass !== record.className) {
@@ -1762,6 +1820,28 @@ export function stepThread(
         }
         const ref = objectRef(record.handle, op.name);
         frame.operands.push({ value: record.members[op.name] ?? 0, ref });
+        frame.ip += 1;
+        break;
+      }
+
+      case "newObject": {
+        const record = createDictionary(vm);
+        frame.operands.push({
+          value: { kind: "object", handle: record.handle, className: DICTIONARY_CLASS },
+          ref: null,
+        });
+        frame.ip += 1;
+        break;
+      }
+
+      case "initMember": {
+        const valueArg = frame.operands.pop();
+        const objectArg = frame.operands[frame.operands.length - 1];
+        const target = isObjectValue(objectArg?.value) ? findObject(vm, objectArg.value.handle) : undefined;
+        if (valueArg === undefined || target === undefined || !isDictionary(target)) {
+          throw new ScriptError("vm.stack-underflow", "initMember: no dictionary below the value", op.pos);
+        }
+        writeMember(target, op.key, valueArg.value === null ? 0 : valueArg.value);
         frame.ip += 1;
         break;
       }
@@ -1859,6 +1939,17 @@ export function stepThread(
             ? (keyArg.value | 0)
             : keyArg.value;
         const keyText = indexKey(keyValue);
+        const dictionary = dictionaryOfBase(vm, thread, frameIndex, baseArg);
+        if (dictionary !== undefined) {
+          // `d["key"]` is the same read and the same write as `d.key` (OOP-10).
+          if (typeof keyArg.value !== "string" && typeof keyArg.value !== "number") {
+            throw new ScriptError("object.invalid", "a dictionary key must be a string or a number", op.pos);
+          }
+          const key = indexKey(keyArg.value);
+          frame.operands.push({ value: readMember(dictionary, key), ref: objectRef(dictionary.handle, key) });
+          frame.ip += 1;
+          break;
+        }
         if (baseArg.ref !== null) {
           const object = parseObjectRef(baseArg.ref);
           if (object !== null) {
@@ -1922,8 +2013,7 @@ export function stepThread(
         const info = classInfo(program, op.className);
         if (info === undefined) throw new ScriptError("object.invalid", `unknown class ${op.className}`, op.pos);
         if (info.abstract) throw new ScriptError("object.abstract-class", `class ${op.className} is abstract`, op.pos);
-        let handle = vm.objects.length + 1;
-        for (const item of vm.objects) if (item.handle >= handle) handle = item.handle + 1;
+        const handle = allocateHandle(vm);
         const members: { [name: string]: Value } = {};
         for (const member of info.members) {
           if (member.arraySize !== null) {

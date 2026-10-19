@@ -297,7 +297,34 @@ function validateVmShape(vm: Record<string, unknown>): void {
       if (typeof frame.autoLocal !== "boolean") shapeError(`the snapshot's vm.threads[${index}].frames[${frameIndex}].autoLocal is invalid`);
     }
   }
+  validateVmObjects(vm);
   validateVmHandles(vm);
+}
+
+/**
+ * The dictionary records of the handle table (OOP-10; entry 19.3): a dictionary
+ * (`className` `""`) has a `keys` list and a class instance has none, and the
+ * list names each member exactly once, so the saved enumeration order and the
+ * members cannot disagree.
+ */
+function validateVmObjects(vm: Record<string, unknown>): void {
+  for (const [index, value] of arrayAt(vm.objects, "vm.objects").entries()) {
+    const record = recordAt(value, `vm.objects[${index}]`);
+    const dictionary = record.className === "";
+    if (record.keys === undefined) {
+      if (dictionary) shapeError(`the snapshot's vm.objects[${index}] is a dictionary with no keys list`);
+      continue;
+    }
+    if (!dictionary) shapeError(`the snapshot's vm.objects[${index}].keys belongs on a dictionary, not a class instance`);
+    const keys = arrayAt(record.keys, `vm.objects[${index}].keys`);
+    const members = recordAt(record.members, `vm.objects[${index}].members`);
+    const listed = new Set<string>();
+    for (const [at, key] of keys.entries()) listed.add(stringAt(key, `vm.objects[${index}].keys[${at}]`));
+    const names = Object.keys(members);
+    if (listed.size !== keys.length || names.length !== keys.length || !names.every((name) => listed.has(name))) {
+      shapeError(`the snapshot's vm.objects[${index}].keys does not list its members exactly once each`);
+    }
+  }
 }
 
 /** A typed restore failure whose message names the place in the save (entry 18.6). */
