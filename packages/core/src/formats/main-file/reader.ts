@@ -20,10 +20,13 @@ import { err, ok, type Result } from "../result.ts";
 import { BinaryReader } from "../binary/reader.ts";
 import type { Colorref } from "../binary/color.ts";
 import {
-  decodeGameSpeed,
   MAIN_MAGIC,
   MAIN_MAX_MINOR,
   MAIN_MIN_MINOR,
+  decodeGameSpeed,
+  MAIN_PACKAGE_EXTENSION_TAG,
+  MAIN_PACKAGE_MAX_BYTES,
+  MAIN_PACKAGE_MAX_COUNT,
   MAIN_SECTION,
   type MainFile,
   type MainFileEnemy,
@@ -32,6 +35,7 @@ import {
   type MainFileReservedRuns,
 } from "./model.ts";
 import { TextLineReader } from "../text/line-reader.ts";
+import { asciiLower } from "./layout.ts";
 
 const NO_BYTES: Uint8Array = new Uint8Array(0);
 const NO_COLOR: Colorref = { r: 0, g: 0, b: 0 };
@@ -44,6 +48,42 @@ function fail(reader: BinaryReader, offset: number, message: string): Result<nev
     section: MAIN_SECTION,
     message,
   });
+}
+
+function parsePackageExtension(bytes: Uint8Array, path: string | undefined, baseOffset: number): Result<{ readonly packagePlugins: readonly string[]; readonly packagePluginsExtension: boolean; readonly residue: Uint8Array }> {
+  const tag = MAIN_PACKAGE_EXTENSION_TAG;
+  const located = <T>(result: Result<T>): Result<T> => result.ok ? result : err({ ...result.error, offset: result.error.offset + baseOffset });
+  if (bytes.length < tag.length || tag.some((value, index) => bytes[index] !== value)) {
+    return ok({ packagePlugins: [], packagePluginsExtension: false, residue: bytes });
+  }
+  const extension = new BinaryReader(bytes, path);
+  extension.readBytes(tag.length);
+  const count = located(extension.u16());
+  if (!count.ok) return count;
+  if (count.value > MAIN_PACKAGE_MAX_COUNT) return fail(extension, baseOffset + tag.length, `TKR package list count ${count.value} exceeds ${MAIN_PACKAGE_MAX_COUNT} (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+  const packagePlugins: string[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < count.value; index += 1) {
+    const nameStart = extension.offset;
+    const scanLimit = Math.min(extension.bytes.length, nameStart + MAIN_PACKAGE_MAX_BYTES + 1);
+    let nulAt = nameStart;
+    while (nulAt < scanLimit && extension.bytes[nulAt] !== 0) nulAt += 1;
+    if (nulAt === scanLimit && scanLimit - nameStart > MAIN_PACKAGE_MAX_BYTES) {
+      return fail(extension, baseOffset + nameStart, `TKR package name exceeds ${MAIN_PACKAGE_MAX_BYTES} bytes (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    }
+    const name = located(extension.str());
+    if (!name.ok) return name;
+    if (name.value.includes("\0")) return fail(extension, baseOffset + extension.offset, "TKR package names must not contain NUL (docs/spec/formats/main-file.md#tkr-package-list-extension)");
+    if (name.value.length === 0) return fail(extension, baseOffset + extension.offset, "TKR package names must not be empty (docs/spec/formats/main-file.md#tkr-package-list-extension)");
+    if (name.value.length > MAIN_PACKAGE_MAX_BYTES) return fail(extension, baseOffset + extension.offset, `TKR package name exceeds ${MAIN_PACKAGE_MAX_BYTES} bytes (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    const folded = asciiLower(name.value);
+    if (seen.has(folded)) return fail(extension, baseOffset + extension.offset, `duplicate TKR package name "${name.value}" (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    seen.add(folded);
+    packagePlugins.push(name.value);
+  }
+  const residue = located(extension.readBytes(extension.remaining));
+  if (!residue.ok) return residue;
+  return ok({ packagePlugins, packagePluginsExtension: true, residue: residue.value });
 }
 /** An empty placeholder main file for zero-byte files (Z-1). */
 export function createEmptyMainFile(): MainFile {
@@ -775,14 +815,15 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
 
   const reservedRuns: MainFileReservedRuns = { parallax, menuPluginFallback, multitask, fightStyle };
 
+  const trailingStart = reader.offset;
   const trailing = reader.readBytes(reader.remaining);
-  if (!trailing.ok) {
-    return trailing;
-  }
+  if (!trailing.ok) return trailing;
+  const extension = parsePackageExtension(trailing.value, reader.path, trailingStart);
+  if (!extension.ok) return extension;
   const warnings: string[] = [];
-  if (trailing.value.length > 0) {
+  if (extension.value.residue.length > 0) {
     warnings.push(
-      `${trailing.value.length} trailing byte(s) after the main file were kept as residue (docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
+      `${extension.value.residue.length} trailing byte(s) after the main file were kept as residue (docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
     );
   }
 
@@ -819,6 +860,9 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     skinButton: skinButton.value,
     skinWindow: skinWindow.value,
     plugins,
+    ...(extension.value.packagePluginsExtension
+      ? { packagePlugins: extension.value.packagePlugins, packagePluginsExtension: true }
+      : {}),
     useDayNight: useDayNight.value,
     dayNightType: dayNightType.value,
     dayLengthMinutes: dayLengthMinutes.value,
@@ -843,6 +887,6 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     movementControls,
     movementScanCodes,
     reservedRuns,
-    residue: trailing.value,
+    residue: extension.value.residue,
   }, warnings);
 }

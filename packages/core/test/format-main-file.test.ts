@@ -477,6 +477,50 @@ test("every minor 0–9 reads with zero trailing bytes and writes back byte-for-
     deepEqual(unwrap(writeMainFile(model)), built.bytes, `minor ${minor} round-trip`);
   }
 });
+test("TKR package extension round-trips ordered names, explicit empty state, residue, and legacy rows", () => {
+  const legacy = readBuilt(buildGam(9));
+  const authored = { ...legacy, menuPlugin: "menu.dll", fightPlugin: "fight.dll", plugins: legacy.plugins, packagePlugins: ["zeta", "Alpha"], packagePluginsExtension: true, residue: new Uint8Array([0x99]) };
+  const bytes = unwrap(writeMainFile(authored));
+  const decoded = unwrap(readMainFile(new BinaryReader(bytes, "authored.gam")));
+  deepEqual(decoded.packagePlugins, ["zeta", "Alpha"]);
+  deepEqual(decoded.residue, new Uint8Array([0x99]));
+  equal(decoded.menuPlugin, "menu.dll");
+  equal(decoded.fightPlugin, "fight.dll");
+  const empty = unwrap(readMainFile(new BinaryReader(unwrap(writeMainFile({ ...legacy, packagePlugins: [], packagePluginsExtension: true })))));
+  deepEqual(empty.packagePlugins, []);
+  equal(legacy.packagePlugins, undefined);
+});
+
+test("TKR package extension rejects NUL names and reports malformed bytes at file offsets", () => {
+  const legacy = readBuilt(buildGam(9));
+  equal(writeMainFile({ ...legacy, packagePlugins: ["core\0rogue"] }).ok, false);
+  const bytes = unwrap(writeMainFile({ ...legacy, packagePlugins: ["one"], packagePluginsExtension: true }));
+  const malformed = bytes.slice(0, -1);
+  const result = readMainFile(new BinaryReader(malformed, "bad.gam"));
+  equal(result.ok, false);
+  if (!result.ok) equal(result.error.offset, bytes.length - 4);
+});
+test("TKR package extension enforces independent count, empty, duplicate, and 255-byte boundaries", () => {
+  const legacy = readBuilt(buildGam(9));
+  const base = unwrap(writeMainFile(legacy));
+  const append = (count: number, names: readonly Uint8Array[]): Uint8Array => {
+    const tail = new Uint8Array(10 + names.reduce((sum, name) => sum + name.length + 1, 0));
+    tail.set([0x54, 0x4b, 0x52, 0x50, 0x4c, 0x55, 0x47, 0, count & 0xff, count >> 8]);
+    let at = 10;
+    for (const name of names) { tail.set(name, at); at += name.length; tail[at++] = 0; }
+    const out = new Uint8Array(base.length + tail.length);
+    out.set(base, 0);
+    out.set(tail, base.length);
+    return out;
+  };
+  equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(0)]))).ok, false);
+  equal(readMainFile(new BinaryReader(append(2, [new Uint8Array([0x78])]))).ok, false);
+  equal(readMainFile(new BinaryReader(append(2, [new Uint8Array([0x78]), new Uint8Array([0x58])]))).ok, false);
+  equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(255).fill(0x61)]))).ok, true);
+  equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(256).fill(0x61)]))).ok, false);
+});
+
+
 
 // --- The writer refuses a model it cannot represent (AD-18) ------------------
 //

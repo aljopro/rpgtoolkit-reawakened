@@ -43,6 +43,11 @@ export const GAME_SPEED_BIAS_MINOR = 8;
 /** The bias `gameSpeed` carries at minor ≥ 8 (docs/spec/formats/main-file.md#layout row 38). */
 export const GAME_SPEED_BIAS = 128;
 
+/** TKR trailing package-list extension (docs/spec/formats/main-file.md#tkr-package-list-extension). */
+export const MAIN_PACKAGE_EXTENSION_TAG = new Uint8Array([0x54, 0x4b, 0x52, 0x50, 0x4c, 0x55, 0x47, 0x00]);
+export const MAIN_PACKAGE_MAX_COUNT = 256;
+export const MAIN_PACKAGE_MAX_BYTES = 255;
+
 /**
  * Decode the stored `gameSpeed` byte (docs/spec/formats/main-file.md#layout row 38). At minor ≥ 8 the
  * byte is `speed + 128`, so the speed is in −4…+4 (each step ±10 %); below 8 the
@@ -181,6 +186,10 @@ export interface MainFile {
   readonly skinWindow: string;
   /** Row 29: the plugin list (the upper bound is derived). */
   readonly plugins: readonly MainFilePlugin[];
+  /** TKR package names from the optional trailing extension, in authored order. */
+  readonly packagePlugins?: readonly string[];
+  /** Whether the TKR package-list block was present, including an explicit empty list. */
+  readonly packagePluginsExtension?: boolean;
   /** Row 30: `0`/`1`. */
   readonly useDayNight: number;
   /** Row 31: `0` = real clock, `1` = game clock. */
