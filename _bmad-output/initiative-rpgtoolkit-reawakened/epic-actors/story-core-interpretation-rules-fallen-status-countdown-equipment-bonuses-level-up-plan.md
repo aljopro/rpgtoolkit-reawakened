@@ -22,7 +22,7 @@ No ATB, no damage formulas, no AI (Epic 7). No behaviour registration (7).
 
 ## Key Decisions
 
-1. R-16: the original uses `experienceIncrease` three ways; the level-up default picks the one rule 20.1 rules and Epic 7 inherits.
+1. R-16 (resolved, owner 2026-10-19): level and experience are stats; level-up and the other abilities are standard equations in code with defaults, overridable by behaviours. The default level-up equation is the one 20.1 rules; Epic 7 inherits it.
 
 ## Acceptance
 

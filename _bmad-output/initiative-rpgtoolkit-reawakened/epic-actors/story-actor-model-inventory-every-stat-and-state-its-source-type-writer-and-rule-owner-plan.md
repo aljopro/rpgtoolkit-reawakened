@@ -23,8 +23,9 @@ Documentation only; reads the readers' field lists, writes no code. Hitl because
 
 ## Key Decisions
 
-1. Charge, speed-derived rates and damage inputs are battle rules; HP, fallen, status counters, equipment bonuses and level-up data are core rules.
-2. Per-field judgement calls are marked OWNER in the table.
+1. Level and experience are stats. Abilities (derived values, level-up, the experience curve, damage taken) are standard equations with code defaults, overridable by behaviours; the table lists each as an equation row naming its default.
+2. Charge, speed-derived rates and damage inputs are battle rules; HP, fallen, status counters, equipment bonuses and level-up data are core rules.
+3. Per-field judgement calls are marked OWNER in the table.
 
 ## Acceptance
 

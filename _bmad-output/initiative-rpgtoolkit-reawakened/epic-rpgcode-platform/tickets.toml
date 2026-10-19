@@ -7,8 +7,8 @@
 id = 1
 type = "story"
 title = "Rulings: objects, receivers, packages, emitters and the trust baseline"
-description = "Doc-first (G7), docs only: settles in docs/spec the dictionary/object runtime and receiver rules (OOP-10, OOP-11, `bindThis`), RPGCode packages on the single shared plugin manifest (name, version, namespace, declared host requests, AD-8 later-wins), `registerPlugin` as a thin layer over the 18.5 environment table, emitter semantics including cancelable emits, the plugin-language guidance and the trust baseline ADR, and records the AD-32 event-bus conflict."
-verify = "The commit touches only docs and affected spec/ADR/spine text; every ruling row carries an OWNER marker, evidence and a rejected alternative; the 2026-10-19 owner decisions each map to one ruled row; ADR 0008 (trust baseline) exists; no later entry relies on unruled behaviour; a person approves the checkpoint."
+description = "Doc-first (G7), docs only: settles in docs/spec the dictionary/object runtime and receiver rules (OOP-10, OOP-11, `bindThis`), RPGCode packages on the single shared plugin manifest (name, version, namespace, declared host requests, AD-8 later-wins), `registerPlugin` as a thin layer over the 18.5 environment table, emitter semantics including cancelable emits, the plugin-language guidance and the trust baseline ADR, a host-provided (hydrated) method mechanism so a built-in object type such as an actor or a Media voice carries data only and no closures in a save, and amends AD-32 to the queued (asynchronous) event-bus model with an explicit G1 check (parked plain-JSON dispatch, saveable mid-dispatch, deterministic registration order), rewrites the E-99 Reawakened rule (RPGCode packages are trusted because the VM contains them; ADR 0008 states this), and confirms the emitter names `on`, `off`, `once`, `emit`, `emitCancelable`."
+verify = "The commit touches only docs and affected spec/ADR/spine text; every ruling row carries an OWNER marker, evidence and a rejected alternative; the 2026-10-19 owner decisions each map to one ruled row; ADR 0008 (trust baseline) exists and states that RPGCode packages are trusted (VM-contained) with no trust gating; the AD-32 line is amended to the queued model and the G1 check (parked plain-JSON dispatch, saveable mid-dispatch, deterministic registration order) is written; E-99 is rewritten; no later entry relies on unruled behaviour; a person approves the checkpoint."
 covers = ["CAP-5", "CAP-11"]
 after = ["18.7", "3.23", "3.25"]
 hitl = true
@@ -64,8 +64,8 @@ references = [
 id = 4
 type = "story"
 title = "Receiver auto-binding, this and bindThis"
-description = "Implements `OP_GET_MEMBER_BOUND`: reading a callable member binds `CallableValue.receiver` to the object, tear-offs keep it, standalone lambdas have `this = null`, and the built-in `bindThis(fn, obj)` returns a rebound callable; `this` resolves from the receiver."
-verify = "`cb = obj.method; cb()` runs with `this = obj`; a standalone lambda sees `this` as null; `bindThis(fn, other)` gives a new callable with the new receiver and leaves `fn` unchanged; the receiver survives save/restore and keeps its object alive; `bindThis` has a command-catalogue row and command doc."
+description = "Builds the `OP_GET_MEMBER_BOUND` opcode named in ADR 0004 decision 8 (member access that auto-binds the receiver, on `.` and `->`): reading a callable member binds `CallableValue.receiver` to the object, tear-offs keep it, standalone lambdas have `this = null`, and the built-in `bindThis(fn, obj)` returns a rebound callable; `this` resolves from the receiver."
+verify = "`OP_GET_MEMBER_BOUND` exists in the step IR and is emitted for `obj.method` and `obj->method` reads (an IR test asserts the opcode, not only the behaviour); `cb = obj.method; cb()` runs with `this = obj`; a standalone lambda sees `this` as null; `bindThis(fn, other)` gives a new callable with the new receiver and leaves `fn` unchanged; the receiver survives save/restore and keeps its object alive; `bindThis` has a command-catalogue row and command doc."
 covers = ["CAP-5"]
 after = [3]
 hitl = false
@@ -127,7 +127,7 @@ references = [
 id = 8
 type = "story"
 title = "registerPlugin as a layer over the environment table"
-description = "Builds `registerPlugin(definition)`: a dictionary of commands whose lambdas take `(args..., next)` is installed as ordered interceptors by storing callables through the 18.5 environment-table interception and `bindingOf`, never as a second dispatch mechanism."
+description = "Builds `registerPlugin(definition)` (ADR 0004 decision 8; it must exist after this entry): a dictionary of commands whose lambdas take `(args..., next)` is installed as ordered interceptors by storing callables through the 18.5 environment-table interception and `bindingOf`, never as a second dispatch mechanism."
 verify = "A package registers wrappers for one command; three registered layers run in the ruled order and `next` reaches the layer below then the engine; a layer that waits parks and saves/restores; removing a package removes only its layers; no new resolution tier exists in `resolveCall`."
 covers = ["CAP-5"]
 after = [7]
@@ -159,8 +159,8 @@ references = [
 id = 10
 type = "story"
 title = "First-class emitter: on, off, once and queued emit"
-description = "Adds the emitter object capability in core: `on`, `off`, `once` and a plain `emit` that is queued while the emitter continues; listeners are saved callables in registration order; delivery happens at a named tick phase; state lives in one owned plain-data section; no bubbling or capture."
-verify = "Listeners run in registration order at the ruled phase; `off` and `once` behave; emitting inside a listener queues rather than recursing; the section round-trips through snapshot/restore with equal hash; every phase-list snapshot test is updated deliberately."
+description = "Adds the emitter object capability in core: `on`, `off`, `once` and a plain `emit` that is queued while the emitter continues, with full listener add/remove semantics (`off(type, fn)`, removing a `once` listener before it fires, removing all listeners for a type, removal during dispatch by a deterministic rule, listeners added during a dispatch not running in that dispatch); listeners are saved callables in registration order; delivery happens at a named tick phase; state lives in one owned plain-data section; no bubbling or capture."
+verify = "Listeners run in registration order at the ruled phase; `off(type, fn)` removes one listener, a `once` listener removed before it fires never runs, removing all listeners for a type works, a listener removed during dispatch follows the ruled deterministic rule (it is skipped if not yet run), a listener added during dispatch does not run in that dispatch, and `once` fires exactly once; emitting inside a listener queues rather than recursing; the section round-trips through snapshot/restore with equal hash; every phase-list snapshot test is updated deliberately."
 covers = ["CAP-5", "CAP-11"]
 after = [4, 5, 2]
 hitl = false

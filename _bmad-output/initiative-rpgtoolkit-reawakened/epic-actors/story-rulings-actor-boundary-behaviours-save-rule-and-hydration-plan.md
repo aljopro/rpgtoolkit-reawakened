@@ -16,7 +16,7 @@ context:
 
 ## Intent
 
-Rule before code. New page `docs/spec/engine/actors.md` (anchored ACT-n rows) plus amendments: E-79 gains the boundary sentence aligned with 'rules in core, battle systems drive core ops'; AD-10's StatsPort sentence is amended to say how actor stats are owned (Assumption A-1); AD-26's `battle` phase is flagged for Epic 7's inception. Core-owned defaults: fallen (default HP <= 0), status lifetime as a countdown `advanceStatus(n)` (the battle script decides when a round passes), equipment bonuses, level-up default from data. Everything specific to one battle implementation (charge +3/tick, 75/123, damage formulas, AI levels 0 to 3, UI, the 3.1 'each round while charged' status rule) is stock-battle RPGCode.
+Rule before code. New page `docs/spec/engine/actors.md` (anchored ACT-n rows) plus amendments: E-79 gains the boundary sentence aligned with 'rules in core, battle systems drive core ops'; AD-10's StatsPort sentence is amended to say how actor stats are owned (Assumption A-1); AD-26's core `battle` phase is removed or repurposed (owner, 2026-10-19: battle is a package, not a core phase) and 20.1 writes that spine amendment; AD-10's StatsPort sentence stays open until the owner has a recommendation. Level-up: level and experience are stats, abilities are standard equations defined in code with defaults and overridable by behaviours; 20.1 rules the default level-up equation. Core-owned defaults: fallen (default HP <= 0), status lifetime as a countdown `advanceStatus(n)` (the battle script decides when a round passes), equipment bonuses, level-up default from data. Everything specific to one battle implementation (charge +3/tick, 75/123, damage formulas, AI levels 0 to 3, UI, the 3.1 'each round while charged' status rule) is stock-battle RPGCode.
 
 ## Boundaries
 
@@ -32,7 +32,8 @@ Documentation only. Does not decide the per-field table (20.2) or any package co
 ## Acceptance
 
 1. The ACT rows exist, are anchored and cite evidence.
-2. StatsPort ownership is decided and written (A-1 resolved or explicitly carried).
+2. StatsPort ownership: a recommendation is delivered to the owner (the conflict is left open until then); A-1 is carried.
+3. AD-26 amendment written; default level-up equation ruled.
 3. Every row names the entry that builds it.
 
 ## Verification

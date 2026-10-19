@@ -23,13 +23,14 @@ Queued emit only; cancelable emit is 11; built-in emitters and the TypeScript bu
 
 ## Key Decisions
 
-1. Exact RPGCode API names follow Assumption A-2 until the owner confirms them.
+1. API names are approved (owner, 2026-10-19): `on`, `off`, `once`, `emit`, `emitCancelable`.
 
 ## Acceptance
 
-1. Registration-order delivery, off, once, no recursion.
-2. One owned state section, plain JSON.
+1. Registration-order delivery, no recursion.
+2. Listener removal: `off(type, fn)`; removing a `once` listener before it fires; removing all listeners for a type; a listener removed during dispatch follows one deterministic rule (skipped if it has not run yet); a listener added during dispatch does not run in that dispatch; `once` fires exactly once.
+3. One owned state section, plain JSON.
 
 ## Verification
 
-Unit tests; hash equality across restore; golden for phase order.
+Unit tests for every add/remove case above; hash equality across restore; golden for phase order.

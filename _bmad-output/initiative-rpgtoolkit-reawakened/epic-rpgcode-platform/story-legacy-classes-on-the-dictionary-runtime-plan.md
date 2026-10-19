@@ -32,3 +32,5 @@ Representation of classes only; no new syntax. Legacy behaviour is the oracle.
 ## Verification
 
 `pnpm test:strict`, golden job.
+
+Handoff: the editor (Epic 11/12 or editor P1) should later offer a legacy-class to dictionary-object conversion tool (nice-to-have.md).

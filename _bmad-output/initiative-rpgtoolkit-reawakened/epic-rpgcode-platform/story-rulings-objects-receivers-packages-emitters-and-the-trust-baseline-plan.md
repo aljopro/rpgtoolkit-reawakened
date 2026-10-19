@@ -28,16 +28,17 @@ Documentation only. No TypeScript, no fixtures. Does not touch the 18.x rows oth
 1. Objects: dictionary literals get runtime storage (they parse today and refuse with 'runtime storage is not available yet'); legacy classes sit on the same storage (OOP-10).
 2. Receivers: `obj.method` and `obj->method` auto-bind `CallableValue.receiver`; tear-offs keep it; standalone lambdas have `this = null`; `bindThis(fn, obj)` returns a new bound callable (ADR 0004 decision 8).
 3. Packages: one manifest, one dispatch; package = name + version + namespace + declared host requests; AD-8 later-wins by manifest order; `registerPlugin` only layers over the 18.5 environment-table interception.
-4. Emitters: `on`, `off`, `once`, `emit`; no bubbling or capture; plain emit is queued; cancelable emit parks the emitter thread until listeners ran in registration order and returns the event object; one bus for RPGCode and TypeScript; AD-32's synchronous event bus line is superseded.
-5. Trust baseline: VM contains RPGCode packages (G2, AD-17 sandbox); manifests declare host requests; native TypeScript plugins stay author-installed; no capability model yet.
+4. Emitters: `on`, `off`, `once`, `emit`; no bubbling or capture; plain emit is queued; cancelable emit parks the emitter thread until listeners ran in registration order and returns the event object; one bus for RPGCode and TypeScript; AD-32's synchronous event bus line is amended to the queued (asynchronous) model (owner, 2026-10-19). 19.1 states the G1 check: dispatch is parked plain-JSON state, saveable mid-dispatch, with deterministic registration order; the 19.2 spike verifies there is no state-machine issue. Final emitter names: `on`, `off`, `once`, `emit`, `emitCancelable`.
+5. Trust baseline: RPGCode packages are trusted because the VM contains them (G2, AD-17 sandbox); 19.1 rewrites the E-99 Reawakened rule and ADR 0008 states this, with no RPGCode trust gating; manifests declare host requests; native TypeScript plugins stay author-installed; no capability model yet.
 6. Plugin-language guidance: TypeScript only when RPGCode cannot do it or is too slow.
+7. Built-in object types: an object whose type the host or a package provides (an actor, a Media voice) saves as data only; its methods are supplied on load by hydration, as actor behaviours are, so no closure is stored for them. Needed by Epic 20 and Epic 21.5. Engine-phase cancelable emits (no script thread to park) are ruled here with 21.1 (Epic 21, Assumption A-3).
 
 ## Acceptance
 
 1. Every row of the ruling tables cites evidence (file:line or spec anchor) and a rejected alternative.
 2. The package, emitter and object sections are anchored so entries 3 to 14 can cite them (`#pkg-1`, `#emit-1`, `#oop-12`).
 3. docs/adr/0008 states the trust baseline in the repo's ADR shape and links from ADR 0004.
-4. The AD-32 event-bus line carries a Decision closing the Source conflict recorded in the epic Notes.
+4. The AD-32 event-bus line is amended to the queued model with the G1 check written; E-99's Reawakened rule is rewritten; both are recorded as Decisions in the epic Notes.
 
 ## Verification
 

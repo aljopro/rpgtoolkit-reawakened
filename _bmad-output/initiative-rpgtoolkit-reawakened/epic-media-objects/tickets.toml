@@ -1,0 +1,133 @@
+# tickets.toml — planned entries of epic-media-objects, in build order. tickets.py reads it.
+# Table order is the build order; ids are stable names. Entry 1 is an owner-approval docs checkpoint (pending).
+# Lanes: A formats (2), B events (3, 4), C objects (5, 6), D proof (7). 8 reconciles shared barrels and closes the epic.
+# Replaces the net-new Epic 6 procedural media surface with objects and events; the 3.1 audio commands are untouched.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Rulings: the media object, its events, the game-file audio settings and the retired surface"
+description = "Doc-first (G7), docs only: amends docs/spec/engine/audio-media.md so the author surface is the media object (voice and track objects returned by `mediaPlay` and reached through `media`), its past-tense events and fields, the cancelable `beforePlay` with its source field, the game-file audio settings block, the stale-voice rule and the list of removed procedural commands; records the engine-phase cancelable-emit rule with Epic 19.11; keeps the playback, cue, wait and fade rules."
+verify = "The commit touches only docs and affected spec text; every ruling row carries an OWNER marker, evidence and a rejected alternative; the 2026-10-19 owner decisions each map to one ruled row; the removed-command list matches the catalogue names exactly; the 3.1 aliases are listed as unchanged; no later entry relies on unruled behaviour; a person approves the checkpoint."
+covers = ["CAP-5", "CAP-7"]
+after = ["19.1", "6.17"]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "spec - docs/spec/engine/audio-media.md (media command family, voices and layers, legacy command mapping, parity ledger, deferrals)",
+  "spec - docs/spec/engine/rpgcode-functions.md (audio rows, `mediaplay` is void in 3.1)",
+  "spec - emitter and object sections written by 19.1",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-10, AD-14, AD-16, AD-32",
+  "epic - epic-media-objects.md, Notes",
+]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Game-file audio settings: tracks, voice counts, voice cap and default SoundFont"
+description = "Adds the additive audio settings block to the main file reader and writer (named tracks with voice counts, the global voice cap, the default SoundFont name) using the 19.9 mechanism, feeds it to the audio core at startup in place of the `defaultSoundFont` startup value and runtime `mediaTrack`, and checks the voice cap once at load with a diagnostic on overflow."
+verify = "Round-trip tests; a game with no block gets the Epic 6 defaults; a block that exceeds the cap loads with one located diagnostic and the defaults for the excess; legacy rows read and write unchanged; the dump gate is green; the settings are absent from a save and a load does not change them."
+covers = ["CAP-7"]
+after = [1, "19.9"]
+hitl = false
+risk = "medium"
+references = [
+  "spec - docs/spec/formats/main-file.md",
+  "spec - docs/spec/engine/audio-media.md (SoundFont policy, deferrals)",
+  "code - packages/core/src/formats/ (main file reader and writer), packages/core/src/audio/",
+]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Audio events from core state: started, stopped, ended, looped, paused, resumed, faded"
+description = "Emits a plain-data event for each voice transition from core audio state, at the point the transition is decided (end ticks at the waits phase), through the 19.12 emitter registration seam, with the fields the 21.1 ruling lists; a runner's `audio.ended` report never produces an event."
+verify = "A scripted run produces the ruled events in the ruled order and tick; the order relative to a wait's wake is the ruled one; two runs and a save at every tick give the same events and state hash; feeding a runner `audio.ended` changes no event; a null-audio runner and a real one give the same event stream."
+covers = ["CAP-5", "CAP-7"]
+after = [1, "19.10", "19.12"]
+hitl = false
+risk = "medium"
+references = [
+  "spec - docs/spec/engine/audio-media.md (P2 end authority, P5 audio waits)",
+  "code - packages/core/src/audio/runtime.ts, packages/core/src/ports/audio.ts",
+  "spec - emitter section written by 19.1",
+]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Cancelable beforePlay for script and engine-originated audio"
+description = "Adds one cancelable `beforePlay` step in front of every voice start at the audio applier, so a script call, a board arrival, an animation frame sound, a battle, a menu cue and a video's music change are all observable; listeners may cancel it or change file, volume or loop; the event carries its source."
+verify = "A listener cancels board music, halves a frame sound's volume and replaces a battle track, each with the ruled cues; a script call and an engine call reach the same listener in registration order; the dispatch cost is within the 19.2 headroom; a save mid-dispatch restores and finishes with the same hash; with no listener the cue stream and every Epic 6 golden are unchanged."
+covers = ["CAP-5", "CAP-7"]
+after = [3, "19.11"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/audio-media.md#r-59-routing and the effect-record table",
+  "code - packages/core/src/audio/runtime.ts (applier), packages/core/src/engine/engine.ts (postBoardMusic, runAnimationPhase)",
+  "spike - epic-rpgcode-platform/discovery/step-budget-spike.md (19.2)",
+]
+
+[[entry]]
+id = 5
+type = "story"
+title = "The media object: media, track and voice objects, and mediaPlay returning a voice"
+description = "Builds the global `media` object, track objects and voice objects over core audio state: `mediaPlay(file[, options])` returns a voice; voices and tracks read their core state and control themselves (stop, pause, resume, seek, loop, fade, volume, wait); the voice object holds data only (track, slot, cueId) with its methods supplied by the 19.1 host-provided method mechanism; a stale voice diagnoses and does nothing."
+verify = "A script plays, queries, fades and waits through voice and track objects with the ruled results; a voice replaced by a later play reports stale with a located diagnostic and cannot control its successor; a save at every tick restores to the same hash with no callable stored in the audio section; the 3.1 aliases still resolve to the same cues."
+covers = ["CAP-5", "CAP-7"]
+after = [2, 3, "19.3", "19.4"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/audio-media.md (media command family, voices and layers) as amended by 21.1",
+  "spec - object and receiver rows written by 19.1",
+  "code - packages/core/src/script/packs/media.ts, packages/core/src/audio/runtime.ts",
+]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Retire the procedural media surface and migrate every caller"
+description = "Removes `mediaTrack`, `mediaLoad`, the other net-new `media*` commands and queries, `&voice`, the `tkMD_*` constants and the `priority` and `syncTrack` arguments, and migrates every fixture, golden, catalogue row, command-doc, spec page and Epic 6 note to the media object, with no shim or alias left."
+verify = "No reference to a removed name remains outside the ruled history notes (a repository search is part of the check); catalogue and command-docs gates pass; every Epic 6 golden is either unchanged or deliberately re-recorded with its reason written down (G5); the 3.1 alias goldens are unchanged."
+covers = ["CAP-5", "CAP-7"]
+after = [4, 5]
+hitl = false
+risk = "medium"
+references = [
+  "code - packages/core/src/script/packs/media.ts, virtuals.ts",
+  "fixtures - packages/core/test/fixtures/audio/, tools/fixtures/audio/",
+  "spec - docs/spec/engine/audio-media.md, rpgcode-functions.md",
+]
+
+[[entry]]
+id = 7
+type = "story"
+title = "Pure-RPGCode media package fixtures and legacy golden verification"
+description = "Authors fixture packages in pure RPGCode (a ducking package that fades `music` while any voice on `ui` plays, a stems package that starts layers on `ended`, a region-music package that replaces board music through `beforePlay`) and pins them in headless goldens, with the legacy audio goldens unchanged."
+verify = "Fixtures run deterministically from a seed with a save at every tick; each pinned golden is explained; the three packages load by name from the manifest; all 3.1 audio goldens and sample plays are unchanged; typecheck, lint, licence, provenance, catalogue and command-docs gates pass."
+covers = ["CAP-5", "CAP-7"]
+after = [6, "19.14"]
+hitl = false
+risk = "medium"
+references = [
+  "fixtures - packages/core/test/fixtures/plugins/ (audio-stems.prg is the 18.7 predecessor)",
+  "golden - golden/scenes/",
+]
+
+[[entry]]
+id = 8
+type = "story"
+title = "Refactor sweep"
+description = "Reconciles the shared seams this epic touched (audio built-in registration, the phase list, the catalogue and command docs), removes dead code made obsolete by the cutover and closes the epic against its Done when."
+verify = "No duplicate registration paths remain; barrels and the phase-list test describe the final shape; docs/spec links resolve; the Done when list is checked item by item with evidence in the PR."
+covers = ["CAP-7"]
+after = [1, 2, 3, 4, 5, 6, 7]
+hitl = false
+risk = "low"
+references = [
+  "epic - epic-media-objects.md, Done when",
+]

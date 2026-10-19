@@ -47,3 +47,12 @@ Add one entry per idea: what it is, who raised it and when, what it depends on, 
 - **Depends on:** the standard media command family (epic audio-synth) and the language tooling and diagnostics (epic rpgcode-tooling, editor-ui).
 - **Settle first:** whether the warning is a diagnostic severity the author can turn off; whether it offers a quick-fix to the standard command.
 - **Status:** logged as an idea.
+
+## Convert legacy class syntax to dictionary objects
+
+- **Raised by:** owner, 2026-10-19 (epic 19 ruling: legacy classes move onto the dictionary runtime, entry 19.5).
+- **Idea:** the editor (epic 11/12 or editor P1) offers a conversion tool that rewrites legacy `class` code into dictionary objects, so authors can move old games onto the new object model without hand-editing.
+- **Today:** classes are re-founded on the dictionary storage in 19.5 but the source syntax is unchanged; nothing converts it.
+- **Depends on:** epic 19 (19.5) and the language tooling in epic rpgcode-tooling and editor-ui.
+- **Settle first:** whether the conversion is a quick-fix per class or a whole-project action; how inheritance and access levels map to dictionary members.
+- **Status:** logged as an idea.

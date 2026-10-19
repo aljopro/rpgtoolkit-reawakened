@@ -14,7 +14,7 @@ context:
 
 ## Intent
 
-`registerPlugin` is sugar: it computes the interception and the saved `original` for the author. The 18.7 fixtures remain valid.
+`registerPlugin` must be built here (ADR 0004 decision 8; owner, 2026-10-19). It is sugar: it computes the interception and the saved `original` for the author. The 18.7 fixtures remain valid.
 
 ## Boundaries
 
