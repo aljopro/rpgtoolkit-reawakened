@@ -1049,6 +1049,26 @@ arithmetic, so two runners and a hand calculation agree to the tick. Technically
 4. SMPTE-division MIDI is unsupported in epic 6 (the corpus uses 120–960 PPQN);
    a later ruling may add it.
 5. No floating point, `Date`, host API or locale call is used in a decoder (G3).
+6. Entry 6.5 pins what the rules above leave open, without changing any number
+   in them. *Detection* is by the leading bytes only: a WAV starts `RIFF`, four
+   size bytes, `WAVE`; a MIDI file starts `MThd`. *WAV:* chunks are walked in
+   order with odd sizes padded; the first `fmt ` and the first `data` chunk
+   win; PCM must have a block align equal to channels times bytes per sample;
+   ADPCM must be 4 bits per sample with a `fmt ` chunk of at least 20 bytes
+   holding a non-zero samples-per-block word; any other `fmt` tag (including
+   WAVE_FORMAT_EXTENSIBLE) is unsupported; a `data` chunk that declares more
+   bytes than the file holds (a cut file, or a streamed size of 0xFFFFFFFF)
+   counts the bytes present and the result carries one warning. *MIDI:* a type
+   2 file is unsupported; chunks other than `MTrk` between tracks are skipped;
+   a declared track the file does not hold, a track longer than the file, a
+   delta time over four bytes, a status byte `0xF1`–`0xFE`, or an event cut by
+   its track's end is a `FormatError`; running status carries across meta and
+   system-exclusive events; a track with no end-of-track ends at its last
+   event; of two tempo events on one tick the later in track-then-event order
+   wins, and a tempo event at or after the file's end changes nothing. XG data
+   is a `0xF0` message whose body starts `0x43` with `0x4C` as its third byte;
+   GS data starts `0x41` with `0x42` third. Every other failure carries the
+   byte offset it was detected at.
 
 **Evidence.** 6.1 P2 (half-up conversion); F-05; exploration §6.1 and §6.5;
 corpus facts in exploration §1 (division 120–960; 8-bit mono 8000 Hz; odd rates
@@ -1084,8 +1104,13 @@ table and the file's events, with no stored state:
    `"gs"` when GS data is found, else `"gm"`; `bankSelect` is true when a
    non-zero CC0 or CC32 is found). It informs editors, prefetch and
    diagnostics and never changes playback. The exploration's corpus counts (28
-   possible XG, 23 possible bank select) are a heuristic that may over-count;
-   entry 6.5 records the authoritative table.
+   possible XG, 23 possible bank select) were a heuristic that over-counted.
+   Entry 6.5 measured the authoritative table over the 171 MIDI files that
+   `pnpm fixtures:fetch` provides (the exploration's 182 also counted 11
+   archaeology downloads outside the fetched corpus, all `"gm"` with no bank
+   select): 23 `"xg"`, 1 `"gs"`, 147 `"gm"`, and 29 with `bankSelect` true
+   (103 type 0, 68 type 1). The per-file table is committed as
+   `packages/core/test/fixtures/audio-corpus.json`, beside the 66 WAV rows.
 
 **Evidence.** Exploration §6.4 and §9 ("fall back to GM bank 0"); corpus counts
 (§1); the SoundFont 2.04 convention that percussion lives in bank 128 (general

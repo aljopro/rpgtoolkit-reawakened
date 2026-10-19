@@ -5,7 +5,8 @@
 // itself. This file imports nothing from packages/core.
 import { test } from "node:test";
 import { deepEqual, equal, ok } from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { check } from "../author/generate.mjs";
@@ -609,4 +610,32 @@ test("video-restarts-music: stop at the call, hold, restart from zero at the nex
   equal(facts(stale, "video-request")[0].presentation, "full");
   const small = theCase("video-restarts-music", "no-retained-file-plays-nothing");
   equal(facts(small, "video-request")[0].presentation, "small");
+});
+
+test("audio-corpus table (ticket 6.5): every MIDI and WAV row matches the independent reader and its pinned bytes", () => {
+  const tablePath = join(AUDIO_OUT, "..", "audio-corpus.json");
+  const corpusTable = JSON.parse(readFileSync(tablePath, "utf8"));
+  equal(corpusTable.schema, 1);
+  const paths = corpusTable.files.map((row) => row.path);
+  deepEqual(paths, [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+  equal(new Set(paths).size, paths.length);
+  // The oracle's own pins are rows of the table.
+  for (const pin of [...CORPUS.wav, ...CORPUS.midi]) {
+    const row = corpusTable.files.find((candidate) => candidate.path === pin.path);
+    ok(row, `${pin.path} is in the table`);
+    equal(row.sha256, pin.sha256);
+    equal(row.lengthTicks, pin.lengthTicks);
+  }
+  const base = join(repoRoot, "fixtures", "legacy");
+  if (!existsSync(base)) return; // fetched at test time; the rows are only checkable when present
+  for (const row of corpusTable.files) {
+    const bytes = readFileSync(join(base, row.path));
+    equal(createHash("sha256").update(bytes).digest("hex"), row.sha256, `${row.path} digest`);
+    const info = row.kind === "wav" ? wavInfo(bytes) : midiInfo(bytes);
+    ok(info.ok, `${row.path} parses`);
+    for (const key of Object.keys(row)) {
+      if (key === "path" || key === "kind" || key === "sha256") continue;
+      equal(info[key], row[key], `${row.path} ${key}`);
+    }
+  }
 });
