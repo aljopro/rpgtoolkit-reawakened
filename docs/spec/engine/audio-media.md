@@ -63,12 +63,19 @@ AudioStateV2 = {
   tracks: AudioTrackState[],         // built-ins first, then creation order
   settings: {
     masterVolume: integer,           // script volume, 0..100
-    trackVolumes: [{ name, volume }] // script volume, 0..100, name order
+    trackVolumes: AudioTrackVolume[] // script volume, sparse, ascending name order (6.6 pin 1)
   }
+}
+
+AudioTrackVolume = {
+  name: string,
+  volume: integer,                   // 0..100
+  fade: AudioFadeState | null        // a track-wide fade (6.2 `mediaFade` without a voice)
 }
 
 AudioTrackState = {
   name: string,
+  voiceCount: integer,               // configured voice slots, at least 1 (6.2 `mediaTrack`; 6.6 pin 1)
   state: "stopped" | "playing" | "paused",
   flags: integer,
   file: AssetKey | null,             // last/current file; stop retains it
@@ -85,10 +92,12 @@ AudioVoiceState = {
   cueId: integer,
   priority: integer,                  // stealing priority, default 0
   volume: integer,                    // voice script volume, 0..100
+  loop: boolean,                      // repeat at the asset boundary (6.6 pin 1)
   startTick: integer,
   positionTicks: integer,
   lengthTicks: integer | null,
   endTick: integer | null,
+  pausedTick: integer | null,         // the tick a paused voice was paused at; null while playing (6.6 pin 1)
   fade: AudioFadeState | null
 }
 
@@ -230,6 +239,110 @@ matches Q11 but loses a saved stinger, ambience or voice and contradicts
 AD-16. Resuming music at its saved position makes load behavior device- and
 board-history-dependent; restarting every non-music track needlessly discards
 state that the track model already records.
+
+<a id="audio-core-pins"></a>
+### Core implementation pins (entry 6.6)
+
+<!-- OWNER: 6.6/pins -->
+**Proposed ruling (pending owner review; 6.6; state and applier pins).** In plain
+terms, the rules above leave a few details open that the first real
+implementation must settle; they are written down here once so the code, the
+scenes of entry 6.4 (whose `P-1` to `P-18` proposals these adopt, listed in
+`tools/fixtures/audio/index.mjs`) and the later entries agree. Technically:
+
+1. *State fields.* The section carries three fields the P1 text did not list,
+   because the oracle's facts need them: `AudioTrackState.voiceCount` (the
+   configured slots, saved, so a load restores the author's `mediaTrack`),
+   `AudioVoiceState.loop` and `AudioVoiceState.pausedTick`. `settings.trackVolumes`
+   is sparse: an entry exists only for a track whose script volume is not 100 or
+   that has a track-wide fade, and entries are in ascending ASCII name order.
+   `flags` on a track is the loop bit of voice 0 (`tkMD_LOOP`, 1) and is kept
+   after a stop; `tkMD_WAIT` and `tkMD_RESTART` are play-time instructions and
+   are not retained. A track's `file` is the file most recently started on it,
+   and only a null music request clears it. The primary view (`positionTicks`,
+   `lengthTicks`, `fade`) of a track with no voice 0 is `0`, `null`, `null`. The
+   section is refreshed at the end of the `audio` phase of every tick, so a
+   voice's stored `positionTicks` is its position at that phase.
+2. *Apply tick.* A transition and the cues it makes carry the tick at which the
+   applier processes the effect, which is `time.tick` at that moment. For an
+   effect posted before the applier registered, or held for an asset reply
+   (pin 4), that tick is later than the post tick and the cue carries the later
+   one; the order is still the post order.
+3. *Same file.* The single-voice carry-on (music) and ignore (every other
+   track) apply only while the voice is playing. A paused voice, a stopped track
+   and a finished one-shot are replaced: stop (when a voice exists), then play
+   from position zero. On a track with more than one voice there is no
+   same-file rule; a play takes the lowest free voice, and when none is free
+   steals the voice with the lowest `priority`, then the oldest `startTick`,
+   then the lowest `index` (a paused voice counts as active).
+4. *Asset lengths.* The applier asks a lookup for every file it starts. The
+   answer is the file's `AudioInfo` length (which may be `null`), "unsupported"
+   (no audio decoder accepted the bytes; length unknown, one
+   `media.asset-format` at the play) or "not fetched yet". For the last, the
+   applier holds that effect and every later `audio` effect, in post order, and
+   asks the engine for the file through the blocking `asset` request of AD-5; the
+   world stalls as for a board's tile and the held effects apply, in order, when
+   the reply is consumed. Audio bytes are decoded at once and dropped; the engine
+   remembers the `AudioInfo` of each file for its own life, and an engine
+   started from a snapshot asks again, the reply being in that run's input log.
+   The decoders are the built-in `audio.midi` and `audio.wav` followed by those
+   of the plugins ([audio-format-policy](#audio-format-policy) dispatch: header
+   detection of the first 64 bytes, a decoder whose extensions name the file's
+   first; the first candidate that decodes wins). A reply with no bytes is
+   silence plus the diagnostic `asset.missing`, an unknown length, and never a
+   stop.
+5. *End and finish.* At the `audio` phase of a one-shot's end tick the voice is
+   removed, one `media.stop` cue is emitted and the track keeps its `file` and
+   `flags`; voices of one track end in ascending index order and tracks in track
+   order. A voice that reaches its end because `mediaSeek` clamped it to its
+   length ends in the same tick's `audio` phase.
+6. *Pause.* A paused voice keeps its `startTick`, `endTick` and fade `startTick`
+   and records `pausedTick`; resume adds the paused span (`resume tick - pausedTick`)
+   to each of them, so position and any fade continue without a jump. A seek on a
+   paused voice moves `startTick` and `endTick` against `pausedTick` and holds the
+   new position.
+7. *The state hash.* `hashGameState` is `hashState` of the `GameState` without
+   `audio.settings`. Snapshots (`snapshot`, `restoreGameState`) include it; a
+   game save never does ([audio-save-load](#audio-save-load)).
+8. *Game load.* The saved projection is `{ tick, cueId, soundFont, tracks }`: the
+   tick it was taken at, the counter, the script bank and every track with its
+   voices. Loading sets the counter to the larger of the live and saved values,
+   takes `soundFont` and the tracks (a live track the save lacks is dropped, a
+   saved track is recreated with its `voiceCount`), leaves `settings` untouched,
+   and emits `soundfont.set` and then, per track and voice in ascending order,
+   `media.play` for each playing voice as [audio-save-load](#audio-save-load)
+   rules. A paused voice is restored paused: its `startTick`, `endTick`,
+   `pausedTick` and fade `startTick` shift by `load tick - saved tick`, and the
+   re-emission is a `media.play` at the held position followed by `media.pause`,
+   both due at the load tick. A voice whose saved fade is running keeps it with
+   `startTick` shifted the same way.
+9. *Engine start and snapshot restore.* The applier's registration emits
+   `soundfont.set` and nothing else ([soundfont-commands](#soundfont-commands)
+   item 4): a snapshot is a state, and the host that wants a runner brought up to
+   date calls the game-load re-emission.
+10. *Effect records.* `music.play` and `sfx.play` carry `[asset, loop, restart,
+    source]`: `asset` an `AssetKey` or `null`, `loop` a boolean (`sfx.play` is
+    always one-shot and ignores it), `restart` a boolean or `null` (`null` means
+    `false`) and `source` a string. `sfx.play` goes to the `ui` track when `source`
+    is `"ui"` and to `sfx` otherwise; animation frame sounds post source
+    `"frame"`. `soundfont.set` carries `[asset]`. The board producer posts one
+    `music.play` for every arrival with the resolved key or `null`; the removed
+    `engine.musicAsset` field is not replaced.
+11. *Pass waits.* The `audio.track` wait payload of [audio-track-wait](#audio-track-wait)
+    gains one field, `passIndex: integer | null`: for a pass wait the voice's pass
+    number `floor((tick - startTick) / lengthTicks)` when the wait was created, and
+    the wait wakes in the first `waits` phase where the voice, not paused, has a
+    greater pass number; `null` for a terminal wait, which wakes when the voice's
+    current `endTick` is reached. A voice that is gone or replaced (`cueId`
+    differs) wakes the wait.
+
+**Evidence.** The oracle scenes of entry 6.4 (every fact above is a row or an
+event in them), the P1 and P2 text above, AD-5's blocking `asset` reply and
+AD-26's phase order. **Rejected alternative.** Holding the world at the post
+tick instead of applying late would need a mid-tick stall the engine does not
+have; rebuilding `pausedTick` from `positionTicks` loses the pass count of a
+wrapped loop; storing the track volumes densely would force a settings write
+whenever a track is created.
 
 ## P2 — fixed time and end authority
 
@@ -462,7 +575,7 @@ Wait = {
   id: "mediaWait",
   payload: [{ track: string, voice: integer | null,
               cueId: integer, endTick: integer | null,
-              pass: boolean }],
+              pass: boolean, passIndex: integer | null }],
   resumeRefs: []
 }
 ```
