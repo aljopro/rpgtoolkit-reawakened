@@ -1,0 +1,277 @@
+{
+  "scene": "soundfont-setting",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/audio, not by packages/core. No state or cue hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation, audio, time (AD-26). A row is the state at the end of the audio phase of its tick.",
+  "units": "ticks (1/60 s); volumes are integer percentages; seconds in scripts are whole milliseconds",
+  "row": "t tick; cfg [track, configured voices] (first tick and on change); tr [track, state, flags, file, positionTicks, lengthTicks, voices] for each track with a file or a voice; voice [index, state, cueId, priority, volume, startTick, positionTicks, endTick, loop, fade [from, to, start, duration] or null]; bus [track, volume, fade]; master; sf (script bank); cues (the 12-key AudioCue records emitted this tick); ev (facts: wait, wake, finished, steal, same-file, diag, legacy, video ...)",
+  "spec": [
+    "docs/spec/engine/audio-media.md#soundfont-commands",
+    "docs/spec/engine/audio-media.md#soundfont-cue",
+    "docs/spec/engine/audio-media.md#soundfont-layers",
+    "docs/spec/engine/audio-media.md#audio-save-load"
+  ],
+  "proposed": ["P-2","P-9"],
+  "cases": [
+    {
+      "name": "spec-worked-example-scaled",
+      "note": "The worked example of 6.3 B2 with the clock scaled by 10 (tick 60 stands for 600 and 90 for 900) so the cue counter, order and values are the spec's: the counter stands at 7 after six cues (start bank, music play, music stop, sfx play, sfx finish stop, a track volume), then soundFont(\"boss.sf2\") and mediaPlay(\"boss.mid\") in one thread step give cue 7 soundfont.set boss.sf2, cue 8 media.play music; soundFontReset() at tick 90 is cue 9 and names the author default town.sf2. The script bank is null again after tick 90.",
+      "setup": {
+        "defaultSoundFont": "media/town.sf2",
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/boss.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8},
+          "media/boss.sf2": {"format":"soundfont","lengthTicks":null},
+          "media/alt.sf3": {"format":"soundfont","lengthTicks":null},
+          "media/town.sf2": {"format":"soundfont","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"},
+        {"t":10,"op":"mediaStop","track":"music"},
+        {"t":12,"op":"effect","kind":"sfx.play","asset":"media/door.wav","source":"frame"},
+        {"t":30,"op":"mediaVolume","track":"music","percent":100},
+        {"t":60,"op":"soundFont","file":"boss.sf2"},
+        {"t":60,"op":"mediaPlay","file":"boss.mid"},
+        {"t":90,"op":"soundFontReset"}
+      ],
+      "ticks": 95,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/town.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/town.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]]]},
+        {"t":5,"tr":[["music","playing",1,"media/town.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]]]},
+        {"t":6,"tr":[["music","playing",1,"media/town.mid",6,40,[[0,"playing",2,0,100,0,6,null,1,null]]]]},
+        {"t":7,"tr":[["music","playing",1,"media/town.mid",7,40,[[0,"playing",2,0,100,0,7,null,1,null]]]]},
+        {"t":8,"tr":[["music","playing",1,"media/town.mid",8,40,[[0,"playing",2,0,100,0,8,null,1,null]]]]},
+        {"t":9,"tr":[["music","playing",1,"media/town.mid",9,40,[[0,"playing",2,0,100,0,9,null,1,null]]]]},
+        {"t":10,"tr":[["music","stopped",1,"media/town.mid",0,null,[]]],"cues":[{"cueId":3,"tick":10,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":11,"tr":[["music","stopped",1,"media/town.mid",0,null,[]]]},
+        {"t":12,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","playing",0,"media/door.wav",0,8,[[0,"playing",4,0,100,12,0,20,0,null]]]],"cues":[{"cueId":4,"tick":12,"kind":"media.play","track":"sfx","voice":0,"asset":"media/door.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":13,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","playing",0,"media/door.wav",1,8,[[0,"playing",4,0,100,12,1,20,0,null]]]]},
+        {"t":14,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","playing",0,"media/door.wav",2,8,[[0,"playing",4,0,100,12,2,20,0,null]]]]},
+        {"t":15,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","playing",0,"media/door.wav",3,8,[[0,"playing",4,0,100,12,3,20,0,null]]]]},
+        {"t":16,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","playing",0,"media/door.wav",4,8,[[0,"playing",4,0,100,12,4,20,0,null]]]]},
+        {"t":17,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","playing",0,"media/door.wav",5,8,[[0,"playing",4,0,100,12,5,20,0,null]]]]},
+        {"t":18,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","playing",0,"media/door.wav",6,8,[[0,"playing",4,0,100,12,6,20,0,null]]]]},
+        {"t":19,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","playing",0,"media/door.wav",7,8,[[0,"playing",4,0,100,12,7,20,0,null]]]]},
+        {"t":20,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"cues":[{"cueId":5,"tick":20,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":4,"endTick":20}]},
+        {"t":21,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":22,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":23,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":24,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":25,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":26,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":27,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":28,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":29,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":30,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"cues":[{"cueId":6,"tick":30,"kind":"media.volume","track":"music","voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":31,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":32,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":33,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":34,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":35,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":36,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":37,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":38,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":39,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":40,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":41,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":42,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":43,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":44,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":45,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":46,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":47,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":48,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":49,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":50,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":51,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":52,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":53,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":54,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":55,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":56,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":57,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":58,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":59,"tr":[["music","stopped",1,"media/town.mid",0,null,[]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":60,"tr":[["music","playing",1,"media/boss.mid",0,40,[[0,"playing",8,0,100,60,0,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2","cues":[{"cueId":7,"tick":60,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":8,"tick":60,"kind":"media.play","track":"music","voice":0,"asset":"media/boss.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":61,"tr":[["music","playing",1,"media/boss.mid",1,40,[[0,"playing",8,0,100,60,1,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":62,"tr":[["music","playing",1,"media/boss.mid",2,40,[[0,"playing",8,0,100,60,2,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":63,"tr":[["music","playing",1,"media/boss.mid",3,40,[[0,"playing",8,0,100,60,3,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":64,"tr":[["music","playing",1,"media/boss.mid",4,40,[[0,"playing",8,0,100,60,4,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":65,"tr":[["music","playing",1,"media/boss.mid",5,40,[[0,"playing",8,0,100,60,5,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":66,"tr":[["music","playing",1,"media/boss.mid",6,40,[[0,"playing",8,0,100,60,6,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":67,"tr":[["music","playing",1,"media/boss.mid",7,40,[[0,"playing",8,0,100,60,7,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":68,"tr":[["music","playing",1,"media/boss.mid",8,40,[[0,"playing",8,0,100,60,8,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":69,"tr":[["music","playing",1,"media/boss.mid",9,40,[[0,"playing",8,0,100,60,9,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":70,"tr":[["music","playing",1,"media/boss.mid",10,40,[[0,"playing",8,0,100,60,10,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":71,"tr":[["music","playing",1,"media/boss.mid",11,40,[[0,"playing",8,0,100,60,11,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":72,"tr":[["music","playing",1,"media/boss.mid",12,40,[[0,"playing",8,0,100,60,12,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":73,"tr":[["music","playing",1,"media/boss.mid",13,40,[[0,"playing",8,0,100,60,13,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":74,"tr":[["music","playing",1,"media/boss.mid",14,40,[[0,"playing",8,0,100,60,14,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":75,"tr":[["music","playing",1,"media/boss.mid",15,40,[[0,"playing",8,0,100,60,15,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":76,"tr":[["music","playing",1,"media/boss.mid",16,40,[[0,"playing",8,0,100,60,16,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":77,"tr":[["music","playing",1,"media/boss.mid",17,40,[[0,"playing",8,0,100,60,17,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":78,"tr":[["music","playing",1,"media/boss.mid",18,40,[[0,"playing",8,0,100,60,18,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":79,"tr":[["music","playing",1,"media/boss.mid",19,40,[[0,"playing",8,0,100,60,19,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":80,"tr":[["music","playing",1,"media/boss.mid",20,40,[[0,"playing",8,0,100,60,20,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":81,"tr":[["music","playing",1,"media/boss.mid",21,40,[[0,"playing",8,0,100,60,21,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":82,"tr":[["music","playing",1,"media/boss.mid",22,40,[[0,"playing",8,0,100,60,22,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":83,"tr":[["music","playing",1,"media/boss.mid",23,40,[[0,"playing",8,0,100,60,23,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":84,"tr":[["music","playing",1,"media/boss.mid",24,40,[[0,"playing",8,0,100,60,24,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":85,"tr":[["music","playing",1,"media/boss.mid",25,40,[[0,"playing",8,0,100,60,25,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":86,"tr":[["music","playing",1,"media/boss.mid",26,40,[[0,"playing",8,0,100,60,26,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":87,"tr":[["music","playing",1,"media/boss.mid",27,40,[[0,"playing",8,0,100,60,27,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":88,"tr":[["music","playing",1,"media/boss.mid",28,40,[[0,"playing",8,0,100,60,28,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":89,"tr":[["music","playing",1,"media/boss.mid",29,40,[[0,"playing",8,0,100,60,29,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"sf":"media/boss.sf2"},
+        {"t":90,"tr":[["music","playing",1,"media/boss.mid",30,40,[[0,"playing",8,0,100,60,30,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]],"cues":[{"cueId":9,"tick":90,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":91,"tr":[["music","playing",1,"media/boss.mid",31,40,[[0,"playing",8,0,100,60,31,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":92,"tr":[["music","playing",1,"media/boss.mid",32,40,[[0,"playing",8,0,100,60,32,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":93,"tr":[["music","playing",1,"media/boss.mid",33,40,[[0,"playing",8,0,100,60,33,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]]},
+        {"t":94,"tr":[["music","playing",1,"media/boss.mid",34,40,[[0,"playing",8,0,100,60,34,null,1,null]]],["sfx","stopped",0,"media/door.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":10,"soundFont":null,"master":100}
+    },
+    {
+      "name": "no-default-bank-is-null",
+      "note": "With no author default the start cue and a reset cue carry asset null (the runner and bundled layers decide); a script bank names its key.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/boss.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8},
+          "media/boss.sf2": {"format":"soundfont","lengthTicks":null},
+          "media/alt.sf3": {"format":"soundfont","lengthTicks":null},
+          "media/town.sf2": {"format":"soundfont","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":2,"op":"soundFont","file":"boss.sf2"},
+        {"t":5,"op":"soundFontReset"}
+      ],
+      "ticks": 8,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[]},
+        {"t":2,"tr":[],"sf":"media/boss.sf2","cues":[{"cueId":2,"tick":2,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[],"sf":"media/boss.sf2"},
+        {"t":4,"tr":[],"sf":"media/boss.sf2"},
+        {"t":5,"tr":[],"cues":[{"cueId":3,"tick":5,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":6,"tr":[]},
+        {"t":7,"tr":[]}
+      ],
+      "end": {"cueId":4,"soundFont":null,"master":100}
+    },
+    {
+      "name": "unchanged-bank-still-emits",
+      "note": "The cue is emitted on every accepted command even when the value is unchanged (the runner treats an unchanged bank as a no-op): two soundFont calls with the same file and two resets give four cues.",
+      "setup": {
+        "defaultSoundFont": "media/town.sf2",
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/boss.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8},
+          "media/boss.sf2": {"format":"soundfont","lengthTicks":null},
+          "media/alt.sf3": {"format":"soundfont","lengthTicks":null},
+          "media/town.sf2": {"format":"soundfont","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":2,"op":"soundFont","file":"boss.sf2"},
+        {"t":4,"op":"soundFont","file":"boss.sf2"},
+        {"t":6,"op":"soundFontReset"},
+        {"t":8,"op":"soundFontReset"}
+      ],
+      "ticks": 10,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[]},
+        {"t":2,"tr":[],"sf":"media/boss.sf2","cues":[{"cueId":2,"tick":2,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[],"sf":"media/boss.sf2"},
+        {"t":4,"tr":[],"sf":"media/boss.sf2","cues":[{"cueId":3,"tick":4,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":5,"tr":[],"sf":"media/boss.sf2"},
+        {"t":6,"tr":[],"cues":[{"cueId":4,"tick":6,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":7,"tr":[]},
+        {"t":8,"tr":[],"cues":[{"cueId":5,"tick":8,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":9,"tr":[]}
+      ],
+      "end": {"cueId":6,"soundFont":null,"master":100}
+    },
+    {
+      "name": "invalid-names-change-nothing",
+      "note": "A name that is not .sf2 or .sf3 is media.soundfont-name, a name that does not resolve is media.soundfont-missing; both leave state and cues alone. The ASCII fold applies: ALT.SF3 resolves to media/alt.sf3.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/boss.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8},
+          "media/boss.sf2": {"format":"soundfont","lengthTicks":null},
+          "media/alt.sf3": {"format":"soundfont","lengthTicks":null},
+          "media/town.sf2": {"format":"soundfont","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":1,"op":"soundFont","file":"boss.mid"},
+        {"t":2,"op":"soundFont","file":"nofile.sf2"},
+        {"t":3,"op":"soundFont","file":"ALT.SF3"}
+      ],
+      "ticks": 5,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[],"ev":[{"e":"diag","code":"media.soundfont-name","op":"soundFont","file":"media/boss.mid"}]},
+        {"t":2,"tr":[],"ev":[{"e":"diag","code":"media.soundfont-missing","op":"soundFont","file":"media/nofile.sf2"}]},
+        {"t":3,"tr":[],"sf":"media/alt.sf3","cues":[{"cueId":2,"tick":3,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/alt.sf3","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":4,"tr":[],"sf":"media/alt.sf3"}
+      ],
+      "end": {"cueId":3,"soundFont":"media/alt.sf3","master":100}
+    },
+    {
+      "name": "load-reemits-the-saved-bank-first",
+      "note": "The bank is in the save projection: saved with boss.sf2 set, then reset, a load restores the script bank and re-emits one soundfont.set before any media cue (the music restart).",
+      "setup": {
+        "defaultSoundFont": "media/town.sf2",
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/boss.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8},
+          "media/boss.sf2": {"format":"soundfont","lengthTicks":null},
+          "media/alt.sf3": {"format":"soundfont","lengthTicks":null},
+          "media/town.sf2": {"format":"soundfont","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"},
+        {"t":2,"op":"soundFont","file":"boss.sf2"},
+        {"t":4,"op":"save","at":"post","name":"s"},
+        {"t":6,"op":"soundFontReset"},
+        {"t":8,"op":"load","at":"pre","save":"s"}
+      ],
+      "ticks": 11,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]]],"sf":"media/boss.sf2","cues":[{"cueId":3,"tick":2,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["music","playing",1,"media/town.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]]],"sf":"media/boss.sf2"},
+        {"t":4,"tr":[["music","playing",1,"media/town.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]]],"sf":"media/boss.sf2"},
+        {"t":5,"tr":[["music","playing",1,"media/town.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]]],"sf":"media/boss.sf2"},
+        {"t":6,"tr":[["music","playing",1,"media/town.mid",6,40,[[0,"playing",2,0,100,0,6,null,1,null]]]],"cues":[{"cueId":4,"tick":6,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":7,"tr":[["music","playing",1,"media/town.mid",7,40,[[0,"playing",2,0,100,0,7,null,1,null]]]]},
+        {"t":8,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",6,0,100,8,0,null,1,null]]]],"sf":"media/boss.sf2","cues":[{"cueId":5,"tick":8,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":6,"tick":8,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"load"}]},
+        {"t":9,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",6,0,100,8,1,null,1,null]]]],"sf":"media/boss.sf2"},
+        {"t":10,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",6,0,100,8,2,null,1,null]]]],"sf":"media/boss.sf2"}
+      ],
+      "end": {"cueId":7,"soundFont":"media/boss.sf2","master":100}
+    }
+  ]
+}

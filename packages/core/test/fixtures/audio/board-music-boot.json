@@ -1,0 +1,244 @@
+{
+  "scene": "board-music-boot",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/audio, not by packages/core. No state or cue hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation, audio, time (AD-26). A row is the state at the end of the audio phase of its tick.",
+  "units": "ticks (1/60 s); volumes are integer percentages; seconds in scripts are whole milliseconds",
+  "row": "t tick; cfg [track, configured voices] (first tick and on change); tr [track, state, flags, file, positionTicks, lengthTicks, voices] for each track with a file or a voice; voice [index, state, cueId, priority, volume, startTick, positionTicks, endTick, loop, fade [from, to, start, duration] or null]; bus [track, volume, fade]; master; sf (script bank); cues (the 12-key AudioCue records emitted this tick); ev (facts: wait, wake, finished, steal, same-file, diag, legacy, video ...)",
+  "spec": [
+    "docs/spec/engine/audio-media.md#audio-lifecycle",
+    "docs/spec/engine/audio-media.md#board-effect-mapping",
+    "docs/spec/engine/audio-media.md#audio-cue-contract",
+    "docs/spec/engine/audio-media.md#soundfont-commands",
+    "docs/spec/engine/audio-media.md#audio-headless"
+  ],
+  "proposed": ["P-1","P-2","P-10","P-14"],
+  "cases": [
+    {
+      "name": "boot-board-music",
+      "note": "Engine start: the applier registers at tick 0 and its first cue is soundfont.set (6.3 A3); the board's music.play follows as a looping music cue.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/cave.mid": {"format":"audio.midi","lengthTicks":30},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"}
+      ],
+      "ticks": 6,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/town.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/town.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]]]},
+        {"t":5,"tr":[["music","playing",1,"media/town.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]]]}
+      ],
+      "end": {"cueId":3,"soundFont":null,"master":100}
+    },
+    {
+      "name": "queued-before-applier",
+      "note": "Effects posted before the applier registered wait in the bounded FIFO queue and apply, in post order, when it registers at tick 2; cue ids follow effect order and the cue tick is the registration tick. A later same-tick effect comes after the drained ones.",
+      "setup": {
+        "defaultSoundFont": null,
+        "registerAt": 2,
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/cave.mid": {"format":"audio.midi","lengthTicks":30},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"},
+        {"t":0,"op":"effect","kind":"sfx.play","asset":"media/door.wav","source":"frame"},
+        {"t":1,"op":"effect","kind":"music.play","asset":"media/cave.mid","loop":true,"restart":false,"source":"board"},
+        {"t":2,"op":"effect","kind":"sfx.play","asset":"media/door.wav","source":"frame"}
+      ],
+      "ticks": 6,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[]},
+        {"t":1,"tr":[]},
+        {"t":2,"tr":[["music","playing",1,"media/cave.mid",0,30,[[0,"playing",5,0,100,2,0,null,1,null]]],["sfx","playing",0,"media/door.wav",0,8,[[0,"playing",3,0,100,2,0,10,0,null]]]],"cues":[{"cueId":1,"tick":2,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":2,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":3,"tick":2,"kind":"media.play","track":"sfx","voice":0,"asset":"media/door.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":4,"tick":2,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":5,"tick":2,"kind":"media.play","track":"music","voice":0,"asset":"media/cave.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"same-file","track":"sfx","file":"media/door.wav","action":"ignored"}]},
+        {"t":3,"tr":[["music","playing",1,"media/cave.mid",1,30,[[0,"playing",5,0,100,2,1,null,1,null]]],["sfx","playing",0,"media/door.wav",1,8,[[0,"playing",3,0,100,2,1,10,0,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/cave.mid",2,30,[[0,"playing",5,0,100,2,2,null,1,null]]],["sfx","playing",0,"media/door.wav",2,8,[[0,"playing",3,0,100,2,2,10,0,null]]]]},
+        {"t":5,"tr":[["music","playing",1,"media/cave.mid",3,30,[[0,"playing",5,0,100,2,3,null,1,null]]],["sfx","playing",0,"media/door.wav",3,8,[[0,"playing",3,0,100,2,3,10,0,null]]]]}
+      ],
+      "end": {"cueId":6,"soundFont":null,"master":100}
+    },
+    {
+      "name": "next-board-different-music",
+      "note": "A board with different music replaces it: media.stop then media.play, in that order, in the same tick.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/cave.mid": {"format":"audio.midi","lengthTicks":30},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"},
+        {"t":10,"op":"effect","kind":"music.play","asset":"media/cave.mid","loop":true,"restart":false,"source":"board"}
+      ],
+      "ticks": 16,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/town.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/town.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]]]},
+        {"t":5,"tr":[["music","playing",1,"media/town.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]]]},
+        {"t":6,"tr":[["music","playing",1,"media/town.mid",6,40,[[0,"playing",2,0,100,0,6,null,1,null]]]]},
+        {"t":7,"tr":[["music","playing",1,"media/town.mid",7,40,[[0,"playing",2,0,100,0,7,null,1,null]]]]},
+        {"t":8,"tr":[["music","playing",1,"media/town.mid",8,40,[[0,"playing",2,0,100,0,8,null,1,null]]]]},
+        {"t":9,"tr":[["music","playing",1,"media/town.mid",9,40,[[0,"playing",2,0,100,0,9,null,1,null]]]]},
+        {"t":10,"tr":[["music","playing",1,"media/cave.mid",0,30,[[0,"playing",4,0,100,10,0,null,1,null]]]],"cues":[{"cueId":3,"tick":10,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":4,"tick":10,"kind":"media.play","track":"music","voice":0,"asset":"media/cave.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":11,"tr":[["music","playing",1,"media/cave.mid",1,30,[[0,"playing",4,0,100,10,1,null,1,null]]]]},
+        {"t":12,"tr":[["music","playing",1,"media/cave.mid",2,30,[[0,"playing",4,0,100,10,2,null,1,null]]]]},
+        {"t":13,"tr":[["music","playing",1,"media/cave.mid",3,30,[[0,"playing",4,0,100,10,3,null,1,null]]]]},
+        {"t":14,"tr":[["music","playing",1,"media/cave.mid",4,30,[[0,"playing",4,0,100,10,4,null,1,null]]]]},
+        {"t":15,"tr":[["music","playing",1,"media/cave.mid",5,30,[[0,"playing",4,0,100,10,5,null,1,null]]]]}
+      ],
+      "end": {"cueId":5,"soundFont":null,"master":100}
+    },
+    {
+      "name": "next-board-same-music-carries-on",
+      "note": "A board with the same music while it plays posts the effect, but the applier carries on: no cue, the position keeps counting (the applier, not engine.musicAsset, owns the decision).",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/cave.mid": {"format":"audio.midi","lengthTicks":30},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"},
+        {"t":10,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"}
+      ],
+      "ticks": 14,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/town.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/town.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]]]},
+        {"t":5,"tr":[["music","playing",1,"media/town.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]]]},
+        {"t":6,"tr":[["music","playing",1,"media/town.mid",6,40,[[0,"playing",2,0,100,0,6,null,1,null]]]]},
+        {"t":7,"tr":[["music","playing",1,"media/town.mid",7,40,[[0,"playing",2,0,100,0,7,null,1,null]]]]},
+        {"t":8,"tr":[["music","playing",1,"media/town.mid",8,40,[[0,"playing",2,0,100,0,8,null,1,null]]]]},
+        {"t":9,"tr":[["music","playing",1,"media/town.mid",9,40,[[0,"playing",2,0,100,0,9,null,1,null]]]]},
+        {"t":10,"tr":[["music","playing",1,"media/town.mid",10,40,[[0,"playing",2,0,100,0,10,null,1,null]]]],"ev":[{"e":"same-file","track":"music","file":"media/town.mid","action":"carry-on"}]},
+        {"t":11,"tr":[["music","playing",1,"media/town.mid",11,40,[[0,"playing",2,0,100,0,11,null,1,null]]]]},
+        {"t":12,"tr":[["music","playing",1,"media/town.mid",12,40,[[0,"playing",2,0,100,0,12,null,1,null]]]]},
+        {"t":13,"tr":[["music","playing",1,"media/town.mid",13,40,[[0,"playing",2,0,100,0,13,null,1,null]]]]}
+      ],
+      "end": {"cueId":3,"soundFont":null,"master":100}
+    },
+    {
+      "name": "board-without-music-silences",
+      "note": "An empty or missing board request is a null asset: media.stop, the music file is cleared (so the music virtual would read empty) and no error is raised; a later board with music plays again.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/cave.mid": {"format":"audio.midi","lengthTicks":30},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"},
+        {"t":10,"op":"effect","kind":"music.play","asset":null,"loop":true,"restart":false,"source":"board"},
+        {"t":14,"op":"effect","kind":"music.play","asset":"media/cave.mid","loop":true,"restart":false,"source":"board"}
+      ],
+      "ticks": 18,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/town.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/town.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]]]},
+        {"t":5,"tr":[["music","playing",1,"media/town.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]]]},
+        {"t":6,"tr":[["music","playing",1,"media/town.mid",6,40,[[0,"playing",2,0,100,0,6,null,1,null]]]]},
+        {"t":7,"tr":[["music","playing",1,"media/town.mid",7,40,[[0,"playing",2,0,100,0,7,null,1,null]]]]},
+        {"t":8,"tr":[["music","playing",1,"media/town.mid",8,40,[[0,"playing",2,0,100,0,8,null,1,null]]]]},
+        {"t":9,"tr":[["music","playing",1,"media/town.mid",9,40,[[0,"playing",2,0,100,0,9,null,1,null]]]]},
+        {"t":10,"tr":[],"cues":[{"cueId":3,"tick":10,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"silence","track":"music","source":"board"}]},
+        {"t":11,"tr":[]},
+        {"t":12,"tr":[]},
+        {"t":13,"tr":[]},
+        {"t":14,"tr":[["music","playing",1,"media/cave.mid",0,30,[[0,"playing",4,0,100,14,0,null,1,null]]]],"cues":[{"cueId":4,"tick":14,"kind":"media.play","track":"music","voice":0,"asset":"media/cave.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":15,"tr":[["music","playing",1,"media/cave.mid",1,30,[[0,"playing",4,0,100,14,1,null,1,null]]]]},
+        {"t":16,"tr":[["music","playing",1,"media/cave.mid",2,30,[[0,"playing",4,0,100,14,2,null,1,null]]]]},
+        {"t":17,"tr":[["music","playing",1,"media/cave.mid",3,30,[[0,"playing",4,0,100,14,3,null,1,null]]]]}
+      ],
+      "end": {"cueId":5,"soundFont":null,"master":100}
+    },
+    {
+      "name": "stopped-music-restarts-on-board-entry",
+      "note": "mediaStop retains the file; board entry with the same file then plays it again from zero (Q5, Q10): the same-file rule only carries on while the track is playing.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/town.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/cave.mid": {"format":"audio.midi","lengthTicks":30},
+          "media/door.wav": {"format":"audio.wav","lengthTicks":8}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"},
+        {"t":5,"op":"mediaStop","track":"music"},
+        {"t":10,"op":"effect","kind":"music.play","asset":"media/town.mid","loop":true,"restart":false,"source":"board"}
+      ],
+      "ticks": 14,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/town.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/town.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]]]},
+        {"t":5,"tr":[["music","stopped",1,"media/town.mid",0,null,[]]],"cues":[{"cueId":3,"tick":5,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":6,"tr":[["music","stopped",1,"media/town.mid",0,null,[]]]},
+        {"t":7,"tr":[["music","stopped",1,"media/town.mid",0,null,[]]]},
+        {"t":8,"tr":[["music","stopped",1,"media/town.mid",0,null,[]]]},
+        {"t":9,"tr":[["music","stopped",1,"media/town.mid",0,null,[]]]},
+        {"t":10,"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",4,0,100,10,0,null,1,null]]]],"cues":[{"cueId":4,"tick":10,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":11,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",4,0,100,10,1,null,1,null]]]]},
+        {"t":12,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",4,0,100,10,2,null,1,null]]]]},
+        {"t":13,"tr":[["music","playing",1,"media/town.mid",3,40,[[0,"playing",4,0,100,10,3,null,1,null]]]]}
+      ],
+      "end": {"cueId":5,"soundFont":null,"master":100}
+    },
+    {
+      "name": "unknown-length-music",
+      "note": "A music file no decoder accepts still plays in core: the cue stream is the same as for a known file, the length is null, the position is the elapsed ticks (never wrapping) and one media.asset-format diagnostic is raised.",
+      "setup": {"defaultSoundFont":null,"assets":{"media/song.xm":{"format":"unsupported","lengthTicks":null}},"videos":[]},
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/song.xm","loop":true,"restart":false,"source":"board"}
+      ],
+      "ticks": 10,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/song.xm",0,null,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/song.xm","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"diag","code":"media.asset-format","op":"music.play","file":"media/song.xm"}]},
+        {"t":1,"tr":[["music","playing",1,"media/song.xm",1,null,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/song.xm",2,null,[[0,"playing",2,0,100,0,2,null,1,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/song.xm",3,null,[[0,"playing",2,0,100,0,3,null,1,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/song.xm",4,null,[[0,"playing",2,0,100,0,4,null,1,null]]]]},
+        {"t":5,"tr":[["music","playing",1,"media/song.xm",5,null,[[0,"playing",2,0,100,0,5,null,1,null]]]]},
+        {"t":6,"tr":[["music","playing",1,"media/song.xm",6,null,[[0,"playing",2,0,100,0,6,null,1,null]]]]},
+        {"t":7,"tr":[["music","playing",1,"media/song.xm",7,null,[[0,"playing",2,0,100,0,7,null,1,null]]]]},
+        {"t":8,"tr":[["music","playing",1,"media/song.xm",8,null,[[0,"playing",2,0,100,0,8,null,1,null]]]]},
+        {"t":9,"tr":[["music","playing",1,"media/song.xm",9,null,[[0,"playing",2,0,100,0,9,null,1,null]]]]}
+      ],
+      "end": {"cueId":3,"soundFont":null,"master":100}
+    }
+  ]
+}

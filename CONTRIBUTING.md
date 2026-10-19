@@ -50,6 +50,28 @@ corpus cannot supply them (ticket 2.22):
   spec is silent. `demo-npc-pathfinding` and `demo-npc-battle-trigger` model
   programs from the fetched `demo` game and pin their digests; the files are read
   only when fetched and are never committed.
+- `audio/` — the audio oracle's fifteen named scenes (ticket 6.4), written by the same
+  generator from the rules in
+  [docs/spec/engine/audio-media.md](docs/spec/engine/audio-media.md) (the time model,
+  cues, waits, voices, fades, the SoundFont and video rules and the legacy parity
+  ledger; each scene file lists the anchors it follows): `board-music-boot`,
+  `animation-frame-sfx`, `track-transport`, `loop-and-end-ticks`, `same-file-rules`,
+  `voices-and-stealing`, `fades`, `synced-start`, `late-start-catch-up`,
+  `media-wait-suspend`, `settings-versus-save`, `soundfont-setting`,
+  `battle-music-handoff`, `legacy-parity-ledger` and `video-restarts-music`. Each case
+  is a recorded script of effects, commands and inputs with the expected per-tick
+  track states, cues (every `AudioCue` in full, ids included), wait wake-ups, end
+  events and diagnostics. The facts come from the reference timeline in
+  `tools/fixtures/audio/`, which imports nothing from `packages/core`; `--check`
+  also scans for such an import. There are **no state or cue hashes**: the consuming
+  entries (6.6 onwards) assert those. `manifest.json` lists every scene, case,
+  authored file and the "proposed" rulings (`P-n`) the oracle relies on where the
+  spec is silent. `files/` holds tiny authored WAV (8 and 16-bit PCM, MS-ADPCM,
+  IMA-ADPCM) and MIDI (type 0 and 1, tempo changes, XG and GS dialects) files, each
+  with a hand-worked length in ticks and the arithmetic behind it; they are written
+  from the public layouts and rule F4, so there is nothing to license. Corpus WAV
+  and MIDI lengths are pinned by SHA-256 and checked by an independent reader only
+  when the corpus is fetched; the files are never committed.
 - `real/` — tiny files an editor produced: a detail-1, a detail-2 and a detail-3
   tileset, plus a `.tan` and a `.gph` held for ticket 16.7.
 - `anonymised/` — derivatives of real legacy samples, produced by
@@ -125,8 +147,8 @@ pnpm icons:test                  # the icon builder's own tests
 pnpm icons                       # rebuild media/icons from media/tkr.png (the logo's icon set)
 pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
 pnpm fixtures:check              # fail if anything under fixtures/ is tracked
-pnpm fixtures:author              # rewrite packages/core/test/fixtures/authored and .../movement (deliberate, see below)
-pnpm fixtures:author:check       # fail if those committed fixtures drift from the generator, or the oracle imports core
+pnpm fixtures:author              # rewrite packages/core/test/fixtures/authored, .../movement and .../audio (deliberate, see below)
+pnpm fixtures:author:check       # fail if those committed fixtures drift from the generator, or an oracle imports core
 pnpm golden                      # the headless golden suite (G5)
 pnpm dump fixtures/legacy/demo   # parse a legacy project and print it (needs fixtures:fetch)
 ```

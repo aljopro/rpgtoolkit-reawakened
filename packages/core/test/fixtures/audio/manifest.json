@@ -1,0 +1,523 @@
+{
+  "schema": 1,
+  "scenes": [
+    {
+      "scene": "board-music-boot",
+      "file": "board-music-boot.json",
+      "cases": [
+        "boot-board-music",
+        "queued-before-applier",
+        "next-board-different-music",
+        "next-board-same-music-carries-on",
+        "board-without-music-silences",
+        "stopped-music-restarts-on-board-entry",
+        "unknown-length-music"
+      ],
+      "proposed": ["P-1","P-2","P-10","P-14"]
+    },
+    {
+      "scene": "animation-frame-sfx",
+      "file": "animation-frame-sfx.json",
+      "cases": [
+        "frame-sounds-replace-on-the-one-voice-sfx-track",
+        "wavstop-stops-a-frame-sound",
+        "script-wav-and-frame-sound-replace-each-other",
+        "menu-sounds-go-to-ui-and-overlap",
+        "two-sfx-voices-when-the-author-raises-the-count",
+        "track-volume-scales-frame-sounds"
+      ],
+      "proposed": ["P-2","P-10","P-13","P-18"]
+    },
+    {
+      "scene": "track-transport",
+      "file": "track-transport.json",
+      "cases": [
+        "play-pause-resume-stop",
+        "stop-retains-file-and-flags",
+        "seek-clamps-wraps-and-rounds",
+        "diagnostics-leave-state-untouched"
+      ],
+      "proposed": ["P-1","P-3","P-4","P-5","P-15","P-17"]
+    },
+    {
+      "scene": "loop-and-end-ticks",
+      "file": "loop-and-end-ticks.json",
+      "cases": [
+        "one-shot-end-tick",
+        "loop-pass-boundaries",
+        "loop-off-finishes-the-current-pass",
+        "loop-on-extends-a-one-shot",
+        "end-ticks-from-authored-files",
+        "unknown-length-never-ends",
+        "loop-plus-wait-is-diagnosed"
+      ],
+      "proposed": ["P-2","P-3","P-8","P-14"]
+    },
+    {
+      "scene": "same-file-rules",
+      "file": "same-file-rules.json",
+      "cases": [
+        "music-same-file-carries-on",
+        "music-restart-flag-restarts",
+        "music-different-file-replaces",
+        "stopped-music-plays-again",
+        "sfx-same-file-ignored-and-replaced",
+        "multi-voice-overlaps-the-same-file",
+        "finished-one-shot-plays-again"
+      ],
+      "proposed": ["P-5","P-10","P-13"]
+    },
+    {
+      "scene": "voices-and-stealing",
+      "file": "voices-and-stealing.json",
+      "cases": [
+        "default-voice-counts",
+        "lowest-free-then-steal-oldest",
+        "steal-lowest-priority-first",
+        "steal-ties-go-to-the-lowest-index",
+        "paused-voices-stay-active-for-allocation",
+        "freed-slot-is-reused-lowest-first",
+        "steal-wakes-the-displaced-wait",
+        "same-file-overlaps-on-multi-voice",
+        "track-creation-limits",
+        "voice-cap-and-shrink-below-live-voice"
+      ],
+      "proposed": ["P-8","P-13","P-17"]
+    },
+    {
+      "scene": "fades",
+      "file": "fades.json",
+      "cases": [
+        "linear-half-up",
+        "new-fade-replaces-from-the-current-integer",
+        "pause-freezes-the-fade-clock",
+        "fade-to-zero-keeps-the-voice-alive",
+        "zero-duration-fade-is-an-immediate-set",
+        "track-volume-fade-and-set",
+        "stinger-and-manual-duck-apply-in-source-order"
+      ],
+      "proposed": ["P-4","P-6","P-7","P-15","P-18"]
+    },
+    {
+      "scene": "synced-start",
+      "file": "synced-start.json",
+      "cases": [
+        "spec-example-position-17-of-10",
+        "equal-lengths-stay-aligned",
+        "paused-source-supplies-its-held-position",
+        "unequal-lengths-are-deterministic",
+        "sync-diagnostics-start-nothing"
+      ],
+      "proposed": ["P-7","P-14","P-17"]
+    },
+    {
+      "scene": "late-start-catch-up",
+      "file": "late-start-catch-up.json",
+      "cases": [
+        "worked-example-600-tick-song",
+        "looping-music-catches-up",
+        "one-shot-sfx-is-dropped-when-late",
+        "music-and-loops-are-never-dropped",
+        "seek-and-fade-cues-late",
+        "restored-voice-cue-is-past-due"
+      ],
+      "proposed": ["P-9","P-16"]
+    },
+    {
+      "scene": "media-wait-suspend",
+      "file": "media-wait-suspend.json",
+      "cases": [
+        "wait-wakes-on-the-end-tick",
+        "pause-suspends-the-wait-and-resume-continues-it",
+        "stop-wakes-at-the-next-waits-phase",
+        "replacing-the-voice-wakes-the-old-wait",
+        "mediaWait-on-a-playing-one-shot",
+        "two-threads-wake-in-ascending-thread-id",
+        "stop-while-paused-wakes-the-wait",
+        "wait-diagnostics-do-not-park"
+      ],
+      "proposed": ["P-3","P-4","P-8","P-17"]
+    },
+    {
+      "scene": "settings-versus-save",
+      "file": "settings-versus-save.json",
+      "cases": [
+        "save-and-load-restore-playback-not-settings",
+        "stopped-tracks-stay-stopped-after-load",
+        "reset-leaves-audio-untouched"
+      ],
+      "proposed": ["P-9","P-18"]
+    },
+    {
+      "scene": "soundfont-setting",
+      "file": "soundfont-setting.json",
+      "cases": [
+        "spec-worked-example-scaled",
+        "no-default-bank-is-null",
+        "unchanged-bank-still-emits",
+        "invalid-names-change-nothing",
+        "load-reemits-the-saved-bank-first"
+      ],
+      "proposed": ["P-2","P-9"]
+    },
+    {
+      "scene": "battle-music-handoff",
+      "file": "battle-music-handoff.json",
+      "cases": [
+        "battle-music-then-return",
+        "battle-without-music-is-silent",
+        "in-fight-music-change-is-lost",
+        "same-file-battle-carries-on-and-restart-restarts",
+        "music-virtual-follows-the-music-track-file"
+      ],
+      "proposed": ["P-10"]
+    },
+    {
+      "scene": "legacy-parity-ledger",
+      "file": "legacy-parity-ledger.json",
+      "cases": [
+        "mp3pause-waits-while-music-keeps-playing",
+        "wav-and-mp3-never-wait-and-play-once",
+        "one-sfx-slot-replaces-or-ignores",
+        "wavstop-leaves-music-alone",
+        "midiplay-carries-on-and-stop-retains",
+        "aliases-map-to-the-standard-calls",
+        "setvolume-is-a-script-setting",
+        "board-entry-silence-and-replay"
+      ],
+      "proposed": ["P-8","P-11","P-15"]
+    },
+    {
+      "scene": "video-restarts-music",
+      "file": "video-restarts-music.json",
+      "cases": [
+        "video-stops-then-restarts-from-zero",
+        "stopped-music-restarts-anyway",
+        "paused-music-restarts",
+        "no-retained-file-plays-nothing",
+        "a-stop-on-the-resumed-tick-wins",
+        "missing-video-changes-nothing",
+        "second-video-while-pending-is-busy",
+        "stale-reply-is-ignored"
+      ],
+      "proposed": ["P-12"]
+    }
+  ],
+  "files": [
+    {
+      "file": "files/pcm8-mono-8000.wav",
+      "kind": "wav",
+      "bytes": 4068,
+      "codec": "pcm8",
+      "channels": 1,
+      "rate": 8000,
+      "frames": 4000,
+      "lengthTicks": 30,
+      "workings": "4000 frames at 8000 Hz is 0.5 s; (120 x 4000 + 8000) / 16000 = 30.5, floor 30. A LIST/INFO chunk with an odd-sized ISFT item precedes the data."
+    },
+    {
+      "file": "files/pcm16-mono-8000.wav",
+      "kind": "wav",
+      "bytes": 4044,
+      "codec": "pcm16",
+      "channels": 1,
+      "rate": 8000,
+      "frames": 2000,
+      "lengthTicks": 15,
+      "workings": "4000 data bytes / block align 2 = 2000 frames; (120 x 2000 + 8000) / 16000 = 15.5, floor 15."
+    },
+    {
+      "file": "files/pcm16-stereo-8000.wav",
+      "kind": "wav",
+      "bytes": 1644,
+      "codec": "pcm16",
+      "channels": 2,
+      "rate": 8000,
+      "frames": 400,
+      "lengthTicks": 3,
+      "workings": "1600 data bytes / block align 4 = 400 frames; (120 x 400 + 8000) / 16000 = 3.5, floor 3."
+    },
+    {
+      "file": "files/pcm8-half-tick.wav",
+      "kind": "wav",
+      "bytes": 244,
+      "codec": "pcm8",
+      "channels": 1,
+      "rate": 8000,
+      "frames": 200,
+      "lengthTicks": 2,
+      "workings": "200 frames at 8000 Hz is exactly 1.5 ticks; (120 x 200 + 8000) / 16000 = 2.0, so a half tick rounds up to 2."
+    },
+    {
+      "file": "files/pcm8-min-one-tick.wav",
+      "kind": "wav",
+      "bytes": 46,
+      "codec": "pcm8",
+      "channels": 1,
+      "rate": 8000,
+      "frames": 1,
+      "lengthTicks": 1,
+      "workings": "one frame; (120 + 8000) / 16000 = 0.5075, floor 0, raised to the minimum of 1. The odd data chunk is padded."
+    },
+    {
+      "file": "files/msadpcm-mono-8000.wav",
+      "kind": "wav",
+      "bytes": 1102,
+      "codec": "ms-adpcm",
+      "channels": 1,
+      "rate": 8000,
+      "frames": 2000,
+      "lengthTicks": 15,
+      "workings": "block align 256 holds (256 - 7) x 2 + 2 = 500 samples; 4 blocks and no fact chunk = 2000 frames; (120 x 2000 + 8000) / 16000 = 15.5, floor 15."
+    },
+    {
+      "file": "files/msadpcm-mono-8000-fact.wav",
+      "kind": "wav",
+      "bytes": 1114,
+      "codec": "ms-adpcm",
+      "channels": 1,
+      "rate": 8000,
+      "frames": 1900,
+      "lengthTicks": 14,
+      "workings": "the same four 500-sample blocks, but the fact chunk says 1900 frames and wins; (120 x 1900 + 8000) / 16000 = 14.75, floor 14."
+    },
+    {
+      "file": "files/ima-adpcm-mono-8000.wav",
+      "kind": "wav",
+      "bytes": 1084,
+      "codec": "ima-adpcm",
+      "channels": 1,
+      "rate": 8000,
+      "frames": 2020,
+      "lengthTicks": 15,
+      "workings": "block align 256 holds (256 - 4) x 2 + 1 = 505 samples; 4 blocks = 2020 frames (fact 2020); (120 x 2020 + 8000) / 16000 = 15.65, floor 15."
+    },
+    {
+      "file": "files/ima-adpcm-stereo-8000.wav",
+      "kind": "wav",
+      "bytes": 1072,
+      "codec": "ima-adpcm",
+      "channels": 2,
+      "rate": 8000,
+      "frames": 1010,
+      "lengthTicks": 8,
+      "workings": "stereo block align 512 is two 4-byte channel headers then 63 groups of 8 bytes (4 per channel): 504 samples per channel plus the header sample = 505 frames per block; 2 blocks and no fact chunk = 1010 frames; (120 x 1010 + 8000) / 16000 = 8.075, floor 8."
+    },
+    {
+      "file": "files/midi0-480-default-tempo.mid",
+      "kind": "midi",
+      "bytes": 58,
+      "type": 0,
+      "division": 480,
+      "lengthTicks": 120,
+      "bank": {"dialect":"gm","bankSelect":false},
+      "workings": "events at 0, 960, 960, 1440 and end-of-track at 1920; no tempo event, so N = 1920 x 500000 = 960000000; (12 x 960000000 + 100000 x 480) / (200000 x 480) = 120.5, floor 120 (2 s)."
+    },
+    {
+      "file": "files/midi0-96-tempo-change.mid",
+      "kind": "midi",
+      "bytes": 49,
+      "type": 0,
+      "division": 96,
+      "lengthTicks": 60,
+      "bank": {"dialect":"gm","bankSelect":false},
+      "workings": "a GM System On sysex, then 96 ticks at the default 500000, a tempo change to 250000 at tick 96, then 192 ticks at 250000 to the end at 288; N = 96 x 500000 + 192 x 250000 = 96000000; (12 x 96000000 + 100000 x 96) / (200000 x 96) = 60.5, floor 60 (1 s)."
+    },
+    {
+      "file": "files/midi1-240-tempo-map.mid",
+      "kind": "midi",
+      "bytes": 82,
+      "type": 1,
+      "division": 240,
+      "lengthTicks": 129,
+      "bank": {"dialect":"gm","bankSelect":false},
+      "workings": "two tracks merged by absolute tick: default 500000 for ticks 0-120, 400000 for 120-360 (tempo track), 1000000 for 360-720; the note track ends last at 720, so the tempo carries on past its own end at 480. N = 120 x 500000 + 240 x 400000 + 360 x 1000000 = 516000000; (12 x 516000000 + 100000 x 240) / (200000 x 240) = 129.5, floor 129 (2.15 s)."
+    },
+    {
+      "file": "files/midi0-480-round-up.mid",
+      "kind": "midi",
+      "bytes": 40,
+      "type": 0,
+      "division": 480,
+      "lengthTicks": 119,
+      "bank": {"dialect":"gm","bankSelect":false},
+      "workings": "end at 1900; N = 1900 x 500000 = 950000000 = 1.9792 s = 118.75 ticks; (12 x 950000000 + 100000 x 480) / (200000 x 480) = 119.25, floor 119 (rounds up)."
+    },
+    {
+      "file": "files/midi1-480-tempo-only.mid",
+      "kind": "midi",
+      "bytes": 47,
+      "type": 1,
+      "division": 480,
+      "lengthTicks": 45,
+      "bank": {"dialect":"gm","bankSelect":false},
+      "workings": "no note events: the tempo map alone gives the length. 480 ticks at 500000 then 480 at 250000; N = 360000000 = 0.75 s; (12 x 360000000 + 100000 x 480) / (200000 x 480) = 45.5, floor 45."
+    },
+    {
+      "file": "files/midi0-empty-minimum.mid",
+      "kind": "midi",
+      "bytes": 26,
+      "type": 0,
+      "division": 480,
+      "lengthTicks": 1,
+      "bank": {"dialect":"gm","bankSelect":false},
+      "workings": "only an end-of-track at tick 0; N = 0; (0 + 100000 x 480) / (200000 x 480) = 0.5, floor 0, raised to the minimum of 1."
+    },
+    {
+      "file": "files/midi0-xg-bank-select.mid",
+      "kind": "midi",
+      "bytes": 53,
+      "type": 0,
+      "division": 480,
+      "lengthTicks": 30,
+      "bank": {"dialect":"xg","bankSelect":true},
+      "workings": "an XG System On sysex (manufacturer 43, model 4C) and controller 0 set to 1; ends at 480; N = 240000000 = 0.5 s; (12 x 240000000 + 100000 x 480) / (200000 x 480) = 30.5, floor 30. Dialect xg, bank select true."
+    },
+    {
+      "file": "files/midi0-gs-reset.mid",
+      "kind": "midi",
+      "bytes": 47,
+      "type": 0,
+      "division": 96,
+      "lengthTicks": 30,
+      "bank": {"dialect":"gs","bankSelect":false},
+      "workings": "a GS Reset sysex (manufacturer 41, model 42), no bank select; ends at 96; N = 48000000 = 0.5 s; (12 x 48000000 + 100000 x 96) / (200000 x 96) = 30.5, floor 30. Dialect gs, bank select false."
+    }
+  ],
+  "proposed": {
+    "P-1": "Row sampling: the row for tick t is the state at the end of the audio phase of tick t, before time advances; a voice started in tick t has position 0 in row t.",
+    "P-2": "Cue tick: the tick at which the applier applied the transition. Effects drained when the applier registers carry the registration tick and follow the start soundfont.set; a one-shot's finish emits media.stop in the audio phase of its end tick.",
+    "P-3": "Finish: at the audio phase of its end tick a one-shot is removed from the track (the track keeps file and flags), a finished fact is recorded once, and the track's primary view then reads position 0 and an unknown length.",
+    "P-4": "A paused voice keeps its pre-pause startTick, endTick and fade start; resume shifts all three by the paused span, and a fade started while paused begins counting at resume.",
+    "P-5": "Loop is per voice (the voice rows carry it); a track's flags are the loop bit of its voice 0 only (tkMD_WAIT and tkMD_RESTART are play-time instructions and are not retained); a track's file is the file most recently started on it.",
+    "P-6": "Fades: the descriptor is cleared in the audio phase of the tick at which the elapsed ticks reach the duration and the volume becomes the target; a zero-duration fade is a media.fade cue with durationTicks 0 and an immediate set; mediaVolume cancels a running fade; a fade with no voice argument is a track (bus) fade, kept beside the track and not in a voice's fade field.",
+    "P-7": "Cue fields: media.play carries loop, flags (the loop bit), the starting positionTicks (the synced position for a synced start) and the voice's script volume; stop, pause, resume, seek, flags and fade carry the track and voice index (a bus fade or volume has voice null, the master volume has track null).",
+    "P-8": "Waits: a finite one-shot's wait reads the voice's current endTick (so a pause or a seek moves it); a pass wait wakes when the voice's pass index exceeds the index at creation; a wait whose voice is gone (stopped, finished, stolen, or replaced so the cue id differs) wakes at the next waits phase.",
+    "P-9": "Load: the cue counter is the larger of the current and the saved one; a resumed non-music voice's cue has tick = load tick minus its saved position and position 0, music's has the load tick and position 0; saving a voice with a running fade, loading a paused voice and loading with a thread parked in a wait are outside the oracle (a hard error).",
+    "P-10": "A same-file play on a single-voice track while playing is a recorded no-cue outcome (carry-on on music, ignored elsewhere); with tkMD_RESTART it is stop then play; on a paused single-voice track it is unruled.",
+    "P-11": "Legacy names resolve case-insensitively to media/<lower-case name>; each is evaluated as the standard call of 6.2's mapping table and records a legacy fact naming it.",
+    "P-12": "Video: playavi stops the music at the call tick (a media.stop only when a voice exists) and parks the thread; video.ended is stamped at the held tick, the row of the next consumed tick, whose waits phase wakes the thread and then posts a restart music.play (source video, retained file and loop flag, restart set) when the music track retained a file.",
+    "P-13": "Steal: the victim is the lowest priority, then the oldest startTick, then the lowest index (a paused voice counts as active with its stale start); the stolen index is stopped (media.stop) before the new play; a steal fact names the victim.",
+    "P-14": "A file no decoder accepts plays with length null and endTick null and raises one media.asset-format diagnostic at the play; a seek or a wait on an unknown length raises media.asset-length; a sync on one raises media.sync-source.",
+    "P-15": "Scripts give seconds as whole milliseconds; ticks = floor((ms x 60 + 500) / 1000), the exact integer form of floor(seconds x 60 + 1/2).",
+    "P-16": "Late runner: for a media.play the runner facts apply, in this order, the drop (finite, not looping, not music, lateness at least 15 ticks), then the loop modulo, then not starting a finite one-shot whose caught-up position reaches its length.",
+    "P-17": "Diagnostic choice where 6.2 lists several: a voice index at or above the configured count, or a voice with no occupant for a seek, fade or volume, is media.unknown-voice.",
+    "P-18": "A row lists the track (bus) volume or an active track fade only for tracks not at 100, the master volume only when not 100, and the script bank when set; none of them is read by a load."
+  },
+  "corpus": {
+    "source": "chrisbmatthews/rpgtoolkit @ 9191b9191c9bda0998c6faae16929b3331ed2ead and tk-reawakened/ludotheque @ 0489f5da225438f8fcd62d958711dc7bad7e8207 (fixtures/legacy/.fetched.json)",
+    "note": "Lengths are measured by tools/fixtures/audio/length.mjs, not by the core decoders; entry 6.5 must agree with them. The files are read only when fetched and are never committed.",
+    "wav": [
+      {
+        "path": "Basic/Media/die.wav",
+        "sha256": "8fa7f2a9b20ffa905224347f1bd6e733c68a5bbc2b45d34ab0b8262dadf681f2",
+        "codec": "pcm8",
+        "channels": 1,
+        "rate": 8000,
+        "frames": 7351,
+        "lengthTicks": 55
+      },
+      {
+        "path": "Basic/Media/fight.wav",
+        "sha256": "81aacc3e1b1855f2d06dbed26d42f8048ef3adf55250c264d07393b1aae5799d",
+        "codec": "pcm8",
+        "channels": 1,
+        "rate": 8000,
+        "frames": 2497,
+        "lengthTicks": 19
+      },
+      {
+        "path": "Basic/Media/hit.wav",
+        "sha256": "000c431ee48b31e06490dad5f650d84605c6432b89193ad5b76a3f2492b50844",
+        "codec": "pcm8",
+        "channels": 1,
+        "rate": 8000,
+        "frames": 3797,
+        "lengthTicks": 28
+      },
+      {
+        "path": "Basic/Media/item.wav",
+        "sha256": "bd1c21086fb9a8699f790920c0f92856eb08a5a90106d98461835d22b8e2d692",
+        "codec": "pcm8",
+        "channels": 1,
+        "rate": 8000,
+        "frames": 12938,
+        "lengthTicks": 97
+      },
+      {
+        "path": "Caoquest/Media/Knifewish.wav",
+        "sha256": "5f18c64ecbddda20e12152fe838663e27d278113275e85c1a5cbf9c4156eff3e",
+        "codec": "ima-adpcm",
+        "channels": 1,
+        "rate": 22050,
+        "frames": 3206,
+        "lengthTicks": 9
+      },
+      {
+        "path": "Caoquest/Media/boom.WAV",
+        "sha256": "0b0c1788829f7105b46747a2f36238fe4679a9f6ccf274f535e35d4ab3f83386",
+        "codec": "ms-adpcm",
+        "channels": 1,
+        "rate": 11025,
+        "frames": 10908,
+        "lengthTicks": 59
+      },
+      {
+        "path": "Caoquest/Media/slash.wav",
+        "sha256": "84856d1c8c78f7c16741094f7d1a8cdad8681f5331285bfa9dd7a9c1085b1d6f",
+        "codec": "ms-adpcm",
+        "channels": 1,
+        "rate": 11025,
+        "frames": 1812,
+        "lengthTicks": 10
+      }
+    ],
+    "midi": [
+      {
+        "path": "Basic/Media/VIP - Boss1.mid",
+        "sha256": "a0b43da36a074e28f1bfecdc7ed5263c2c8ac77bb470d4e9753dc1505b52e05c",
+        "type": 1,
+        "division": 120,
+        "dialect": "gm",
+        "bankSelect": false,
+        "lengthTicks": 13507
+      },
+      {
+        "path": "Basic/Media/VIP - Action.mid",
+        "sha256": "b83e2a9414f253dfd21cfb35ad68ebc17b259e56c8633c57260b73abb3b08df5",
+        "type": 0,
+        "division": 480,
+        "dialect": "xg",
+        "bankSelect": true,
+        "lengthTicks": 23369
+      },
+      {
+        "path": "Basic/Media/VIP - Battle1.mid",
+        "sha256": "09543041427b87c8d2225b6e6a619eb0d4078cdb43ce8a2ed27e7312cd0b2a6a",
+        "type": 0,
+        "division": 120,
+        "dialect": "gm",
+        "bankSelect": false,
+        "lengthTicks": 25869
+      },
+      {
+        "path": "Basic/Media/VIP -  Battle or Boss.mid",
+        "sha256": "af015ea22897823d61a1bd294d15efaf25d98e236460a8a053abf3f6eb79ad4b",
+        "type": 0,
+        "division": 120,
+        "dialect": "gm",
+        "bankSelect": true,
+        "lengthTicks": 19190
+      },
+      {
+        "path": "School2Demo/Media/school.mid",
+        "sha256": "79b039015210de13c710f3662c0a11a1fd5c531f4a3e578d1dcae4daf53f1244",
+        "type": 1,
+        "division": 120,
+        "dialect": "gs",
+        "bankSelect": true,
+        "lengthTicks": 15805
+      }
+    ]
+  }
+}

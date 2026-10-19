@@ -1,0 +1,164 @@
+{
+  "scene": "track-transport",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/audio, not by packages/core. No state or cue hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation, audio, time (AD-26). A row is the state at the end of the audio phase of its tick.",
+  "units": "ticks (1/60 s); volumes are integer percentages; seconds in scripts are whole milliseconds",
+  "row": "t tick; cfg [track, configured voices] (first tick and on change); tr [track, state, flags, file, positionTicks, lengthTicks, voices] for each track with a file or a voice; voice [index, state, cueId, priority, volume, startTick, positionTicks, endTick, loop, fade [from, to, start, duration] or null]; bus [track, volume, fade]; master; sf (script bank); cues (the 12-key AudioCue records emitted this tick); ev (facts: wait, wake, finished, steal, same-file, diag, legacy, video ...)",
+  "spec": [
+    "docs/spec/engine/audio-media.md#audio-state",
+    "docs/spec/engine/audio-media.md#audio-lifecycle",
+    "docs/spec/engine/audio-media.md#media-command-family",
+    "docs/spec/engine/audio-media.md#audio-time-model"
+  ],
+  "proposed": ["P-1","P-3","P-4","P-5","P-15","P-17"],
+  "cases": [
+    {
+      "name": "play-pause-resume-stop",
+      "note": "Pause holds the integer position (4) and the pass clock; resume continues from it with a new startTick; pausing a paused voice and resuming a playing one are no-ops (no cue); stop rewinds, retains file and flags, and a later play starts from zero.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {"media/song.mid":{"format":"audio.midi","lengthTicks":30},"media/sting.wav":{"format":"audio.wav","lengthTicks":20}},
+        "videos": []
+      },
+      "script": [
+        {"t":2,"op":"mediaPlay","file":"song.mid"},
+        {"t":6,"op":"mediaPause","track":"music"},
+        {"t":7,"op":"mediaPause","track":"music"},
+        {"t":9,"op":"mediaResume","track":"music"},
+        {"t":10,"op":"mediaResume","track":"music"},
+        {"t":15,"op":"mediaStop","track":"music"},
+        {"t":20,"op":"mediaPlay","file":"song.mid"}
+      ],
+      "ticks": 26,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[]},
+        {"t":2,"tr":[["music","playing",1,"media/song.mid",0,30,[[0,"playing",2,0,100,2,0,null,1,null]]]],"cues":[{"cueId":2,"tick":2,"kind":"media.play","track":"music","voice":0,"asset":"media/song.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["music","playing",1,"media/song.mid",1,30,[[0,"playing",2,0,100,2,1,null,1,null]]]]},
+        {"t":4,"tr":[["music","playing",1,"media/song.mid",2,30,[[0,"playing",2,0,100,2,2,null,1,null]]]]},
+        {"t":5,"tr":[["music","playing",1,"media/song.mid",3,30,[[0,"playing",2,0,100,2,3,null,1,null]]]]},
+        {"t":6,"tr":[["music","paused",1,"media/song.mid",4,30,[[0,"paused",2,0,100,2,4,null,1,null]]]],"cues":[{"cueId":3,"tick":6,"kind":"media.pause","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":7,"tr":[["music","paused",1,"media/song.mid",4,30,[[0,"paused",2,0,100,2,4,null,1,null]]]],"ev":[{"e":"no-op","op":"mediaPause","track":"music"}]},
+        {"t":8,"tr":[["music","paused",1,"media/song.mid",4,30,[[0,"paused",2,0,100,2,4,null,1,null]]]]},
+        {"t":9,"tr":[["music","playing",1,"media/song.mid",4,30,[[0,"playing",2,0,100,5,4,null,1,null]]]],"cues":[{"cueId":4,"tick":9,"kind":"media.resume","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":10,"tr":[["music","playing",1,"media/song.mid",5,30,[[0,"playing",2,0,100,5,5,null,1,null]]]],"ev":[{"e":"no-op","op":"mediaResume","track":"music"}]},
+        {"t":11,"tr":[["music","playing",1,"media/song.mid",6,30,[[0,"playing",2,0,100,5,6,null,1,null]]]]},
+        {"t":12,"tr":[["music","playing",1,"media/song.mid",7,30,[[0,"playing",2,0,100,5,7,null,1,null]]]]},
+        {"t":13,"tr":[["music","playing",1,"media/song.mid",8,30,[[0,"playing",2,0,100,5,8,null,1,null]]]]},
+        {"t":14,"tr":[["music","playing",1,"media/song.mid",9,30,[[0,"playing",2,0,100,5,9,null,1,null]]]]},
+        {"t":15,"tr":[["music","stopped",1,"media/song.mid",0,null,[]]],"cues":[{"cueId":5,"tick":15,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":16,"tr":[["music","stopped",1,"media/song.mid",0,null,[]]]},
+        {"t":17,"tr":[["music","stopped",1,"media/song.mid",0,null,[]]]},
+        {"t":18,"tr":[["music","stopped",1,"media/song.mid",0,null,[]]]},
+        {"t":19,"tr":[["music","stopped",1,"media/song.mid",0,null,[]]]},
+        {"t":20,"tr":[["music","playing",1,"media/song.mid",0,30,[[0,"playing",6,0,100,20,0,null,1,null]]]],"cues":[{"cueId":6,"tick":20,"kind":"media.play","track":"music","voice":0,"asset":"media/song.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":21,"tr":[["music","playing",1,"media/song.mid",1,30,[[0,"playing",6,0,100,20,1,null,1,null]]]]},
+        {"t":22,"tr":[["music","playing",1,"media/song.mid",2,30,[[0,"playing",6,0,100,20,2,null,1,null]]]]},
+        {"t":23,"tr":[["music","playing",1,"media/song.mid",3,30,[[0,"playing",6,0,100,20,3,null,1,null]]]]},
+        {"t":24,"tr":[["music","playing",1,"media/song.mid",4,30,[[0,"playing",6,0,100,20,4,null,1,null]]]]},
+        {"t":25,"tr":[["music","playing",1,"media/song.mid",5,30,[[0,"playing",6,0,100,20,5,null,1,null]]]]}
+      ],
+      "end": {"cueId":7,"soundFont":null,"master":100}
+    },
+    {
+      "name": "stop-retains-file-and-flags",
+      "note": "A stopped track keeps its last file and its loop flag (music reads looping, sfx once) and reports position 0 and an unknown length with no voice.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {"media/song.mid":{"format":"audio.midi","lengthTicks":30},"media/sting.wav":{"format":"audio.wav","lengthTicks":20}},
+        "videos": []
+      },
+      "script": [
+        {"t":1,"op":"mediaPlay","file":"song.mid"},
+        {"t":1,"op":"mediaPlay","file":"sting.wav","track":"sfx"},
+        {"t":4,"op":"mediaStop","track":"music"},
+        {"t":4,"op":"mediaStop","track":"sfx"}
+      ],
+      "ticks": 8,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/song.mid",0,30,[[0,"playing",2,0,100,1,0,null,1,null]]],["sfx","playing",0,"media/sting.wav",0,20,[[0,"playing",3,0,100,1,0,21,0,null]]]],"cues":[{"cueId":2,"tick":1,"kind":"media.play","track":"music","voice":0,"asset":"media/song.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":3,"tick":1,"kind":"media.play","track":"sfx","voice":0,"asset":"media/sting.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":2,"tr":[["music","playing",1,"media/song.mid",1,30,[[0,"playing",2,0,100,1,1,null,1,null]]],["sfx","playing",0,"media/sting.wav",1,20,[[0,"playing",3,0,100,1,1,21,0,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/song.mid",2,30,[[0,"playing",2,0,100,1,2,null,1,null]]],["sfx","playing",0,"media/sting.wav",2,20,[[0,"playing",3,0,100,1,2,21,0,null]]]]},
+        {"t":4,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/sting.wav",0,null,[]]],"cues":[{"cueId":4,"tick":4,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":5,"tick":4,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":5,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/sting.wav",0,null,[]]]},
+        {"t":6,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/sting.wav",0,null,[]]]},
+        {"t":7,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/sting.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":6,"soundFont":null,"master":100}
+    },
+    {
+      "name": "seek-clamps-wraps-and-rounds",
+      "note": "mediaSeek converts milliseconds with half-up rounding (25 ms = 1.5 ticks = 2). A one-shot clamps to its length and finishes in the same tick; a loop wraps modulo its length; the end tick moves with the seek.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {"media/song.mid":{"format":"audio.midi","lengthTicks":30},"media/sting.wav":{"format":"audio.wav","lengthTicks":20}},
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"mediaPlay","file":"song.mid"},
+        {"t":0,"op":"mediaPlay","file":"sting.wav","track":"sfx","flags":0},
+        {"t":3,"op":"mediaSeek","track":"sfx","ms":250},
+        {"t":4,"op":"mediaSeek","track":"music","ms":1000},
+        {"t":6,"op":"mediaSeek","track":"music","ms":750},
+        {"t":9,"op":"mediaSeek","track":"music","ms":25},
+        {"t":11,"op":"mediaPlay","file":"sting.wav","track":"sfx"},
+        {"t":12,"op":"mediaSeek","track":"sfx","ms":1000}
+      ],
+      "ticks": 16,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/song.mid",0,30,[[0,"playing",2,0,100,0,0,null,1,null]]],["sfx","playing",0,"media/sting.wav",0,20,[[0,"playing",3,0,100,0,0,20,0,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/song.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":3,"tick":0,"kind":"media.play","track":"sfx","voice":0,"asset":"media/sting.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/song.mid",1,30,[[0,"playing",2,0,100,0,1,null,1,null]]],["sfx","playing",0,"media/sting.wav",1,20,[[0,"playing",3,0,100,0,1,20,0,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/song.mid",2,30,[[0,"playing",2,0,100,0,2,null,1,null]]],["sfx","playing",0,"media/sting.wav",2,20,[[0,"playing",3,0,100,0,2,20,0,null]]]]},
+        {"t":3,"tr":[["music","playing",1,"media/song.mid",3,30,[[0,"playing",2,0,100,0,3,null,1,null]]],["sfx","playing",0,"media/sting.wav",15,20,[[0,"playing",3,0,100,-12,15,8,0,null]]]],"cues":[{"cueId":4,"tick":3,"kind":"media.seek","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":15,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":4,"tr":[["music","playing",1,"media/song.mid",0,30,[[0,"playing",2,0,100,4,0,null,1,null]]],["sfx","playing",0,"media/sting.wav",16,20,[[0,"playing",3,0,100,-12,16,8,0,null]]]],"cues":[{"cueId":5,"tick":4,"kind":"media.seek","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":0,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":5,"tr":[["music","playing",1,"media/song.mid",1,30,[[0,"playing",2,0,100,4,1,null,1,null]]],["sfx","playing",0,"media/sting.wav",17,20,[[0,"playing",3,0,100,-12,17,8,0,null]]]]},
+        {"t":6,"tr":[["music","playing",1,"media/song.mid",15,30,[[0,"playing",2,0,100,-9,15,null,1,null]]],["sfx","playing",0,"media/sting.wav",18,20,[[0,"playing",3,0,100,-12,18,8,0,null]]]],"cues":[{"cueId":6,"tick":6,"kind":"media.seek","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":15,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":7,"tr":[["music","playing",1,"media/song.mid",16,30,[[0,"playing",2,0,100,-9,16,null,1,null]]],["sfx","playing",0,"media/sting.wav",19,20,[[0,"playing",3,0,100,-12,19,8,0,null]]]]},
+        {"t":8,"tr":[["music","playing",1,"media/song.mid",17,30,[[0,"playing",2,0,100,-9,17,null,1,null]]],["sfx","stopped",0,"media/sting.wav",0,null,[]]],"cues":[{"cueId":7,"tick":8,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":3,"endTick":8}]},
+        {"t":9,"tr":[["music","playing",1,"media/song.mid",2,30,[[0,"playing",2,0,100,7,2,null,1,null]]],["sfx","stopped",0,"media/sting.wav",0,null,[]]],"cues":[{"cueId":8,"tick":9,"kind":"media.seek","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":2,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":10,"tr":[["music","playing",1,"media/song.mid",3,30,[[0,"playing",2,0,100,7,3,null,1,null]]],["sfx","stopped",0,"media/sting.wav",0,null,[]]]},
+        {"t":11,"tr":[["music","playing",1,"media/song.mid",4,30,[[0,"playing",2,0,100,7,4,null,1,null]]],["sfx","playing",0,"media/sting.wav",0,20,[[0,"playing",9,0,100,11,0,31,0,null]]]],"cues":[{"cueId":9,"tick":11,"kind":"media.play","track":"sfx","voice":0,"asset":"media/sting.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":12,"tr":[["music","playing",1,"media/song.mid",5,30,[[0,"playing",2,0,100,7,5,null,1,null]]],["sfx","stopped",0,"media/sting.wav",0,null,[]]],"cues":[{"cueId":10,"tick":12,"kind":"media.seek","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":20,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":11,"tick":12,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":9,"endTick":12}]},
+        {"t":13,"tr":[["music","playing",1,"media/song.mid",6,30,[[0,"playing",2,0,100,7,6,null,1,null]]],["sfx","stopped",0,"media/sting.wav",0,null,[]]]},
+        {"t":14,"tr":[["music","playing",1,"media/song.mid",7,30,[[0,"playing",2,0,100,7,7,null,1,null]]],["sfx","stopped",0,"media/sting.wav",0,null,[]]]},
+        {"t":15,"tr":[["music","playing",1,"media/song.mid",8,30,[[0,"playing",2,0,100,7,8,null,1,null]]],["sfx","stopped",0,"media/sting.wav",0,null,[]]]}
+      ],
+      "end": {"cueId":12,"soundFont":null,"master":100}
+    },
+    {
+      "name": "diagnostics-leave-state-untouched",
+      "note": "A missing file, an unknown track and an unknown voice each raise one located diagnostic and change nothing (no cue, no state). A file no decoder accepts does play, with one media.asset-format diagnostic; a seek on it (unknown length) and a negative seek time are then diagnosed and leave the voice as it was.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/song.mid": {"format":"audio.midi","lengthTicks":30},
+          "media/sting.wav": {"format":"audio.wav","lengthTicks":20},
+          "media/song.xm": {"format":"unsupported","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":1,"op":"mediaPlay","file":"nofile.wav","track":"sfx"},
+        {"t":2,"op":"mediaPlay","file":"sting.wav","track":"nosuch"},
+        {"t":3,"op":"mediaStop","track":"music","voice":3},
+        {"t":4,"op":"mediaPlay","file":"song.xm"},
+        {"t":5,"op":"mediaSeek","track":"music","ms":500},
+        {"t":6,"op":"mediaSeek","track":"music","ms":-1}
+      ],
+      "ticks": 8,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[],"ev":[{"e":"diag","code":"media.asset-missing","op":"mediaPlay","file":"media/nofile.wav"}]},
+        {"t":2,"tr":[],"ev":[{"e":"diag","code":"media.unknown-track","op":"mediaPlay","track":"nosuch"}]},
+        {"t":3,"tr":[],"ev":[{"e":"diag","code":"media.unknown-voice","op":"mediaStop","track":"music","voice":3}]},
+        {"t":4,"tr":[["music","playing",1,"media/song.xm",0,null,[[0,"playing",2,0,100,4,0,null,1,null]]]],"cues":[{"cueId":2,"tick":4,"kind":"media.play","track":"music","voice":0,"asset":"media/song.xm","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"diag","code":"media.asset-format","op":"mediaPlay","file":"media/song.xm"}]},
+        {"t":5,"tr":[["music","playing",1,"media/song.xm",1,null,[[0,"playing",2,0,100,4,1,null,1,null]]]],"ev":[{"e":"diag","code":"media.asset-length","op":"mediaSeek","track":"music","voice":0}]},
+        {"t":6,"tr":[["music","playing",1,"media/song.xm",2,null,[[0,"playing",2,0,100,4,2,null,1,null]]]],"ev":[{"e":"diag","code":"media.invalid-time","op":"mediaSeek","ms":-1}]},
+        {"t":7,"tr":[["music","playing",1,"media/song.xm",3,null,[[0,"playing",2,0,100,4,3,null,1,null]]]]}
+      ],
+      "end": {"cueId":3,"soundFont":null,"master":100}
+    }
+  ]
+}

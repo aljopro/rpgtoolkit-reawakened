@@ -1,0 +1,163 @@
+{
+  "scene": "settings-versus-save",
+  "schema": 1,
+  "note": "Authored from docs/spec; expected facts are derived by tools/fixtures/audio, not by packages/core. No state or cue hashes: later entries assert those.",
+  "tick": "60 Hz fixed; phases input, waits, threads, movement, edges, triggers, battle, animation, audio, time (AD-26). A row is the state at the end of the audio phase of its tick.",
+  "units": "ticks (1/60 s); volumes are integer percentages; seconds in scripts are whole milliseconds",
+  "row": "t tick; cfg [track, configured voices] (first tick and on change); tr [track, state, flags, file, positionTicks, lengthTicks, voices] for each track with a file or a voice; voice [index, state, cueId, priority, volume, startTick, positionTicks, endTick, loop, fade [from, to, start, duration] or null]; bus [track, volume, fade]; master; sf (script bank); cues (the 12-key AudioCue records emitted this tick); ev (facts: wait, wake, finished, steal, same-file, diag, legacy, video ...)",
+  "spec": [
+    "docs/spec/engine/audio-media.md#audio-state",
+    "docs/spec/engine/audio-media.md#audio-save-load",
+    "docs/spec/engine/audio-media.md#soundfont-commands",
+    "docs/spec/engine/audio-media.md#audio-cue-contract"
+  ],
+  "proposed": ["P-9","P-18"],
+  "cases": [
+    {
+      "name": "save-and-load-restore-playback-not-settings",
+      "note": "Saved at tick 10 and loaded at tick 20. The load re-emits soundfont.set first (the saved script bank), then music (restarted from zero at the load tick, loop kept), then non-music voices in track order at their saved positions (ambience 8 of 12, sfx 6 of 40: cue tick = load tick minus position, position 0). The master volume and the music bus volume changed after the save keep their newer values: settings are neither saved nor loaded. Cue ids go on from the counter.",
+      "setup": {
+        "defaultSoundFont": "media/town.sf2",
+        "assets": {
+          "media/song.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":40},
+          "media/short.wav": {"format":"audio.wav","lengthTicks":5},
+          "media/other.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/boss.sf2": {"format":"soundfont","lengthTicks":null},
+          "media/town.sf2": {"format":"soundfont","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/song.mid","loop":true,"restart":false,"source":"board"},
+        {"t":1,"op":"soundFont","file":"boss.sf2"},
+        {"t":2,"op":"mediaPlay","file":"loop.wav","track":"ambience","flags":1},
+        {"t":3,"op":"setvolume","percent":80},
+        {"t":3,"op":"mediaVolume","track":"music","percent":60},
+        {"t":4,"op":"mediaPlay","file":"hit.wav","track":"sfx"},
+        {"t":10,"op":"save","at":"post","name":"s"},
+        {"t":12,"op":"setvolume","percent":30},
+        {"t":12,"op":"mediaVolume","track":"music","percent":90},
+        {"t":13,"op":"soundFontReset"},
+        {"t":15,"op":"mediaStop","track":"music"},
+        {"t":20,"op":"load","at":"pre","save":"s"}
+      ],
+      "ticks": 24,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/song.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/song.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/song.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]],"sf":"media/boss.sf2","cues":[{"cueId":3,"tick":1,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":2,"tr":[["music","playing",1,"media/song.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]],["ambience","playing",1,"media/loop.wav",0,12,[[0,"playing",4,0,100,2,0,null,1,null]]]],"sf":"media/boss.sf2","cues":[{"cueId":4,"tick":2,"kind":"media.play","track":"ambience","voice":0,"asset":"media/loop.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["music","playing",1,"media/song.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]],["ambience","playing",1,"media/loop.wav",1,12,[[0,"playing",4,0,100,2,1,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2","cues":[{"cueId":5,"tick":3,"kind":"media.volume","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":80,"targetVolume":null,"durationTicks":null},{"cueId":6,"tick":3,"kind":"media.volume","track":"music","voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":60,"targetVolume":null,"durationTicks":null}]},
+        {"t":4,"tr":[["music","playing",1,"media/song.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]],["sfx","playing",0,"media/hit.wav",0,40,[[0,"playing",7,0,100,4,0,44,0,null]]],["ambience","playing",1,"media/loop.wav",2,12,[[0,"playing",4,0,100,2,2,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2","cues":[{"cueId":7,"tick":4,"kind":"media.play","track":"sfx","voice":0,"asset":"media/hit.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":5,"tr":[["music","playing",1,"media/song.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]],["sfx","playing",0,"media/hit.wav",1,40,[[0,"playing",7,0,100,4,1,44,0,null]]],["ambience","playing",1,"media/loop.wav",3,12,[[0,"playing",4,0,100,2,3,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2"},
+        {"t":6,"tr":[["music","playing",1,"media/song.mid",6,40,[[0,"playing",2,0,100,0,6,null,1,null]]],["sfx","playing",0,"media/hit.wav",2,40,[[0,"playing",7,0,100,4,2,44,0,null]]],["ambience","playing",1,"media/loop.wav",4,12,[[0,"playing",4,0,100,2,4,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2"},
+        {"t":7,"tr":[["music","playing",1,"media/song.mid",7,40,[[0,"playing",2,0,100,0,7,null,1,null]]],["sfx","playing",0,"media/hit.wav",3,40,[[0,"playing",7,0,100,4,3,44,0,null]]],["ambience","playing",1,"media/loop.wav",5,12,[[0,"playing",4,0,100,2,5,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2"},
+        {"t":8,"tr":[["music","playing",1,"media/song.mid",8,40,[[0,"playing",2,0,100,0,8,null,1,null]]],["sfx","playing",0,"media/hit.wav",4,40,[[0,"playing",7,0,100,4,4,44,0,null]]],["ambience","playing",1,"media/loop.wav",6,12,[[0,"playing",4,0,100,2,6,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2"},
+        {"t":9,"tr":[["music","playing",1,"media/song.mid",9,40,[[0,"playing",2,0,100,0,9,null,1,null]]],["sfx","playing",0,"media/hit.wav",5,40,[[0,"playing",7,0,100,4,5,44,0,null]]],["ambience","playing",1,"media/loop.wav",7,12,[[0,"playing",4,0,100,2,7,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2"},
+        {"t":10,"tr":[["music","playing",1,"media/song.mid",10,40,[[0,"playing",2,0,100,0,10,null,1,null]]],["sfx","playing",0,"media/hit.wav",6,40,[[0,"playing",7,0,100,4,6,44,0,null]]],["ambience","playing",1,"media/loop.wav",8,12,[[0,"playing",4,0,100,2,8,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2"},
+        {"t":11,"tr":[["music","playing",1,"media/song.mid",11,40,[[0,"playing",2,0,100,0,11,null,1,null]]],["sfx","playing",0,"media/hit.wav",7,40,[[0,"playing",7,0,100,4,7,44,0,null]]],["ambience","playing",1,"media/loop.wav",9,12,[[0,"playing",4,0,100,2,9,null,1,null]]]],"bus":[["music",60,null]],"master":80,"sf":"media/boss.sf2"},
+        {"t":12,"tr":[["music","playing",1,"media/song.mid",12,40,[[0,"playing",2,0,100,0,12,null,1,null]]],["sfx","playing",0,"media/hit.wav",8,40,[[0,"playing",7,0,100,4,8,44,0,null]]],["ambience","playing",1,"media/loop.wav",10,12,[[0,"playing",4,0,100,2,10,null,1,null]]]],"bus":[["music",90,null]],"master":30,"sf":"media/boss.sf2","cues":[{"cueId":8,"tick":12,"kind":"media.volume","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":30,"targetVolume":null,"durationTicks":null},{"cueId":9,"tick":12,"kind":"media.volume","track":"music","voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":90,"targetVolume":null,"durationTicks":null}]},
+        {"t":13,"tr":[["music","playing",1,"media/song.mid",13,40,[[0,"playing",2,0,100,0,13,null,1,null]]],["sfx","playing",0,"media/hit.wav",9,40,[[0,"playing",7,0,100,4,9,44,0,null]]],["ambience","playing",1,"media/loop.wav",11,12,[[0,"playing",4,0,100,2,11,null,1,null]]]],"bus":[["music",90,null]],"master":30,"cues":[{"cueId":10,"tick":13,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":14,"tr":[["music","playing",1,"media/song.mid",14,40,[[0,"playing",2,0,100,0,14,null,1,null]]],["sfx","playing",0,"media/hit.wav",10,40,[[0,"playing",7,0,100,4,10,44,0,null]]],["ambience","playing",1,"media/loop.wav",0,12,[[0,"playing",4,0,100,2,0,null,1,null]]]],"bus":[["music",90,null]],"master":30},
+        {"t":15,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","playing",0,"media/hit.wav",11,40,[[0,"playing",7,0,100,4,11,44,0,null]]],["ambience","playing",1,"media/loop.wav",1,12,[[0,"playing",4,0,100,2,1,null,1,null]]]],"bus":[["music",90,null]],"master":30,"cues":[{"cueId":11,"tick":15,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":16,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","playing",0,"media/hit.wav",12,40,[[0,"playing",7,0,100,4,12,44,0,null]]],["ambience","playing",1,"media/loop.wav",2,12,[[0,"playing",4,0,100,2,2,null,1,null]]]],"bus":[["music",90,null]],"master":30},
+        {"t":17,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","playing",0,"media/hit.wav",13,40,[[0,"playing",7,0,100,4,13,44,0,null]]],["ambience","playing",1,"media/loop.wav",3,12,[[0,"playing",4,0,100,2,3,null,1,null]]]],"bus":[["music",90,null]],"master":30},
+        {"t":18,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","playing",0,"media/hit.wav",14,40,[[0,"playing",7,0,100,4,14,44,0,null]]],["ambience","playing",1,"media/loop.wav",4,12,[[0,"playing",4,0,100,2,4,null,1,null]]]],"bus":[["music",90,null]],"master":30},
+        {"t":19,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","playing",0,"media/hit.wav",15,40,[[0,"playing",7,0,100,4,15,44,0,null]]],["ambience","playing",1,"media/loop.wav",5,12,[[0,"playing",4,0,100,2,5,null,1,null]]]],"bus":[["music",90,null]],"master":30},
+        {"t":20,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/song.mid",0,40,[[0,"playing",13,0,100,20,0,null,1,null]]],["sfx","playing",0,"media/hit.wav",6,40,[[0,"playing",14,0,100,14,6,54,0,null]]],["ambience","playing",1,"media/loop.wav",8,12,[[0,"playing",15,0,100,12,8,null,1,null]]]],"bus":[["music",90,null]],"master":30,"sf":"media/boss.sf2","cues":[{"cueId":12,"tick":20,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":13,"tick":20,"kind":"media.play","track":"music","voice":0,"asset":"media/song.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":14,"tick":14,"kind":"media.play","track":"sfx","voice":0,"asset":"media/hit.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null},{"cueId":15,"tick":12,"kind":"media.play","track":"ambience","voice":0,"asset":"media/loop.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"load"}]},
+        {"t":21,"tr":[["music","playing",1,"media/song.mid",1,40,[[0,"playing",13,0,100,20,1,null,1,null]]],["sfx","playing",0,"media/hit.wav",7,40,[[0,"playing",14,0,100,14,7,54,0,null]]],["ambience","playing",1,"media/loop.wav",9,12,[[0,"playing",15,0,100,12,9,null,1,null]]]],"bus":[["music",90,null]],"master":30,"sf":"media/boss.sf2"},
+        {"t":22,"tr":[["music","playing",1,"media/song.mid",2,40,[[0,"playing",13,0,100,20,2,null,1,null]]],["sfx","playing",0,"media/hit.wav",8,40,[[0,"playing",14,0,100,14,8,54,0,null]]],["ambience","playing",1,"media/loop.wav",10,12,[[0,"playing",15,0,100,12,10,null,1,null]]]],"bus":[["music",90,null]],"master":30,"sf":"media/boss.sf2"},
+        {"t":23,"tr":[["music","playing",1,"media/song.mid",3,40,[[0,"playing",13,0,100,20,3,null,1,null]]],["sfx","playing",0,"media/hit.wav",9,40,[[0,"playing",14,0,100,14,9,54,0,null]]],["ambience","playing",1,"media/loop.wav",11,12,[[0,"playing",15,0,100,12,11,null,1,null]]]],"bus":[["music",90,null]],"master":30,"sf":"media/boss.sf2"}
+      ],
+      "end": {"cueId":16,"soundFont":"media/boss.sf2","master":30}
+    },
+    {
+      "name": "stopped-tracks-stay-stopped-after-load",
+      "note": "A stopped music track (file retained) and a one-shot that had already finished are not re-emitted by a load; only the playing ambience voice is, at its saved position.",
+      "setup": {
+        "defaultSoundFont": null,
+        "assets": {
+          "media/song.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":40},
+          "media/short.wav": {"format":"audio.wav","lengthTicks":5},
+          "media/other.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/boss.sf2": {"format":"soundfont","lengthTicks":null},
+          "media/town.sf2": {"format":"soundfont","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/song.mid","loop":true,"restart":false,"source":"board"},
+        {"t":1,"op":"mediaPlay","file":"short.wav","track":"sfx"},
+        {"t":2,"op":"mediaPlay","file":"loop.wav","track":"ambience","flags":1},
+        {"t":4,"op":"mediaStop","track":"music"},
+        {"t":7,"op":"save","at":"post","name":"s"},
+        {"t":10,"op":"load","at":"pre","save":"s"}
+      ],
+      "ticks": 13,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/song.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/song.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/song.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]],["sfx","playing",0,"media/short.wav",0,5,[[0,"playing",3,0,100,1,0,6,0,null]]]],"cues":[{"cueId":3,"tick":1,"kind":"media.play","track":"sfx","voice":0,"asset":"media/short.wav","loop":false,"flags":0,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":2,"tr":[["music","playing",1,"media/song.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]],["sfx","playing",0,"media/short.wav",1,5,[[0,"playing",3,0,100,1,1,6,0,null]]],["ambience","playing",1,"media/loop.wav",0,12,[[0,"playing",4,0,100,2,0,null,1,null]]]],"cues":[{"cueId":4,"tick":2,"kind":"media.play","track":"ambience","voice":0,"asset":"media/loop.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["music","playing",1,"media/song.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]],["sfx","playing",0,"media/short.wav",2,5,[[0,"playing",3,0,100,1,2,6,0,null]]],["ambience","playing",1,"media/loop.wav",1,12,[[0,"playing",4,0,100,2,1,null,1,null]]]]},
+        {"t":4,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","playing",0,"media/short.wav",3,5,[[0,"playing",3,0,100,1,3,6,0,null]]],["ambience","playing",1,"media/loop.wav",2,12,[[0,"playing",4,0,100,2,2,null,1,null]]]],"cues":[{"cueId":5,"tick":4,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":5,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","playing",0,"media/short.wav",4,5,[[0,"playing",3,0,100,1,4,6,0,null]]],["ambience","playing",1,"media/loop.wav",3,12,[[0,"playing",4,0,100,2,3,null,1,null]]]]},
+        {"t":6,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/short.wav",0,null,[]],["ambience","playing",1,"media/loop.wav",4,12,[[0,"playing",4,0,100,2,4,null,1,null]]]],"cues":[{"cueId":6,"tick":6,"kind":"media.stop","track":"sfx","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"finished","track":"sfx","voice":0,"cueId":3,"endTick":6}]},
+        {"t":7,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/short.wav",0,null,[]],["ambience","playing",1,"media/loop.wav",5,12,[[0,"playing",4,0,100,2,5,null,1,null]]]]},
+        {"t":8,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/short.wav",0,null,[]],["ambience","playing",1,"media/loop.wav",6,12,[[0,"playing",4,0,100,2,6,null,1,null]]]]},
+        {"t":9,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/short.wav",0,null,[]],["ambience","playing",1,"media/loop.wav",7,12,[[0,"playing",4,0,100,2,7,null,1,null]]]]},
+        {"t":10,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/short.wav",0,null,[]],["ambience","playing",1,"media/loop.wav",5,12,[[0,"playing",8,0,100,5,5,null,1,null]]]],"cues":[{"cueId":7,"tick":10,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":8,"tick":5,"kind":"media.play","track":"ambience","voice":0,"asset":"media/loop.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"load"}]},
+        {"t":11,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/short.wav",0,null,[]],["ambience","playing",1,"media/loop.wav",6,12,[[0,"playing",8,0,100,5,6,null,1,null]]]]},
+        {"t":12,"tr":[["music","stopped",1,"media/song.mid",0,null,[]],["sfx","stopped",0,"media/short.wav",0,null,[]],["ambience","playing",1,"media/loop.wav",7,12,[[0,"playing",8,0,100,5,7,null,1,null]]]]}
+      ],
+      "end": {"cueId":9,"soundFont":null,"master":100}
+    },
+    {
+      "name": "reset-leaves-audio-untouched",
+      "note": "reset() changes nothing in the audio section (playing music, the script bank and the volume settings stay); the board entry that follows is a same-file request and carries on without restarting. Another board's music replaces it normally.",
+      "setup": {
+        "defaultSoundFont": "media/town.sf2",
+        "assets": {
+          "media/song.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/loop.wav": {"format":"audio.wav","lengthTicks":12},
+          "media/hit.wav": {"format":"audio.wav","lengthTicks":40},
+          "media/short.wav": {"format":"audio.wav","lengthTicks":5},
+          "media/other.mid": {"format":"audio.midi","lengthTicks":40},
+          "media/boss.sf2": {"format":"soundfont","lengthTicks":null},
+          "media/town.sf2": {"format":"soundfont","lengthTicks":null}
+        },
+        "videos": []
+      },
+      "script": [
+        {"t":0,"op":"effect","kind":"music.play","asset":"media/song.mid","loop":true,"restart":false,"source":"board"},
+        {"t":2,"op":"setvolume","percent":70},
+        {"t":2,"op":"mediaVolume","track":"sfx","percent":40},
+        {"t":3,"op":"soundFont","file":"boss.sf2"},
+        {"t":10,"op":"reset","at":"pre"},
+        {"t":10,"op":"effect","kind":"music.play","asset":"media/song.mid","loop":true,"restart":false,"source":"board"},
+        {"t":12,"op":"effect","kind":"music.play","asset":"media/other.mid","loop":true,"restart":false,"source":"board"}
+      ],
+      "ticks": 15,
+      "expect": [
+        {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/song.mid",0,40,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"music","voice":0,"asset":"media/song.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":1,"tr":[["music","playing",1,"media/song.mid",1,40,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
+        {"t":2,"tr":[["music","playing",1,"media/song.mid",2,40,[[0,"playing",2,0,100,0,2,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"cues":[{"cueId":3,"tick":2,"kind":"media.volume","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":70,"targetVolume":null,"durationTicks":null},{"cueId":4,"tick":2,"kind":"media.volume","track":"sfx","voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":40,"targetVolume":null,"durationTicks":null}]},
+        {"t":3,"tr":[["music","playing",1,"media/song.mid",3,40,[[0,"playing",2,0,100,0,3,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2","cues":[{"cueId":5,"tick":3,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
+        {"t":4,"tr":[["music","playing",1,"media/song.mid",4,40,[[0,"playing",2,0,100,0,4,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"},
+        {"t":5,"tr":[["music","playing",1,"media/song.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"},
+        {"t":6,"tr":[["music","playing",1,"media/song.mid",6,40,[[0,"playing",2,0,100,0,6,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"},
+        {"t":7,"tr":[["music","playing",1,"media/song.mid",7,40,[[0,"playing",2,0,100,0,7,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"},
+        {"t":8,"tr":[["music","playing",1,"media/song.mid",8,40,[[0,"playing",2,0,100,0,8,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"},
+        {"t":9,"tr":[["music","playing",1,"media/song.mid",9,40,[[0,"playing",2,0,100,0,9,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"},
+        {"t":10,"tr":[["music","playing",1,"media/song.mid",10,40,[[0,"playing",2,0,100,0,10,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2","ev":[{"e":"reset"},{"e":"same-file","track":"music","file":"media/song.mid","action":"carry-on"}]},
+        {"t":11,"tr":[["music","playing",1,"media/song.mid",11,40,[[0,"playing",2,0,100,0,11,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"},
+        {"t":12,"tr":[["music","playing",1,"media/other.mid",0,40,[[0,"playing",7,0,100,12,0,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2","cues":[{"cueId":6,"tick":12,"kind":"media.stop","track":"music","voice":0,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":7,"tick":12,"kind":"media.play","track":"music","voice":0,"asset":"media/other.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
+        {"t":13,"tr":[["music","playing",1,"media/other.mid",1,40,[[0,"playing",7,0,100,12,1,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"},
+        {"t":14,"tr":[["music","playing",1,"media/other.mid",2,40,[[0,"playing",7,0,100,12,2,null,1,null]]]],"bus":[["sfx",40,null]],"master":70,"sf":"media/boss.sf2"}
+      ],
+      "end": {"cueId":8,"soundFont":"media/boss.sf2","master":70}
+    }
+  ]
+}

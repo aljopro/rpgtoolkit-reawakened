@@ -44,12 +44,19 @@
 //     triggers, events) derived by that directory's own reference simulation.
 //     No state or draw hashes; no import from `packages/core` (the check below
 //     scans for one). Written to `packages/core/test/fixtures/movement/`.
+//   * the audio oracle's fifteen named scenes and authored WAV/MIDI files (ticket 6.4,
+//     `tools/fixtures/audio/`): recorded effect, command and input scripts with expected
+//     per-tick track states, cues, wait wake-ups and end events derived by that
+//     directory's own reference timeline, plus tiny PCM, MS-ADPCM, IMA-ADPCM and MIDI files
+//     with hand-worked lengths. No state or cue hashes; no import from `packages/core`.
+//     Written to `packages/core/test/fixtures/audio/`.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendCmp1, ascii, buildZip, concat, le16, le32 } from "./zip.mjs";
 import { MOVEMENT_OUT, checkMovementCorpus, checkMovementImports, movementFixtureFiles } from "../movement/index.mjs";
+import { AUDIO_OUT, audioFixtureFiles, checkAudioCorpus, checkAudioFiles, checkAudioImports } from "../audio/index.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..", "..");
@@ -930,6 +937,28 @@ function checkMovementFixtures(dir) {
   return problems;
 }
 
+/** Where the audio oracle's scenes and authored files go: beside `authored/` by default, else under the output directory. */
+function audioOut(out) {
+  return out === defaultOut ? AUDIO_OUT : join(out, "audio");
+}
+
+function writeAudioFixtures(dir) {
+  for (const [name, bytes] of audioFixtureFiles()) {
+    mkdirSync(dirname(join(dir, name)), { recursive: true });
+    writeFileSync(join(dir, name), bytes);
+  }
+}
+
+function checkAudioFixtures(dir) {
+  const problems = [];
+  for (const [name, expected] of audioFixtureFiles()) {
+    let actual;
+    try { actual = readFileSync(join(dir, name)); } catch { problems.push(`audio/${name}: missing`); continue; }
+    if (!actual.equals(expected)) problems.push(`audio/${name}: differs from a fresh run`);
+  }
+  return problems;
+}
+
 /** Write every authored fixture and oracle scene under their canonical output paths. */
 export function generate(out = defaultOut) {
   mkdirSync(out, { recursive: true });
@@ -940,6 +969,7 @@ export function generate(out = defaultOut) {
   }
   if (out === defaultOut) writeOracleScenes();
   writeMovementFixtures(movementOut(out));
+  writeAudioFixtures(audioOut(out));
   return out;
 }
 
@@ -967,6 +997,7 @@ export function check(out = defaultOut) {
   }
   if (out === defaultOut) problems.push(...checkOracleScenes());
   problems.push(...checkMovementFixtures(movementOut(out)), ...checkMovementImports(), ...checkMovementCorpus());
+  problems.push(...checkAudioFixtures(audioOut(out)), ...checkAudioFiles(), ...checkAudioImports(), ...checkAudioCorpus());
   return problems;
 }
 
@@ -986,7 +1017,7 @@ function main(argv) {
     return 0;
   }
   generate(out);
-  console.log(`wrote ${authoredFixtures().length} authored fixtures and ${movementFixtureFiles().length} movement oracle files to ${out}`);
+  console.log(`wrote ${authoredFixtures().length} authored fixtures, ${movementFixtureFiles().length} movement oracle files and ${audioFixtureFiles().length} audio oracle files to ${out}`);
   return 0;
 }
 
