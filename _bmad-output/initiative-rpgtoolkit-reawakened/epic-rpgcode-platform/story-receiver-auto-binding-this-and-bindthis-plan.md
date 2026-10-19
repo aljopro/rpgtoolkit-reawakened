@@ -3,34 +3,93 @@ title: "Receiver auto-binding, this and bindThis"
 type: 'feature'
 ticket: 4
 created: '2026-10-19'
-status: draft
-baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
+status: built
+baseline_revision: 'd5564edfe11da102e931151de74c34e47ee3ab8e'
+route: 'full'
+route_source: 'auto'
 risk: "high"
+review: ''
+review_source: ''
+lenses_ran: []
+review_loop_iteration: 0
 context:
-  - "spec - docs/spec/engine/rpgcode-modules-and-objects.md (OOP-11)"
-  - "adr - docs/adr/0004-script-ast-step-ir-and-plugins.md, decision 8"
-  - "code - packages/core/src/script/values.ts (CallableValue), vm.ts, builtins/"
+  - "docs/guardrails.md"
+  - "docs/spec/engine/rpgcode-modules-and-objects.md"
+  - "docs/adr/0004-script-ast-step-ir-and-plugins.md"
+  - "docs/adr/0009-compatibility-layer-not-the-model.md"
 ---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent
 
-Build `OP_GET_MEMBER_BOUND` (ADR 0004 decision 8: member access auto-binds the receiver) and make the `receiver` field that 18.6 only validates for shape do real work, and decide what keeps a receiver's object alive (18.6 left this to this entry; the 19.1 ruling states the rule).
+**Problem:** Callable records already carry a nullable receiver, but the compiler emits an unbound member read, invocation does not install `this`, collection ignores receiver edges, and no `bindThis` command exists. Consequently dictionary methods cannot be safely torn off, called through `d.fn()`, saved/restored, or kept alive by their callable alone.
 
-## Boundaries
+**Approach:** Add a real `OP_GET_MEMBER_BOUND` step for dot/arrow reads, binding only receiver-less callables; make callable invocation install the receiver frame context; add `bindThis(fn, obj)` as a new documented core builtin; and include callable receiver handles in reachability and restore validation.
 
-Receivers and `bindThis` only. The implicit-this method step of legacy classes keeps its place (18.5 flagged it); aligning it is entry 5's decision at most.
+## Boundaries & Constraints
 
-## Key Decisions
+**Always:** Preserve non-null receivers through member reads; standalone lambdas expose `this = null`; all runtime failures are catchable `ScriptError`s with source positions; dictionary member calls dispatch callable values; state remains plain JSON and legacy implicit-method dispatch remains unchanged.
 
-1. `OP_GET_MEMBER_BOUND` is a real step-IR opcode, emitted by the compiler for `.` and `->` member reads of callables; it is not simulated by a later pass.
-2. A callable keeps its receiver alive as a root in the collection pass.
+**Never:** Do not realign legacy classes (ticket 19.5), add namespace/package dispatch (19.7), mutate the original callable in `bindThis`, or introduce a second object/runtime representation.
 
-## Acceptance
+## I/O & Edge-Case Matrix
 
-1. `OP_GET_MEMBER_BOUND` exists in the step IR and is the path for `.` and `->` reads (asserted by an IR test); auto-binding behaves per the ruling.
-2. `bindThis` rebinding and error cases (non-callable, non-object receiver) are catchable located errors.
-3. `pnpm catalogue:check` and `pnpm command-docs:check` pass with the new built-in.
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| Dictionary method | `d={n:2, f:()=>this.n}; d.f()` | Returns 2; direct call and tear-off retain receiver | No error |
+| Rebind | `g=bindThis(d.f, e)` | New handle has `receiver=e`; `d.f` is unchanged | No error |
+| Standalone | `f=()=>this` | `this` is null/unset per value rules | No error |
+| Invalid bind | `bindThis(1, d)` or `bindThis(f, 1)` | Statement fails at call source line | Catchable located `callable.not-callable` / `object.invalid` |
+| Collection/restore | Only a reachable callable names object receiver | Receiver object survives collection and restored handle reproduces it | Malformed/unknown handle remains typed |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `packages/core/src/script/ops.ts` -- add the explicit bound-member step variant and stack effect.
+- `packages/core/src/script/lower.ts` -- emit the bound step for member reads and retain direct method-call lowering for legacy methods.
+- `packages/core/src/script/vm.ts` -- execute bound reads, dictionary callable method calls, install callable receivers in frames, implement `bindThis`, and include receiver edges in object reachability.
+- `packages/core/src/script/cells.ts` and `packages/core/src/script/restore-check.ts` -- walk receiver-bearing callables for collection and program-aware restore checks.
+- `packages/core/src/script/builtins/pure.ts`, `builtins.ts`, `docs/spec/engine/rpgcode-functions.md`, and catalogue metadata -- register and document `bindThis`.
+- `packages/core/test/` -- IR, runtime, error, GC, save/restore, and authored dictionary smoke coverage; reuse existing `makeState`/`advanceOrFail` helpers.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] Add `get_member_bound`/`OP_GET_MEMBER_BOUND` stack semantics and compiler emission for `.`/`->` reads.
+- [x] Bind callable values without overwriting existing receivers; dispatch dictionary `d.fn()` through the callable path.
+- [x] Apply receiver context to callable frames so `this` reads the object, and add the pure-data `bindThis` command with validation.
+- [x] Treat receiver handles as object roots and preserve them through save/restore validation.
+- [x] Register docs/catalogue metadata and add focused tests plus an authored VM smoke fixture.
+
+**Acceptance Criteria:**
+- Given a dictionary callable member, when read through dot/arrow or called directly, then the IR contains `OP_GET_MEMBER_BOUND` for reads and invocation returns with the correct receiver.
+- Given a tear-off or explicit rebind, when called, then the original receiver is retained unless `bindThis` creates a new handle.
+- Given a standalone lambda, when it reads `this`, then it observes null/unset; invalid bind arguments produce located catchable errors.
+- Given a callable is the sole reachable reference to its receiver, when collection and JSON restore run, then the object and receiver field remain valid.
+- Given the new builtin is registered, when catalogue and command-doc checks run, then both pass.
+
+## Implementation Notes
+Implemented the explicit bound-member op and receiver-aware invocation in the VM. Dictionary direct calls and bracket reads use the same callable path; callable receiver handles are traversed as object roots, and restored receivers are checked against the object table. `bindThis` is a pure-data core command with OOP-11 documentation.
+
+Verification completed in the isolated worktree: install and fixture fetch succeeded; typecheck, lint, strict tests, both golden runners, graph, licence, provenance, catalogue, command-docs, and oracle checks passed. The authored VM smoke returned direct=4, rebound=9, original=4 and retained two objects.
+
+## Plan Change Log
+
+## Review Triage Log
+
+## Design Notes
+
+`methodCall` remains the legacy class path; its VM branch must recognize dictionary records and forward the stored callable to `performCallable`, preserving source locations. Bound member reads return a copied callable record, so all state remains serializable and no host closure is introduced. Receiver roots are discovered from every reachable callable, including nested captures and object members.
 
 ## Verification
 
-Unit and golden tests; catalogue and command-docs gates.
+**Commands:**
+- `pnpm install`, `pnpm fixtures:fetch`
+- `pnpm typecheck`, `pnpm lint`, `pnpm test:strict`
+- `pnpm golden`, `pnpm golden:bun`, `pnpm graph`, `pnpm licence`, `pnpm provenance`
+- `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm oracle:check`
+
+**Manual checks:**
+- Compile and run an authored dictionary/method program through the real VM; inspect returned values, emitted IR, receiver retention after collection, and canonical JSON restore.

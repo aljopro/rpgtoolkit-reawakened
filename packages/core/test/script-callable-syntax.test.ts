@@ -155,3 +155,8 @@ test("a dictionary literal lowers to newObject, then each value and an initMembe
   const names = compiled.ops.map((step) => (step.op === "initMember" ? `initMember:${step.key}` : step.op));
   deepEqual(names, ["load", "newObject", "push", "initMember:k", "push", "initMember:s", "storeRef", "pop", "return"]);
 });
+
+test("dot and arrow callable member reads lower to OP_GET_MEMBER_BOUND", () => {
+  const compiled = compileInline("a = d.fn\nb = d->fn\n");
+  equal(compiled.ops.filter((step) => step.op === "get_member_bound").length, 2);
+});

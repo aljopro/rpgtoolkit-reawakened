@@ -286,6 +286,25 @@ test("a file-qualified call never asks the scope: it reaches that file's own def
   equal(state.vm.globals.b, 50, "the qualified call is not");
 });
 
+test("a dictionary callable wins over the same-named file, while no binding keeps file-qualified semantics", () => {
+  const loader = loaderOf({
+    "object-main.prg": "d = { f: () => 7 }\nobjectResult = d.f()\n",
+    "file-main.prg": "fileResult = d.f()\n",
+    "d.prg": "function f() { return 50 }\n",
+  });
+  const objectState = createGameState({ seed: 0 });
+  startProgram(objectState.vm, fileProgramRef(loader, "object-main.prg"));
+  const objectServices = createScriptServices(objectState, [], undefined, undefined, loader);
+  runToRest(objectState, objectServices);
+  equal(objectState.vm.globals.objectresult, 7);
+
+  const fileState = createGameState({ seed: 0 });
+  startProgram(fileState.vm, fileProgramRef(loader, "file-main.prg"));
+  const fileServices = createScriptServices(fileState, [], undefined, undefined, loader);
+  runToRest(fileState, fileServices);
+  equal(fileState.vm.globals.fileresult, 50);
+});
+
 test("a plugin's command is wrapped the same way, through the extension entry", () => {
   const say: BuiltinSpec = {
     name: "say",

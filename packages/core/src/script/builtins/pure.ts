@@ -12,10 +12,13 @@ import {
 } from "../../fmath/index.ts";
 import { TICKS_PER_SECOND, secondsToTicks } from "../../time/time.ts";
 import type { Arg, BuiltinSpec } from "../builtins.ts";
-import { ScriptError } from "../errors.ts";
+import {
+  CALLABLE_NOT_CALLABLE,
+  ScriptError,
+} from "../errors.ts";
 import { COMPILER_VERSION } from "../program.ts";
 import type { CommandEffect } from "../plugin.ts";
-import { toNumberValue, toStringValue, truthy } from "../values.ts";
+import { isCallableValue, toNumberValue, toStringValue, truthy } from "../values.ts";
 
 function unaryMath(name: string, operation: (value: number) => number): BuiltinSpec {
   return {
@@ -230,4 +233,56 @@ const FLOW_SPECS: readonly BuiltinSpec[] = [
   },
 ];
 
-export const PURE_SPECS: readonly BuiltinSpec[] = [...MATH_SPECS, ...FLOW_SPECS];
+const BINDING_SPECS: readonly BuiltinSpec[] = [
+  {
+    name: "bindthis",
+    aliases: [],
+    params: [
+      { name: "fn", optional: false, byRef: false, variadic: false },
+      { name: "obj", optional: false, byRef: false, variadic: false },
+    ],
+    doc: {
+      summary: "Return a new callable whose `this` receiver is `obj`, without mutating `fn`.",
+      behaviour: "Require a callable and a live object handle, then return a new callable with the same definition and captures and the supplied object as receiver; the original callable is unchanged and the command does not wait.",
+      groups: ["reawakened-additions-not-part-of-the-282-legacy-catalogue", "core-runtime"],
+      returns: { summary: "A new callable whose receiver is the supplied object." },
+      throws: [
+        { code: CALLABLE_NOT_CALLABLE, when: "The first argument is not callable." },
+        { code: "object.invalid", when: "The second argument is not a live object handle." },
+      ],
+      see: ["docs/spec/engine/rpgcode-modules-and-objects.md#oop-11"],
+      waits: { kind: "never", summary: "Never waits." },
+    },
+    call: (view, args) => {
+      const fn = args[0]?.value;
+      if (!isCallableValue(fn)) {
+        throw new ScriptError(CALLABLE_NOT_CALLABLE, "bindThis: the first argument must be callable");
+      }
+      const object = args[1]?.value;
+      const objectHandle =
+        typeof object === "object" &&
+        object !== null &&
+        "kind" in object &&
+        object.kind === "object"
+          ? object
+          : undefined;
+      if (
+        objectHandle === undefined ||
+        view.state === undefined ||
+        view.state.vm.objects.every((record) => record.handle !== objectHandle.handle)
+      ) {
+        throw new ScriptError("object.invalid", "bindThis: the second argument must be a live object");
+      }
+      return {
+        value: {
+          type: "callable",
+          def: fn.def,
+          captures: fn.captures,
+          receiver: String(objectHandle.handle),
+        },
+      };
+    },
+  },
+];
+
+export const PURE_SPECS: readonly BuiltinSpec[] = [...MATH_SPECS, ...FLOW_SPECS, ...BINDING_SPECS];
