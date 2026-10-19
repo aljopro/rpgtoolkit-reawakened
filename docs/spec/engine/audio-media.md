@@ -3,9 +3,10 @@
 This page is the normative Reawakened contract for the core audio model. It is
 implementation-neutral: `core` describes the game state and the decisions that
 a runner must replay, while `synth` and a runner provide decoding and sound
-output. The page is the docs-first checkpoint for Epic 6.1 and 6.2; every
-rule marked **Proposed ruling (pending owner review)** must be approved before
-the implementation entries start.
+output. The page is the docs-first checkpoint for Epic 6.1, 6.2 and 6.3
+(core model, command surface and platform rules); every rule marked
+**Proposed ruling (pending owner review)** must be approved before the
+implementation entries start.
 
 ## What an author sees
 
@@ -58,6 +59,7 @@ JSON shape (the arrays are ordered; no map iteration order is observable):
 AudioStateV2 = {
   schema: 2,
   cueId: integer,                    // next unused cue id, starts at 1
+  soundFont: AssetKey | null,        // 6.3: script-chosen bank; null = author default
   tracks: AudioTrackState[],         // built-ins first, then creation order
   settings: {
     masterVolume: integer,           // script volume, 0..100
@@ -191,7 +193,8 @@ back by a later resume and is not needed by the existing cue set. A separate
 
 <!-- OWNER: 6.1/P1-persistence -->
 **Proposed ruling (pending owner review; P1; persistence).** The Reawakened
-save projection includes `AudioStateV2.tracks` and `cueId`, including active
+save projection includes `AudioStateV2.tracks`, `cueId` and (6.3 amendment,
+[soundfont-state](#soundfont-state)) `soundFont`, including active
 voice positions, flags, pause state and fade descriptors. It excludes
 `AudioStateV2.settings`, all player-mix fields and all runner handles. A
 snapshot is a full core-state snapshot and therefore includes `settings`; it
@@ -312,14 +315,14 @@ removes.
 **Proposed ruling (pending owner review; P4; generic per-track cues).** In
 plain terms, cues say what a named track should do; they do not contain a
 runner handle or a callback. Technically, the core port becomes this generic
-set (the later 6.3 ruling may add a platform kind such as `soundfont.set` in
-a docs-only amendment):
+set. Entry 6.3 adds the platform kind `soundfont.set` as a documented
+amendment ([soundfont-cue](#soundfont-cue)); every other kind is unchanged:
 
 ```text
 AudioCueKind =
   "media.load" | "media.play" | "media.stop" | "media.pause" |
   "media.resume" | "media.seek" | "media.volume" | "media.fade" |
-  "media.flags"
+  "media.flags" | "soundfont.set"
 
 AudioCue = {
   cueId: integer,
@@ -802,11 +805,11 @@ format policy are owned by Epic 6.2/6.3; they must preserve these rows.
 | Q11 | Legacy saves store no audio; load plays board music; reset does not stop music | Deliberately depart for Reawakened playback save/re-emission; retain reset behavior and restart music from zero on load. |
 | Q12 | Volume clamps 0..100, starts 100, is not remembered; 3.1.0 zero is quiet-but-audible and battle starts full; final has no audible effect | Follow 3.1.0: script volumes are integer settings, initial 100, not save/reset fields; final no-op volume is treated as a regression. |
 | Q13 | Volume is not saved and reset does not change it | Keep in the script-settings/player-mix split. |
-| Q14 | Frame sounds have a separate player, separate from `setVolume` and `wavStop`; frame-0 trigger depends on an unavailable breakdown | Keep the separation. **Unresolved:** frame-0 per-case timing remains unruled until the missing owner fact is supplied. |
-| Q15 | Focus loss pauses the game; the engine does not touch audio; Windows/libraries decide audibility | Keep: core stops advancing, while runner focus policy cannot change cue meaning. |
-| Q16 | Video stops music and freezes everything; cannot be skipped; afterwards music restarts from zero even if stopped | Keep; video owns the freeze and posts a music restart on completion. |
-| Q17 | 3.1.0 played all listed formats and looped music; final played only MIDI | Follow 3.1.0; format availability and import policy are owned by 6.3, not by this command contract. |
-| Q18 | Files are under Media; subfolders allowed; no extension added; case-insensitive; PAK does not unpack frame sounds or check videos | Keep path resolution and case folding; package/import handling remains a 6.3 platform rule. |
+| Q14 | Frame sounds have a separate player, separate from `setVolume` and `wavStop`; frame-0 trigger depends on an unavailable breakdown | **Amended by 6.3 ([r-59-routing](#r-59-routing)):** the separate player is not reproduced; frame sounds are one-shot `sfx` voices, so `wavstop` and script volume reach them. **Unresolved:** frame-0 per-case timing remains unruled until the missing owner fact is supplied. |
+| Q15 | Focus loss pauses the game; the engine does not touch audio; Windows/libraries decide audibility | Keep: core stops advancing and runner focus policy cannot change cue meaning. 6.3 rules the runner default (pause realised voices, restore on gain) in [audio-focus](#audio-focus). |
+| Q16 | Video stops music and freezes everything; cannot be skipped; afterwards music restarts from zero even if stopped | Keep; the core hold, the music stop and the restart effect are ruled in [video-wait-hold](#video-wait-hold) and [video-music](#video-music). |
+| Q17 | 3.1.0 played all listed formats and looped music; final played only MIDI | Follow 3.1.0 for playback of MP3/OGG through import-time transcoding ([audio-import-policy](#audio-import-policy)); tracker files are a documented departure ([audio-tracker-policy](#audio-tracker-policy)). |
+| Q18 | Files are under Media; subfolders allowed; no extension added; case-insensitive; PAK does not unpack frame sounds or check videos | Keep path resolution and case folding. The PAK gaps are not reproduced: frame sounds and videos resolve through the same package index as every asset ([r-59-routing](#r-59-routing), [video-request](#video-request)). |
 | Q19 | `music` shows battle music and is non-empty after `mediaStop` | Keep: the virtual reads the canonical `music` file retained by stop. |
 | M1 | Music always loops in both versions and had no once argument | Keep `tkMD_LOOP` as the music default; `tkMD_ONCE` is a Reawakened addition. |
 | M2 | Replaying an already-playing track carries on | Keep as the same-file rule unless `tkMD_RESTART` is explicit. |
@@ -828,6 +831,1337 @@ rounds 8 and 9 are owner-relayed facts with no independent confidence claim.
 to be easiest would turn an extraction/version difference into an undocumented
 compatibility change.
 
+<a id="platform-rulings"></a>
+## Platform rulings — formats, banks, runner protocol and video (Epic 6.3)
+
+<a id="platform-overview"></a>
+### What a player and an author see
+
+An author can use a MIDI file or a WAV file directly. An MP3 or Ogg song is
+converted to WAV once, when the game is imported, and then plays like any other
+WAV. MIDI music needs a **SoundFont**, a file of instrument samples: the game
+ships one, an author can pick another for the whole game or for one scene with
+`soundFont("file.sf2")`, and a player can override both with a file of their
+own. Choosing a SoundFont never changes what the game does, only how the notes
+sound. A cutscene video stops the game and the music, plays to its end, cannot
+be skipped, and then the music starts again from its beginning.
+
+Behind that, a runner (the browser app, the desktop app, the headless test
+runner, or one written in another language) follows one small, language-neutral
+protocol: ten messages in, three events out and one voice state machine. A
+runner that follows it and replays the conformance vectors of entry 6.15
+behaves like the TypeScript reference. The rules below give exact field names,
+units, ticks, ordering and what happens without a device.
+
+**Terms.** A **source** is the runner-side component that turns the bytes of one
+format into sound (a MIDI synthesiser, a PCM player). A **bank** is the
+instrument data a source may need (a SoundFont for MIDI). The **cue player** is
+the runner-side component that turns core cues into protocol messages
+([cue-player](#cue-player)). The **protocol** is the message set between the
+cue player and the sources ([runner-audio-protocol](#runner-audio-protocol)).
+`AudioInfo` is the plain-data record a core decoder produces for one file
+([audio-info-seam](#audio-info-seam)).
+
+<a id="platform-amendments"></a>
+<!-- OWNER: 6.3/amendments -->
+**Proposed ruling (pending owner review; 6.3; amendments to 6.1/6.2).** Entry
+6.3 keeps every 6.1 and 6.2 ruling except the following, each made explicit
+here and at its own anchor:
+
+| # | Amends | Change | Anchor |
+|---|---|---|---|
+| A1 | P1 state schema | `AudioStateV2` gains the top-level field `soundFont: AssetKey \| null`; it is in the save projection. | [soundfont-state](#soundfont-state) |
+| A2 | P4 cue vocabulary | `AudioCueKind` gains `soundfont.set`; `media.volume` with `track: null` is the script master volume. | [soundfont-cue](#soundfont-cue), [cue-player](#cue-player) |
+| A3 | P2 restore order | On load, `soundfont.set` is emitted before every media cue; at engine start it is the first cue. | [soundfont-commands](#soundfont-commands) |
+| A4 | 6.2 stable diagnostics | Adds `media.asset-format`, `media.soundfont-missing`, `media.soundfont-name`, `media.video-missing`, `media.video-busy`. | [audio-format-policy](#audio-format-policy), [soundfont-commands](#soundfont-commands), [video-request](#video-request) |
+| A5 | Parity ledger Q14 | The separate frame-sound player is not reproduced. | [r-59-routing](#r-59-routing) |
+| A6 | P7 late-sound threshold | The 15-tick lateness is measured when the voice is ready to start, not when the cue is received. | [audio-late-sounds](#audio-late-sounds) |
+| A7 | AD-14 `video.ended` | The input gains `reqId`. | [video-request](#video-request) |
+| A8 | 6.5 and 6.10 verify wording | "caller plays silence" means the runner realises silence while core keeps the transition; the headless runner answers a video on its next `advance`, not "after the declared duration". | [audio-format-policy](#audio-format-policy), [video-headless](#video-headless) |
+
+**Evidence.** Each row's evidence is at the linked anchor. **Rejected
+alternative.** Changing 6.1/6.2 silently inside the platform text, which would
+leave the two checkpoints contradicting each other for the owner's review.
+
+### Formats and sources
+
+<a id="audio-format-policy"></a>
+<!-- OWNER: 6.3/F1 -->
+**Proposed ruling (pending owner review; F1; format matrix, dispatch and
+unsupported files).** In plain terms, the engine plays MIDI and WAV directly;
+MP3, Ogg, FLAC and Opus are converted at import; anything else is silent with a
+message and never changes the game. The file's bytes, not the track it plays on
+and not its name, decide how it is played. Technically:
+
+| Format | Core half (`AssetDecoder<AudioInfo>`) | Runner half (`AudioSource`) | Epic 6 disposition |
+|---|---|---|---|
+| Standard MIDI file, type 0 and 1 | `audio.midi` (entry 6.5) | MIDI source with a bank (entry 6.12) | Supported |
+| WAV: PCM 8-bit, PCM 16-bit, MS-ADPCM, IMA-ADPCM; 1 or 2 channels | `audio.wav` (entry 6.5) | PCM source (entry 6.12) | Supported |
+| Any other WAV codec or layout (A-law, µ-law, float, 24/32-bit, more than 2 channels, MP3 inside WAV); SMPTE-division MIDI | none accepts it | none | Unsupported |
+| MP3, Ogg Vorbis, Opus, FLAC | none | none | Converted to WAV at import ([audio-import-policy](#audio-import-policy)); an unconverted file is unsupported |
+| Tracker modules (XM, MOD, S3M, IT) | none | none | Unsupported ([audio-tracker-policy](#audio-tracker-policy)) |
+| SPC, NSF, GBS, SID, VGM | none | none | Not planned; extension packs only |
+| SoundFont banks (SF2, SF3) | not an `AudioInfo` format | the MIDI source's bank loader | [soundfont-layers](#soundfont-layers) |
+
+*Dispatch.* A decoder is chosen by header detection: (1) the candidates are the
+registered decoders whose `detect(header)` returns true for the first 64 bytes
+of the file (or all of it when shorter); (2) among several, those whose
+`extensions` contain the file's ASCII-folded extension come first; remaining
+ties go in registration order, and the built-in `audio.midi` and `audio.wav`
+register before any plugin pack; (3) an extension alone never selects a
+decoder. The runner's source registry uses the same rule with each source's
+`detect` and `id`; a decoder and its source share one `id`. The track a file
+plays on never chooses the source: a WAV may be music and a MIDI may be a sound
+effect.
+
+*Unsupported file (core).* A file that exists but that no decoder accepts, or
+that a decoder returns a `FormatError` for, is played with an unknown length:
+the transition is applied and cued exactly as for a known file, with
+`lengthTicks: null` and `endTick: null`; the voice's position is the elapsed
+ticks since `startTick`, which never wrap or clamp; it ends only by stop or
+replacement; `tkMD_WAIT` and `mediaWait` follow the existing unknown-length
+rule (a diagnostic, the thread does not park). The command raises one located
+diagnostic `media.asset-format` at the file argument. The cue stream, the
+state and the hash are therefore the same on every runner whatever sources it
+has installed.
+
+*Unsupported file (runner).* A runner with no source for the bytes realises
+silence and reports `error { code: "format.unsupported" }`
+([runner-audio-protocol](#runner-audio-protocol)).
+
+**Evidence.** AD-31 dispatches by extension and magic header and defines
+`detect(header)`; F-05 records that no audio decoder exists; the exploration
+§6.1–§6.4 and §11.6 require failure to be a diagnostic plus silence and never a
+state change; Q17 (3.1.0 played every listed format); the corpus (182 MIDI, 66
+WAV, 1 XM, 0 MP3/OGG, measured 2026-10-18, exploration §1); the display page
+records that the original routed every file through its MIDI path because of a
+string-comparison bug, which is a legacy bug note and not a requirement.
+
+**Rejected alternative.** Choosing the source by extension would break
+name-preserving import ([audio-import-policy](#audio-import-policy)) and a
+mislabelled file. Choosing it by track re-creates the legacy MIDI-path bug.
+Refusing the play (no state change, no cue) on an unknown format would hide the
+file from a runner that has a runner-only source and would make the cue stream
+depend on installed packs. Throwing is forbidden everywhere by AD-18.
+
+<a id="audio-import-policy"></a>
+<!-- OWNER: 6.3/F2 -->
+**Proposed ruling (pending owner review; F2; MP3, Ogg, Opus and FLAC are
+transcoded on import).** In plain terms, if a game uses MP3 or Ogg songs, the
+importer turns each into a WAV with the same file name, once; the game then
+plays and loops it exactly like any WAV. Technically:
+
+1. Core and synth in epic 6 play WAV and MIDI only (the D-15 conservative
+   default is ratified). MP3, Ogg Vorbis, Opus and FLAC are **import-time
+   formats**: no runtime decoder for them ships in epic 6.
+2. The import output is a WAV with 16-bit signed little-endian PCM, the source's
+   channel count (1 or 2) and its sample rate, resampled down to 48000 Hz only
+   when above it. An importer option may write IMA-ADPCM instead to save space.
+   The frame count is the decoded length **after removing the encoder's delay
+   and padding** (the gapless information in the MP3 header, the Ogg final
+   granule position, the FLAC stream-info total), so `lengthTicks` is the
+   musical length and a looping song has no gap.
+3. **Name preservation.** The converted bytes replace the original under the
+   original logical name (`Media/song.mp3` holds WAV bytes), because game data
+   and runtime strings name files and the resolver adds no extension (Q18).
+   Header detection ([audio-format-policy](#audio-format-policy)) plays it.
+   Game data is never rewritten. The importer writes a report (not game data)
+   listing each file's original name, original and output SHA-256, delay
+   trimmed and resampling.
+4. The importer is an authoring tool run at project import and package export;
+   it is not part of `core` or a runner. No entry in any epic builds it today
+   (**[UNCHECKED]**; the editor and asset epics own it, [audio-authoring-handoff](#audio-authoring-handoff)).
+   Its decoder and encoder dependencies must clear G6 before they are shipped;
+   a tool may call a user-installed decoder without shipping it.
+5. An unconverted MP3/Ogg file is "unsupported" under F1: silent, with
+   `media.asset-format`, never a state change.
+6. Size consequence, stated rather than hidden: a converted song is far larger
+   than the MP3 (about 10 MB a minute for 44.1 kHz stereo 16-bit PCM, about a
+   quarter of that as IMA-ADPCM). No corpus game uses MP3/OGG, so epic 6 does not
+   depend on it, but a game that does may cross epic 9's whole-package
+   threshold sooner ([audio-prefetch](#audio-prefetch)).
+
+**Evidence.** Q17 and M1 (3.1.0 played MP3, Ogg and tracker files as looping
+music; the final version played MIDI only; the version rule follows 3.1.0,
+so a game that uses MP3 must still play); exploration §9 (conservative default
+"transcode on import"), §10 (encoder delay and padding create loop gaps; the
+Ogg granule position and FLAC stream-info give exact lengths); exploration §6.5
+(core needs every length up front, P2); audio-readiness item 4 (no entry builds
+the transcoder); E-104 (video transcodes on import, the same pattern); corpus
+(0 MP3/OGG).
+
+**Rejected alternative.** (a) Shipping MP3/Ogg decoders in `synth` now: each is
+a new dependency to clear (G6) and maintain, exact lengths need a frame walk in
+core for variable bit rate, and no corpus game needs it. (b) Browser
+`decodeAudioData` at run time: decoder delay and padding differ per browser, so
+the length that wakes a wait would depend on the device (against P2). (c)
+Transcoding to Ogg: needs a runtime Ogg decoder, which is (a) again. (d)
+Rewriting names in game data: boards and scripts build names at run time. (e)
+Extension probing in the resolver (`song.mp3` falls back to `song.wav`): a new
+resolver rule against Q18 ("no extension is added").
+
+<a id="audio-tracker-policy"></a>
+<!-- OWNER: 6.3/F3 -->
+**Proposed ruling (pending owner review; F3; tracker modules and the BusDriver
+XM).** In plain terms, tracker music is not played in epic 6. The one corpus
+file, `BusDriver/Media/track02.xm`, is silent with a message. Technically, no
+decoder or source accepts it, so it is an unsupported file under F1: the
+`music` track reports it as its file (Q19 still holds), its length is unknown,
+the runner reports `format.unsupported`, and nothing else in the game changes.
+A tracker pack (for example one built on libopenmpt, whose BSD licence is
+**unverified** here) may later register a core decoder and a source through
+[audio-info-seam](#audio-info-seam) and [audio-source-seam](#audio-source-seam)
+without any core change; promoting that is an **owner deferral** ([audio-deferrals](#audio-deferrals)).
+
+This departs from 3.1.0, which played tracker files (M1); the departure is
+deliberate and recorded: tracker modules are an envelope non-goal, a player
+needs a G6-cleared dependency, and one corpus file does not justify it.
+
+**Evidence.** Epic envelope boundaries ("tracker modules are a non-goal");
+D-16 (ratified); exploration §6.3 and §10; corpus (one XM); Q17/M1.
+**Rejected alternative.** Rendering the XM to WAV at import needs a tracker
+player inside the import tool, which is the same dependency; playing it now adds
+a runtime dependency and toolchain for one file.
+
+<a id="audio-wav-midi-length"></a>
+<!-- OWNER: 6.3/F4 -->
+**Proposed ruling (pending owner review; F4; WAV playback and exact lengths).**
+In plain terms, a file's length in ticks is computed with whole-number
+arithmetic, so two runners and a hand calculation agree to the tick. Technically:
+
+1. The PCM source decodes 8-bit unsigned PCM, 16-bit signed little-endian PCM,
+   MS-ADPCM and IMA-ADPCM itself and resamples to the output rate. The browser's
+   `decodeAudioData` is not used for WAV (its ADPCM support is **unverified**).
+2. WAV: with `frames` sample frames at `rate` Hz,
+   `lengthTicks = max(1, floor((120 * frames + rate) / (2 * rate)))`. This is
+   the 6.1 rule `max(1, floor(seconds * 60 + 0.5))` evaluated exactly. `frames`
+   is data bytes divided by block align for PCM; for ADPCM it is the `fact`
+   chunk's sample count when present and otherwise whole blocks times samples
+   per block. Zero frames, zero rate, or a rate above 192000 is a `FormatError`.
+3. MIDI (PPQN division `d`): merge all tracks by absolute tick, and let
+   `N = sum(deltaTicks * tempoMicrosPerQuarter)` over the segments up to the
+   last end-of-track (default tempo 500000 before any tempo event). Then
+   `lengthTicks = max(1, floor((12 * N + 100000 * d) / (200000 * d)))`. Example:
+   `d = 480`, tempo 500000, 1920 ticks gives `N = 960000000` and 120 ticks (2 s).
+   A file whose intermediate would exceed 2^53 − 1 is a `FormatError`. Release
+   tails and trailing silence beyond the last end-of-track are not counted; a
+   file with no note events still has its tempo-map length.
+4. SMPTE-division MIDI is unsupported in epic 6 (the corpus uses 120–960 PPQN);
+   a later ruling may add it.
+5. No floating point, `Date`, host API or locale call is used in a decoder (G3).
+
+**Evidence.** 6.1 P2 (half-up conversion); F-05; exploration §6.1 and §6.5;
+corpus facts in exploration §1 (division 120–960; 8-bit mono 8000 Hz; odd rates
+22255 Hz and 12025 Hz). The hand-worked example is derived here from the
+formula, not from a file.
+**Rejected alternative.** Float seconds (`frames / rate * 60`) can differ at an
+exact half tick across engines and from a hand calculation; a fixed
+sample-rate resample before measuring changes the length; measuring from the
+device reintroduces device timing.
+
+<a id="midi-bank-fallback"></a>
+<!-- OWNER: 6.3/F5 -->
+**Proposed ruling (pending owner review; F5; XG/GS missing-bank fallback).** In
+plain terms, if an old MIDI song asks for an instrument set the SoundFont does
+not have, it plays the plain General MIDI instrument instead of going quiet.
+Technically, every MIDI source applies this pure function of the bank's preset
+table and the file's events, with no stored state:
+
+1. A melodic Program Change selects preset `(bank, program)` where `bank` is
+   the last bank-select MSB (CC0) on that channel (0 if none); the LSB (CC32) is
+   ignored. If that preset is missing the source uses `(0, program)`; if that is
+   also missing the channel is silent for that program.
+2. Percussion (MIDI channel 10) selects preset `(128, program)`, the SoundFont
+   percussion bank; if missing, `(128, 0)`; if missing, the channel is silent.
+3. GM System On, GS Reset and XG System On reset channel state to defaults. Every
+   other GS or XG system-exclusive message (effects, drum maps, tuning) is
+   ignored; emulating them is not required and is not tested.
+4. Each first use of a fallback per `(file, bank, program)` raises one
+   diagnostic `synth.bank-fallback`; it is not an `error` event because the
+   voice keeps playing.
+5. `AudioInfo.bank` records `{ kind: "soundfont", dialect, bankSelect }` (a pure
+   byte scan: `dialect` is `"xg"` when XG system-exclusive data is found, else
+   `"gs"` when GS data is found, else `"gm"`; `bankSelect` is true when a
+   non-zero CC0 or CC32 is found). It informs editors, prefetch and
+   diagnostics and never changes playback. The exploration's corpus counts (28
+   possible XG, 23 possible bank select) are a heuristic that may over-count;
+   entry 6.5 records the authoritative table.
+
+**Evidence.** Exploration §6.4 and §9 ("fall back to GM bank 0"); corpus counts
+(§1); the SoundFont 2.04 convention that percussion lives in bank 128 (general
+knowledge, **unverified** against the installed backend; entry 6.12 confirms).
+**Rejected alternative.** Staying silent loses the melody on every compact GM
+bank (Path B and Path C have no XG/GS variation banks); emulating XG/GS is large
+DSP work for effects a SoundFont cannot supply anyway; remapping through
+hardware tables risks copying vendor tables (G7).
+
+<a id="r-59-routing"></a>
+<!-- OWNER: 6.3/R-59 -->
+**Proposed ruling (pending owner review; R-59; audio routing and frame
+audio).** In plain terms, every sound goes through the same path whatever
+produced it, and animation frame sounds are ordinary one-shot effect sounds.
+Technically:
+
+1. *Source routing* is [audio-format-policy](#audio-format-policy): by the
+   file's bytes. The legacy MIDI-path bug is not reproduced.
+2. *Track routing.* The audio applier maps an effect record to a track by the
+   producer's source tag (today the fourth argument of the record):
+
+   | Producer | Effect | Track |
+   |---|---|---|
+   | board `bkgMusic` (epic 4) | `music.play`, source = board key | `music` |
+   | battle music (epic 7) | `music.play`, source `battle` | `music` |
+   | video restart (this entry) | `music.play`, source `video` | `music` |
+   | animation frame sound (epic 4) | `sfx.play` | `sfx` |
+   | menu cursor sounds (epic 8), battle menu sounds (epic 7) | `sfx.play`, source `ui` | `ui` |
+   | script commands | `media*` built-ins and legacy aliases | the named track |
+
+   The record names stay Epic 4's ([board-effect-mapping](#board-effect-mapping)).
+3. *Frame sounds.* Each visible `.anm` frame sound is one `sfx.play` record,
+   emitted when the frame becomes visible, in animation-phase then frame-index
+   order, resolved through the same asset resolver and package index as every
+   file. The legacy fact that frame sounds were not unpacked from packages (Q18)
+   is not reproduced.
+4. *Amendment of ledger Q14 (A5).* The legacy frame-sound player was separate
+   from `setVolume` and `wavStop`. Reawakened frame sounds share the `sfx`
+   track, so `wavstop` / `mediaStop("sfx")` stops a playing frame sound, a frame
+   sound and a script `wav` replace each other on the one-voice track, and script
+   volume scales them. An author who needs both at once raises the voice count
+   with `mediaTrack("sfx", n)`; which voice each takes follows the lowest-free
+   rule of 6.2. Menu and battle-menu sounds go to `ui`, so they are no longer
+   stopped by `wavstop` (Q4 grouped them with the script slot). Frame-0
+   per-case timing stays unruled (Q14's missing breakdown).
+5. Missing runner audio is silence plus a diagnostic and never alters game
+   state (6.1 R-59 text).
+
+**Evidence.** Q4 and Q14; the 6.1 R-59 row and effect mapping; D-6 (five
+built-in tracks, `ui` for menu and cursor sounds); the 6.6 verify (a frame
+`sfx.play` becomes an `sfx`-track cue); exploration §6.8 (which track menu,
+battle and frame sounds use) and §13 (per-category sliders in epic 8).
+**Rejected alternative.** A sixth built-in track for frame sounds breaks D-6 and
+splits the player's "sound effects" slider; routing them to `ui` or `ambience`
+puts them in the wrong category; a hidden engine-owned player keeps audio
+state outside `GameState.audio`, so it could not be saved, re-emitted or
+replayed.
+
+### The two seams: decoders and sources
+
+<a id="audio-info-seam"></a>
+<!-- OWNER: 6.3/S1 -->
+**Proposed ruling (pending owner review; S1; `AssetDecoder<AudioInfo>`, the
+AD-31 amendment).** In plain terms, every audio format gives the core one small
+record that says how long a file is, nothing more; the core never decodes
+sound. Technically, an audio format contributes a decoder to
+`PluginDefinition.decoders` whose result type is:
+
+```text
+AudioInfo = {
+  format: string,                 // the decoder id: "audio.wav", "audio.midi", a pack's id
+  lengthTicks: integer | null,    // exact, from F4; null = unknown (not waitable)
+  sampleRateHz: integer | null,   // null for MIDI
+  channels: integer | null,       // 1 or 2; null for MIDI
+  bank: { kind: string, dialect: "gm" | "gs" | "xg", bankSelect: boolean } | null
+}
+```
+
+Every key is present; `null` means "not applicable or unknown" (AD-14 rule).
+The decoder is `AssetDecoder<AudioInfo> { id, extensions, detect, decode }` as in
+AD-31, returns `Result<AudioInfo, FormatError>` (AD-18), never throws, and is a
+pure function of the bytes (G2, G3). Ids are lower-case ASCII with dots;
+`audio.wav` and `audio.midi` are reserved for the built-ins; a duplicate id
+throws at registration, as AD-8 and AD-9 do. The `context` argument is unused
+by audio decoders.
+
+The core receives the bytes through the existing blocking AD-5 `asset` reply,
+decodes them, and the applier reads only `lengthTicks`. The bytes are not kept.
+Whether `AudioInfo` is memoised, and where, is entry 6.6's decision, with one
+condition: a dropped cache must never make a replay request an asset whose
+reply is not in the input log. Making that reply immediate is the runner's
+prefetch job ([audio-prefetch](#audio-prefetch)).
+
+Authored loop points (Ogg tags, MIDI controller 111 or markers) are not part of
+`AudioInfo`: legacy loops whole files (M1), and loop points need new state and
+cue fields in the same change ([audio-deferrals](#audio-deferrals)).
+
+**Evidence.** AD-31 (the interface and `PluginDefinition.decoders`); F-05 (no
+`AudioInfo` exists); exploration §11.1; 6.1 P2 (lengths are metadata supplied to
+core); AD-5 (blocking asset replies); G2/G3.
+**Rejected alternative.** Putting decoding in core breaks G2; passing lengths in
+from the runner makes a wait depend on which runner decoded the file; reserving
+loop fields that no state or cue can carry is dead weight.
+
+<a id="audio-source-seam"></a>
+<!-- OWNER: 6.3/S2 -->
+**Proposed ruling (pending owner review; S2; `AudioSource`, the registry and
+the conformance kit).** In plain terms, a new kind of music is added by writing
+two small pieces that share a name: one tells the core how long the file is,
+the other makes the sound. Neither touches the core's rules. Technically:
+
+1. `synth` defines `AudioSource` and keeps an ordered registry. A source has
+   `id` (equal to its decoder's), `extensions`, `detect(header)`, `bank`
+   (`string | null`, the bank kind it needs; `"soundfont"` for MIDI, `null` for
+   PCM), and `open(bytes, env) -> Result<SourceVoice, SourceError>`. `open`
+   never throws. `env` carries the output rate and the current bank handle.
+2. A `SourceVoice` reports `lengthTicks` (equal to the `AudioInfo` of the same
+   bytes, or `null`) and implements the voice state machine of
+   [voice-state-machine](#voice-state-machine): start at a position with a loop
+   flag, stop, pause, resume, seek, set loop, set gain, fade, advance/render and
+   report its natural end. The exact TypeScript signatures are entry 6.11's.
+3. MIDI (a MIDI synthesiser plus a bank) and PCM (WAV) are the first two sources
+   and register through the same public seam a third-party pack uses (AD-31
+   practice). A Null source serves headless runs.
+4. A pack is two independent registrations. A decoder without a source means a
+   known length and silence; a source without a decoder means sound with an
+   unknown length. Neither is an error.
+5. Failure is never a game-state change: an unknown format, a missing source or a
+   bad file gives a diagnostic and silence; the cue stream and every state hash
+   are the same on every runner (AD-16).
+6. Banks are general: a source declares a bank kind and the layered choice of
+   [soundfont-layers](#soundfont-layers) applies per kind; the only kind in epic 6
+   is `"soundfont"`. The script command keeps the name `soundFont`; a later
+   source with another bank kind adds its own command rather than overloading
+   this one.
+7. **Conformance kit** (entry 6.15, as vectors): a source's length equals its
+   decoder's `AudioInfo`; loop, stop, pause, resume and seek behave as the state
+   machine says; bus and voice gain apply; an offline render is non-silent where
+   the binding offers one; a corrupt file gives an `error` event and never a
+   throw.
+8. Anything shipped with the engine passes G6. A pack a user installs is their
+   own business under ADR 0004's ungated-extension rule; a "write an audio
+   source" guide belongs to the documentation-site epic.
+
+**Evidence.** Exploration §11 (the owner direction to reuse AD-31); AD-30 (hot
+paths behind ports, the TypeScript implementation as reference); spine AD-16.
+**Rejected alternative.** A second plugin system beside AD-31; hard-wiring MIDI
+and PCM so a third-party source would be a different kind of thing; one
+combined registration, which would force every pack to write both halves.
+
+### SoundFont policy
+
+<a id="soundfont-layers"></a>
+<!-- OWNER: 6.3/B1 -->
+**Proposed ruling (pending owner review; B1; the SoundFont layers).** In plain
+terms, three people can choose the instrument set: the player, the game, and the
+runner. The player wins, then the game (script first, then the author's default),
+then the runner, then the bundled default. Choosing a set never changes game
+state. Technically the **effective bank** is the first non-null of:
+
+| Rank | Layer | Where it lives | Saved? |
+|---|---|---|---|
+| 1 | Player | the runner's preferences: "Game's choice" (null), a bundled bank, a CDN bank or a custom `.sf2` | never; not in `GameState` |
+| 2 | Script | `GameState.audio.soundFont` set by `soundFont()` ([soundfont-state](#soundfont-state)) | yes, in the save |
+| 3 | Author | a project-level default SoundFont `AssetKey`, read by the engine at start | with the game data |
+| 4 | Runner | `RunConfig.audio.bank` (`BankRef \| null`) | no |
+| 5 | Bundled default | the in-repo bank of [path-b-bank](#path-b-bank) / TK-16, lazy-loaded | no |
+
+The core contributes ranks 2 and 3 as one value, `soundFont ?? defaultSoundFont`,
+in the `soundfont.set` cue ([soundfont-cue](#soundfont-cue)); the cue player
+adds ranks 1, 4 and 5 and sends the result as the protocol's `setBank`. If every
+rank is null there is no bank: MIDI voices report `error { code: "bank.missing" }`
+and are silent; WAV is unaffected.
+
+A bank is named by a `BankRef`:
+
+```text
+BankRef = {
+  source: "bundled" | "game" | "cdn" | "user",
+  id: string,              // bundled id, game AssetKey, CDN id, or user-bank id
+  sha256: string | null    // lower-case hex; verified before use when non-null
+}
+```
+
+`sha256` is required for `bundled` and `cdn` banks and is `null` for `game` and
+`user` banks until the runner has hashed them. The runner config's audio part
+has fixed keys `backend` (the `MidiSynth` id, `"null"` for headless), `bank`
+(`BankRef | null`), `focus` (`"pause" | "continue"`, [audio-focus](#audio-focus))
+and the player mix; entry 6.11 owns its TypeScript type.
+
+The project-level default (rank 3) enters the engine as the plain-data startup
+value `defaultSoundFont: AssetKey | null`; if the key does not resolve in the
+asset index, the engine raises `media.soundfont-missing` once at start and
+treats it as `null`. Where that value is stored in a game project (the legacy
+`.gam` has no field for it) belongs to the native project file and is an
+**owner deferral** ([audio-deferrals](#audio-deferrals)).
+
+**Evidence.** Owner direction (epic envelope, 2026-10-18) names the runner,
+author and player layers and says a player override is never saved in game
+state; exploration §4 (the three layers; hot swap without restart) and §6.15;
+Q15 shows the legacy engine left audibility to the platform.
+**Rejected alternative.** Letting a script or the author override the player
+takes away a deliberate player choice (taste, accessibility) and makes a saved
+game sound different per machine anyway; a runner config that forces a bank
+over the player has no use case beyond what rank 1 already covers; storing the
+player's choice in the save would make loading a save change another game's
+sound.
+
+<a id="soundfont-state"></a>
+<a id="soundfont-commands"></a>
+<!-- OWNER: 6.3/B2 -->
+**Proposed ruling (pending owner review; B2; `soundFont`, `soundFontReset`,
+state and persistence).**
+
+| Command | Behavior |
+|---|---|
+| `void soundFont(string file)` | Names a `.sf2` or `.sf3` file in the game's Media folder as the script-chosen bank. The name resolves like every Media name (subfolders allowed, no extension added, case-insensitive; Q18). Immediate; never waits. |
+| `void soundFontReset()` | Clears the script-chosen bank, so the author's default applies again. Immediate; never waits. |
+
+**Help text (simple first).** `soundFont` changes the instrument set that MIDI
+music plays through, for example to give a boss fight its own sound. Give the
+name of a `.sf2` or `.sf3` file in your game's Media folder. Music that is
+already playing switches to the new instruments without restarting; WAV sounds
+are not affected. `soundFontReset` goes back to the game's own default set. For
+exact behavior: both commands act at the tick they run, never wait for the file
+to load, are kept when the game is saved and loaded, and a missing or wrongly
+named file raises a diagnostic and changes nothing.
+
+Technically:
+
+1. Each command posts one `audio` effect record `soundfont.set`, whose single
+   argument is the resolved `AssetKey` or `null`; the audio applier owns the
+   state. Effect order is post order, so `soundFont("boss.sf2")` followed by
+   `mediaPlay("boss.mid")` in one thread step emits the bank cue before the play
+   cue.
+2. *State.* `AudioStateV2.soundFont: AssetKey | null` (amendment A1). The
+   applier sets it to the key (`soundFont`) or `null` (`soundFontReset`), then
+   emits one `soundfont.set` cue whose `asset` is `soundFont ?? defaultSoundFont`.
+   The cue is emitted on every accepted command, even when the value is
+   unchanged; a runner treats an unchanged bank as a no-op.
+3. *Diagnostics.* A name that is not `.sf2` or `.sf3` (ASCII-folded) raises
+   `media.soundfont-name`; a name that does not resolve in the asset index
+   raises `media.soundfont-missing`. Both are located at the argument and make
+   no state or cue change (the 6.2 error rule). A bank that resolves but fails to
+   load is the runner's problem: it reports `bank.invalid` or `bank.unavailable`
+   and keeps its current bank; core state is unchanged.
+4. *Start, save and load (amendment A3).* The applier emits one `soundfont.set`
+   cue, with `asset = soundFont ?? defaultSoundFont`, when it registers at engine
+   start (before it drains pending effects) and again at the head of every load
+   re-emission, before any media cue. The bank is part of the save projection;
+   `reset()` leaves it untouched with the rest of the audio section.
+5. *Null and headless.* The cue is recorded in the cue stream and nothing is
+   loaded.
+6. Not ruled: a `getSoundFont` read-back. No author need was found; adding one
+   later changes no state.
+
+*Worked example.* The cue counter is at 7 and the author default is
+`media/town.sf2`. At tick 600 a thread runs `soundFont("boss.sf2")` then
+`mediaPlay("boss.mid")`; at tick 900 another runs `soundFontReset()`:
+
+| cueId | tick | kind | track | asset |
+|---:|---:|---|---|---|
+| 7 | 600 | `soundfont.set` | `null` | `media/boss.sf2` |
+| 8 | 600 | `media.play` | `music` | `media/boss.mid` |
+| 9 | 900 | `soundfont.set` | `null` | `media/town.sf2` |
+
+After tick 900 `soundFont` is `null` again; saving then loading re-emits one
+`soundfont.set` for `media/town.sf2` before any media cue.
+
+**Evidence.** Exploration §5 (owner direction: the two commands, restore after
+load, a bad bank is non-fatal and keeps the current one); AD-16's closed kind
+list (the amendment); 6.1 save/restore and reset rulings; 6.2's error rule; Q18
+(Media-folder name resolution).
+**Rejected alternative.** Treating the script bank as a setting (not saved) would
+lose the author's chosen sound after a load in a new session; letting the runner
+resolve the bank name loses deterministic diagnostics and a replayable state;
+deduplicating the cue needs a second field of "last emitted bank" state for no
+gain; failing the command when the bank cannot be decoded would make game
+behavior depend on the runner's file support.
+
+<a id="soundfont-cue"></a>
+<!-- OWNER: 6.3/B3 -->
+**Proposed ruling (pending owner review; B3; the `soundfont.set` cue, the
+AD-16 amendment).** `soundfont.set` is a platform cue with the same twelve fixed
+keys as every cue:
+
+```text
+{ cueId, tick, kind: "soundfont.set", track: null, voice: null,
+  asset: AssetKey | null, loop: null, flags: null, positionTicks: null,
+  volume: null, targetVolume: null, durationTicks: null }
+```
+
+`asset` is the effective core-side bank (`soundFont ?? defaultSoundFont`);
+`null` means "no game bank; use the runner and bundled layers". `tick` is the tick
+the effect was applied. The cue is added to the closed `AudioCueKind` union, so
+the runner-side exhaustive `switch` and the port fixture change with it. A
+runner realises it as in [cue-player](#cue-player); an unrealisable bank is a
+diagnostic and silence for MIDI voices only.
+
+**Evidence.** AD-16; exploration §5 and §11; 6.1 P4's fixed-key rule.
+**Rejected alternative.** A cue per voice (a bank is global to a MIDI source); a
+`media.*` kind (a bank is not a track); omitting `null` when no bank is set
+(violates AD-14's fixed keys).
+
+<a id="soundfont-user-bank"></a>
+<!-- OWNER: 6.3/B4 -->
+**Proposed ruling (pending owner review; B4; the player layer and the user
+`.sf2` contract).** In plain terms, a player can point the runner at their own
+SoundFont, and it stays their choice across games and saves. The runner (epic 9)
+implements this; epic 6 fixes the contract so it can be checked. Technically:
+
+1. *Choosing.* The runner's audio settings offer "Game's choice" (the default),
+   each bundled bank, any CDN bank the runner lists, and "Custom…" (a file
+   picker and drag-and-drop for any `.sf2` or `.sf3`). The choice is a player
+   preference; it is never in `GameState`, a save, a cue or the input log.
+2. *Validation.* A custom file must begin with a RIFF container of type `sfbk`;
+   otherwise the runner reports `bank.invalid` and keeps the current bank. The
+   runner MAY enforce a size ceiling and report `bank.unavailable` above it; the
+   ceiling is a runner number, not part of the protocol.
+3. *Identity and storage.* A user bank's id is the SHA-256 of its bytes; the runner
+   stores it in its own durable storage (browser: OPFS or IndexedDB) so it
+   survives reloads and is shared by every game on that runner. Nothing is
+   uploaded.
+4. *Hot swap.* Selecting a bank sends `setBank`; MIDI voices already playing keep
+   their position and continue with the new instruments.
+5. *Failure.* Any failure keeps the previous bank, shows a message, and changes
+   nothing in the game.
+6. *Reset.* Choosing "Game's choice" returns to rank 2/3/4/5 resolution.
+7. *Licence.* A user's file is the user's own responsibility under ADR 0004's
+   ungated-extension rule; the runner ships no copy of it.
+8. *Proof.* The reference binding proves the contract with a conformance vector
+   in which `setBank` names a `user` bank given as bytes (entry 6.15); epic 9
+   proves the browser UI ([epic9-audio-handoff](#epic9-audio-handoff)).
+
+**Evidence.** Epic envelope Done-when item 3 and the owner direction that the
+player layer is never saved; exploration §4 and §6.15; architecture-options §7
+("let users point the runner at their own `.sf2`").
+**Rejected alternative.** Reading a user bank through a core `asset` request
+(blocks time and puts a large host file in the game's asset space); saving the
+choice with the game; a size ceiling inside the protocol (differs per device).
+
+<a id="path-b-bank"></a>
+<!-- OWNER: 6.3/B5 -->
+**Proposed ruling (pending owner review; B5; the Path B bank choice and its
+provenance and licence bar).** In plain terms, the project will only ship a
+General MIDI SoundFont whose samples it can prove it may redistribute. On today's
+evidence neither named candidate proves it, so the ruling fixes the bar, names
+the one candidate worth checking, and says exactly what happens if it fails.
+Technically:
+
+*Candidate and what is known (read 2026-10-18).*
+
+| | Florestan Basic GM GS | GMGSx |
+|---|---|---|
+| Size | 3.3 MB; 3,272,882 bytes in an Internet Archive listing | about 4 MB; 4,140,692 bytes in the same listing |
+| Author's own statement | The author's page (Wayback snapshot 2025-10-28; the live page returned HTTP 410) says it is "sampled from a Roland Sound Canvas module"; the page text I read carries a site copyright footer (2012–2016) and no licence sentence | The author's SoundFont download page lists other banks and not this one |
+| "Public domain" labels | Third-party only: an Internet Archive file name; the Polyphone hub labels sibling Florestan banks public domain (the Basic bank's own hub page was not retrievable) | Third-party only: an Internet Archive file name; an Arch Linux package describes it as "similar sound as gm.dls" and records licence `LicenseRef-SynthFont` |
+| Verdict | **Sole Path B candidate**, subject to the bar | **Removed**: no first-party licence found, a sound modelled on a commercial wavetable set, and a contradictory package licence |
+
+*The bar* (entry 6.13 verifies each item with evidence and records it beside the
+bank; a bank ships only if every item passes and a person approves):
+
+* **PB-1 Identity:** the exact artifact URL(s), retrieval date, byte length and
+  SHA-256.
+* **PB-2 First-party grant:** an explicit licence or dedication naming this bank,
+  written by its author on a first-party page, in the author's archive, or in the
+  file's `ICOP`/`ICMT` chunks. A third-party hub label or archive file name is a
+  hint, never proof.
+* **PB-3 Sample origin:** the grant covers the samples. The author created every
+  sample, or each sample's permissive origin is documented. A bank sampled from a
+  commercial synthesiser or wavetable set **fails** unless its maker's terms are
+  shown to allow redistributing the samples.
+* **PB-4 Licence class:** CC0-1.0 or a licence rated Bronze or better on the pinned
+  Blue Oak list (G6). A bare "public domain" statement with no fallback licence
+  needs an ADR exception, per G6 rule 2.
+* **PB-5 Contradiction scan:** the bank's embedded `INAM`, `ICOP` and `ICMT` text
+  and any readme in the original archive contain no reservation ("all rights
+  reserved") — the Chaos Bank precedent.
+* **PB-6 Agreement:** two independent sources agree on author and licence; any
+  disagreement is a fail until resolved.
+* **PB-7 Inheritance:** a bank built from other banks documents each upstream's
+  terms.
+* **PB-8 Gate fields:** path under `media/soundfonts/`, licence id, ADR, SHA-256,
+  a `THIRD_PARTY_NOTICES` entry with the licence text verbatim, SF2 container (so
+  the default path needs no WebAssembly), and a size ceiling of 8 MiB
+  (8,388,608 bytes) per bundled bank, registered under `bundledAssets`.
+* **PB-9 Evidence kept:** a provenance record in `media/soundfonts/` (statements
+  quoted, URLs, dates, hashes); entry 6.13 owns it.
+* **PB-10 Owner approval:** a person approves the bank choice.
+
+*Outcome rule.* If Florestan Basic passes, 6.13 ships it and TK-16 (entry 6.14)
+replaces it as the default when the owner approves how it sounds. **If it fails
+(expected on today's evidence, at PB-2 and PB-3), 6.13 ships no third-party
+bank:** it records the failed items, still lands the licence-gate extension,
+authors a tiny CC0 test SoundFont as a test fixture (under
+`packages/synth/test/fixtures/`, never bundled as a default) so the offline MIDI
+render test of entry 6.16 has a bank, and the first bundled bank becomes TK-16.
+No other third-party bank is substituted without a new owner ruling. The
+default-bank resolution order is: TK-16 if shipped, else the Path B bank if
+shipped, else none.
+
+*Where a bundled bank lives.* A bundled bank is a runner-side asset under
+`media/soundfonts/`. It is not part of the `bundled` bytes that
+`createEngine` receives for fonts and cursors (display page, ticket 4.28):
+the core never sees bank bytes, so the engine's input and hashes do not change
+with the bank.
+
+*Larger banks.* FluidR3_GM (about 141 MB) and similar large banks are not bundled
+in the monorepo and are not the default; the runner may offer them as an optional
+CDN or user bank after the same provenance check. This supersedes the older
+statements that FluidR3_GM is the default (ADR 0001 point 5, G6 rule 3, the
+spine's version table and `architecture-options.md` §7); rewording a guard-rail
+needs an ADR, which is an **owner deferral** ([audio-deferrals](#audio-deferrals)).
+
+**Evidence.** Exploration §3 (candidates, "provenance must be verified", the Chaos
+Bank counter-example, "keep it in this monorepo", 2–4 MB at `media/soundfonts/`),
+§9 (conservative default: Florestan or GMGSx after verification); the retrieved
+pages named in the table; G6 and ADR 0003; `tools/licences/config.json`
+(`bundledAssets` holds fonts only today).
+**Rejected alternative.** Adopting Florestan or GMGSx now on the strength of
+third-party "public domain" labels (the Chaos Bank lesson: a label is not a
+grant); picking the next-best third-party bank automatically when Path B fails
+(repeats the same risk without an owner ruling); bundling FluidR3_GM (size, and
+its default status predates the owner's bank direction).
+
+### The runner audio protocol
+
+<a id="runner-audio-protocol"></a>
+<!-- OWNER: 6.3/P1 -->
+**Proposed ruling (pending owner review; P1; protocol v1, messages in and
+events out).** In plain terms, between the part of a runner that reads cues and
+the part that makes sound there are only ten kinds of message and three kinds of
+event, all plain data. Any language can implement them, and the vectors of entry
+6.15 prove it. Technically (`AudioProtocolV1`; every record has exactly the keys
+shown, in any order, and a field with no value is `null`, never omitted):
+
+| Message in | Keys | Meaning |
+|---|---|---|
+| `load` | `kind, voice, track, asset, data` | Create voice `voice` for the bytes `data` of `asset` on the bus named `track`, and begin decoding. |
+| `play` | `kind, voice, cue, loop, volume, positionTicks` | Start a `ready` voice at `positionTicks`, looping if `loop`, at script volume `volume`. `cue` is the cue id reported by a later `ended`. |
+| `pause` | `kind, voice` | Hold a playing voice at its position; its fade clock stops with it. |
+| `resume` | `kind, voice` | Continue a paused voice from where it held. |
+| `stop` | `kind, voice` | End the voice and release it. No `ended` follows. |
+| `seek` | `kind, voice, positionTicks` | Move a playing or paused voice to `positionTicks`. |
+| `setLoop` | `kind, voice, loop` | Turn looping on or off in place; `false` lets the current pass finish. |
+| `setVolume` | `kind, scope, voice, bus, volume` | Set a script volume (0–100). `scope` is `"voice"`, `"bus"` or `"master"`; for `"voice"` only `voice` is non-null, for `"bus"` only `bus` (a track name), for `"master"` both are `null`. |
+| `fade` | `kind, scope, voice, bus, fromVolume, targetVolume, durationTicks` | Ramp a `"voice"` or `"bus"` volume linearly in ticks (master has no fade). `durationTicks` 0 is an immediate set. |
+| `setBank` | `kind, bankKind, bank` | Select the bank of kind `bankKind` (`"soundfont"`); `bank` is a `BankRef` or `null` for none. Hot-swaps without restarting playback. |
+
+| Event out | Keys | Meaning |
+|---|---|---|
+| `ready` | `kind, voice, lengthTicks` | The voice finished decoding (and, for MIDI, has its bank). `lengthTicks` is the source's length, equal to the `AudioInfo` of the same bytes, or `null`. |
+| `ended` | `kind, voice, cue` | A finite, non-looping voice reached its natural end. |
+| `error` | `kind, voice, cue, code, detail` | Something failed. `voice` and `cue` are `null` when not about one voice. `detail` is free text for people and is never compared. |
+
+Field types. `voice` is a positive integer, the `cueId` of the cue that created
+the voice, so voice ids are unique and never reused. `track` and `bus` are track
+names; the runner makes one bus per track on first use and one implicit master
+bus. `data` is a byte sequence (an in-process byte array; a base64 string with
+padding in JSON vectors). `asset` is informational (diagnostics). `loop` is a
+boolean. `volume`, `fromVolume` and `targetVolume` are integers 0–100.
+`positionTicks` and `durationTicks` are non-negative integers in 60 Hz core
+ticks; a source converts ticks to its own frames internally, rounding half up.
+The closed `error` codes are `format.unsupported`, `format.malformed`,
+`bank.missing` (a MIDI voice has no bank set), `bank.invalid` (not a SoundFont,
+or a hash mismatch), `bank.unavailable` (not fetched, quota, too large),
+`source.failed`, `output.unavailable` and `protocol.state`. The player's mix
+(master, per-track gain, mute, output device) is outside the protocol: a runner
+multiplies it after the script volumes, and the vectors run with it at unity.
+
+*Added message.* The owner direction listed nine messages. The 6.1 cue
+`media.flags` and 6.2's `mediaLoop` change looping in place, which none of the
+nine can express, so `setLoop` is added. **Rejected alternatives:** overloading
+`seek` or `play` with a loop field (a `seek` would then do two things and a
+second `play` is illegal in `playing`).
+
+*Units and clocks.* Time reaches a source only as ticks inside messages and,
+in the conformance binding, through `advance(ticks)` / `render(frames)` calls
+in the vector script; a real runner uses its device clock. A fade's elapsed
+time counts the voice's own playing ticks, so it freezes on `pause`; a bus fade
+freezes while every active voice of that track is paused (the 6.1 aggregate).
+
+*Owed `ended`.* A realised voice that is finite, not looping, and reaches its end
+without a `stop` emits exactly one `ended`. A looping voice, a stopped voice, a
+failed voice and a voice the cue player chose not to realise
+([audio-late-sounds](#audio-late-sounds)) emit none. `ended` is advisory
+(6.1): the cue player MAY turn it into `audio.ended { cueId: cue }` and core
+ignores it for time. Under the Null backend `ended` is emitted only in the
+conformance binding or when `RunConfig` asks for it; a normal headless run logs
+no `audio.ended`.
+
+**Evidence.** Exploration §12 (the message and event lists, `null` for absence,
+language-neutral schema, data-driven vectors) and §13 P4 (`seek` and `fade`,
+`track` and `voice`); the epic envelope assumption A-5; AD-14 (fixed keys,
+`null`); AD-30 (the TypeScript implementation is the reference); entry 6.15's
+plan (schema checked against types; vectors replay through Null and PCM).
+**Rejected alternative.** A class-shaped contract (only usable from
+TypeScript); one record shape with every key for every kind (large and
+hides which keys matter); events carrying positions (a runner must not feed
+position back, 6.1 P2).
+
+<a id="voice-state-machine"></a>
+<!-- OWNER: 6.3/P2 -->
+**Proposed ruling (pending owner review; P2; the voice state machine).** A voice
+is in exactly one of `loading`, `ready`, `playing`, `paused`, `ended`, `stopped`
+or `failed`. The last three are terminal: the voice is released and its id is
+never reused.
+
+```mermaid
+stateDiagram-v2
+  [*] --> loading: load
+  loading --> ready: decoded (ready)
+  loading --> failed: error
+  loading --> stopped: stop
+  ready --> playing: play
+  ready --> stopped: stop
+  playing --> paused: pause
+  paused --> playing: resume
+  playing --> ended: natural end (ended)
+  playing --> stopped: stop
+  paused --> stopped: stop
+  ended --> [*]
+  stopped --> [*]
+  failed --> [*]
+```
+
+| State | Message or condition | Next | Output |
+|---|---|---|---|
+| (none) | `load` | `loading` | none |
+| `loading` | decode succeeded (MIDI: and the bank is ready) | `ready` | `ready` |
+| `loading` | decode failed | `failed` | `error` (`format.unsupported`, `format.malformed` or `source.failed`) |
+| `loading` | MIDI voice and no bank is set | `failed` | `error` (`bank.missing`) |
+| `loading` | MIDI voice and the bank is still loading | `loading` | none; it waits, and fails with `bank.invalid` or `bank.unavailable` if the bank fails |
+| `loading` | `stop` | `stopped` | none; no `ready` follows |
+| `ready` | `play` | `playing` | none |
+| `ready` | `stop` | `stopped` | none |
+| `ready`, `playing`, `paused` | `setLoop`, `setVolume`, `fade` | unchanged | none (a fade on a `paused` voice is frozen) |
+| `playing` | `pause` | `paused` | none |
+| `playing`, `paused` | `seek` | unchanged | none; a finite voice sought to or past its length becomes `ended` |
+| `paused` | `resume` | `playing` | none |
+| `playing` | natural end, not looping | `ended` | `ended` |
+| `playing` | pass boundary, looping | `playing` | none |
+| `playing`, `paused` | `stop` | `stopped` | none |
+| any live state | a message not listed above | unchanged | `error` (`protocol.state`) |
+| `ended`, `stopped`, `failed`, unknown id | any message | unchanged | none, ignored silently |
+
+The last row matters: core stops a finished one-shot with a later `media.stop`,
+so a `stop` for an already-ended voice is normal and must be ignored, not
+reported. Only `loading` may take `stop` before `ready`; every other message
+waits for `ready`, which the cue player enforces ([cue-player](#cue-player)), so
+sources need no queue. `setBank` is not a voice message and is valid at any
+time; a failed bank reports `error` with `voice: null` and the previous bank
+stays in force.
+
+**Evidence.** Exploration §12 (the draft state machine and "ended is not a
+transition from stopped"); 6.1 P2/P5 (core stops finished voices later and
+replaced voices stop before play); 6.2 voices.
+**Rejected alternative.** A source-side message queue (every source would have to
+reimplement ordering); treating a stale `stop` as an error (it happens on every
+one-shot); letting `seek` and `play` set the position in `ready` (two ways to
+do one thing).
+
+<a id="cue-player"></a>
+<!-- OWNER: 6.3/P3 -->
+**Proposed ruling (pending owner review; P3; the cue player and the normative
+cue-to-message mapping).** In plain terms, the cue player is the one place that
+turns "what the game says should be playing" into messages, and it handles a
+late start by jumping ahead. Anyone writing a runner copies this table, so every
+runner starts the same sounds. It lives in `synth` (entry 6.11's design, in the
+TypeScript reference). Technically, the cue player processes the cues of one
+`TickReport` in array order, then its requests, and keeps: a map from
+`(track, voice index)` to the runner voice id and creating cue id; a
+*prepared* voice per `(track, asset)` from `media.load`; the last effective bank
+sent; and `R`, the simulation tick the runner has most recently reached when it
+acts.
+
+| Cue | Cue player action |
+|---|---|
+| `soundfont.set` | Recompute the effective bank ([soundfont-layers](#soundfont-layers)); if it differs from the last sent, send `setBank { bankKind: "soundfont", bank }`. |
+| `media.load` | Send `load` with `voice` = the cue id; remember it as the prepared voice for `(track, asset)`. A later `media.load` or `media.play` for another asset on that track releases it with `stop`. |
+| `media.play` | Reuse the prepared `ready` voice for `(track, asset)`, else send `load` with `voice` = the cue id. When the voice is `ready`, let `s = cue.positionTicks + max(0, R − cue.tick)`. If it loops and the length is known, `s = s mod length`. If it is finite and `s ≥ length`, or it is dropped by [audio-late-sounds](#audio-late-sounds), send `stop` and realise nothing. Otherwise send `play { voice, cue: cue.cueId, loop: cue.loop, volume: cue.volume, positionTicks: s }` and record the map entry. |
+| `media.stop` | Send `stop` to the mapped voice; clear the entry. An unmapped slot is ignored. |
+| `media.pause`, `media.resume` | Send `pause` or `resume` to the mapped voice. |
+| `media.seek` | Send `seek { positionTicks: cue.positionTicks + (playing ? max(0, R − cue.tick) : 0) }`, wrapped for a looping voice. |
+| `media.flags` | Send `setLoop { loop: cue.loop }`; the integer `flags` stay in core. |
+| `media.volume` | `track: null` → `setVolume` scope `"master"`; `voice: null` → scope `"bus"` with `bus` = the track; otherwise scope `"voice"`. |
+| `media.fade` | `voice: null` → scope `"bus"`, otherwise `"voice"`. With lateness `d = max(0, R − cue.tick)` and duration `D`, send `fade` with `fromVolume` = the 6.2 fade value at `d`, the cue's `targetVolume`, and `durationTicks = max(0, D − d)`; if `d ≥ D` send `setVolume` with the target instead. |
+
+A message for a voice that is still `loading` waits in the cue player and is
+sent, in order and lateness-adjusted, once `ready` arrives; if the voice
+fails, they are dropped. Cue processing never blocks the simulation, and the
+cue player never sends the runner's position back.
+
+*Worked example.* A `media.play` cue for a looping 600-tick song has `tick` 100,
+`positionTicks` 0, `cueId` 41. The voice becomes `ready` when `R = 190`:
+`s = 0 + (190 − 100) = 90`, so it sends `load { voice: 41, … }` earlier and now
+`play { voice: 41, cue: 41, loop: true, volume: 100, positionTicks: 90 }`. At
+`R = 760` it would send `positionTicks: (660) mod 600 = 60`.
+
+**Evidence.** 6.1 P2 item 5 (late runners catch up from the cue `tick`; a
+one-shot at or past its length is not started); 6.2 P7 (the fade formula and the
+late threshold); exploration §12 ("the runner maps `cueId` to `voiceId`");
+spine AD-16.
+**Rejected alternative.** Leaving the mapping to each runner (two runners would
+start different sounds from the same cues and the vectors could not prove
+agreement); queuing control messages inside sources (see the state machine).
+
+<a id="runner-may-decide"></a>
+<!-- OWNER: 6.3/P4 -->
+**Proposed ruling (pending owner review; P4; what a runner may and may not
+decide, and how audio is tested).** A runner **may** choose its output API, buffer
+sizes, threading, which sources and banks are installed, its focus policy
+([audio-focus](#audio-focus)), whether to report `ended`, and how it presents a
+video. It **may not** change what a cue means, change core state, report a
+position, invent an `ended` for a voice that did not reach its end, drop an
+owed one, or send anything into the core except the AD-14 inputs (asset
+replies, `audio.ended`, `video.ended`, `focus`, key and pointer events).
+
+Rendered sound is never hashed. Goldens compare the cue stream and state hashes
+(entry 6.16); a PCM render is checked only by smoke or tolerance. Starting values
+for 6.12, 6.15 and 6.16, which they may tighten with evidence but never turn into
+a hash: a PCM source's `ready.lengthTicks` equals the `AudioInfo` exactly; a
+one-shot's offline render is at least `lengthTicks` ticks of frames, within one
+tick; "non-silent" means a peak of at least 1/1000 of full scale (about −60 dBFS)
+inside the voice's length.
+
+**Evidence.** Exploration §12.4 and §6.7 (goldens hash the cue stream; PCM may
+differ across engines); AD-14 and AD-30.
+**Rejected alternative.** Hashing PCM output (engine-dependent floating point);
+letting a runner read a position back to "stay in sync" (device timing in core).
+
+<a id="battle-music-synthetic"></a>
+<!-- OWNER: 6.3/BM -->
+**Proposed ruling (pending owner review; BM; the synthetic battle effect for
+Done-when item 1).** In plain terms, there is no battle yet, so tests post the
+same music effects a battle will, and the music behaves as Q8 and Q9 say. The
+battle epic later posts the real ones. Technically, the synthetic producer posts
+`music.play` records with source `battle`:
+
+| Moment | Effect | Expected cues |
+|---|---|---|
+| battle starts, the fight has music `A` | `music.play(A, loop, source battle)` | `media.stop` on `music` if it was playing, then `media.play` of `A` from 0 |
+| battle starts, the fight has no music | `music.play(null, source battle)` | `media.stop` only: silence (Q8); the `music` file is cleared |
+| battle ends (win, flee or game over) | `music.play(P, loop, restart, source battle)`, `P` the pre-fight file the battle producer saved | `media.stop` if playing, then `media.play` of `P` from 0 (Q9); the `restart` flag makes a same-file `P` restart too |
+
+These records are test fixtures in epic 6 (entries 6.6 and 6.16); the real
+battle producer, its saved pre-fight file and the game-over case are epic 7's.
+The record's exact argument layout is entry 6.6's; the behavior above is fixed.
+
+**Evidence.** Q8, Q9, Q19 and the 6.1 ledger rows; epic envelope ("Source
+conflict (to confirm at 6.3)": Done-when item 1 asks for battle cues but no
+battle runtime exists); 6.1's producer table (battle posts `music.play` with
+source `battle`).
+**Rejected alternative.** Waiting for epic 7 (Done-when item 1 could not be
+proved); a second cue vocabulary for battle (6.1 forbids it).
+
+### The contract epic 9 implements
+
+<a id="epic9-audio-handoff"></a>
+Epic 9 (the web runner, epic `web-runner-packaging`) wires Web Audio and the
+browser; epic 6 rules what the runner must do so that every runner behaves the
+same. Each item below has its own ruling. In every item the core never waits on
+the runner and never reads anything back except the AD-14 inputs.
+
+<a id="audio-autoplay"></a>
+<!-- OWNER: 6.3/H1 -->
+**Proposed ruling (pending owner review; H1; autoplay unlock).** In plain terms,
+a browser will not make sound until the player clicks or presses something. Until
+then the game runs normally and the runner remembers what should be playing; at
+the first click the music joins in at the right place and short sound effects
+that were missed are simply skipped. Technically: a runner is **locked** until
+its first user gesture. While locked the cue player processes every cue into a
+mirror (per voice: asset, loop, volume, the last position-setting cue and its
+`tick`, and its state) and sends no `load` or `play`. At unlock tick `R_u` it
+realises every voice the mirror shows as `playing` or `paused`, in track order
+then voice index, as an ordinary late start measured to `R_u`
+([cue-player](#cue-player)); a paused voice is realised paused at its held
+position. The late rule of [audio-late-sounds](#audio-late-sounds) then drops
+missed finite sound effects and keeps music and looping voices, which catch up by
+position. Unlock is a runner event, not an input: it is never logged and core
+never sees it. A headless or native runner with no lock skips this.
+
+**Evidence.** Exploration §6.12 ("before the first gesture hold only the current
+music state and drop SFX; the core never waits on unlock"); 6.1 P2 item 5 and
+6.2 P7 already define late starts, so no new mechanism is needed.
+**Rejected alternative.** An `audio.unlocked` input (a replay would differ by
+when a human clicked, for a value the core never reads); making the core wait for
+unlock (device state would gate the simulation).
+
+<a id="audio-focus"></a>
+<!-- OWNER: 6.3/H2 -->
+**Proposed ruling (pending owner review; H2; focus).** In plain terms, when the
+window loses focus the game pauses (that is the core's job), and by default the
+sound pauses with it and resumes where it was. Technically, core behavior is
+AD-14/E-03: after `focus.lost` it consumes no ticks until `focus.gained`. The
+runner's `RunConfig.audio.focus` is `"pause"` (default) or `"continue"`. With
+`"pause"`, the cue player holds: it sends `pause` to every voice it realised as
+`playing` and, on `focus.gained`, `resume` to exactly those voices. With
+`"continue"` it does nothing. Both are legal under Q15; neither changes cue
+meaning or game state. The same hold mechanism is used for video
+([video-music](#video-music)); a hold is not a loading stall.
+
+**Evidence.** Q15 (the legacy engine never touched audio; audibility was the
+platform's); exploration §6.13 (music pauses through the existing `focus`
+input) and the 6.1 P8 note (audio continues unless the runner decides
+otherwise).
+**Rejected alternative.** Always continue: with the core frozen, the device
+position drifts ahead of `mediaPosition` and of synced stems; always pause:
+removes the choice a background-music player might want.
+
+<a id="audio-late-sounds"></a>
+<!-- OWNER: 6.3/H3 -->
+**Proposed ruling (pending owner review; H3; late sounds, amendment A6).** The
+threshold stays 15 ticks (250 ms at 60 Hz, 6.2 P7). *Lateness* is
+`R − cue.tick` measured **when the voice is ready to start** (after fetching and
+decoding), not when the cue was received. A voice is **dropped** (not realised,
+`stop` sent, no `ended`) when it is finite, not looping, on a track other than
+`music`, and its lateness is at least 15. Music and looping voices are never
+dropped: they start at the caught-up position. Core keeps the voice timeline
+either way. A blocking asset request freezes core ticks, so it adds no lateness
+by itself; decode time after the reply does. During such a stall realised voices
+keep sounding; the stall is not a hold.
+
+**Evidence.** 6.2 P7 (15 ticks, "receiveTick"); exploration §7.5 and §9 (about
+250 ms, drop); AD-5 (blocking requests freeze time).
+**Rejected alternative.** Measuring from receipt (ignores decode time, the main
+source of lateness); dropping music (the legacy behavior is that music always
+plays); a threshold in wall-clock milliseconds (device-dependent).
+
+<a id="audio-prefetch"></a>
+<!-- OWNER: 6.3/H4 -->
+**Proposed ruling (pending owner review; H4; audio's share of the prefetch plan).**
+In plain terms, the game tells the runner which sounds it will probably need
+soon, so the first play does not stall. The core computes the plan; the runner
+only fetches and decodes ahead. Technically the audio assets by tier are:
+
+| Tier | Audio assets |
+|---|---|
+| `now` | the current board's `bkgMusic`; the `.anm` frame sounds of the animations the board uses; the effective bank (`soundFont ?? defaultSoundFont`) when any MIDI is in this tier |
+| `next` | the music of boards reachable by edge links and literal `send(...)` targets; the battle background's `music`, `selectSound`, `chooseSound`, `readySound`, `cantDoSound` |
+| `always` | the main file's `cursorMoveSound`, `cursorSelectSound`, `cursorCancelSound`; the default bank |
+
+Hints never change state. On a hint the runner SHOULD decode ahead in a worker
+(WAV to PCM, MIDI parse, bank load); the bank loads lazily, on the first MIDI
+need or an `always` hint, never at boot. An audio file with no hint is fetched
+through the blocking `asset` request when first played, so the stall is visible
+but correct. The hint wire shape and the planner are a core entry at the AD-5
+seam that epic 9's inception creates (an **owner deferral** by name,
+[audio-deferrals](#audio-deferrals)); epic 6 rules only this audio content.
+
+**Evidence.** Exploration §7 items 2 and 4 and its ownership table ("Epic 6: audio's
+share of the plan"); the main-file and fight-background audio fields in
+exploration §1; AD-5 (hints allowed, cannot change state).
+**Rejected alternative.** Each runner parsing boards to guess (a second board
+parser per runner); loading the bank at boot (3 MB or more before the first
+sound for games that use none).
+
+<a id="audio-soundfont-cache"></a>
+<!-- OWNER: 6.3/H5 -->
+**Proposed ruling (pending owner review; H5; the SoundFont cache contract).** A
+runner caches banks by the SHA-256 of their bytes, per runner and shared by every
+game, so a bank is fetched once. The bundled default is kept in the app-shell
+cache. A `BankRef` with a `sha256` is verified before use; a mismatch is
+`bank.invalid`. Banks supplied by a game package are cached under the same hash
+and are not duplicated per game. User banks are stored durably
+([soundfont-user-bank](#soundfont-user-bank)). A storage or quota failure is
+`bank.unavailable`, keeps the previous bank and falls back to streaming where
+the runner can. Eviction never removes the bank currently in use. The runner
+SHOULD request persistent storage; Safari's eviction rules are **unverified**.
+
+**Evidence.** Exploration §7 items 3, 8 and 9; epic 9's envelope ("a SoundFont
+cache shared across games"). **Rejected alternative.** A cache per game (the same
+3 MB bank stored once per game); keying by URL (changes under a CDN move).
+
+<a id="audio-browser-test"></a>
+<!-- OWNER: 6.3/H6 -->
+**Proposed ruling (pending owner review; H6; browser playback test and the CSP
+note).** The browser playback test of the envelope's Done-when item 2 moves to
+epic 9: the repository has no browser harness and no `runner-web`. Entry 6.16
+proves the render path offline in Node. Epic 9's test drives `runner-web` (the
+browser tool pinned in the spine is Playwright) with a cue vector and asserts a
+non-silent output of about the core `AudioInfo` length; the probe (an analyser
+tap or an offline context) is epic 9's choice. *CSP.* The bundled banks are SF2,
+so the default path needs no WebAssembly. SF3 (compressed samples) decoding is
+believed to need `script-src 'wasm-unsafe-eval'`; that is **unverified**, and
+entry 6.12 confirms it against the installed dependency and writes the exact
+note into epic 9's envelope. **Rejected alternative.** Building a browser
+harness inside epic 6 (delays the synth lanes for a harness epic 9 must build
+anyway).
+
+<a id="audio-done-when"></a>
+<!-- OWNER: 6.3/D-10 -->
+**Proposed ruling (pending owner review; D-10; Done-when items assigned).** The
+owner confirms here that item 2 (browser test) moves to epic 9 and that item 3
+(a user's own `.sf2`) is delivered by the epic 9 runner against
+[soundfont-user-bank](#soundfont-user-bank):
+
+| Envelope Done-when | Delivered by | Note |
+|---|---|---|
+| 1. Music and sound-effect cues from boards, battles, animation frames and scripts appear in headless null-audio tests | 6.6 (boards, animation frames), 6.8 and 6.9 (scripts), 6.16 (goldens); battles by [battle-music-synthetic](#battle-music-synthetic) | The real battle producer is epic 7's |
+| 2. The synth plays a sample MIDI through the SoundFont in a browser test | 6.12 and 6.16 (offline Node render); epic 9 (browser, [audio-browser-test](#audio-browser-test)) | Moved to epic 9 |
+| 3. A user can point the runner at their own `.sf2` | This entry (the contract); epic 9 (the runner); 6.15 (the reference vector) | Delivered against [soundfont-user-bank](#soundfont-user-bank) |
+| 4. Audio built-ins register with the VM and drive the cues | 6.8, 6.9, 6.10 | |
+
+**Evidence.** Inception proposal D-10 and its done-when mapping; audio-readiness
+F-07 (no browser harness, no `runner-web`). **Rejected alternative.** Keeping
+items 2 and 3 in epic 6 (they cannot be shown without a browser runner).
+
+### Video
+
+<a id="video-policy"></a>
+<!-- OWNER: 6.3/V1 -->
+**Proposed ruling (pending owner review; V1; video is transcoded on import).** In
+plain terms, cutscene videos are converted once when a game is imported, keep
+their file name, and the runner plays the converted copy. This closes the spine's
+open question "transcode on import, or drop?" in favour of transcoding (E-104).
+Technically: the importer (an authoring tool owned by the editor and asset epics;
+no entry builds it today, **[UNCHECKED]**) converts `.avi`, `.mpg` and `.mov` to
+the **portable video profile**: a WebM container with VP9 video and Opus audio.
+The converted bytes keep the original logical name, exactly as for audio
+([audio-import-policy](#audio-import-policy)); a runner identifies the container
+from its bytes. That browsers decode VP9 in WebM and Opus on every target is
+**unverified** here; epic 9 verifies it and may amend the profile before the
+importer exists. A file the runner cannot decode (an unconverted legacy AVI) is
+answered like any failure ([video-request](#video-request)): the cutscene is
+skipped and the game continues.
+
+**Evidence.** E-104 and its Reawakened rule; Q17/Q18; spine open question (AVI);
+exploration §6 on formats; epic envelope ("AVI video is handled at import time").
+**Rejected alternative.** H.264/AAC MP4 (universally decodable but
+patent-encumbered; an author may still choose it if epic 9 verifies support);
+AV1 (encode cost, uneven support); decoding AVI at run time (legacy codecs);
+dropping video (a clean-room parity loss for cutscene games).
+
+<a id="video-request"></a>
+<!-- OWNER: 6.3/V2 -->
+**Proposed ruling (pending owner review; V2; the `playVideo` request, the
+`video.ended` input and the commands; AD-17 and AD-14 amendments).** In plain
+terms, `playavi` shows the video full screen and `playavismall` shows it at its
+own size in the middle; both stop the game and the music, cannot be skipped, and
+the script carries on after the video ends. Technically:
+
+```text
+PlayVideoRequest = { kind: "playVideo", reqId: integer, key: AssetKey,
+                     presentation: "full" | "small" }
+VideoEnded       = { kind: "video.ended", reqId: integer }
+```
+
+`presentation` is new (amendment of AD-17's `playVideo`); `reqId` on
+`video.ended` is new (amendment A7 of AD-14): AD-5 says every request carries a
+core-assigned `reqId` and every reply names it. The request is a stream request:
+no bytes return, and the runner fetches the video by `key` itself. `"full"` fits
+the logical screen with the aspect ratio kept and black bars; `"small"` shows the
+video at its own pixel size, centred over the last presented frame, scaled down
+(never up) when larger than the screen. Both are runner presentation and never
+state. The video's own soundtrack follows the player's master mix and ignores
+script volume.
+
+| Command | Behavior |
+|---|---|
+| `void playavi(string movie)` | Plays `movie` full screen and waits for it to end. |
+| `void playavismall(string movie)` | Plays `movie` at actual size, centred, and waits for it to end. |
+
+**Help text (simple first).** `playavi` and `playavismall` play a movie file from
+your Media folder. The game freezes and the music stops while it plays, nothing
+the player does can skip it, and your script continues on the next line when it
+finishes; the music then starts again from its beginning, even if you had
+stopped it. `playavi` fills the screen, `playavismall` shows the movie at its own
+size in the middle. For exact behavior: the call takes no time of its own, time
+stops until the runner reports the end, and the commands and the music restart
+follow the rules below.
+
+*Rules.* (1) The name resolves like every Media name. A name that does not resolve
+raises `media.video-missing`, issues no request and changes nothing (no hold, no
+music change); this is also how an absent video in a package is handled, so the
+Q18 gap (packaged games did not look for videos) is not reproduced. (2) At most
+one video is outstanding: a call while one is pending (a later thread in the same
+tick) raises `media.video-busy` and returns immediately. (3) A runner answers
+every `playVideo` with exactly one `video.ended { reqId }`, including on failure
+(an unsupported container, a decode error, a missing file): it replies
+immediately and reports a diagnostic, so a bad video can never hang a game. (4)
+A reply for an unknown or stale `reqId` is ignored. (5) A script that wants to
+offer a skip cannot: unskippable is the rule (Q16).
+
+**Evidence.** AD-5 (every request has a `reqId`; stream requests); AD-17
+(`playVideo`); `packages/core/src/ports/requests.ts` and `ports/input.ts` (today
+the request has no presentation field and the reply has no `reqId`); the Graphics
+table rows for the two commands (full screen versus actual size, centred); Q16
+and Q18.
+**Rejected alternative.** Two request kinds (`playVideo` and `playVideoSmall`):
+doubles the union for one flag; a bare `video.ended` (a late or duplicate reply
+could release the wrong wait, and a restored game could not tell old from new);
+queuing a second video (more state for a case legacy scripts do not have).
+
+<a id="video-wait-hold"></a>
+<!-- OWNER: 6.3/V3 -->
+**Proposed ruling (pending owner review; V3; the `video` wait and the freeze).**
+In plain terms, while a video plays nothing in the game moves, exactly as when the
+window loses focus, and the script resumes when the runner says the video is
+over. Technically the wait is plain data:
+
+```text
+Wait = {
+  kind: "video", global: false, id: "playavi" | "playavismall",
+  payload: [{ reqId: integer, key: AssetKey, presentation: "full" | "small" }],
+  resumeRefs: []
+}
+```
+
+(The repository's positional `NamedWait.payload` array is acceptable; the decoded
+object above is normative.) While a thread is parked in a `video` wait whose
+`video.ended` has not been consumed, `advance` consumes no ticks, like the E-03
+pause; runners keep calling it. The `video.ended` input is consumed on arrival
+even though no tick runs, is recorded by its owner section as a completed
+`reqId`, and is logged at the held `time.tick` (so replay feeds it back at the
+same point). At the next consumed tick's waits phase the wait resolver wakes the
+thread when its `reqId` is completed. Key and pointer events that arrive during
+the hold follow the AD-5 rule for inputs during a stall: they are queued in state
+and consumed at the next real tick; their legacy treatment is not known. A
+`focus.lost` during the hold adds the focus pause; the hold ends only on
+`video.ended`. A restored snapshot with a pending `video` wait re-issues the
+`playVideo` request with the same `reqId`; the music stays stopped. The status
+field that tells a runner "held, not loading" is entry 6.10's; it must not reuse
+`loading`, which means a blocking asset request.
+
+**Evidence.** Q16 ("everything else freezes"; cannot be skipped); AD-9 (a wait is
+plain data, polled in ascending thread id); AD-14 (E-03 pause consumes no
+ticks; inputs are logged at `time.tick`); AD-26 (waits before threads);
+`ports/engine.ts` (`loading` is for blocking requests). The single-owner
+recording of `video.ended` follows AD-9's "inputs reach waits only through state
+sections their owner holds".
+**Rejected alternative.** A thread-only wait that lets other threads and time run
+(contradicts Q16); a core timer for the video length (the core has no length and
+must not read the device); a wait that polls a runner flag (not replayable).
+
+<a id="video-music"></a>
+<!-- OWNER: 6.3/V4 -->
+**Proposed ruling (pending owner review; V4; music stops and restarts, other
+audio holds).** When the video starts, the video command posts the same stop
+effect as `mediaStop("music")`, so the track stops in that tick with a
+`media.stop` cue and keeps its file and flags. When the wait wakes
+(at the waits phase of the first tick after the hold, before any thread runs) the
+video owner posts a `music.play` effect with source `video`, carrying the retained
+music file, its retained loop flag and the restart flag, so the music starts from
+tick 0 even if it had been stopped (Q16) or paused. If the track retains no file,
+nothing plays. Only the music track's primary voice is restarted. Within one
+`TickReport` the cue player realises cues first and then acts on requests, so the
+music stop is processed before the video starts. The runner holds every other
+realised voice for the duration, as for focus ([audio-focus](#audio-focus)), and
+releases the hold when it delivers `video.ended`, which is before the restart cue
+is processed. A `mediaStop()` the thread runs on the resumed tick comes after the
+restart effect in post order, so the stop wins; this is deliberate.
+
+**Evidence.** Q16, Q10 and Q19; the 6.6 verify ("a restart hook for later video
+end"); 6.1 lifecycle (stop retains the file). **Rejected alternative.** Pausing
+and resuming music (legacy restarts from zero); stopping other tracks (Q16 freezes
+everything and says nothing about silencing them, and holding keeps them
+continuous); restarting through a new effect vocabulary (6.1 forbids one).
+
+<a id="video-headless"></a>
+<!-- OWNER: 6.3/V5 -->
+**Proposed ruling (pending owner review; V5; headless video).** The core cannot
+see how long a video lasts: time is frozen, so the reply is logged at the held
+tick whatever the runner's delay. The headless and null runner therefore answers
+every `playVideo` with `video.ended { reqId }` on its next `advance` call,
+with no real-time delay; a harness may add a wall-clock delay for realism and
+nothing in the state or log changes (amendment A8 of 6.10's "after the declared
+duration"). It replies immediately with a diagnostic when the asset is missing or
+undecodable, like every runner.
+
+**Evidence.** AD-14 (inputs stamped with `time.tick`); V3. **Rejected
+alternative.** A duration table for the null runner (it can only move a wall-clock
+instant that the log never records).
+
+### Authoring and distribution
+
+<a id="audio-authoring-handoff"></a>
+<!-- OWNER: 6.3/H7 -->
+**Proposed ruling (pending owner review; H7; authoring, packaging, preview and
+accessibility).** In plain terms, importing a game and exporting one are where
+audio gets converted, checked and licensed; the editor previews sound with the
+same engine the game uses. Epic 6 builds none of the tools; it fixes what they
+must do. Technically:
+
+1. *Import tools* (audio F2, video V1) belong to the editor and asset epics, run
+   at project import and package export, and write the name-preserving
+   import report. Nothing in epic 6 builds them (**[UNCHECKED]** whether any
+   epic schedules them).
+2. *Project default SoundFont* (rank 3 of the layers) is a project setting; its
+   storage in the native project file is the project-file entry's
+   ([audio-deferrals](#audio-deferrals)). The editor's project settings page
+   shows it and the licence warning below.
+3. *Packaging.* Exporting a game that has a `game` bank bundles that bank in the
+   package. The exporter reads the bank's `ICOP` and `ICMT` chunks and **warns**
+   (does not block) when they are absent or name no licence of the class PB-4
+   accepts. The repository, project templates and installers never include the
+   legacy toolkit's bundled MIDI pack (it has its own licence terms per the
+   exploration; the terms themselves are **unverified** here); legacy sample
+   games remain test fixtures fetched at test time (G5).
+4. *Editor preview.* Asset editors play MIDI and WAV through `synth` with the
+   same protocol and the effective bank (the project default, unless the editor
+   user picks another as a player would), with no running game.
+5. *Accessibility.* Per-track sliders and mute are player-mix settings (epics 8
+   and 9). Visual sound indicators are later; the cue stream already carries
+   `track` and `asset`, which is enough to derive them without new core state.
+
+**Evidence.** Exploration §6.15–§6.18 and §10; epic envelope handoffs to the
+editor epics; architecture-options §6 point 5 (never bundle ripped or EULA
+content); G6 and G5.
+**Rejected alternative.** Building the converters in epic 6 (no entry, no G6
+clearance for encoders); blocking export on an unclear bank licence (the author
+owns that call, ADR 0004); a preview path separate from the runner's (it would
+not prove the shipped sound).
+
+### Deferrals and the disposition index
+
+<a id="audio-deferrals"></a>
+<!-- OWNER: 6.3/deferrals -->
+**Proposed ruling (pending owner review; deferrals).** These are deferred by
+name, each with an owner and the condition that reopens it. None changes a ruling
+above.
+
+| Deferred item | Owner | Reopens when |
+|---|---|---|
+| Ogg Vorbis or Opus as a recommended delivery format; authored loop points (Ogg `LOOPSTART`/`LOOPLENGTH` tags, MIDI controller 111 or markers); gapless-loop conventions beyond whole-file loops | the owner, as a nice-to-have (exploration §10; `nice-to-have.md`) | promoted to scope; loop points then add `AudioInfo`, state and cue fields in one change |
+| Tracker and chip formats (MOD/XM/S3M/IT through libopenmpt; SPC, NSF, GBS, SID, VGM) and their licence survey | the owner (exploration §10 "Settle first") | promoted; a pack registers through S1 and S2 |
+| Crossfade and `musicFade` commands | none needed: fade out `music`, play the next file on another track with `mediaFade`, using 6.2's fade rule | an author need that composition cannot meet |
+| Media metadata `mediaInfo(file, key)` | 6.2 / `nice-to-have.md` | promoted |
+| Storage of the project default SoundFont in the native project file | the project-file entry (ADR 0005; research flow `08-project-file-by-convention`) | that entry is incepted; until then the engine takes `defaultSoundFont` as a startup value |
+| Reword guard-rail G6 rule 3, ADR 0001 point 5, the spine's pinned-version table and `architecture-options.md` §7, which still name FluidR3_GM as the default SoundFont | the owner (a guard-rail change needs an ADR, `guardrails.md` "Changing a rule") | at this checkpoint's approval: write the ADR or accept the superseding text of [path-b-bank](#path-b-bank) |
+| The prefetch hint wire shape and the core prefetch planner | epic 9's inception (a core entry at the AD-5 seam) | epic 9 inception |
+| The audio and video import tools | the editor and asset epics (**[UNCHECKED]** that any entry schedules them) | editor epics' inception |
+| Frame-0 per-case sound timing (Q14) | the owner (a legacy fact still unanswered) | the fact is supplied |
+| Visual sound indicators | later accessibility work | an accessibility entry |
+| A `getSoundFont` read-back | none | an author need |
+| Battle-music and volume-settings notes in epics 7 and 8 | entry 6.17 (downstream handoffs) | 6.17 |
+
+**Evidence.** Exploration §10 and §11; `nice-to-have.md`; the epic envelope's
+handoffs. **Rejected alternative.** Ruling these now without a scoped owner (each
+needs evidence this entry does not have, for example a licence survey).
+
+<a id="audio-disposition-index"></a>
+### Disposition index (verification aid)
+
+Every decision the ticket inherits and where it is ruled. "6.1" and "6.2" rows
+are ruled earlier on this page and are unchanged.
+
+| Source | Decision | Ruled at |
+|---|---|---|
+| Exploration §5 | `soundFont`, `soundFontReset`, the `soundfont.set` cue, restore after load, non-fatal bad bank | [soundfont-commands](#soundfont-commands), [soundfont-cue](#soundfont-cue) |
+| §6.1 | shared WAV decoder, PCM, ADPCM, resampling | [audio-wav-midi-length](#audio-wav-midi-length), [audio-source-seam](#audio-source-seam) |
+| §6.2 | MP3/OGG | [audio-import-policy](#audio-import-policy) |
+| §6.3 | tracker modules | [audio-tracker-policy](#audio-tracker-policy) |
+| §6.4 | MIDI dialect, XG/GS bank requests | [midi-bank-fallback](#midi-bank-fallback) |
+| §6.5 | duration parsing | [audio-wav-midi-length](#audio-wav-midi-length), [audio-info-seam](#audio-info-seam) |
+| §6.6 | music position after load | 6.1 [audio-save-load](#audio-save-load) |
+| §6.7 | goldens hash the cue stream, not PCM | [runner-may-decide](#runner-may-decide) |
+| §6.8 | SFX channels, menu, battle and frame sound routing | 6.2 voices ([media-command-family](#media-command-family)); [r-59-routing](#r-59-routing) |
+| §6.9 | battle music hand-off | parity ledger Q8/Q9; [battle-music-synthetic](#battle-music-synthetic) |
+| §6.10 | two volume layers; SoundFont split | 6.1 settings split; [soundfont-layers](#soundfont-layers) |
+| §6.11 | crossfades, `musicFade`, authored loop points | [audio-deferrals](#audio-deferrals) |
+| §6.12 | autoplay unlock | [audio-autoplay](#audio-autoplay) |
+| §6.13 | focus pause | [audio-focus](#audio-focus) |
+| §6.14 | preload and cache; SF3 and the CSP | [audio-prefetch](#audio-prefetch), [audio-soundfont-cache](#audio-soundfont-cache), [audio-browser-test](#audio-browser-test) |
+| §6.15 | project default SoundFont storage | [soundfont-layers](#soundfont-layers), [audio-deferrals](#audio-deferrals) |
+| §6.16 | packaging, bank licence warning, legacy MIDI pack | [audio-authoring-handoff](#audio-authoring-handoff) |
+| §6.17, §6.18 | editor preview; accessibility | [audio-authoring-handoff](#audio-authoring-handoff) |
+| §7 items 1–9 | load modes, prefetch plan, content-addressed cache, worker decode, late SFX, stall presentation, author feedback, SoundFont cache, storage limits | audio's share: [audio-prefetch](#audio-prefetch), [audio-late-sounds](#audio-late-sounds), [audio-soundfont-cache](#audio-soundfont-cache); the rest is epic 9's and the editor epics' ([audio-deferrals](#audio-deferrals)) |
+| §9 | MP3/OGG; SFX channels; music after load; BusDriver XM; XG/GS; late SFX; Path B bank | F2; 6.2 P6; 6.1; F3; F5; H3; B5 (anchors above) |
+| §10 | modern and retro formats | [audio-deferrals](#audio-deferrals) |
+| §11 | `AssetDecoder<AudioInfo>`, `AudioSource`, registry, conformance kit | [audio-info-seam](#audio-info-seam), [audio-source-seam](#audio-source-seam) |
+| §12 | runner protocol, state machine, what a runner may decide, vectors | [runner-audio-protocol](#runner-audio-protocol), [voice-state-machine](#voice-state-machine), [cue-player](#cue-player), [runner-may-decide](#runner-may-decide) |
+| P9 | R-59 | [r-59-routing](#r-59-routing) |
+| Envelope | Done-when items 1–3 | [audio-done-when](#audio-done-when) |
+| Ticket | AVI import and request policy; video wait and music | [video-policy](#video-policy), [video-request](#video-request), [video-wait-hold](#video-wait-hold), [video-music](#video-music), [video-headless](#video-headless) |
+
 ## Affected seams and later ownership
 
 This checkpoint changes contracts, not code. Later entries must update the
@@ -848,18 +2182,38 @@ following without introducing a second model:
   defaults, aliases and legacy mappings on this page.
 * The independent audio timeline oracle and null-audio goldens cite the
   anchors on this page; they do not import core to generate expected facts.
-* Entry 6.3 owns format availability, import metadata, runner protocol and
-  source policy. It may not change the core clock, save/settings split, cue
-  ordering, voice cap, fade maths or `audio.track` wake contract without a
-  new ruling.
+* Entry **6.3** (platform rulings, below) owns format availability, import
+  metadata, the runner protocol and source policy. Its explicit amendments to
+  the 6.1/6.2 text are listed in [platform-amendments](#platform-amendments);
+  it changes nothing else in the core clock, save/settings split, cue
+  ordering, voice cap, fade maths or `audio.track` wake contract.
+* Entry **6.5** owns the `audio.wav` and `audio.midi` decoders against
+  [audio-info-seam](#audio-info-seam) and [audio-wav-midi-length](#audio-wav-midi-length).
+* Entry **6.6** owns the `soundFont` applier, the `soundfont.set` cue and the
+  startup/load re-emission ([soundfont-commands](#soundfont-commands)); entry
+  **6.8** adds the two commands' catalogue and Audio-table rows.
+* Entry **6.10** owns `playavi`/`playavismall` against [video-request](#video-request),
+  [video-wait-hold](#video-wait-hold) and [video-music](#video-music); it also
+  adds the `video.ended { reqId }` validator change.
+* Entry **6.11** owns the `AudioSource` and `MidiSynth` interfaces and the cue
+  player ([audio-source-seam](#audio-source-seam), [cue-player](#cue-player));
+  entry **6.12** the backend; entry **6.13** the Path B gate and checklist
+  ([path-b-bank](#path-b-bank)); entry **6.14** TK-16; entry **6.15** the
+  schema and vectors for [runner-audio-protocol](#runner-audio-protocol).
+* Epic 9 (web runner) owns the handoffs in [epic9-audio-handoff](#epic9-audio-handoff);
+  the editor epics own the import tools and previews in
+  [audio-authoring-handoff](#audio-authoring-handoff).
 
 ## References
 
-* [AD-2, AD-9, AD-10, AD-14, AD-16 and AD-26](../../../_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md)
-* [Display, input and audio — E-16, E-100–E-104](display-input-audio.md)
+* [AD-2, AD-5, AD-9, AD-10, AD-14, AD-16, AD-17, AD-26 and AD-31](../../../_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md)
+* [Display, input and audio — E-16, E-100–E-104, R-59](display-input-audio.md)
 * [RPGCode runtime effect dispatch](rpgcode-runtime.md#reawakened-effect-dispatch)
 * [Save-game format and Reawakened save rule](../formats/save-game.md#layout-minor-4)
+* [Packaging and paths — manifest and the ASCII fold](../formats/packaging-and-paths.md)
 * `docs/provenance/facts-round-8.md` Q1–Q19
 * `docs/provenance/facts-round-9.md` M1–M4
 * `_bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-readiness.md` F-01–F-14
-* `_bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-exploration.md` §13, P1–P8
+* `_bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-exploration.md` §1–§13, P1–P10
+* `_bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/inception-proposal.md` D-8–D-19
+* `_bmad-output/initiative-rpgtoolkit-reawakened/epic-web-runner-packaging/epic-web-runner-packaging.md` (audio handoff notes)
