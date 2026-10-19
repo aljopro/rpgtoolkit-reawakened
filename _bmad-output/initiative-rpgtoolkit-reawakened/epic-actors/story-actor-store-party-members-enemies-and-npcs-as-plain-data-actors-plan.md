@@ -23,12 +23,12 @@ Data, ids, section and StatsPort bridge only. No rules (5), no loading from file
 
 ## Key Decisions
 
-1. One owner per section (AD-10): `core/actors` owns the actor section.
+1. One owner per section (AD-10, amended 2026-10-19): `core/actors` owns the actor section, including actor stats; `vm.globals` character stats are aliases onto it.
 
 ## Acceptance
 
 1. Plain-data records; snapshot/restore; hash equality.
-2. StatsPort path reads and writes through the owner.
+2. StatsPort path resolves to the actor section (one owner, no copies); the save shape change is one deliberate golden re-record (G5) and reset clears the actor section.
 
 ## Verification
 

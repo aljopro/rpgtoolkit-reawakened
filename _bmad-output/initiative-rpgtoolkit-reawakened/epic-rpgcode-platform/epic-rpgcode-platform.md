@@ -75,3 +75,4 @@ Extends `core/script` (parser, lowerer, VM, registry, manifest) and adds an owne
 - Handoff: Epic 21 (epic-media-objects) puts Media on this model: voice and track objects, the `media` emitter and a cancelable `beforePlay`. It needs 19.1's host-provided method mechanism and its engine-phase cancelable-emit rule, 19.3, 19.4, 19.9, 19.10 to 19.12 and 19.14. Owner, 2026-10-19: Media is net new, so one object handle model, no integer handles.
 - handoff: editor (Epic 11/12 or editor P1) should later offer a conversion tool from legacy class syntax to dictionary objects, now that classes sit on the dictionary runtime (19.5). Also recorded in nice-to-have.md.
 - handoff: Epic 20 owns the AD-26 amendment (the core `battle` phase is removed/repurposed); see Epic 20's Notes.
+- Principle: see the initiative Notes Decision of 2026-10-19 (3.1 is a compatibility layer, not the model); 19.1 writes ADR 0009 and the CLAUDE.md working note.

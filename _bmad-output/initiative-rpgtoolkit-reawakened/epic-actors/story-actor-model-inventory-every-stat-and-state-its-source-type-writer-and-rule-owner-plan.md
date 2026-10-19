@@ -15,7 +15,7 @@ context:
 
 ## Intent
 
-The one table every later entry reads (entries 3, 5, 6, 7, 8, 10 and Epic 7). Lives at `docs/spec/engine/actors.md#act-inventory`; columns: name, source field, type, writer (core / battle script / any script), rule (core-rule / battle-rule), evidence. Distinguishes data (saved) from derived values (never saved) and from battle-only temporaries (charge, action choice) that Epic 7 keeps in its own battle object.
+The one table every later entry reads (entries 3, 5, 6, 7, 8, 10 and Epic 7). Lives at `docs/spec/engine/actors.md#act-inventory`; columns: name, source field, type, owner (actor section), alias (legacy global name such as `HP!`), writer (core / battle script / any script), rule (core-rule / battle-rule), evidence. Distinguishes data (saved) from derived values (never saved) and from battle-only temporaries (charge, action choice) that Epic 7 keeps in its own battle object.
 
 ## Boundaries
 

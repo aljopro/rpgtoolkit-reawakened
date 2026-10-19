@@ -60,3 +60,4 @@ Changes `core/audio` only at its script-facing edge (events out, `beforePlay` in
 - Sequenced: 21.1 rulings first; 21.2 (formats lane) and 21.3 (events lane) run in parallel after it; 21.4 follows 21.3 and 19.11; 21.5 follows 21.2, 21.3 and Epic 19's objects and receivers; 21.6 retires the old surface; 21.7 proves it; 21.8 sweeps.
 - Handoff: Epic 7 (stock battle) and Epic 8 (stock menu) play their battle, cursor and menu sounds through this surface and list this epic in their `after`.
 - Handoff: Epic 9's audio handoff is unchanged (cues and the runner protocol are not touched).
+- Principle: see the initiative Notes Decision of 2026-10-19 (3.1 is a compatibility layer, not the model); 19.1 writes ADR 0009 and the CLAUDE.md working note.

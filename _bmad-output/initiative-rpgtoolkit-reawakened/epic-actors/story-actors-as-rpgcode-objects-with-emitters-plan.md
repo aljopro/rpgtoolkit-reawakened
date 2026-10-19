@@ -18,7 +18,7 @@ Lane B (script bindings), runs beside lane A after 3. Object handles are views o
 
 ## Boundaries
 
-Binding layer only; rules are entry 5, events emitted by actors are entry 9.
+Binding layer plus the virtual-variable write path for legacy stat aliases (`script/virtuals.ts`); rules are entry 5, events emitted by actors are entry 9.
 
 ## Key Decisions
 
@@ -27,6 +27,7 @@ Binding layer only; rules are entry 5, events emitted by actors are entry 9.
 ## Acceptance
 
 1. Read/write through owner; methods; emitter.
+2. `virtuals.ts` gains a write path; `HP!`/`Level!`-style `.tem` globals read and write the actor stat live; `kill()` on an alias resets to the .tem default.
 
 ## Verification
 
