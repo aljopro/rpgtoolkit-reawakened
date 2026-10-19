@@ -52,6 +52,7 @@ import { createInputSection } from "../input/input.ts";
 import { createTriggersSection, TRIGGERS_SCHEMA_VERSION } from "../triggers/model.ts";
 import { INPUT_SCHEMA_VERSION } from "./sections/input.ts";
 import { AUDIO_SCHEMA_VERSION, createAudioSection } from "../audio/model.ts";
+import { createEventsSection } from "../events/model.ts";
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
   return canon(tagNonFinite(state) as never);
@@ -427,6 +428,69 @@ function validateVmHandles(vm: Record<string, unknown>): void {
   );
 }
 
+/** A save made before the `events` section existed loads with the empty section (EMIT-15); nothing else moves. */
+function migrateEvents(record: Record<string, unknown>, schema: Record<string, unknown>): void {
+  if (record.events !== undefined || schema.events !== undefined) return;
+  record.events = createEventsSection();
+  schema.events = SCHEMA_VERSIONS.events;
+}
+
+/**
+ * The `events` section's shape (EMIT-15; entry 19.10): the listener table, the queue
+ * and the dispatch cursor are whole, every id is distinct and below `nextListener`,
+ * every event handle names a live object, every listener is a whole callable whose
+ * cells exist, and the cursor's list, position and thread agree. Whether a listener's
+ * definition still exists needs the compiled programs, which is `verifyRestoredHandles`.
+ */
+function validateEventsShape(value: unknown, vm: Record<string, unknown>): void {
+  const events = recordAt(value, "events");
+  const next = numberAt(events.nextListener, "events.nextListener");
+  if (next < 1) shapeError("the snapshot's events.nextListener must be at least 1");
+  const objects = new Set<number>();
+  for (const object of arrayAt(vm.objects, "vm.objects")) objects.add(numberAt(recordAt(object, "vm.objects[]").handle, "vm.objects[].handle"));
+  const threads = new Set<number>();
+  for (const thread of arrayAt(vm.threads, "vm.threads")) threads.add(numberAt(recordAt(thread, "vm.threads[]").id, "vm.threads[].id"));
+  const cells = isRecord(vm.cells) ? vm.cells : {};
+  const ids = new Set<number>();
+  for (const [index, listenerValue] of arrayAt(events.listeners, "events.listeners").entries()) {
+    const path = `events.listeners[${index}]`;
+    const listener = recordAt(listenerValue, path);
+    const id = numberAt(listener.id, `${path}.id`);
+    if (id < 1 || id >= next || ids.has(id)) shapeError(`the snapshot's ${path}.id is not a distinct id below events.nextListener`);
+    ids.add(id);
+    stringAt(listener.emitter, `${path}.emitter`);
+    stringAt(listener.type, `${path}.type`);
+    if (typeof listener.once !== "boolean") shapeError(`the snapshot's ${path}.once must be a boolean`);
+    if (!isRecord(listener.callable) || listener.callable.type !== "callable") {
+      shapeError(`the snapshot's ${path}.callable must be a callable`);
+    }
+    checkValue(`${path}.callable`, listener.callable, cells);
+  }
+  const liveEvent = (handle: unknown, path: string): void => {
+    if (!objects.has(numberAt(handle, path))) shapeError(`the snapshot's ${path} names no live object handle`);
+  };
+  for (const [index, queuedValue] of arrayAt(events.queue, "events.queue").entries()) {
+    const queued = recordAt(queuedValue, `events.queue[${index}]`);
+    stringAt(queued.emitter, `events.queue[${index}].emitter`);
+    liveEvent(queued.event, `events.queue[${index}].event`);
+  }
+  if (events.dispatch === null) return;
+  const dispatch = recordAt(events.dispatch, "events.dispatch");
+  stringAt(dispatch.emitter, "events.dispatch.emitter");
+  liveEvent(dispatch.event, "events.dispatch.event");
+  const order = arrayAt(dispatch.order, "events.dispatch.order");
+  for (const [index, id] of order.entries()) {
+    const listed = numberAt(id, `events.dispatch.order[${index}]`);
+    if (listed < 1 || listed >= next) shapeError(`the snapshot's events.dispatch.order[${index}] is not an id below events.nextListener`);
+  }
+  const position = numberAt(dispatch.index, "events.dispatch.index");
+  if (position < 0 || position > order.length) shapeError("the snapshot's events.dispatch.index is outside events.dispatch.order");
+  if (dispatch.thread !== null) {
+    if (!threads.has(numberAt(dispatch.thread, "events.dispatch.thread"))) shapeError("the snapshot's events.dispatch.thread names no thread");
+    if (position >= order.length) shapeError("the snapshot's events.dispatch.index must name a listener while a thread runs");
+  }
+}
+
 function validateSurfacesShape(value: unknown): void {
   const surfaces = recordAt(value, "surfaces");
   if (Object.keys(surfaces).length === 0) return;
@@ -529,6 +593,7 @@ function validateShape(record: Record<string, unknown>): void {
   for (const key of ["s0", "s1", "s2", "s3"]) numberAt(rng[key], `rng.${key}`);
   numberAt(recordAt(record.time, "time").tick, "time.tick");
   validateVmShape(recordAt(record.vm, "vm"));
+  validateEventsShape(record.events, recordAt(record.vm, "vm"));
   validateSurfacesShape(record.surfaces);
 }
 
@@ -557,6 +622,7 @@ export function restoreGameState(json: string): GameState {
     );
   }
 
+  migrateEvents(record, schema as Record<string, unknown>);
   for (const key of Object.keys(SCHEMA_VERSIONS)) {
     if (!Object.hasOwn(record, key)) {
       throw new ScriptError("restore.shape", `the snapshot is missing the "${key}" section`);

@@ -147,3 +147,34 @@ test("restore refuses an audio section whose shape is wrong, naming the place", 
   refused((json) => { json.audio.settings.masterVolume = "loud"; }, "audio.settings.masterVolume");
   refused((json) => { json.audio.settings.trackVolumes.push({ name: "music", volume: 5, fade: { fromVolume: 1 } }); }, "audio.settings.trackVolumes[0].fade");
 });
+
+// The events section (entry 19.10; EMIT-15): it appeared at schema version 1, so every committed save fixture
+// lacks both the section and `schema.events`. Such a save loads with the empty section and nothing else moves.
+test("a save from before the events section restores with it empty and no other section moved", () => {
+  equal(SCHEMA_VERSIONS.events, 1);
+  for (const name of ["v2-vm.json", "v3-vm.json", "v4-vm.json"]) {
+    const raw = JSON.parse(fixtureText(name)) as { events?: unknown; schema: { events?: unknown; compiler: string } };
+    equal(raw.events, undefined, `${name} predates the section`);
+    equal(raw.schema.events, undefined, `${name} predates the section`);
+    const restored = restoreGameState(fixtureText(name));
+    equal(restored.schema.events, SCHEMA_VERSIONS.events);
+    deepEqual(restored.events, { nextListener: 1, listeners: [], queue: [], dispatch: null });
+    equal(canon(restoreGameState(snapshot(restored))), canon(restored));
+  }
+});
+
+test("restore refuses an events section that is not whole", () => {
+  const json = JSON.parse(snapshot(createGameState({ seed: 0 }))) as { events: Record<string, unknown> };
+  for (const [change, place] of [
+    [(events: Record<string, unknown>) => { events.nextListener = 0; }, "events.nextListener"],
+    [(events: Record<string, unknown>) => { events.listeners = {}; }, "events.listeners"],
+    [(events: Record<string, unknown>) => { events.queue = "none"; }, "events.queue"],
+    [(events: Record<string, unknown>) => { events.dispatch = 3; }, "events.dispatch"],
+  ] as const) {
+    const copy = JSON.parse(JSON.stringify(json)) as { events: Record<string, unknown> };
+    change(copy.events);
+    const failure = errorOf(() => restoreGameState(JSON.stringify(copy)));
+    equal(failure.code, "restore.shape");
+    ok(failure.message.includes(place), `${place}: ${failure.message}`);
+  }
+});

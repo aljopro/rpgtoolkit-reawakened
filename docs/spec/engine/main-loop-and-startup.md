@@ -203,6 +203,7 @@ Ambient light (board ambient colour plus script changes) is applied as a gamma r
 | `battle`, `menu` | Close active battle/menu and discard transient screens. |
 | `ui` | Hide/clear mwin/msgBox, cursor maps and buttons; restore project/default font and colour settings. |
 | `camera` | Reset follow target and transform to AD-33 defaults; board startup selects the first player. |
+| `events` | Drop every listener and queued event and any delivery in progress with the `vm` section they refer to; the listener table starts empty ([EMIT-15](rpgcode-modules-and-objects.md#emit-14)). |
 | `fx` | Cancel fades, wipes, zoom, animations and pending screen effects. |
 | `audio` | Stop one-shot effects and clear board-music ownership; startup/board entry emits new board music. |
 | `surfaces` | Clear script canvases and screen captures; no old pixels persist. |

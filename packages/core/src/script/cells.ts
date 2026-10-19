@@ -167,9 +167,11 @@ export function recordOwner(vm: VmState, def: string, ref: ProgramRef): void {
  * Reachability, not a count, decides it, so a recursive local lambda, whose
  * cell holds a callable that captures that same cell, is freed with nothing
  * outside naming it. `vm.cellSeq` is not touched, so an id is never issued
- * twice. A state with no cell and no `vm.defOwners` is left alone.
+ * twice. A state with no cell and no `vm.defOwners` is left alone. `roots` are
+ * script values kept outside the `vm` section (the listener table of the `events`
+ * section, EMIT-14), which count as roots too.
  */
-export function collectCells(vm: VmState): void {
+export function collectCells(vm: VmState, roots: readonly unknown[] = []): void {
   const owners = vm.defOwners;
   const cells = vm.cells;
   if (cells === undefined && owners === undefined) return;
@@ -192,6 +194,7 @@ export function collectCells(vm: VmState): void {
     (_path, value) => visit(value),
     (_path, ref) => reach(cellIdOfRef(ref)),
   );
+  for (const root of roots) visit(root);
   for (let id = pending.pop(); id !== undefined; id = pending.pop()) visit(table[id]);
   for (const id of Object.keys(table)) {
     if (!live.has(id)) delete table[id];

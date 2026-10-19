@@ -3,7 +3,7 @@ title: "First-class emitter: on, off, once and queued emit"
 type: 'feature'
 ticket: 10
 created: '2026-10-19'
-status: draft
+status: built
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "high"
 context:
@@ -34,3 +34,12 @@ Queued emit only; cancelable emit is 11; built-in emitters and the TypeScript bu
 ## Verification
 
 Unit tests for every add/remove case above; hash equality across restore; golden for phase order.
+
+## Built (19.10)
+
+- Spec first (own commit): EMIT-14 (commands, the `events` phase straight after `threads`, the core-owned dispatcher, budget and waits, errors, freed emitters) and EMIT-15 (the saved `events` section); free-function rows in `rpgcode-functions.md`; an `events` row in the E-06 reset table.
+- Section: `packages/core/src/events/` owns `events` (`nextListener`, `listeners`, `queue`, `dispatch`), schema version 1; a save from before the section loads with it empty. `GameState` has 19 sections; every state hash and golden moves for that reason (G5, re-recorded once).
+- Phase: `ENGINE_PHASES` gains `events` after `threads`; the dispatcher (`events/dispatch.ts`) starts each listener on its own `persistent` world-owned thread (`__listener(__event)`), shares one `STEP_BUDGET` per phase and waits for a listener the budget interrupts or that waits (spike recommendation 2). `advanceScriptTick` runs the same phase, so headless script tests need no engine.
+- Commands: methods of every object (`h.on`, `h.once`, `h.off`, `h.emit`, also as bound callables when read) and the free functions `on`, `once`, `off`, `emit` in the core pack; both land in `events/emitter.ts`.
+- Collection: the listener table and queued events are extra roots of the end-of-tick pass (`collectGarbage(vm, roots)`); the listeners of a freed emitter go with it.
+- Left to 19.11 and 19.12: `emitCancelable` and the `cancel` method, the game emitter and the `error` event, the TypeScript side of the bus.

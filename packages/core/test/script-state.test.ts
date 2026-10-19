@@ -48,7 +48,7 @@ function midYieldState(): GameState {
 test("GameState is PlainData and has exactly the AD-10 sections", () => {
   const state = createGameState({ seed: 0 });
   deepEqual(Object.keys(state).sort(), Object.keys(SCHEMA_VERSIONS).sort());
-  equal(Object.keys(state).length, 18);
+  equal(Object.keys(state).length, 19);
   equal(typeof canon(state), "string");
   deepEqual(state.schema.compiler, "2");
 });
