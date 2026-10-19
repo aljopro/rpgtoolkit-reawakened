@@ -3,7 +3,7 @@ title: 'Parser and AST support for lambdas, dictionary literals and indirect cal
 type: 'feature'
 ticket: 2
 created: '2026-10-18'
-status: built
+status: done
 baseline_revision: 'c869f2cd'
 risk: 'medium'
 context:

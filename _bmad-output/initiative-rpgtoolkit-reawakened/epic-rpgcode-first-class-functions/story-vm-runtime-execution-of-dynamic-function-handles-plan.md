@@ -3,7 +3,7 @@ title: 'VM runtime execution of dynamic function handles and step budget'
 type: 'feature'
 ticket: 4
 created: '2026-10-18'
-status: built
+status: done
 baseline_revision: 'f212728587894ad87ae94de67ae14e31cb444a36'
 risk: 'high'
 context:
