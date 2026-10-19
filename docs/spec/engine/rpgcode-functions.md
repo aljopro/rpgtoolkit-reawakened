@@ -479,6 +479,7 @@ The following functions are Reawakened built-in additions provided in the pure b
 | `isNaN` | `int isNaN(variant &value, [int &ret])` | Returns 1 if `value` is numeric and NaN, 0 otherwise. | Reawakened addition; takes first arg byRef |
 | `isInfinity` | `int isInfinity(variant &value, [int &ret])` | Returns 1 if `value` is numeric and +Infinity or -Infinity, 0 otherwise. | Reawakened addition; takes first arg byRef |
 | `isFinite` | `int isFinite(variant &value, [int &ret])` | Returns 1 if `value` is numeric and a finite number (not NaN, not ±Infinity), 0 otherwise. | Reawakened addition; takes first arg byRef |
+| `bindThis` | `callable bindThis(callable fn, object obj)` | Return a new callable whose `this` receiver is `obj`, without mutating `fn`. | Reawakened addition; `fn` must be callable and `obj` must be a live object handle; see [OOP-11](rpgcode-modules-and-objects.md#oop-11). |
 
 * **Parameter by reference.** Each function declares its first parameter `byRef: true` (`&value`). This is necessary because reading a variable by name in RPGCode truncates numbers to 32-bit integers (SEM-3), which would convert NaN or Infinity to 0 before the function sees it. Passing by reference ensures the function inspects the stored full value directly. Computed temporaries (for example `isNaN(0/0)` or `isInfinity(1/0)`) pass their temporary value and work identically.
 * **String handling.** Strings (both non-numeric strings like `"abc"` and numeric strings like `"123"`) return 0 for all three functions, because a string is not a number.

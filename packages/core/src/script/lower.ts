@@ -208,7 +208,7 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
         break;
       case "member":
         lowerExpr(expr.receiver);
-        ops.push({ op: "member", name: expr.name, pos: getPos(expr.line) });
+        ops.push({ op: "get_member_bound", name: expr.name, pos: getPos(expr.line) });
         break;
       case "unary":
         if (expr.operator === "++") {

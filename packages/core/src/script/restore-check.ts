@@ -16,7 +16,7 @@
 import type { CallableValue } from "../ports/value.ts";
 import type { ProgramCache } from "./cache.ts";
 import { eachRootValue, isCallableRecord } from "./cells.ts";
-import { RESTORE_CALLABLE_CAPTURES, RESTORE_CALLABLE_UNKNOWN_DEF, ScriptError } from "./errors.ts";
+import { RESTORE_CALLABLE_CAPTURES, RESTORE_CALLABLE_RECEIVER, RESTORE_CALLABLE_UNKNOWN_DEF, ScriptError } from "./errors.ts";
 import { COMPILER_VERSION, programKey, type Program, type ProgramRef } from "./program.ts";
 import type { CommandLookup } from "./registry.ts";
 import type { VmState } from "./state.ts";
@@ -48,6 +48,16 @@ export function verifyRestoredHandles(vm: VmState, services: RestoreCheckService
   };
   eachRootValue(vm, collect, () => undefined);
   for (const id of Object.keys(vm.cells ?? {})) collect(`vm.cells.${id}`, vm.cells?.[id]);
+  for (const { path, value } of callables) {
+    if (value.receiver === null) continue;
+    const handle = Number(value.receiver);
+    if (!Number.isSafeInteger(handle) || !vm.objects.some((record) => record.handle === handle)) {
+      throw new ScriptError(
+        RESTORE_CALLABLE_RECEIVER,
+        `the snapshot's ${path}.receiver names no live object handle`,
+      );
+    }
+  }
   const owners = vm.defOwners ?? {};
   const ownerDefs = Object.keys(owners);
   if (callables.length === 0 && ownerDefs.length === 0) return;

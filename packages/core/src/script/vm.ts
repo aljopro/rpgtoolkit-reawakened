@@ -342,7 +342,12 @@ export function collectGarbage(vm: VmState): void {
 function collectObjects(vm: VmState): void {
   const roots: number[] = [];
   const visit = (value: Value): void => {
-    if (isObjectValue(value)) roots.push(value.handle);
+    if (isObjectValue(value)) {
+      roots.push(value.handle);
+    } else if (isCallableValue(value) && value.receiver !== null) {
+      const handle = Number(value.receiver);
+      if (Number.isSafeInteger(handle)) roots.push(handle);
+    }
   };
   for (const value of Object.values(vm.globals)) visit(value);
   for (const value of Object.values(vm.cells ?? {})) visit(value);
@@ -354,6 +359,16 @@ function collectObjects(vm: VmState): void {
   }
   const rootSet: { [handle: string]: true } = {};
   for (const handle of roots) rootSet[String(handle)] = true;
+  // A reachable object can contain a callback whose receiver must also be a root.
+  for (;;) {
+    const before = Object.keys(rootSet).length;
+    for (const record of vm.objects) {
+      if (rootSet[String(record.handle)] !== true) continue;
+      for (const value of Object.values(record.members)) visit(value);
+    }
+    for (const handle of roots) rootSet[String(handle)] = true;
+    if (Object.keys(rootSet).length === before) break;
+  }
   // An object only a freed object named is unreferenced too, so the count is taken again until
   // nothing more is freed: dropping a dictionary frees the dictionaries nested in it in this
   // same pass. Two objects that name each other still keep each other (R-34).
@@ -480,6 +495,12 @@ function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base:
   return record !== undefined && isDictionary(record) ? record : undefined;
 }
 
+/** Copy a callable with the target as receiver unless it already has one (OOP-11). */
+function bindMemberValue(value: Value, handle: number): Value {
+  if (!isCallableValue(value) || value.receiver !== null) return value;
+  return { type: "callable", def: value.def, captures: [...value.captures], receiver: String(handle) };
+}
+
 function setOwnValue(record: { [name: string]: Value }, name: string, value: Value): void {
   Object.defineProperty(record, name, {
     value,
@@ -562,6 +583,7 @@ function stackEffect(op: StepOp): { readonly pops: number; readonly pushes: numb
     case "binop":
       return { pops: 2, pushes: 1 };
     case "member":
+    case "get_member_bound":
     case "unop":
       return { pops: 1, pushes: 1 };
     case "select":
@@ -1165,6 +1187,15 @@ function performCallable(
     const takes = found.infos.filter((entry) => entry.entry >= 0).map((entry) => entry.params.length);
     throw new ScriptError(CALLABLE_ARITY, `"${value.def}" takes ${takes.join(" or ")} argument(s), got ${args.length}`, pos);
   }
+  let receiverHandle: number | undefined;
+  let receiverClass: string | undefined;
+  if (value.receiver !== null) {
+    const handle = Number(value.receiver);
+    const receiver = Number.isSafeInteger(handle) ? findObject(vm, handle) : undefined;
+    if (receiver === undefined) throw new ScriptError("object.invalid", "callable receiver is not a live object", pos);
+    receiverHandle = handle;
+    receiverClass = receiver.className;
+  }
 
   const locals = bindMethodLocals(info, args);
   const names = info.captures ?? [];
@@ -1184,6 +1215,8 @@ function performCallable(
   }
 
   frame.ip += 1;
+  const receiverContext =
+    receiverHandle === undefined ? {} : { objectHandle: receiverHandle, objectClass: receiverClass ?? "" };
   thread.frames.push({
     program: found.program.ref,
     ip: info.entry,
@@ -1191,6 +1224,7 @@ function performCallable(
     operands: [],
     errorHandler: null,
     autoLocal: frame.autoLocal,
+    ...receiverContext,
   });
   return "continue";
 }
@@ -1793,6 +1827,8 @@ export function stepThread(
             value: { kind: "object", handle: frame.objectHandle, className: frame.objectClass },
             ref: null,
           });
+        } else if (op.name === "this") {
+          frame.operands.push({ value: null, ref: null });
         } else {
           frame.operands.push(loadArg(vm, thread, frameIndex, op.name, op.scope, services.virtuals));
         }
@@ -1820,6 +1856,29 @@ export function stepThread(
         }
         const ref = objectRef(record.handle, op.name);
         frame.operands.push({ value: record.members[op.name] ?? 0, ref });
+        frame.ip += 1;
+        break;
+      }
+      case "get_member_bound": {
+        const receiver = frame.operands.pop();
+        const receiverValue = receiver?.value;
+        if (!isObjectValue(receiverValue)) {
+          throw new ScriptError("object.invalid", "member access requires a live object", op.pos);
+        }
+        const record = findObject(vm, receiverValue.handle);
+        if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${receiverValue.handle}`, op.pos);
+        if (isDictionary(record)) {
+          frame.operands.push({ value: bindMemberValue(readMember(record, op.name), record.handle), ref: objectRef(record.handle, op.name) });
+          frame.ip += 1;
+          break;
+        }
+        const member = findMember(program, record.className, op.name);
+        if (member === undefined) throw new ScriptError("object.invalid", `unknown member ${op.name}`, op.pos);
+        if (member.access === "private" && frame.objectClass !== record.className) {
+          throw new ScriptError("object.inaccessible-member", `member ${op.name} is private`, op.pos);
+        }
+        const ref = objectRef(record.handle, op.name);
+        frame.operands.push({ value: bindMemberValue(record.members[op.name] ?? 0, record.handle), ref });
         frame.ip += 1;
         break;
       }
@@ -1946,7 +2005,7 @@ export function stepThread(
             throw new ScriptError("object.invalid", "a dictionary key must be a string or a number", op.pos);
           }
           const key = indexKey(keyArg.value);
-          frame.operands.push({ value: readMember(dictionary, key), ref: objectRef(dictionary.handle, key) });
+          frame.operands.push({ value: bindMemberValue(readMember(dictionary, key), dictionary.handle), ref: objectRef(dictionary.handle, key) });
           frame.ip += 1;
           break;
         }
@@ -2041,6 +2100,14 @@ export function stepThread(
         if (!isObjectValue(receiverValue)) throw new ScriptError("object.invalid", "method receiver is not an object", op.pos);
         const record = vm.objects.find((item) => item.handle === receiverValue.handle);
         if (record === undefined) throw new ScriptError("object.invalid", `unknown object handle ${receiverValue.handle}`, op.pos);
+        if (isDictionary(record)) {
+          const member = bindMemberValue(readMember(record, op.name), record.handle);
+          if (!isCallableValue(member)) {
+            throw new ScriptError(CALLABLE_NOT_CALLABLE, `dictionary member "${op.name}" is not callable`, op.pos);
+          }
+          if (performCallable(thread, vm, services, program, frame, frameIndex, member, args, op.pos) === "yield") return finish();
+          break;
+        }
         if (op.name === "release") {
           const info = classInfo(program, record.className);
           if (info?.destructor !== null && info?.destructor !== undefined) {
@@ -2337,6 +2404,26 @@ export function stepThread(
           frame.operands.push({ value: bindingOfCall(vm, thread, frameIndex, services, program, args, op.pos), ref: null });
           frame.ip += 1;
           break;
+        }
+        if (op.file !== undefined) {
+          const slot = frame.locals[op.file];
+          const receiverValue =
+            slot === undefined
+              ? vm.globals[op.file]
+              : slot.ref === localRef(op.file)
+                ? slot.value ?? 0
+                : readRef(vm, thread, frameIndex, slot.ref);
+          const record = isObjectValue(receiverValue) ? findObject(vm, receiverValue.handle) : undefined;
+          if (record !== undefined && isDictionary(record)) {
+            const member = bindMemberValue(readMember(record, op.name), record.handle);
+            if (!isCallableValue(member)) {
+              throw new ScriptError(CALLABLE_NOT_CALLABLE, `dictionary member "${op.name}" is not callable`, op.pos);
+            }
+            if (performCallable(thread, vm, services, program, frame, frameIndex, member, args, op.pos) === "yield") {
+              return finish();
+            }
+            break;
+          }
         }
         // The environment table (FUN-8; entry 18.5): the running scope's own
         // callable under this name first, then a built-in, a script function and a

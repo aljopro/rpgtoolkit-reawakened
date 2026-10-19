@@ -273,6 +273,55 @@ r = fn(21)
   deepEqual(stored, { type: "callable", def: "<inline>#lambda_1", captures: [], receiver: null });
 });
 
+test("dictionary callable members bind this for direct calls, tear-offs and arrows, while bindThis rebinds a copy", () => {
+  const state = runOnce(`
+d = { n: 2, f: () => this.n }
+direct = d.f()
+arrow = d->f()
+bracket = d["f"]()
+tear = d.f
+fromTear = tear()
+e = { n: 9 }
+rebound = bindThis(tear, e)
+fromRebound = rebound()
+original = tear()
+`);
+  deepEqual(
+    ["direct", "arrow", "bracket", "fromtear", "fromrebound", "original"].map((name) => state.vm.globals[name]),
+    [2, 2, 2, 2, 9, 2],
+  );
+  const stored = state.vm.objects.find((record) => Object.hasOwn(record.members, "f"))?.members.f;
+  deepEqual(stored, { type: "callable", def: "<inline>#lambda_1", captures: [], receiver: null });
+});
+
+test("standalone lambda this is null and member access fails as a located catchable error", () => {
+  const error = errorOf("f = () => this.n\nr = f()\n");
+  equal(error.code, "object.invalid");
+  equal(error.pos?.line, 1);
+});
+
+test("bindThis rejects a non-callable or non-object with a located catchable error", () => {
+  equal(errorOf("d = {}\nr = bindThis(1, d)\n").code, "callable.not-callable");
+  const badObject = errorOf("f = () => 1\nr = bindThis(f, 1)\n");
+  equal(badObject.code, "object.invalid");
+  equal(badObject.pos?.line, 2);
+});
+
+test("a bound callable keeps its receiver alive and survives JSON restore", () => {
+  const state = runOnce(`
+d = { n: 7, f: () => this.n }
+f = d.f
+kill(d)
+`);
+  equal(state.vm.objects.length, 1, "the callable is the sole receiver root");
+  const saved = snapshot(state);
+  const restored = restoreChecked(saved);
+  equal(restored.state.vm.objects.length, 1);
+  startProgram(restored.state.vm, { kind: "inline", text: "r = f()\n", compiler: "2" });
+  runToRest(restored.state, restored.services);
+  equal(restored.state.vm.globals.r, 7);
+});
+
 test("a read of a member of something that is not an object is a located, catchable error", () => {
   const error = errorOf("n = 0\nr = n.field\n");
   equal(error.code, "object.invalid");
