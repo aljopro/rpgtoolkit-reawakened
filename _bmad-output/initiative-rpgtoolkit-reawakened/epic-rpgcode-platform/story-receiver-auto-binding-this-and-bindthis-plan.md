@@ -100,7 +100,7 @@ Verification completed in the isolated worktree: install and fixture fetch succe
 
 **Recorded evidence (2026-10-19):**
 - Independent review of PR #294 at head `6145b09960d92c10c2504d99ce91906f29ed0312`: APPROVE, no findings.
-- Independent runtime smoke: a suspended receiver's `frameObjectHandle` 1 survives GC and JSON restore, returning 7; a `waitreply` callable with `objectsAfterCollect` 1 restores its result 7; a stale receiver restore reports `callable-receiver`; object and file collision handles are `[1, 2]`; public export codes are preserved.
+- Independent runtime smoke: a suspended receiver's `frameObjectHandle` 1 survives GC and JSON restore, returning 7; a `waitreply` callable with `objectsAfterCollect` 1 restores its result 7; a stale receiver restore reports `restore.callable-receiver`; object and file collision handles are `[1, 2]`; public export codes are preserved.
 - GitHub Actions run `39292913962` passed all 9 jobs, including `gate`.
 - Local exact-worktree gates passed: typecheck, lint, strict tests 1472/1472 with 0 skipped, golden, golden:bun, graph, licence, provenance, catalogue:check, command-docs:check, oracle:check. No golden diffs.
 - PR #294 merged normally to `main` as `89a4f293865e11f6d4ac185d08c65274c5f0f2b5`; no admin bypass or rebase.
