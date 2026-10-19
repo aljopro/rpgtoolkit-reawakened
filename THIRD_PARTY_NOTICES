@@ -92,8 +92,8 @@ Assets (SoundFonts, fonts, sample art) distributed with the engine or editor are
 
 This authored test bank is **not a bundled default bank**. It is a 1-instrument,
 short-loop SF2 fixture for offline synth tests and is stored at
-`packages/synth/test/fixtures/test-minimal.sf2` (792 bytes,
-SHA-256 `1644ef4f35ec33d4cf5cc73e65fb0ba1b49b6e15356baf445f47f04abcc80eb6`).
+`packages/synth/test/fixtures/test-minimal.sf2` (800 bytes,
+SHA-256 `204a02cbcb31ad6ebeb8776d335769fb50727d6121ea6b4ed0b2801c18a56f06`).
 It contains no third-party samples. TK-16 (ticket 6.14) is the first candidate
 for a bundled GM bank; no third-party bank ships until its PB-1–PB-10 audit
 passes.

@@ -1,0 +1,252 @@
+{
+  "schema": 1,
+  "comment": "Ticket 6.16 null-audio cue streams: each fetched sample game boots to its first board, and the synthetic battle hand-off posts music.play with source battle. These are deliberate G5 additions; null audio records cues without rendering device output.",
+  "games": {
+    "demo": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      },
+      {
+        "cueId": 2,
+        "tick": 61,
+        "kind": "media.play",
+        "track": "music",
+        "voice": 0,
+        "asset": "media/vip - village3.mid",
+        "loop": true,
+        "flags": 1,
+        "positionTicks": 0,
+        "volume": 100,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ],
+    "Basic": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ],
+    "Caoquest": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      },
+      {
+        "cueId": 2,
+        "tick": 0,
+        "kind": "media.play",
+        "track": "music",
+        "voice": 0,
+        "asset": "media/town.mid",
+        "loop": true,
+        "flags": 1,
+        "positionTicks": 0,
+        "volume": 100,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ],
+    "ChimeranEmpire": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      },
+      {
+        "cueId": 2,
+        "tick": 0,
+        "kind": "media.play",
+        "track": "music",
+        "voice": 0,
+        "asset": "media/vip - forest1.mid",
+        "loop": true,
+        "flags": 1,
+        "positionTicks": 0,
+        "volume": 100,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ],
+    "FinalDestiny": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      },
+      {
+        "cueId": 2,
+        "tick": 0,
+        "kind": "media.play",
+        "track": "music",
+        "voice": 0,
+        "asset": "media/vip -  battle or boss.mid",
+        "loop": true,
+        "flags": 1,
+        "positionTicks": 0,
+        "volume": 100,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ],
+    "School2Demo": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ],
+    "LittleMan": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ],
+    "BusDriver": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ]
+  },
+  "syntheticBattle": {
+    "game": "demo",
+    "source": "battle",
+    "cues": [
+      {
+        "cueId": 1,
+        "tick": 0,
+        "kind": "soundfont.set",
+        "track": null,
+        "voice": null,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      },
+      {
+        "cueId": 2,
+        "tick": 1,
+        "kind": "media.play",
+        "track": "music",
+        "voice": 0,
+        "asset": "media/synthetic-battle.mid",
+        "loop": true,
+        "flags": 1,
+        "positionTicks": 0,
+        "volume": 100,
+        "targetVolume": null,
+        "durationTicks": null
+      },
+      {
+        "cueId": 3,
+        "tick": 61,
+        "kind": "media.stop",
+        "track": "music",
+        "voice": 0,
+        "asset": null,
+        "loop": null,
+        "flags": null,
+        "positionTicks": null,
+        "volume": null,
+        "targetVolume": null,
+        "durationTicks": null
+      },
+      {
+        "cueId": 4,
+        "tick": 61,
+        "kind": "media.play",
+        "track": "music",
+        "voice": 0,
+        "asset": "media/vip - village3.mid",
+        "loop": true,
+        "flags": 1,
+        "positionTicks": 0,
+        "volume": 100,
+        "targetVolume": null,
+        "durationTicks": null
+      }
+    ]
+  }
+}

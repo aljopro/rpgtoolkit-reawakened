@@ -6,6 +6,7 @@ test("runner-harness public surface matches the pinned export list with no doubl
   const actualExports = Object.keys(harness).sort();
   const pinnedExports = [
     "CLOSING_BASELINE_PATH",
+    "checkAudioGoldens",
     "CLOSING_PLAN_PATH",
     "buildCorpus",
     "buildFetchedCorpus",
@@ -22,6 +23,7 @@ test("runner-harness public surface matches the pinned export list with no doubl
     "createNullAudio",
     "createScriptHost",
     "encodeRgbaPng",
+    "formatAudioGolden",
     "formatClosingBaseline",
     "formatGolden",
     "formatScriptsGolden",
@@ -33,6 +35,7 @@ test("runner-harness public surface matches the pinned export list with no doubl
     "resolvePluginManifest",
     "restoreScriptHost",
     "runAllCorpusPrograms",
+    "runAudioGoldens",
     "runClosingGame",
     "runClosingSuite",
     "runCorpusProgram",

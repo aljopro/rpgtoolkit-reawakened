@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { goldenJob, runFetchedCorpus } from "@tk-reawakened/runner-harness";
-import { runClosing } from "./closing.ts";
+import { goldenJob, parseClosingPlan, runAudioGoldens, runFetchedCorpus, type AudioGoldenRuns } from "@tk-reawakened/runner-harness";
+import { loadGameFiles, runClosing } from "./closing.ts";
 import { runDump } from "./dump/cli.ts";
 
 function readFileOrUndefined(filePath: string): string | undefined {
@@ -65,7 +65,29 @@ function runGolden(argv: string[]): number {
         ledgerText,
       };
     });
-    const result = goldenJob({ vectors, run, golden, scriptsGolden, sceneGoldens }, record);
+    const closingPlanText = readFileOrUndefined(join(root, "golden/closing/plan.json"));
+    const audioGolden = readFileOrUndefined(join(root, "golden/audio/cues.json")) ?? (record ? "" : undefined);
+    let audioRuns: AudioGoldenRuns | undefined;
+    if (closingPlanText !== undefined && audioGolden !== undefined) {
+      const closingPlan = parseClosingPlan(closingPlanText);
+      const bundled = new Map<string, Uint8Array>();
+      for (const folder of closingPlan.bundled) for (const [path, bytes] of loadGameFiles(join(root, folder))) bundled.set(`${folder}/${path}`, bytes);
+      const fetchedRoot = join(root, "fixtures", "legacy");
+      if (!existsSync(fetchedRoot)) throw new Error("audio golden: fixtures/legacy directory not found; run pnpm fixtures:fetch");
+      audioRuns = runAudioGoldens(closingPlan, (name) => loadGameFiles(join(fetchedRoot, name)), bundled);
+    }
+    const result = goldenJob({
+      vectors,
+      run,
+      golden,
+      scriptsGolden,
+      sceneGoldens,
+      ...(audioRuns !== undefined ? {
+        audioGolden,
+        audioRuns: audioRuns.runs,
+        audioSynthetic: audioRuns.synthetic,
+      } : {}),
+    }, record);
 
     if (!result.ok) {
       const completed = result.lines.slice(0, -1);
@@ -97,6 +119,14 @@ function runGolden(argv: string[]): number {
       mkdirSync(targetDir, { recursive: true });
       const tmpPath = join(targetDir, `golden.json.tmp.${process.pid}`);
       writeFileSync(tmpPath, result.scriptsGolden, "utf8");
+      renameSync(tmpPath, targetPath);
+    }
+    if (record && result.audioGolden !== undefined) {
+      const targetPath = join(root, "golden/audio/cues.json");
+      const targetDir = dirname(targetPath);
+      mkdirSync(targetDir, { recursive: true });
+      const tmpPath = join(targetDir, `cues.json.tmp.${process.pid}`);
+      writeFileSync(tmpPath, result.audioGolden, "utf8");
       renameSync(tmpPath, targetPath);
     }
 
