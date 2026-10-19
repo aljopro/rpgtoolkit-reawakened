@@ -5,6 +5,7 @@
 // same, and every failure stays located and catchable.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
+import { TextEncoder } from "node:util";
 import {
   advanceScriptTick,
   assetKey,
