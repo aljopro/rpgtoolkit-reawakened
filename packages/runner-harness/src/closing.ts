@@ -24,15 +24,18 @@ import {
 import type {
   AssetIndex,
   AssetKey,
+  AudioCue,
   DecodedTexture,
   DrawListInclude,
   EffectRecord,
   Engine,
+  EnginePhaseRegistration,
   GameState,
   InputRecord,
   RunnerRequest,
   SurfaceId,
 } from "@tk-reawakened/core";
+import { createNullAudio } from "./audio.ts";
 import { compareRgbaWithPng } from "./png.ts";
 
 /** What the suite must find for a game: it boots clean, or it is a known failure that names the epic that fixes it. */
@@ -111,6 +114,7 @@ export type ClosingGameRun = {
   readonly record: ClosingGameRecord;
   readonly images: ReadonlyMap<string, DecodedTexture>;
   readonly batchProblems: readonly string[];
+  readonly audioCues: readonly AudioCue[];
 };
 
 const INCLUDE: DrawListInclude = { shading: true, images: true, sprites: true };
@@ -145,11 +149,16 @@ export function parseClosingPlan(text: string): ClosingPlan {
   return plan;
 }
 
-/** The stand-ins for the later epics' seams, observing the engine's state without ever writing it. */
-function createBootDoubles() {
+export type ClosingRunOptions = {
+  readonly captureAudio?: boolean;
+  readonly syntheticBattle?: boolean;
+};
+
+function createBootDoubles(options: ClosingRunOptions = {}) {
   let hasPlayer = false;
   let position: { x: number; y: number } | null = null;
   let latest: GameState | null = null;
+  let battlePosted = false;
   const sprites = (effect: EffectRecord): void => {
     if (effect.name === "createplayer") hasPlayer = true;
     if (effect.name === "placeplayer") {
@@ -157,15 +166,39 @@ function createBootDoubles() {
       position = unit === "tile" ? { x: (x - 1) * 32 + 16, y: (y - 1) * 32 + 31 } : { x, y };
     }
   };
+  const phaseRegistrations: EnginePhaseRegistration[] = [
+    { phase: "audio", run: (state: GameState) => { latest = state; } },
+  ];
+  if (options.syntheticBattle === true) {
+    phaseRegistrations.push({
+      phase: "battle",
+      run: (_state, post) => {
+        if (battlePosted || post === undefined) return;
+        battlePosted = true;
+        post("audio", {
+          thread: 0,
+          name: "music.play",
+          kind: "state-write",
+          args: ["media/synthetic-battle.mid", true, true, "battle"],
+          out: {},
+          result: null,
+          patch: { section: "audio", path: [], op: "merge", value: null },
+          wait: null,
+          request: null,
+        });
+      },
+    });
+  }
+  const effectAppliers: { readonly section: "sprites" | "triggers" | "audio"; readonly applier: (effect: EffectRecord) => void }[] = [
+    { section: "sprites", applier: sprites },
+    { section: "triggers", applier: () => undefined },
+  ];
+  if (options.captureAudio !== true) effectAppliers.push({ section: "audio", applier: () => undefined });
   return {
     options: {
-      effectAppliers: [
-        { section: "sprites" as const, applier: sprites },
-        { section: "triggers" as const, applier: () => undefined },
-        { section: "audio" as const, applier: () => undefined },
-      ],
+      effectAppliers,
       cameraTarget: { getPlayerPosition: () => position, getEntityPosition: () => null },
-      phaseRegistrations: [{ phase: "audio" as const, run: (state: GameState) => { latest = state; } }],
+      phaseRegistrations,
     },
     startup: {
       presence: { hasPlayer: () => hasPlayer },
@@ -184,7 +217,9 @@ type Trace = {
   readonly diagnostics: readonly ClosingDiagnostic[];
   readonly checkpoints: readonly { readonly tick: number; readonly stateHash: string }[];
   readonly captures: readonly Capture[];
+  readonly audioCues: readonly AudioCue[];
 };
+
 
 /** Read the screen surface. Its revision depends on how often the frame was refreshed, so scan for the current one. */
 function readScreen(engine: Engine): DecodedTexture {
@@ -205,10 +240,10 @@ function capture(engine: Engine, label: string, tick: number, stateHash: string)
 }
 
 /** Boot one game and play the plan with `batch` ticks per `advance` call. */
-function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, index: AssetIndex, mainKey: string, batch: number): Trace {
+function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, index: AssetIndex, mainKey: string, batch: number, options: ClosingRunOptions = {}): Trace {
   const bundledFiles = new Map<AssetKey, Uint8Array>();
   for (const [path, bytes] of bundled) bundledFiles.set(assetKey(path), bytes);
-  const doubles = createBootDoubles();
+  const doubles = createBootDoubles(options);
   const engine = createEngine({
     seed: plan.seed,
     assetIndex: index,
@@ -222,6 +257,7 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
     bundled: bundledFiles,
     ...doubles.options,
   });
+  const nullAudio = options.captureAudio === true ? createNullAudio() : null;
   const diagnostics: ClosingDiagnostic[] = [];
   const queued: InputRecord[] = [];
   let tick = 0;
@@ -245,6 +281,7 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
       remaining -= report.ticksRun;
       tick = report.tickAfter;
       stateHash = report.stateHash;
+      for (const cue of report.audioCues) nullAudio?.handle(cue);
       for (const diagnostic of report.diagnostics) diagnostics.push({ code: diagnostic.code, file: diagnostic.file, line: diagnostic.line, message: diagnostic.message });
       const videoReplies = report.requests.flatMap((request) => reply(request, report.tickAfter));
       if (report.loading || videoReplies.length > 0) {
@@ -290,6 +327,7 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
     diagnostics,
     checkpoints,
     captures,
+    audioCues: nullAudio?.cues ?? [],
   };
 }
 
@@ -327,6 +365,7 @@ function traceDifferences(batch: number, reference: Trace, other: Trace): string
   const tag = `batch ${batch}`;
   if (other.ticks !== reference.ticks) problems.push(`${tag}: reached tick ${other.ticks}, reference reached ${reference.ticks}`);
   if (JSON.stringify(other.diagnostics) !== JSON.stringify(reference.diagnostics)) problems.push(`${tag}: diagnostics differ from the reference run`);
+  if (JSON.stringify(other.audioCues) !== JSON.stringify(reference.audioCues)) problems.push(`${tag}: audio cues differ from the reference run`);
   for (const [index, checkpoint] of reference.checkpoints.entries()) {
     const found = other.checkpoints[index];
     if (found === undefined || found.tick !== checkpoint.tick || found.stateHash !== checkpoint.stateHash) problems.push(`${tag}: state hash at tick ${checkpoint.tick} is ${found?.stateHash ?? "missing"}, reference ${checkpoint.stateHash}`);
@@ -339,9 +378,9 @@ function traceDifferences(batch: number, reference: Trace, other: Trace): string
 }
 
 /** Run one game for every batch size of the plan and return the reference record with any batching disagreement. */
-export function runClosingGame(plan: ClosingPlan, game: ClosingGamePlan, files: ClosingFiles, bundled: ClosingFiles): ClosingGameRun {
+export function runClosingGame(plan: ClosingPlan, game: ClosingGamePlan, files: ClosingFiles, bundled: ClosingFiles, options: ClosingRunOptions = {}): ClosingGameRun {
   const { all, index, mainKey } = gameFiles(game, files);
-  const traces = plan.batches.map((batch) => runOnce(plan, all, bundled, index, mainKey, batch));
+  const traces = plan.batches.map((batch) => runOnce(plan, all, bundled, index, mainKey, batch, options));
   const reference = traces[0];
   if (reference === undefined) throw new Error("the plan has no batch sizes");
   const batchProblems = plan.batches.flatMap((batch, position) => (position === 0 || traces[position] === undefined ? [] : traceDifferences(batch, reference, traces[position] as Trace)));
@@ -362,6 +401,7 @@ export function runClosingGame(plan: ClosingPlan, game: ClosingGamePlan, files: 
   return {
     name: game.name,
     batchProblems,
+    audioCues: reference.audioCues,
     images,
     record: {
       dialect: game.dialect,
