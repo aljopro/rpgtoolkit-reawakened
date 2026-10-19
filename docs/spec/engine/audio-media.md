@@ -1640,15 +1640,37 @@ spine's version table and `architecture-options.md` §7); rewording a guard-rail
 needs an ADR, which is an **owner deferral** ([audio-deferrals](#audio-deferrals)).
 
 **Evidence.** Exploration §3 (candidates, "provenance must be verified", the Chaos
-Bank counter-example, "keep it in this monorepo", 2–4 MB at `media/soundfonts/`),
-§9 (conservative default: Florestan or GMGSx after verification); the retrieved
-pages named in the table; G6 and ADR 0003; `tools/licences/config.json`
-(`bundledAssets` holds fonts only today).
+Bank counter-example, "keep it in this monorepo", and the 2–4 MB target),
+§9 (the earlier conservative default proposal); the retrieved pages named in
+the table; G6 and ADR 0003; the entry 6.13 gate and the entry 6.14
+`tools/licences/tk16-provenance.json` record.
 **Rejected alternative.** Adopting Florestan or GMGSx now on the strength of
 third-party "public domain" labels (the Chaos Bank lesson: a label is not a
 grant); picking the next-best third-party bank automatically when Path B fails
 (repeats the same risk without an owner ruling); bundling FluidR3_GM (size, and
 its default status predates the owner's bank direction).
+
+<a id="path-c-bank"></a>
+<!-- OWNER: 6.14/C -->
+**TK-16 shipping record (entry 6.14, 2026-10-19).** Path C now ships the
+project-authored compact bank that the Path B outcome rule reserved. In plain
+terms, the game has a small, redistributable instrument set with a distinct
+16-bit RPG character; a person can listen to it before the bundled-default
+choice is activated. Technically, `media/soundfonts/TK-16.sf2` is a RIFF
+SoundFont 2.1 (`sfbk`) containing 16 melodic programs (MIDI programs 0–15), a
+bank-128 percussion program, and 17 mono looping samples at 22,050 Hz. It is
+37,492 bytes, SHA-256
+`40f387b79ad75fa86adffdbecd09e53a7345e73d4a32181c44521d7368411253`, and is
+registered as `CC0-1.0` under `ADR-0003` with an 8 MiB ceiling in
+`tools/licences/config.json`.
+
+Every waveform is original deterministic synthesis; no recorded or commercial
+sample is included. `tools/licences/tk16-provenance.json` records each sample's
+generator, frequency, rate, loop range, source statement and CC0-1.0 licence.
+The bank and its notice pass the entry 6.13 bundling gate (`pnpm licence`).
+TK-16 is therefore the first bundled-bank candidate and is ready for owner
+listening review; until that approval, the runner's bundled-default layer
+remains conditional and no core state or save projection changes.
 
 ### The runner audio protocol
 

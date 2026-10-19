@@ -34,6 +34,16 @@
         "sha256": "f2b83c763e8afd21709333370bed4774337fae82267937e2b5aea7e2fbd922c1"
       }
     ],
-    "soundfonts": []
+    "soundfonts": [
+      {
+        "path": "media/soundfonts/TK-16.sf2",
+        "license": "CC0-1.0",
+        "adr": "ADR-0003",
+        "release": "TK-16 authored bank 1.0",
+        "sha256": "40f387b79ad75fa86adffdbecd09e53a7345e73d4a32181c44521d7368411253",
+        "sizeCeiling": 8388608,
+        "notice": "TK-16 is an authored General MIDI bank built entirely from deterministic mathematical waveforms; it contains no third-party samples."
+      }
+    ]
   }
 }
