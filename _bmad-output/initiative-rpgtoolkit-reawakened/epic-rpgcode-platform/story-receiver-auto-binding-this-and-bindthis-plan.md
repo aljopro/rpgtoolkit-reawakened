@@ -3,7 +3,7 @@ title: "Receiver auto-binding, this and bindThis"
 type: 'feature'
 ticket: 4
 created: '2026-10-19'
-status: built
+status: done
 baseline_revision: 'd5564edfe11da102e931151de74c34e47ee3ab8e'
 route: 'full'
 route_source: 'auto'
@@ -77,7 +77,11 @@ Verification completed in the isolated worktree: install and fixture fetch succe
 
 ## Plan Change Log
 
+- 2026-10-19 — Closed via PR #294, merged to `main` at `89a4f293865e11f6d4ac185d08c65274c5f0f2b5`. Status set to `done` with `tickets.py mark`.
+
 ## Review Triage Log
+
+- 2026-10-19 — Independent review of PR #294 at head `6145b09960d92c10c2504d99ce91906f29ed0312`: **APPROVE, no findings**.
 
 ## Design Notes
 
@@ -93,3 +97,10 @@ Verification completed in the isolated worktree: install and fixture fetch succe
 
 **Manual checks:**
 - Compile and run an authored dictionary/method program through the real VM; inspect returned values, emitted IR, receiver retention after collection, and canonical JSON restore.
+
+**Recorded evidence (2026-10-19):**
+- Independent review of PR #294 at head `6145b09960d92c10c2504d99ce91906f29ed0312`: APPROVE, no findings.
+- Independent runtime smoke: a suspended receiver's `frameObjectHandle` 1 survives GC and JSON restore, returning 7; a `waitreply` callable with `objectsAfterCollect` 1 restores its result 7; a stale receiver restore reports `restore.callable-receiver`; object and file collision handles are `[1, 2]`; public export codes are preserved.
+- GitHub Actions run `39292913962` passed all 9 jobs, including `gate`.
+- Local exact-worktree gates passed: typecheck, lint, strict tests 1472/1472 with 0 skipped, golden, golden:bun, graph, licence, provenance, catalogue:check, command-docs:check, oracle:check. No golden diffs.
+- PR #294 merged normally to `main` as `89a4f293865e11f6d4ac185d08c65274c5f0f2b5`; no admin bypass or rebase.
