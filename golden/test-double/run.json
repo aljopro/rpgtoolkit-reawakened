@@ -8,6 +8,6 @@
     { "tick": 6, "event": { "kind": "key", "name": "foo\"bar\\baz", "code": "KeyA", "char": null, "down": false } },
     { "tick": 10, "event": { "kind": "asset", "reqId": 1, "bytes": { "t": "bytes", "hex": "00050f" } } },
     { "tick": 10, "event": { "kind": "audio.ended", "cueId": 1 } },
-    { "tick": 14, "event": { "kind": "video.ended" } }
+    { "tick": 14, "event": { "kind": "video.ended", "reqId": 1 } }
   ]
 }

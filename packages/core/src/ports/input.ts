@@ -90,6 +90,7 @@ export type AudioEnded = {
 /** A stream video finished. */
 export type VideoEnded = {
   readonly kind: "video.ended";
+  readonly reqId: number;
 };
 
 /** The one published input event union (AD-14). */

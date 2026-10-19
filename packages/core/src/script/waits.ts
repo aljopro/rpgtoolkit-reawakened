@@ -149,8 +149,18 @@ export function pollAudioTrack(view: WaitView, wait: Wait): WaitResult | null {
   }
   return voice.endTick !== null && view.tick >= voice.endTick ? DONE : null;
 }
+/** `video`: wake only for the matching, unskippable video completion reply. */
+export function pollVideo(view: WaitView, wait: Wait): WaitResult | null {
+  if (wait.kind !== "video") return null;
+  const payload = wait.payload[0];
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const reqId = payload.reqId;
+  if (typeof reqId !== "number" || view.video?.reqId !== reqId || view.video.ended !== true) return null;
+  return DONE;
+}
 
 /** UI-owned wait kinds, kept separate so hosts can extend the VM registry without duplicate registration. */
+
 export const UI_WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "render.msgbox", poll: pollRenderMsgBox },
 ];
@@ -164,6 +174,7 @@ export const WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "request", poll: pollRequest },
   { kind: "blob", poll: pollRequest },
   { kind: "audio.track", poll: pollAudioTrack },
+  { kind: "video", poll: pollVideo },
 ];
 
 /** Fold per-kind resolvers into the one `WaitPoll` (AD-9). Throws

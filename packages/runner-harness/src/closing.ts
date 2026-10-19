@@ -229,7 +229,11 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
   let stalled = false;
 
   const reply = (request: RunnerRequest, at: number): InputRecord[] =>
-    request.kind === "asset" ? [{ tick: at, event: { kind: "asset", reqId: request.reqId, bytes: files.get(request.key) ?? null } }] : [];
+    request.kind === "asset"
+      ? [{ tick: at, event: { kind: "asset", reqId: request.reqId, bytes: files.get(request.key) ?? null } }]
+      : request.kind === "playVideo"
+        ? [{ tick: at, event: { kind: "video.ended", reqId: request.reqId } }]
+        : [];
 
   /** Run `count` ticks, answering asset requests the way a host does; false when the engine stops advancing. */
   function advance(count: number): boolean {
@@ -242,8 +246,11 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
       tick = report.tickAfter;
       stateHash = report.stateHash;
       for (const diagnostic of report.diagnostics) diagnostics.push({ code: diagnostic.code, file: diagnostic.file, line: diagnostic.line, message: diagnostic.message });
-      if (report.loading) {
-        replies = report.requests.flatMap((request) => reply(request, report.tickAfter));
+      const videoReplies = report.requests.flatMap((request) => reply(request, report.tickAfter));
+      if (report.loading || videoReplies.length > 0) {
+        replies = report.loading
+          ? report.requests.flatMap((request) => reply(request, report.tickAfter))
+          : videoReplies;
         continue;
       }
       if (remaining <= 0) return true;

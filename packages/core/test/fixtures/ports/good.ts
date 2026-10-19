@@ -390,6 +390,7 @@ export const pinPlayVideoRequest: PlayVideoRequest = {
   kind: "playVideo",
   reqId: 8,
   key: "intro.mp4" as AssetKey,
+  presentation: "full",
 };
 
 export const pinKeyInputWithChar: KeyInput = {
@@ -477,6 +478,7 @@ export const pinAudioEnded: AudioEnded = {
 
 export const pinVideoEnded: VideoEnded = {
   kind: "video.ended",
+  reqId: 1,
 };
 
 export const pinTexRefWithTile: TexRef = {

@@ -60,7 +60,7 @@ test("parseRun parses valid run with all 11 event kinds including non-BMP char a
       },
       {
         tick: 11,
-        event: { kind: "video.ended" },
+        event: { kind: "video.ended", reqId: 1 },
       },
     ],
   });

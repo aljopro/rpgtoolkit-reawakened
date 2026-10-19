@@ -41,7 +41,7 @@ import { createProgramCache, type ProgramCache } from "./cache.ts";
 import { runModuleCommand } from "./modules.ts";
 import { MODULE_COMMANDS } from "./parse.ts";
 import type { SourcePos, StepOp } from "./ops.ts";
-import type { CommandResult, CommandView, ResolvedPlugin } from "./plugin.ts";
+import type { CommandResult, CommandRequest, CommandView, ResolvedPlugin } from "./plugin.ts";
 import {
   COMPILER_VERSION,
   fileProgramRef,
@@ -114,8 +114,9 @@ export type ScriptServices = {
   readonly diagnostics: Diagnostic[];
   /** Manifest options remain host/service data and never enter VM state. */
   readonly pluginOptions: ReadonlyMap<string, PlainData>;
-  /** Engine-owned synchronous effect dispatch hook. */
   readonly postEffect?: (section: SectionKey, effect: EffectRecord) => void;
+  /** Engine-owned synchronous host-request dispatch hook. */
+  readonly postRequest?: (request: CommandRequest) => void;
 };
 
 /** Take every diagnostic collected since the last drain, oldest first. */
@@ -132,6 +133,7 @@ export function createScriptServices(
   loaderOrGameId?: ProgramLoader | string,
   explicitGameId = "default",
   postEffect?: (section: SectionKey, effect: EffectRecord) => void,
+  postRequest?: (request: CommandRequest) => void,
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
@@ -191,6 +193,7 @@ export function createScriptServices(
     pluginOptions,
     ...(loader === undefined ? {} : { loader }),
     ...(postEffect === undefined ? {} : { postEffect }),
+    ...(postRequest === undefined ? {} : { postRequest }),
   };
 }
 
@@ -1009,6 +1012,10 @@ function requestWait(
     line: pos.line,
   };
 }
+function videoWait(reqId: number, key: string, presentation: "full" | "small", id: string): Wait {
+  return { kind: "video", global: false, id, payload: [{ reqId, key, presentation }], resumeRefs: [] };
+}
+
 
 /** The thread `id` names, for an operation that needs it to be running code (`threadSleep`, `tellThread`). */
 function liveTarget(vm: VmState, id: number, what: string, pos: SourcePos): Thread {
@@ -1517,6 +1524,10 @@ function dispatchResolved(
     }
     vm.requestSeq += 1;
     const reqId = vm.requestSeq;
+    const request: CommandRequest = { ...result.request, reqId };
+    const wait = request.kind === "playVideo" && typeof request.key === "string" && (request.presentation === "full" || request.presentation === "small")
+      ? videoWait(reqId, request.key, request.presentation, name)
+      : requestWait(reqId, deadline, result.then, pos, request.kind);
     recordEffect(vm, {
       tick,
       thread: thread.id,
@@ -1526,10 +1537,11 @@ function dispatchResolved(
       out: {},
       result: null,
       patch: null,
-      wait: requestWait(reqId, deadline, result.then, pos, result.request.kind),
-      request: { ...result.request, reqId },
+      wait: { ...wait },
+      request,
     });
-    thread.wait = requestWait(reqId, deadline, result.then, pos, result.request.kind);
+    services.postRequest?.(request);
+    thread.wait = wait;
     thread.status = "waiting";
     return "yield";
   }

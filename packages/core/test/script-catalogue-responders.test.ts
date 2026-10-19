@@ -52,8 +52,6 @@ const pluginWaitPoll = createWaitPoll([
   resolver("render.msgbox"),
   resolver("input.mouse"),
   resolver("menu.screen"),
-  resolver("audio.sfx"),
-  resolver("video"),
 ]);
 
 test("all non-core catalogue responders have a lower-case command and a recorded response", () => {

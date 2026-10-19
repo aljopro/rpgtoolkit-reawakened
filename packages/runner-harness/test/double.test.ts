@@ -143,7 +143,7 @@ test("test double increments other counter for remaining events and returns null
     { tick: 4, event: { kind: "blob.listed", reqId: 4, names: ["save1"] } },
     { tick: 5, event: { kind: "extension.result", reqId: 5, result: 42 } },
     { tick: 6, event: { kind: "audio.ended", cueId: 10 } },
-    { tick: 7, event: { kind: "video.ended" } },
+    { tick: 7, event: { kind: "video.ended", reqId: 1 } },
   ];
 
   const report = engine.advance(8, inputs);
