@@ -40,24 +40,25 @@ export type ThreadOwner = "script" | "world";
 export type ThreadStatus = "ready" | "waiting" | "finished";
 
 /**
- * One active object in the deterministic handle table (OOP-3/OOP-5/OOP-10).
+ * One active object in the deterministic handle table (OOP-3/OOP-5/OOP-10,
+ * docs/spec/engine/rpgcode-modules-and-objects.md#oop-10). Every object, a
+ * dictionary literal's and a legacy class instance alike, has this one shape.
  *
- * A legacy class instance has the name of its class and the program that
- * defines it. A dictionary object (OOP-10, entry 19.3) is an object with no
- * class: `className` is `""`, `program` is `null` (nothing in it needs a
- * compiled program) and `keys` lists its member names in the order they were
- * first written. `members` is a plain JSON object whose own order is not
- * reliable (a key such as `"2"` is always listed first), so `keys` is the one
- * enumeration order, saved and restored with the record. `keys` is present on
- * a dictionary and absent on a class instance, so a state with no dictionary
- * keeps the shape it had before dictionaries existed.
+ * `className` is the class tag: the folded name of the class, or `""` for a
+ * dictionary, which has no class. `program` is the program that declares that
+ * class, and is `null` exactly when `className` is `""`. The methods, the
+ * ancestors and the access labels of the class are its declaration, found by
+ * name in the running program's class table, never saved with the object
+ * (OOP-12). `members` is a plain JSON object whose own order is not reliable (a
+ * key such as `"2"` is always listed first), so `keys` is the one enumeration
+ * order, saved and restored with the record: it names each member exactly once.
  */
 export type ObjectRecord = {
   handle: number;
   className: string;
   program: ProgramRef | null;
   members: { [name: string]: Value };
-  keys?: string[];
+  keys: string[];
 };
 
 /** One local variable storage slot in a call frame (AD-7). */

@@ -47,6 +47,8 @@ export type StepOp =
       readonly op: "load";
       readonly name: string;
       readonly scope?: VarScope;
+      /** Present and `true` only when `name` is a parameter of the function this op is in: a parameter shadows a field of the object (OOP-6). */
+      readonly param?: true;
       readonly pos: SourcePos;
     }
   | {
@@ -56,7 +58,12 @@ export type StepOp =
       readonly pos: SourcePos;
     }
   | { readonly op: "storeRef"; readonly pos: SourcePos }
-  | { readonly op: "index"; readonly pos: SourcePos }
+  | {
+      readonly op: "index";
+      /** Present and `true` only when the indexed bare name is a parameter of the function this op is in (OOP-6). */
+      readonly baseParam?: true;
+      readonly pos: SourcePos;
+    }
   | { readonly op: "member"; readonly name: string; readonly pos: SourcePos }
   /** Read a member and bind a receiver-less callable to the owning object (OOP-11). */
   | { readonly op: "get_member_bound"; readonly name: string; readonly pos: SourcePos }
@@ -116,6 +123,8 @@ export type StepOp =
       readonly argc: number;
       /** The folded file name of a `file.func(...)` call site (MOD-2); a restore reproduces the binding from it. */
       readonly file?: string;
+      /** Present and `true` only when `file` is a parameter of the function this op is in: `eng.get()` with a parameter `eng` (OOP-6). */
+      readonly fileParam?: true;
       readonly pos: SourcePos;
     }
   | { readonly op: "return"; readonly pos: SourcePos };

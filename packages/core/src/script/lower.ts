@@ -103,6 +103,12 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
   const statements: StatementRange[] = [];
   const lambdaDefs: { readonly def: string; readonly expr: Extract<Expr, { kind: "lambda" }> }[] = [];
   let lambdaNumber = 0;
+  /** The parameter names of the function body being lowered (OOP-6: a parameter shadows a field of the object). */
+  let paramNames: ReadonlySet<string> = new Set();
+  /** Whether an indexed base is a bare name that is a parameter of the body being lowered. */
+  function indexesParam(base: Expr): boolean {
+    return base.kind === "variable" && base.name !== "this" && paramNames.has(base.name);
+  }
   function getPos(line: number): SourcePos {
     let p = posCache.get(line);
     if (!p) {
@@ -130,7 +136,12 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
       if (target.scope) {
         ops.push({ op: "load", name: target.name, scope: target.scope, pos: getPos(target.line) });
       } else {
-        ops.push({ op: "load", name: target.name, pos: getPos(target.line) });
+        ops.push({
+          op: "load",
+          name: target.name,
+          ...(paramNames.has(target.name) ? { param: true as const } : {}),
+          pos: getPos(target.line),
+        });
       }
       return;
     }
@@ -141,7 +152,7 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
     if (target.kind === "index") {
       lowerIndexBase(target.base);
       lowerExpr(target.index);
-      ops.push({ op: "index", pos: getPos(target.line) });
+      ops.push({ op: "index", ...(indexesParam(target.base) ? { baseParam: true as const } : {}), pos: getPos(target.line) });
       return;
     }
     if (target.kind === "member") {
@@ -173,13 +184,18 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
         if (expr.scope) {
           ops.push({ op: "load", name: expr.name, scope: expr.scope, pos: getPos(expr.line) });
         } else {
-          ops.push({ op: "load", name: expr.name, pos: getPos(expr.line) });
+          ops.push({
+            op: "load",
+            name: expr.name,
+            ...(paramNames.has(expr.name) ? { param: true as const } : {}),
+            pos: getPos(expr.line),
+          });
         }
         break;
       case "index":
         lowerIndexBase(expr.base);
         lowerExpr(expr.index);
-        ops.push({ op: "index", pos: getPos(expr.line) });
+        ops.push({ op: "index", ...(indexesParam(expr.base) ? { baseParam: true as const } : {}), pos: getPos(expr.line) });
         break;
       case "decl":
         ops.push({ op: "declRef", scope: expr.scope, name: expr.name, pos: getPos(expr.line) });
@@ -190,7 +206,14 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
       case "call":
         for (const arg of expr.args) lowerExpr(arg);
         if (expr.file !== undefined) {
-          ops.push({ op: "call", name: expr.name, argc: expr.args.length, file: expr.file, pos: getPos(expr.line) });
+          ops.push({
+            op: "call",
+            name: expr.name,
+            argc: expr.args.length,
+            file: expr.file,
+            ...(paramNames.has(expr.file) ? { fileParam: true as const } : {}),
+            pos: getPos(expr.line),
+          });
         } else if (classNames.has(expr.name)) {
           ops.push({ op: "construct", className: expr.name, argc: expr.args.length, pos: getPos(expr.line) });
         } else {
@@ -454,12 +477,19 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
   const functions: { [name: string]: FunctionInfo[] } = {};
   const classes: { [name: string]: CompiledClass } = {};
 
-  function lowerBody(body: Block, line: number): { entry: number; end: number; labels: { [name: string]: number } } {
+  function lowerBody(
+    body: Block,
+    line: number,
+    params: readonly { readonly name: string }[],
+  ): { entry: number; end: number; labels: { [name: string]: number } } {
+    const outer = paramNames;
+    paramNames = new Set(params.map((param) => param.name));
     const entry = ops.length;
     const labels: { [name: string]: number } = {};
     for (const statement of body) emitStatement(statement, labels);
     const lastLine = body[body.length - 1]?.line ?? line;
     ops.push({ op: "return", pos: getPos(lastLine) });
+    paramNames = outer;
     return { entry, end: ops.length, labels };
   }
 
@@ -470,7 +500,7 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
       if (className === undefined) return base;
       return access === undefined ? { ...base, className } : { ...base, className, access };
     }
-    const lowered = lowerBody(method.body, method.line);
+    const lowered = lowerBody(method.body, method.line, method.params);
     const base = { ...lowered, params: method.params.map((p) => ({ name: p.name, byRef: p.byRef })) };
     if (className === undefined) return base;
     return access === undefined ? { ...base, className } : { ...base, className, access };
@@ -506,7 +536,7 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
   // functions and methods so a `load_fn` emitted in any body can point at a complete range.
   for (let index = 0; index < lambdaDefs.length; index += 1) {
     const lambda = lambdaDefs[index]!;
-    const lowered = lowerBody(lambda.expr.body, lambda.expr.line);
+    const lowered = lowerBody(lambda.expr.body, lambda.expr.line, lambda.expr.params);
     const params = lambda.expr.params.map((param) => ({ name: param.name, byRef: param.byRef }));
     // The captures are worked out here, once per definition, because the load
     // site and the call site must agree on the order without either embedding

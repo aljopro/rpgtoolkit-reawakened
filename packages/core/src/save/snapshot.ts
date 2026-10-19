@@ -302,27 +302,33 @@ function validateVmShape(vm: Record<string, unknown>): void {
 }
 
 /**
- * The dictionary records of the handle table (OOP-10; entry 19.3): a dictionary
- * (`className` `""`) has a `keys` list and a class instance has none, and the
- * list names each member exactly once, so the saved enumeration order and the
- * members cannot disagree.
+ * The records of the handle table (OOP-10; entries 19.3 and 19.5): every object,
+ * a dictionary and a class instance alike, has the one shape. The `handle`s are
+ * distinct whole numbers, `keys` names each member exactly once, and `program` is
+ * a program reference exactly when the record has a class (`className` is not `""`).
+ * A record in the shape saved before entry 19.5 (a class instance with no `keys`)
+ * is refused here: no step migrates it.
  */
 function validateVmObjects(vm: Record<string, unknown>): void {
+  const handles = new Set<number>();
   for (const [index, value] of arrayAt(vm.objects, "vm.objects").entries()) {
-    const record = recordAt(value, `vm.objects[${index}]`);
-    const dictionary = record.className === "";
-    if (record.keys === undefined) {
-      if (dictionary) shapeError(`the snapshot's vm.objects[${index}] is a dictionary with no keys list`);
-      continue;
+    const path = `vm.objects[${index}]`;
+    const record = recordAt(value, path);
+    const handle = numberAt(record.handle, `${path}.handle`);
+    if (handle < 1 || handles.has(handle)) shapeError(`the snapshot's ${path}.handle is not a distinct positive handle`);
+    handles.add(handle);
+    if (stringAt(record.className, `${path}.className`) === "") {
+      if (record.program !== null) shapeError(`the snapshot's ${path}.program must be null on an object with no class`);
+    } else {
+      validateProgramRef(record.program, `${path}.program`);
     }
-    if (!dictionary) shapeError(`the snapshot's vm.objects[${index}].keys belongs on a dictionary, not a class instance`);
-    const keys = arrayAt(record.keys, `vm.objects[${index}].keys`);
-    const members = recordAt(record.members, `vm.objects[${index}].members`);
+    const keys = arrayAt(record.keys, `${path}.keys`);
+    const members = recordAt(record.members, `${path}.members`);
     const listed = new Set<string>();
-    for (const [at, key] of keys.entries()) listed.add(stringAt(key, `vm.objects[${index}].keys[${at}]`));
+    for (const [at, key] of keys.entries()) listed.add(stringAt(key, `${path}.keys[${at}]`));
     const names = Object.keys(members);
     if (listed.size !== keys.length || names.length !== keys.length || !names.every((name) => listed.has(name))) {
-      shapeError(`the snapshot's vm.objects[${index}].keys does not list its members exactly once each`);
+      shapeError(`the snapshot's ${path}.keys does not list its members exactly once each`);
     }
   }
 }

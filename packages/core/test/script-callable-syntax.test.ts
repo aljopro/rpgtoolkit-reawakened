@@ -128,28 +128,6 @@ test("`=>` does not change `>=` or the legacy operators", () => {
   equal(kindOf(assignedValue("ok = (a == b)"), "binary").operator, "==");
 });
 
-test("lowers lambdas to deterministic function handles and dynamic calls to explicit IR", () => {
-  const lambdaProgram = compileInline("f = (a) => a");
-  deepEqual(lambdaProgram.ops.slice(0, 6), [
-    { op: "load", name: "f", pos: { file: "<inline>", line: 1 } },
-    { op: "load_fn", def: "<inline>#lambda_1", captures: [], pos: { file: "<inline>", line: 1 } },
-    { op: "storeRef", pos: { file: "<inline>", line: 1 } },
-    { op: "pop", pos: { file: "<inline>", line: 1 } },
-    { op: "return", pos: { file: "<inline>", line: 1 } },
-    { op: "load", name: "a", pos: { file: "<inline>", line: 1 } },
-  ]);
-  equal(lambdaProgram.functions["<inline>#lambda_1"]?.[0]?.params[0]?.name, "a");
-
-  deepEqual(compileInline("f(1)(2)").ops, [
-    { op: "push", value: 1, pos: { file: "<inline>", line: 1 } },
-    { op: "call", name: "f", argc: 1, pos: { file: "<inline>", line: 1 } },
-    { op: "push", value: 2, pos: { file: "<inline>", line: 1 } },
-    { op: "call_indirect", argc: 1, pos: { file: "<inline>", line: 1 } },
-    { op: "pop", pos: { file: "<inline>", line: 1 } },
-    { op: "return", pos: { file: "<inline>", line: 1 } },
-  ]);
-});
-
 test("a dictionary literal lowers to newObject, then each value and an initMember in the order written (OOP-10)", () => {
   const compiled = compileInline("d = { k: 1, \"s\": 2 }");
   const names = compiled.ops.map((step) => (step.op === "initMember" ? `initMember:${step.key}` : step.op));

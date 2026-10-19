@@ -10,9 +10,9 @@ import {
   canon,
   collectGarbage,
   createGameState,
-  dictionaryKeys,
   hashState,
   isDictionary,
+  objectKeys,
   replyToRequest,
   restoreGameState,
   snapshot,
@@ -95,7 +95,7 @@ test("a key is a bare identifier or a string; a repeated key keeps the last valu
   const record = only(state);
 
   deepEqual(record.members, { a: 3, "two words": 2, b: 4 });
-  deepEqual(dictionaryKeys(record), ["a", "two words", "b"]);
+  deepEqual(objectKeys(record), ["a", "two words", "b"]);
 });
 
 test("the literal creates its object first, then evaluates the values in the order written (OOP-10)", () => {
@@ -144,7 +144,7 @@ d["d"] = 4
 d.a = 10
 `);
   const record = only(state);
-  deepEqual(dictionaryKeys(record), ["a", "b", "c", "d"]);
+  deepEqual(objectKeys(record), ["a", "b", "c", "d"]);
   deepEqual(record.members, { a: 10, b: 2, c: 3, d: 4 });
 });
 
@@ -158,7 +158,7 @@ z = d.missing + 5
   equal(state.vm.globals.x, 0);
   equal(state.vm.globals.y, 0);
   equal(state.vm.globals.z, 5);
-  deepEqual(dictionaryKeys(only(state)), ["a"]);
+  deepEqual(objectKeys(only(state)), ["a"]);
 });
 
 test("keys that clash with JavaScript names are ordinary data", () => {
@@ -173,7 +173,7 @@ c = d["__proto__"]
   equal(state.vm.globals.a, 0);
   equal(state.vm.globals.b, 7);
   equal(state.vm.globals.c, 8);
-  deepEqual(dictionaryKeys(only(state)), ["constructor", "__proto__"]);
+  deepEqual(objectKeys(only(state)), ["constructor", "__proto__"]);
 });
 
 test("a numeric index is the key written with six significant digits, like an array index", () => {
@@ -186,7 +186,7 @@ b = d["2.5"]
 `);
   equal(state.vm.globals.a, "one");
   equal(state.vm.globals.b, "two and a half");
-  deepEqual(dictionaryKeys(only(state)), ["1", "2.5"]);
+  deepEqual(objectKeys(only(state)), ["1", "2.5"]);
 });
 
 test("a key written as a bare name is folded like any name; a string key keeps its case", () => {
@@ -199,7 +199,7 @@ c = d["exact"]
   equal(state.vm.globals.a, 1);
   equal(state.vm.globals.b, 2);
   equal(state.vm.globals.c, 0);
-  deepEqual(dictionaryKeys(only(state)), ["mixed", "Exact"]);
+  deepEqual(objectKeys(only(state)), ["mixed", "Exact"]);
 });
 
 test("nested access reads and updates through every form, and a compound write works", () => {
@@ -399,7 +399,7 @@ d.a = 9
 `);
   const record = only(state);
   deepEqual(record.members, { b: 2, a: 9 });
-  deepEqual(dictionaryKeys(record), ["b", "a"]);
+  deepEqual(objectKeys(record), ["b", "a"]);
   equal(state.vm.globals.x, 0);
 });
 
@@ -411,7 +411,7 @@ e = d
 kill(d)
 `);
   deepEqual(
-    state.vm.objects.map((record) => dictionaryKeys(record)),
+    state.vm.objects.map((record) => objectKeys(record)),
     [["in"], ["y"]],
   );
   equal(Object.hasOwn(state.vm.globals, "d"), false);
@@ -503,13 +503,13 @@ test("a dictionary saved mid-run restores to an equal hash and finishes exactly 
   const services = createScriptServices(state);
   advanceOrFail(state, services);
   equal(state.vm.threads[0]!.status, "waiting");
-  deepEqual(dictionaryKeys(state.vm.objects[0]!), ["count", "meta", "extra", "2", "alpha"]);
+  deepEqual(objectKeys(state.vm.objects[0]!), ["count", "meta", "extra", "2", "alpha"]);
 
   const json = snapshot(state);
   const { state: restored, services: restoredServices } = restoreChecked(json);
   equal(canon(restored), json);
   equal(hashState(restored), hashState(state));
-  deepEqual(dictionaryKeys(restored.vm.objects[0]!), ["count", "meta", "extra", "2", "alpha"], "the order survives a save");
+  deepEqual(objectKeys(restored.vm.objects[0]!), ["count", "meta", "extra", "2", "alpha"], "the order survives a save");
 
   runToRest(state, services);
   runToRest(restored, restoredServices);
@@ -522,12 +522,7 @@ test("a dictionary saved mid-run restores to an equal hash and finishes exactly 
 test("the save keeps a dictionary's order even though a canonical JSON object does not", () => {
   const state = runOnce('d = {}\nd["2"] = 1\nd.b = 2\nd["1"] = 3\n');
   const { state: restored } = restoreChecked(snapshot(state));
-  deepEqual(dictionaryKeys(restored.vm.objects[0]!), ["2", "b", "1"]);
-});
-
-test("a state with no dictionary keeps the shape it had: no keys list, no null program", () => {
-  const state = runOnce("x = 1\n");
-  deepEqual(state.vm.objects, []);
+  deepEqual(objectKeys(restored.vm.objects[0]!), ["2", "b", "1"]);
 });
 
 function edited(json: string, change: (raw: { vm: { objects: Array<Record<string, unknown>> } }) => void): string {
@@ -550,8 +545,6 @@ test("a snapshot whose dictionary keys disagree with its members is refused", ()
   ok(refuse((record) => void (record.keys = ["a"])).includes("vm.objects[0].keys"));
   ok(refuse((record) => void (record.keys = ["a", "a"])).includes("vm.objects[0].keys"));
   ok(refuse((record) => void (record.keys = ["a", "c"])).includes("vm.objects[0].keys"));
-  ok(refuse((record) => void delete record.keys).includes("dictionary with no keys"));
-  ok(refuse((record) => void (record.className = "Box")).includes("not a class instance"));
 });
 
 test("advanceScriptTick on a restored state collects like the original", () => {

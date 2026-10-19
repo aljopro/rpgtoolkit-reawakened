@@ -3,34 +3,113 @@ title: "Legacy classes on the dictionary runtime"
 type: 'feature'
 ticket: 5
 created: '2026-10-19'
-status: draft
-baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
+status: in-review
+baseline_revision: '8d4868a5a8f32a25e19dccb80ccc88d24e548c3b'
+route: 'full'
+route_source: 'auto'
 risk: "high"
+review: ''
+review_source: ''
+lenses_ran: []
+review_loop_iteration: 0
 context:
-  - "spec - docs/spec/engine/rpgcode-modules-and-objects.md (OOP-1 to OOP-10)"
-  - "code - packages/core/src/script/ (class lowering and object table)"
+  - "docs/guardrails.md"
+  - "docs/spec/engine/rpgcode-modules-and-objects.md"
+  - "docs/adr/0009-compatibility-layer-not-the-model.md"
 ---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent
 
-Delete the parallel legacy object representation once the dictionary runtime exists. Done clean-cutover: migrate every caller, no shim. If a state-hash change is unavoidable the plan lists it and the golden is re-recorded deliberately (G5).
+**Problem:** Dictionary objects (19.3) and legacy `class` instances already share the handle table, but they are still two representations: `ObjectRecord.keys` exists only on dictionaries, the VM has a separate dictionary path and class path for member read, call, `kill` and collection, and a class's identity is read from three places (the record, the object value, the running frame).
 
-## Boundaries
+**Approach:** One record shape for every object (class tag, program, members, required `keys`), one member read/write, one call path, one collection pass, and class identity taken from the record for dispatch while the frame keeps the defining class for access (OOP-9). Clean cutover: no shim, no migration of the old saved shape (ADR 0009); legacy 3.1 behaviour is the oracle.
 
-Representation of classes only; no new syntax. Legacy behaviour is the oracle.
+## Boundaries & Constraints
 
-## Key Decisions
+**Always:** Preserve every OOP-1 to OOP-9 behaviour: only the named constructor runs, own-class-only destructor, the OOP-8 ancestor walk, access labels, `operator` dispatch, `return &` references and member arrays, handle numbering. State stays plain JSON (G1); no clock, randomness or unordered iteration (G3). `Frame.objectClass` stays the access (definer) context and is not merged into dispatch. Docs first (G7 rule 4).
 
-1. Legacy compatibility is the 3.1 behaviour in docs/spec, not the previous Reawakened save format (owner, 2026-10-18).
+**Never:** New syntax; a second object table or representation; a schema bump or a migration shim for the old class-instance shape; changes to the order of the OOP-6 lookup tiers (environment-table precedence) or to the OOP-9 access identity; changes to lifetime or receiver semantics (`release()`, receiver binding); DeepSeek workers.
 
-## Acceptance
+## I/O & Edge-Case Matrix
 
-1. One object runtime.
-2. All legacy object behaviour rows still pass.
-3. Goldens unchanged or deliberately re-recorded with reasons.
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| Instance shape | `class Leaf : Mid : Base` with fixed and growable arrays | Members are the declared fields (own class, then ancestors, nearest wins); `keys` lists them once each | n/a |
+| Dispatch | `this + o` in a method `A` defines, object of `C : A` overriding `operator+` | C's operator runs | no operator: `object.invalid` |
+| Call | `a.get()`, `a->get()`, `a.release()`, `a.cb()` on a class instance | Same call; a callable field is called with the object as receiver | non-callable: `callable.not-callable`; private: `object.inaccessible-member`; missing: `object.invalid` |
+| Implicit lookups | Inside `Base::run()`, bare `step()` and a bare field only `Kid` declares, on a `Kid` object | The override runs and the field is the member, as `this->step()` does | unknown name: `unknown.command` |
+| Dot qualifier | `eng.get()` inside a method where `eng` is a field | Same `eng` as `eng->get()`: field first, then local, then global | include fallback only when no object is found |
+| `kill` | `kill(a->x)` on an instance | Key removed, field stays declared, re-enters last | n/a |
+| Collection | Kept garbage cycle holding `q.f`; by-reference slot into a member | Receiver and referenced object survive; the save loads | `restore.callable-receiver` never raised for a kept holder |
+| Save shape | Old class record (no `keys`), class with null `program`, dictionary with a `program`, duplicate handle | Load refused, path named | `restore.shape` |
+| Class gone | Instance restored, running program no longer declares its class | Load succeeds; first method call fails, data stays | catchable `object.invalid` |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `packages/core/src/script/state.ts` -- `ObjectRecord` with required `keys`.
+- `packages/core/src/script/objects.ts` -- the one object model: `createObject`, `instantiate`, `checkMemberAccess`, member read/write/remove, `objectKeys`, `objectRef`/`parseObjectRef`.
+- `packages/core/src/script/classes.ts` -- new: OOP-8 walk, `findMethod`, `findMember`, `declaredMembers` (moved out of `vm.ts`).
+- `packages/core/src/script/vm.ts` -- merged `member`/`get_member_bound`; `liveObject` + `invokeMember` behind `methodCall` and the file-qualified dot call; `construct` uses `instantiate`; operators and `this` take the record's class; `kill` of any field; `collectObjects` on `cells.eachLiveRoot`.
+- `packages/core/src/script/cells.ts` -- `eachLiveRoot` (the roots without object members).
+- `packages/core/src/save/snapshot.ts` -- `validateVmObjects` validates the one shape.
+- `docs/spec/engine/rpgcode-modules-and-objects.md`, `rpgcode-language.md` -- OOP-10/11, R-34, restore.shape.
+- Not touched: `Frame` (no new optional fields), `ObjectValue`, lowering, OOP-6 lookups.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] Docs first: stored shape, instance fields, two class identities, call path, `kill`, R-34 roots (own commit).
+- [x] One `ObjectRecord` shape, validated on load; class model moved to `classes.ts`.
+- [x] One member/call/kill/collection path in the VM; dispatch by record class, access by frame class.
+- [x] Object roots: frame `this`, operand and slot references, receivers of callables in kept objects.
+- [x] Tests: `script-class-objects.test.ts`; obsolete two-shape tests deleted.
+
+**Acceptance Criteria:**
+- Given any existing class test or legacy golden, when run, then it passes with no state-hash diff (the corpus class program ends with no live object).
+- Given a class instance and a dictionary, when saved mid-wait and restored, then hashes are equal and both finish identically.
+- Given the failing-before scenarios above, when run on the base, then they fail; on this head they pass.
+
+## Implementation Notes
+
+Classes already lived in `vm.objects` (19.3 reused the table), so the cutover is the representation and the code paths, not a second table. Decisions: instances seed every declared field including ancestors' (reads were already `0`); a growable `var m[]` has `arraySize` `null` and stays one member; dot calls on class instances now dispatch like `->`; operators on a released handle fall back to handle comparison; no schema bump (old class records are refused with a path-naming `restore.shape`). Deviations found and fixed against the OOP-8 "actual class" rule: `this + x` in an inherited method used the defining class's operator; a bare `step()` and a bare field name in a base method used the defining class's symbols; `eng.get()` did not see a field `eng`; `kill(obj->field)` did nothing on instances; a kept garbage cycle freed the receiver of a callable it held. `frameObjectClass` (record's class) finds symbols; `Frame.objectClass` (the class that defined the running method) still decides access.
+
+The object pass runs on `cells.eachLiveRoot`, which builds no path strings, and returns at once on an empty handle table.
+
+## Plan Change Log
+
+- 2026-10-19 — Director triage of the review of `0a2e1826` renegotiated the frozen scope: the implicit bare-call and bare-field lookups inside a method (F2) and the dot-call qualifier (F8) belong to this story's object-first dispatch, not to a deferred OOP-6 change; the lookup-tier order and the access identity stay. The `Never` line and the I/O matrix above were amended to match; the spec rows were written first (`0c0a8cec`).
+
+## Review Triage Log
+
+Independent review of `0a2e1826` (code identical to `16fd1163`): pass with findings, no blocker.
+
+| Finding | Verdict | Action |
+|---|---|---|
+| F1 docs: `kill(obj["field"])` and `obj["k"]` on a class instance | valid | `kill` row, KILL-1 and EXP-7 now say `dict["k"]` is the member and a class instance's `obj[i]` keeps OOP-7 |
+| F2 bare call / bare field use the defining class | valid (also on base) | fixed: `frameObjectClass` in `load`, member-array `index` and the implicit call; test `a bare call and a bare field name…` fails on base (`1 !== 2`) |
+| F3 explicit `release()` of a callable's receiver dangles it | valid, pre-existing, not a GC bug | not changed (lifetime/receiver semantics are not this ticket). Evidence on this head and on base `8d4868a5`: `k.cb = bindThis(() => this.n, r); r->release()` then save/restore gives `restore.callable-receiver`. The R-34 sentence now promises only that collection never frees a receiver a kept object's callable names, and states the limit |
+| F4 per-tick collector cost | valid | empty-table early return; `eachLiveRoot` builds no path strings |
+| F5 'deliberate re-record' claim | valid | reworded: no golden holds a live class instance, none re-recorded |
+| F6 'exactly these fields' / undocumented handle rule | valid | reworded to 'these fields'; positive distinct handles documented; no stricter reject policy added |
+| F7 private-field identity | pre-existing, out of scope | unchanged and pinned by a test. Evidence (same on base): in `Base`, a bare `secret` on a `Kid` object reads it, `this->secret` raises `object.inaccessible-member`, because the field check compares the running method's class with the object's class, not with the field's declaring class (methods compare with the method's definer). Owner question for the access policy; no follow-up promised here |
+| F8 `eng.get()` does not see a field `eng` | valid | fixed: the qualifier is found by `peekName` (field, then local, then global); test `the dot-call qualifier…` fails on base (`dot` 0 with `include.missing`) |
+| F9 (review of `9414aa71`) a field only the object's class declares shadowed a parameter of an ancestor's method (`run(x)` returned the field; `&x`, closure, qualifier and index variants too); the same-class param-vs-field departure from OOP-6 | valid regression plus a pre-existing departure | fixed at the root: the lowerer flags a bare name that is a parameter of the function it lowers (`load.param`, `index.baseParam`, `call.fileParam`, only when true, no op added or moved, no compiler bump) and `isImplicitField` skips the field tier for it, giving OOP-6's order (explicit global, parameter, field of the object's class, local or global). `findObject` tries `objects[handle - 1]` before the scan. Tests `a parameter of an inherited method shadows…` and `…same name in the class that declares both…` |
+
+## Design Notes
+
+Two class identities, two jobs: the record's `className` decides dispatch (methods, operators, abstract); the frame's `objectClass` (the class that defined the running method) decides access. Rejected: keeping the class name in the object value (it gave `this` the defining class) and a second optional-`keys` shape.
 
 ## Verification
 
-`pnpm test:strict`, golden job.
+**Commands:**
+- `pnpm install`, `pnpm fixtures:fetch`
+- `pnpm typecheck`, `pnpm lint`, `pnpm test:strict`
+- `pnpm golden`, `pnpm golden:bun`, `pnpm graph`, `pnpm licence`, `pnpm provenance`
+- `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm oracle:check`
 
-Handoff: the editor (Epic 11/12 or editor P1) should later offer a legacy-class to dictionary-object conversion tool (nice-to-have.md).
+**Manual checks:**
+- Authored class-and-dictionary program through the real VM: a wait, a JSON save and restore, then the end-of-tick pass; compare values and hashes.
