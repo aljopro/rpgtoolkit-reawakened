@@ -1,0 +1,257 @@
+{
+  "schema": 1,
+  "protocol": "audio-protocol-v1",
+  "outputRateHz": 6000,
+  "note": "Messages use base64 for load.data in JSON. Expected events are fixed-key protocol records; PCM peak is checked only for the PCM binding.",
+  "vectors": [
+    {
+      "id": "pcm-full-protocol",
+      "assets": {
+        "short.wav": "UklGRtgAAABXQVZFZm10IBAAAAABAAEAcBcAAHAXAAABAAgAZGF0YbQAAACAlqu9zNje4N3UyLekjnhjTz0vJiEhJjA+T2N5j6S4yNXd4N7XzL2qlX9qVUMzKCIgJCw5SV1yiJ6yw9Hb39/a0MKwnIdxW0g4KyMgIik0RFZrgZesvs3Y3uDc1Me2o453Yk49LyUgISYwPlBkepCluMnV3eDe18u8qZR+aVRCMyghICQsOUpec4mfs8TS2+Df2tDBr5uGcFpHNysjICIpNURXbIKYrL/O2N/g3NPGtaKNdmE="
+      },
+      "script": [
+        {
+          "op": "message",
+          "message": {
+            "kind": "setBank",
+            "bankKind": "soundfont",
+            "bank": {
+              "source": "bundled",
+              "id": "test",
+              "sha256": null
+            }
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "load",
+            "voice": 1,
+            "track": "music",
+            "asset": "short.wav",
+            "data": "UklGRtgAAABXQVZFZm10IBAAAAABAAEAcBcAAHAXAAABAAgAZGF0YbQAAACAlqu9zNje4N3UyLekjnhjTz0vJiEhJjA+T2N5j6S4yNXd4N7XzL2qlX9qVUMzKCIgJCw5SV1yiJ6yw9Hb39/a0MKwnIdxW0g4KyMgIik0RFZrgZesvs3Y3uDc1Me2o453Yk49LyUgISYwPlBkepCluMnV3eDe18u8qZR+aVRCMyghICQsOUpec4mfs8TS2+Df2tDBr5uGcFpHNysjICIpNURXbIKYrL/O2N/g3NPGtaKNdmE="
+          },
+          "events": [
+            {
+              "kind": "ready",
+              "voice": 1,
+              "lengthTicks": 2
+            }
+          ]
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "setVolume",
+            "scope": "master",
+            "voice": null,
+            "bus": null,
+            "volume": 80
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "setVolume",
+            "scope": "bus",
+            "voice": null,
+            "bus": "music",
+            "volume": 90
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "setVolume",
+            "scope": "voice",
+            "voice": 1,
+            "bus": null,
+            "volume": 75
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "fade",
+            "scope": "bus",
+            "voice": null,
+            "bus": "music",
+            "fromVolume": 90,
+            "targetVolume": 60,
+            "durationTicks": 10
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "fade",
+            "scope": "voice",
+            "voice": 1,
+            "bus": null,
+            "fromVolume": 75,
+            "targetVolume": 25,
+            "durationTicks": 5
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "play",
+            "voice": 1,
+            "cue": 101,
+            "loop": false,
+            "volume": 75,
+            "positionTicks": 0
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "pause",
+            "voice": 1
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "resume",
+            "voice": 1
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "seek",
+            "voice": 1,
+            "positionTicks": 1
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "setLoop",
+            "voice": 1,
+            "loop": true
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "setLoop",
+            "voice": 1,
+            "loop": false
+          },
+          "events": []
+        },
+        {
+          "op": "render",
+          "frames": 100,
+          "events": [
+            {
+              "kind": "ended",
+              "voice": 1,
+              "cue": 101
+            }
+          ]
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "stop",
+            "voice": 1
+          },
+          "events": []
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "load",
+            "voice": 2,
+            "track": "sfx",
+            "asset": "short.wav",
+            "data": "UklGRtgAAABXQVZFZm10IBAAAAABAAEAcBcAAHAXAAABAAgAZGF0YbQAAACAlqu9zNje4N3UyLekjnhjTz0vJiEhJjA+T2N5j6S4yNXd4N7XzL2qlX9qVUMzKCIgJCw5SV1yiJ6yw9Hb39/a0MKwnIdxW0g4KyMgIik0RFZrgZesvs3Y3uDc1Me2o453Yk49LyUgISYwPlBkepCluMnV3eDe18u8qZR+aVRCMyghICQsOUpec4mfs8TS2+Df2tDBr5uGcFpHNysjICIpNURXbIKYrL/O2N/g3NPGtaKNdmE="
+          },
+          "events": [
+            {
+              "kind": "ready",
+              "voice": 2,
+              "lengthTicks": 2
+            }
+          ]
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "play",
+            "voice": 2,
+            "cue": 202,
+            "loop": true,
+            "volume": 100,
+            "positionTicks": 0
+          },
+          "events": []
+        },
+        {
+          "op": "render",
+          "frames": 300,
+          "events": [],
+          "peakAtLeast": 0.001
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "stop",
+            "voice": 2
+          },
+          "events": []
+        }
+      ]
+    },
+    {
+      "id": "invalid-asset-error",
+      "assets": {
+        "broken.wav": "AQID"
+      },
+      "script": [
+        {
+          "op": "message",
+          "message": {
+            "kind": "load",
+            "voice": 3,
+            "track": "sfx",
+            "asset": "broken.wav",
+            "data": "AQID"
+          },
+          "events": [
+            {
+              "kind": "error",
+              "voice": 3,
+              "cue": null,
+              "code": "format.unsupported",
+              "detail": "broken.wav: no registered audio source recognises these bytes"
+            }
+          ]
+        },
+        {
+          "op": "message",
+          "message": {
+            "kind": "stop",
+            "voice": 3
+          },
+          "events": []
+        }
+      ]
+    }
+  ]
+}
