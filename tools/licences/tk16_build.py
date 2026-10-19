@@ -152,12 +152,13 @@ def build() -> tuple[bytes, dict]:
 
     inst_records = [struct.pack("<20sH", INSTRUMENTS[index][0].encode("ascii")[:19].ljust(20, b"\0"), index) for index in range(17)]
     inst_records.append(struct.pack("<20sH", b"EOI\0".ljust(20, b"\0"), 17))
-    ibag_records = [struct.pack("<HH", index * 2, 0) for index in range(17)] + [struct.pack("<HH", 34, 0)]
+    ibag_records = [struct.pack("<HH", index * 3, 0) for index in range(17)] + [struct.pack("<HH", 51, 0)]
     igen_records: list[bytes] = []
     for index in range(17):
         key_range = 0 | (127 << 8)
         igen_records.append(struct.pack("<Hh", 43, key_range))
         igen_records.append(struct.pack("<Hh", 53, index))
+        igen_records.append(struct.pack("<Hh", 54, 1))  # continuous loop mode
     igen_records.append(struct.pack("<Hh", 0, 0))
 
     info = list_chunk(

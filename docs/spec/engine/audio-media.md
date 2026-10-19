@@ -1659,8 +1659,8 @@ terms, the game has a small, redistributable instrument set with a distinct
 choice is activated. Technically, `media/soundfonts/TK-16.sf2` is a RIFF
 SoundFont 2.1 (`sfbk`) containing 16 melodic programs (MIDI programs 0–15), a
 bank-128 percussion program, and 17 mono looping samples at 22,050 Hz. It is
-37,492 bytes, SHA-256
-`40f387b79ad75fa86adffdbecd09e53a7345e73d4a32181c44521d7368411253`, and is
+37,560 bytes, SHA-256
+`5419f02b0a9e63534b35332842e29decbc53c5352236be85b92cc87d0267f62a`, and is
 registered as `CC0-1.0` under `ADR-0003` with an 8 MiB ceiling in
 `tools/licences/config.json`.
 

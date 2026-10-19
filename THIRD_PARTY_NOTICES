@@ -122,8 +122,8 @@ all uses of the work, to the fullest extent permitted by applicable law.
 ### TK-16 authored General MIDI bank — CC0-1.0
 
 `media/soundfonts/TK-16.sf2` is the project's compact, Super NES-flavoured
-General MIDI bank (37,492 bytes, SHA-256
-`40f387b79ad75fa86adffdbecd09e53a7345e73d4a32181c44521d7368411253`). It is
+General MIDI bank (37,560 bytes, SHA-256
+`5419f02b0a9e63534b35332842e29decbc53c5352236be85b92cc87d0267f62a`). It is
 authored entirely from deterministic mathematical waveforms and contains no
 third-party or recorded samples. The 16 melodic programs and one percussion
 program are listed individually in

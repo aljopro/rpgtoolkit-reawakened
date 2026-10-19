@@ -40,7 +40,7 @@
         "license": "CC0-1.0",
         "adr": "ADR-0003",
         "release": "TK-16 authored bank 1.0",
-        "sha256": "40f387b79ad75fa86adffdbecd09e53a7345e73d4a32181c44521d7368411253",
+        "sha256": "5419f02b0a9e63534b35332842e29decbc53c5352236be85b92cc87d0267f62a",
         "sizeCeiling": 8388608,
         "notice": "TK-16 is an authored General MIDI bank built entirely from deterministic mathematical waveforms; it contains no third-party samples."
       }
