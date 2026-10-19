@@ -102,7 +102,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `castlit` | `string castlit(variant x, [string &ret])` | Cast the specified value to a string. There is really no need to do this ever. RPGCode by itself will cast values passed to functions to the correct types as required. |  |
 | `castint` | `int castint(variant x, [int &ret])` | Cast the specified value to an integer (i.e., a number in the sequence ...-2, -1, 0, 1, 2...). This is useful for removing fractional parts of numbers. Note that this... |  |
 | `charat` | `string charat(string str, int pos, [string &ret])` | Get a character from a string. The first character is one. |  |
-| `kill` | `void kill(variant &var, ...)` | Delete variables. |  |
+| `kill` | `void kill(variant &var, ...)` | Delete variables. |  Reawakened rule (entry 19.1, [KILL-1](rpgcode-language.md#kill-1)): in plain terms, it removes a variable or object field you made, and it cannot remove a name the engine controls. Precisely, it deletes only storage the script owns (a global, a local, a captured cell variable, an object field; `kill(obj.field)` removes the key). Engine-controlled names (the `tk*` constants, the engine virtual variables and actor stat aliases such as `HP!`) raise the catchable runtime error `kill.system-owned` and are left untouched. |
 | `sin` | `double sin(double x, [double &ret])` | Calculate sine x. |  |
 | `cos` | `double cos(double x, [double &ret])` | Calculate cosine x. |  |
 | `tan` | `double tan(double x, [double &ret])` | Calculate tangent x. |  |
