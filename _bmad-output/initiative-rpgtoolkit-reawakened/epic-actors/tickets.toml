@@ -1,0 +1,233 @@
+# tickets.toml — planned entries of epic-actors, in build order. tickets.py reads it.
+# Table order is the build order; ids are stable names. Entry 1 is an owner-approval docs checkpoint (pending); entry 2 is the actor model inventory every later entry reads.
+# Lanes: A core/actors (3, 5, 6, 7, 8, 10; 3 owns the barrel and section), B script bindings (4), C packages and .gam (11, 12).
+# The core/battle boundary of the 2026-10-19 owner decisions: core owns actor data and defaults, packages own battle systems.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Rulings: actor boundary, behaviours, save rule and hydration"
+description = "Doc-first (G7), docs only: settles in docs/spec the core-versus-battle boundary (core owns actor data and the interpretation rules true for any game; the stock battle package owns ATB, damage, AI and UI), the behaviour pattern (data gives the default, a behaviour overrides it), the save rule (data and a behaviour name, never callables), hydration by name with a diagnostic on a missing behaviour, and how actors own stats and legacy stat globals alias them (amending AD-10 and removing StatsPort's vm.globals-owner wording) and AD-32's Unified Actor."
+verify = "The commit touches only docs and affected spec/spine text; the AD-26 `battle` phase is ruled removed/repurposed (battle is a package) and amended in the spine; a default level-up equation is ruled (level and experience are stats; abilities are standard equations with defaults, overridable by behaviours); each ruling row has an OWNER marker, evidence and a rejected alternative; the owner's 2026-10-19 boundary, save and legacy decisions each map to one ruled row; AD-10 is amended (actors own stats; legacy `.tem` globals are live read/write aliases; StatsPort's \"vm.globals owner\" wording removed) with the costs recorded (golden re-record G5, reset clears the actor section, `kill()` on an alias resets to the .tem default); the 19.2 spike result is applied; a person approves the checkpoint."
+covers = ["CAP-3", "CAP-9", "CAP-10", "CAP-11"]
+after = ["19.1", "19.2"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "spec - docs/spec/engine/plugins-and-battle.md#e-79 and E-72 to E-78, E-85",
+  "spec - docs/spec/formats/character.md, enemy.md, item.md, battle-data.md",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-10, AD-26, AD-32",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-battle/discovery/all-rpgcode-battle-architecture.md (narrower reading superseded)",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-platform/discovery/step-budget-spike.md",
+]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Actor model inventory: every stat and state, its source, type, writer and rule owner"
+description = "Writes the inventory table in docs/spec (owner column = actor section, alias column = legacy global name such as `HP!`; level and experience listed as stats; each ability, such as derived values, level-up, the experience curve and damage taken, listed as a standard equation with a code default that a behaviour may override) for character (.tem), enemy (.ene), item (.itm), status (.ste) and NPC/board sprites: for each stat or state its source field, type, who may write it (core, battle script, any script), whether it is a core-rule or battle-rule value, and evidence (file, offset or spec row)."
+verify = "The table covers every field of the five formats read by the Epic 2 readers and every runtime state of the 5.3 actor; each row has all five columns filled and a spec or fixture citation; no field appears in two rows; rows where the owner must choose are marked OWNER and approved by a person."
+covers = ["CAP-3", "CAP-9", "CAP-10"]
+after = [1, "2.6", "2.7", "5.3"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "spec - docs/spec/formats/character.md, enemy.md, item.md, battle-data.md (status .ste)",
+  "code - packages/core/src/formats/ (the .tem, .ene, .itm, .ste, .spc readers) and packages/core/src/sprites/ (5.3)",
+  "spec - docs/spec/engine/plugins-and-battle.md (E-72 to E-78, E-85, the PLAYER_*, ENE_* codes)",
+  "plan - _bmad-output/initiative-rpgtoolkit-reawakened/epic-movement-triggers/story-unified-actor-and-sprite-runtime-state-plan.md",
+]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Actor store: party members, enemies and NPCs as plain-data actors"
+description = "Builds the core actor data model per the 20.2 inventory: one plain-data record shape for party members, enemies and NPCs with stats, status counters and a behaviour name, a deterministic id/handle scheme, an owned state section with schema, snapshot/restore and hash, extending the AD-32 Unified Actor without a second actor type."
+verify = "Party, enemy and NPC records created from fixture data round-trip through snapshot/restore with equal hash; no record holds a callable (typecheck on PlainData); the stats-ownership rule ruled in 20.1 holds (the actor section owns stats; the StatsPort path resolves to it, no copies; one deliberate golden re-record for the save shape change, and reset clears the actor section); the existing 5.3 player/item actors are unchanged in behaviour."
+covers = ["CAP-3", "CAP-9", "CAP-10", "CAP-11"]
+after = [2]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/actors.md (20.1, 20.2)",
+  "spine - AD-10, AD-32",
+  "code - packages/core/src/sprites/, packages/core/src/save/",
+  "code - StatsPort (E-85) and vm.globals character stats",
+]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Actors as RPGCode objects with emitters"
+description = "Exposes each actor to RPGCode as an object and adds the write path to the virtual-variable port (`script/virtuals.ts`, read-only today) so legacy `.tem` stat globals (`HP!`, `Level!`) are live read/write aliases of the actor stat, with `kill()` on an alias a catchable runtime error with code `kill.system-owned` (system-controlled names are never killed; a write to a read-only alias is `assign.read-only`) and writes never breaking the link: stat reads and writes that go through the owner, `advanceStatus` and the other core operations as methods, and the actor as a built-in emitter using the entries 19.4 and 19.10 machinery."
+verify = "A script reads and writes actor stats and calls the core operations through the object; writes go through the owner and are visible in the actor section; `actor.on(...)` registers a listener on that actor; writing `HP!` through the alias changes the actor stat and reading it returns the actor stat, with no copy; `kill()` on the alias raises the catchable runtime error `kill.system-owned` (caught by a script error handler), changes nothing, and the link still works afterwards; no callable is stored in the actor section."
+covers = ["CAP-5", "CAP-9"]
+after = [3, "19.4", "19.10"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/actors.md",
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (OOP-10, OOP-11)",
+  "code - packages/core/src/script/builtins/",
+]
+
+[[entry]]
+id = 5
+type = "story"
+title = "Load actors from character, enemy, item and status data"
+description = "Hydrates actor records from the Epic 2 readers' data: character .tem (and the player), enemy .ene, item .itm and status .ste definitions, filling the stats and state columns of the 20.2 inventory and nothing else."
+verify = "Fixture characters, enemies and items produce actor records whose every inventory row equals the source field; unknown or out-of-range legacy values follow the reader's defaults and diagnostics; the output is stable across two runs."
+covers = ["CAP-3", "CAP-9", "CAP-10"]
+after = [3, "2.6", "2.7"]
+hitl = false
+risk = "medium"
+references = [
+  "spec - docs/spec/formats/character.md, enemy.md, item.md, battle-data.md",
+  "code - packages/core/src/formats/",
+  "fixtures - docs/spec/examples/game/",
+]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Core interpretation rules: fallen, status countdown, equipment bonuses, level-up"
+description = "Implements the core defaults ruled in 20.1: an actor is fallen when HP <= 0 unless a behaviour says otherwise (fallen is a state, never a removal: the actor stays in the party, and revival is the state changing back by HP being raised or a behaviour-defined revive, firing `fallen` and `revived` events), status effects count down through `advanceStatus(n)` with the battle script choosing when a round passes, equipment bonuses apply from item data, and level-up default derives from character data; each is a hook with a core default. Level and experience are stats; the level-up default is the equation ruled in 20.1 (a standard equation defined in code, overridable by behaviours)."
+verify = "Fallen (a state, never a removal; revival changes it back), countdown, equipment and level-up (the 20.1 default equation, with level and experience as stats) produce the ruled results from fixture data with no battle script present; `advanceStatus(2)` ages every status by 2 and expires at zero emitting the ruled change; two different 'round' definitions (per turn, per time) drive the same counters in a test."
+covers = ["CAP-9", "CAP-10"]
+after = [5]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/actors.md (ACT rows from 20.1)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-75, E-77, E-78 (data only; the 'each round while charged' rule is stock-battle)",
+  "code - packages/core/src/actors/ (from 20.3)",
+]
+
+[[entry]]
+id = 7
+type = "story"
+title = "Behaviour registration and override precedence"
+description = "Adds named behaviours: a package registers a behaviour (a dictionary of hook callables) under a namespaced name such as `stock-rpg/hero`; an actor carries only the name; the hook resolution order is behaviour override first, core default second."
+verify = "An actor with a registered behaviour has its fallen, level-up and damage-taken hooks overridden; an actor with no behaviour (or an unknown name) uses the defaults; behaviours registered by two packages keep their namespace; registration is by name only and stores no callable in the actor section."
+covers = ["CAP-5", "CAP-9"]
+after = [6, 4, "19.8"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/actors.md",
+  "code - packages/core/src/script/ (registerPlugin from 19.8)",
+  "code - packages/core/src/actors/",
+]
+
+[[entry]]
+id = 8
+type = "story"
+title = "Save and hydrate actors by behaviour name"
+description = "Saves actors as data only and, on load, re-attaches behaviours by name from the installed packages; a missing behaviour becomes the core default plus a located diagnostic, never a refused load."
+verify = "Save, remove the package, load: the game loads, the actor uses core defaults and a diagnostic names the missing behaviour; reinstall a newer package version and load: the newer code runs on the saved data; a scan of every saved actor record finds no callable; script closures still save per 18.6."
+covers = ["CAP-11"]
+after = [7, "18.6"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/formats/save-game.md (new actors section, version bump rules)",
+  "code - packages/core/src/save/sections/",
+  "adr - docs/adr/0004 (18.6 saving closures)",
+]
+
+[[entry]]
+id = 9
+type = "story"
+title = "Actor, board and game events: fallen, status, level-up, enter and leave"
+description = "Creates the per-board emitters through 19.12's seam and emits the ruled events: actors emit `fallen` and `revived` (fallen is a state, so the actor stays in the party and revival is the state changing back), status changes and level-up from the core defaults; board enter/leave comes from the board-edge transitions; stock actor code re-emits `fallen` on the game emitter so quest scripts can listen globally."
+verify = "An actor at HP 0 emits `fallen` and stays in the party, and raising HP (or a behaviour-defined revive) emits `revived`; a quest-script test listens on the game emitter for `fallen` re-emitted by stock actor code; a listener on one actor sees only that actor's events; board enter/leave events fire once per transition; a cancelable damage-taken emit lets a listener change the damage."
+covers = ["CAP-5", "CAP-9"]
+after = [4, 6, "19.11", "19.12", "5.9"]
+hitl = false
+risk = "medium"
+references = [
+  "spec - docs/spec/engine/actors.md; emitter section (19.1)",
+  "code - packages/core/src/actors/, packages/core/src/world/",
+  "plan - epic-movement-triggers 5.9 (board edges and transitions)",
+]
+
+[[entry]]
+id = 10
+type = "story"
+title = "NPCs and board sprites as actors with behaviours"
+description = "Unifies board NPC/item sprites with the actor model (AD-32): a board sprite is an actor, so the same stats, hooks and behaviour name apply, with its movement, collision and trigger behaviour from Epic 5 unchanged."
+verify = "A board NPC defined in fixture data has stats and a behaviour name, can be hydrated by name, and moves/collides/triggers exactly as in the 5.3 and 5.4 goldens; all Epic 5 goldens are unchanged."
+covers = ["CAP-3", "CAP-10"]
+after = [7, "5.3"]
+hitl = false
+risk = "medium"
+references = [
+  "spine - AD-32",
+  "plan - epic-movement-triggers 5.3 (unified actor and sprite runtime state)",
+  "code - packages/core/src/sprites/",
+]
+
+[[entry]]
+id = 11
+type = "story"
+title = "stock-battle and stock-menu package scaffolds"
+description = "Creates the `stock-battle` and `stock-menu` RPGCode packages as loadable, versioned, namespaced packages with real manifests and declared host requests whose only behaviour is the spec's no-plugin one (a battle ends immediately, the menu key does nothing), ready for Epic 7 and Epic 8 to fill."
+verify = "Both packages load through the 19.6 manifest and the 19.9 plugins list, register their `battle` and `menu` commands, report their declared host requests, and give the spec's no-plugin results in a headless test; no placeholder logic exists beyond that spec behaviour."
+covers = ["CAP-9", "CAP-10"]
+after = [8, "19.6", "19.9"]
+hitl = false
+risk = "medium"
+references = [
+  "spec - docs/spec/engine/plugins-and-battle.md (Plugin roles: without a battle plugin battles end immediately)",
+  "code - packages/core/src/script/manifest.ts",
+  "assumption - A-1 on where the package sources live and how they ship",
+]
+
+[[entry]]
+id = 12
+type = "story"
+title = ".gam plugins mapping: stock packages in templates and legacy DLL names"
+description = "New-project templates list `stock-battle` and `stock-menu` in the `.gam` plugins; legacy `fightPlugin = tk3fight.dll` and `menuPlugin = tk3menu.dll` map in memory to the stock packages and are written to the file only when saved from the editor."
+verify = "Opening a legacy .gam yields the stock packages without changing the file's bytes on load; a template project lists both packages; saving from the editor writes them explicitly; a custom dll name has no mapping and gets a diagnostic."
+covers = ["CAP-9", "CAP-10"]
+after = [11, "19.9"]
+hitl = false
+risk = "medium"
+references = [
+  "spec - docs/spec/formats/main-file.md (rows 23, 24)",
+  "code - packages/core/src/formats/ main-file reader and writer",
+  "owner - '.gam is the csproj of the toolkit'",
+]
+
+[[entry]]
+id = 13
+type = "story"
+title = "Two battle scripts over one actor model, with goldens"
+description = "Proves the boundary: two small authored battle scripts (a Zelda-style real-time game with 12 hearts and an FF-style game with 9999 HP) run over the same actor model, with a save mid-fight, restore and replay, pinned in headless goldens, and all legacy goldens unchanged."
+verify = "Both scripts run from a seed with a save at every tick restoring to equal hashes; each fixture changes the fallen, damage-taken and level-up behaviours only through registered behaviours; all legacy goldens and sample plays are unchanged; gates pass."
+covers = ["CAP-9", "CAP-11"]
+after = [8, 9, 10, 11, 12]
+hitl = false
+risk = "high"
+references = [
+  "fixtures - packages/core/test/fixtures/",
+  "golden - golden/scenes/",
+]
+
+[[entry]]
+id = 14
+type = "story"
+title = "Refactor sweep"
+description = "Reconciles shared seams touched here (actors barrel, section list, built-in registrations, catalogue and command docs), removes the old parallel actor representation made obsolete, and closes the epic against its Done when."
+verify = "One actor representation remains; barrels and docs describe the final shape; the Done when is checked item by item with evidence in the PR."
+covers = ["CAP-3", "CAP-9", "CAP-10", "CAP-11"]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+hitl = false
+risk = "low"
+references = [
+  "epic - epic-actors.md, Done when",
+]

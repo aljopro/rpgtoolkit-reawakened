@@ -49,18 +49,46 @@ covers = ["CAP-7"]
 after = [{ epic = 1, needs = "the synth package scaffold and licence gate" }, { epic = 2, needs = "the asset resolver for Media-folder names (2.10)" }, { epic = 3, needs = "audio built-in registration" }, { epic = 4, needs = "the `audio` effect records for board music (4.20) and per-frame animation sounds (4.23), which this epic turns into cues" }]
 
 [[epic]]
+id = 18
+slug = "epic-rpgcode-first-class-functions"
+title = "First-class functions and pure-RPGCode plugin architecture"
+covers = ["CAP-5"]
+after = [{ epic = 3, needs = "the saveable step-machine VM, AST, and lowerer (3.3, 3.11, 3.27)" }]
+
+[[epic]]
+id = 19
+slug = "epic-rpgcode-platform"
+title = "RPGCode as a platform: objects, packages, events and trust"
+covers = ["CAP-5", "CAP-9", "CAP-11"]
+after = [{ epic = 2, needs = "the main-file reader and writer for the plugins list (2.9)" }, { epic = 3, needs = "the plugin contract and the manifest this epic extends (3.23, 3.25)" }, { epic = 18, needs = "first-class functions, the environment table, closure saving and the middleware fixtures, and the recorded gaps this epic builds (18.5, 18.6, 18.7)" }]
+
+[[epic]]
+id = 20
+slug = "epic-actors"
+title = "Actors: one data model for party members, enemies and NPCs, with behaviours and stock packages"
+covers = ["CAP-3", "CAP-9", "CAP-10", "CAP-11"]
+after = [{ epic = 2, needs = "the character, enemy, item and battle-data readers (2.6, 2.7)" }, { epic = 5, needs = "the unified actor runtime and board edges and transitions (5.3, 5.9)" }, { epic = 18, needs = "closure saving, which stays the only place callables are saved (18.6)" }, { epic = 19, needs = "objects, receivers, packages, registerPlugin, the plugins list, emitters and the step-budget spike (19.1, 19.2, 19.4, 19.6, 19.8, 19.9, 19.10, 19.12)" }]
+
+[[epic]]
+id = 21
+slug = "epic-media-objects"
+title = "Media as objects and events: voices, tracks and the media object"
+covers = ["CAP-5", "CAP-7"]
+after = [{ epic = 6, needs = "the audio core, tracks, voices, cues and the parity ledger this epic re-surfaces (6.17)" }, { epic = 19, needs = "objects, receivers, the plugins list, emitters, cancelable emit and the game emitter (19.1, 19.3, 19.4, 19.9, 19.10, 19.11, 19.12, 19.14)" }]
+
+[[epic]]
 id = 7
 slug = "epic-battle"
 title = "Battles run on core rules with a default UI"
 covers = ["CAP-9"]
-after = [{ epic = 2, needs = "enemy, special-move, status-effect and background data" }, { epic = 3, needs = "battle built-ins and custom programs" }, { epic = 5, needs = "random battle start and fighter state" }]
+after = [{ epic = 2, needs = "enemy, special-move, status-effect and background data" }, { epic = 3, needs = "battle built-ins and custom programs" }, { epic = 5, needs = "random battle start and fighter state" }, { epic = 19, needs = "objects, packages, registerPlugin and emitters for the stock battle package" }, { epic = 20, needs = "the actor model, behaviours, hydration and the stock-battle package shell" }, { epic = 21, needs = "the media object and `beforePlay`, for battle music and battle sounds" }]
 
 [[epic]]
 id = 8
 slug = "epic-menu-party-save"
 title = "Menu, party, inventory and saves work, including running threads"
 covers = ["CAP-10", "CAP-11"]
-after = [{ epic = 3, needs = "thread snapshot support" }, { epic = 5, needs = "party and board state" }, { epic = 7, needs = "battle state to save" }]
+after = [{ epic = 3, needs = "thread snapshot support" }, { epic = 5, needs = "party and board state" }, { epic = 7, needs = "battle state to save" }, { epic = 20, needs = "the actor model and the stock-menu package shell" }, { epic = 21, needs = "the media object, for cursor and menu sounds" }]
 
 [[epic]]
 id = 9
@@ -117,10 +145,3 @@ slug = "epic-documentation-website"
 title = "Documentation and public website: install, make, import, debug, package and share games"
 covers = ["CAP-19"]
 after = [{ epic = 1, needs = "the licence, provenance and required-checks gates and contributor docs that the site and its tooling must pass (1.5, 1.6, 1.10)" }, { epic = 2, needs = "the project dump tool, package loader and writer, so the import and packaging guides describe what exists (2.10, 2.11, 2.12)" }, { epic = 16, needs = "the TK2 readers and corpus gate, so the migration guide states what loads" }, { epic = 3, needs = "the plugin contract and manifest, the native legacy packs and the built-in registry the RPGCode reference and the plugin guide describe (3.23, 3.24, 3.25)" }, { epic = 9, needs = "the web runner and packaging, so play, share and package pages are walked against the real thing" }, { epic = 10, needs = "the language server and debug adapter the debugging guide describes" }, { epic = 11, needs = "the editor shell, both hosts and the program editor, for install, open and workflow pages" }, { epic = 12, needs = "the P0 asset editors, for the first-game tutorial and the editor guides" }, { epic = 13, needs = "the P1 tools and legacy upgrade wizards, for their guides and the migration guide" }, { epic = 14, needs = "the P2 tools and the in-editor tutorials, so written guides do not duplicate them" }, { epic = 15, needs = "the desktop shell decision and host, so the install pages say what ships" }]
-
-[[epic]]
-id = 18
-slug = "epic-rpgcode-first-class-functions"
-title = "First-class functions and pure-RPGCode plugin architecture"
-covers = ["CAP-5"]
-after = [{ epic = 3, needs = "the saveable step-machine VM, AST, and lowerer (3.3, 3.11, 3.27)" }]

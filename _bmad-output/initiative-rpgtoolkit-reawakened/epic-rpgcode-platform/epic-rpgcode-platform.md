@@ -1,0 +1,80 @@
+---
+type: epic
+title: "RPGCode as a platform: objects, packages, events and trust"
+parent: initiative-rpgtoolkit-reawakened
+covers: ["CAP-5", "CAP-9", "CAP-11"]
+assignee: ""
+risk: high
+---
+
+# RPGCode as a platform: objects, packages, events and trust
+
+## Description
+
+RPGCode grows from a language with functions into a platform authors build whole feature sets on. Epic 18 made functions first-class but left the object runtime, receiver binding and `registerPlugin` unbuilt: dictionary literals parse and then refuse with "runtime storage is not available yet", `CallableValue.receiver` is validated for shape only, and 18.7 recorded `registerPlugin` as designed and not built. This epic builds them, and adds what a package ecosystem needs: RPGCode packages on the one shared plugin manifest (name, version, namespace, declared host requests), a first-class event emitter every object can have, per-package VM step counters, a written trust baseline and a measured answer to whether a stock battle tick fits the VM's step budget.
+
+## Outcome
+
+An author can write, install and compose RPGCode packages: objects with methods that keep their receiver, packages that register commands and listen to events, and cancelable events whose listeners may change the event. The product sentence is: "Every object in RPGCode can emit and listen to events. Emits can be cancelable, and listeners may change the event." The step-budget spike has either confirmed the stock battle can run in RPGCode or changed Epic 20's design before it was built.
+
+## Done when
+
+1. Dictionary literals execute: members are created, read, written and deleted with `obj.prop`, `obj->prop` and `obj["prop"]`, and legacy `class` instances sit on the same storage (one object runtime).
+2. `obj.method` and `obj->method` auto-bind the receiver, a torn-off method keeps it, a standalone lambda has `this = null`, and `bindThis(fn, obj)` rebinds explicitly.
+3. A package on the single shared manifest has a name, version, namespace and declared host requests; names resolve by AD-8 later-wins in manifest order, also as `namespace.name`; `registerPlugin` is a thin layer over the 18.5 environment-table interception and adds no second dispatch mechanism.
+4. The `.gam` plugins list reads and writes as package names and feeds the manifest; legacy rows are untouched.
+5. `on`, `off`, `once` and `emit` work on any object and on the game, and boards and actors become emitters through the same seam (Epic 20 adds them); a plain emit is queued; a cancelable emit parks the emitter until listeners ran in registration order and returns the event object; there is one bus for RPGCode and TypeScript plugins.
+6. A save taken at any tick, including mid-dispatch, restores and finishes with the same state hash.
+7. VM step counts are recorded per package as plain data.
+8. The trust baseline (ADR 0008) and the plugin-language guidance are written in docs/spec and the plugin guide's source.
+9. The measured result of a stock ATB tick and cancelable emits against `STEP_BUDGET` is committed, and Epic 20 reflects it.
+10. Every legacy golden is unchanged; typecheck, lint, licence, provenance, catalogue and command-docs gates pass.
+
+## Boundaries
+
+Extends `core/script` (parser, lowerer, VM, registry, manifest) and adds an owned `events` section; reads the main-file plugins list (`core/formats`). Does not own actors or battle or menu content (Epics 20, 7, 8), host or editor chrome, or the debug adapter's step-counter view (Epic 10). Native TypeScript plugins stay author-installed; there is no capability model yet. Legacy 3.1 compatibility is the oracle; Reawakened's own prior internal formats may be replaced without shims.
+
+## References
+
+- spec - `_bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md`, section Capabilities (CAP-5, CAP-9, CAP-11)
+- spine - `_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md`, AD-8, AD-9, AD-10, AD-17, AD-26, AD-32
+- constraint - `docs/guardrails.md`, G1, G2, G3, G7
+- adr - `docs/adr/0004-script-ast-step-ir-and-plugins.md`, decision 8; `docs/adr/0005-independent-product-v1-and-native-format.md`
+- reference - `docs/spec/engine/rpgcode-language.md` (FUN-8), `rpgcode-modules-and-objects.md` (MOD-4, OOP-10, OOP-11), `plugins-and-battle.md#e-99`
+- code - `packages/core/src/script/plugin.ts`, `manifest.ts`, `registry.ts`, `vm.ts`, `values.ts`
+- discovery - `discovery/inception-proposal.md`, `discovery/platform-readiness.md`
+- owner decisions - the 2026-10-19 party session (all recorded in Notes)
+
+## Notes
+
+- Decision: epic scoped from the Epic 7 (battle) preparation: Epic 18 left the object runtime, receiver binding and `registerPlugin` unbuilt (ADR 0004 decision 8 and the 18.7 amendment).
+- Decision: Jensen, 2026-10-19: new epic 19, "RPGCode as a platform", owns the dictionary/object runtime, `CallableValue.receiver` auto-binding on `obj.method` and `bindThis(fn, obj)` (ADR 0004 decision 8), RPGCode packages, a first-class event emitter, per-package VM step counters, the trust baseline ADR and a performance spike.
+- Decision: Jensen, 2026-10-19: packages share ONE manifest with Epic 3's plugin manifest: one manifest, one dispatch, AD-8 later-wins. A package has a name, a version and a namespace. `registerPlugin` is a thin layer over the 18.5 environment-table interception, never a second dispatch mechanism. The `.gam` plugins list names the packages.
+- Decision: Jensen, 2026-10-19: the emitter is an object capability in the style of Godot signals and Node's EventEmitter: `on`, `off`, `once`, `emit`. There is NO bubbling and NO capture. The game and boards are built-in emitters alongside actors (the game and the registration seam in 19.12; boards and actors in 20.4 and 20.9); code re-emits (stock actor code re-emits `fallen` on the game) so quest scripts can listen globally.
+- Decision: Jensen, 2026-10-19: cancel is opt-in per emit. A plain emit is queued and the emitter continues. A cancelable emit waits (a G1 parked thread, plain JSON, saveable mid-dispatch) until the listeners ran in registration order, then returns the event object; listeners may `cancel()` or modify fields (a shield can halve damage).
+- Decision: Jensen, 2026-10-19: one bus for RPGCode and TypeScript plugins; no synchronous side door.
+- Decision: Jensen, 2026-10-19: product sentence: "Every object in RPGCode can emit and listen to events. Emits can be cancelable, and listeners may change the event."
+- Decision: Jensen, 2026-10-19: plugin-language guidance (goes in the plugin guide's decision tree): use TypeScript only when RPGCode cannot do it or is too slow. Native plugins inherit host/harness detection, feature sniffing, G2 and G3 obligations, their own host requests and versioning against the core API; RPGCode gets all of that for free.
+- Decision: Jensen, 2026-10-19: trust baseline (an ADR, 19.1): RPGCode packages are contained by the VM (G2: every external effect is a host request; file I/O through the AD-17 sandbox); manifests DECLARE the host requests they use, so a runner can show it like app permissions; native TypeScript plugins stay author-installed only; no capability model yet.
+- Decision: Jensen, 2026-10-19: per-package VM step counters: the data lands in this epic, the user-facing view comes later in Epic 10's debug adapter.
+- Decision: Jensen, 2026-10-19: early spike: measure the stock ATB tick (4 fighters, statuses ticking, events per hit) AND cancelable emits against `STEP_BUDGET`. If it does not fit, Epic 20's design changes. (Entry 19.2.)
+- Decision: Jensen, 2026-10-19: two extra epics are fine; the timeline is flexible: "get it right" over release date.
+- Decision: Jensen, 2026-10-19: AD-32 (spine) says the Event Bus is a synchronous, priority-ordered queue (`world.eventQueue`); the owner rules the event bus ASYNCHRONOUS (queued emit) provided it causes no G1 state-machine issue. Entry 19.1 amends AD-32 to the queued model and states the G1 check: dispatch is parked plain-JSON state, saveable mid-dispatch, with deterministic registration order. The 19.2 spike verifies no state-machine issue; if it finds one, 19.1's amendment is revisited before 19.10 to 19.12 are refined (they stay `refined: false` until then).
+- Decision: Jensen, 2026-10-19: ADR 0004 decision 8 names `registerPlugin` and `OP_GET_MEMBER_BOUND`; both MUST be built. The 18.7 amendment records both as unbuilt. This epic builds `OP_GET_MEMBER_BOUND` in 19.4 (member access auto-binds the receiver) and `registerPlugin` in 19.8 (with 19.3 for the object storage).
+- Decision: Jensen, 2026-10-19: E-99 (plugins-and-battle.md, "not trust-gated for now") is being re-evaluated by the owner; RPGCode is trusted already because the VM contains it (G2). 19.1 rewrites the E-99 Reawakened rule, and ADR 0008 states that RPGCode packages are trusted (VM-contained). Manifest host-request declarations are informational only; there is no trust gating of RPGCode.
+- Assumption A-1 (to confirm): package distribution form (a folder inside the project versus a zip) and how packages reach the editor are undecided; entries 19.6 and 20.11 use a package folder referenced by name from the manifest and keep loading with the host (core loads nothing, G2).
+- Decision: Jensen, 2026-10-19: emitter API names `on`, `off`, `once`, `emit` and `emitCancelable` are approved. The emitter entries cover adding and removing listeners fully (`off(type, fn)`, removing a `once` listener before it fires, removing all listeners for a type, removal during dispatch, listeners added during dispatch not running in that dispatch).
+- Assumption A-3 (to confirm): whether the party or the battle need to be built-in emitters. Taken: no, only the game, boards and actors are built in, and a battle script that wants events re-emits on the game; 19.12 and 20.9 change if the owner rules otherwise.
+- Assumption A-4 (to confirm): a package that issues a host request it did not declare is not refused (no capability model yet); whether the Logger should warn is open. Taken: informational, no warning.
+- Assumption A-5 (to confirm): whether per-package step counters are part of the state hash. Taken: they are stored as optional plain data in the vm section and excluded from `hashState` so existing goldens do not move; the 19.1 ruling confirms.
+- Decision: Jensen, 2026-10-19: legacy classes move onto the dictionary runtime (19.5 confirmed); a state-hash change is a deliberate golden re-record (G5).
+- Sequenced: the spike (19.2) precedes the emitter entries (19.10 to 19.12) and is a prerequisite of Epic 20's rulings (20.1).
+- Sequenced: lane A objects (19.3, 19.4, 19.5, then 19.13), lane B packages (19.6, 19.7, 19.8), lane C main-file list (19.9), lane D events (19.10, 19.11, 19.12). Shared seams (`index.ts` barrels, the phase list, the `GameState` section list) are reconciled by 19.15; the events section owner is 19.10.
+- Handoff: Epic 20 (epic-actors) builds on 19.4 receivers, 19.8 `registerPlugin`, 19.9 plugins list, 19.10 to 19.12 emitters. Epic 7 and Epic 8 build on the packages and emitters through Epic 20.
+- Handoff: the plugin guide (Epic 17's docs) takes the plugin-language decision tree written in 19.1; no Epic 17 entry changes here.
+- Handoff: Epic 21 (epic-media-objects) puts Media on this model: voice and track objects, the `media` emitter and a cancelable `beforePlay`. It needs 19.1's host-provided method mechanism and its engine-phase cancelable-emit rule, 19.3, 19.4, 19.9, 19.10 to 19.12 and 19.14. Owner, 2026-10-19: Media is net new, so one object handle model, no integer handles.
+- handoff: editor (Epic 11/12 or editor P1) should later offer a conversion tool from legacy class syntax to dictionary objects, now that classes sit on the dictionary runtime (19.5). Also recorded in nice-to-have.md.
+- handoff: Epic 20 owns the AD-26 amendment (the core `battle` phase is removed/repurposed); see Epic 20's Notes.
+- Principle: see the initiative Notes Decision of 2026-10-19 (3.1 is a compatibility layer, not the model); 19.1 writes ADR 0009 and the CLAUDE.md working note.
+- Decision: Jensen, 2026-10-19: `kill()` deletes only storage the script owns. System-controlled names can never be killed: compile-time `tk*` constants (`tkMV_`, `tkVT_`, `tkPRG_`, `tkDIR_`, `tkMD_`), the engine virtual variables (rpgcode-language.md "Virtual variables": `music`, `gametime`, `playerx[i]`, `playerhandle[i]`, `boardskill` and the rest, plus the `threads[]` and `ambient*` additions) and actor stat aliases (`HP!`, `Level!`, any .tem-named stat of a party member or other actor); `kill()` on any of them is a catchable runtime error (`kill.system-owned`; supersedes the earlier "located diagnostic and no-op"), the value and the engine link untouched. Real globals, locals, captured closure cells and object fields are deleted as today (`kill(obj.field)` removes the key; 19.1 confirms). The 3.1 quirk "assigning to a virtual variable breaks its link for the session" is NOT reproduced: a write to a system-controlled name either writes through to the engine where the name is writable (for example `ambientRed`) or is a catchable runtime error (`assign.read-only` for a read-only name), and the link never breaks. If a 3.1 game is found to depend on the broken link, the compatibility layer handles it case by case (3.1 is a compatibility layer, not the model). 19.1 writes these rules into docs/spec rpgcode-language.md (Virtual variables) and the `kill` row of rpgcode-functions.md; 20.4 builds the alias write path and the kill diagnostic.
+- Decision: Jensen, 2026-10-19: `kill()` on a system-controlled name is a CATCHABLE RUNTIME ERROR (located, catchable by the script's error handler per ERR-2) with code `kill.system-owned`, added as a row in docs/spec ERR-2's failure table by 19.1; the value and engine link stay untouched. A write to a read-only system-controlled name is likewise a catchable runtime error, code `assign.read-only`; writable ones still write through. Runtime errors are also EMITTED on the game emitter (like window.onerror): event type `error`, detail `{ code, message, file, line, handled }`. It is a non-cancelable notification fired in addition to normal ERR-2 handling: it does not catch or replace the script's handler and fires whether or not a handler caught the error. 19.1 rules the event shape; 19.12 builds it and its test.
