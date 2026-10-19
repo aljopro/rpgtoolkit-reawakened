@@ -244,13 +244,9 @@ export function lower(ast: Ast, file = "<inline>", knownClasses?: ReadonlySet<st
         break;
       }
       case "callIndirect": {
-        // The target is the first emitted operand for the callee. Keeping the instruction
-        // index explicit makes nested dynamic calls structurally inspectable without host
-        // closures or implicit compiler state.
-        const target = ops.length;
         lowerExpr(expr.callee);
         for (const arg of expr.args) lowerExpr(arg);
-        ops.push({ op: "call_indirect", target, argc: expr.args.length, pos: getPos(expr.line) });
+        ops.push({ op: "call_indirect", argc: expr.args.length, pos: getPos(expr.line) });
         break;
       }
       case "object":

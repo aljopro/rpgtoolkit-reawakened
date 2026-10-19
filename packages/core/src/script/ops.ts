@@ -72,9 +72,8 @@ export type StepOp =
       readonly pos: SourcePos;
     }
   | {
-      /** Invoke the callable at the emitted operand index with `argc` following arguments. */
+      /** Invoke the callable below the top `argc` stack values (callee pushed first, then arguments). */
       readonly op: "call_indirect";
-      readonly target: number;
       readonly argc: number;
       readonly pos: SourcePos;
     }
