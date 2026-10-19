@@ -699,10 +699,11 @@ export function fetchFixtures(root, sources, options = {}) {
     games: games.map((name) => ({ name, files: counts[name] })),
   });
 
+  // Remove interrupted runs before consulting the cache so a valid cache cannot
+  // preserve a stale staging directory from a previous process.
+  removeLeftovers(fixtures);
   const cached = cachedCounts(legacy, pins);
   if (cached !== null) return summary("cached", cached);
-
-  removeLeftovers(fixtures);
   requireGit(env);
 
   mkdirSync(fixtures, { recursive: true });
