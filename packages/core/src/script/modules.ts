@@ -64,7 +64,7 @@ function replaceRefs(vm: VmState, from: ProgramRef, to: ProgramRef): void {
     }
   }
   for (const record of vm.objects) {
-    if (programKey(record.program) === key) record.program = to;
+    if (record.program !== null && programKey(record.program) === key) record.program = to;
   }
 }
 

@@ -59,6 +59,17 @@ export type StepOp =
   | { readonly op: "index"; readonly pos: SourcePos }
   | { readonly op: "member"; readonly name: string; readonly pos: SourcePos }
   /**
+   * Make an empty dictionary object in the handle table and push its handle
+   * (OOP-10, entry 19.3). A dictionary literal is this op, then one value
+   * expression and one `initMember` per entry, in the order written.
+   */
+  | { readonly op: "newObject"; readonly pos: SourcePos }
+  /**
+   * Pop a value and write it as member `key` of the dictionary below it on the
+   * stack, which stays there (OOP-10). A repeated key keeps the last value.
+   */
+  | { readonly op: "initMember"; readonly key: string; readonly pos: SourcePos }
+  /**
    * Load a statically identified callable definition. `def` is a stable definition ID
    * (for example `<inline>#lambda_1`) and captures are plain environment-cell IDs.
    *

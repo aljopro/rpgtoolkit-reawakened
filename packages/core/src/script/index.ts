@@ -79,6 +79,7 @@ export type { LoadedSource, ProgramLoader } from "./loader.ts";
 export { createProgramCache } from "./cache.ts";
 export type { ProgramCache } from "./cache.ts";
 export { killAllRedirects, killRedirect, setRedirect } from "./modules.ts";
+export { dictionaryKeys, isDictionary } from "./objects.ts";
 export {
   createVmState,
   endBoardThreads,
@@ -100,6 +101,7 @@ export type {
   Frame,
   GlobalBlock,
   LocalSlot,
+  ObjectRecord,
   PendingCall,
   QueuedInline,
   Thread,

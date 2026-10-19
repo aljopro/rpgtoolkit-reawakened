@@ -146,6 +146,7 @@ Legacy RPG Toolkit 3 had two major architectural bottlenecks in extensibility an
    * **Step IR Instruction Extensions:**
      - `load_fn { def, captures }` (the ruling's `OP_MAKE_CALLABLE`): pushes a new callable record referencing static definition `def` and capturing cell IDs.
      - `call_indirect { argc }` (the ruling's `OP_CALL_INDIRECT`): dynamically invokes the callable value pushed below its `argc` arguments, evaluated from a primary expression.
+     - `newObject` and `initMember { key }` (entry 19.3, OOP-10): a dictionary literal is `newObject` (makes an empty dictionary in the handle table and pushes its handle), then each value expression followed by `initMember`, which pops the value and writes it to the dictionary below it.
      - `OP_GET_MEMBER_BOUND { prop }`: retrieves a property and, if the value is a callable, auto-binds its `receiver` to the target object.
    * **Step-Machine Closure Serialization (G1):**
      Lexical captures are stored as explicit environment cells in game state (`vm.cells`). Mid-tick snapshots, save files, and golden replays serialize active closures and suspended `next` frames as plain JSON without relying on opaque host closures.
