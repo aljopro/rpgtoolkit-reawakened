@@ -30,26 +30,26 @@ corpus cannot supply them (ticket 2.22):
   [docs/spec/formats/](docs/spec/formats/README.md) by `tools/fixtures/author/generate.mjs`:
   detail 4/5/6 tilesets, an isometric `.iso`, three Windows bitmaps (24-bit,
   1-bit and RLE8), four GIFs (still, animated, interlaced and full-table),
-  a `.tpk` and a deflated copy of it, a Setup ZIP, a backslash-entry ZIP,
-  a `CMP1` standalone EXE and two negative
-  EXE stubs. The tool imports no `core` reader or writer, so a fixture cannot
-  "pass by sharing the writer primitives". `pnpm fixtures:author:check` re-runs it
-  and fails if the committed bytes drift; `pnpm fixtures:author` rewrites them and
-  is a deliberate act, exactly like `pnpm golden:record` (G5).
+  a `.tpk` and a deflated copy of it, a Setup ZIP, a backslash-entry ZIP, a
+  `CMP1` standalone EXE and two negative EXE stubs. The tool imports no
+  `core` reader or writer, so a fixture cannot "pass by sharing the writer
+  primitives". `pnpm fixtures:author:check` re-runs it and fails if the
+  committed bytes drift; `pnpm fixtures:author` rewrites them and is a
+  deliberate act, exactly like `pnpm golden:record` (G5).
 - `movement/` — the movement oracle's fourteen named scenes (ticket 5.2), written
   by the same generator from the rules in
   [docs/spec/engine/movement-and-collision.md](docs/spec/engine/movement-and-collision.md)
   (R-50 to R-54 and the ratifications) and
   [docs/spec/engine/display-input-audio.md](docs/spec/engine/display-input-audio.md#reawakened-gamepad-contract):
   authored boards and actors, fixed-tick recorded inputs, and the expected per-tick
-  outcome facts (positions, layers, fired triggers, events). The facts come from the
-  reference simulation in `tools/fixtures/movement/`, which imports nothing from
-  `packages/core`; `--check` also scans for such an import. There are **no state or
-  draw hashes**: the consuming entries assert those. `manifest.json` lists every scene
-  and case and the "proposed" rulings (`P-n`) each relies on where the spec is silent.
-  `demo-npc-pathfinding` and `demo-npc-battle-trigger` model programs from the fetched
-  `demo` game and pin their digests; the files are read only when fetched and are
-  never committed.
+  outcome facts (positions, layers, fired triggers, events). The facts come from
+  the reference simulation in `tools/fixtures/movement/`, which imports nothing
+  from `packages/core`; `--check` also scans for such an import. There are **no
+  state or draw hashes**: the consuming entries assert those. `manifest.json` lists
+  every scene and case and the "proposed" rulings (`P-n`) each relies on where the
+  spec is silent. `demo-npc-pathfinding` and `demo-npc-battle-trigger` model
+  programs from the fetched `demo` game and pin their digests; the files are read
+  only when fetched and are never committed.
 - `real/` — tiny files an editor produced: a detail-1, a detail-2 and a detail-3
   tileset, plus a `.tan` and a `.gph` held for ticket 16.7.
 - `anonymised/` — derivatives of real legacy samples, produced by
@@ -125,12 +125,10 @@ pnpm icons:test                  # the icon builder's own tests
 pnpm icons                       # rebuild media/icons from media/tkr.png (the logo's icon set)
 pnpm fixtures:fetch              # fetch the legacy sample games (network, cached)
 pnpm fixtures:check              # fail if anything under fixtures/ is tracked
-pnpm fixtures:author             # rewrite packages/core/test/fixtures/authored and .../movement (deliberate, see below)
+pnpm fixtures:author              # rewrite packages/core/test/fixtures/authored and .../movement (deliberate, see below)
 pnpm fixtures:author:check       # fail if those committed fixtures drift from the generator, or the oracle imports core
 pnpm golden                      # the headless golden suite (G5)
 pnpm dump fixtures/legacy/demo   # parse a legacy project and print it (needs fixtures:fetch)
-pnpm dump:check                  # the corpus digest gate (runs in the golden job, after fixtures:fetch)
-pnpm closing                     # boot every sample game through the real engine and compare with the committed baselines (needs fixtures:fetch)
 ```
 
 The `*:test` scripts are the tool self-tests that CI also runs, so run them when you touch `tools/`. `pnpm graph:write` is a dev aid that CI never runs. `pnpm license` and `pnpm license:test` are aliases of `licence` and `licence:test`.
@@ -141,36 +139,14 @@ The `*:test` scripts are the tool self-tests that CI also runs, so run them when
 
 Only `synth` has per-package `build`, `typecheck`, `lint` and `test` scripts. `core`, `runner-harness` and `runner-headless` expose `typecheck:tests` only, and their tests run through the root `pnpm test`.
 
-**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's and the no-skips guard's own tests run in `unit`; there is no separate `fixtures` check. `pnpm test` runs in `unit` without the sample games, where the format tests skip their sample-game cases. The `golden` job runs the whole suite again after the fetch as `pnpm test:strict`: those cases run against the real files, and any skipped test fails the job, so a sample-game case cannot pass by skipping. Renaming a job id means updating branch protection in the same pull request, or every merge blocks. `main` accepts only a commit whose eight checks have already passed, so every change lands through a pull request (see [Work in a worktree](#work-in-a-worktree)).
+**Required checks.** Branch protection requires the seven job names defined in `.github/workflows/ci.yml`: `typecheck`, `lint`, `unit`, `golden`, `licence`, `provenance`, `graph`, plus `gate`, which fails unless every required job succeeded. The fixture fetch and check run inside the required `golden` job, and the fixture tool's and the no-skips guard's own tests run in `unit`; there is no separate `fixtures` check. `pnpm test` runs in `unit` without the sample games, where the format tests skip their sample-game cases. The `golden` job runs the whole suite again after the fetch as `pnpm test:strict`: those cases run against the real files, and any skipped test fails the job, so a sample-game case cannot pass by skipping. Renaming a job id means updating branch protection and the gate in the same change.
 
 ## The dump tool and the corpus digest gate
 
-`pnpm dump <path>` walks a legacy project and prints one readable line per file. `<path>` is an extracted project folder, a game folder, or a `.tpk`/standalone EXE package ([packaging-and-paths.md](docs/spec/formats/packaging-and-paths.md)). Each file goes to the reader its extension names (`.gam` [main-file.md](docs/spec/formats/main-file.md), `.brd` [board.md](docs/spec/formats/board.md), `.tst`/`.iso` [tiles.md](docs/spec/formats/tiles.md), `.tbm` [tiles.md#tile-bitmap-tbm](docs/spec/formats/tiles.md#tile-bitmap-tbm), `.anm` [animation.md](docs/spec/formats/animation.md), `.tem`/`.itm`/`.ene` [character.md](docs/spec/formats/character.md), [item.md](docs/spec/formats/item.md), [enemy.md](docs/spec/formats/enemy.md), `.spc`/`.ste`/`.bkg` [battle-data.md](docs/spec/formats/battle-data.md), images, and `.prg` as text); text, media, plugin files and formats with no reader yet are reported as **skipped with a reason**, and never counted as failures; a file whose extension is a data format that will not parse prints its located `FormatError` (path, offset, section, message) and makes the command exit non-zero. It exits 0 if and only if every data-format file parsed.
+`pnpm dump <path>` walks a legacy project and prints one readable line per file. `<path>` is an extracted project folder, a game folder, or a `.tpk`/standalone EXE package ([packaging-and-paths.md](docs/spec/formats/packaging-and-paths.md)). Each file goes to the reader its extension names (`.gam` [main-file.md](docs/spec/formats/main-file.md), `.brd` [board.md](docs/spec/formats/board.md), `.tst`/`.iso` [tiles.md](docs/spec/formats/tiles.md), `.tbm` [tiles.md#tile-bitmap-tbm](docs/spec/formats/tiles.md#tile-bitmap-tbm), `.anm` [animation.md](docs/spec/formats/animation.md), `.tem`/`.itm`/`.ene` [character.md](docs/spec/formats/character.md), [item.md](docs/spec/formats/item.md), [enemy.md](docs/spec/formats/enemy.md), `.spc`/`.ste`/`.bkg` [battle-data.md](docs/spec/formats/battle-data.md), and so on). Unsupported formats are named rather than silently skipped.
 
 `pnpm dump --json <path>` prints the same report as JSON, with a per-file digest: `core`'s FNV-1a over the canonical JSON of the parsed model (AD-11), or over the decoded RGBA for an image. The report is deterministic — files sorted by path, fixed key order, nothing machine-specific — so a reader or decoder that drifts changes a digest.
 
-That is epic 2's Done-when 1 as a **CI gate**, not a local habit: the required
-`golden` job (which already runs `pnpm fixtures:fetch`) runs `pnpm dump:check`,
-which compares:
-1. The six TK2 games pinned from ludotheque (`FinalDestiny`, `LittleMan`,
-   `BusDriver`, `Caoquest`, `School2Demo` and `ChimeranEmpire`), plus the
-   existing `demo` and `Basic` sample games retained for the headless corpus
-   tests, in `fixtures/legacy` against the committed `golden/legacy-corpus.json`.
-2. The JSON report over the committed `docs/spec/examples` folders (`game`,
-   `files`, `versions`) against `golden/spec-examples.json`. Current formats
-   must parse with 0 failures and 0 residue; unsupported historical formats
-   remain tracked as `expectedFailures` or `expectedResidue` rows naming the
-   ticket that clears each. If an expected failure or residue clears without
-   updating the expectation, the gate fails.
+That is epic 2's Done-when 1 as a **CI gate**, not a local habit: the required `golden` job (which already runs `pnpm fixtures:fetch`) runs `pnpm dump:check`, which compares the six TK2 games pinned from ludotheque plus existing `demo` and `Basic` games against `golden/legacy-corpus.json`, and the JSON report over committed spec examples against `golden/spec-examples.json`. Current formats must parse with 0 failures and 0 residue; unsupported historical formats remain tracked as expected failures/residue rows naming the ticket that clears each. A changed digest or unexpected failure fails the job.
 
-A changed digest or unexpected failure fails the job and names the file, so
-parser and decoder drift cannot pass silently. Sibling scripts
-`pnpm dump:check:examples` and `pnpm dump:record:examples` check or re-record
-the spec examples expectation alone.
-
-The fixture fetch uses the pinned ludotheque revision and the existing demo
-source recorded in `tools/fixtures/sources.json`; each listed game is fetched
-atomically at test time and the resulting files remain ignored rather than
-committed.
-
-`pnpm dump:record` rewrites `golden/legacy-corpus.json` and `pnpm dump:record:examples` rewrites `golden/spec-examples.json`. Regenerating either is a **deliberate act**, exactly like `pnpm golden:record` (G5): never run it in CI, never let it run as a side effect, and explain in the pull request why the digests changed. If a digest moved because a reader was fixed, the fix belongs in the same pull request as the regenerated expectation.
+`pnpm dump:record` and `pnpm dump:record:examples` rewrite expectations deliberately, like `pnpm golden:record`: never run them in CI, never let them run as a side effect, and explain any digest changes in the pull request.
