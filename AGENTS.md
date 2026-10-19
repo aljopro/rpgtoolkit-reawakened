@@ -27,3 +27,9 @@ Setup, choosing a ticket, the checks to run and the pull-request flow are in [CO
 - Legacy sample games are CI fixtures fetched at test time. Never commit whole games. G7 is about the GPL source, so small anonymised or authored fixtures under `packages/core/test/fixtures/` are fine.
 - Help text and user-facing command descriptions (the editor's help, the built-in's `docs/spec` row, the documentation site): first explain what it does in simple terms for someone writing a game, then describe the action technically and deterministically (units, ticks, order, whether the script waits) so a reader knows exactly how it will behave. Owner rule, 2026-10-17; the `earthquake` intensity text is the model.
 - 3.1 is a compatibility layer, not the model ([ADR 0009](docs/adr/0009-compatibility-layer-not-the-model.md)): the core is built on objects and forward design, and legacy 3.1 names, commands and data shapes are aliases/adapters onto it. Owner rule, 2026-10-19; consistent with ADR 0005.
+- **GitHub Project is the primary interface (Owner rule, 2026-10-19):** Planning happens via BMAD, but all epics, stories, and tasks must exist in the GitHub ecosystem.
+  - Project Board: [RPG Toolkit Reawakened Roadmap & Tasks](https://github.com/orgs/tk-reawakened/projects/3).
+  - Every BMAD ticket in `_bmad-output/` must have a corresponding GitHub issue with `tracker_id = "#<num>"` recorded in its `tickets.toml` (or leaf frontmatter).
+  - New Epics are created as GitHub Parent Issues (`[Epic <num>] <title>`) with their stories attached as native sub-issues (`addSubIssue`).
+  - Active sprint tasks belong to the current sprint (`sprint:@current`); unstarted future epics sit in the Backlog (`no:sprint`).
+  - Branches name the ticket/issue (`feat/<ticket>-<short-name>`), and pull requests must cite their issue (`Fixes #<num>`).
