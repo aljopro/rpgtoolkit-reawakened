@@ -125,4 +125,3 @@ Two class identities, two jobs: the record's `className` decides dispatch (metho
 - An explicit `release()` of a callable's receiver leaves that callable dangling: a call is `object.invalid` and a save holding it is refused as `restore.callable-receiver` (F3).
 - OOP-9 private-field identity: a base method's `this->secret` on a derived object is refused while a bare `secret` reads it (F7); owner question for the access policy.
 - A parameter a receiver-bound closure captures does not shadow a field of its receiver, and inside any closure the `file.name()` qualifier is never captured (FUN-8), so `eng.get()` and `eng->get()` can differ there.
-- A member holding an object and indexed by a bare name inside a method does not dispatch that object's `operator[]` (found while reading the index path; not touched).
