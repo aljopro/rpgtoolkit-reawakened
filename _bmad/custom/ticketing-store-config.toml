@@ -1,0 +1,8 @@
+[tickets]
+store = "repo"
+tracker = "github"
+repo = "tk-reawakened/rpgtoolkit-reawakened"
+project_title = "RPG Toolkit Reawakened Roadmap & Tasks"
+project_url = "https://github.com/orgs/tk-reawakened/projects/3"
+project_id = "PVT_kwDOFH0rD84Bnzfi"
+project_number = 3
