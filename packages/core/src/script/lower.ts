@@ -68,9 +68,14 @@ export type LowerResult = {
 
 /**
  * The enclosing names a lambda body reads, in first-use order — what the lambda
- * captures (FUN-8; docs/spec/engine/rpgcode-language.md#lexical-rules; entry
- * 18.4). The body's own `load`s with no explicit scope are exactly its free
- * variable reads, so a parameter (which the body reads without a scope but
+ * captures (FUN-8; docs/spec/engine/rpgcode-language.md#keywords-and-structure;
+ * entries 18.4 and 18.5). The body's own `load`s with no explicit scope are its
+ * free variable reads, and the name of a plain-name call (`g(args)`, a `call`
+ * with no `file.` qualifier) reads the variable `g` to see whether it holds a
+ * callable, so it is a capture site too: without it a closure could not call a
+ * local callable of its creating function once that function had returned. A
+ * name that is not a local of the creating function costs one `""` entry in the
+ * handle and nothing else. A parameter (which the body reads without a scope but
  * which shadows the outer name), `this`, a scoped read (`local(x)`,
  * `global(x)`) and an array element are not captures; an array element never
  * appears as a `load` at all, because only its index expression does.
@@ -80,7 +85,9 @@ function capturedNames(body: readonly StepOp[], params: readonly ParamInfo[]): s
   for (const param of params) seen.add(param.name);
   const names: string[] = [];
   for (const op of body) {
-    if (op.op !== "load" || op.scope !== undefined || seen.has(op.name)) continue;
+    const free =
+      (op.op === "load" && op.scope === undefined) || (op.op === "call" && op.file === undefined);
+    if (!free || seen.has(op.name)) continue;
     seen.add(op.name);
     names.push(op.name);
   }

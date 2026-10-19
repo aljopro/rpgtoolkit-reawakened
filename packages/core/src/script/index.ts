@@ -172,7 +172,6 @@ export {
   assembleCommands,
   createCommandLookup,
   resolveCall,
-  TIER_ORDER,
 } from "./registry.ts";
 export type {
   LegacyPluginEntry,
@@ -196,10 +195,9 @@ export type {
   CallResolution,
   CommandLookup,
   CommandRegistry,
-  CommandTiers,
+  CommandSource,
   FunctionTarget,
   ResolvedCommand,
-  TierLookup,
 } from "./registry.ts";
 export {
   advanceScriptTick,
