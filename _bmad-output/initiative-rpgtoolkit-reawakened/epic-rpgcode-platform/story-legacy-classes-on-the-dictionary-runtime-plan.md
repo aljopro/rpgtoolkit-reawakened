@@ -3,7 +3,7 @@ title: "Legacy classes on the dictionary runtime"
 type: 'feature'
 ticket: 5
 created: '2026-10-19'
-status: in-review
+status: done
 baseline_revision: '8d4868a5a8f32a25e19dccb80ccc88d24e548c3b'
 route: 'full'
 route_source: 'auto'
@@ -113,3 +113,16 @@ Two class identities, two jobs: the record's `className` decides dispatch (metho
 
 **Manual checks:**
 - Authored class-and-dictionary program through the real VM: a wait, a JSON save and restore, then the end-of-tick pass; compare values and hashes.
+
+**Recorded evidence (2026-10-19):**
+- Independent final review of PR #296: **APPROVE, no findings**, bound `f420a2d191a6ffa8efcf44b087e5ff580019cf9c`; code reviewed clean at `894616ee` (the parameter, by-reference, closure, qualifier and index cases match OOP-6), `f420a2d1` adds only the two closure-claim doc narrowings it asked for.
+- GitHub Actions run `39304706474` on `f420a2d1`: all 9 jobs passed (typecheck, lint, unit, golden, golden-bun, graph, licence, provenance, `gate`). PR #296 merged normally to `main` as `ecc0bc84097cceeb42e6778072cf7d089c60554f`; no admin bypass, no rebase.
+- Local exact-worktree gates on `4cb99b49` (code identical to `f420a2d1` apart from one deleted incidental IR test and doc text): install and `fixtures:fetch`; typecheck, lint, `test:strict` **1498/1498 with 0 skipped**, golden, golden:bun, graph, licence, provenance, catalogue:check, command-docs:check, oracle:check all exit 0; no golden diff.
+- Failing-before proof: `script-class-objects.test.ts` on base `8d4868a5` failed on every deviation fixed here (`100 !== 7` for `this + o`, `1 !== 2` for a bare `step()`, dot-qualifier `0` with `include.missing`, `2 !== 3` objects in the receiver-cycle case, `0 !== 1` for the by-reference slot, `3 !== 0` after `kill(a->x)`); all pass on head. The parameter cases (`run(x)` returning `0` or the field) were verified failing at `9414aa71` by the reviewer.
+- Authored runtime smoke (class and dictionary mix, a `sleep`, JSON save and restore mid-run, `kill`, `release`, a garbage cycle holding a bound callable): `total=100 again=100 healed=110 peeked=7 d="tonic/50"` on original and restored runs, hashes equal at the wait and at the end, no diagnostics, final save loads; the same program on base failed each `p.method()` dot call with `include.missing` (`total=0`) and kept the released object alive.
+
+**Pre-existing limits, found here and not changed (identical on base `8d4868a5`):**
+- An explicit `release()` of a callable's receiver leaves that callable dangling: a call is `object.invalid` and a save holding it is refused as `restore.callable-receiver` (F3).
+- OOP-9 private-field identity: a base method's `this->secret` on a derived object is refused while a bare `secret` reads it (F7); owner question for the access policy.
+- A parameter a receiver-bound closure captures does not shadow a field of its receiver, and inside any closure the `file.name()` qualifier is never captured (FUN-8), so `eng.get()` and `eng->get()` can differ there.
+- A member holding an object and indexed by a bare name inside a method does not dispatch that object's `operator[]` (found while reading the index path; not touched).
