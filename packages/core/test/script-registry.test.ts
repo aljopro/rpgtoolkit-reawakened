@@ -16,6 +16,7 @@ import {
   snapshot,
   startProgram,
   resolveCall,
+  resolveNamespaced,
   type Arg,
   type CallResolution,
   type BuiltinSpec,
@@ -350,4 +351,58 @@ test("a name the environment table cannot resolve is still unknown.command, and 
     until: 2,
     resumesCall: true,
   });
+});
+
+// --- Package namespaces (PKG-4; entry 19.7) ---------------------------------------------------
+
+function packageIn(id: string, namespace: string, commands: readonly BuiltinSpec[]): ResolvedPlugin {
+  return { definition: { id, version: "1.0.0", commands }, namespace };
+}
+
+test("a namespace reaches its package's own layer, with next the layer below it", () => {
+  const value = (n: number): BuiltinSpec => noParamsSpec("each", () => ({ value: n }));
+  const wrap: BuiltinSpec = {
+    name: "each",
+    aliases: [],
+    params: [],
+    call: (view, args, next) => ({ value: (next(view, args, next).value as number) + 100 }),
+  };
+  const { logger, records } = collectingLogger();
+  const registry = assembleCommands(
+    [pack("core", [value(1)]), packageIn("lower", "Low", [value(2)]), packageIn("upper", "up", [wrap])],
+    logger,
+  );
+
+  equal(registry.hasNamespace("low"), true, "namespaces are keyed folded");
+  equal(registry.hasNamespace("core"), false, "a native pack has no namespace");
+  const own = registry.getIn("low", "each")!;
+  equal(own.spec.call(FIXTURE_VIEW, [], own.next).value, 2);
+  const wrapped = registry.getIn("up", "each")!;
+  equal(wrapped.spec.call(FIXTURE_VIEW, [], wrapped.next).value, 102, "next is the layer below the package, not the top");
+  equal(own.next(FIXTURE_VIEW, [], own.next).value, 1, "the layer below lower is core");
+  equal(registry.getIn("low", "nothing"), undefined);
+  equal(registry.getIn("missing", "each"), undefined);
+  equal(records.filter((record) => record.code === "command.overridden").length, 2);
+});
+
+test("a repeated namespace is an assembly error naming both plugins", () => {
+  const { logger } = collectingLogger();
+  const message = thrownMessage(() =>
+    assembleCommands([packageIn("one", "same", []), packageIn("two", "SAME", [])], logger),
+  );
+  equal(message.includes("one"), true);
+  equal(message.includes("two"), true);
+});
+
+test("resolving through a namespace that supplies no such name is unknown.command", () => {
+  const { logger } = collectingLogger();
+  const registry = assembleCommands([packageIn("pkg", "ns", [noParamsSpec("here", () => ({ value: 1 }))])], logger);
+  const commands = createCommandLookup({
+    extension: (name) => registry.get(name),
+    namespace: { has: (ns) => registry.hasNamespace(ns), get: (ns, name) => registry.getIn(ns, name) },
+  });
+
+  equal(resolveNamespaced("NS", "here", commands)?.kind, "command");
+  equal(resolveNamespaced("other", "here", commands), undefined, "not a namespace: the caller tries a file");
+  equal(errorOf(() => resolveNamespaced("ns", "gone", commands)).code, "unknown.command");
 });

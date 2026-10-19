@@ -35,7 +35,7 @@ import {
   toDiagnostic,
 } from "./errors.ts";
 import { NULL_LOGGER } from "./logging.ts";
-import { ENGINE_DEFAULT_MANIFEST } from "./manifest.ts";
+import { ENGINE_DEFAULT_MANIFEST, foldNamespace } from "./manifest.ts";
 import { collectCells, eachLiveRoot, recordOwner } from "./cells.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
 import { applyEmitterOp, forgetEmitter, isEmitterMethod } from "../events/emitter.ts";
@@ -75,6 +75,7 @@ import {
   bindingOf,
   createCommandLookup,
   resolveCall,
+  resolveNamespaced,
   type CallResolution,
   type CommandLookup,
 } from "./registry.ts";
@@ -132,6 +133,8 @@ export type ScriptServices = {
   readonly diagnostics: Diagnostic[];
   /** Manifest options remain host/service data and never enter VM state. */
   readonly pluginOptions: ReadonlyMap<string, PlainData>;
+  /** The `namespace.prg` files a package namespace already warned about, so each warns once (PKG-4); a log aid, never state. */
+  readonly hiddenFileWarned: Set<string>;
   readonly postEffect?: (section: SectionKey, effect: EffectRecord) => void;
   /** Engine-owned synchronous host-request dispatch hook. */
   readonly postRequest?: (request: CommandRequest) => void;
@@ -173,6 +176,7 @@ export function createScriptServices(
     builtin: (name) =>
       registry.layerPlugins(name).some((id) => builtinPacks.has(id)) ? registry.get(name) : undefined,
     extension: (name) => registry.get(name),
+    namespace: { has: (namespace) => registry.hasNamespace(namespace), get: (namespace, name) => registry.getIn(namespace, name) },
   });
   const diagnostics: Diagnostic[] = [];
   // Load-time notices (clashes, shadowed built-ins, include cycles) are raised once, when a program
@@ -209,6 +213,7 @@ export function createScriptServices(
     logger,
     diagnostics,
     pluginOptions,
+    hiddenFileWarned: new Set(),
     ...(loader === undefined ? {} : { loader }),
     ...(postEffect === undefined ? {} : { postEffect }),
     ...(postRequest === undefined ? {} : { postRequest }),
@@ -1390,6 +1395,25 @@ function performCallable(
 }
 
 /**
+ * PKG-4: a package namespace is chosen ahead of a `namespace.prg` file the program also
+ * holds, and the first call it serves says so once per namespace and file.
+ */
+function warnNamespaceHidesFile(services: ScriptServices, program: Program, namespace: string): void {
+  const folded = foldNamespace(namespace);
+  const path = `${namespace}.prg`;
+  if (!Object.hasOwn(program.fileKeys, path)) return;
+  const key = `${folded}\u0000${path}`;
+  if (services.hiddenFileWarned.has(key)) return;
+  services.hiddenFileWarned.add(key);
+  services.logger.warn({
+    level: "warn",
+    code: "namespace.hides-file",
+    message: `the package namespace "${folded}" is chosen over the file "${path}" for \`${namespace}.name(...)\` calls`,
+    data: { namespace: folded, file: path },
+  });
+}
+
+/**
  * Run a request continuation's command (a call site that was already passed, so
  * the instruction pointer does not advance). The command resolves through the
  * engine's own bindings only — the environment table without the running
@@ -2525,11 +2549,18 @@ export function stepThread(
             break;
           }
         }
+        // A package namespace (PKG-4; entry 19.7) is chosen after a live object and before the
+        // file. A parameter qualifier is a local, so it is never a namespace.
+        const inPackage =
+          op.file !== undefined && op.fileParam !== true
+            ? resolveNamespaced(op.file, op.name, services.commands)
+            : undefined;
+        if (inPackage !== undefined) warnNamespaceHidesFile(services, program, op.file!);
         // The environment table (FUN-8; entry 18.5): the running scope's own
         // callable under this name first, then a built-in, a script function and a
         // plugin command. A `file.`-qualified call never asks the scope.
         const held = op.file === undefined ? heldCallable(vm, thread, frameIndex, op.name) : undefined;
-        const resolved = resolveCall(op.name, op.argc, program, services.commands, op.file, held);
+        const resolved = inPackage ?? resolveCall(op.name, op.argc, program, services.commands, op.file, held);
         if (resolved === undefined) {
           const ownClass = frameObjectClass(vm, frame);
           if (frame.objectHandle !== undefined && ownClass !== undefined) {
