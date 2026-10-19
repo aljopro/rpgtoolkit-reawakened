@@ -236,15 +236,18 @@ export function packageNamespace(entry: PluginManifestEntry): string {
   return entry.namespace ?? entry.id;
 }
 
-/** The comparison key of a namespace: ASCII-only case fold, never a locale fold. */
-function namespaceKey(entry: PluginManifestEntry): string {
-  const text = packageNamespace(entry);
+/** The comparison key of a namespace: ASCII-only case fold, never a locale fold (PKG-4). */
+export function foldNamespace(text: string): string {
   let out = "";
   for (let index = 0; index < text.length; index += 1) {
     const code = text.charCodeAt(index);
     out += code >= 0x41 && code <= 0x5a ? String.fromCharCode(code + 0x20) : text.charAt(index);
   }
   return out;
+}
+
+function namespaceKey(entry: PluginManifestEntry): string {
+  return foldNamespace(packageNamespace(entry));
 }
 
 /** The index of an earlier package entry that already owns this entry's namespace, or -1. */

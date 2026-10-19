@@ -146,8 +146,14 @@ export type PluginDefinition = {
   readonly decoders?: readonly AssetDecoder[];
 };
 
-/** A host-resolved definition plus its manifest configuration. */
+/**
+ * A host-resolved definition plus its manifest configuration. `namespace` is set
+ * for a package entry (PKG-2, PKG-4): the host copies `packageNamespace(entry)`, and
+ * `namespace.name(...)` then reaches this definition's own layer of `name`. A native
+ * pack has none.
+ */
 export type ResolvedPlugin = {
   readonly definition: PluginDefinition;
   readonly options?: PlainData;
+  readonly namespace?: string;
 };

@@ -189,6 +189,7 @@ export {
   assembleCommands,
   createCommandLookup,
   resolveCall,
+  resolveNamespaced,
 } from "./registry.ts";
 export type {
   LegacyPluginEntry,
@@ -214,6 +215,7 @@ export type {
   CommandRegistry,
   CommandSource,
   FunctionTarget,
+  NamespaceSource,
   ResolvedCommand,
 } from "./registry.ts";
 export {
