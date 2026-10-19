@@ -50,29 +50,31 @@ function fail(reader: BinaryReader, offset: number, message: string): Result<nev
   });
 }
 
-function parsePackageExtension(bytes: Uint8Array, path: string | undefined): Result<{ readonly packagePlugins: readonly string[]; readonly packagePluginsExtension: boolean; readonly residue: Uint8Array }> {
+function parsePackageExtension(bytes: Uint8Array, path: string | undefined, baseOffset: number): Result<{ readonly packagePlugins: readonly string[]; readonly packagePluginsExtension: boolean; readonly residue: Uint8Array }> {
   const tag = MAIN_PACKAGE_EXTENSION_TAG;
+  const located = <T>(result: Result<T>): Result<T> => result.ok ? result : err({ ...result.error, offset: result.error.offset + baseOffset });
   if (bytes.length < tag.length || tag.some((value, index) => bytes[index] !== value)) {
     return ok({ packagePlugins: [], packagePluginsExtension: false, residue: bytes });
   }
   const extension = new BinaryReader(bytes, path);
   extension.readBytes(tag.length);
-  const count = extension.u16();
+  const count = located(extension.u16());
   if (!count.ok) return count;
-  if (count.value > MAIN_PACKAGE_MAX_COUNT) return fail(extension, tag.length, `TKR package list count ${count.value} exceeds ${MAIN_PACKAGE_MAX_COUNT} (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+  if (count.value > MAIN_PACKAGE_MAX_COUNT) return fail(extension, baseOffset + tag.length, `TKR package list count ${count.value} exceeds ${MAIN_PACKAGE_MAX_COUNT} (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
   const packagePlugins: string[] = [];
   const seen = new Set<string>();
   for (let index = 0; index < count.value; index += 1) {
-    const name = extension.str();
+    const name = located(extension.str());
     if (!name.ok) return name;
-    if (name.value.length === 0) return fail(extension, extension.offset, "TKR package names must not be empty (docs/spec/formats/main-file.md#tkr-package-list-extension)");
-    if (name.value.length > MAIN_PACKAGE_MAX_BYTES) return fail(extension, extension.offset, `TKR package name exceeds ${MAIN_PACKAGE_MAX_BYTES} bytes (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    if (name.value.includes("\0")) return fail(extension, baseOffset + extension.offset, "TKR package names must not contain NUL (docs/spec/formats/main-file.md#tkr-package-list-extension)");
+    if (name.value.length === 0) return fail(extension, baseOffset + extension.offset, "TKR package names must not be empty (docs/spec/formats/main-file.md#tkr-package-list-extension)");
+    if (name.value.length > MAIN_PACKAGE_MAX_BYTES) return fail(extension, baseOffset + extension.offset, `TKR package name exceeds ${MAIN_PACKAGE_MAX_BYTES} bytes (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
     const folded = asciiLower(name.value);
-    if (seen.has(folded)) return fail(extension, extension.offset, `duplicate TKR package name "${name.value}" (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    if (seen.has(folded)) return fail(extension, baseOffset + extension.offset, `duplicate TKR package name "${name.value}" (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
     seen.add(folded);
     packagePlugins.push(name.value);
   }
-  const residue = extension.readBytes(extension.remaining);
+  const residue = located(extension.readBytes(extension.remaining));
   if (!residue.ok) return residue;
   return ok({ packagePlugins, packagePluginsExtension: true, residue: residue.value });
 }
@@ -806,9 +808,10 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
 
   const reservedRuns: MainFileReservedRuns = { parallax, menuPluginFallback, multitask, fightStyle };
 
+  const trailingStart = reader.offset;
   const trailing = reader.readBytes(reader.remaining);
   if (!trailing.ok) return trailing;
-  const extension = parsePackageExtension(trailing.value, reader.path);
+  const extension = parsePackageExtension(trailing.value, reader.path, trailingStart);
   if (!extension.ok) return extension;
   const warnings: string[] = [];
   if (extension.value.residue.length > 0) {

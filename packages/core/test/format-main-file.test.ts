@@ -477,6 +477,30 @@ test("every minor 0–9 reads with zero trailing bytes and writes back byte-for-
     deepEqual(unwrap(writeMainFile(model)), built.bytes, `minor ${minor} round-trip`);
   }
 });
+test("TKR package extension round-trips ordered names, explicit empty state, residue, and legacy rows", () => {
+  const legacy = readBuilt(buildGam(9));
+  const authored = { ...legacy, menuPlugin: "menu.dll", fightPlugin: "fight.dll", plugins: legacy.plugins, packagePlugins: ["zeta", "Alpha"], packagePluginsExtension: true, residue: new Uint8Array([0x99]) };
+  const bytes = unwrap(writeMainFile(authored));
+  const decoded = unwrap(readMainFile(new BinaryReader(bytes, "authored.gam")));
+  deepEqual(decoded.packagePlugins, ["zeta", "Alpha"]);
+  deepEqual(decoded.residue, new Uint8Array([0x99]));
+  equal(decoded.menuPlugin, "menu.dll");
+  equal(decoded.fightPlugin, "fight.dll");
+  const empty = unwrap(readMainFile(new BinaryReader(unwrap(writeMainFile({ ...legacy, packagePlugins: [], packagePluginsExtension: true })))));
+  deepEqual(empty.packagePlugins, []);
+  equal(legacy.packagePlugins, undefined);
+});
+
+test("TKR package extension rejects NUL names and reports malformed bytes at file offsets", () => {
+  const legacy = readBuilt(buildGam(9));
+  equal(writeMainFile({ ...legacy, packagePlugins: ["core\0rogue"] }).ok, false);
+  const bytes = unwrap(writeMainFile({ ...legacy, packagePlugins: ["one"], packagePluginsExtension: true }));
+  const malformed = bytes.slice(0, -1);
+  const result = readMainFile(new BinaryReader(malformed, "bad.gam"));
+  equal(result.ok, false);
+  if (!result.ok) equal(result.error.offset, bytes.length - 4);
+});
+
 
 // --- The writer refuses a model it cannot represent (AD-18) ------------------
 //

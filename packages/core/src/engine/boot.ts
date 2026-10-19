@@ -19,6 +19,7 @@ import {
   MEDIA_PLUGIN,
   ENGINE_DEFAULT_MANIFEST,
   NATIVE_PACK_TABLE,
+  applyPluginManifestPatch,
   isPluginManifestEntryEnabled,
   type EffectKind,
   type PluginManifest,
@@ -69,12 +70,18 @@ export function mainFilePluginPatch(main: MainFile): PluginManifestPatch {
  * E-02 step 3: the engine default manifest plus the package entries named by
  * the main file. Legacy DLL rows are retained as data and never interpreted.
  */
-export function pluginManifestFor(main: MainFile, _mainKeyForDiagnostics: string): { readonly manifest: PluginManifest; readonly diagnostics: Diagnostic[] } {
-  const manifest: { id: string }[] = ENGINE_DEFAULT_MANIFEST.map((entry) => ({ id: entry.id }));
-  for (const operation of mainFilePluginPatch(main)) {
-    if (operation.op === "append") manifest.push(operation.entry);
-  }
-  return { manifest, diagnostics: [] };
+export function pluginManifestFor(main: MainFile, mainKeyForDiagnostics: string): { readonly manifest: PluginManifest; readonly diagnostics: Diagnostic[] } {
+  const baseManifest: PluginManifest = ENGINE_DEFAULT_MANIFEST.map((entry) => ({ id: entry.id }));
+  const patched = applyPluginManifestPatch(baseManifest, mainFilePluginPatch(main), mainKeyForDiagnostics);
+  return {
+    manifest: patched.manifest,
+    diagnostics: patched.diagnostics.map((diagnostic) => ({
+      code: diagnostic.code,
+      file: diagnostic.path,
+      line: diagnostic.index,
+      message: diagnostic.message,
+    })),
+  };
 }
 
 /** Resolve manifest ids to the engine's own definitions; a disabled entry is skipped and an unknown id is a diagnostic. */

@@ -4,7 +4,7 @@ type: 'feature'
 ticket: 9
 created: '2026-10-19'
 status: 'built'
-baseline_revision: 'd5564edf'
+baseline_revision: 'd5564edfe11da102e931151de74c34e47ee3ab8e'
 route: 'full'
 route_source: 'auto'
 risk: 'medium'
@@ -13,8 +13,8 @@ review_source: ''
 lenses_ran: []
 review_loop_iteration: 0
 context:
-  - '/Users/jensen/projects/rpgtoolkit-reawakened/docs/spec/formats/main-file.md'
-  - '/Users/jensen/projects/rpgtoolkit-reawakened/docs/adr/0009-compatibility-layer-not-the-model.md'
+- 'docs/spec/formats/main-file.md'
+- 'docs/adr/0009-compatibility-layer-not-the-model.md'
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
@@ -74,11 +74,11 @@ context:
 
 ## Design Notes
 
-The extension uses the existing residue boundary: ASCII tag `TKRPLUG\0`, unsigned little-endian `u16` count, then `count` UTF-8 length-prefixed strings using the project binary string convention. The reader recognizes only this exact tag at the start of trailing bytes; any other residue remains opaque. A maximum of 256 names and 255 UTF-8 bytes per name keeps allocations bounded and matches existing count/string validation style. The writer emits the tag even for an explicitly authored empty list and appends opaque residue after it.
+The extension uses the existing residue boundary: ASCII tag `TKRPLUG\0`, unsigned little-endian `u16` true count, then `count` NUL-terminated Windows-1252 strings. The reader recognizes only this exact tag at the start of trailing bytes; any other residue remains opaque. A maximum of 256 names and 255 encoded bytes per name keeps allocations bounded. The writer emits the tag even for an explicitly authored empty list and appends opaque residue after it.
 
 ## Verification
 
 **Commands:**
 - `pnpm install` -- dependencies install successfully.
 - `pnpm fixtures:fetch` -- legacy fixtures available.
-- `pnpm typecheck`, `pnpm lint`, `pnpm test:strict`, `pnpm golden`, `pnpm golden:bun`, `pnpm graph`, `pnpm licence`, `pnpm provenance`, `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm oracle:check` -- all pass; dump/golden baselines unchanged.
+- `pnpm typecheck`, `pnpm lint`, `pnpm test:strict`, `pnpm golden`, `pnpm golden:bun`, `pnpm graph`, `pnpm licence`, `pnpm provenance`, `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm oracle:check` -- all pass; the closing golden deliberately drops the legacy DLL diagnostic because legacy rows are now data-only.

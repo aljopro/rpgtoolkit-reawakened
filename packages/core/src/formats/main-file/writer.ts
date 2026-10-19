@@ -301,8 +301,8 @@ function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | unde
   }
   const seen = new Set<string>();
   for (const name of packagePlugins) {
-    if (name.length === 0 || name.length > MAIN_PACKAGE_MAX_BYTES) {
-      return fail(writer, `TKR package name must be 1–${MAIN_PACKAGE_MAX_BYTES} bytes (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    if (name.length === 0 || name.length > MAIN_PACKAGE_MAX_BYTES || name.includes("\0")) {
+      return fail(writer, `TKR package name must be 1–${MAIN_PACKAGE_MAX_BYTES} bytes and must not contain NUL (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
     }
     const folded = asciiLower(name);
     if (seen.has(folded)) return fail(writer, `duplicate TKR package name "${name}" (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
