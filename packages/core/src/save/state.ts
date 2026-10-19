@@ -1,7 +1,7 @@
 /**
  * The one state tree (AD-10, AD-23; decisions Q2/Q3).
  *
- * `GameState` has exactly AD-10's 18 sections. Entry 2 owns four of them —
+ * `GameState` has exactly AD-10's 19 sections. Entry 2 owns four of them —
  * `schema` (here), `vm` (`core/script`), `rng` (`core/rng`) and `time`
  * (`core/time`); of the other fourteen, seven are real sections declared under
  * `save/sections/` (`world`, `camera`, `ui`, `fx`, `surfaces`, `input`,
@@ -49,6 +49,7 @@ import { createTriggersSection } from "../triggers/model.ts";
 import { createSpritesSection } from "../sprites/model.ts";
 import { createInputSection } from "../input/input.ts";
 import { createAudioSection } from "../audio/model.ts";
+import { createEventsSection, type EventsSection } from "../events/model.ts";
 
 /** Every `GameState` section key (AD-10), i.e. the schema version map's keys. */
 export const SCHEMA_VERSIONS = {
@@ -70,6 +71,7 @@ export const SCHEMA_VERSIONS = {
   rng: 1,
   time: 1,
   engine: 1,
+  events: 1,
 } as const;
 
 /** One `GameState` section key. */
@@ -95,10 +97,11 @@ export type SchemaState = {
   rng: number;
   time: number;
   engine: number;
+  events: number;
   compiler: string;
 };
 
-/** AD-10's 18-section state tree; `SaveState` is this type. */
+/** AD-10's 19-section state tree (`events` is entry 19.10's); `SaveState` is this type. */
 export type GameState = {
   schema: SchemaState;
   world: WorldSection;
@@ -118,6 +121,7 @@ export type GameState = {
   rng: RngState;
   time: TimeState;
   engine: EngineSection;
+  events: EventsSection;
 };
 
 /** Build-time proof that the whole state tree stays plain data (G1 rule 2). */
@@ -144,6 +148,7 @@ export function createSchemaState(): SchemaState {
     rng: SCHEMA_VERSIONS.rng,
     time: SCHEMA_VERSIONS.time,
     engine: SCHEMA_VERSIONS.engine,
+    events: SCHEMA_VERSIONS.events,
     compiler: COMPILER_VERSION,
   };
 }
@@ -169,5 +174,6 @@ export function createGameState(init: { seed: number }): GameState {
     rng: seedRng(init.seed),
     time: createTimeState(),
     engine: {},
+    events: createEventsSection(),
   };
 }

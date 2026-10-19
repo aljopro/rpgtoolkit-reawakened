@@ -20,6 +20,7 @@ import { RESTORE_CALLABLE_CAPTURES, RESTORE_CALLABLE_RECEIVER, RESTORE_CALLABLE_
 import { COMPILER_VERSION, programKey, type Program, type ProgramRef } from "./program.ts";
 import type { CommandLookup } from "./registry.ts";
 import type { VmState } from "./state.ts";
+import type { EventsSection } from "../events/model.ts";
 
 /** What the check needs of the host's services. */
 export type RestoreCheckServices = {
@@ -40,14 +41,16 @@ function describeProgram(ref: ProgramRef): string {
  * for. A program whose source changed since the save, or that an older compiler
  * built, is skipped: its thread restarts from source on its next turn, so a
  * definition only that program had is reported unknown, with the program named.
+ * The listeners of the `events` section, when given, are callables like any other (EMIT-15).
  */
-export function verifyRestoredHandles(vm: VmState, services: RestoreCheckServices): void {
+export function verifyRestoredHandles(vm: VmState, services: RestoreCheckServices, events?: EventsSection): void {
   const callables: Array<{ readonly path: string; readonly value: CallableValue }> = [];
   const collect = (path: string, value: unknown): void => {
     if (isCallableRecord(value)) callables.push({ path, value });
   };
   eachRootValue(vm, collect, () => undefined);
   for (const id of Object.keys(vm.cells ?? {})) collect(`vm.cells.${id}`, vm.cells?.[id]);
+  for (const [index, listener] of (events?.listeners ?? []).entries()) collect(`events.listeners[${index}].callable`, listener.callable);
   for (const { path, value } of callables) {
     if (value.receiver === null) continue;
     const handle = Number(value.receiver);

@@ -1,6 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import { ENGINE_PHASES, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board, type GameState } from "../src/index.ts";
+import { ENGINE_PHASES, applyEmitterOp, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board, type GameState } from "../src/index.ts";
 
 function boardBytes(board: Board): Uint8Array {
   const encoded = writeBoard(board);
@@ -62,10 +62,11 @@ function loadedEngine(registrations: Parameters<typeof createEngine>[0]["phaseRe
 }
 
 test("engine runs the fixed phase order, registers audio after animation, and pauses on focus loss", () => {
-  deepEqual(ENGINE_PHASES, ["input", "waits", "threads", "movement", "edges", "triggers", "battle", "animation", "audio", "time"]);
+  deepEqual(ENGINE_PHASES, ["input", "waits", "threads", "events", "movement", "edges", "triggers", "battle", "animation", "audio", "time"]);
   const phases: string[] = [];
   const engine = loadedEngine([
     { phase: "movement", run: (state) => phases.push(`movement:${state.time.tick}`) },
+    { phase: "events", run: (state) => phases.push(`events:${state.time.tick}`) },
     { phase: "audio", run: (state) => phases.push(`audio:${state.time.tick}`) },
   ]);
   const paused = engine.advance(2, [{ tick: 0, event: { kind: "focus", state: "lost" } }]);
@@ -73,7 +74,55 @@ test("engine runs the fixed phase order, registers audio after animation, and pa
   const resumed = engine.advance(60, [{ tick: 0, event: { kind: "focus", state: "gained" } }], 2);
   equal(resumed.ticksRun, 2);
   equal(resumed.tickAfter, 2);
-  deepEqual(phases, ["movement:0", "audio:0", "movement:1", "audio:1"]);
+  deepEqual(phases, ["events:0", "movement:0", "audio:0", "events:1", "movement:1", "audio:1"]);
+});
+
+function programEngine(program: string, registrations: NonNullable<Parameters<typeof createEngine>[0]["phaseRegistrations"]>) {
+  const board = writeBoard(createEmptyBoard());
+  if (!board.ok) throw new Error(board.error.message);
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program,
+    phaseRegistrations: registrations,
+  });
+  const request = engine.advance(0, []).requests[0];
+  if (request?.kind !== "asset") throw new Error("expected board asset request");
+  engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: board.value } }]);
+  return engine;
+}
+
+test("the events phase delivers an emit made earlier in the tick; an emit made by a later phase waits for the next tick (EMIT-3, EMIT-14)", () => {
+  const seen: string[] = [];
+  const engine = programEngine(
+    'log = ""\nh = {}\nh.on("x", (e) => { log = log + "x" })\nh.on("late", (e) => { log = log + "L" })\nh.emit("x")\n',
+    [
+      {
+        phase: "movement",
+        run: (state) => {
+          if (state.time.tick === 0) applyEmitterOp(state.vm, state.events, "emit", { kind: "object", handle: 1, className: "" }, ["late"]);
+        },
+      },
+      { phase: "audio", run: (state) => seen.push(`${state.time.tick}:${String(state.vm.globals.log)}`) },
+    ],
+  );
+  const report = engine.advance(3, []);
+  equal(report.diagnostics.length, 0);
+  deepEqual(seen, ["0:x", "1:xL", "2:xL"]);
+});
+
+test("the events section is part of the state hash and a mid-dispatch run replays to the same hash", () => {
+  const program = 'h = {}\nh.on("x", (e) => { for (i = 0; i < 400; i = i + 1) { n = i } })\nh.emit("x")\nh.emit("x")\n';
+  const straight = programEngine(program, []);
+  const split = programEngine(program, []);
+  const final = straight.advance(6, []);
+  for (let tick = 0; tick < 6; tick += 1) split.advance(1, []);
+  equal(split.advance(0, []).stateHash, final.stateHash);
 });
 
 test("batching the same stamped input log produces the same state hash", () => {

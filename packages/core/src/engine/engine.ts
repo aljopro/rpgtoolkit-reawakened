@@ -49,9 +49,9 @@ import { runRandomEncounterPhase } from "../sprites/encounters.ts";
 import { EffectBus, type EffectApplier, type PostEffect } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
 import type { EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
+import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
 import {
   COMPILER_VERSION,
-  collectGarbage,
   createScriptServices,
   defaultWaitPoll,
   drainDiagnostics,
@@ -85,6 +85,7 @@ export const ENGINE_PHASES = [
   "input",
   "waits",
   "threads",
+  "events",
   "movement",
   "edges",
   "triggers",
@@ -671,6 +672,7 @@ export function createEngine(init: EngineInit): Engine {
     state.inventory = fresh.inventory;
     state.triggers = fresh.triggers;
     state.vm = createVmState();
+    state.events = fresh.events;
     state.battle = fresh.battle;
     state.menu = fresh.menu;
     state.input = createInputSection(init.input);
@@ -1120,9 +1122,13 @@ export function createEngine(init: EngineInit): Engine {
         runThreadsPhase(state.vm, services, STEP_BUDGET);
         expireProgramTileEdits(state);
         return;
+      case "events":
+        runEventsPhase(state, services, STEP_BUDGET);
+        for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
+        return;
       case "time":
         runTimePhase(state.time);
-        collectGarbage(state.vm);
+        collectStateGarbage(state);
         return;
       case "movement":
         state.camera = updateCamera(state.camera, state.world.board ?? null, init.cameraTarget ?? init.spriteRuntime);

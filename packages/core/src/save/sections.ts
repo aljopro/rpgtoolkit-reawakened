@@ -35,6 +35,7 @@ export {
 export type { RgbaSnapshot, SurfaceState, SurfacesSection } from "./sections/surfaces.ts";
 export { INPUT_SCHEMA_VERSION, type InputBindings, type InputButton, type InputButtonSlot, type InputGamepad, type InputImageButton, type InputSection } from "./sections/input.ts";
 export type { EngineSection } from "./sections/engine.ts";
+export type { EventsSection } from "../events/model.ts";
 
 export type { SpritesSection } from "../sprites/model.ts";
 

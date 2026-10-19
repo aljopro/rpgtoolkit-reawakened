@@ -37,6 +37,9 @@ import {
 import { NULL_LOGGER } from "./logging.ts";
 import { ENGINE_DEFAULT_MANIFEST } from "./manifest.ts";
 import { collectCells, eachLiveRoot, recordOwner } from "./cells.ts";
+import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
+import { applyEmitterOp, forgetEmitter, isEmitterMethod } from "../events/emitter.ts";
+import type { EventsSection } from "../events/model.ts";
 import { classInfo, findMember, findMethod } from "./classes.ts";
 import {
   checkMemberAccess,
@@ -331,9 +334,9 @@ export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: n
  * phase alike. It frees the closure cells no script can reach, then runs the
  * object pass, so a cell that only a dead cell named no longer keeps an object alive.
  */
-export function collectGarbage(vm: VmState): void {
-  collectCells(vm);
-  collectObjects(vm);
+export function collectGarbage(vm: VmState, roots: readonly unknown[] = []): void {
+  collectCells(vm, roots);
+  collectObjects(vm, roots);
 }
 
 /**
@@ -353,7 +356,7 @@ export function collectGarbage(vm: VmState): void {
  * holds a callable whose receiver was freed and a save taken after the pass
  * always loads (`restore.callable-receiver`).
  */
-function collectObjects(vm: VmState): void {
+function collectObjects(vm: VmState, roots: readonly unknown[]): void {
   if (vm.objects.length === 0) return;
   const reached = new Set<number>();
   const pending: number[] = [];
@@ -372,6 +375,7 @@ function collectObjects(vm: VmState): void {
     (_path, ref) => reach(typeof ref === "string" ? (parseObjectRef(ref)?.handle ?? null) : null),
   );
   for (const value of Object.values(vm.cells ?? {})) reachValue(value);
+  for (const root of roots) reachValue(root);
   for (const thread of vm.threads) {
     for (const frame of thread.frames) reach(frame.objectHandle ?? null);
   }
@@ -430,14 +434,16 @@ export function advanceScriptTick(
 ): ScriptStatus {
   runWaitsPhase(state.vm, state.time, poll);
   runThreadsPhase(state.vm, services, budget);
+  runEventsPhase(state, services, budget);
   assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
-  collectGarbage(state.vm);
-  return scriptStatus(state.vm);
+  collectStateGarbage(state);
+  return scriptStatus(state);
 }
 
-function scriptStatus(vm: VmState): ScriptStatus {
-  let running = false;
+function scriptStatus(state: GameState): ScriptStatus {
+  const { vm, events } = state;
+  let running = events.queue.length > 0 || events.dispatch !== null;
   let waiting = false;
   for (const thread of vm.threads) {
     if (thread.status === "ready") running = true;
@@ -576,6 +582,45 @@ function liveObject(vm: VmState, value: Value | undefined, pos: SourcePos, what:
   return record;
 }
 
+/** The events section a host-provided emitter method works on (EMIT-14). */
+function eventsOf(services: ScriptServices): EventsSection {
+  const state = services.view.state;
+  if (state === undefined) throw new ScriptError("emit.no-state", "the events section is not reachable");
+  return state.events;
+}
+
+/** Free an object by `release` or after its destructor, and drop its listeners with it (EMIT-14). */
+function releaseObject(vm: VmState, services: ScriptServices, handle: number): void {
+  vm.objects = vm.objects.filter((item) => item.handle !== handle);
+  const state = services.view.state;
+  if (state !== undefined) forgetEmitter(state.events, handle);
+}
+
+/**
+ * Whether reading `name` of `record` finds a host-provided method (OOP-12): an emitter method
+ * of every object, unless the object's own data field or its class's declaration has the name.
+ */
+function isHostMethod(program: Program, record: ObjectRecord, name: string): boolean {
+  if (!isEmitterMethod(name) || Object.hasOwn(record.members, name)) return false;
+  return isDictionary(record) || findMember(program, record.className, name) === undefined;
+}
+
+/** Run `emitter.on(...)`, `once`, `off` or `emit` (EMIT-2, EMIT-14): the call is done at once and returns `0`. */
+function callEmitterMethod(
+  vm: VmState,
+  services: ScriptServices,
+  frame: Frame,
+  record: ObjectRecord,
+  name: string,
+  args: Arg[],
+): CallOutcome {
+  const emitter: Value = { kind: "object", handle: record.handle, className: record.className };
+  applyEmitterOp(vm, eventsOf(services), name, emitter, args.map((arg) => arg.value));
+  frame.ip += 1;
+  frame.operands.push({ value: 0, ref: null });
+  return "continue";
+}
+
 /**
  * Call member `name` of `record` (OOP-10, "Calls through a name"; OOP-11): the one
  * path behind `obj->name(args)`, `obj.name(args)` and `a.b.name(args)`. An object
@@ -607,7 +652,7 @@ function invokeMember(
           objectClass: record.className, releaseHandle: record.handle,
         });
       } else {
-        vm.objects = vm.objects.filter((item) => item.handle !== record.handle);
+        releaseObject(vm, services, record.handle);
         frame.operands.push({ value: 0, ref: null });
       }
       return "continue";
@@ -626,9 +671,12 @@ function invokeMember(
       return "continue";
     }
     if (findMember(program, record.className, name) === undefined) {
+      if (isEmitterMethod(name)) return callEmitterMethod(vm, services, frame, record, name, args);
       throw new ScriptError("object.invalid", `method ${name} not found`, pos);
     }
     checkMemberAccess(program, record, name, frame.objectClass, pos);
+  } else if (isEmitterMethod(name) && !Object.hasOwn(record.members, name)) {
+    return callEmitterMethod(vm, services, frame, record, name, args);
   }
   const member = bindMemberValue(readMember(record, name), record.handle);
   if (!isCallableValue(member)) {
@@ -1267,9 +1315,15 @@ function performCallable(
 ): CallOutcome {
   const builtin = services.commands.builtin(value.def);
   if (builtin !== undefined) {
+    // A host-provided method read off an object carries it as the receiver; the command takes it first (EMIT-2).
+    const holder = value.receiver !== null && isEmitterMethod(value.def) ? findObject(vm, Number(value.receiver)) : undefined;
+    const given: Arg[] =
+      holder === undefined
+        ? args
+        : [{ value: { kind: "object", handle: holder.handle, className: holder.className }, ref: null }, ...args];
     return dispatchResolved(
       thread, vm, services, program, frame, frameIndex, value.def,
-      { kind: "command", command: builtin }, args, pos, true,
+      { kind: "command", command: builtin }, given, pos, true,
     );
   }
   const found = findDefinition(vm, services, program, value.def);
@@ -1494,6 +1548,15 @@ function dispatchResolved(
           message: String(effect.args?.[1] ?? ""),
           data: { file: pos.file, line: pos.line, thread: thread.id },
         });
+      }
+      if (action === "emitter") {
+        applyEmitterOp(
+          vm,
+          eventsOf(services),
+          effect.args?.[1] as string,
+          effect.args?.[2] as Value,
+          (effect.args?.slice(3) ?? []) as Value[],
+        );
       }
       if (action === "autoLocal") {
         frame.autoLocal = Boolean(effect.args?.[1]);
@@ -1950,6 +2013,15 @@ export function stepThread(
       case "get_member_bound": {
         const receiver = frame.operands.pop();
         const record = liveObject(vm, receiver?.value, op.pos, "member access requires a live object");
+        if (op.op === "get_member_bound" && isHostMethod(program, record, op.name)) {
+          // A host-provided method read without a call is a bound callable (OOP-11, OOP-12; EMIT-2).
+          frame.operands.push({
+            value: { type: "callable", def: op.name, captures: [], receiver: String(record.handle) },
+            ref: objectRef(record.handle, op.name),
+          });
+          frame.ip += 1;
+          break;
+        }
         checkMemberAccess(program, record, op.name, frame.objectClass, op.pos);
         const value = readMember(record, op.name);
         frame.operands.push({
@@ -2490,7 +2562,7 @@ export function stepThread(
         const poppedIndex = thread.frames.length - 1;
         thread.frames.pop();
         if (releaseHandle !== undefined) {
-          vm.objects = vm.objects.filter((item) => item.handle !== releaseHandle);
+          releaseObject(vm, services, releaseHandle);
         }
         if (thread.frames.length === 0) {
           thread.status = "finished";

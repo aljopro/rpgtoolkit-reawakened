@@ -204,17 +204,20 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
   // the cue counter, the script bank). Nothing else moved: hashing each final state with the placeholder put back
   // gives every previous value (60b9d135ecc2665c, c70da0e285468911, d1a2feea4d6699d3, 148143e8efdad422,
   // 91341281743ee68f, 1eda27c040030408, 4aead264e9d81fc0 and 249a5a6f76a4cb12).
+  // Re-pinned by ticket 19.10: the state tree gained the `events` section (empty here) and `schema.events`. Nothing else
+  // moved: hashing each final state without them gives every previous value (bcccb726d88cf025, c7276b9169328503,
+  // 9128c9fb95d1f969, a7e3084cbafc59c0, 2e8a007d7bae1d31, 6717598c0b7e163a, 69af004598505635 and eaef689c32b9ae98).
   const expectedHashes: Record<string, string> = {
-    "sample-start-demo": "bcccb726d88cf025",
-    "sample-system-demo": "c7276b9169328503",
-    "sample-sys-test-demo": "c7276b9169328503",
-    "sample-win-demo": "9128c9fb95d1f969",
-    "sample-oldman-demo": "a7e3084cbafc59c0",
-    "sample-man-demo": "2e8a007d7bae1d31",
-    "sample-man-wander-demo": "6717598c0b7e163a",
-    "sample-start-basic": "69af004598505635",
-    "sample-system-basic": "c7276b9169328503",
-    "sample-wander-basic": "eaef689c32b9ae98",
+    "sample-start-demo": "5912612833f63825",
+    "sample-system-demo": "a9310c5b6b715d03",
+    "sample-sys-test-demo": "a9310c5b6b715d03",
+    "sample-win-demo": "328fa1770626d169",
+    "sample-oldman-demo": "54b21d7b4206e1c0",
+    "sample-man-demo": "0e69036ee7e0b531",
+    "sample-man-wander-demo": "1afe10e47cde5e3a",
+    "sample-start-basic": "856ea439268e9e35",
+    "sample-system-basic": "a9310c5b6b715d03",
+    "sample-wander-basic": "6e9a893666deb7ba",
   };
 
   for (const res of results) {
@@ -237,7 +240,7 @@ test("corpus: defined finish line for programs that never end (Basic/Prg/wander.
   const hash2 = host2.stateHash();
 
   equal(hash1, hash2);
-  equal(hash1, "eaef689c32b9ae98");
+  equal(hash1, "6e9a893666deb7ba");
 
   for (let split = 0; split <= 5; split++) {
     const fresh = wander.createHost(0);
