@@ -3,7 +3,7 @@ title: "Spike: stock ATB tick and cancelable emits against STEP_BUDGET"
 type: 'feature'
 ticket: 2
 created: '2026-10-19'
-status: built
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "high"
 context:
