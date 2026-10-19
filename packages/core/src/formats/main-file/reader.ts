@@ -64,6 +64,13 @@ function parsePackageExtension(bytes: Uint8Array, path: string | undefined, base
   const packagePlugins: string[] = [];
   const seen = new Set<string>();
   for (let index = 0; index < count.value; index += 1) {
+    const nameStart = extension.offset;
+    const scanLimit = Math.min(extension.bytes.length, nameStart + MAIN_PACKAGE_MAX_BYTES + 1);
+    let nulAt = nameStart;
+    while (nulAt < scanLimit && extension.bytes[nulAt] !== 0) nulAt += 1;
+    if (nulAt === scanLimit && scanLimit - nameStart > MAIN_PACKAGE_MAX_BYTES) {
+      return fail(extension, baseOffset + nameStart, `TKR package name exceeds ${MAIN_PACKAGE_MAX_BYTES} bytes (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
+    }
     const name = located(extension.str());
     if (!name.ok) return name;
     if (name.value.includes("\0")) return fail(extension, baseOffset + extension.offset, "TKR package names must not contain NUL (docs/spec/formats/main-file.md#tkr-package-list-extension)");

@@ -500,6 +500,26 @@ test("TKR package extension rejects NUL names and reports malformed bytes at fil
   equal(result.ok, false);
   if (!result.ok) equal(result.error.offset, bytes.length - 4);
 });
+test("TKR package extension enforces independent count, empty, duplicate, and 255-byte boundaries", () => {
+  const legacy = readBuilt(buildGam(9));
+  const base = unwrap(writeMainFile(legacy));
+  const append = (count: number, names: readonly Uint8Array[]): Uint8Array => {
+    const tail = new Uint8Array(10 + names.reduce((sum, name) => sum + name.length + 1, 0));
+    tail.set([0x54, 0x4b, 0x52, 0x50, 0x4c, 0x55, 0x47, 0, count & 0xff, count >> 8]);
+    let at = 10;
+    for (const name of names) { tail.set(name, at); at += name.length; tail[at++] = 0; }
+    const out = new Uint8Array(base.length + tail.length);
+    out.set(base, 0);
+    out.set(tail, base.length);
+    return out;
+  };
+  equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(0)]))).ok, false);
+  equal(readMainFile(new BinaryReader(append(2, [new TextEncoder().encode("x")]))).ok, false);
+  equal(readMainFile(new BinaryReader(append(2, [new TextEncoder().encode("x"), new TextEncoder().encode("X")]))).ok, false);
+  equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(255).fill(0x61)]))).ok, true);
+  equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(256).fill(0x61)]))).ok, false);
+});
+
 
 
 // --- The writer refuses a model it cannot represent (AD-18) ------------------
