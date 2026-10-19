@@ -356,12 +356,6 @@
       "board": null,
       "diagnostics": [
         {
-          "code": "plugin.declined-network",
-          "file": "main/schoolsout2.gam",
-          "line": 0,
-          "message": "legacy plugin \"tkplug0\" is not supported (TK2 slot 0 (in TransChat2b: FTP plugin; unportable network); observed in 1 corpus programs)"
-        },
-        {
           "code": "asset.missing",
           "file": "main/schoolsout2.gam",
           "line": 0,
