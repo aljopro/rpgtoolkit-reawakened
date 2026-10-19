@@ -119,6 +119,38 @@ with this deed makes no warranties about the work, and disclaims liability for
 all uses of the work, to the fullest extent permitted by applicable law.
 ```
 
+### TK-16 authored General MIDI bank — CC0-1.0
+
+`media/soundfonts/TK-16.sf2` is the project's compact, Super NES-flavoured
+General MIDI bank (37,560 bytes, SHA-256
+`5419f02b0a9e63534b35332842e29decbc53c5352236be85b92cc87d0267f62a`). It is
+authored entirely from deterministic mathematical waveforms and contains no
+third-party or recorded samples. The 16 melodic programs and one percussion
+program are listed individually in
+`tools/licences/tk16-provenance.json`, including each generator, frequency,
+loop range and CC0-1.0 provenance. The bank is shipped as a candidate pending
+owner listening approval; it is not activated as the default by this entry.
+
+TK-16 is an authored General MIDI bank built entirely from deterministic mathematical waveforms; it contains no third-party samples.
+
+```
+CC0 1.0 Universal
+
+No Copyright
+
+The person who associated a work with this deed has dedicated the work to the
+public domain by waiving all of his or her rights to the work worldwide under
+copyright law, including all related and neighboring rights, to the extent
+allowed by law.
+
+You can copy, modify, distribute and perform the work, even for commercial
+purposes, all without asking permission.
+
+The work is provided without any warranties. The person who associated the work
+with this deed makes no warranties about the work, and disclaims liability for
+all uses of the work, to the fullest extent permitted by applicable law.
+```
+
 ### Liberation Fonts 2.1.5 — SIL Open Font License 1.1
 
 Bundled TrueType font files distributed with the engine as data assets under the asset-only exception approved in ADR 0003 (Decision 6):
