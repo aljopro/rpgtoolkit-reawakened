@@ -1,0 +1,58 @@
+name: "Contributor Task / Good First Issue"
+description: "A scoped task ready for community contributors to pick up."
+title: "[Task]: "
+labels: ["good first issue", "help wanted", "task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping build **RPG Toolkit Reawakened**!
+        Before starting, please make sure you've read [CONTRIBUTING.md](https://github.com/tk-reawakened/rpgtoolkit-reawakened/blob/main/CONTRIBUTING.md) and [docs/guardrails.md](https://github.com/tk-reawakened/rpgtoolkit-reawakened/blob/main/docs/guardrails.md).
+  - type: textarea
+    id: summary
+    attributes:
+      label: Task Summary
+      description: What needs to be implemented or improved?
+      placeholder: Describe the goal in clear, concrete terms.
+    validations:
+      required: true
+  - type: textarea
+    id: spec-citations
+    attributes:
+      label: Normative Specification Citation
+      description: What section of `docs/spec/` or `docs/editor-features.md` defines this behavior? (Rule G7)
+      placeholder: e.g. docs/spec/engine/rpgcode-language.md#string-literals or T-xx ID
+    validations:
+      required: false
+  - type: textarea
+    id: starting-point
+    attributes:
+      label: Starting Point & Key Files
+      description: Where in the codebase does this change take place?
+      placeholder: |
+        - Relevant package: `packages/core/...`
+        - Key files to look at:
+        - Relevant test suite: `packages/core/test/...`
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Observable conditions that must pass for this task to be considered complete.
+      placeholder: |
+        - [ ] Behavior X works as specified
+        - [ ] Unit tests pass: `node --test packages/core/test/...`
+        - [ ] CI gates pass: `pnpm build && pnpm typecheck && pnpm lint && pnpm test`
+    validations:
+      required: true
+  - type: checkboxes
+    id: guardrails
+    attributes:
+      label: Guard-Rails Confirmation
+      description: Confirm that this task adheres to project binding constraints.
+      options:
+        - label: "**G7 (Clean-room)**: Work strictly from `docs/`. Never consult, copy, or translate legacy GPL source code."
+          required: true
+        - label: "**G2/G3 (Deterministic Core)**: No DOM/Node/timers in `core`, no non-deterministic math (`Math.random`, `Date`)."
+          required: false

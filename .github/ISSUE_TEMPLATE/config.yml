@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Roadmap & Project Board"
+    url: "https://github.com/orgs/tk-reawakened/projects/3"
+    about: "View current epics, in-flight work, and contributor tasks."
+  - name: "Contributing Guide"
+    url: "https://github.com/tk-reawakened/rpgtoolkit-reawakened/blob/main/CONTRIBUTING.md"
+    about: "Read setup instructions, clean-room rules (G7), and pull request requirements."

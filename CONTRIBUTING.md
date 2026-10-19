@@ -6,7 +6,7 @@ The short version:
 
 1. Read [AGENTS.md](AGENTS.md) and [docs/guardrails.md](docs/guardrails.md). Seven rules (G1 to G7) apply to every change, and CI checks them.
 2. Set up, then run the first-run check below so you know your machine works.
-3. Pick a ticket (or file an issue), and say you are on it.
+3. Pick an issue from the [Project Board](https://github.com/orgs/tk-reawakened/projects/3) (look for `good first issue` or `help wanted`), and comment to claim it.
 4. Work in your own git worktree, from the docs, with tests.
 5. Run the checks, open a pull request with the template filled in, and get an independent review.
 
@@ -20,7 +20,7 @@ Toolkit 3.1 behaviour is a compatibility layer, not the model ([ADR 0009](docs/a
 
 - **Report a bug or ask a question.** Open an issue at <https://github.com/tk-reawakened/rpgtoolkit-reawakened/issues>. Say what you did, what you expected, what happened, and the exact commands and versions (`node -v`, `pnpm -v`). Never paste credentials or legacy source code.
 - **Fix or extend the specification.** [docs/spec/](docs/spec/README.md) is the normative description of what Toolkit 3.1 does ([ADR 0007](docs/adr/0007-docs-spec-is-the-normative-specification.md)). A wrong or missing spec page is a documentation pull request, and it lands before the code that depends on it (G7).
-- **Write code or tests.** Pick a ticket (see "Pick and claim a ticket").
+- **Write code or tests.** Pick an issue from the [GitHub Project board](https://github.com/orgs/tk-reawakened/projects/3) or issues list (see "Pick and claim an issue").
 - **Review.** Read someone else's pull request against the checklist in [.github/pull_request_template.md](.github/pull_request_template.md) and run its checks. See "Open the pull request, review and merge".
 
 Code and contributions are licensed under the [MIT license](LICENSE).
@@ -110,37 +110,33 @@ Outside `packages/`: `docs/` (spec, ADRs, guard-rails), `tools/` (the checks and
 
 The editor, its hosts (`editor-ui`, `host-vscode`, `host-web`, `host-desktop`), the language and debug servers and a web runner are **planned** and do not exist in this repository yet. The dependency direction they must follow is in G2.
 
-## Pick and claim a ticket
+## Pick and claim an issue
 
-Planned work is tracked as files in this repository (the BMad "repo store"), under `_bmad-output/initiative-rpgtoolkit-reawakened/`. The initiative is described in [initiative-rpgtoolkit-reawakened.md](_bmad-output/initiative-rpgtoolkit-reawakened/initiative-rpgtoolkit-reawakened.md). Each epic is a folder with a `tickets.toml` (its tickets in build order, each with a stable id and an `after` list of prerequisites) and one `*-plan.md` per started ticket, whose `status` says where it stands. A ticket is named `<epic id>.<entry id>`, for example `19.5`.
+All tasks and contributor opportunities go through **GitHub Issues** and the **[RPG Toolkit Reawakened Roadmap & Tasks Project Board](https://github.com/orgs/tk-reawakened/projects/3)**.
 
-You do not need an AI agent or BMad installation to contribute:
+### Finding work to do
 
-1. Open the initiative's `tickets.toml` to find an epic and its id, then that epic's `tickets.toml` to find a ticket. Read the epic's description and the ticket's `description`, `verify`, `references` and `after` prerequisites.
-2. Read its story file when one exists, and its `*-plan.md` for progress. A ticket with no plan has not been started in the store; still check open branches and pull requests before claiming it.
-3. Plans with `in-progress` or `blocked` are already being worked on. `in-review` or `built` means implementation is awaiting acceptance; `done` means accepted. Do not infer that a review happened from the status alone: read the review evidence.
-4. Agree the scope with the maintainer through an issue or draft pull request. For a code change, record the implementation plan, acceptance criteria and verification evidence alongside the ticket. Keep its plan status current; the maintainer or orchestrator marks it `done` after acceptance.
+1. Check the [Project Board](https://github.com/orgs/tk-reawakened/projects/3) for cards in **Ready for Dev** or **Backlog**.
+2. Check the [Issues tab](https://github.com/tk-reawakened/rpgtoolkit-reawakened/issues) filtered by [`good first issue`](https://github.com/tk-reawakened/rpgtoolkit-reawakened/labels/good%20first%20issue) or [`help wanted`](https://github.com/tk-reawakened/rpgtoolkit-reawakened/labels/help%20wanted) for tasks scoped for newcomers.
+3. Each issue describes the goal, key files, spec citations (`docs/spec/...#anchor`), acceptance criteria, and clean-room requirements (G7).
 
-If you already use the **external `bmad-ticket` skill**, its `scripts/tickets.py` computes readiness from dependencies, statuses and checkpoints. It is not shipped in this repository. Replace `/path/to/bmad-ticket` below with your installed skill directory; these optional commands require `uv`:
+### Claiming an issue
 
-```sh
-uv run /path/to/bmad-ticket/scripts/tickets.py --project-root . next initiative-rpgtoolkit-reawakened
-uv run /path/to/bmad-ticket/scripts/tickets.py --project-root . find initiative-rpgtoolkit-reawakened 19.5
-uv run /path/to/bmad-ticket/scripts/tickets.py --project-root . --help
-```
+Before starting work on an issue:
 
-Name the initiative explicitly. The optional active-initiative setting lives in a git-ignored `_bmad/custom/config.user.toml` that fresh clones and worktrees do not have; copying someone else's personal configuration is not required.
+1. Check that nobody is already working on it (check the issue assignees, comments, and open pull requests: `gh pr list`).
+2. Leave a comment on the issue saying you would like to take it so others know it is claimed.
+3. Work in your own git worktree (see "Work in a worktree" below).
+4. Name branches `<type>/<issue-or-ticket-id>-<short-name>` (e.g. `feat/19-5-class-dictionaries`, `fix/42-string-escape`).
+5. Link the issue in your pull request description using GitHub syntax (`Fixes #<number>` or `Closes #<number>`) so the project board updates automatically when merged.
 
-Before you take a ticket:
+If no existing issue covers what you want to build or fix, open a new issue using one of the templates ([Bug Report](https://github.com/tk-reawakened/rpgtoolkit-reawakened/issues/new?template=bug_report.yml), [Implementation Task](https://github.com/tk-reawakened/rpgtoolkit-reawakened/issues/new?template=task.yml), or [Feature Request](https://github.com/tk-reawakened/rpgtoolkit-reawakened/issues/new?template=feature_request.yml)).
 
-1. Run `git fetch origin`, then check that nobody already has it: `git branch -r`, `git worktree list`, and the open pull requests (`gh pr list`). A ticket can look ready on `main` while a branch for it is still in flight.
-2. Read the ticket, its epic, and the spec pages it cites.
-3. Check for `hitl = true` or a plan or done checkpoint on the ticket. Those need the owner's approval at a set point, so ask first.
-4. Say you are on it: comment on an issue, or open a draft pull request early that names the ticket id.
+### Planning background (BMAD)
 
-No ticket fits what you want to do? Open an issue describing it, so it can be sized and put in the right epic.
+Project maintainers plan large epics, architecture spikes, and initiative roadmaps using BMAD in `_bmad-output/initiative-rpgtoolkit-reawakened/`. Those epics and stories are exported into GitHub Issues and mapped to the Project Board.
 
-Name branches `<type>/<ticket>-<short-name>`, with the types used in recent history: `feat`, `fix`, `docs`, `test`, `chore` (for example `feat/19-5-class-dictionaries`). Commit subjects follow the same `type(scope): subject` style, for example `docs(spec): ...`. Cite the spec pages you implement in commits and pull requests.
+Contributors never need to install or run BMAD tooling—all task acceptance criteria and spec references are included directly in the GitHub Issue. If you are a maintainer or working on the initiative planning spine directly, see [initiative-rpgtoolkit-reawakened.md](_bmad-output/initiative-rpgtoolkit-reawakened/initiative-rpgtoolkit-reawakened.md) and `_bmad-output/`.
 
 ## Doing the work
 

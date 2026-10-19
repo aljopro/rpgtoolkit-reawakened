@@ -1,0 +1,61 @@
+name: "Implementation Task / Story"
+description: "A planned story, feature, or refactor task."
+title: "[Task]: "
+labels: ["task"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal & Context
+      description: What are we building and why?
+    validations:
+      required: true
+  - type: input
+    id: bmad-ref
+    attributes:
+      label: BMAD Reference / Story ID
+      description: If this task comes from a BMAD epic or ticket breakdown, provide the ID or path.
+      placeholder: e.g. 19.6 or epic-rpgcode-platform
+    validations:
+      required: false
+  - type: textarea
+    id: spec
+    attributes:
+      label: Specification Citations
+      description: Cite the `docs/spec/...#anchor` sections or capability IDs.
+      placeholder: docs/spec/...
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Observable conditions for completion.
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "area:core"
+        - "area:editor-ui"
+        - "area:formats"
+        - "area:synth"
+        - "area:docs"
+        - "area:tooling"
+    validations:
+      required: true
+  - type: checkboxes
+    id: guardrails
+    attributes:
+      label: Guard-Rails (docs/guardrails.md)
+      options:
+        - label: "**G7 Clean-Room**: Implemented from `docs/` only. No legacy GPL source consulted."
+          required: true
+        - label: "**G1 Step-Machine**: Script VM state remains plain JSON data."
+          required: false
+        - label: "**G2/G3 Core Boundaries**: `core` touches no I/O, DOM, Node, or non-deterministic APIs."
+          required: false
