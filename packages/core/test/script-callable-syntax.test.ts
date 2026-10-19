@@ -144,7 +144,7 @@ test("lowers lambdas to deterministic function handles and dynamic calls to expl
     { op: "push", value: 1, pos: { file: "<inline>", line: 1 } },
     { op: "call", name: "f", argc: 1, pos: { file: "<inline>", line: 1 } },
     { op: "push", value: 2, pos: { file: "<inline>", line: 1 } },
-    { op: "call_indirect", target: 0, argc: 1, pos: { file: "<inline>", line: 1 } },
+    { op: "call_indirect", argc: 1, pos: { file: "<inline>", line: 1 } },
     { op: "pop", pos: { file: "<inline>", line: 1 } },
     { op: "return", pos: { file: "<inline>", line: 1 } },
   ]);

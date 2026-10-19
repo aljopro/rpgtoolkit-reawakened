@@ -18,7 +18,7 @@ Emit bytecode instructions capable of performing indirect calls through function
 AST lowering and IR opcode definitions only. Does not modify the VM execution loop.
 
 ## Key Decisions
-Introduce load_fn and call_indirect IR opcodes with explicit operand indices and argument counts.
+Introduce load_fn and call_indirect IR opcodes as in ADR 0004 decision 8: `load_fn { def, captures }` pushes a callable, and `call_indirect { argc }` calls the callable pushed below its `argc` arguments (no operand index). Lambdas lower with an empty `captures` list; resolving captured variables to cells is owned by 18.4.
 
 ## Acceptance
 Bytecode generation produces deterministic IR for all dynamic call patterns.
