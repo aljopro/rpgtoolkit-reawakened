@@ -24,6 +24,8 @@ const RESTARTS: readonly Restart[] = [
   { scene: "settings-versus-save", name: "save-and-load-restore-playback-not-settings", at: 14 },
   { scene: "soundfont-setting", name: "load-reemits-the-saved-bank-first", at: 5 },
   { scene: "battle-music-handoff", name: "battle-music-then-return", at: 8 },
+  { scene: "fades", name: "linear-half-up", at: 4 },
+  { scene: "media-wait-suspend", name: "wait-wakes-on-the-end-tick", at: 6 },
 ];
 
 /** A row with the cue ids removed: ids move by the cues a restart emits, nothing else may. */

@@ -61,16 +61,19 @@ function loadedEngine(registrations: Parameters<typeof createEngine>[0]["phaseRe
   return engine;
 }
 
-test("engine runs the fixed phase order, caps catch-up, and pauses on focus loss", () => {
+test("engine runs the fixed phase order, registers audio after animation, and pauses on focus loss", () => {
   deepEqual(ENGINE_PHASES, ["input", "waits", "threads", "movement", "edges", "triggers", "battle", "animation", "audio", "time"]);
   const phases: string[] = [];
-  const engine = loadedEngine([{ phase: "movement", run: (state) => phases.push(`movement:${state.time.tick}`) }]);
+  const engine = loadedEngine([
+    { phase: "movement", run: (state) => phases.push(`movement:${state.time.tick}`) },
+    { phase: "audio", run: (state) => phases.push(`audio:${state.time.tick}`) },
+  ]);
   const paused = engine.advance(2, [{ tick: 0, event: { kind: "focus", state: "lost" } }]);
   equal(paused.ticksRun, 0);
   const resumed = engine.advance(60, [{ tick: 0, event: { kind: "focus", state: "gained" } }], 2);
   equal(resumed.ticksRun, 2);
   equal(resumed.tickAfter, 2);
-  deepEqual(phases, ["movement:0", "movement:1"]);
+  deepEqual(phases, ["movement:0", "audio:0", "movement:1", "audio:1"]);
 });
 
 test("batching the same stamped input log produces the same state hash", () => {
