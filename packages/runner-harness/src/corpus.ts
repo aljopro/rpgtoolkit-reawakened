@@ -14,6 +14,7 @@ import {
   PACKAGE_ROOT,
   utf8Encode,
   CORE_PLUGIN,
+  MEDIA_PLUGIN,
   CATALOGUE_PLUGIN,
   WORLD_PLUGIN,
   type AssetKey,
@@ -1041,6 +1042,7 @@ export function verifyCatalogueCompleteness(
   const state = createGameState({ seed: 0 });
   const plugins = [
     { definition: CORE_PLUGIN },
+    { definition: MEDIA_PLUGIN },
     { definition: CATALOGUE_PLUGIN },
     { definition: WORLD_PLUGIN },
     { definition: TK2_COMPAT_PLUGIN },
