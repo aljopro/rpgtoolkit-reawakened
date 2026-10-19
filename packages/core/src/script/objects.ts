@@ -63,8 +63,9 @@ export function createObject(
  * Make an instance of the class `className` that `program` declares (OOP-10):
  * every field of the class and its ancestors is a member, set to the unset value
  * `0`, in the order `declaredMembers` gives. A fixed array `m[10]` contributes
- * the elements `m[0]` to `m[9]`; a growable `var m[]` contributes none until an
- * element is written.
+ * the elements `m[0]` to `m[9]`; a growable `var m[]` is declared like a plain
+ * field (its `arraySize` is `null`), so it contributes the one member `m` and its
+ * elements join the object as they are first written.
  */
 export function instantiate(
   vm: Pick<VmState, "objects">,
