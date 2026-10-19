@@ -1,0 +1,67 @@
+---
+type: epic
+title: "Actors: one data model for party members, enemies and NPCs, with behaviours and stock packages"
+parent: initiative-rpgtoolkit-reawakened
+covers: ["CAP-3", "CAP-9", "CAP-10", "CAP-11"]
+assignee: ""
+risk: high
+---
+
+# Actors: one data model for party members, enemies and NPCs, with behaviours and stock packages
+
+## Description
+
+One actor model for everything that has stats and a life in the game: party members, enemies, NPCs and board sprites. Core owns the actor DATA and the interpretation rules that hold for any game (fallen, status countdown, equipment bonuses, level-up default). Everything specific to one battle implementation is RPGCode in a package. Behaviours let a package override a default; actors save data and a behaviour name only, and behaviours are re-attached by name when a save loads. The epic also scaffolds the two stock packages, `stock-battle` and `stock-menu`, and the `.gam` plugins mapping that names them.
+
+## Outcome
+
+A game's party, enemies and NPCs are one plain-data actor model. A Zelda-style game with 12 hearts and an FF-style game with 9999 HP are two battle scripts over the same actors. A save holds only data and behaviour names, so it cannot go stale against new package code, and a missing package gives core defaults and a diagnostic rather than a refused load. The stock packages exist as real packages for Epics 7 and 8 to fill.
+
+## Done when
+
+1. The actor model inventory (every stat and state of character, enemy, item, status and NPC/board sprite, with source field, type, writer, rule owner and evidence) is written in docs/spec and approved.
+2. Party members, enemies, NPCs and board sprites are plain-data actors in one owned section, loaded from the legacy data, readable and writable from RPGCode through the owner.
+3. The core rules fallen (default HP <= 0), status countdown (`advanceStatus(n)`), equipment bonuses and level-up default work from data and are hooks with core defaults.
+4. A package registers named behaviours that override the hooks; an actor carries only the behaviour name.
+5. Saves hold actor data and behaviour names only (no callables); load re-attaches behaviours by name; a missing behaviour gives the core default and a diagnostic, never a refused load.
+6. Actors, boards and the game emit the ruled events through Epic 19's emitters, and stock actor code re-emits `fallen` on the game.
+7. `stock-battle` and `stock-menu` exist as loadable packages; new-project templates list them in `.gam` plugins; legacy `tk3fight.dll` and `tk3menu.dll` map in memory to them.
+8. Two authored battle scripts (12 hearts, 9999 HP) run over the same actor model with a save mid-fight, pinned in goldens; every legacy golden is unchanged.
+
+## Boundaries
+
+Core actor data, its interpretation rules, loading, hydration, save section and script exposure; the two stock package shells; the `.gam` mapping as core data. Does not include ATB, damage formulas, AI levels or battle UI (Epic 7, the stock battle package), menu screens and inventory rules (Epic 8), or the editor's save action. Movement, collision and triggers of board sprites stay Epic 5's observable behaviour.
+
+## References
+
+- spec - `_bmad-output/initiative-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened/spec-rpgtoolkit-reawakened.md`, section Capabilities (CAP-3, CAP-9, CAP-10, CAP-11)
+- spine - `_bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md`, AD-10, AD-26, AD-32
+- constraint - `docs/guardrails.md`, G1, G2, G3, G7
+- reference - `docs/spec/engine/plugins-and-battle.md#e-72` to E-79, E-85, E-99; `docs/spec/formats/character.md`, `enemy.md`, `item.md`, `battle-data.md`, `main-file.md`
+- discovery - `discovery/inception-proposal.md`, `discovery/actor-readiness.md`; `epic-battle/discovery/all-rpgcode-battle-architecture.md`
+- owner decisions - the 2026-10-19 party session (all recorded in Notes)
+
+## Notes
+
+- Decision: Jensen, 2026-10-19: new epic 20, "Actors": the actor model inventory; actors cover party members, NPCs and enemies (board sprites included); behaviours and hydration; the stock packages `stock-battle` and `stock-menu`.
+- Decision: Jensen, 2026-10-19: Epic 7 (epic-battle) becomes "the stock battle package", built on Epics 19 and 20: ATB loop, damage, AI levels and battle UI all in RPGCode. Its envelope is annotated, and its initiative `after` adds 19 and 20. Epic 7's breakdown is a later inception.
+- Decision: Jensen, 2026-10-19: boundary (supersedes the narrower reading of the 2026-10-18 all-RPGCode note; aligns with E-79 "rules in core, battle systems drive core ops"): core owns actor DATA and its INTERPRETATION rules that hold for any game: fallen (default HP <= 0), status-effect lifetime as a countdown (`advanceStatus(n)`; the battle script decides when a "round" passes: per action or turn in FF-style, by time or hits in Zelda-style), equipment bonuses, level-up default from data.
+- Decision: Jensen, 2026-10-19: everything specific to a particular battle implementation is RPGCode in the stock battle package: ATB charge (+3 per tick, 75 and 123), damage formulas, AI levels 0 to 3, UI. A Zelda-style real-time game with 12 hearts and an FF-style game with 9999 HP are two battle scripts over the same actor model.
+- Decision: Jensen, 2026-10-19: the 3.1 `.ste` "each round while charged" semantics live in the stock battle, not core.
+- Decision: Jensen, 2026-10-19: pattern: data gives default behaviour; a behaviour overrides it (fallen, level-up and damage-taken are actor hooks with core defaults).
+- Decision: Jensen, 2026-10-19: saves: actors save DATA only (stats, status counters, a behaviour NAME such as `behaviour: "stock-rpg/hero"`). Never callables on actors.
+- Decision: Jensen, 2026-10-19: on load, behaviours are hydrated by name from installed packages ("a service that takes the actor"); a missing behaviour gives the core default plus a diagnostic, never a refused load. Package version governs code; saves cannot go stale against new code.
+- Decision: Jensen, 2026-10-19: script closures (threads parked mid-wait, locals) remain saved per 18.6; script state is the only place callables are saved.
+- Decision: Jensen, 2026-10-19: legacy: new project templates list `stock-battle` and `stock-menu` in `.gam` plugins (".gam is the csproj of the toolkit"). Legacy `fightPlugin = tk3fight.dll` and `menuPlugin = tk3menu.dll` map in memory to the stock packages and are written to the file explicitly only when saved from the editor.
+- Decision: Jensen, 2026-10-19: the actor model inventory is an early entry (20.2) that other entries depend on: a table of every stat and state for character .tem, enemy .ene, item .itm, status .ste and NPC/board sprites with source field, type, who may write, core-rule versus battle-rule and evidence.
+- Decision: Jensen, 2026-10-19: if the 19.2 spike shows the stock ATB tick or cancelable emits do not fit `STEP_BUDGET`, this epic's design changes; 20.1 applies the result.
+- Source conflict: AD-10 (spine) - "Character stats have one owner: `vm.globals` behind `StatsPort` (E-85)" vs the actor model owning stats and AD-32's Unified Actor 'Stats Container'. 20.1 settles which owns what; 20.3 stays `refined: false` until it does.
+- Source conflict: AD-26 (spine) - the tick pipeline has a `battle` phase for `core/battle` vs rules living in a package. Flagged for Epic 7's inception; this epic changes nothing in the phase list.
+- Source conflict: epic-battle Done when 1 to 4 (core formulas, AI levels in core) vs the boundary above. Epic 7's envelope is annotated; its Done when is re-sliced at its own inception.
+- Assumption A-1 (to confirm): stats ownership. Taken: the actor section owns actor stats and the existing StatsPort and `vm.globals` character variables become a view the owner writes through, so legacy scripts that read `HP` see the actor; the alternative is to keep `vm.globals` as the owner and make actors a view of it.
+- Assumption A-2 (to confirm): package distribution form (project folder versus zip) and how packages reach the editor are undecided. Taken: the stock packages are authored `.prg` source under a repo `stock/` folder, referenced by name from `.gam`; hosts bundle them. Exact emitter API names are Epic 19's A-2.
+- Assumption A-3 (to confirm): whether party or battle need to be built-in emitters (same open item as Epic 19's A-3). Taken: no.
+- Assumption A-4 (to confirm): level-up default and `experienceIncrease` (R-16) follow the single rule 20.1 chooses; Epic 7 inherits it.
+- Sequenced: after 19.1 and the 19.2 spike for 20.1; the inventory (20.2) then feeds every other entry; lane A core/actors (20.3, 20.5, 20.6, 20.7, 20.8, 20.10), lane B script bindings (20.4), lane C packages and `.gam` (20.11, 20.12).
+- Handoff: Epic 7 builds the stock battle in `stock-battle` over this model; Epic 8 builds menu, party and inventory in `stock-menu` and the party save section over it; Epic 9 consumes both via the manifest.
+- Handoff: new-project templates (20.12) are core data; the editor epics (11, 12) consume them and own the explicit-write-on-save action.
