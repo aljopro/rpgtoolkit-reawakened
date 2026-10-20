@@ -4,6 +4,8 @@
 
 This folder captures Jensen's design discussion and extends it through task walkthroughs: **what does someone actually do when they want to make a village, a door, a hero, a fight or animated water?** Complete authoring capability stays the goal. Common tasks get short paths; specialist work remains available.
 
+**Broader discovery map:** the [creator scenario inventory](creator-scenario-inventory.md) explores 54 situations across creator intents, working methods, project stages and recovery needs. It reconciles the [experience bank](../../../docs/editor-experience-bank.md), these studies and current planning, with evidence and uncertainty attached. It is a discovery draft—not a golden path, UI specification, priority list or feature commitment.
+
 ## Read by the job
 
 | I want to… | Study |
