@@ -11,7 +11,7 @@ risk: high
 
 ## Description
 
-One actor model for everything that has stats and a life in the game: party members, enemies, NPCs and board sprites. Core owns the actor DATA and the interpretation rules that hold for any game (fallen, status countdown, equipment bonuses, level-up default). Everything specific to one battle implementation is RPGCode in a package. Behaviours let a package override a default; actors save data and a behaviour name only, and behaviours are re-attached by name when a save loads. The epic also scaffolds the two stock packages, `stock_battle` and `stock_menu`, and the `.gam` plugins mapping that names them.
+One actor model for everything that has stats and a life in the game: party members, enemies and NPCs. Board sprites are a separate section whose records may reference an actor. Core owns the actor DATA and the interpretation rules that hold for any game (fallen, status countdown, equipment bonuses, level-up default). Everything specific to one battle implementation is RPGCode in a package. Behaviours let a package override a default; actors save data and a behaviour name only, and behaviours are re-attached by name when a save loads. The epic also scaffolds the two stock packages, `stock-battle` and `stock-menu`, and the `.gam` plugins mapping that names them.
 
 ## Outcome
 
@@ -24,8 +24,8 @@ A game's party, enemies and NPCs are one plain-data actor model. A Zelda-style g
 3. The core rules fallen (default HP <= 0), status countdown (`advanceStatus(n)`), equipment bonuses and level-up default work from data and are hooks with core defaults.
 4. A package registers named behaviours that override the hooks; an actor carries only the behaviour name.
 5. Saves hold actor data and behaviour names only (no callables); load re-attaches behaviours by name; a missing behaviour gives the core default and a diagnostic, never a refused load.
-6. Actors, boards and the game emit the ruled events through Epic 19's emitters, and stock actor code re-emits `stock_rpg.fallen` on the game.
-7. `stock_battle` and `stock_menu` exist as loadable packages; new-project templates list them in `.gam` plugins; legacy `tk3fight.dll` and `tk3menu.dll` map in memory to them.
+6. Actors, boards and the game emit the ruled events through Epic 19's emitters, and stock actor code re-emits `stock-rpg.fallen` on the game.
+7. `stock-battle` and `stock-menu` exist as loadable packages; new-project templates list them in `.gam` plugins; legacy `tk3fight.dll` and `tk3menu.dll` map in memory to them.
 8. Two authored battle scripts (12 hearts, 9999 HP) run over the same actor model with a save mid-fight, pinned in goldens; every legacy golden is unchanged.
 
 ## Boundaries
