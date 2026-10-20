@@ -37,6 +37,8 @@ type GameSpec = {
   readonly programs: Readonly<Record<string, string>>;
   readonly fonts?: Readonly<Record<string, Uint8Array>>;
   readonly plugins?: readonly string[];
+  /** The TKR package names of the main file's package-list extension, in order. */
+  readonly packages?: readonly string[];
   /** Lay the game out as a game folder (`Main/` plus `Game/<project>/`) instead of a package. */
   readonly project?: string;
 };
@@ -89,6 +91,7 @@ function authorGame(spec: GameSpec): AuthoredGame {
     initBoard: spec.initBoard ?? "start.brd",
     initChar: spec.initChar ?? "",
     plugins: (spec.plugins ?? []).map((pluginFile) => ({ enabled: 0, pluginFile })),
+    ...(spec.packages === undefined ? {} : { packagePlugins: spec.packages }),
   };
   files.set(assetKey(mainPath), unwrap(writeMainFile(main)));
   for (const [name, board] of Object.entries(spec.boards)) add(`Boards/${name}`, boardBytes(board));
@@ -285,6 +288,14 @@ test("a main file's legacy plugin rows remain data and do not map to the manifes
   const game = authorGame({ ...SCRIPTED, plugins: ["no-such-plugin.dll"] });
   const result = run(bootEngine(game, makeDoubles()), game.files, 10);
   equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved" && diagnostic.message.includes("no-such-plugin.dll")), false);
+});
+
+test("the main file's package names feed the manifest in stored order, and a name with no definition is a located diagnostic", () => {
+  const game = authorGame({ ...SCRIPTED, plugins: ["no-such-plugin.dll"], packages: ["weather", "quests"] });
+  const result = run(bootEngine(game, makeDoubles()), game.files, 10);
+  const unresolved = result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin.unresolved");
+  deepEqual(unresolved.map((diagnostic) => diagnostic.message.includes("weather") ? "weather" : diagnostic.message.includes("quests") ? "quests" : "other"), ["weather", "quests"]);
+  equal(unresolved.every((diagnostic) => diagnostic.file === game.main), true);
 });
 
 test("a game-folder root takes its project path from the main file", () => {

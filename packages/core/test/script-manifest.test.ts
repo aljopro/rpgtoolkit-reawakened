@@ -4,6 +4,7 @@ import {
   applyPluginManifestPatch,
   assembleCommands,
   ENGINE_DEFAULT_MANIFEST,
+  ENGINE_PLUGIN_TABLE,
   HOST_REQUEST_KINDS,
   isPackageManifestEntry,
   listPackageDeclarations,
@@ -33,6 +34,11 @@ test("the default manifest is core and catalogue followed by owner/native packs"
     "kaimu",
     "twbutton",
   ]);
+});
+
+test("the one engine table holds exactly the default manifest's ids, each under its own id", () => {
+  deepEqual(Object.keys(ENGINE_PLUGIN_TABLE), ENGINE_DEFAULT_MANIFEST.map((entry) => entry.id));
+  for (const [id, definition] of Object.entries(ENGINE_PLUGIN_TABLE)) equal(definition.id, id);
 });
 
 test("manifest patch applies append, disable, replace and remove by id", () => {

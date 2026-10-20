@@ -48,7 +48,7 @@ import { clearPathfindingCache } from "../sprites/pathfinding.ts";
 import { runRandomEncounterPhase } from "../sprites/encounters.ts";
 import { EffectBus, type EffectApplier, type PostEffect } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
-import type { EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
+import type { EnginePhase, EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
 import {
   COMPILER_VERSION,
@@ -94,8 +94,15 @@ export const ENGINE_PHASES = [
   "animation",
   "audio",
   "time",
-] as const;
-export type EnginePhase = (typeof ENGINE_PHASES)[number];
+] as const satisfies readonly EnginePhase[];
+
+// Compile-time exhaustiveness: the saved `EnginePhase` union (the `engine` section's `phase`) and this list are
+// one set, so a phase added to one must be added to the other.
+type _MissingPhases = Exclude<EnginePhase, (typeof ENGINE_PHASES)[number]>;
+const _phasesAreExhaustive: [_MissingPhases] extends [never] ? true : never = true;
+void _phasesAreExhaustive;
+
+export type { EnginePhase };
 
 export type EnginePhaseRegistration = {
   readonly phase: EnginePhase;

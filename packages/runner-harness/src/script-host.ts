@@ -18,10 +18,7 @@ import {
   advanceScriptTick,
   applyPluginManifestPatch,
   parsePluginManifest,
-  CORE_PLUGIN,
-  MEDIA_PLUGIN,
-  CATALOGUE_PLUGIN,
-  NATIVE_PACK_TABLE,
+  ENGINE_PLUGIN_TABLE,
   createLogger,
   createScriptServices,
   createGameState,
@@ -113,13 +110,7 @@ function resolveHostPlugins(
   patch: PluginManifestPatch | undefined,
   definitions: readonly PluginDefinition[] | undefined,
 ): HostResolution {
-  const table: Record<string, PluginDefinition> = {
-    core: CORE_PLUGIN,
-    media: MEDIA_PLUGIN,
-    catalogue: CATALOGUE_PLUGIN,
-    tk2: TK2_COMPAT_PLUGIN,
-    ...NATIVE_PACK_TABLE,
-  };
+  const table: Record<string, PluginDefinition> = { ...ENGINE_PLUGIN_TABLE, tk2: TK2_COMPAT_PLUGIN };
   if (definitions !== undefined) {
     for (const definition of definitions) {
       if (definition.id !== "core") table[definition.id] = definition;

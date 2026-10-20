@@ -14,9 +14,6 @@
 
 import type { CallableValue } from "../ports/value.ts";
 
-/** The saved version of the `events` section (AD-23); the section appeared at 1. */
-export const EVENTS_SCHEMA_VERSION = 1;
-
 /**
  * One registered listener. `emitter` is the key of the emitter it listens on
  * (`object:<handle>`, or the key of a built-in emitter, EMIT-20); `id` is distinct
