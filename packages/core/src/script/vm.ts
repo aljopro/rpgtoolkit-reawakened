@@ -38,7 +38,7 @@ import { NULL_LOGGER } from "./logging.ts";
 import { ENGINE_DEFAULT_MANIFEST, foldNamespace } from "./manifest.ts";
 import { collectCells, eachLiveRoot, recordOwner } from "./cells.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
-import { applyEmitterOp, forgetEmitter, isEmitterMethod } from "../events/emitter.ts";
+import { applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef } from "../events/emitter.ts";
 import type { EventsSection } from "../events/model.ts";
 import { classInfo, findMember, findMethod } from "./classes.ts";
 import {
@@ -437,7 +437,7 @@ export function advanceScriptTick(
   budget: number = STEP_BUDGET,
   poll: WaitPoll = defaultWaitPoll,
 ): ScriptStatus {
-  runWaitsPhase(state.vm, state.time, poll);
+  runWaitsPhase(state.vm, { tick: state.time.tick, events: state.events }, poll);
   runThreadsPhase(state.vm, services, budget);
   runEventsPhase(state, services, budget);
   assertNoDeadlock(state.vm, services);
@@ -610,8 +610,19 @@ function isHostMethod(program: Program, record: ObjectRecord, name: string): boo
   return isDictionary(record) || findMember(program, record.className, name) === undefined;
 }
 
-/** Run `emitter.on(...)`, `once`, `off` or `emit` (EMIT-2, EMIT-14): the call is done at once and returns `0`. */
+/** Park `thread` on the cancelable event `handle` (EMIT-16), straight after the call queued it. */
+function parkOnEvent(thread: Thread, handle: number): void {
+  thread.wait = { kind: EVENT_DISPATCH_WAIT, global: false, id: "emitCancelable", payload: [handle], resumeRefs: [] };
+  thread.status = "waiting";
+}
+
+/**
+ * Run `emitter.on(...)`, `once`, `off`, `emit` or `emitCancelable` (EMIT-2, EMIT-14,
+ * EMIT-16): all but the last are done at once and return `0`; a cancelable emit parks
+ * the thread, and the wake pushes the event as the value of the call.
+ */
 function callEmitterMethod(
+  thread: Thread,
   vm: VmState,
   services: ScriptServices,
   frame: Frame,
@@ -620,8 +631,12 @@ function callEmitterMethod(
   args: Arg[],
 ): CallOutcome {
   const emitter: Value = { kind: "object", handle: record.handle, className: record.className };
-  applyEmitterOp(vm, eventsOf(services), name, emitter, args.map((arg) => arg.value));
+  const parked = applyEmitterOp(vm, eventsOf(services), name, emitter, args.map((arg) => arg.value), thread.id);
   frame.ip += 1;
+  if (parked !== null) {
+    parkOnEvent(thread, parked);
+    return "yield";
+  }
   frame.operands.push({ value: 0, ref: null });
   return "continue";
 }
@@ -676,12 +691,12 @@ function invokeMember(
       return "continue";
     }
     if (findMember(program, record.className, name) === undefined) {
-      if (isEmitterMethod(name)) return callEmitterMethod(vm, services, frame, record, name, args);
+      if (isEmitterMethod(name)) return callEmitterMethod(thread, vm, services, frame, record, name, args);
       throw new ScriptError("object.invalid", `method ${name} not found`, pos);
     }
     checkMemberAccess(program, record, name, frame.objectClass, pos);
   } else if (isEmitterMethod(name) && !Object.hasOwn(record.members, name)) {
-    return callEmitterMethod(vm, services, frame, record, name, args);
+    return callEmitterMethod(thread, vm, services, frame, record, name, args);
   }
   const member = bindMemberValue(readMember(record, name), record.handle);
   if (!isCallableValue(member)) {
@@ -1321,7 +1336,7 @@ function performCallable(
   const builtin = services.commands.builtin(value.def);
   if (builtin !== undefined) {
     // A host-provided method read off an object carries it as the receiver; the command takes it first (EMIT-2).
-    const holder = value.receiver !== null && isEmitterMethod(value.def) ? findObject(vm, Number(value.receiver)) : undefined;
+    const holder = value.receiver !== null && isHostMethodDef(value.def) ? findObject(vm, Number(value.receiver)) : undefined;
     const given: Arg[] =
       holder === undefined
         ? args
@@ -1574,13 +1589,18 @@ function dispatchResolved(
         });
       }
       if (action === "emitter") {
-        applyEmitterOp(
+        const event = applyEmitterOp(
           vm,
           eventsOf(services),
           effect.args?.[1] as string,
           effect.args?.[2] as Value,
           (effect.args?.slice(3) ?? []) as Value[],
+          thread.id,
         );
+        if (event !== null) {
+          parkOnEvent(thread, event);
+          parked = true;
+        }
       }
       if (action === "autoLocal") {
         frame.autoLocal = Boolean(effect.args?.[1]);

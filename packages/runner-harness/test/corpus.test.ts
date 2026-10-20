@@ -96,16 +96,52 @@ test("verifyCatalogueCompleteness: missing mapped TK2 command throws with diagno
   );
 });
 
-test("corpus: all 22 programs run to completion and pass random-step snapshot restore", () => {
+test("corpus: all 23 programs run to completion and pass random-step snapshot restore", () => {
   const programs = buildCorpus();
-  equal(programs.length, 22);
+  equal(programs.length, 23);
 
   const results = runAllCorpusPrograms(42);
-  equal(results.length, 22);
+  equal(results.length, 23);
 
   for (const result of results) {
     equal(typeof result.stateHash === "string" && result.stateHash.length === 16, true);
     equal(result.ticks > 0, true);
+  }
+});
+
+test("corpus: synthetic-12-cancelable-emit parks on event.dispatch, resumes with the changed event, and restores from every tick to the same state hash (entry 19.11)", () => {
+  const emit = buildCorpus().find((p) => p.id === "synthetic-12-cancelable-emit");
+  if (!emit) throw new Error("synthetic-12-cancelable-emit missing");
+
+  const straight = emit.createHost(0);
+  straight.advance(emit.ticks, []);
+  const state = straight.state();
+  equal(
+    state.vm.globals.log,
+    "sco1z|15scz|020",
+    "the first event is halved and cancelled, the second only halved; the once listener ran for the first only",
+  );
+  equal(state.vm.threads[0]?.status, "finished");
+  equal(state.events.dispatch, null);
+
+  const parkedAt = emit.createHost(0);
+  let parkedTicks = 0;
+  for (let tick = 0; tick < emit.ticks; tick += 1) {
+    parkedAt.advance(1, []);
+    if (parkedAt.state().vm.threads.some((thread) => thread.wait?.kind === "event.dispatch")) parkedTicks += 1;
+  }
+  equal(parkedTicks > 0, true, "the emitting thread was parked on an event.dispatch wait at a tick boundary");
+
+  for (let split = 0; split < emit.ticks; split += 1) {
+    const fresh = emit.createHost(0);
+    fresh.advance(split, []);
+    const restored = emit.restoreHost(fresh.snapshot());
+    equal(restored.stateHash(), fresh.stateHash(), `split ${split}`);
+    checkSnapshotRestore(
+      { fresh, fromSnapshot: restored },
+      { ticks: emit.ticks - split, split, inputsForTick: undefined },
+    );
+    equal(fresh.stateHash(), straight.stateHash(), `split ${split} ends where the straight run ends`);
   }
 });
 

@@ -105,7 +105,7 @@ test("the events phase delivers an emit made earlier in the tick; an emit made b
       {
         phase: "movement",
         run: (state) => {
-          if (state.time.tick === 0) applyEmitterOp(state.vm, state.events, "emit", { kind: "object", handle: 1, className: "" }, ["late"]);
+          if (state.time.tick === 0) applyEmitterOp(state.vm, state.events, "emit", { kind: "object", handle: 1, className: "" }, ["late"], null);
         },
       },
       { phase: "audio", run: (state) => seen.push(`${state.time.tick}:${String(state.vm.globals.log)}`) },
