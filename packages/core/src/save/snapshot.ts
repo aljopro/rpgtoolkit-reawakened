@@ -272,6 +272,7 @@ function validateVmShape(vm: Record<string, unknown>): void {
   numberAt(vm.effectSeq, "vm.effectSeq");
   numberAt(vm.requestSeq, "vm.requestSeq");
   nullableRecord(vm.block, "vm.block");
+  if (vm.messagesOff !== undefined && vm.messagesOff !== true) shapeError("the snapshot's vm.messagesOff is invalid");
   if (vm.stepCounters !== undefined) {
     const counters = recordAt(vm.stepCounters, "vm.stepCounters");
     for (const [owner, count] of Object.entries(counters)) {
