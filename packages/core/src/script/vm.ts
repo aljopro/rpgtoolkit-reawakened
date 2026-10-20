@@ -1085,6 +1085,8 @@ function writeRef(
   if (scope === "virtual") {
     const result = services?.virtuals.write?.(name, stored) ?? "not-virtual";
     if (result === "read-only") throw new ScriptError(ASSIGN_READ_ONLY, `system-owned name "${name}" is read-only`);
+    if (result === "written") return;
+    setOwnValue(vm.globals, name, stored);
     return;
   }
   if (scope === "object") {

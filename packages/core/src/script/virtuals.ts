@@ -31,7 +31,8 @@ const ACTOR_ALIASES: Readonly<Record<string, keyof ActorStats>> = {
 };
 
 function actorAlias(name: string): keyof ActorStats | undefined {
-  return ACTOR_ALIASES[name.endsWith("!") ? name.slice(0, -1) : name];
+  const alias = name.endsWith("!") ? name.slice(0, -1) : name;
+  return Object.hasOwn(ACTOR_ALIASES, alias) ? ACTOR_ALIASES[alias] : undefined;
 }
 
 function isCompileTimeConstant(name: string): boolean {
@@ -45,7 +46,6 @@ function isCompileTimeConstant(name: string): boolean {
 
 function isSystemVirtual(name: string): boolean {
   return (
-    name === "gametime" ||
     name === "music" ||
     name === GAME_EMITTER ||
     name === "boardbackground" ||
@@ -77,6 +77,7 @@ export function createDefaultVirtuals(state: GameState, actors: ActorService = c
     const name = rawName.toLowerCase();
     const stat = actorAlias(name);
     if (stat !== undefined) return actors.activeActor()?.stats[stat] ?? 0;
+    if (name === "gametime" && Object.hasOwn(state.vm.globals, name)) return state.vm.globals[name] ?? 0;
     if (name === "gametime") return Math.floor(state.time.tick / TICKS_PER_SECOND);
     if (name === "music") return musicFile(state.audio) ?? "";
     if (name === GAME_EMITTER) {
