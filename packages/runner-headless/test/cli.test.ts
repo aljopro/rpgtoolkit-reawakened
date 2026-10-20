@@ -72,10 +72,11 @@ function createTempGoldenRoot(options?: {
 }
 
 test("replays the committed test-double golden through the CLI", () => {
-  // The full committed tree (scenes, closing frames, audio cues) is replayed by
-  // `pnpm golden` in the `golden` CI job. Repeating it here made every
-  // `pnpm test` pay the whole G5 suite; this root carries only the committed
-  // test-double so the CLI's replay path is still covered end to end.
+  // The rest of the committed tree is replayed by `pnpm golden` (scenes,
+  // scripts, audio cues) and `pnpm closing` (closing frames), both in the
+  // `golden` CI job. Repeating one of those here made every `pnpm test` pay the
+  // whole G5 suite; this root carries only the committed test-double so the
+  // CLI's replay path is still covered end to end.
   const temp = createTempGoldenRoot({ committedGolden: true });
   try {
     const result = runCli(["golden", temp.root]);
