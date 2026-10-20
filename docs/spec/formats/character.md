@@ -37,12 +37,12 @@ Header text: `RPGTLKIT CHAR`. Newest minor: **8**. The original engine refuses m
 | 18 | × 11 accessory slot name | string | | slots 0..10; the editor uses 1..10 |
 | 19 | × 7 armour slot used | byte | | slots 0..6 (0/1); the editor uses 1..6: head, neck, left hand, right hand, body, legs |
 | 20 | levelType | int (byte if minor = 3) | | experience needed for the first level-up |
-| 21 | experienceIncrease | short | | how the requirement grows per level (see note) |
+| 21 | experienceIncrease | short | | amount used to grow the next-level requirement; `levelUpType = 0` uses `truncate(oldRequirement * experienceIncrease / 100)` and `levelUpType = 1` adds it directly |
 | 22 | maxLevel | int | | |
-| 23 | levelHp, levelDp, levelFp, levelSm | short × 4 | | stat increase per level, in percent or points (field 25) |
+| 23 | levelHp, levelDp, levelFp, levelSm | short × 4 | | stat increase per level, in percent or points (field 26) |
 | 24 | swipe, defend, special, die sounds | string × 4 | minor < 5 | legacy; ignored |
 | 25 | levelUpProgram | string | | program run on level-up |
-| 26 | levelUpType | byte | | 0 = percentage increases ("exponential"), 1 = fixed points ("linear") |
+| 26 | levelUpType | byte | | 0 = percentage mode for stat increases and threshold growth; 1 = fixed-point mode for stat increases and direct threshold growth |
 | 27 | sizeType | byte | | legacy: 0 = 32×32, 1 = 64×32 |
 | 28 | walk animations × 8 | string | minor ≥ 5 | order **S, N, E, W, NW, NE, SW, SE**; `.anm` files in `Misc\` (or `.gif`) |
 | 29 | FIGHT, DEFEND, SPECIAL MOVE, DIE, REST animations | string × 5 | minor ≥ 5 | battle stances; also reachable by these names as custom stances |
@@ -64,7 +64,7 @@ The file ends here.
 
 - **Default polygons** (minor < 8) — the ruled values: collision = rectangle from (−15, −15) to (15, 0); activation = rectangle from (−24, −24) to (24, 8). On isometric boards the bases are diamonds instead. The sample characters store exactly these, and a file that predates stored bases (a `.tem` below minor 8) takes them when it is read; the pre-vector board conversion generates no base.
 - **Missing animations:** a missing diagonal falls back to the nearest horizontal direction; a missing idle animation falls back to the walk animation.
-- **Levelling.** The original engine uses `experienceIncrease` inconsistently in three places (an integer percentage that rounds to 0 below 100, a multiplier `1 + value`, and `1 + value/100`). A compatible engine should pick one and document it; the editor's UI presents it as a percentage. **Reawakened rule (R-16):** the levelling *arithmetic* stays as written above — the battle work (epic 7) rules it — and this page fixes only the field list. The first-level requirement is `levelType`, at minor 3 a single byte and otherwise an `int`.
+- **Levelling.** `levelType` is the first-level requirement. `experienceIncrease` derives later requirements: with `levelUpType = 0`, add `truncate(oldRequirement * experienceIncrease / 100)`; with `levelUpType = 1`, add `experienceIncrease` directly. Stat increases use the same `levelUpType` split, with percentage results converted to integers after calculation. The actor and progression rules record the deterministic compatibility contract; legacy restoration conversion is handled during import rather than by mixing formulas at runtime.
 
 ## Older versions
 
