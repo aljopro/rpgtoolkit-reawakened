@@ -223,8 +223,8 @@ permitted to mutate the value (a script may request a mutation through that owne
 | level-up program | character.levelUpProgram | program reference | progression | OWNER | editor conversion/script | core-rule | [character](../formats/character.md#layout) 25; [actor precedence](#progression) | 20.6/20.7 |
 | level-up mode | character.levelUpType | byte | progression policy | `LevelUpType!` | core | core-rule | [character](../formats/character.md#layout) 26 | 20.6 |
 | enemy run permission | enemy.canRun | byte | battle traits | `ENE_CANRUN` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 8; [E-71](plugins-and-battle.md#e-71) | Epic 7 |
-| enemy take-crit denominator | enemy.takeCrit | short | battle traits | `ENE_TAKECRIT` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 9; [E-74](plugins-and-battle.md#e-74) | Epic 7 |
-| enemy give-crit denominator | enemy.giveCrit | short | battle traits | `ENE_GIVECRIT` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 10; [E-74](plugins-and-battle.md#e-74) | Epic 7 |
+| offensive critical value | enemy.giveCrit (characters: none, -1) | short | stats | `ENE_GIVECRIT` | core/actor script | core-rule (data); battle-rule (resolution) | [enemy](../formats/enemy.md#layout) 10; [E-74](plugins-and-battle.md#e-74) | 20.3/20.5; Epic 7 resolves |
+| defensive critical value | enemy.takeCrit (characters: none, -1) | short | stats | `ENE_TAKECRIT` | core/actor script | core-rule (data); battle-rule (resolution) | [enemy](../formats/enemy.md#layout) 9; [E-74](plugins-and-battle.md#e-74) | 20.3/20.5; Epic 7 resolves |
 | enemy special moves | enemy.special moves | array<asset reference> | abilities | `ENE_SPC` | hydration/Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 11 | 20.5/Epic 7 |
 | weaknesses | enemy.weaknesses | array<asset reference> | battle traits | `ENE_WEAK` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 12 | Epic 7 |
 | strengths | enemy.strengths | array<asset reference> | battle traits | `ENE_STRONG` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 13 | Epic 7 |
@@ -289,7 +289,7 @@ Source-field rows above whose owner is `movement` or `presentation` (portrait as
 | derived stat | equipment/base stat | int | stats | corresponding stat alias | core | core-rule | [ACT-3](#actor-contract-entries), [E-82](plugins-and-battle.md#e-82) | 20.6 |
 | next level threshold | levelType, experienceIncrease, levelUpType | int | progression | OWNER | core | core-rule | [progression](progression-and-levels.md) | 20.6 |
 | level-up growth | levelHp/levelDp/levelFp/levelSm + levelUpType | int | progression | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23,26; [progression](progression-and-levels.md) | 20.6/20.7 |
-| damage taken | attacker FP, target DP, crit, variance | int | battle operation | OWNER | Epic 7 | battle-rule | [E-74](plugins-and-battle.md#e-74) | Epic 7 |
+| damage taken | attacker FP, target DP, attacker offensive and target defensive critical values, variance | int | battle operation | OWNER | Epic 7 | battle-rule | [E-74](plugins-and-battle.md#e-74) | Epic 7 |
 
 Defaults are deterministic: missing numeric stats start at zero (except format-declared
 defaults), HP/SMP mutations clamp to `[0,max]`, `fallen` is `HP <= 0`, and the core uses
