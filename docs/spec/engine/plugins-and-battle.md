@@ -152,7 +152,7 @@ The engine keeps the battle **model**; the plugin owns the **loop and the UI**.
 4. **Floor.** If the amount is now below 1 it becomes 1. This includes a supplied amount of 0 or less.
 5. **Apply.** Subtract the amount from the target's HP, or from its SMP when the damage goes to SMP, never going below 0.
 
-Legacy battles are one-sided, so each attack has exactly one side with a value and makes one draw, in the same random sequence as the original:
+Legacy battles are one-sided, so each attack has exactly one side with a value and makes one draw, in the same random sequence as the original. Only the value for the direction of the attack is used: an enemy being hit uses its defensive value, an enemy attacking uses its offensive value, and its other value takes no part. Every legacy enemy file stores both values, so the enemy's side is always present; a stored 0 therefore means every attack in that direction skips DP, exactly as in the original. An actor created without a value (a character, or a new enemy) has -1 for it, never 0.
 
 | Attacker | Target | Value used |
 | --- | --- | --- |
