@@ -25,6 +25,8 @@ The ten studies are indexed separately to keep related decisions readable; the s
 
 **Focused task walkthroughs:** [Make a house kit, build a forest maze, and connect an NPC interaction to battle](walkthroughs-house-forest-and-npc.md). These paper exercises cover kit creation as well as placement, and expose shared/local edit scope, visual terrain versus traversability, and the unresolved battle-result continuation contract.
 
+**Creator journey discussion:** [Workspace rehearsals and the legacy asset workflow](creator-journey-workspace-rehearsal.md) — the guard-at-the-entrance encounter from Morgan, Casey and Avery's starting points, stress-tested with Rowan and Riley, and compared with the legacy asset editors. Notes for a later team perspective round; not validated research, selected workspace modes or epic changes.
+
 **Illustrated keepsake:** [Make the thing, not the file](party-editors-for-tomorrow/party-editors-for-tomorrow.html) — one self-contained HTML walkthrough of house kits, forest terrain, NPC battles, sight encounters, reusable RPGCode templates and the final locked chest. Original illustrations, chapter navigation and expandable contract notes; no game/editor execution or external assets.
 
 ## The working synthesis
