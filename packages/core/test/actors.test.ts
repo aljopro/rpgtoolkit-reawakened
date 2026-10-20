@@ -100,11 +100,84 @@ test("actor hydration maps character and enemy reader fields deterministically",
   deepEqual(second, first);
 });
 
+test("actor hydration preserves reader warnings from character residue", () => {
+  const source = new Uint8Array([...example("Game/Example/Chrs/ada.tem"), 0]);
+  const read = readCharacter(new BinaryReader(source, "ada-residue.tem"));
+  equal(read.ok, true);
+  if (!read.ok) return;
+  equal(read.value.residue.length, 1);
+  equal(read.warnings.length, 1);
+
+  const hydrated = hydrateCharacterResult(createActorsSection(), "ada-residue.tem", "party", read);
+  equal(hydrated.ok, true);
+  if (!hydrated.ok) return;
+  deepEqual(hydrated.warnings, read.warnings);
+  equal(hydrated.value.name, read.value.name);
+});
+
+test("actor hydration carries defaults from an authored minor-zero character", () => {
+  const path = join(examplesDirectory, "..", "versions", "character", "character_text_minor0.tem");
+  const read = readCharacter(new BinaryReader(new Uint8Array(readFileSync(path)), path));
+  equal(read.ok, true);
+  if (!read.ok) return;
+  equal(read.value.minor, 0);
+  equal(read.value.movementAnimations, undefined);
+  equal(read.value.idleAnimations, undefined);
+  equal(read.value.vectorBases, undefined);
+
+  const hydrated = hydrateCharacterResult(createActorsSection(), "character_text_minor0.tem", "party", read);
+  equal(hydrated.ok, true);
+  if (!hydrated.ok) return;
+  deepEqual(hydrated.value.stats, {
+    experience: read.value.stats.experience,
+    hp: read.value.stats.hp,
+    maxHp: read.value.stats.maxHp,
+    dp: read.value.stats.dp,
+    fp: read.value.stats.fp,
+    smp: read.value.stats.smp,
+    maxSmp: read.value.stats.maxSmp,
+    level: read.value.stats.level,
+    criticalOn: -1,
+    criticalBy: -1,
+  });
+  deepEqual(hydrated.value.progression, {
+    levelType: read.value.firstLevelExp,
+    experienceIncrease: read.value.experienceIncrease,
+    maxLevel: read.value.maxLevel,
+    levelHp: read.value.levelIncreases[0],
+    levelDp: read.value.levelIncreases[1],
+    levelFp: read.value.levelIncreases[2],
+    levelSm: read.value.levelIncreases[3],
+    levelUpType: read.value.levelUpType,
+  });
+  deepEqual(hydrated.value.statuses, {});
+  equal(hydrated.value.behaviour, null);
+  deepEqual(hydrated.value.customEvents, []);
+});
+
 test("actor hydration keeps reader errors and routes item data outside actor records", () => {
   const section = createActorsSection();
   const failed = hydrateCharacterResult(section, "broken.tem", "party", readCharacter(new BinaryReader(new Uint8Array(), "broken.tem")));
   equal(failed.ok, false);
-  if (!failed.ok) equal(failed.error.path, "broken.tem");
+  if (!failed.ok) {
+    deepEqual({ path: failed.error.path, offset: failed.error.offset, section: failed.error.section }, {
+      path: "broken.tem",
+      offset: 0,
+      section: "docs/spec/formats/character.md#layout",
+    });
+    equal(typeof failed.error.message, "string");
+  }
+
+  const failedEnemy = hydrateEnemyResult(section, "broken.ene", readEnemy(new BinaryReader(new Uint8Array(), "broken.ene")));
+  equal(failedEnemy.ok, false);
+  if (!failedEnemy.ok) {
+    deepEqual({ path: failedEnemy.error.path, offset: failedEnemy.error.offset, section: failedEnemy.error.section }, {
+      path: "broken.ene",
+      offset: 0,
+      section: "docs/spec/formats/README.md#primitive-encoding",
+    });
+    equal(typeof failedEnemy.error.message, "string");
+  }
 
   const item = readItem(new BinaryReader(example("Game/Example/Item/chest.itm"), join(examplesDirectory, "Game", "Example", "Item", "chest.itm")));
   equal(item.ok, true);
