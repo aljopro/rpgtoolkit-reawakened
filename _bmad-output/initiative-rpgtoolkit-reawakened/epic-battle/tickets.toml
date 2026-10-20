@@ -5,6 +5,7 @@
 
 [[entry]]
 id = 1
+tracker_id = "#504"
 type = "story"
 title = "Rulings: the battle package boundary, battle state, the facing API and the defeated event"
 description = "Doc-first (G7), docs only: writes docs/spec/engine/battle.md (BAT-1 to BAT-15) to settle the battle package boundary (the core owns the `battle` section with fighter references and charge, plus the actor model; the `stock-battle` package owns the loop, charge rate, damage, status round effects, AI, outcomes sequence, music cues and UI), the `BattleSection` shape (active battle id, parties of actor references plus charge, background, canRun, outcome 0-4; never copies HP, SMP or status effects), the rebuild mapping of E-79's callbacks 114-132 to actor methods and battle operations (no core `fightTick`), the `defeated` event, R-57 (random start charge, +3 plus or minus 2 per speed/slow, 75/123, `skill` always -1, damage variance and criticals), R-16 (one `experienceIncrease` rule), R-11 (`.spc` flags), outcomes 0-4, the no-enemies message, battle music, the party source, and that the default UI uses existing 3.1 draw primitives. Amends E-72 to E-79 and E-77's outcome wording, EMIT-13's `defeated` row and AD-10's `battle` row; records a rejected alternative for each owner choice."
@@ -26,6 +27,7 @@ references = [
 
 [[entry]]
 id = 2
+tracker_id = "#505"
 type = "story"
 title = "Battle state: parties, fighter references and charge"
 description = "Replaces the empty `BattleSection` placeholder with the plain-data battle record ruled by 7.1: one active battle (`id`, `boardKey`, `background`, `canRun`, `outcome` 0-4 or null) with party 0 enemies and party 1 players as ordered `{ party, actorId, charge }` references, status effects left on their actor, and no copied HP/SMP; bumps the per-section version under the save schema-bump rule with a v1 fixture and restore test, and adds snapshot/restore, canonical hash, reset clearing and a located diagnostic for a dangling or duplicate actor reference on load, and updates the `save/sections.ts` header and `BattleSection` comment to match."
@@ -42,6 +44,7 @@ references = [
 
 [[entry]]
 id = 3
+tracker_id = "#506"
 type = "story"
 title = "The battle-facing API and the battle built-ins"
 description = "Builds the package-facing battle surface over 7.2 and the actor model: the global `battle` object (party size, fighter lookup by party and index, charge read/add/set/release, charge percent, `canRun`, outcome) and the battle built-ins (`hp`, `givehp`, `gethp`, `maxhp`, `getmaxhp`, `smp`, `givesmp`, `getsmp`, `maxsmp`, `getmaxsmp`, `fp`, `givefp`, `getfp`, `dp`, `getdp`, `applystatus`, `removestatus`, `giveexp`) as aliases onto actor stats, plus fighter-handle resolution for `source`, `target`, a party member name and an enemy reference; no copies of stats and no core `fightTick`."
@@ -59,6 +62,7 @@ references = [
 
 [[entry]]
 id = 4
+tracker_id = "#507"
 type = "story"
 title = "Charge-bar turns: the ATB loop"
 description = "Implements the stock battle package's charge-bar loop: initialise each fighter's charge from the seeded shared RNG, add its effective speed (3, plus 2 per active speed effect, minus 2 per active slow effect, floored at zero) each whole engine tick (a `threadSleep` of 1/60 second, which the ruled conversion turns into one tick), freeze a disabled fighter, let a player act when charge reaches 75 and an enemy when it reaches 123, reset the acting fighter's charge on release, and drive the loop from the package's `battle` command, with deterministic turn order (enemies before players, then party index)."
@@ -75,6 +79,7 @@ references = [
 
 [[entry]]
 id = 5
+tracker_id = "#508"
 type = "story"
 title = "Player actions and damage: attacks, criticals, specials and items"
 description = "Implements the player's Fight, Special Move and Item actions and E-74 damage inside the stock package: one seeded variance draw for damage (`FP` with a plus or minus 10% variance, rounded by the ruled integer rule), `DP` subtracted unless `giveCrit`/`takeCrit` makes a critical that bypasses it, a minimum of 1, damage to HP or SMP, special-move FP and SMP drain and SMP cost with affordability, the move's animation and status, item fight HP/SMP through an inventory port with a test double and a posted consume effect, and `attackall`/`drainall` without criticals; damage goes through the actor method so `fallen` fires once."
@@ -91,6 +96,7 @@ references = [
 
 [[entry]]
 id = 6
+tracker_id = "#509"
 type = "story"
 title = "Status effects: rounds, per-round effects, speed and disable"
 description = "Implements E-75 status effects over the core counter: apply a `.ste` by file with re-apply restarting its rounds, expire at zero, and on a fighter becoming charged call the core's `advanceStatus(1)` and apply the status's per-round HP, SMP and program effect, its speed/slow contribution to the charge rate and its disable contribution as a reference count; remove/expire drops the contribution and a lethal status fires `fallen` with cause `status`."
@@ -107,6 +113,7 @@ references = [
 
 [[entry]]
 id = 7
+tracker_id = "#510"
 type = "story"
 title = "Enemy AI: four levels and a custom AI program"
 description = "Implements E-76 enemy AI in the stock package: the four built-in levels as the table states (random target with a 50/50 physical or special choice, special moves until SMP runs out, weakest target with a 50/50 choice, weakest target with specials first), a deterministic index tie-break for weakest, affordability checks, curative specials choosing the lowest-HP ally, and a custom `useCode` AI program run with `source` as the enemy and `target` as the drawn player; the `ai(level)` built-in sets the acting enemy's level."
@@ -122,6 +129,7 @@ references = [
 
 [[entry]]
 id = 8
+tracker_id = "#511"
 type = "story"
 title = "Outcomes, rewards and level-up: win, run and lose"
 description = "Implements E-77 and E-78 outcomes: map the package's outcome to codes 0-4, apply the automatic path (the summed enemy gold as a plain-data inventory effect and experience to every party member, the level-up default from 20.6 that runs the level-up program and raises max HP/DP/FP/max SMP without refilling, and the defeat programs), run the run program or the game-over program (or `reset()` when none), show the reward and level-up messages, and emit `defeated` once per enemy with cause and source; `canRun` gates the Run action."
@@ -139,6 +147,7 @@ references = [
 
 [[entry]]
 id = 9
+tracker_id = "#512"
 type = "story"
 title = "Battle starts and setup: random encounters, Fight and FightEnemy"
 description = "Consumes the 5.11 random-encounter handoff and implements `Fight` and `FightEnemy`: create enemy actors with 20.5 from the handoff, start party 0 enemies and party 1 from the actor store's ordered party, load the `.bkg` background image and `canRun`, show the handoff's no-enemies message and start nothing when the pool is empty, call the registered `battle` command (or the main file's custom fight program) and wait for its outcome, and repoint the 5.11 `battle` phase registration to the phase ruled by 20.1."
@@ -156,6 +165,7 @@ references = [
 
 [[entry]]
 id = 10
+tracker_id = "#513"
 type = "story"
 title = "Battle music and sounds through the media object"
 description = "Plays the battle's music, sounds and menu cues through the 21.5 media object: play the battle background's music with source `battle`, let a `beforePlay` listener replace or cancel it, play the menu move/confirm/cancel and battle cues as voices, stop the battle track and have the board's music re-posted from the battle's `boardKey` on the outcome, and keep audio out of the save (a mid-battle load stops the stale track and plays the battle track again, with the board track restored from the board after the battle)."
@@ -172,6 +182,7 @@ references = [
 
 [[entry]]
 id = 11
+tracker_id = "#514"
 type = "story"
 title = "The default battle UI"
 description = "Builds the stock package's default battle UI with existing 3.1 drawing and input primitives: the `.bkg` background, the enemy and player sprites with stances and animations, HP, SMP and charge bars, names, the Fight/Special/Item/Run command list with its cursor, target selection, damage numbers and messages, redrawn each tick into the render-now canvas with the ruled primitives (no new `drawBox`/`drawBar`), and driven by the existing key queue; the owner approves the screen and its golden."
@@ -190,6 +201,7 @@ references = [
 
 [[entry]]
 id = 12
+tracker_id = "#515"
 type = "story"
 title = "A custom fight program drives every battle operation"
 description = "Proves the replacement path: a fixture RPGCode fight program registered as the main file's fight program drives every battle-facing operation (party and fighter lookup, charge read/write/release, status and damage through the actor, the enemy `defeated` emit, outcome) and its own drawing and input, without the stock package's loop or UI, over the same core battle state; a seeded short battle pins the state hash and draw list."
@@ -206,6 +218,7 @@ references = [
 
 [[entry]]
 id = 13
+tracker_id = "#516"
 type = "story"
 title = "Refactor sweep"
 description = "Reconciles the epic's seams: one registration path for the battle built-ins and the `battle` command, the battle section exported through the save barrel, the 5.11 handoff with a single owner and the 20.1 phase list, the package manifest and `.gam` mapping, the built-in catalogue and command docs, and the spec links and anchors; removes the placeholder and any dead battle-phase code, and closes the epic's Done when list with evidence."

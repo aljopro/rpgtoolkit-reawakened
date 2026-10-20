@@ -3,8 +3,10 @@
 - Epic 19 (#489): #451 - #465
 - Epic 20 (#490): #466 - #479
 - Epic 21 (#491): #480 - #487
+- Epic 7 (#503): #504 - #516
 """
 
+import argparse
 import json
 import subprocess
 import time
@@ -21,6 +23,7 @@ EPIC_MAPPINGS = {
     489: (list(range(451, 466)), SPRINT_1_ID),  # Epic 19: 451-465 -> Sprint 1
     490: (list(range(466, 480)), SPRINT_2_ID),  # Epic 20: 466-479 -> Sprint 2
     491: (list(range(480, 488)), SPRINT_3_ID),  # Epic 21: 480-487 -> Sprint 3
+    503: (list(range(504, 517)), None),  # Epic 7: 504-516 -> no sprint yet
 }
 
 
@@ -67,15 +70,25 @@ def get_issue_node_ids(numbers: list[int], token: str) -> dict[int, str]:
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--epic", type=int, default=0, help="Only link this epic number")
+    args = parser.parse_args()
+
     token = get_token()
-    all_needed = list(EPIC_MAPPINGS.keys())
-    for children, _ in EPIC_MAPPINGS.values():
+    mappings = EPIC_MAPPINGS
+    if args.epic:
+        if args.epic not in EPIC_MAPPINGS:
+            raise SystemExit(f"Unknown epic {args.epic}; known: {sorted(EPIC_MAPPINGS)}")
+        mappings = {args.epic: EPIC_MAPPINGS[args.epic]}
+
+    all_needed = list(mappings.keys())
+    for children, _ in mappings.values():
         all_needed.extend(children)
 
     print("Fetching issue IDs...", flush=True)
     node_ids = get_issue_node_ids(all_needed, token)
 
-    for epic_num, (children, sprint_id) in EPIC_MAPPINGS.items():
+    for epic_num, (children, sprint_id) in mappings.items():
         epic_id = node_ids.get(epic_num)
         if not epic_id:
             print(f"Missing epic {epic_num} ID!")

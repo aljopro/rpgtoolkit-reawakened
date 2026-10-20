@@ -52,6 +52,7 @@ EPIC_AREA_MAP = {
     "epic-rpgcode-platform": "core",
     "epic-actors": "core",
     "epic-media-objects": "synth",
+    "epic-battle": "core",
 }
 
 EPIC_LABEL_MAP = {
@@ -66,6 +67,7 @@ EPIC_LABEL_MAP = {
     "epic-rpgcode-platform": "epic:rpgcode-platform",
     "epic-actors": "epic:actors",
     "epic-media-objects": "epic:media-objects",
+    "epic-battle": "epic:battle",
 }
 
 
@@ -155,6 +157,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Print actions without creating issues")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of tickets to process")
+    parser.add_argument("--epic", default="", help="Only process tickets of one epic folder, e.g. epic-battle")
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parent.parent
@@ -166,6 +169,9 @@ def main():
     status_data = json.loads(res.stdout)
     tickets = status_data.get("tickets", [])
     print(f"Loaded {len(tickets)} tickets from initiative.", flush=True)
+
+    if args.epic:
+        tickets = [t for t in tickets if t.get("epic") == args.epic]
 
     if args.limit > 0:
         tickets = tickets[: args.limit]
