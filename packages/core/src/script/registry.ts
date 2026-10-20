@@ -336,22 +336,31 @@ export function assembleCommands(
     });
   }
 
-  function handlerAt(stack: readonly CommandLayer[], index: number): CommandHandler {
-    const layer = stack[index]!;
-    const options = layer.options;
-    if (options === undefined) return layer.spec.call;
-    return (view, args, next) => layer.spec.call({ ...view, options }, args, next);
+  // One handler per layer, built bottom-up once: each is bound to the layer below *it* and ignores
+  // the `next` it is passed, so a wrapper's `next(view, args, next)` reaches the layer beneath the
+  // wrapper, never itself (PKG-4, AD-8).
+  const handlers = new Map<string, CommandHandler[]>();
+  for (const [key, stack] of layers) {
+    const chain: CommandHandler[] = [];
+    stack.forEach((layer, index) => {
+      const below = index === 0 ? noNext.get(key)! : chain[index - 1]!;
+      const options = layer.options;
+      chain.push((view, args) =>
+        layer.spec.call(options === undefined ? view : { ...view, options }, args, below),
+      );
+    });
+    handlers.set(key, chain);
   }
 
   /** The layer at `index` of `name`'s stack as a command, with `next` the layer below it. */
   function commandAt(name: string, stack: readonly CommandLayer[], index: number): ResolvedCommand | undefined {
     const layer = stack[index];
-    if (layer === undefined) return undefined;
-    const next = index === 0 ? noNext.get(name) : handlerAt(stack, index - 1);
+    const chain = handlers.get(name);
+    if (layer === undefined || chain === undefined) return undefined;
+    const next = index === 0 ? noNext.get(name) : chain[index - 1];
     if (next === undefined) return undefined;
-    const call = handlerAt(stack, index);
-    const spec = call === layer.spec.call ? layer.spec : { ...layer.spec, call };
-    return { spec, next };
+    // A layer with no options is its own spec (its caller passes `next`); only an options layer is wrapped.
+    return { spec: layer.options === undefined ? layer.spec : { ...layer.spec, call: chain[index]! }, next };
   }
 
   return {
