@@ -76,11 +76,13 @@ Types and conventions are defined in [README.md](README.md#primitive-encoding). 
 
 The file ends after the last field present.
 
+**Version-dependent fields (legacy fact).** Twelve logical rows are conditional, and the "Present when" column above is the whole of it: the unused `short` at row 11 (`minor < 3`); the menu/fight plugins at rows 23-24 against the reserved `short` at row 23′; rows 25 and 33 (`minor ≤ 2`); the plugin-slot form at rows 38a/38b (`minor ≤ 2` uses `enabled` flags named `tkplug<i>.dll`, `minor ≥ 3` uses names); and, in order, rows 42-46 (`minor ≥ 3`), 47-48 (`≥ 4`), 49 (`= 5`), 50-53 (`≥ 6`), 54-55 (`≥ 7`), 56 (`≥ 8`) and 57-61 (`≥ 9`). Every row carries a unique number 1-61 in storage order across the file's lifetime, so it can be cited. The minor history is in [legacy/older-binary-versions.md](legacy/older-binary-versions.md#main-file-minor-history).
+
 ## TKR package-list extension
 
 TK Reawakened may append a native package list after the last documented row. This extension is not part of the legacy TK3 layout; a legacy reader therefore sees it as trailing residue. The extension begins with the eight-byte marker `TKRPLUG\0` (seven ASCII bytes followed by NUL), then an unsigned little-endian `u16` true count. Each package name is a NUL-terminated Windows-1252 string in authored order. A count of zero is an explicit empty list. The list is bounded to 256 names and each encoded name to 255 bytes; names must be non-empty and unique under ASCII case-folding. Any bytes after the final name remain opaque residue.
 
-**Version-dependent fields (legacy fact).** Twelve logical rows are conditional, and the "Present when" column above is the whole of it: the unused `short` at row 11 (`minor < 3`); the menu/fight plugins at rows 23-24 against the reserved `short` at row 23′; rows 25 and 33 (`minor ≤ 2`); the plugin-slot form at rows 38a/38b (`minor ≤ 2` uses `enabled` flags named `tkplug<i>.dll`, `minor ≥ 3` uses names); and, in order, rows 42-46 (`minor ≥ 3`), 47-48 (`≥ 4`), 49 (`= 5`), 50-53 (`≥ 6`), 54-55 (`≥ 7`), 56 (`≥ 8`) and 57-61 (`≥ 9`). Every row carries a unique number 1-61 in storage order across the file's lifetime, so it can be cited. The minor history is in [legacy/older-binary-versions.md](legacy/older-binary-versions.md#main-file-minor-history).
+The package list is the only part of the main file the plugin manifest reads: the engine appends one manifest entry per name, in the stored order, after the engine default manifest ([E-02 step 3](../engine/main-loop-and-startup.md#reawakened-boot-sequence)). The legacy plugin rows (23-24, 38a and 38b) stay data: they round-trip byte for byte and are never interpreted as plugins.
 
 ## Compatibility notes
 
