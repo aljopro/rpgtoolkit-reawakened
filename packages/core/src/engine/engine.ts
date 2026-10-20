@@ -676,6 +676,7 @@ export function createEngine(init: EngineInit): Engine {
     const fresh = createGameState({ seed: 0 });
     state.world = fresh.world;
     state.sprites = fresh.sprites;
+    state.actors = fresh.actors;
     state.party = fresh.party;
     state.inventory = fresh.inventory;
     state.triggers = fresh.triggers;

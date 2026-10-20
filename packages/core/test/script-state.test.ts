@@ -1,5 +1,5 @@
 // The save tree, canonical form and restore checks (AD-7, AD-10, AD-11, AD-23):
-// the 19-section shape, a mid-yield round-trip and the two pinned restore errors.
+// the 20-section shape, a mid-yield round-trip and the two pinned restore errors.
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -50,7 +50,7 @@ function midYieldState(): GameState {
 test("GameState is PlainData and has exactly the AD-10 sections", () => {
   const state = createGameState({ seed: 0 });
   deepEqual(Object.keys(state).sort(), Object.keys(SCHEMA_VERSIONS).sort());
-  equal(Object.keys(state).length, 19);
+  equal(Object.keys(state).length, 20);
   equal(typeof canon(state), "string");
   deepEqual(state.schema.compiler, "2");
 });

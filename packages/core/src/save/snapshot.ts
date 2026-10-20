@@ -47,6 +47,7 @@ import {
 } from "../script/errors.ts";
 import { COMPILER_VERSION } from "../script/program.ts";
 import { SCHEMA_VERSIONS, type GameState } from "./state.ts";
+import { asActorsSection, createActorsSection, ACTORS_SCHEMA_VERSION } from "../actors/model.ts";
 import { asSpritesSection, createSpritesSection, SPRITES_SCHEMA_VERSION } from "../sprites/model.ts";
 import { createInputSection } from "../input/input.ts";
 import { createTriggersSection, TRIGGERS_SCHEMA_VERSION } from "../triggers/model.ts";
@@ -158,6 +159,20 @@ function migrateSprites(record: Record<string, unknown>, schema: Record<string, 
   } else if (current !== null) {
     record.sprites = section;
   }
+}
+
+/** Add the actor section to saves made before the unified actor owner existed. */
+function migrateActors(record: Record<string, unknown>, schema: Record<string, unknown>): void {
+  const version = schema.actors;
+  if (version === undefined) {
+    record.actors = createActorsSection();
+    schema.actors = ACTORS_SCHEMA_VERSION;
+    return;
+  }
+  if (typeof version !== "number") shapeError("the snapshot's `schema` has no numeric `actors` version");
+  if (version >= ACTORS_SCHEMA_VERSION) return;
+  record.actors = createActorsSection();
+  schema.actors = ACTORS_SCHEMA_VERSION;
 }
 
 /** Migrate the old empty trigger placeholder to the activation-state schema. */
@@ -545,6 +560,11 @@ function validateSpritesShape(value: unknown): void {
   if (sprites === null || sprites.version !== SPRITES_SCHEMA_VERSION) shapeError("the snapshot's `sprites` section has an invalid schema");
 }
 
+function validateActorsShape(value: unknown): void {
+  const actors = asActorsSection(value);
+  if (actors === null || actors.version !== ACTORS_SCHEMA_VERSION) shapeError("the snapshot's `actors` section has an invalid schema");
+}
+
 function validateTriggersShape(value: unknown): void {
   const triggers = recordAt(value, "triggers");
   if (numberAt(triggers.version, "triggers.version") !== TRIGGERS_SCHEMA_VERSION) {
@@ -613,6 +633,7 @@ function validateShape(record: Record<string, unknown>): void {
     if (key === "schema" || key === "vm" || key === "rng" || key === "time") continue;
     recordAt(record[key], key);
     if (key === "sprites") validateSpritesShape(record[key]);
+    if (key === "actors") validateActorsShape(record[key]);
     if (key === "triggers") validateTriggersShape(record[key]);
     if (key === "audio") validateAudioShape(record[key]);
   }
@@ -650,6 +671,7 @@ export function restoreGameState(json: string): GameState {
   }
 
   migrateEvents(record, schema as Record<string, unknown>);
+  migrateActors(record, schema as Record<string, unknown>);
   for (const key of Object.keys(SCHEMA_VERSIONS)) {
     if (!Object.hasOwn(record, key)) {
       throw new ScriptError("restore.shape", `the snapshot is missing the "${key}" section`);

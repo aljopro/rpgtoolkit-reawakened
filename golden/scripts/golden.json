@@ -3,111 +3,111 @@
   "programs": [
     {
       "id": "synthetic-1-expressions",
-      "hash": "0046a15863711a8c"
+      "hash": "bdb7a2d988de17bf"
     },
     {
       "id": "synthetic-2-classes",
-      "hash": "cdec3f88b3cc747c"
+      "hash": "21b6f9831e93ffff"
     },
     {
       "id": "synthetic-3-byref",
-      "hash": "49d2de9102ef98de"
+      "hash": "069b09cd075f8c7b"
     },
     {
       "id": "synthetic-4-errors",
-      "hash": "afc0aadafbe9651d"
+      "hash": "3b7410ba4dfe105c"
     },
     {
       "id": "synthetic-5-threads",
-      "hash": "a31c811ece0ae5a0"
+      "hash": "7a80e72c474ee6dd"
     },
     {
       "id": "synthetic-6-modules",
-      "hash": "ee7cd1928d018d25"
+      "hash": "c727d3c5ba5982e6"
     },
     {
       "id": "synthetic-7-numbers",
-      "hash": "fb29ffa8c6474602"
+      "hash": "604b4c3e6dc8e3bb"
     },
     {
       "id": "synthetic-8-file-io",
-      "hash": "2b5e9ec07a30ea10"
+      "hash": "b986dc94ee6eeb11"
     },
     {
       "id": "synthetic-9-mismatch",
-      "hash": "ec83193524185db1"
+      "hash": "83c375af4587b99c"
     },
     {
       "id": "synthetic-10-closures",
-      "hash": "53dffc1a02d30b76"
+      "hash": "605d612e78ed2b2f"
     },
     {
       "id": "synthetic-11-middleware",
-      "hash": "67206df2cb6f5a1f"
+      "hash": "765a52908ba40418"
     },
     {
       "id": "synthetic-12-cancelable-emit",
-      "hash": "aee27b9e58a6f4d2"
+      "hash": "53a069ab9bae320d"
     },
     {
       "id": "synthetic-13-package-layers",
-      "hash": "62e6b14c00abfd79"
+      "hash": "b98ccc2a06886b7e"
     },
     {
       "id": "synthetic-14-object-package",
-      "hash": "24f9dd6b26c5f276"
+      "hash": "9f5649b422339189"
     },
     {
       "id": "synthetic-15-emitter-package",
-      "hash": "ba092c92ec1fede4"
+      "hash": "1a5db8b89b7c9b6f"
     },
     {
       "id": "synthetic-16-namespaced-packages",
-      "hash": "5489c2dbda4f4984"
+      "hash": "9194e905ea8da26f"
     },
     {
       "id": "synthetic-tk2",
-      "hash": "19687fcdaf064bfe"
+      "hash": "106b970ccb3176ad"
     },
     {
       "id": "sample-start-demo",
-      "hash": "5912612833f63825"
+      "hash": "cb7c80f68c24843a"
     },
     {
       "id": "sample-start-basic",
-      "hash": "856ea439268e9e35"
+      "hash": "959d5bd2fe3d269e"
     },
     {
       "id": "sample-system-demo",
-      "hash": "a9310c5b6b715d03"
+      "hash": "6dabd6841be3e90a"
     },
     {
       "id": "sample-system-basic",
-      "hash": "a9310c5b6b715d03"
+      "hash": "6dabd6841be3e90a"
     },
     {
       "id": "sample-sys-test-demo",
-      "hash": "a9310c5b6b715d03"
+      "hash": "6dabd6841be3e90a"
     },
     {
       "id": "sample-win-demo",
-      "hash": "328fa1770626d169"
+      "hash": "cf795dc46174bb80"
     },
     {
       "id": "sample-oldman-demo",
-      "hash": "54b21d7b4206e1c0"
+      "hash": "ad574b96ad4e57a3"
     },
     {
       "id": "sample-man-demo",
-      "hash": "0e69036ee7e0b531"
+      "hash": "d833d3885dea6f78"
     },
     {
       "id": "sample-man-wander-demo",
-      "hash": "1afe10e47cde5e3a"
+      "hash": "151d56a8a392c7fd"
     },
     {
       "id": "sample-wander-basic",
-      "hash": "6e9a893666deb7ba"
+      "hash": "a7bdc349df217dcd"
     }
   ]
 }
