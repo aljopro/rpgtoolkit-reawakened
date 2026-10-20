@@ -1,9 +1,9 @@
 ---
 title: "Per-package VM step counters"
-type: 'feature'
+type: feature
 ticket: 13
 created: '2026-10-19'
-status: draft
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "medium"
 context:
@@ -22,7 +22,7 @@ Data and a read API. No UI, no limits, no enforcement.
 
 ## Key Decisions
 
-1. Whether counters are part of the state hash is a 19.1 judgement call (see Assumption A-5).
+1. Counters are excluded from the state hash: they describe execution history rather than game state, while snapshots preserve them for deterministic continuation.
 
 ## Acceptance
 

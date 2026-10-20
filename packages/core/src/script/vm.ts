@@ -97,6 +97,7 @@ import {
   findBlockingThread,
   findThread,
   globalRef,
+  incrementStepCounter,
   killThread,
   localRef,
   refreshBlock,
@@ -568,7 +569,13 @@ function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base:
 /** Copy a callable with the target as receiver unless it already has one (OOP-11). */
 function bindMemberValue(value: Value, handle: number): Value {
   if (!isCallableValue(value) || value.receiver !== null) return value;
-  return { type: "callable", def: value.def, captures: value.captures, receiver: String(handle) };
+  return {
+    type: "callable",
+    def: value.def,
+    captures: value.captures,
+    receiver: String(handle),
+    ...(value.owner === undefined ? {} : { owner: value.owner }),
+  };
 }
 
 /**
@@ -1208,7 +1215,12 @@ function bindingOfCall(
   // compiled program defines it, and compiled programs are not saved: record
   // that program so a restore can compile it (entry 18.6). A command has none.
   const owner = findDefinition(vm, services, program, handle.def);
-  if (owner !== undefined) recordOwner(vm, handle.def, owner.program.ref);
+  if (owner !== undefined) {
+    recordOwner(vm, handle.def, owner.program.ref);
+    return owner.program.ref.owner === undefined
+      ? handle
+      : { ...handle, owner: owner.program.ref.owner };
+  }
   return handle;
 }
 
@@ -1580,10 +1592,14 @@ function performCallable(
   }
 
   frame.ip += 1;
+  const definitionRef =
+    value.owner === undefined || found.program.ref.owner === value.owner
+      ? found.program.ref
+      : { ...found.program.ref, owner: value.owner };
   const receiverContext =
     receiverHandle === undefined ? {} : { objectHandle: receiverHandle, objectClass: receiverClass ?? "" };
   thread.frames.push({
-    program: found.program.ref,
+    program: definitionRef,
     ip: info.entry,
     locals,
     operands: [],
@@ -2153,6 +2169,7 @@ export function stepThread(
         return finish();
       }
       steps += 1;
+      incrementStepCounter(vm, top.program.owner);
       const pos: SourcePos = { file: pending.file, line: pending.line };
       const args = pending.args.map((value) => continuationArg(value, pos));
       const outcome = performContinuation(
@@ -2199,6 +2216,7 @@ export function stepThread(
       return finish();
     }
     steps += 1;
+    incrementStepCounter(vm, frame.program.owner);
     const opIp = frame.ip;
     const depth = frame.operands.length;
 
@@ -2706,7 +2724,16 @@ export function stepThread(
           if (slot.ref === localRef(name)) slot.ref = cellRef(id);
         }
         recordOwner(vm, op.def, frame.program);
-        frame.operands.push({ value: { type: "callable", def: op.def, captures, receiver: null }, ref: null });
+        frame.operands.push({
+          value: {
+            type: "callable",
+            def: op.def,
+            captures,
+            receiver: null,
+            ...(frame.program.owner === undefined ? {} : { owner: frame.program.owner }),
+          },
+          ref: null,
+        });
         frame.ip += 1;
         break;
       }

@@ -254,7 +254,15 @@ export function bindingOf(
   held: CallableValue | undefined,
   defines: (name: string) => boolean,
 ): CallableValue | undefined {
-  if (held !== undefined) return { type: "callable", def: held.def, captures: [...held.captures], receiver: held.receiver };
+  if (held !== undefined) {
+    return {
+      type: "callable",
+      def: held.def,
+      captures: [...held.captures],
+      receiver: held.receiver,
+      ...(held.owner === undefined ? {} : { owner: held.owner }),
+    };
+  }
   const defined = commands.builtin(name) !== undefined || defines(name) || commands.extension(name) !== undefined;
   return defined ? { type: "callable", def: name, captures: [], receiver: null } : undefined;
 }

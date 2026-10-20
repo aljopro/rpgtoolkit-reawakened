@@ -183,5 +183,11 @@ export function layerRoots(table: PluginLayers): readonly CallableValue[] {
 }
 
 function copyCallable(value: CallableValue): CallableValue {
-  return { type: "callable", def: value.def, captures: [...value.captures], receiver: value.receiver };
+  return {
+    type: "callable",
+    def: value.def,
+    captures: [...value.captures],
+    receiver: value.receiver,
+    ...(value.owner === undefined ? {} : { owner: value.owner }),
+  };
 }
