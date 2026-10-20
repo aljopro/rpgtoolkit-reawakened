@@ -5,35 +5,38 @@ on:
     branches: [main]
 permissions:
   contents: read
+# The runner image is pinned deliberately: `ubuntu-latest` starts migrating to
+# Ubuntu 26 on 2026-10-19, and the golden/oracle checks are validated on 24.04.
+# Moving to a new image should be its own deliberate change.
 jobs:
   typecheck:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: pnpm
@@ -47,16 +50,16 @@ jobs:
       - run: pnpm no-skips:test
       - run: pnpm icons:test
   golden:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: fixtures/legacy
           key: legacy-games-${{ hashFiles('tools/fixtures/sources.json') }}
@@ -81,11 +84,11 @@ jobs:
       # (`pnpm dump:record`), like a golden (G5).
       - run: pnpm dump:check
   licence:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: pnpm
@@ -94,11 +97,11 @@ jobs:
       - run: pnpm licence:test
       - run: pnpm licence
   provenance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: pnpm
@@ -106,11 +109,11 @@ jobs:
       - run: pnpm provenance:test
       - run: pnpm provenance
   graph:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: pnpm
@@ -118,11 +121,11 @@ jobs:
       - run: pnpm graph:test
       - run: pnpm graph
   golden-bun:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.21.0
           cache: pnpm
@@ -130,7 +133,7 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: pnpm install --frozen-lockfile
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: fixtures/legacy
           key: legacy-games-${{ hashFiles('tools/fixtures/sources.json') }}
@@ -140,7 +143,7 @@ jobs:
   gate:
     needs: [typecheck, lint, unit, golden, golden-bun, licence, provenance, graph]
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - env:
