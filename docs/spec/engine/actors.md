@@ -195,7 +195,7 @@ permitted to mutate the value (a script may request a mutation through that owne
 
 ### Source fields
 
-| Name | Source field | Type | Actor-section owner | Legacy alias | Writer | Rule | Evidence | Builder |
+| Name | Source field | Type | Section owner (actor, or sprite where marked movement/presentation) | Legacy alias | Writer | Rule | Evidence | Builder |
 |---|---|---|---|---|---|---|---|---|
 | display name | character.name / enemy.name | string | identity | `Name$` | core/actor script | core-rule | [character layout](../formats/character.md#layout) 3; [enemy layout](../formats/enemy.md#layout) 3 | 20.3/20.5 |
 | experience | character.experienceVar + initial experience | int | progression | `Experience!` | core/actor script | core-rule | [character](../formats/character.md#layout) 4,13 | 20.3/20.6 |
