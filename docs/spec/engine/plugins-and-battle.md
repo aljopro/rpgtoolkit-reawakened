@@ -144,6 +144,23 @@ The engine keeps the battle **model**; the plugin owns the **loop and the UI**.
 <a id="e-74"></a>
 **E-74 Damage rules.** A physical attack uses the attacker's FP ±10 % random variance; the target's DP is subtracted **unless a critical hit happens** (enemies define 1-in-N crit chances for being hit and for hitting); minimum 1 damage; damage can be applied to SMP instead of HP. A special move removes its *FP* from the target's HP and its *target SMP drain* from the target's SMP, costs the user SMP, and may apply a status effect and play an animation. HP and SMP are clamped at 0.
 
+**Reawakened rule (OWNER; E-74 physical attack, from owner-relayed [round 10](../../provenance/facts-round-10.md)).** *What it does for a game author:* a normal attack hits for the attacker's fight power, give or take a little luck, minus the target's defence. Now and then it is a critical hit, which ignores the target's defence. Every enemy file says how often: `takeCrit` is how often the player's attacks on that enemy are critical, and `giveCrit` is how often that enemy's attacks on the player are critical. Damage is never less than 1. *Precisely:* the built-in physical attack takes an attacker, a target, a supplied amount (the stock fight plugin supplies the attacker's FP; a plugin or script may supply any amount and apply the result itself) and whether the damage goes to SMP instead of HP. It runs these steps, in this order, and reports the damage dealt.
+
+1. **Nothing to do.** If there is no attacker, no target, or the attacker's HP is below 1, nothing changes and the reported damage is 0. The order of these three checks cannot be observed, because each leaves everything unchanged.
+2. **Luck.** If the supplied amount is above 0, draw one whole percentage *p* from -10 to +9, each equally likely, from the seeded random generator (G3), and replace the amount with `amount × (100 + p) ÷ 100` with the fraction dropped (towards zero). The swing is not symmetrical. This is worked in exact arithmetic, a Reawakened determinism choice; the original used floating-point arithmetic and may differ by 1 at a rounding boundary (not verified).
+3. **Defence and critical hit.** If the supplied amount was above 0, pick the limit *n* from the table below, then draw one whole number from 0 to *n* inclusive, each equally likely, from the seeded generator. A draw of 0 is a critical hit and the target's DP is not subtracted; any other draw subtracts the target's DP from the amount. So a limit of *n* gives a 1-in-(*n* + 1) chance, and **a limit of 0 always skips DP**. The luck draw comes first and the critical draw second; both happen only when the supplied amount is above 0, so an amount of 0 or less consumes no random numbers.
+4. **Floor.** If the amount is now below 1 it becomes 1. This includes a supplied amount of 0 or less.
+5. **Apply.** Subtract the amount from the target's HP, or from its SMP when the damage goes to SMP, never going below 0.
+
+| Attacker | Target | Limit *n* |
+| --- | --- | --- |
+| player | enemy | the enemy's `takeCrit` |
+| enemy | player | the attacking enemy's `giveCrit` |
+| enemy | enemy | the attacking enemy's `giveCrit` |
+| player | player | 0 (DP is always skipped; not a normal battle pairing) |
+
+A player has no critical-hit field of its own. *Departure from the original:* for an enemy attacking a player, the original read the limit from a record the player target does not have, which gave an invalid result; the rebuild uses the attacking enemy's `giveCrit`, which is what the two field names and [`enemy.md`](../formats/enemy.md#layout) rows 9 and 10 describe. The other three rows follow the original. *Special moves* do not use these steps: a special move takes its own flat FP value off the target's HP, its own target-SMP value off the target's SMP and its own source-SMP value off the user's SMP, each kept at 0 or above, with no luck and no DP subtraction. *Evidence:* [facts-round-10.md](../../provenance/facts-round-10.md) D1 to D8; `enemy.md` rows 9 and 10. *Rejected alternative:* adding a critical-hit field to players, which no format has and which the enemy-side fields already cover. DP derivation from stats and equipment and the defaults of `takeCrit`/`giveCrit` are not ruled here (facts D9).
+
 <a id="e-75"></a>
 **E-75 Status effects.** Applied by moves or by script and keyed by file (re-applying restarts it). Each round while the fighter is charged: apply ±HP and ±SMP and optionally run a program (with `source`/`target` = the fighter); it lasts a number of rounds. **Speed up / slow down** change the charge rate; **disable** freezes charging and is reference-counted when several disables are active.
 
