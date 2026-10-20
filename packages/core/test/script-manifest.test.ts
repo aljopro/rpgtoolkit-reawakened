@@ -134,6 +134,16 @@ test("a package entry parses with name, version, default namespace and declared 
   equal(isPackageManifestEntry(result.manifest![0]!), false);
 });
 
+test("reserved lower-case package IDs remain valid manifest names", () => {
+  const result = parsePluginManifest([
+    { id: "core" },
+    { id: "__proto__", version: "1" },
+    { id: "constructor", version: "1" },
+  ]);
+  deepEqual(result.diagnostics, []);
+  deepEqual(result.manifest?.map((entry) => entry.id), ["core", "__proto__", "constructor"]);
+});
+
 test("package fields are validated with located diagnostics", () => {
   const cases: readonly [unknown, string][] = [
     [{ id: "p", version: "" }, "manifest.version"],

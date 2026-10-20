@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   createGameState,
   hashGameState,
+  incrementStepCounter,
   isCallableValue,
   readStepCounters,
   restoreGameState,
@@ -98,4 +99,34 @@ test("step counters are excluded from the game-state hash", () => {
   counted.vm.stepCounters = { alpha: 17, beta: 4 };
   equal(hashGameState(counted), hashGameState(plain));
   ok(snapshot(counted).includes('"stepCounters"'));
+});
+
+test("reserved package IDs count as own numeric counters through snapshot restore", () => {
+  const owners = ["__proto__", "constructor", "toString", "ordinary"];
+  const state = createGameState({ seed: 0 });
+  for (const owner of owners) {
+    incrementStepCounter(state.vm, owner);
+    incrementStepCounter(state.vm, owner);
+  }
+
+  const counters = state.vm.stepCounters!;
+  deepEqual(Object.keys(counters), owners);
+  for (const owner of owners) {
+    equal(Object.hasOwn(counters, owner), true);
+    equal(counters[owner], 2);
+    equal(typeof counters[owner], "number");
+  }
+
+  const restored = restoreGameState(snapshot(state));
+  deepEqual(restored.vm.stepCounters, counters);
+  for (const owner of owners) incrementStepCounter(restored.vm, owner);
+  for (const owner of owners) equal(restored.vm.stepCounters![owner], 3);
+
+  const replay = createGameState({ seed: 0 });
+  for (const owner of owners) {
+    incrementStepCounter(replay.vm, owner);
+    incrementStepCounter(replay.vm, owner);
+  }
+  equal(snapshot(replay), snapshot(state));
+  equal(hashGameState(state), hashGameState(createGameState({ seed: 0 })));
 });
