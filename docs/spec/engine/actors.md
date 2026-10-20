@@ -125,3 +125,103 @@ An actor-producing asset MAY declare custom event names. Declarations are asset 
 ## Evidence and ownership
 
 The actor model inventory is entry 20.2. The actor store is 20.3; script object exposure and aliases are 20.4; asset hydration is 20.5; core interpretation rules are 20.6; behaviour registration is 20.7; save and hydration are 20.8; events and board emitter lifetime are 20.9; board-sprite unification is 20.10. Epic 7 owns stock-battle behavior, and the editor epics own warnings and conversion of legacy `levelUpProgram` values.
+
+## Actor inventory {#act-inventory}
+
+This is the canonical 20.2 inventory. Each persisted source field appears once; runtime
+state appears once in the runtime table. `OWNER` marks a choice that requires owner-epic
+approval rather than an inferred legacy rule. `core-rule` means the actor store owns the
+interpretation; `battle-rule` means Epic 7 owns it. “Writer” identifies the only layer
+permitted to mutate the value (a script may request a mutation through that owner).
+
+### Source fields
+
+| Name | Source field | Type | Actor-section owner | Legacy alias | Writer | Rule | Evidence | Builder |
+|---|---|---|---|---|---|---|---|---|
+| display name | character.name / enemy.name | string | identity | `Name$` | core/actor script | core-rule | [character layout](../formats/character.md#layout) 3; [enemy layout](../formats/enemy.md#layout) 3 | 20.3/20.5 |
+| experience | character.experienceVar + initial experience | int | progression | `Experience!` | core/actor script | core-rule | [character](../formats/character.md#layout) 4,13 | 20.3/20.6 |
+| defence | character.defenseVar + defense | int | stats | `DP!` | core/actor script | core-rule | [character](../formats/character.md#layout) 5,13 | 20.3/20.6 |
+| fight power | character.fightVar + fight | int | stats | `FP!` | core/actor script | core-rule | [character](../formats/character.md#layout) 6,13 | 20.3/20.6 |
+| current HP | character.healthVar + health / enemy.hp | int | stats | `HP!` | core/battle operation | core-rule | [character](../formats/character.md#layout) 7,13; [enemy](../formats/enemy.md#layout) 4 | 20.3/20.6/Epic 7 |
+| maximum HP | character.maxHealthVar + maxHealth / enemy.hp | int | stats | `MaxHP!` | core/equipment/level-up | core-rule | [character](../formats/character.md#layout) 8,13; [enemy](../formats/enemy.md#layout) 4 | 20.3/20.6 |
+| actor name variable | character.nameVar | string variable reference | identity | `NameVar$` | core | core-rule | [character](../formats/character.md#layout) 9 | 20.5 |
+| current SMP | character.smVar + sm / enemy.smp | int | stats | `SMP!` | core/battle operation | core-rule | [character](../formats/character.md#layout) 10,13; [enemy](../formats/enemy.md#layout) 5 | 20.3/20.6/Epic 7 |
+| maximum SMP | character.smMaxVar + smMax / enemy.smp | int | stats | `MaxSMP!` | core/equipment/level-up | core-rule | [character](../formats/character.md#layout) 11,13; [enemy](../formats/enemy.md#layout) 5 | 20.3/20.6 |
+| level | character.levelVar + level | int | progression | `Level!` | core/level-up/script | core-rule | [character](../formats/character.md#layout) 12,13 | 20.3/20.6 |
+| portrait | character.profilePic | asset reference | presentation | OWNER | hydration/editor | core-rule | [character](../formats/character.md#layout) 14 | 20.5/20.10 |
+| special-move slots | character specialMove.file/minExp/minLevel/condition variable/required value (×201) | array of records | abilities | OWNER | core hydration/script | core-rule | [character](../formats/character.md#layout) 15a–e | 20.5/20.6 |
+| special-move menu label | character.specialMoveName | string | abilities | OWNER | hydration/editor | core-rule | [character](../formats/character.md#layout) 16 | 20.5 |
+| special-move flag | character.smYN | byte | abilities | OWNER | hydration | core-rule | [character](../formats/character.md#layout) 17 | 20.5 |
+| accessory slots | character accessory slot name (×11) | array<string> | equipment | OWNER | core/equipment script | core-rule | [character](../formats/character.md#layout) 18 | 20.5/20.6 |
+| armour-slot usage | character armour slot used (×7) | array<boolean> | equipment | OWNER | core/equipment | core-rule | [character](../formats/character.md#layout) 19 | 20.5/20.6 |
+| first-level threshold | character.levelType | int | progression | `LevelType!` | core | core-rule | [character](../formats/character.md#layout) 20 | 20.6 |
+| threshold increase | character.experienceIncrease | short | progression | `ExperienceIncrease!` | core | core-rule | [character](../formats/character.md#layout) 21 | 20.6 |
+| maximum level | character.maxLevel | int | progression | `MaxLevel!` | core | core-rule | [character](../formats/character.md#layout) 22 | 20.6 |
+| level HP increase | character.levelHp | short | progression policy | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
+| level DP increase | character.levelDp | short | progression policy | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
+| level FP increase | character.levelFp | short | progression policy | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
+| level SMP increase | character.levelSm | short | progression policy | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
+| level-up program | character.levelUpProgram | program reference | progression | OWNER | editor conversion/script | core-rule | [character](../formats/character.md#layout) 25; [actor precedence](#progression) | 20.6/20.7 |
+| level-up mode | character.levelUpType | byte | progression policy | `LevelUpType!` | core | core-rule | [character](../formats/character.md#layout) 26 | 20.6 |
+| enemy run permission | enemy.canRun | byte | battle traits | `ENE_CANRUN` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 8; [E-71](plugins-and-battle.md#e-71) | Epic 7 |
+| enemy take-crit denominator | enemy.takeCrit | short | battle traits | `ENE_TAKECRIT` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 9; [E-74](plugins-and-battle.md#e-74) | Epic 7 |
+| enemy give-crit denominator | enemy.giveCrit | short | battle traits | `ENE_GIVECRIT` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 10; [E-74](plugins-and-battle.md#e-74) | Epic 7 |
+| enemy special moves | enemy.special moves | array<asset reference> | abilities | `ENE_SPC` | hydration/Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 11 | 20.5/Epic 7 |
+| weaknesses | enemy.weaknesses | array<asset reference> | battle traits | `ENE_WEAK` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 12 | Epic 7 |
+| strengths | enemy.strengths | array<asset reference> | battle traits | `ENE_STRONG` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 13 | Epic 7 |
+| AI level | enemy.ai | byte | battle traits | `ENE_AI` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 14; [AI table](plugins-and-battle.md#enemy-ai) | Epic 7 |
+| custom AI enabled | enemy.useCode | byte | battle traits | `ENE_USECOD` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 15 | Epic 7 |
+| custom AI program | enemy.prg | program reference | battle traits | `ENE_PRG` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 16 | Epic 7 |
+| experience reward | enemy.exp | int | rewards | `ENE_EXP` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 17; [E-77](plugins-and-battle.md#e-77) | Epic 7 |
+| gold reward | enemy.gp | int | rewards | `ENE_GP` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 18 | Epic 7 |
+| victory program | enemy.winPrg | program reference | battle traits | `ENE_WINPRG` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 19 | Epic 7 |
+| run-away program | enemy.runPrg | program reference | battle traits | `ENE_RUNPRG` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 20 | Epic 7 |
+| character/enemy animations | animation slots and custom stance pairs | arrays<asset reference/label> | presentation | OWNER | hydration | core-rule | [character](../formats/character.md#layout) 28–35; [enemy](../formats/enemy.md#layout) 21–24 | 20.5/20.10 |
+| movement timing | character.idleTime/speed; item.speed/idleTime | double | movement | OWNER | core/movement | core-rule | [character](../formats/character.md#layout) 31–33; [item](../formats/item.md#layout) 25–27 | 20.10 |
+| collision/activation hulls | character/item polygons | point arrays | movement | OWNER | hydration/movement | core-rule | [character](../formats/character.md#layout) 36–40; [item](../formats/item.md#layout) 30–32 | 20.5/20.10 |
+| item identity and description | item.itemName/description | string | inventory | OWNER | inventory owner | core-rule | [item](../formats/item.md#layout) 3–4; [E-81](plugins-and-battle.md#e-81) | 20.3/20.5 |
+| item permissions | item.equipYN/menuYN/boardYN/fightYN/usedBy/allowed character | bytes/array<string> | inventory | OWNER | inventory/equipment | core-rule | [item](../formats/item.md#layout) 5–7 | 20.3/20.6 |
+| item prices/key flag | item.buyPrice/sellPrice/keyItem | int/int/byte | inventory | OWNER | inventory/menu | core-rule | [item](../formats/item.md#layout) 8–9 | 20.3 |
+| item equipment slots/bonuses | item equip slot, accessory, equipHP/equipDP/equipFP/equipSM | array/strings/ints | equipment | OWNER | equipment owner | core-rule | [item](../formats/item.md#layout) 10–12; [E-82](plugins-and-battle.md#e-82) | 20.6 |
+| item equip/remove programs | item.prgEquip/prgRemove | program references | equipment | OWNER | equipment owner | core-rule | [item](../formats/item.md#layout) 13 | 20.6 |
+| item menu effect/program | item.menuHP/menuSM/prgMenuUse | ints/program reference | inventory | OWNER | inventory owner | core-rule | [item](../formats/item.md#layout) 14–15 | 20.6 |
+| item battle effect/program | item.fightHP/fightSM/prgFightUse | ints/program reference | inventory | OWNER | Epic 7 | battle-rule | [item](../formats/item.md#layout) 16–17 | Epic 7 |
+| item animation/board programs | item.animation/prgOnBoard/prgPickUp | asset/program references | movement | OWNER | hydration/board | core-rule | [item](../formats/item.md#layout) 18–20 | 20.5/20.10 |
+| status identity and duration | status.name/rounds | string/short | statuses | OWNER | core status owner | core-rule | [status](../formats/battle-data.md#status-effect) 3–4 | 20.3/20.6 |
+| status charge modifiers | status.speed/slow/disable | short flags | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 5–7; [E-75](plugins-and-battle.md#e-75) | Epic 7 |
+| status HP/SMP tick | status.hp/hpAmount/smp/smpAmount | flags/shorts | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 8–11 | Epic 7 |
+| status program | status.code/prg | flag/program reference | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 12–13 | Epic 7 |
+
+### Runtime state (5.3 actor)
+
+| Name | Source field | Type | Actor-section owner | Legacy alias | Writer | Rule | Evidence | Builder |
+|---|---|---|---|---|---|---|---|---|
+| stable id | runtime actor.id | scalar | identity | OWNER | actor store | core-rule | [ACT-1](#actor-contract-entries) | 20.3 |
+| source asset/kind | runtime actor.source/kind | asset reference/enum | identity | OWNER | hydration | core-rule | [actor data](#actor-data-and-identity) | 20.5 |
+| current/max stats | runtime actor.stats | plain-data record | stats | aliases above | actor owner | core-rule | [actor data](#actor-data-and-identity) | 20.3/20.6 |
+| statuses/counters | runtime actor.statuses | map<status, counter> | statuses | OWNER | actor status operation | core-rule | [actor data](#actor-data-and-identity) | 20.6 |
+| equipment-derived state | runtime actor.equipment/equipment bonuses | plain-data record | equipment | OWNER | equipment owner | core-rule | [ACT-3](#actor-contract-entries) | 20.3/20.6 |
+| progression state/policy | runtime actor.progression | plain-data record | progression | aliases above | actor/behaviour | core-rule | [Progression](#progression) | 20.6/20.7 |
+| behaviour name | runtime actor.behaviour | string or absent | identity | OWNER | hydration/registry | core-rule | [behaviours](#behaviours-and-hydration) | 20.7/20.8 |
+| declared custom events | runtime actor.customEvents | array<string> | identity | OWNER | hydration | core-rule | [custom events](#custom-actor-events) | 20.5/20.9 |
+| transform/facing/visual | runtime actor.transform/facing/visual | plain-data records | movement/presentation | OWNER | movement/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
+| collision/activation bases | runtime actor.collision/activation | point arrays | movement | OWNER | movement/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
+| movement queue/waypoints | runtime actor.movement | plain-data queue | movement | OWNER | movement/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
+| board loading visibility | runtime actor.visible/loading | boolean/state | movement | OWNER | board/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
+| compact item handle | runtime item actor index/handle | integer | inventory | OWNER | hydration/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
+
+### Deterministic equations
+
+| Name | Source field | Type | Actor-section owner | Legacy alias | Writer | Rule | Evidence | Builder |
+|---|---|---|---|---|---|---|---|---|
+| derived stat | equipment/base stat | int | stats | corresponding stat alias | core | core-rule | [ACT-3](#actor-contract-entries), [E-82](plugins-and-battle.md#e-82) | 20.6 |
+| next level threshold | levelType, experienceIncrease, levelUpType | int | progression | OWNER | core | core-rule | [progression](progression-and-levels.md) | 20.6 |
+| level-up growth | levelHp/levelDp/levelFp/levelSm + levelUpType | int | progression | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23,26; [progression](progression-and-levels.md) | 20.6/20.7 |
+| damage taken | attacker FP, target DP, crit, variance | int | battle operation | OWNER | Epic 7 | battle-rule | [E-74](plugins-and-battle.md#e-74) | Epic 7 |
+
+Defaults are deterministic: missing numeric stats start at zero (except format-declared
+defaults), HP/SMP mutations clamp to `[0,max]`, `fallen` is `HP <= 0`, and the core uses
+the progression arithmetic in [progression-and-levels.md](progression-and-levels.md).
+Behaviour hooks may replace derived-stat, level-up, revival, status, or equipment results;
+the stock battle package may replace damage and charge rules. Random variance requires the
+injected seeded RNG; no equation may read wall-clock time or an ambient RNG.
