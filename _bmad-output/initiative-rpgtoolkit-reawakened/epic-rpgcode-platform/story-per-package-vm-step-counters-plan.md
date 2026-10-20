@@ -22,7 +22,7 @@ Data and a read API. No UI, no limits, no enforcement.
 
 ## Key Decisions
 
-1. Whether counters are part of the state hash is a 19.1 judgement call (see Assumption A-5).
+1. Counters are excluded from the state hash: they describe execution history rather than game state, while snapshots preserve them for deterministic continuation.
 
 ## Acceptance
 
