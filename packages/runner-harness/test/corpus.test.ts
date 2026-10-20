@@ -27,7 +27,9 @@ import {
   verifyCatalogueCompleteness,
   type FetchedGameFiles,
 } from "../src/corpus.ts";
+import { PLATFORM_FIXTURE_SOURCES } from "../src/platform-fixtures.ts";
 import { checkSnapshotRestore } from "../src/restore-check.ts";
+import type { ScriptHost } from "../src/script-host.ts";
 import { createScriptHost, restoreScriptHost } from "../src/script-host.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -96,12 +98,12 @@ test("verifyCatalogueCompleteness: missing mapped TK2 command throws with diagno
   );
 });
 
-test("corpus: all 24 programs run to completion and pass random-step snapshot restore", () => {
+test("corpus: all 27 programs run to completion and pass random-step snapshot restore", () => {
   const programs = buildCorpus();
-  equal(programs.length, 24);
+  equal(programs.length, 27);
 
   const results = runAllCorpusPrograms(42);
-  equal(results.length, 24);
+  equal(results.length, 27);
   for (const result of results) {
     equal(typeof result.stateHash === "string" && result.stateHash.length === 16, true);
     equal(result.ticks > 0, true);
@@ -174,6 +176,75 @@ test("corpus: synthetic-13-package-layers registers layers, runs onion dispatch,
     );
     equal(fresh.stateHash(), straight.stateHash(), `split ${split} ends where the straight run ends`);
   }
+});
+
+// Entry 19.14: the three package goldens run the authored fixtures of packages/core/test/fixtures/platform/.
+const PLATFORM_FIXTURE_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "core",
+  "test",
+  "fixtures",
+  "platform",
+);
+
+test("corpus: the platform fixture copies are the fixture files without their comment lines (entry 19.14)", () => {
+  const files = readdirSync(PLATFORM_FIXTURE_DIR).sort();
+  deepEqual(Object.keys(PLATFORM_FIXTURE_SOURCES).sort(), files, "every fixture file has a copy and no copy lacks a file");
+  for (const file of files) {
+    const withoutComments = readFileSync(join(PLATFORM_FIXTURE_DIR, file), "utf8")
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("//"))
+      .join("\n");
+    equal(PLATFORM_FIXTURE_SOURCES[file], withoutComments, `${file} drifted from its corpus copy`);
+  }
+});
+
+/** Restore the program from a snapshot taken at every tick and check each run ends where the straight run ends. */
+function restoresFromEveryTick(id: string): ScriptHost {
+  const program = buildCorpus().find((p) => p.id === id);
+  if (!program) throw new Error(`${id} missing`);
+  const straight = program.createHost(0);
+  straight.advance(program.ticks, []);
+  for (let split = 0; split <= program.ticks; split += 1) {
+    const fresh = program.createHost(0);
+    fresh.advance(split, []);
+    const restored = program.restoreHost(fresh.snapshot());
+    equal(restored.stateHash(), fresh.stateHash(), `split ${split}`);
+    checkSnapshotRestore(
+      { fresh, fromSnapshot: restored },
+      { ticks: program.ticks - split, split, inputsForTick: undefined },
+    );
+    equal(fresh.stateHash(), straight.stateHash(), `split ${split} ends where the straight run ends`);
+  }
+  return straight;
+}
+
+test("corpus: synthetic-14-object-package pins one seeded run of the fighters objects and restores from every tick (entry 19.14)", () => {
+  const straight = restoresFromEveryTick("synthetic-14-object-package");
+  const globals = straight.state().vm.globals;
+  equal(globals.log, "direct:5;torn-off:7;rebound:3;potion:22;killed:slime;");
+  equal(globals.done, 1);
+});
+
+test("corpus: synthetic-15-emitter-package pins one seeded run of the shield and restores from every tick (entry 19.14)", () => {
+  const straight = restoresFromEveryTick("synthetic-15-emitter-package");
+  const globals = straight.state().vm.globals;
+  equal(
+    globals.log,
+    "w1r0:6>0;blocked:6;w0r1:10>5;first:5;hurt:5;w1r2:6>0;blocked:6;w1r3:6>0;blocked:6;bare:40;hurt:40;foe:4;",
+  );
+  equal(globals.fallen, 1);
+  equal(globals.done, 1);
+});
+
+test("corpus: synthetic-16-namespaced-packages pins one seeded run of the override and restores from every tick (entry 19.14)", () => {
+  const straight = restoresFromEveryTick("synthetic-16-namespaced-packages");
+  const globals = straight.state().vm.globals;
+  equal(globals.log, "weather:5+storm;weather:5;weather:5+storm;weather:3;");
+  equal(globals.trace, "storm> weather> <weather <storm weather> <weather ");
+  equal(globals.done, 1);
 });
 
 test("corpus: synthetic-10-closures restores from a snapshot taken at every tick and finishes with the same state hash (entry 18.6)", () => {
