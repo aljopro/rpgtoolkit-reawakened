@@ -215,6 +215,14 @@ export default [
       "**/node_modules/**",
       "**/*.tsbuildinfo",
       "packages/core/test/fixtures/**",
+      // Local trees that are not this checkout's source. Flat config does not
+      // read `.gitignore`, so without these `eslint .` parses every other
+      // branch checked out under `.worktrees/` (thousands of files) and the
+      // fetched sample games. Lint checks the repository, not a neighbour's
+      // working copy.
+      ".worktrees/**",
+      "fixtures/**",
+      ".serena/**",
     ],
   },
   {
