@@ -251,7 +251,7 @@ permitted to mutate the value (a script may request a mutation through that owne
 | status HP/SMP tick | status.hp/hpAmount/smp/smpAmount | flags/shorts | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 8–11 | Epic 7 |
 | status program | status.code/prg | flag/program reference | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 12–13 | Epic 7 |
 
-### Runtime state (5.3 actor)
+### Runtime state (actor)
 
 | Name | Source field | Type | Actor-section owner | Legacy alias | Writer | Rule | Evidence | Builder |
 |---|---|---|---|---|---|---|---|---|
@@ -263,11 +263,22 @@ permitted to mutate the value (a script may request a mutation through that owne
 | progression state/policy | runtime actor.progression | plain-data record | progression | aliases above | actor/behaviour | core-rule | [Progression](#progression) | 20.6/20.7 |
 | behaviour name | runtime actor.behaviour | string or absent | identity | OWNER | hydration/registry | core-rule | [behaviours](#behaviours-and-hydration) | 20.7/20.8 |
 | declared custom events | runtime actor.customEvents | array<string> | identity | OWNER | hydration | core-rule | [custom events](#custom-actor-events) | 20.5/20.9 |
-| transform/facing/visual | runtime actor.transform/facing/visual | plain-data records | movement/presentation | OWNER | movement/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
-| collision/activation bases | runtime actor.collision/activation | point arrays | movement | OWNER | movement/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
-| movement queue/waypoints | runtime actor.movement | plain-data queue | movement | OWNER | movement/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
-| board loading visibility | runtime actor.visible/loading | boolean/state | movement | OWNER | board/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
-| compact item handle | runtime item actor index/handle | integer | inventory | OWNER | hydration/runtime | core-rule | Epic 5 unified actor plan, implementation notes | 20.10 |
+
+### Sprite state (sprites section, separate from actors)
+
+These rows are owned by the sprites/presentation section, not the actor section. A sprite MAY reference an actor by `actorId`; no row below is copied into the actor record.
+
+| Name | Source field | Type | Section owner | Writer | Rule | Evidence | Builder |
+|---|---|---|---|---|---|---|---|
+| sprite id / `actorId` | runtime sprite.id/actorId | scalar / scalar or null | sprites | sprite store/hydration | core-rule | [Sprites and board geometry](#sprites-and-board-geometry) | 20.10 |
+| transform/facing | runtime sprite.transform | plain-data record | sprites | movement service | core-rule | Epic 5 unified actor and sprite plan | 20.10 |
+| visual/animation playback | runtime sprite.visual | plain-data record | sprites/presentation | presentation service | core-rule | Epic 5 unified actor and sprite plan | 20.10 |
+| geometry (occupancy, activation, hitbox) | runtime sprite.geometry | shape records or null | sprites | hydration/movement service | core-rule | [Sprites and board geometry](#sprites-and-board-geometry) | 20.10 |
+| movement queue/waypoints | runtime sprite.movement | plain-data queue | sprites | movement service | core-rule | Epic 5 unified actor and sprite plan | 20.10 |
+| board visibility/loading | runtime sprite.visible/loading | boolean/state | sprites | board/runtime | core-rule | Epic 5 unified actor and sprite plan | 20.10 |
+| compact item handle | runtime item sprite index/handle | integer | sprites | hydration/runtime | core-rule | Epic 5 unified actor and sprite plan | 20.10 |
+
+Source-field rows above whose owner is `movement` or `presentation` (portrait aside) hydrate into this sprite section, not the actor record.
 
 ### Deterministic equations
 
