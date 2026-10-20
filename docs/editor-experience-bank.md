@@ -113,6 +113,18 @@ Rowan has an unfinished or changed project and wants to resume, revise, or redir
 - Evidence: `CORPUS-FORUM-7148`; `docs/editor-features.md` T-03, T-06, T-28, T-31, T-43–T-44, T-73.
 - Confidence: strongly inferred.
 
+### Riley Forge — the code-centered boundary pusher
+
+Riley is an engineering-minded creator who enjoys assembling code and testing the limits of a flexible game-making ecosystem. The editor is not necessarily Riley's preferred starting point, but a code-centered workspace would let Riley configure and extend the project from that direction.
+
+- Typical starting state: familiarity with the engine's commands, an existing board or game idea, and curiosity about what the system can support.
+- Primary intent: “Let me use code to push this system somewhere unexpected, and show me quickly what works.”
+- Preferred interaction: code editing, command discovery and completion, direct configuration, and a fast run-and-inspect loop.
+- Trust condition: the editor supports experimentation without hiding the code or presenting unsupported capabilities as available.
+- Failure signal: slow execution, poor command discoverability, or a hard boundary between the board system and an adjacent genre idea makes experimentation frustrating.
+- Evidence: owner-reported experience (the project owner's own usage style); RPGCode contests are a research lead for corroboration, not yet reviewed evidence.
+- Confidence: firsthand for this owner's experience; broader prevalence unverified. Not a historical-corpus composite and not a primary first-use path.
+
 ## Candidate intent inventory
 
 | ID | Creator intent | Likely personas | Priority | Current status |
@@ -129,6 +141,7 @@ Rowan has an unfinished or changed project and wants to resume, revise, or redir
 | I-10 | “I changed direction; help me revise safely.” | Rowan, Casey | P1 | Research entry |
 | I-11 | “I have an existing project; help me continue.” | Rowan | P0 | Research entry |
 | I-12 | “Finish and share a complete game.” | All | P1 | Feature-supported, flow not yet designed |
+| I-14 | “Let me configure and extend the game from code, and quickly explore what the engine can do.” | Riley | P2 | Owner-reported scenario; not a golden case. (I-13, acquired-system integration, is defined in the research pilot.) |
 
 Priority is provisional. P0 means the intent is central to the editor promise and should be represented in the first experience bank; it does not mean every supporting feature must ship immediately.
 

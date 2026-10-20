@@ -185,7 +185,7 @@ Only two composites clear this pilot's minimal cross-situation threshold. They a
 
 ## C. Candidate intent inventory
 
-Existing I-01–I-12 IDs are retained for continuity; I-13 makes integration explicit. **P0** means exercise in the first design study, **P1** means next research coverage—not shipping order or measured demand. Status describes the intent claim; individual design responses remain I/H/S even where the goal was observed.
+Existing I-01–I-12 IDs are retained for continuity; I-13 makes integration explicit and I-14 records the owner's code-centered usage style. **P0** means exercise in the first design study, **P1** means next research coverage—not shipping order or measured demand. Status describes the intent claim; individual design responses remain I/H/S even where the goal was observed.
 
 | ID / user-language intent | Likely lens; starting state → outcome | Modes and editor responsibility | Human judgment; failure → recovery | Evidence; priority; status |
 |---|---|---|---|---|
@@ -202,6 +202,7 @@ Existing I-01–I-12 IDs are retained for continuity; I-13 makes integration exp
 | I-11 “Help me resume this project.” | Returning-creator hypothesis; unfamiliar existing work → understood next step | **H:** project overview, inspection, optional explanation | Whether to continue; incorrect summary → inspect actual state | E7148 inactivity is not evidence of a resumption workflow; P1; **hypothesized** |
 | I-12 “Let others experience what I made.” | Ellis; finished work → intended version delivered | **H:** release preview, packaging, optional conversation; surface prerequisites | Audience, readiness, publication consent; failed launch → diagnose/repackage | E735/E764; P1; **observed** |
 | I-13 “Make this acquired system work here.” | Avery; downloaded capability → configured, testable use | **H:** structured setup, docs/examples, code, optional AI; reveal prerequisites and integration steps | Whether it fits the game; incompatibility → explain and preserve project | E7190; P0; **observed** |
+| I-14 “Let me configure and extend the game from code.” | Riley (owner-reported lens); engine familiarity → fast run-and-inspect loop | **H:** code editing, command discovery, direct configuration; never hide code or imply unsupported capability | Which boundaries to push; slow loop or hard board/genre limit → expose actual capability and errors | Owner report, no corpus support; P1 (research); **owner-reported hypothesis** |
 
 The brief's “AI as expert implementation partner” is a strategic direction. It is not proven by historical requests for human help. Likewise, I-09 does not authorize AI to judge whether a game is good.
 
