@@ -99,11 +99,12 @@ export function runEventsPhase(state: GameState, services: ScriptServices, budge
 }
 
 /**
- * The end-of-tick pass with the emitter's roots (R-34, EMIT-14): the listener
+ * The end-of-tick pass with the emitter's roots (R-34, EMIT-14, EMIT-16): the listener
  * table and the queued events keep their callables' cells and receivers and their
- * event objects alive, and the listeners of an emitter the pass freed go with it.
+ * event objects alive, as does a thread parked on a cancelable emit, and the
+ * listeners of an emitter the pass freed go with it.
  */
 export function collectStateGarbage(state: GameState): void {
-  collectGarbage(state.vm, eventRoots(state.events));
-  if (pruneDeadEmitters(state.events, state.vm) > 0) collectGarbage(state.vm, eventRoots(state.events));
+  collectGarbage(state.vm, eventRoots(state.events, state.vm));
+  if (pruneDeadEmitters(state.events, state.vm) > 0) collectGarbage(state.vm, eventRoots(state.events, state.vm));
 }

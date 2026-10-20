@@ -325,6 +325,25 @@ seen = total()
 end()
 `;
 
+// 12. Cancelable emit (entry 19.11; EMIT-5, EMIT-16, EMIT-17): the emitting thread parks on an
+// event.dispatch wait while four listeners run in registration order (one halves a damage
+// field, one cancels, a once listener sees the cancel, one waits), then resumes with the
+// event; a plain emit queued between the two cancelable emits never blocks the program.
+const SYNTHETIC_12_SOURCE = `log = ""
+guard = {}
+steps = 0
+guard.on("hit", (e) => { for (i = 0; i < 3; i = i + 1) { steps = steps + 1 }; e.detail.dmg = e.detail.dmg / 2; log = log + "s" })
+guard.on("hit", (e) => { if (e.detail.dmg < 6) { e.cancel() }; log = log + "c" })
+guard.once("hit", (e) => { log = log + "o" + e.canceled })
+guard.on("hit", (e) => { threadSleep(getThreadId(), 0.02); log = log + "z" })
+first = guard.emitCancelable("hit", { dmg: 10 })
+log = log + "|" + first.canceled + first.detail.dmg
+guard.emit("note", { dmg: 6 })
+second = guard.emitCancelable("hit", { dmg: 40 })
+log = log + "|" + second.canceled + second.detail.dmg
+end()
+`;
+
 // -------------------------------------------------------------------
 // Synthetic TK2 Program (dialect, # prefixes, sigils, loose dialogue, methods)
 // -------------------------------------------------------------------
@@ -867,6 +886,15 @@ export function buildCorpus(): readonly CorpusProgram[] {
         const loader = createMemoryLoader({ "main.prg": SYNTHETIC_11_BOOT, "game.prg": SYNTHETIC_11_GAME });
         return restoreScriptHost(json, { loader });
       },
+    },
+    {
+      id: "synthetic-12-cancelable-emit",
+      name: "Synthetic 12 (Cancelable Emit)",
+      description:
+        "A cancelable emit that parks its thread on an event.dispatch wait while four listeners halve a field, cancel, see the cancel and wait, then resumes with the event; a plain emit between two cancelable emits",
+      ticks: 20,
+      createHost: (seed) => createScriptHost({ program: SYNTHETIC_12_SOURCE, seed }),
+      restoreHost: (json) => restoreScriptHost(json, {}),
     },
     {
       id: "synthetic-tk2",

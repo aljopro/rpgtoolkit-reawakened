@@ -1,6 +1,7 @@
 /**
- * The free-function form of the emitter methods (EMIT-2, EMIT-14; entry 19.10):
- * `on`, `once`, `off` and `emit` with the emitter first. `emitter.on(type, fn)`
+ * The free-function form of the emitter methods (EMIT-2, EMIT-14, EMIT-16, EMIT-17;
+ * entries 19.10 and 19.11): `on`, `once`, `off`, `emit` and `emitCancelable` with the
+ * emitter first, and `cancelEvent(event)`. `emitter.on(type, fn)`, `event.cancel()`
  * and the rest are the same operation, run by the VM without a command lookup.
  *
  * A command never touches state (AD-8): each reports a `vm.control` effect whose
@@ -24,10 +25,11 @@ const NOT_CALLABLE = { code: CALLABLE_NOT_CALLABLE, when: "The listener is not a
 
 /** One emitter command: it names its operation and forwards its arguments to the VM. */
 function emitterCommand(
-  name: "on" | "once" | "off" | "emit",
+  name: "on" | "once" | "off" | "emit" | "emitcancelable" | "cancelevent",
   params: readonly ParamSpec[],
   doc: NonNullable<BuiltinSpec["doc"]>,
 ): BuiltinSpec {
+  const op = name === "cancelevent" ? "cancel" : name;
   return {
     name,
     aliases: [],
@@ -35,7 +37,7 @@ function emitterCommand(
     doc,
     call: (_view, args) => ({
       value: 0,
-      effects: [{ kind: "vm.control", args: ["emitter", name, ...args.map((arg) => arg.value)] }],
+      effects: [{ kind: "vm.control", args: ["emitter", op, ...args.map((arg) => arg.value)] }],
     }),
   };
 }
@@ -75,6 +77,33 @@ export const EVENT_SPECS: readonly BuiltinSpec[] = [
     returns: { summary: "Always 0." },
     throws: [BAD_EMITTER, BAD_TYPE, { code: "builtin.bad-arg", when: "The detail is given and is not a dictionary." }],
     see: ["docs/spec/engine/rpgcode-modules-and-objects.md#emit-14"],
+    waits: { kind: "never", summary: "Never waits." },
+  }),
+  emitterCommand("emitcancelable", [param("emitter"), param("type"), param("detail", true)], {
+    summary: "Send an event and wait until every listener has run; the value is the event, which a listener may have changed or cancelled.",
+    behaviour: "Require a live object, a string event type and, when given, a dictionary of detail. Make the event object now, with a copy of the detail taken at this moment and cancelable set to 1, append it to the event queue and park the calling thread on an event.dispatch wait in the same step. The events phase delivers it in queue order to the listeners in registration order; a cancel does not stop later listeners. The thread resumes at the start of the tick after the last listener finished, and the call's value is the event object, in which the script reads canceled and any field a listener changed. Only the calling thread waits. A listener's own thread may not call it (emit.reentrant).",
+    groups: [...GROUPS],
+    returns: { summary: "The event object (a dictionary with type, target, detail, cancelable, canceled and cancel)." },
+    throws: [
+      BAD_EMITTER,
+      BAD_TYPE,
+      { code: "builtin.bad-arg", when: "The detail is given and is not a dictionary." },
+      { code: "emit.reentrant", when: "The call is made on the thread that is running a listener of the event being delivered." },
+    ],
+    see: ["docs/spec/engine/rpgcode-modules-and-objects.md#emit-16"],
+    waits: { kind: "until-event", summary: "Waits, on this thread only, until the event has been delivered to every listener." },
+  }),
+  emitterCommand("cancelevent", [param("event")], {
+    summary: "Cancel the cancelable event a listener is handling.",
+    behaviour: "Require a live event object that is cancelable and is the event being delivered now, and set its canceled field to 1; cancelling twice is the same as once. Later listeners still run and see canceled set. The call never waits and returns 0.",
+    groups: [...GROUPS],
+    returns: { summary: "Always 0." },
+    throws: [
+      { code: "builtin.bad-arg", when: "The argument is not an event object." },
+      { code: "event.not-cancelable", when: "The event was sent with emit, not emitCancelable." },
+      { code: "event.not-dispatching", when: "The event is not the one being delivered now." },
+    ],
+    see: ["docs/spec/engine/rpgcode-modules-and-objects.md#emit-17"],
     waits: { kind: "never", summary: "Never waits." },
   }),
 ];

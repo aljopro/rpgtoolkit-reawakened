@@ -15,6 +15,7 @@
 
 import type { Wait, WaitKindResolver, WaitPoll, WaitResult, WaitView } from "../ports/wait.ts";
 import { ScriptError } from "./errors.ts";
+import { DICTIONARY_CLASS } from "./objects.ts";
 
 /** The text a request that ran out its tick deadline resumes with. */
 export const REQUEST_TIMEOUT_TEXT = "the request timed out";
@@ -159,6 +160,22 @@ export function pollVideo(view: WaitView, wait: Wait): WaitResult | null {
   return DONE;
 }
 
+/**
+ * `event.dispatch` (EMIT-16): wake once the cancelable event named by the payload
+ * is neither queued nor the delivery in progress, with the event object as the
+ * value of the emit. The view carries no events state only when a host built it
+ * without the section, which is a fault, not a "not yet".
+ */
+export function pollEventDispatch(view: WaitView, wait: Wait): WaitResult | null {
+  if (wait.kind !== "event.dispatch") return null;
+  const handle = wait.payload[0];
+  if (typeof handle !== "number") return null;
+  const events = view.events;
+  if (events === undefined) throw new ScriptError("wait.no-events-view", "an event.dispatch wait was polled with no events state in the wait view");
+  if (events.dispatch?.event === handle || events.queue.some((queued) => queued.event === handle)) return null;
+  return { value: { kind: "object", handle, className: DICTIONARY_CLASS }, ok: true };
+}
+
 /** UI-owned wait kinds, kept separate so hosts can extend the VM registry without duplicate registration. */
 
 export const UI_WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
@@ -175,6 +192,7 @@ export const WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "blob", poll: pollRequest },
   { kind: "audio.track", poll: pollAudioTrack },
   { kind: "video", poll: pollVideo },
+  { kind: "event.dispatch", poll: pollEventDispatch },
 ];
 
 /** Fold per-kind resolvers into the one `WaitPoll` (AD-9). Throws

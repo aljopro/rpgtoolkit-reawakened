@@ -53,6 +53,7 @@ import { createTriggersSection, TRIGGERS_SCHEMA_VERSION } from "../triggers/mode
 import { INPUT_SCHEMA_VERSION } from "./sections/input.ts";
 import { AUDIO_SCHEMA_VERSION, createAudioSection } from "../audio/model.ts";
 import { createEventsSection } from "../events/model.ts";
+import { EVENT_DISPATCH_WAIT } from "../events/emitter.ts";
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
   return canon(tagNonFinite(state) as never);
@@ -473,6 +474,11 @@ function validateEventsShape(value: unknown, vm: Record<string, unknown>): void 
     const queued = recordAt(queuedValue, `events.queue[${index}]`);
     stringAt(queued.emitter, `events.queue[${index}].emitter`);
     liveEvent(queued.event, `events.queue[${index}].event`);
+  }
+  for (const [index, threadValue] of arrayAt(vm.threads, "vm.threads").entries()) {
+    const wait = recordAt(threadValue, `vm.threads[${index}]`).wait;
+    if (!isRecord(wait) || wait.kind !== EVENT_DISPATCH_WAIT) continue;
+    liveEvent(arrayAt(wait.payload, `vm.threads[${index}].wait.payload`)[0], `vm.threads[${index}].wait.payload[0]`);
   }
   if (events.dispatch === null) return;
   const dispatch = recordAt(events.dispatch, "events.dispatch");

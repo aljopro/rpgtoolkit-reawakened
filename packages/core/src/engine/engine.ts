@@ -1021,6 +1021,7 @@ export function createEngine(init: EngineInit): Engine {
       })),
       claims: state.engine.claims ?? [],
       audio: state.audio,
+      events: state.events,
       ...(state.engine.video === undefined ? {} : { video: { reqId: state.engine.video.reqId, ended: state.engine.video.ended } }),
     };
   }

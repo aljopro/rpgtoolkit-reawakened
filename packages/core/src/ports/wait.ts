@@ -11,6 +11,7 @@
  * - `movement` waits for coupled sprite movement.
  * - `request` waits for a host reply, while `blob` is the file-I/O request wait.
  * - `audio.track` waits on a saved track/voice cue and is polled from core audio state.
+ * - `event.dispatch` waits for a cancelable emit's delivery (EMIT-16) and is polled from the `events` section.
  *
  * `global` marks a blocking command (R-32). A cooperative wait parks only its
  * own thread. Wait payloads are plain data so a save can restore them exactly.
@@ -37,7 +38,7 @@ export type SleepWait = {
 };
 
 /** One owner-registered named wait kind. */
-export type NamedWaitKind = "render.msgbox" | "input.mouse" | "menu.screen" | "audio.track" | "video";
+export type NamedWaitKind = "render.msgbox" | "input.mouse" | "menu.screen" | "audio.track" | "video" | "event.dispatch";
 
 export type NamedWait = {
   kind: NamedWaitKind;
@@ -128,6 +129,12 @@ export type WaitAudioView = {
 /** The video reply currently held by the engine. */
 export type WaitVideoView = { readonly reqId: number; readonly ended: boolean };
 
+/** The read-only events state needed by `event.dispatch` polling: the queue and the delivery in progress (EMIT-15). */
+export type WaitEventsView = {
+  readonly queue: readonly { readonly event: number }[];
+  readonly dispatch: { readonly event: number } | null;
+};
+
 /** What the waits phase may read while deciding. */
 export type WaitView = {
   readonly tick: number;
@@ -137,6 +144,7 @@ export type WaitView = {
   readonly claims?: readonly number[];
   readonly audio?: WaitAudioView;
   readonly video?: WaitVideoView;
+  readonly events?: WaitEventsView;
 };
 
 export type WaitResult = { readonly value: Value; readonly ok: boolean; readonly claim?: number };

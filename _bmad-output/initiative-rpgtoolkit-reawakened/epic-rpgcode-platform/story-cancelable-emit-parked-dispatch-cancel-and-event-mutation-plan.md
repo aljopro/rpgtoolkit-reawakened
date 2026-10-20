@@ -3,7 +3,7 @@ title: "Cancelable emit: parked dispatch, cancel and event mutation"
 type: 'feature'
 ticket: 11
 created: '2026-10-19'
-status: draft
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "high"
 context:
@@ -23,7 +23,7 @@ Dispatch semantics only.
 
 ## Key Decisions
 
-1. The event object is a dictionary (entry 3); `cancel()` is a method bound to it.
+1. The event object is a dictionary (entry 3); `cancel()` is a method bound to it (a stored callable naming the built-in `cancelEvent`, EMIT-16, EMIT-17).
 
 ## Acceptance
 
@@ -31,4 +31,4 @@ Dispatch semantics only.
 
 ## Verification
 
-Unit tests with save at every tick; goldens.
+Unit tests with save at every tick (`packages/core/test/events-cancelable.test.ts`); the script golden `synthetic-12-cancelable-emit` (`golden/scripts/golden.json`).
