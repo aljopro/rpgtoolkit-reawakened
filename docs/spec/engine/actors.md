@@ -57,6 +57,29 @@ in place, provided callers receive read-only views, only the owner mutates
 the store, and snapshots, hashes, saves, restores, and action results observe
 the same deterministic committed state.
 
+## Sprites and board geometry
+
+A sprite is a board-scoped plain-data presence record, not an actor subtype.
+It represents something occupying or capable of occupying board space and may
+be static or moving, visible or invisible, actor-backed or asset-only. An
+actor may have no sprite or more than one sprite; a sprite MAY reference an
+actor through `actorId`.
+
+Sprite geometry is separate from the actor record:
+
+```text
+geometry
+├── occupancy   // movement collision and board blocking
+├── activation  // interaction and trigger reach
+└── hitbox      // attack, projectile and effect overlap
+```
+
+Each geometry role is optional, with a deterministic tile-aligned square as
+the normal board default. Visual bounds are presentation data and do not
+implicitly define gameplay geometry. Sprite state, geometry, movement queues,
+and animation playback belong to the sprites/presentation owner; actor state
+contains gameplay identity and rules.
+
 ## Progression
 
 The authoritative compatibility arithmetic is [Experience, rewards, and level progression](progression-and-levels.md). In summary:
@@ -158,11 +181,9 @@ An actor-producing asset MAY declare custom event names. Declarations are asset 
 | ACT-7 | Core-originated hooks do not wait; script-thread invocation may wait through the script scheduler. | 20.6, 20.7 |
 | ACT-8 | Core owns actor mutation and emits actor transition events after applying validated results. | 20.6, 20.9 |
 | ACT-9 | Board unload unregisters emitters and discards queued work targeting the unloaded board. | 20.9 |
-| ACT-10 | The core has no battle phase; battle-package systems run through package threads and trigger handoff. | 20.6, Epic 7 |
+| ACT-10 | The core has no battle phase; battle-package systems run through package threads and trigger handoff. Sprites are board presences that may reference actors, not actor subtypes. | 20.6, 20.10, Epic 7 |
 
-## Evidence and ownership
-
-The actor model inventory is entry 20.2. The actor store is 20.3; script object exposure and aliases are 20.4; asset hydration is 20.5; core interpretation rules are 20.6; behaviour registration is 20.7; save and hydration are 20.8; events and board emitter lifetime are 20.9; board-sprite unification is 20.10. Epic 7 owns stock-battle behavior, and the editor epics own warnings and conversion of legacy `levelUpProgram` values.
+The actor model inventory is entry 20.2. The actor store is 20.3; script object exposure and aliases are 20.4; asset hydration is 20.5; core interpretation rules are 20.6; behaviour registration is 20.7; save and hydration are 20.8; events and board emitter lifetime are 20.9; actor-backed sprites are 20.10. Epic 7 owns stock-battle behavior, and the editor epics own warnings and conversion of legacy `levelUpProgram` values.
 
 ## Actor inventory {#act-inventory}
 
