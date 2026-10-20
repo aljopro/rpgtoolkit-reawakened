@@ -238,18 +238,20 @@ permitted to mutate the value (a script may request a mutation through that owne
 | character/enemy animations | animation slots and custom stance pairs | arrays<asset reference/label> | presentation | OWNER | hydration | core-rule | [character](../formats/character.md#layout) 28–35; [enemy](../formats/enemy.md#layout) 21–24 | 20.5/20.10 |
 | movement timing | character.idleTime/speed; item.speed/idleTime | double | movement | OWNER | core/movement | core-rule | [character](../formats/character.md#layout) 31–33; [item](../formats/item.md#layout) 25–27 | 20.10 |
 | collision/activation hulls | character/item polygons | point arrays | movement | OWNER | hydration/movement | core-rule | [character](../formats/character.md#layout) 36–40; [item](../formats/item.md#layout) 30–32 | 20.5/20.10 |
-| item identity and description | item.itemName/description | string | inventory | OWNER | inventory owner | core-rule | [item](../formats/item.md#layout) 3–4; [E-81](plugins-and-battle.md#e-81) | 20.3/20.5 |
-| item permissions | item.equipYN/menuYN/boardYN/fightYN/usedBy/allowed character | bytes/array<string> | inventory | OWNER | inventory/equipment | core-rule | [item](../formats/item.md#layout) 5–7 | 20.3/20.6 |
-| item prices/key flag | item.buyPrice/sellPrice/keyItem | int/int/byte | inventory | OWNER | inventory/menu | core-rule | [item](../formats/item.md#layout) 8–9 | 20.3 |
-| item equipment slots/bonuses | item equip slot, accessory, equipHP/equipDP/equipFP/equipSM | array/strings/ints | equipment | OWNER | equipment owner | core-rule | [item](../formats/item.md#layout) 10–12; [E-82](plugins-and-battle.md#e-82) | 20.6 |
-| item equip/remove programs | item.prgEquip/prgRemove | program references | equipment | OWNER | equipment owner | core-rule | [item](../formats/item.md#layout) 13 | 20.6 |
-| item menu effect/program | item.menuHP/menuSM/prgMenuUse | ints/program reference | inventory | OWNER | inventory owner | core-rule | [item](../formats/item.md#layout) 14–15 | 20.6 |
-| item battle effect/program | item.fightHP/fightSM/prgFightUse | ints/program reference | inventory | OWNER | Epic 7 | battle-rule | [item](../formats/item.md#layout) 16–17 | Epic 7 |
-| item animation/board programs | item.animation/prgOnBoard/prgPickUp | asset/program references | movement | OWNER | hydration/board | core-rule | [item](../formats/item.md#layout) 18–20 | 20.5/20.10 |
+| item identity and description | item.itemName/description | string | item definition (asset; Epic 8 rules) | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 3–4; [E-81](plugins-and-battle.md#e-81) | Epic 8 |
+| item permissions | item.equipYN/menuYN/boardYN/fightYN/usedBy/allowed character | bytes/array<string> | item definition | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 5–7 | Epic 8 |
+| item prices/key flag | item.buyPrice/sellPrice/keyItem | int/int/byte | item definition | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 8–9 | Epic 8 |
+| item menu effect/program | item.menuHP/menuSM/prgMenuUse | ints/program reference | item definition | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 14–15 | Epic 8 |
+| item equipment slots/bonuses | item equip slot, accessory, equipHP/equipDP/equipFP/equipSM | array/strings/ints | item definition, interpreted by actor equipment rule | OWNER | none (read-only asset); derived bonus written by actor owner | core-rule | [item](../formats/item.md#layout) 10–12; [E-82](plugins-and-battle.md#e-82) | 20.6 |
+| item equip/remove programs | item.prgEquip/prgRemove | program references | item definition, run on equip/remove | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 13 | 20.6 |
+| item battle effect/program | item.fightHP/fightSM/prgFightUse | ints/program reference | item definition | OWNER | none (read-only asset); applied by Epic 7 | battle-rule | [item](../formats/item.md#layout) 16–17 | Epic 7 |
+| item board animation/programs | item.animation/prgOnBoard/prgPickUp | asset/program references | sprite (movement/presentation) | OWNER | hydration/board | core-rule | [item](../formats/item.md#layout) 18–20 | 20.5/20.10 |
 | status identity and duration | status.name/rounds | string/short | statuses | OWNER | core status owner | core-rule | [status](../formats/battle-data.md#status-effect) 3–4 | 20.3/20.6 |
 | status charge modifiers | status.speed/slow/disable | short flags | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 5–7; [E-75](plugins-and-battle.md#e-75) | Epic 7 |
 | status HP/SMP tick | status.hp/hpAmount/smp/smpAmount | flags/shorts | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 8–11 | Epic 7 |
 | status program | status.code/prg | flag/program reference | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 12–13 | Epic 7 |
+
+Item rows are asset definitions, hydrated by name and never saved. Inventory state (stacks, counts, and which actor has which item in which slot) belongs to the `inventory` section (AD-10) through `InventoryAction`, built by Epic 8. An actor holds only equipped item references and the bonuses derived from them by the core equipment rule (`equipmentChanged`); it never owns item records. Item speed, idle time, hulls and board animation belong to the sprite that represents a board item.
 
 ### Runtime state (actor)
 
