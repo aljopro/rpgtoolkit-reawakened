@@ -272,6 +272,8 @@ The engine exposes 44 read-only variables that mirror engine state (R-37):
 
 **Reawakened rule.** Two engine-backed names that the legacy engine also had are kept as additions here, because existing games use them and `docs/spec` does not list them: `threads[i]`, the live thread table, and `ambientRed`, `ambientGreen`, `ambientBlue`, the ambient light level (call `forceRedraw()` after assigning one). They are marked as additions, not as part of the 44 read-only set, so an implementer can tell which names come from the legacy specification. (Owner ruling U2, 2026-10-15.)
 
+**Reawakened rule — the name `game`.** `game` is a third engine-backed addition: it reads as the game emitter, an object any script can listen on and emit on (`game.on("error", fn)`, `game.emit("quests.questDone")`). It is not one of the 44 read-only variables and is not a value the legacy engine had. The rules are [EMIT-19](rpgcode-modules-and-objects.md#emit-19) and [EMIT-20](rpgcode-modules-and-objects.md#emit-20).
+
 <a id="e-92"></a>
 **E-92 Variables.** One global namespace that persists across programs and boards and is included in saves; locals are per call; the engine-backed "virtual" variables in the table above are read and written through the engine (party positions, board data, ambient light, game time).
 

@@ -12,7 +12,7 @@ import { log } from "node:console";
 import { env } from "node:process";
 import { test } from "node:test";
 import {
-  collectGarbage,
+  collectStateGarbage,
   createGameState,
   defaultWaitPoll,
   restoreGameState,
@@ -213,7 +213,7 @@ function tickOnce(state: GameState, services: ScriptServices, budget: number): {
     if (ran >= budget && thread.status === "ready") preempted += 1;
   }
   runTimePhase(state.time);
-  collectGarbage(state.vm);
+  collectStateGarbage(state);
   return { steps, preempted };
 }
 
