@@ -2,8 +2,8 @@
 
 # Clean-room extraction, round 10 — the built-in physical attack damage (OWNER-RELAYED)
 
-* **Source consulted:** the answerer read the program's logic. Their text named source files, routines, a line position, a data-structure detail and pseudocode; none of that is reproduced here, and no expression from the program is reproduced. Nothing was run.
-* **Answerer:** not stated; relayed by the owner (Jensen) on 2026-10-20, in two parts while reviewing the Epic 20 actor inventory (the damage-equation row). The second part corrects and extends the first; where they differ the second is recorded.
+* **Source consulted:** the answerer read the program's logic. Their text named source files, routines, a line position, a data-structure detail, a quoted source expression and pseudocode; none of that is reproduced here, and no expression from the program is reproduced. Nothing was run.
+* **Answerer:** not stated; relayed by the owner (Jensen) on 2026-10-20, in three parts while reviewing the Epic 20 actor inventory (the damage-equation row). Later parts correct and extend earlier ones; where they differ the later part is recorded.
 * **Date:** 2026-10-20
 * **Versions:** not stated.
 * **Confidence labels:** none given. Every statement is *read from the program's logic, confidence not stated*.
@@ -21,14 +21,14 @@
 
 **D4. Defence and critical hit.** When the supplied amount is above 0, a random whole number is drawn and tested against the limit plus one: if the draw divides evenly by that number the attack is a critical hit and the target's DP is **not** subtracted; otherwise it is a normal hit and DP is subtracted. There is no separate critical-damage figure; the only effect is whether DP is subtracted. A limit of *n* gives a 1-in-(*n* + 1) chance of skipping DP. **A limit of 0 always skips DP.** (This corrects the first part of the relay, which said 0 meant never.)
 
-**D5. Which limit is used.**
+**D5. Which limit is used.** The two enemy fields mean what the format doc says: the take-crit value is the chance that a player's attack on that enemy skips the enemy's DP, and the give-crit value is the chance that that enemy's attack on a player skips the player's DP. The editor and manual use the same two directions ("critical hit on the enemy" and "critical hit on the player"). A player has no critical-hit field of its own. As relayed, in the original:
 
-| Attacker hits | Limit used |
+| Attacker hits | Limit the original uses |
 |---|---|
 | a player, against an enemy | the enemy's take-crit value |
-| an enemy, against a player | **not valid in the original**: it reads an enemy record from the target, and a player has none, so the value is undefined |
+| an enemy, against a player | **a defect**: it reads the take-crit value out of the target, which is a player and has no enemy record, so the result is invalid. It is not evidence that players have such a field. The intended value is the attacking enemy's give-crit value. |
 | a player, against a player | fixed at 0, so DP is always skipped; not a normally supported pairing |
-| an enemy, against an enemy | the attacker's give-crit value (relayed in the first part only) |
+| an enemy, against an enemy | the attacker's give-crit value (relayed in the first and third parts) |
 
 **D6. Floor.** After the above, if the amount is below 1 it becomes 1. This includes a supplied amount of 0 or less, which skips the swing and the DP test and so deals 1.
 
@@ -42,12 +42,12 @@
 
 ## Doubts in the relay
 
-Resolved by the second part: limit 0 always skips DP (D4); the amount is made a whole number right after the swing, by dropping the fraction (D3).
+Resolved by the later parts: limit 0 always skips DP (D4); the amount is made a whole number right after the swing, by dropping the fraction (D3); the enemy-against-player case is a legacy defect and the intended value is the attacker's give-crit value (D5), which the format doc's own field descriptions support.
 
 Still open:
 
-* **Enemy against player (D5).** The original behaviour is undefined. The answerer says the rebuild needs an explicit compatibility decision, and that the project should not invent a take-crit field for players. That is a ruling for the owner, not a fact.
-* **Enemy against enemy (D5).** Relayed only in the first part and not repeated or contradicted in the second.
+* **Adopting the intended value (D5).** Using the attacking enemy's give-crit value for enemy against player is the answerer's recommendation, not an original behaviour. Making it the rebuild's rule is an owner ruling, written as its own doc-first commit.
+* **Player against player and enemy against enemy (D5).** The answerer recommends keeping the original's explicit branches (limit 0, and the attacker's give-crit value). Neither is a normal pairing; the same ruling should decide them.
 * **Order of the guards (D2).** The relay lists the three conditions but does not say whether an attacker below 1 HP is checked before a missing target.
 
 ## Disposition
@@ -58,7 +58,7 @@ Nothing below is a ruling.
 |---|---|---|
 | D1, D3, D4, D6, D7 | `plugins-and-battle.md#e-74`; the damage-equation row of the Epic 20 actor inventory; Epic 7 | Agrees with E-74's FP, variance, DP, critical hit, minimum 1 and SMP target. Adds the asymmetric -10 to +9 swing, truncation straight after the swing, the amount-above-0 condition, and that a limit of 0 always skips DP (E-74 only says enemies define 1-in-N chances). |
 | D2 | E-74 | Adds the three do-nothing conditions and the 0 report. |
-| D5 | E-74 (crit chances) | Player against enemy is settled. Enemy against player needs a rebuild rule before Epic 7 can rely on it. |
+| D5 | E-74 (crit chances); `enemy.md` rows 9 and 10 | The field meanings agree with `enemy.md`. Player against enemy is settled. Enemy against player needs the owner ruling named above before Epic 7 relies on it; the intended value is the attacker's give-crit value. |
 | D8 | E-74 special moves | Agrees with E-74. Adds the user's own SMP cost, which E-74 already states, and confirms no swing and no DP. |
 | D9 | `character.md`, `enemy.md`, `item.md` | Open: DP derivation and crit defaults must come from the format docs and fixtures, not from this round. |
 
