@@ -13,6 +13,7 @@ import {
   fileProgramRef,
   PACKAGE_ROOT,
   utf8Encode,
+  withOwner,
   CORE_PLUGIN,
   MEDIA_PLUGIN,
   CATALOGUE_PLUGIN,
@@ -20,8 +21,10 @@ import {
   type AssetKey,
   type InputRecord,
   type ProgramLoader,
+  type ProgramRef,
 } from "@tk-reawakened/core";
 import { TK2_COMPAT_PLUGIN } from "@tk-reawakened/plugin-tk2-compat";
+import { PLATFORM_FIXTURE_SOURCES } from "./platform-fixtures.ts";
 import { checkSnapshotRestore, randomSplit } from "./restore-check.ts";
 import {
   createScriptHost,
@@ -799,6 +802,83 @@ export function runFetchedCorpus(files: FetchedGameFiles, seed = 0): readonly Pr
 // Assembled Corpus Program Definitions
 // -------------------------------------------------------------------
 
+// 14 to 16. The package fixtures of entry 19.14 (the authored programs under
+// packages/core/test/fixtures/platform/; the copies are in ./platform-fixtures.ts): one
+// package of dictionary objects and a class, one of emitter listeners with a shield that halves
+// damage, and two namespaced packages where the later overrides the earlier. A package's
+// start-up program is owned by the package (PKG-8) and runs before the game on a fresh state
+// (PKG-5); a restore runs the same start-up programs again before it loads the save.
+type PlatformFixture = {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly ticks: number;
+  readonly main: string;
+  readonly startups: readonly { readonly file: string; readonly owner: string }[];
+};
+
+function platformProgram(fixture: PlatformFixture): CorpusProgram {
+  const make = (): { loader: ProgramLoader; startups: readonly ProgramRef[] } => {
+    const loader = createMemoryLoader(PLATFORM_FIXTURE_SOURCES);
+    return {
+      loader,
+      startups: fixture.startups.map((entry) => withOwner(fileProgramRef(loader, entry.file), entry.owner)),
+    };
+  };
+  return {
+    id: fixture.id,
+    name: fixture.name,
+    description: fixture.description,
+    ticks: fixture.ticks,
+    createHost: (seed) => {
+      const { loader, startups } = make();
+      return createScriptHost({
+        program: fileProgramRef(loader, fixture.main),
+        loader,
+        packageStartups: startups,
+        seed,
+      });
+    },
+    restoreHost: (json) => {
+      const { loader, startups } = make();
+      return restoreScriptHost(json, { loader, packageStartups: startups });
+    },
+  };
+}
+
+const PLATFORM_FIXTURES: readonly PlatformFixture[] = [
+  {
+    id: "synthetic-14-object-package",
+    name: "Synthetic 14 (Object-Model Package)",
+    description:
+      "Fighters as dictionary objects with a hit method: a direct call, a method taken out of its object, one rebound with bindThis, a legacy class instance on the same storage, kill of a field and random damage from the seed",
+    ticks: 8,
+    main: "fighters-game.prg",
+    startups: [],
+  },
+  {
+    id: "synthetic-15-emitter-package",
+    name: "Synthetic 15 (Emitter Package With A Shield)",
+    description:
+      "A package whose shield listener halves damage on a cancelable emit, a guard that cancels weak hits, a listener that waits, once and off, plain emits queued behind the emitter and a fallen event on the game emitter",
+    ticks: 20,
+    main: "shield-game.prg",
+    startups: [{ file: "shield.prg", owner: "shield" }],
+  },
+  {
+    id: "synthetic-16-namespaced-packages",
+    name: "Synthetic 16 (Namespaced Packages With An Override)",
+    description:
+      "Two packages that each keep a namespace object and a plain rain command: the later package overrides the plain command and the mwin layer and hands on to the earlier, qualified calls reach each package's own rain, and one call takes the override off again",
+    ticks: 8,
+    main: "namespaces-game.prg",
+    startups: [
+      { file: "weather.prg", owner: "weather" },
+      { file: "storm.prg", owner: "storm" },
+    ],
+  },
+];
+
 export function buildCorpus(): readonly CorpusProgram[] {
   const programs: CorpusProgram[] = [
     {
@@ -966,6 +1046,7 @@ export function buildCorpus(): readonly CorpusProgram[] {
         return restoreScriptHost(json, { loader, packageStartups: startups });
       },
     },
+    ...PLATFORM_FIXTURES.map(platformProgram),
     {
       id: "synthetic-tk2",
       name: "Synthetic TK2 Dialect",
