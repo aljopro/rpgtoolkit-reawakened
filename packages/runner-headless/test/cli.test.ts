@@ -37,7 +37,9 @@ function runCli(
   };
 }
 
-function createTempGoldenRoot(): {
+function createTempGoldenRoot(options?: {
+  readonly committedGolden?: boolean;
+}): {
   root: string;
   cleanup: () => void;
 } {
@@ -54,6 +56,12 @@ function createTempGoldenRoot(): {
     join(REPO_ROOT, "golden/test-double/run.json"),
     join(testDoubleDir, "run.json"),
   );
+  if (options?.committedGolden === true) {
+    copyFileSync(
+      join(REPO_ROOT, "golden/test-double/golden.json"),
+      join(testDoubleDir, "golden.json"),
+    );
+  }
 
   return {
     root,
@@ -63,32 +71,21 @@ function createTempGoldenRoot(): {
   };
 }
 
-test("replay matches committed golden tree or records first if absent", () => {
-  const committedGoldenPath = join(REPO_ROOT, "golden/test-double/golden.json");
-  if (existsSync(committedGoldenPath)) {
-    const result = runCli(["golden", REPO_ROOT]);
+test("replays the committed test-double golden through the CLI", () => {
+  // The full committed tree (scenes, closing frames, audio cues) is replayed by
+  // `pnpm golden` in the `golden` CI job. Repeating it here made every
+  // `pnpm test` pay the whole G5 suite; this root carries only the committed
+  // test-double so the CLI's replay path is still covered end to end.
+  const temp = createTempGoldenRoot({ committedGolden: true });
+  try {
+    const result = runCli(["golden", temp.root]);
     equal(result.status, 0, `CLI failed with stderr: ${result.stderr}`);
     ok(result.stdout.includes("vectors: 20 rows ok"));
     ok(result.stdout.includes("run: 24 ticks"));
     ok(result.stdout.includes("batching: 1,3,"));
     ok(result.stdout.includes("golden: 24 compared"));
-  } else {
-    const temp = createTempGoldenRoot();
-    try {
-      const recordResult = runCli(["golden", temp.root, "--record"]);
-      equal(recordResult.status, 0, `Record failed: ${recordResult.stderr}`);
-      ok(recordResult.stdout.includes("golden: 24 recorded"));
-      ok(existsSync(join(temp.root, "golden/test-double/golden.json")));
-
-      const replayResult = runCli(["golden", temp.root]);
-      equal(replayResult.status, 0, `Replay failed: ${replayResult.stderr}`);
-      ok(replayResult.stdout.includes("vectors: 20 rows ok"));
-      ok(replayResult.stdout.includes("run: 24 ticks"));
-      ok(replayResult.stdout.includes("batching: 1,3,"));
-      ok(replayResult.stdout.includes("golden: 24 compared"));
-    } finally {
-      temp.cleanup();
-    }
+  } finally {
+    temp.cleanup();
   }
 });
 
