@@ -30,6 +30,21 @@ A runtime actor MAY contain:
 
 It MUST NOT contain a callable, compiled program, host object, emitter listener table, or raw `.prg` path. Host methods and emitters are hydrated after load.
 
+## Store and action boundary
+
+Actor records are the store's plain-data state. Code does not call methods on
+an actor record or mutate its fields directly. Actor operations are dispatched
+through an action/service layer: an action identifies the requested operation
+and its plain-data inputs; the actor service validates it, runs the applicable
+core rule or behaviour, and commits the resulting plain-data patch to the
+actor store. The store remains the single owner of actor state and produces
+snapshots, hashes, and transition events from committed changes.
+
+The action and service layers are runtime machinery and are not serialized into
+the actor record. A hydrated RPGCode object may expose those operations as
+methods, but each method dispatches through the actor service and never turns
+the underlying record into an object with methods.
+
 ## Progression
 
 The authoritative compatibility arithmetic is [Experience, rewards, and level progression](progression-and-levels.md). In summary:
