@@ -406,3 +406,50 @@ test("resolving through a namespace that supplies no such name is unknown.comman
   equal(resolveNamespaced("other", "here", commands), undefined, "not a namespace: the caller tries a file");
   equal(errorOf(() => resolveNamespaced("ns", "gone", commands)).code, "unknown.command");
 });
+
+// --- Stacked wrappers: `next` is the layer below the caller (PKG-4, AD-8; issue #496) ----------
+
+function chainStack(depth: number): { registry: ReturnType<typeof assembleCommands>; records: { code: string }[] } {
+  const trail = (label: string): BuiltinSpec => ({
+    name: "f",
+    aliases: [],
+    params: [],
+    call: (view, args, next) => ({ value: `${next(view, args, next).value as string}>${label}` }),
+  });
+  const base = noParamsSpec("f", () => ({ value: "core" }));
+  const plugins: ResolvedPlugin[] = [pack("core", [base])];
+  const names = ["a", "b", "c", "d"].slice(0, depth - 1);
+  for (const name of names) plugins.push(packageIn(name, name, [trail(name)]));
+  const { logger, records } = collectingLogger();
+  return { registry: assembleCommands(plugins, logger), records };
+}
+
+for (const depth of [3, 4]) {
+  test(`${depth} stacked wrappers each run once, bottom to top, for the plain call and every namespace`, () => {
+    const { registry } = chainStack(depth);
+    const top = registry.get("f")!;
+    const expected = ["core", ...["a", "b", "c", "d"].slice(0, depth - 1)];
+    equal(top.spec.call(FIXTURE_VIEW, [], top.next).value, expected.join(">"));
+    expected.slice(1).forEach((name, i) => {
+      const own = registry.getIn(name, "f")!;
+      equal(own.spec.call(FIXTURE_VIEW, [], own.next).value, expected.slice(0, i + 2).join(">"));
+    });
+  });
+}
+
+test("next from the bottom of a wrapper stack is command.no-next, once per call", () => {
+  const wrap = (label: string): BuiltinSpec => ({
+    name: "f",
+    aliases: [],
+    params: [],
+    call: (view, args, next) => ({ value: `${next(view, args, next).value as string}>${label}` }),
+  });
+  const { logger, records } = collectingLogger();
+  const registry = assembleCommands(
+    [packageIn("a", "a", [wrap("a")]), packageIn("b", "b", [wrap("b")]), packageIn("c", "c", [wrap("c")])],
+    logger,
+  );
+  const top = registry.get("f")!;
+  equal(top.spec.call(FIXTURE_VIEW, [], top.next).value, "null>a>b>c");
+  equal(records.filter((r) => r.code === "command.no-next").length, 1);
+});
