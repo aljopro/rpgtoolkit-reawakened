@@ -45,6 +45,18 @@ the actor record. A hydrated RPGCode object may expose those operations as
 methods, but each method dispatches through the actor service and never turns
 the underlying record into an object with methods.
 
+The action type is section-specific: `ActorAction` covers actor operations,
+while `BoardAction`, `InventoryAction`, `BattleAction`, and the other core
+sections use the same boundary for their own state. These are plain-data
+discriminated records, not methods attached to records. Exact action members
+are defined by the section that owns them.
+
+This rule does not require a persistent-immutable implementation or a full
+state-tree copy on every tick. An owner MAY update its private live store
+in place, provided callers receive read-only views, only the owner mutates
+the store, and snapshots, hashes, saves, restores, and action results observe
+the same deterministic committed state.
+
 ## Progression
 
 The authoritative compatibility arithmetic is [Experience, rewards, and level progression](progression-and-levels.md). In summary:

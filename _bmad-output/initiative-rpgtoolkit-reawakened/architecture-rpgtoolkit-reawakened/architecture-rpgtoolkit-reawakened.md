@@ -199,7 +199,11 @@ plain-data effects or actions; the owning service validates and reduces them
 into state changes. Section methods, host objects, listeners, timers, and
 other runtime machinery are hydrated or registered outside the saved state.
 Snapshots, hashes, saves, restores, and emitted transitions are derived from
-the canonical store state.
+the canonical store state. Section APIs expose discriminated plain-data action
+families such as `ActorAction` and `BoardAction`; exact members belong to the
+owning section. This is a separation contract, not a requirement to copy the
+whole state tree on every tick: an owner may mutate its private live store in
+place while preserving read-only views and deterministic commit boundaries.
 - **Check:** dependency-cruiser rule that only `core/<section>/**` imports its mutable `<Section>State`; a type check that `GameState extends PlainData`.
 
 ```mermaid
