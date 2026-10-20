@@ -39,6 +39,9 @@ export type { EventsSection } from "../events/model.ts";
 
 export type { SpritesSection } from "../sprites/model.ts";
 
+/** Owner: `core/actors` (ACT-1/ACT-3; AD-10). */
+export type { ActorsSection } from "../actors/model.ts";
+
 /** Owner: `core/menu` (roster, selection, steps). Filled by epic menu-party-save. */
 export type PartySection = Record<string, never>;
 

@@ -29,3 +29,5 @@ export {
   type UiSection,
   type WorldSection,
 } from "./sections.ts";
+
+export type { ActorsSection } from "../actors/model.ts";

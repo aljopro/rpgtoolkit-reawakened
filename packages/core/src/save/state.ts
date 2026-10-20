@@ -1,13 +1,13 @@
 /**
  * The one state tree (AD-10, AD-23; decisions Q2/Q3).
  *
- * `GameState` has exactly AD-10's 19 sections. Entry 2 owns four of them —
+ * `GameState` has exactly AD-10's 20 sections. Entry 2 owns four of them —
  * `schema` (here), `vm` (`core/script`), `rng` (`core/rng`) and `time`
- * (`core/time`); of the other fifteen, seven are real sections declared under
+ * (`core/time`); of the other sixteen, seven are real sections declared under
  * `save/sections/` (`world`, `camera`, `ui`, `fx`, `surfaces`, `input`,
- * `engine`), four are owned by their own modules (`sprites`, `triggers`,
- * `audio`, schema v2, `core/audio`, and `events`, `core/events`, entry 19.10) and
- * four are the `Record<string, never>` placeholders of `sections.ts` that later
+ * `engine`), five are owned by their own modules (`sprites`, `actors`,
+ * `triggers`, `audio`, and `events`) and four are the
+ * `Record<string, never>` placeholders of `sections.ts` that later
  * epics fill. `SchemaState` is AD-23's per-section version
  * map plus the compiler version, and `SCHEMA_VERSIONS` is the current version
  * of every section, each starting at 1.
@@ -31,6 +31,7 @@ import {
   createCameraSection,
   createUiSection,
   createFxSection,
+  type ActorsSection,
   type AudioSection,
   type BattleSection,
   type CameraSection,
@@ -48,6 +49,7 @@ import {
 } from "./sections.ts";
 import { createTriggersSection } from "../triggers/model.ts";
 import { createSpritesSection } from "../sprites/model.ts";
+import { createActorsSection } from "../actors/model.ts";
 import { createInputSection } from "../input/input.ts";
 import { createAudioSection } from "../audio/model.ts";
 import { createEventsSection, type EventsSection } from "../events/model.ts";
@@ -57,6 +59,7 @@ export const SCHEMA_VERSIONS = {
   schema: 1,
   world: 1,
   sprites: 2,
+  actors: 1,
   party: 1,
   inventory: 1,
   triggers: 2,
@@ -83,6 +86,7 @@ export type SchemaState = {
   schema: number;
   world: number;
   sprites: number;
+  actors: number;
   party: number;
   inventory: number;
   triggers: number;
@@ -102,11 +106,12 @@ export type SchemaState = {
   compiler: string;
 };
 
-/** AD-10's 19-section state tree (`events` is entry 19.10's); `SaveState` is this type. */
+/** AD-10's 20-section state tree (`events` is entry 19.10's); `SaveState` is this type. */
 export type GameState = {
   schema: SchemaState;
   world: WorldSection;
   sprites: SpritesSection;
+  actors: ActorsSection;
   party: PartySection;
   inventory: InventorySection;
   triggers: TriggersSection;
@@ -134,6 +139,7 @@ export function createSchemaState(): SchemaState {
     schema: SCHEMA_VERSIONS.schema,
     world: SCHEMA_VERSIONS.world,
     sprites: SCHEMA_VERSIONS.sprites,
+    actors: SCHEMA_VERSIONS.actors,
     party: SCHEMA_VERSIONS.party,
     inventory: SCHEMA_VERSIONS.inventory,
     triggers: SCHEMA_VERSIONS.triggers,
@@ -160,6 +166,7 @@ export function createGameState(init: { seed: number }): GameState {
     schema: createSchemaState(),
     world: {},
     sprites: createSpritesSection(),
+    actors: createActorsSection(),
     party: {},
     inventory: {},
     triggers: createTriggersSection(),

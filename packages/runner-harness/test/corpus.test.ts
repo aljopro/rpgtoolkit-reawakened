@@ -345,17 +345,18 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
   // Re-pinned by ticket 19.10: the state tree gained the `events` section (empty here) and `schema.events`. Nothing else
   // moved: hashing each final state without them gives every previous value (bcccb726d88cf025, c7276b9169328503,
   // 9128c9fb95d1f969, a7e3084cbafc59c0, 2e8a007d7bae1d31, 6717598c0b7e163a, 69af004598505635 and eaef689c32b9ae98).
+  // Re-pinned by ticket 20.3: the empty `actors` section is now part of the hashed state tree.
   const expectedHashes: Record<string, string> = {
-    "sample-start-demo": "5912612833f63825",
-    "sample-system-demo": "a9310c5b6b715d03",
-    "sample-sys-test-demo": "a9310c5b6b715d03",
-    "sample-win-demo": "328fa1770626d169",
-    "sample-oldman-demo": "54b21d7b4206e1c0",
-    "sample-man-demo": "0e69036ee7e0b531",
-    "sample-man-wander-demo": "1afe10e47cde5e3a",
-    "sample-start-basic": "856ea439268e9e35",
-    "sample-system-basic": "a9310c5b6b715d03",
-    "sample-wander-basic": "6e9a893666deb7ba",
+    "sample-start-demo": "cb7c80f68c24843a",
+    "sample-system-demo": "6dabd6841be3e90a",
+    "sample-sys-test-demo": "6dabd6841be3e90a",
+    "sample-win-demo": "cf795dc46174bb80",
+    "sample-oldman-demo": "ad574b96ad4e57a3",
+    "sample-man-demo": "d833d3885dea6f78",
+    "sample-man-wander-demo": "151d56a8a392c7fd",
+    "sample-start-basic": "959d5bd2fe3d269e",
+    "sample-system-basic": "6dabd6841be3e90a",
+    "sample-wander-basic": "a7bdc349df217dcd",
   };
 
   for (const res of results) {
@@ -378,7 +379,7 @@ test("corpus: defined finish line for programs that never end (Basic/Prg/wander.
   const hash2 = host2.stateHash();
 
   equal(hash1, hash2);
-  equal(hash1, "6e9a893666deb7ba");
+  equal(hash1, "a7bdc349df217dcd");
 
   for (let split = 0; split <= 5; split++) {
     const fresh = wander.createHost(0);
