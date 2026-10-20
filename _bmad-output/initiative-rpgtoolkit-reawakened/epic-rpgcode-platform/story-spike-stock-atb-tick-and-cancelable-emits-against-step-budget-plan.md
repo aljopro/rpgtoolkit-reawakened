@@ -16,7 +16,7 @@ context:
 
 ## Intent
 
-Answer the one question the whole stock-battle design rests on: does an ATB tick written in RPGCode, with statuses and events, fit the per-thread step budget and the fixed tick, once cancelable emits park and resume threads? The owner ruled the answer must exist before Epic 20's design is fixed; if it does not fit, Epic 20 changes (for example a core-owned tick accumulator, a per-package budget or batched emits).
+Answer the one question the whole stock_battle design rests on: does an ATB tick written in RPGCode, with statuses and events, fit the per-thread step budget and the fixed tick, once cancelable emits park and resume threads? The owner ruled the answer must exist before Epic 20's design is fixed; if it does not fit, Epic 20 changes (for example a core-owned tick accumulator, a per-package budget or batched emits).
 
 ## Boundaries
 

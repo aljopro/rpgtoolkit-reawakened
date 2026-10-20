@@ -16,7 +16,7 @@ context:
 
 ## Intent
 
-Rule before code. New page `docs/spec/engine/actors.md` (anchored ACT-n rows) plus amendments: E-79 gains the boundary sentence aligned with 'rules in core, battle systems drive core ops'; AD-10's StatsPort sentence is amended to say how actor stats are owned (Assumption A-1); AD-26's core `battle` phase is removed or repurposed (owner, 2026-10-19: battle is a package, not a core phase) and 20.1 writes that spine amendment; AD-10 is amended (owner, 2026-10-19): actors own stats in the actor section, legacy `.tem` globals such as `HP!` are live read/write aliases, StatsPort's "vm.globals owner" wording is removed; costs: one deliberate golden re-record (G5), reset clears the actor section, `kill()` on an alias is a catchable runtime error (`kill.system-owned`), virtuals need a write path (20.4). Level-up: level and experience are stats, abilities are standard equations defined in code with defaults and overridable by behaviours; 20.1 rules the default level-up equation. Core-owned defaults: fallen (default HP <= 0), status lifetime as a countdown `advanceStatus(n)` (the battle script decides when a round passes), equipment bonuses, level-up default from data. Everything specific to one battle implementation (charge +3/tick, 75/123, damage formulas, AI levels 0 to 3, UI, the 3.1 'each round while charged' status rule) is stock-battle RPGCode.
+Rule before code. New page `docs/spec/engine/actors.md` (anchored ACT-n rows) plus amendments: E-79 gains the core-versus-battle boundary; AD-10 says actors own stats and `.tem` globals such as `HP!` are live aliases; AD-26's core `battle` phase is removed or repurposed because battle is a package; the save rule is data plus behaviour name only; behaviour registrations are session data rebuilt by package start-up and never saved; and EMIT-6, EMIT-11, EMIT-13 and OOP-12 are settled for Epic 20. The row also fixes the `kill.system-owned` rule, the scalar actor-id event source, the event names `statusChanged`, `beforeDamage` and `talked`, namespace-prefixed shared-emitter re-emits and board-emitter unload lifetime. Level-up remains a core default equation; stock_battle owns charge, damage formulas, AI, UI and its round-specific status rule.
 
 ## Boundaries
 
@@ -25,9 +25,11 @@ Documentation only. Does not decide the per-field table (20.2) or any package co
 ## Key Decisions
 
 1. A Zelda-style game with 12 hearts and an FF-style game with 9999 HP are two battle scripts over one actor model.
-2. Actors save DATA only: stats, status counters, a behaviour name such as `stock-rpg/hero`; never callables.
-3. On load behaviours are hydrated by name from installed packages; a missing behaviour is the core default plus a diagnostic, never a refused load; package version governs code.
-4. Script closures (parked threads, locals) stay saved per 18.6; script state is the only place callables are saved.
+2. Actors save DATA only: stats, status counters, a behaviour name such as `stock_rpg.hero`; never callables.
+3. On load, `runPackageStartup` rebuilds package and behaviour session data before actor hydration; a missing behaviour is the core default plus a diagnostic, never a refused load; actors record no package version.
+4. `registerBehaviour(name, hooks)` is separate from `registerPlugin`; names use `namespace.name`, the hook list is closed, unknown names/hooks diagnose, and package code may still emit custom events.
+5. Engine-originated `beforeEnter` dispatch uses EMIT-11's short, budgeted, non-waiting path; `beforeDamage` is sent by the battle RPGCode thread with `emitCancelable`; `beforePlay` consumes the same engine-phase seam in Epic 21.
+6. Script closures (parked threads, locals) stay saved per 18.6; script state is the only place callables are saved.
 
 ## Acceptance
 

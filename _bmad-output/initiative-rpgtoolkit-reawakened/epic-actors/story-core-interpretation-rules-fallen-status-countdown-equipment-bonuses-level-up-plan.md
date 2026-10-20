@@ -8,23 +8,25 @@ baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "high"
 context:
   - "spec - docs/spec/engine/actors.md (ACT rows from 20.1)"
-  - "spec - docs/spec/engine/plugins-and-battle.md#e-75, E-77, E-78 (data only; the 'each round while charged' rule is stock-battle)"
+  - "spec - docs/spec/engine/plugins-and-battle.md#e-75, E-77, E-78 (data only; the 'each round while charged' rule is stock_battle)"
   - "code - packages/core/src/actors/ (from 20.3)"
 ---
 
 ## Intent
 
-Hooks with defaults: fallen, level-up and damage-taken exist as named hook points; entry 7 lets a behaviour override them. This entry builds the defaults and the hook call sites.
+Hooks with defaults: fallen, revived, statusChanged, level-up, damage-taken and equipment/experience equations exist as named hook points; entry 7 lets a behaviour override the closed list. This entry builds the defaults and returns scalar transition data for 20.9 to emit.
 
 ## Boundaries
 
-No ATB, no damage formulas, no AI (Epic 7). No behaviour registration (7).
+No ATB, no damage formulas, no AI (Epic 7). No behaviour registration (7) and no event bus dispatch (9).
 
 ## Key Decisions
 
 1. R-16 (resolved, owner 2026-10-19): level and experience are stats; level-up and the other abilities are standard equations in code with defaults, overridable by behaviours. The default level-up equation is the one 20.1 rules; Epic 7 inherits it.
 
-2. Fallen is a state, never a removal (owner, 2026-10-19): default HP <= 0, behaviour-overridable; the actor stays in the party; revival is the state changing back (HP raised or a behaviour-defined revive); both `fallen` and `revived` events fire (emitted by 20.9).
+2. Fallen is a state, never a removal (owner, 2026-10-19): default HP <= 0, behaviour-overridable; the actor stays in the party; revival is the state changing back (HP raised or a behaviour-defined revive); both `fallen` and `revived` transition records are returned for 20.9 to emit, with `source` an actor id or null.
+
+3. `advanceStatus(n)` ages counters and returns `statusChanged` details; it does not decide what a battle's “round” means. `beforeDamage` is not emitted from these core methods; the battle RPGCode thread sends it.
 
 ## Acceptance
 

@@ -14,15 +14,17 @@ context:
 
 ## Intent
 
-A behaviour is one more export of a package, registered through 19.8's `registerPlugin` layer, so there is one registration mechanism.
+A behaviour is a separate package-start-up registration, not a `registerPlugin` key: `registerBehaviour(name, hooks)` stores session data beside the 19.8 layers and is rebuilt by the 19.16 loader at every boot/reset/restore.
 
 ## Boundaries
 
-Registration and resolution only; saving and hydration are entry 8.
+Registration and resolution only; saving and generic object hydration are entry 8.
 
 ## Key Decisions
 
-1. Behaviour names are package-namespaced strings; the registry holds callables in script state (saved per 18.6), the actor holds the string.
+1. Behaviour names use the package grammar `namespace.name` (for example `stock_rpg.hero`); an actor stores only the name.
+2. The hook list is closed and defined by core: unknown hook names, malformed names, wrong package namespaces and duplicates diagnose and register nothing; packages may still emit custom events.
+3. Resolution is behaviour hook first, core default second; no behaviour or an unknown name uses the default and emits one located diagnostic for the unknown name.
 
 ## Acceptance
 

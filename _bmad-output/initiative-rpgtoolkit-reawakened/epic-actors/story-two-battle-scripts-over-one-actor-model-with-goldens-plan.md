@@ -13,7 +13,7 @@ context:
 
 ## Intent
 
-Closing end-to-end proof of the actor boundary. Fixtures are authored (G7).
+Closing end-to-end proof of the actor boundary. Fixtures are authored (G7) and use the corpus `startups` seam that 19.14 already exercises, while 19.16 supplies the production package loader.
 
 ## Boundaries
 
@@ -21,7 +21,7 @@ Fixtures and goldens; not the stock battle (Epic 7).
 
 ## Key Decisions
 
-None beyond the epic Notes.
+1. Two pinned scripts use one actor model; their fallen, damage-taken and level-up differences come only from `registerBehaviour` in package start-up. `beforeDamage` is sent by the battle thread, not from a listener, and the one-tick cancelable resume is included in the timing.
 
 ## Acceptance
 

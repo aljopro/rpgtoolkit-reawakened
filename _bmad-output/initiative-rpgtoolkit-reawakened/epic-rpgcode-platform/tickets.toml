@@ -1,6 +1,6 @@
 # tickets.toml — planned entries of epic-rpgcode-platform, in build order. tickets.py reads it.
 # Table order is the build order; ids are stable names. Entry 1 is an owner-approval docs checkpoint (pending); entry 2 is an early owner-read spike.
-# Lanes: A objects (3, 4, 5, then 13), B packages (6, 7, 8), C main-file list (9), D events (10, 11, 12). 10 owns the events section; 15 reconciles shared barrels, the phase list and the GameState section list.
+# Lanes: A objects (3, 4, 5, then 13), B packages (6, 7, 8, then 16), C main-file list (9), D events (10, 11, 12). 10 owns the events section; 15 reconciles shared barrels, the phase list and the GameState section list. 16 owns the package catalogue seam in boot and the engine's package start-up run.
 # Builds what Epic 18 recorded as not built: the object runtime, receiver binding and registerPlugin.
 
 [[entry]]
@@ -263,4 +263,24 @@ hitl = false
 risk = "low"
 references = [
   "epic - epic-rpgcode-platform.md, Done when",
+]
+
+# Entry 16 was added on 2026-10-20 after the Epic 20 audit found that no engine path loads an RPGCode package (the .gam list names packages that nothing resolves). It follows the sweep (19.15, done) because it reopens none of the entries it builds on; lane B (packages), after 6, 7, 8, 9 and 13.
+[[entry]]
+id = 16
+tracker_id = "#540"
+type = "story"
+title = "Host package loader: manifest entry to source program and start-up"
+description = "Builds the package loader that PKG-4 and PKG-7 name: a host-supplied package catalogue (plain data the host fetches before boot; core touches no I/O, G2) maps each package named in the `.gam` list to its version, namespace, declared host requests and start-up program, so boot makes versioned package entries (the manifest entry and its declaration gain a `program` field) and owner-tagged start-up `ProgramRef`s, reports a listed name the catalogue lacks as a located `plugin.unresolved`, runs `runPackageStartup` at boot and on `reset`, and offers a restore helper that runs it on a scratch state before a saved state loads."
+verify = "A project folder holding one RPGCode package and a `.gam` list naming it boots with that package's version and namespace in the manifest and its start-up having registered a layer on an engine command, seen in a headless engine test; the layer table is rebuilt after `reset` and through the restore helper before a saved state loads, and a start-up that waits fails with `package.startup-unfinished`; a listed name the catalogue lacks gives one located `plugin.unresolved` naming the main file and the list position and the game still boots; a package name with a hyphen is the located `manifest.package-name` diagnostic; the 19.14 corpus `startups` path and every legacy golden are unchanged."
+covers = ["CAP-5"]
+after = [6, 7, 8, 9, 13]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (PKG-2, PKG-3, PKG-4, PKG-5, PKG-7)",
+  "spec - docs/spec/engine/main-loop-and-startup.md (E-02 step 3) and docs/spec/formats/main-file.md (TKR package-list extension)",
+  "code - packages/core/src/engine/boot.ts (pluginManifestFor, resolveManifestPlugins), engine.ts (makeServices, resetLifecycle), script/manifest.ts, plugin.ts, package-startup.ts",
+  "code - packages/runner-harness/src/script-host.ts (createScriptHost, restoreScriptHost), script-plugin-resolver.ts, corpus.ts (startups)",
+  "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-actors/discovery/actor-readiness.md (F-11 to F-14)",
 ]
