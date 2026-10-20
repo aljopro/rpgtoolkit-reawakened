@@ -132,22 +132,40 @@ test("reserved package IDs count as own numeric counters through snapshot restor
   equal(hashGameState(state), hashGameState(createGameState({ seed: 0 })));
 });
 
-test("restore rejects messagesOff=false while retaining valid messagesOff and step counters", () => {
+test("restore validates messagesOff and stepCounters shapes", () => {
   const state = createGameState({ seed: 0 });
   state.vm.stepCounters = { alpha: 17, beta: 4 };
-  const raw = JSON.parse(snapshot(state)) as { vm: { messagesOff?: unknown; stepCounters?: unknown } };
+  const base = JSON.parse(snapshot(state)) as {
+    vm: { messagesOff?: unknown; stepCounters?: unknown };
+  };
 
-  restoreGameState(JSON.stringify(raw));
-  raw.vm.messagesOff = true;
-  const restored = restoreGameState(JSON.stringify(raw));
-  deepEqual(restored.vm.stepCounters, state.vm.stepCounters);
+  deepEqual(restoreGameState(JSON.stringify(base)).vm.stepCounters, state.vm.stepCounters);
+  base.vm.messagesOff = true;
+  deepEqual(restoreGameState(JSON.stringify(base)).vm.stepCounters, state.vm.stepCounters);
 
-  raw.vm.messagesOff = false;
-  throws(
-    () => restoreGameState(JSON.stringify(raw)),
-    (error: unknown) => {
-      equal((error as ScriptError).code, "restore.shape");
-      return true;
-    },
-  );
+  const malformed = [
+    ["messagesOff=false", (raw: typeof base) => { raw.vm.messagesOff = false; }, "the snapshot's vm.messagesOff is invalid"],
+    ["messagesOff=0", (raw: typeof base) => { raw.vm.messagesOff = 0; }, "the snapshot's vm.messagesOff is invalid"],
+    ["messagesOff=text", (raw: typeof base) => { raw.vm.messagesOff = "true"; }, "the snapshot's vm.messagesOff is invalid"],
+    ["messagesOff=null", (raw: typeof base) => { raw.vm.messagesOff = null; }, "the snapshot's vm.messagesOff is invalid"],
+    ["stepCounters empty owner", (raw: typeof base) => { raw.vm.stepCounters = { "": 1 }; }, "the snapshot's vm.stepCounters. must be a non-negative whole number"],
+    ["stepCounters non-number", (raw: typeof base) => { raw.vm.stepCounters = { alpha: "1" }; }, "the snapshot's vm.stepCounters.alpha must be a non-negative whole number"],
+    ["stepCounters negative", (raw: typeof base) => { raw.vm.stepCounters = { alpha: -1 }; }, "the snapshot's vm.stepCounters.alpha must be a non-negative whole number"],
+    ["stepCounters fractional", (raw: typeof base) => { raw.vm.stepCounters = { alpha: 1.5 }; }, "the snapshot's vm.stepCounters.alpha must be a non-negative whole number"],
+    ["stepCounters unsafe integer", (raw: typeof base) => { raw.vm.stepCounters = { alpha: 9007199254740992 }; }, "the snapshot's vm.stepCounters.alpha must be a non-negative whole number"],
+    ["stepCounters malformed record", (raw: typeof base) => { raw.vm.stepCounters = []; }, "the snapshot's vm.stepCounters must be an object"],
+  ] as const;
+
+  for (const [label, change, message] of malformed) {
+    const raw = JSON.parse(JSON.stringify(base)) as typeof base;
+    change(raw);
+    throws(
+      () => restoreGameState(JSON.stringify(raw)),
+      (error: unknown) => {
+        equal((error as ScriptError).code, "restore.shape", label);
+        equal((error as ScriptError).message, message, label);
+        return true;
+      },
+    );
+  }
 });
