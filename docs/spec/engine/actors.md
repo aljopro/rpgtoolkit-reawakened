@@ -188,8 +188,10 @@ The actor model inventory is entry 20.2. The actor store is 20.3; script object 
 ## Actor inventory {#act-inventory}
 
 This is the canonical 20.2 inventory. Each persisted source field appears once; runtime
-state appears once in the runtime table. `OWNER` marks a choice that requires owner-epic
-approval rather than an inferred legacy rule. `core-rule` means the actor store owns the
+state appears once in the runtime table. A `none` alias means the legacy engine has no
+stat global for the row. The ownership choices in this table (actor versus sprite versus
+item definition versus inventory, and core-rule versus battle-rule) were approved by the
+owner on 2026-10-20. `core-rule` means the actor store owns the
 interpretation; `battle-rule` means Epic 7 owns it. “Writer” identifies the only layer
 permitted to mutate the value (a script may request a mutation through that owner).
 
@@ -207,20 +209,20 @@ permitted to mutate the value (a script may request a mutation through that owne
 | current SMP | character.smVar + sm / enemy.smp | int | stats | `SMP!` | core/battle operation | core-rule | [character](../formats/character.md#layout) 10,13; [enemy](../formats/enemy.md#layout) 5 | 20.3/20.6/Epic 7 |
 | maximum SMP | character.smMaxVar + smMax / enemy.smp | int | stats | `MaxSMP!` | core/equipment/level-up | core-rule | [character](../formats/character.md#layout) 11,13; [enemy](../formats/enemy.md#layout) 5 | 20.3/20.6 |
 | level | character.levelVar + level | int | progression | `Level!` | core/level-up/script | core-rule | [character](../formats/character.md#layout) 12,13 | 20.3/20.6 |
-| portrait | character.profilePic | asset reference | presentation | OWNER | hydration/editor | core-rule | [character](../formats/character.md#layout) 14 | 20.5/20.10 |
-| special-move slots | character specialMove.file/minExp/minLevel/condition variable/required value (×201) | array of records | abilities | OWNER | core hydration/script | core-rule | [character](../formats/character.md#layout) 15a–e | 20.5/20.6 |
-| special-move menu label | character.specialMoveName | string | abilities | OWNER | hydration/editor | core-rule | [character](../formats/character.md#layout) 16 | 20.5 |
-| special-move flag | character.smYN | byte | abilities | OWNER | hydration | core-rule | [character](../formats/character.md#layout) 17 | 20.5 |
-| accessory slots | character accessory slot name (×11) | array<string> | equipment | OWNER | core/equipment script | core-rule | [character](../formats/character.md#layout) 18 | 20.5/20.6 |
-| armour-slot usage | character armour slot used (×7) | array<boolean> | equipment | OWNER | core/equipment | core-rule | [character](../formats/character.md#layout) 19 | 20.5/20.6 |
+| portrait | character.profilePic | asset reference | presentation | none | hydration/editor | core-rule | [character](../formats/character.md#layout) 14 | 20.5/20.10 |
+| special-move slots | character specialMove.file/minExp/minLevel/condition variable/required value (×201) | array of records | abilities | none | core hydration/script | core-rule | [character](../formats/character.md#layout) 15a–e | 20.5/20.6 |
+| special-move menu label | character.specialMoveName | string | abilities | none | hydration/editor | core-rule | [character](../formats/character.md#layout) 16 | 20.5 |
+| special-move flag | character.smYN | byte | abilities | none | hydration | core-rule | [character](../formats/character.md#layout) 17 | 20.5 |
+| accessory slots | character accessory slot name (×11) | array<string> | equipment | none | core/equipment script | core-rule | [character](../formats/character.md#layout) 18 | 20.5/20.6 |
+| armour-slot usage | character armour slot used (×7) | array<boolean> | equipment | none | core/equipment | core-rule | [character](../formats/character.md#layout) 19 | 20.5/20.6 |
 | first-level threshold | character.levelType | int | progression | `LevelType!` | core | core-rule | [character](../formats/character.md#layout) 20 | 20.6 |
 | threshold increase | character.experienceIncrease | short | progression | `ExperienceIncrease!` | core | core-rule | [character](../formats/character.md#layout) 21 | 20.6 |
 | maximum level | character.maxLevel | int | progression | `MaxLevel!` | core | core-rule | [character](../formats/character.md#layout) 22 | 20.6 |
-| level HP increase | character.levelHp | short | progression policy | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
-| level DP increase | character.levelDp | short | progression policy | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
-| level FP increase | character.levelFp | short | progression policy | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
-| level SMP increase | character.levelSm | short | progression policy | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
-| level-up program | character.levelUpProgram | program reference | progression | OWNER | editor conversion/script | core-rule | [character](../formats/character.md#layout) 25; [actor precedence](#progression) | 20.6/20.7 |
+| level HP increase | character.levelHp | short | progression policy | none | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
+| level DP increase | character.levelDp | short | progression policy | none | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
+| level FP increase | character.levelFp | short | progression policy | none | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
+| level SMP increase | character.levelSm | short | progression policy | none | core/behaviour | core-rule | [character](../formats/character.md#layout) 23 | 20.6/20.7 |
+| level-up program | character.levelUpProgram | program reference | progression | none | editor conversion/script | core-rule | [character](../formats/character.md#layout) 25; [actor precedence](#progression) | 20.6/20.7 |
 | level-up mode | character.levelUpType | byte | progression policy | `LevelUpType!` | core | core-rule | [character](../formats/character.md#layout) 26 | 20.6 |
 | enemy run permission | enemy.canRun | byte | battle traits | `ENE_CANRUN` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 8; [E-71](plugins-and-battle.md#e-71) | Epic 7 |
 | offensive critical value | enemy.giveCrit (characters: none, -1) | short | stats | `ENE_GIVECRIT` | core/actor script | core-rule (data); battle-rule (resolution) | [enemy](../formats/enemy.md#layout) 10; [E-74](plugins-and-battle.md#e-74) | 20.3/20.5; Epic 7 resolves |
@@ -235,21 +237,21 @@ permitted to mutate the value (a script may request a mutation through that owne
 | gold reward | enemy.gp | int | rewards | `ENE_GP` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 18 | Epic 7 |
 | victory program | enemy.winPrg | program reference | battle traits | `ENE_WINPRG` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 19 | Epic 7 |
 | run-away program | enemy.runPrg | program reference | battle traits | `ENE_RUNPRG` | Epic 7 | battle-rule | [enemy](../formats/enemy.md#layout) 20 | Epic 7 |
-| character/enemy animations | animation slots and custom stance pairs | arrays<asset reference/label> | presentation | OWNER | hydration | core-rule | [character](../formats/character.md#layout) 28–35; [enemy](../formats/enemy.md#layout) 21–24 | 20.5/20.10 |
-| movement timing | character.idleTime/speed; item.speed/idleTime | double | movement | OWNER | core/movement | core-rule | [character](../formats/character.md#layout) 31–33; [item](../formats/item.md#layout) 25–27 | 20.10 |
-| collision/activation hulls | character/item polygons | point arrays | movement | OWNER | hydration/movement | core-rule | [character](../formats/character.md#layout) 36–40; [item](../formats/item.md#layout) 30–32 | 20.5/20.10 |
-| item identity and description | item.itemName/description | string | item definition (asset; Epic 8 rules) | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 3–4; [E-81](plugins-and-battle.md#e-81) | Epic 8 |
-| item permissions | item.equipYN/menuYN/boardYN/fightYN/usedBy/allowed character | bytes/array<string> | item definition | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 5–7 | Epic 8 |
-| item prices/key flag | item.buyPrice/sellPrice/keyItem | int/int/byte | item definition | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 8–9 | Epic 8 |
-| item menu effect/program | item.menuHP/menuSM/prgMenuUse | ints/program reference | item definition | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 14–15 | Epic 8 |
-| item equipment slots/bonuses | item equip slot, accessory, equipHP/equipDP/equipFP/equipSM | array/strings/ints | item definition, interpreted by actor equipment rule | OWNER | none (read-only asset); derived bonus written by actor owner | core-rule | [item](../formats/item.md#layout) 10–12; [E-82](plugins-and-battle.md#e-82) | 20.6 |
-| item equip/remove programs | item.prgEquip/prgRemove | program references | item definition, run on equip/remove | OWNER | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 13 | 20.6 |
-| item battle effect/program | item.fightHP/fightSM/prgFightUse | ints/program reference | item definition | OWNER | none (read-only asset); applied by Epic 7 | battle-rule | [item](../formats/item.md#layout) 16–17 | Epic 7 |
-| item board animation/programs | item.animation/prgOnBoard/prgPickUp | asset/program references | sprite (movement/presentation) | OWNER | hydration/board | core-rule | [item](../formats/item.md#layout) 18–20 | 20.5/20.10 |
-| status identity and duration | status.name/rounds | string/short | statuses | OWNER | core status owner | core-rule | [status](../formats/battle-data.md#status-effect) 3–4 | 20.3/20.6 |
-| status charge modifiers | status.speed/slow/disable | short flags | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 5–7; [E-75](plugins-and-battle.md#e-75) | Epic 7 |
-| status HP/SMP tick | status.hp/hpAmount/smp/smpAmount | flags/shorts | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 8–11 | Epic 7 |
-| status program | status.code/prg | flag/program reference | statuses | OWNER | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 12–13 | Epic 7 |
+| character/enemy animations | animation slots and custom stance pairs | arrays<asset reference/label> | presentation | none | hydration | core-rule | [character](../formats/character.md#layout) 28–35; [enemy](../formats/enemy.md#layout) 21–24 | 20.5/20.10 |
+| movement timing | character.idleTime/speed; item.speed/idleTime | double | movement | none | core/movement | core-rule | [character](../formats/character.md#layout) 31–33; [item](../formats/item.md#layout) 25–27 | 20.10 |
+| collision/activation hulls | character/item polygons | point arrays | movement | none | hydration/movement | core-rule | [character](../formats/character.md#layout) 36–40; [item](../formats/item.md#layout) 30–32 | 20.5/20.10 |
+| item identity and description | item.itemName/description | string | item definition (asset; Epic 8 rules) | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 3–4; [E-81](plugins-and-battle.md#e-81) | Epic 8 |
+| item permissions | item.equipYN/menuYN/boardYN/fightYN/usedBy/allowed character | bytes/array<string> | item definition | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 5–7 | Epic 8 |
+| item prices/key flag | item.buyPrice/sellPrice/keyItem | int/int/byte | item definition | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 8–9 | Epic 8 |
+| item menu effect/program | item.menuHP/menuSM/prgMenuUse | ints/program reference | item definition | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 14–15 | Epic 8 |
+| item equipment slots/bonuses | item equip slot, accessory, equipHP/equipDP/equipFP/equipSM | array/strings/ints | item definition, interpreted by actor equipment rule | none | none (read-only asset); derived bonus written by actor owner | core-rule | [item](../formats/item.md#layout) 10–12; [E-82](plugins-and-battle.md#e-82) | 20.6 |
+| item equip/remove programs | item.prgEquip/prgRemove | program references | item definition, run on equip/remove | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 13 | 20.6 |
+| item battle effect/program | item.fightHP/fightSM/prgFightUse | ints/program reference | item definition | none | none (read-only asset); applied by Epic 7 | battle-rule | [item](../formats/item.md#layout) 16–17 | Epic 7 |
+| item board animation/programs | item.animation/prgOnBoard/prgPickUp | asset/program references | sprite (movement/presentation) | none | hydration/board | core-rule | [item](../formats/item.md#layout) 18–20 | 20.5/20.10 |
+| status identity and duration | status.name/rounds | string/short | statuses | none | core status owner | core-rule | [status](../formats/battle-data.md#status-effect) 3–4 | 20.3/20.6 |
+| status charge modifiers | status.speed/slow/disable | short flags | statuses | none | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 5–7; [E-75](plugins-and-battle.md#e-75) | Epic 7 |
+| status HP/SMP tick | status.hp/hpAmount/smp/smpAmount | flags/shorts | statuses | none | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 8–11 | Epic 7 |
+| status program | status.code/prg | flag/program reference | statuses | none | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 12–13 | Epic 7 |
 
 Item rows are asset definitions, hydrated by name and never saved. Inventory state (stacks, counts, and which actor has which item in which slot) belongs to the `inventory` section (AD-10) through `InventoryAction`, built by Epic 8. An actor holds only equipped item references and the bonuses derived from them by the core equipment rule (`equipmentChanged`); it never owns item records. Item speed, idle time, hulls and board animation belong to the sprite that represents a board item.
 
@@ -257,14 +259,14 @@ Item rows are asset definitions, hydrated by name and never saved. Inventory sta
 
 | Name | Source field | Type | Actor-section owner | Legacy alias | Writer | Rule | Evidence | Builder |
 |---|---|---|---|---|---|---|---|---|
-| stable id | runtime actor.id | scalar | identity | OWNER | actor store | core-rule | [ACT-1](#actor-contract-entries) | 20.3 |
-| source asset/kind | runtime actor.source/kind | asset reference/enum | identity | OWNER | hydration | core-rule | [actor data](#actor-data-and-identity) | 20.5 |
+| stable id | runtime actor.id | scalar | identity | none | actor store | core-rule | [ACT-1](#actor-contract-entries) | 20.3 |
+| source asset/kind | runtime actor.source/kind | asset reference/enum | identity | none | hydration | core-rule | [actor data](#actor-data-and-identity) | 20.5 |
 | current/max stats | runtime actor.stats | plain-data record | stats | aliases above | actor owner | core-rule | [actor data](#actor-data-and-identity) | 20.3/20.6 |
-| statuses/counters | runtime actor.statuses | map<status, counter> | statuses | OWNER | actor status operation | core-rule | [actor data](#actor-data-and-identity) | 20.6 |
-| equipment-derived state | runtime actor.equipment/equipment bonuses | plain-data record | equipment | OWNER | equipment owner | core-rule | [ACT-3](#actor-contract-entries) | 20.3/20.6 |
+| statuses/counters | runtime actor.statuses | map<status, counter> | statuses | none | actor status operation | core-rule | [actor data](#actor-data-and-identity) | 20.6 |
+| equipment-derived state | runtime actor.equipment/equipment bonuses | plain-data record | equipment | none | equipment owner | core-rule | [ACT-3](#actor-contract-entries) | 20.3/20.6 |
 | progression state/policy | runtime actor.progression | plain-data record | progression | aliases above | actor/behaviour | core-rule | [Progression](#progression) | 20.6/20.7 |
-| behaviour name | runtime actor.behaviour | string or absent | identity | OWNER | hydration/registry | core-rule | [behaviours](#behaviours-and-hydration) | 20.7/20.8 |
-| declared custom events | runtime actor.customEvents | array<string> | identity | OWNER | hydration | core-rule | [custom events](#custom-actor-events) | 20.5/20.9 |
+| behaviour name | runtime actor.behaviour | string or absent | identity | none | hydration/registry | core-rule | [behaviours](#behaviours-and-hydration) | 20.7/20.8 |
+| declared custom events | runtime actor.customEvents | array<string> | identity | none | hydration | core-rule | [custom events](#custom-actor-events) | 20.5/20.9 |
 
 ### Sprite state (sprites section, separate from actors)
 
@@ -287,9 +289,9 @@ Source-field rows above whose owner is `movement` or `presentation` (portrait as
 | Name | Source field | Type | Actor-section owner | Legacy alias | Writer | Rule | Evidence | Builder |
 |---|---|---|---|---|---|---|---|---|
 | derived stat | equipment/base stat | int | stats | corresponding stat alias | core | core-rule | [ACT-3](#actor-contract-entries), [E-82](plugins-and-battle.md#e-82) | 20.6 |
-| next level threshold | levelType, experienceIncrease, levelUpType | int | progression | OWNER | core | core-rule | [progression](progression-and-levels.md) | 20.6 |
-| level-up growth | levelHp/levelDp/levelFp/levelSm + levelUpType | int | progression | OWNER | core/behaviour | core-rule | [character](../formats/character.md#layout) 23,26; [progression](progression-and-levels.md) | 20.6/20.7 |
-| damage taken | attacker FP, target DP, attacker offensive and target defensive critical values, variance | int | battle operation | OWNER | Epic 7 | battle-rule | [E-74](plugins-and-battle.md#e-74) | Epic 7 |
+| next level threshold | levelType, experienceIncrease, levelUpType | int | progression | none | core | core-rule | [progression](progression-and-levels.md) | 20.6 |
+| level-up growth | levelHp/levelDp/levelFp/levelSm + levelUpType | int | progression | none | core/behaviour | core-rule | [character](../formats/character.md#layout) 23,26; [progression](progression-and-levels.md) | 20.6/20.7 |
+| damage taken | attacker FP, target DP, attacker offensive and target defensive critical values, variance | int | battle operation | none | Epic 7 | battle-rule | [E-74](plugins-and-battle.md#e-74) | Epic 7 |
 
 Defaults are deterministic: missing numeric stats start at zero (except format-declared
 defaults and the two critical values, which default to -1, "none"; see E-74), HP/SMP
