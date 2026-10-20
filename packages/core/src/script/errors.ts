@@ -34,6 +34,10 @@ export const OBJECT_INVALID = "object.invalid";
 export const OBJECT_ABSTRACT_CLASS = "object.abstract-class";
 export const OBJECT_INACCESSIBLE_MEMBER = "object.inaccessible-member";
 
+/** System-owned-name failures from KILL-1 and VIRT-1. */
+export const KILL_SYSTEM_OWNED = "kill.system-owned";
+export const ASSIGN_READ_ONLY = "assign.read-only";
+
 /** The error-handler misuse codes (ERR-1). */
 export const HANDLER_TOP_LEVEL = "handler.top-level";
 export const HANDLER_UNKNOWN_LABEL = "handler.unknown-label";
@@ -96,6 +100,8 @@ const CATCHABLE: { readonly [code: string]: FailureClass } = {
   [OBJECT_INVALID]: "object",
   [OBJECT_ABSTRACT_CLASS]: "object",
   [OBJECT_INACCESSIBLE_MEMBER]: "object",
+  [KILL_SYSTEM_OWNED]: "builtin",
+  [ASSIGN_READ_ONLY]: "builtin",
   "vm.modulo-by-zero": "arithmetic",
   "vm.bad-lvalue": "argument",
   "vm.bad-operand": "internal",

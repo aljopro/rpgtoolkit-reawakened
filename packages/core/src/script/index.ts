@@ -7,6 +7,7 @@
  */
 
 export {
+  ASSIGN_READ_ONLY,
   CALLABLE_ARITY,
   CALLABLE_NOT_CALLABLE,
   CALLABLE_UNKNOWN_DEF,
@@ -17,6 +18,7 @@ export {
   INCLUDE_CYCLE,
   INCLUDE_MISSING,
   INCLUDE_REFUSED,
+  KILL_SYSTEM_OWNED,
   locateError,
   OBJECT_ABSTRACT_CLASS,
   OBJECT_INACCESSIBLE_MEMBER,
@@ -31,7 +33,6 @@ export {
   ScriptError,
   toDiagnostic,
 } from "./errors.ts";
-export type { FailureClass } from "./errors.ts";
 export { verifyRestoredHandles } from "./restore-check.ts";
 export type { RestoreCheckServices } from "./restore-check.ts";
 export type { BinaryOp, SourcePos, StepOp, UnaryOp } from "./ops.ts";
@@ -81,7 +82,9 @@ export type { LoadedSource, ProgramLoader } from "./loader.ts";
 export { createProgramCache } from "./cache.ts";
 export type { ProgramCache } from "./cache.ts";
 export { killAllRedirects, killRedirect, setRedirect } from "./modules.ts";
-export { isDictionary, objectKeys } from "./objects.ts";
+export { createHostObject, isDictionary, objectKeys } from "./objects.ts";
+export { hostMethodDef, parseHostMethodDef } from "./host.ts";
+export type { HostObjectContext, HostObjectType, HostRemoveResult, HostWriteResult } from "./host.ts";
 export {
   createVmState,
   endBoardThreads,
@@ -93,6 +96,7 @@ export {
   incrementStepCounter,
   killThread,
   localRef,
+  virtualRef,
   nextThreadId,
   readStepCounters,
   refreshBlock,
@@ -252,7 +256,7 @@ export {
 } from "./waits.ts";
 export type { ScriptServices, ScriptStatus } from "./vm.ts";
 export { createDefaultVirtuals } from "./virtuals.ts";
-export type { VirtualVariablePort } from "./virtuals.ts";
+export type { VirtualVariablePort, VirtualWriteResult } from "./virtuals.ts";
 export { STRING_SPECS } from "./builtins/strings.ts";
 export { CONVERSION_SPECS } from "./builtins/conversions.ts";
 export { SCOPE_SPECS } from "./builtins/scope.ts";

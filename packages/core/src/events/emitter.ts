@@ -82,13 +82,19 @@ export function emitterKeyOf(events: Pick<EventsSection, "emitters">, handle: nu
  * registered under that key, else a new dictionary recorded in `events.emitters`. The
  * engine keeps it alive while it is registered (`eventRoots`).
  */
-export function registerEmitter(vm: Pick<VmState, "objects">, events: EventsSection, key: string): ObjectRecord {
+export function registerEmitter(
+  vm: Pick<VmState, "objects">,
+  events: EventsSection,
+  key: string,
+  existing?: ObjectRecord,
+): ObjectRecord {
   const emitters = events.emitters;
   if (emitters !== undefined && Object.hasOwn(emitters, key)) {
-    const existing = findObject(vm, emitters[key]!);
-    if (existing !== undefined) return existing;
+    const current = findObject(vm, emitters[key]!);
+    if (current !== undefined) return current;
+    delete emitters[key];
   }
-  const record = createObject(vm, null);
+  const record = existing ?? createObject(vm, null);
   const table = events.emitters ?? {};
   Object.defineProperty(table, key, { value: record.handle, writable: true, enumerable: true, configurable: true });
   events.emitters = table;

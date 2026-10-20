@@ -18,15 +18,18 @@ import type { ProgramCache } from "./cache.ts";
 import { eachRootValue, isCallableRecord } from "./cells.ts";
 import { RESTORE_CALLABLE_CAPTURES, RESTORE_CALLABLE_RECEIVER, RESTORE_CALLABLE_UNKNOWN_DEF, ScriptError } from "./errors.ts";
 import { isLayerDef } from "./layers.ts";
+import { parseHostMethodDef } from "./host.ts";
 import { COMPILER_VERSION, programKey, type Program, type ProgramRef } from "./program.ts";
 import type { CommandLookup } from "./registry.ts";
 import type { VmState } from "./state.ts";
 import type { EventsSection } from "../events/model.ts";
+import type { HostObjectType } from "./host.ts";
 
 /** What the check needs of the host's services. */
 export type RestoreCheckServices = {
   readonly programs: ProgramCache;
   readonly commands: CommandLookup;
+  readonly hostTypes?: ReadonlyMap<string, HostObjectType>;
 };
 
 /** A short name for a program in a message: its path, or `<inline>`. */
@@ -104,6 +107,16 @@ export function verifyRestoredHandles(vm: VmState, services: RestoreCheckService
   }
 
   for (const { path, value } of callables) {
+    const hydrated = parseHostMethodDef(value.def);
+    if (hydrated !== null) {
+      if (value.captures.length !== 0) {
+        throw new ScriptError(
+          RESTORE_CALLABLE_CAPTURES,
+          `the snapshot's ${path} names ${value.captures.length} cell(s), but "${value.def}" is a hydrated host method and captures nothing`,
+        );
+      }
+      continue;
+    }
     // A layer wrapper or a `remove` handle names the layer table of the running game, which package
     // start-up rebuilds and a save never holds (entry 19.8): the table answers when the handle is called.
     if (isLayerDef(value.def)) {
