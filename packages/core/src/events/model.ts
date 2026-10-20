@@ -9,7 +9,7 @@
  * as the unsaved run does.
  *
  * Owner: entry 19.10. Entries 19.11 (cancelable emit) and 19.12 (the game
- * emitter) extend it.
+ * emitter, the registration seam of built-in emitters) extend it.
  */
 
 import type { CallableValue } from "../ports/value.ts";
@@ -18,9 +18,9 @@ import type { CallableValue } from "../ports/value.ts";
 export const EVENTS_SCHEMA_VERSION = 1;
 
 /**
- * One registered listener. `emitter` is the key of the object it listens on
- * (`object:<handle>`); `id` is distinct and never reused; `once` marks a listener
- * removed just before it first runs (EMIT-4).
+ * One registered listener. `emitter` is the key of the emitter it listens on
+ * (`object:<handle>`, or the key of a built-in emitter, EMIT-20); `id` is distinct
+ * and never reused; `once` marks a listener removed just before it first runs (EMIT-4).
  */
 export type ListenerRecord = {
   id: number;
@@ -50,6 +50,16 @@ export type DispatchCursor = {
   thread: number | null;
 };
 
+/** The key of the game emitter (EMIT-19, EMIT-20). */
+export const GAME_EMITTER = "game";
+
+/** One TypeScript listener a package declares (EMIT-21): an emitter key, an event type and one of the package's commands. */
+export type NativeListener = {
+  readonly emitter: string;
+  readonly type: string;
+  readonly command: string;
+};
+
 /** The `events` section. */
 export type EventsSection = {
   /** The id the next registered listener takes; it never goes down. */
@@ -60,6 +70,12 @@ export type EventsSection = {
   queue: QueuedEvent[];
   /** The delivery in progress, or `null` between deliveries. */
   dispatch: DispatchCursor | null;
+  /**
+   * The built-in emitters a section owner registered (EMIT-20): key to the handle of
+   * the object that stands for it. Absent until the first registration, like `cells`
+   * in the `vm` section, so a state that never registered one keeps the shape it had.
+   */
+  emitters?: { [key: string]: number };
 };
 
 /** A fresh `events` section: no listener, nothing queued, nothing in progress. */

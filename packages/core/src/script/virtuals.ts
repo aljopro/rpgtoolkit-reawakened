@@ -1,6 +1,8 @@
 /** E-92 engine-backed virtual variables, including board data (R-37). */
 import type { Value } from "../ports/value.ts";
 import { musicFile } from "../audio/model.ts";
+import { GAME_EMITTER } from "../events/model.ts";
+import { registerEmitter } from "../events/emitter.ts";
 import type { GameState } from "../save/state.ts";
 import { TICKS_PER_SECOND } from "../time/time.ts";
 import { ScriptError } from "./errors.ts";
@@ -24,6 +26,11 @@ export function createDefaultVirtuals(state: GameState): VirtualVariablePort {
       const name = rawName.toLowerCase();
       if (name === "gametime") return Math.floor(state.time.tick / TICKS_PER_SECOND);
       if (name === "music") return musicFile(state.audio) ?? "";
+      if (name === GAME_EMITTER) {
+        // EMIT-19: `game` reads as the game emitter, an object made the first time anything needs it.
+        const game = registerEmitter(state.vm, state.events, GAME_EMITTER);
+        return { kind: "object", handle: game.handle, className: game.className };
+      }
       const world = asRecord(state.world);
       const board = asRecord(world?.board);
       if (requiresBoard(name) && board === undefined) throw new ScriptError("world.no-board", `virtual variable "${rawName}" requires a loaded board`);

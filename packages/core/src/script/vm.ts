@@ -38,8 +38,9 @@ import { NULL_LOGGER } from "./logging.ts";
 import { ENGINE_DEFAULT_MANIFEST, foldNamespace } from "./manifest.ts";
 import { collectCells, eachLiveRoot, recordOwner } from "./cells.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
-import { applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef } from "../events/emitter.ts";
-import type { EventsSection } from "../events/model.ts";
+import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef, queueErrorEvent } from "../events/emitter.ts";
+import { GAME_EMITTER, type EventsSection } from "../events/model.ts";
+import { registerNativeListeners } from "../events/native.ts";
 import { classInfo, findMember, findMethod } from "./classes.ts";
 import {
   checkMemberAccess,
@@ -166,6 +167,14 @@ export function createScriptServices(
   };
   const virt = virtuals ?? createDefaultVirtuals(state);
   const registry = assembleCommands(plugins, logger);
+  for (const problem of registerNativeListeners(state.events, plugins)) {
+    logger.warn({
+      level: "warn",
+      code: "plugin.listener-unknown-command",
+      message: `plugin "${problem.plugin}" declares a listener for "${problem.listener.type}" on "${problem.listener.emitter}" that names "${problem.listener.command}", which is not one of its commands; it was not registered`,
+      data: { plugin: problem.plugin, emitter: problem.listener.emitter, type: problem.listener.type, command: problem.listener.command },
+    });
+  }
   const pluginOptions = new Map<string, PlainData>();
   for (const plugin of plugins) {
     if (plugin.options !== undefined) pluginOptions.set(plugin.definition.id, plugin.options);
@@ -506,13 +515,22 @@ function isObjectValue(value: Value | undefined): value is ObjectValue {
 
 /**
  * The variable `name` as a read of it from the running frame would find it,
- * without creating it: a local of the running frame, else the global, else
- * `undefined`.
+ * without creating it: a local of the running frame, else the global, else the
+ * game emitter when `name` is `game` (EMIT-19), else `undefined`. Only `game` is
+ * asked of the virtual variables here: their other names mean no object, and a read
+ * of a board-backed one fails without a board.
  */
-function peekVariable(vm: VmState, thread: Thread, frameIndex: number, name: string): Value | undefined {
+function peekVariable(
+  vm: VmState,
+  thread: Thread,
+  frameIndex: number,
+  name: string,
+  virtuals?: VirtualVariablePort,
+): Value | undefined {
   const frame = thread.frames[frameIndex]!;
   if (Object.hasOwn(frame.locals, name)) return readRef(vm, thread, frameIndex, frame.locals[name]!.ref);
-  return Object.hasOwn(vm.globals, name) ? vm.globals[name] : undefined;
+  if (Object.hasOwn(vm.globals, name)) return vm.globals[name];
+  return name === GAME_EMITTER ? virtuals?.read(name) : undefined;
 }
 
 /**
@@ -520,9 +538,9 @@ function peekVariable(vm: VmState, thread: Thread, frameIndex: number, name: str
  * one. A plain variable base arrives as its name (the `name` op), so the name
  * is looked up without creating it; any other base arrives as the value.
  */
-function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base: Arg): ObjectRecord | undefined {
+function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base: Arg, virtuals?: VirtualVariablePort): ObjectRecord | undefined {
   const value =
-    base.ref === null && typeof base.value === "string" ? peekVariable(vm, thread, frameIndex, base.value) : base.value;
+    base.ref === null && typeof base.value === "string" ? peekVariable(vm, thread, frameIndex, base.value, virtuals) : base.value;
   if (!isObjectValue(value)) return undefined;
   const record = findObject(vm, value.handle);
   return record !== undefined && isDictionary(record) ? record : undefined;
@@ -570,13 +588,14 @@ function peekName(
   program: Program,
   name: string,
   shadowed: boolean,
+  virtuals?: VirtualVariablePort,
 ): Value | undefined {
   const frame = thread.frames[frameIndex]!;
   if (frame.objectHandle !== undefined && isImplicitField(vm, program, frame, name, shadowed)) {
     const record = findObject(vm, frame.objectHandle);
     return record === undefined ? undefined : readMember(record, name);
   }
-  return peekVariable(vm, thread, frameIndex, name);
+  return peekVariable(vm, thread, frameIndex, name, virtuals);
 }
 
 /** The live object `value` names; `what` is the message when `value` is no object at all (OOP-3). */
@@ -835,6 +854,7 @@ function reportFailure(vm: VmState, services: ScriptServices, error: ScriptError
  * touches another frame, so a caller's handler cannot catch a callee failure.
  */
 function handleFailure(
+  thread: Thread,
   vm: VmState,
   services: ScriptServices,
   program: Program,
@@ -850,6 +870,7 @@ function handleFailure(
   if (handler !== null && handler.mode === "label") {
     const target = handler.label === null ? undefined : handlerLabel(program, opIp, handler.label);
     if (target !== undefined) {
+      emitErrorEvent(thread, vm, services, located, true);
       frame.operands.length = 0;
       handler.active = true;
       handler.resume = statementEnd(program, opIp);
@@ -859,11 +880,30 @@ function handleFailure(
     // ERR-1: the handler is cleared only when its label cannot be found; the error is reported.
     frame.errorHandler = null;
   }
+  emitErrorEvent(thread, vm, services, located, handler !== null && handler.mode === "resumeNext");
   const effect = stackEffect(op);
   const target = Math.max(0, depth - effect.pops) + effect.pushes;
   if (frame.operands.length > target) frame.operands.length = target;
   while (frame.operands.length < target) frame.operands.push({ value: 0, ref: null });
   frame.ip = opIp + 1;
+}
+
+/**
+ * Queue the game `error` event for one reported failure (EMIT-9, EMIT-22): the same located
+ * diagnostic the host receives, plus whether the failing frame's handler took it. It is
+ * queued and never runs a listener here (EMIT-3). A run with no state to hold the `events`
+ * section (a bare services object) has no game to emit on.
+ */
+function emitErrorEvent(thread: Thread, vm: VmState, services: ScriptServices, error: ScriptError, handled: boolean): void {
+  const state = services.view.state;
+  if (state === undefined) return;
+  queueErrorEvent(vm, state.events, thread.id, {
+    code: error.code,
+    message: error.message,
+    file: error.pos?.file ?? "",
+    line: error.pos?.line ?? 0,
+    handled,
+  });
 }
 
 /** Install or replace the calling frame's handler, keeping any in-flight resume point (ERR-1). */
@@ -1766,6 +1806,7 @@ function dispatchResolved(
         }
       }
     } else {
+      if (effect.kind === "emit") applyEmitEffect(vm, eventsOf(services), effect.args ?? []);
       const section = effect.section;
       const out: { [index: string]: PlainData } = {};
       for (const [index, value] of result.out ?? []) {
@@ -2191,7 +2232,7 @@ export function stepThread(
             ? (keyArg.value | 0)
             : keyArg.value;
         const keyText = indexKey(keyValue);
-        const dictionary = dictionaryOfBase(vm, thread, frameIndex, baseArg);
+        const dictionary = dictionaryOfBase(vm, thread, frameIndex, baseArg, services.virtuals);
         if (dictionary !== undefined) {
           // `d["key"]` is the same read and the same write as `d.key` (OOP-10).
           if (typeof keyArg.value !== "string" && typeof keyArg.value !== "number") {
@@ -2560,7 +2601,7 @@ export function stepThread(
           break;
         }
         if (op.file !== undefined) {
-          const receiverValue = peekName(vm, thread, frameIndex, program, op.file, op.fileParam === true);
+          const receiverValue = peekName(vm, thread, frameIndex, program, op.file, op.fileParam === true, services.virtuals);
           const record = isObjectValue(receiverValue) ? findObject(vm, receiverValue.handle) : undefined;
           if (record !== undefined) {
             if (invokeMember(thread, vm, services, program, frame, frameIndex, record, op.name, args, op.pos) === "yield") {
@@ -2632,7 +2673,7 @@ export function stepThread(
     } catch (caught) {
       // Load-time errors are not catchable; only a runtime failure of this one op is routed here.
       if (!(caught instanceof ScriptError) || failureClass(caught.code) === null) throw caught;
-      handleFailure(vm, services, program, frame, op, opIp, depth, caught);
+      handleFailure(thread, vm, services, program, frame, op, opIp, depth, caught);
     }
   }
   return finish();

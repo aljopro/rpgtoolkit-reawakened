@@ -1,19 +1,21 @@
 /**
- * The emitter operations over the `events` section (EMIT-2, EMIT-4, EMIT-14;
- * docs/spec/engine/rpgcode-modules-and-objects.md#emit-14): add a listener,
- * remove one or all of a type, and queue an event. Every function is a plain
- * function over plain data (G1): no clock, no randomness, no closure in state.
+ * The emitter operations over the `events` section (EMIT-2, EMIT-4, EMIT-14, EMIT-19 to
+ * EMIT-22; docs/spec/engine/rpgcode-modules-and-objects.md#emit-14): add a listener,
+ * remove one or all of a type, queue an event, register a built-in emitter, apply a
+ * TypeScript plugin's emit effect and queue the game `error` event. Every function is a
+ * plain function over plain data (G1): no clock, no randomness, no closure in state.
  *
  * Delivery is `dispatch.ts`'s; this file never runs a listener.
  */
 
 import type { ObjectValue, Value } from "../ports/value.ts";
+import type { PlainData } from "../ports/plain-data.ts";
 import { CALLABLE_NOT_CALLABLE, OBJECT_INVALID, ScriptError } from "../script/errors.ts";
 import { createObject, findObject, isDictionary, readMember, writeMember } from "../script/objects.ts";
 import type { ObjectRecord, VmState } from "../script/state.ts";
 import { isCallableValue } from "../script/values.ts";
 import type { CallableValue } from "../ports/value.ts";
-import { emitterHandle, objectEmitter, type EventsSection } from "./model.ts";
+import { emitterHandle, GAME_EMITTER, objectEmitter, type EventsSection } from "./model.ts";
 
 /** The emitter methods every object has (EMIT-2): the names, folded as the lexer folds them. */
 const EMITTER_METHODS: Record<string, true> = { on: true, once: true, off: true, emit: true, emitcancelable: true };
@@ -28,6 +30,9 @@ export const EVENT_DISPATCH_WAIT = "event.dispatch";
 export const EMIT_REENTRANT = "emit.reentrant";
 export const EVENT_NOT_CANCELABLE = "event.not-cancelable";
 export const EVENT_NOT_DISPATCHING = "event.not-dispatching";
+
+/** The type of the game's runtime-error event (EMIT-9, EMIT-22). */
+export const ERROR_EVENT = "error";
 
 /** Whether `name` is one of the host-provided emitter methods of every object (OOP-12, EMIT-2). */
 export function isEmitterMethod(name: string): boolean {
@@ -54,6 +59,53 @@ function badArg(op: string, message: string): ScriptError {
 
 function isObjectValue(value: Value | undefined): value is ObjectValue {
   return typeof value === "object" && value !== null && "kind" in value && value.kind === "object";
+}
+
+function objectValueOf(record: ObjectRecord): ObjectValue {
+  return { kind: "object", handle: record.handle, className: record.className };
+}
+
+/**
+ * The listener-table key of the object with `handle` (EMIT-15, EMIT-20): the key it is
+ * registered under as a built-in emitter, else `object:<handle>`.
+ */
+export function emitterKeyOf(events: Pick<EventsSection, "emitters">, handle: number): string {
+  const emitters = events.emitters;
+  if (emitters !== undefined) {
+    for (const key of Object.keys(emitters)) if (emitters[key] === handle) return key;
+  }
+  return objectEmitter(handle);
+}
+
+/**
+ * Register the built-in emitter `key` (EMIT-20) and return its object: the one already
+ * registered under that key, else a new dictionary recorded in `events.emitters`. The
+ * engine keeps it alive while it is registered (`eventRoots`).
+ */
+export function registerEmitter(vm: Pick<VmState, "objects">, events: EventsSection, key: string): ObjectRecord {
+  const emitters = events.emitters;
+  if (emitters !== undefined && Object.hasOwn(emitters, key)) {
+    const existing = findObject(vm, emitters[key]!);
+    if (existing !== undefined) return existing;
+  }
+  const record = createObject(vm, null);
+  const table = events.emitters ?? {};
+  Object.defineProperty(table, key, { value: record.handle, writable: true, enumerable: true, configurable: true });
+  events.emitters = table;
+  return record;
+}
+
+/**
+ * Unregister the built-in emitter `key` (EMIT-20): drop its listeners and stop keeping its
+ * object alive, which is then ordinary garbage. Events already queued for the key are
+ * still taken and have no listener (EMIT-14). A key that is not registered does nothing.
+ */
+export function unregisterEmitter(events: EventsSection, key: string): void {
+  const emitters = events.emitters;
+  if (emitters === undefined || !Object.hasOwn(emitters, key)) return;
+  delete emitters[key];
+  if (Object.keys(emitters).length === 0) delete events.emitters;
+  events.listeners = events.listeners.filter((listener) => listener.emitter !== key);
 }
 
 /** The live object `value` names, or the catchable `object.invalid` (EMIT-14). */
@@ -97,7 +149,7 @@ export function applyEmitterOp(
     return null;
   }
   const record = liveEmitter(vm, op, emitter);
-  const key = objectEmitter(record.handle);
+  const key = emitterKeyOf(events, record.handle);
   const type = eventType(op, rest[0]);
   if (op === "on" || op === "once") {
     addListener(events, key, type, listenerCallable(op, rest[1]), op === "once");
@@ -108,16 +160,16 @@ export function applyEmitterOp(
     return null;
   }
   if (op === "emit") {
-    queueEvent(vm, events, record, type, rest.length > 1 ? detailRecord(vm, op, rest[1]) : undefined, false);
+    queueEvent(vm, events, record, key, type, rest.length > 1 ? detailFields(vm, op, rest[1]) : [], false);
     return null;
   }
   if (op === "emitcancelable") {
-    const detail = rest.length > 1 ? detailRecord(vm, op, rest[1]) : undefined;
+    const detail = rest.length > 1 ? detailFields(vm, op, rest[1]) : [];
     if (thread === null) throw badArg(op, "a cancelable emit needs a script thread to park (an engine phase's own emits are EMIT-11)");
     if (events.dispatch !== null && events.dispatch.thread === thread) {
       throw new ScriptError(EMIT_REENTRANT, `${op}: a listener cannot wait for a cancelable event; its own delivery would wait for it (EMIT-18)`);
     }
-    return queueEvent(vm, events, record, type, detail, true);
+    return queueEvent(vm, events, record, key, type, detail, true);
   }
   throw badArg(op, "is not an emitter command");
 }
@@ -139,14 +191,15 @@ function cancelEvent(vm: VmState, events: EventsSection, value: Value | undefine
   writeMember(record, "canceled", 1);
 }
 
-function detailRecord(vm: VmState, op: string, value: Value | undefined): ObjectRecord {
+/** The fields of the dictionary a script gave as `detail`, in key order (EMIT-6: the copy is made when the event is made). */
+function detailFields(vm: VmState, op: string, value: Value | undefined): Array<readonly [string, Value]> {
   const record = isObjectValue(value) ? findObject(vm, value.handle) : undefined;
   if (record === undefined || !isDictionary(record)) throw badArg(op, "the detail must be a dictionary");
-  return record;
+  return record.keys.map((name) => [name, record.members[name]!] as const);
 }
 
 /** Append a listener to the one table, so registration order is the order of the table (EMIT-4). */
-function addListener(events: EventsSection, emitter: string, type: string, callable: CallableValue, once: boolean): void {
+export function addListener(events: EventsSection, emitter: string, type: string, callable: CallableValue, once: boolean): void {
   events.listeners.push({ id: events.nextListener, emitter, type, once, callable });
   events.nextListener += 1;
 }
@@ -171,30 +224,115 @@ function removeListeners(events: EventsSection, emitter: string, type: string, f
  * Make the event object now, append it to the queue and return its handle (EMIT-3,
  * EMIT-6, EMIT-14, EMIT-16): a dictionary with `type`, `target`, `detail`,
  * `cancelable`, `canceled` and `cancel`, where `detail` is a new dictionary holding
- * a copy of `detail` made at this moment (an empty one when none was given) and
- * `cancel` is a callable bound to the event itself. Nothing runs.
+ * `fields` (an empty one when there are none) and `cancel` is a callable bound to the
+ * event itself. `key` is the emitter's listener-table key. Nothing runs.
  */
 function queueEvent(
   vm: VmState,
   events: EventsSection,
   emitter: ObjectRecord,
+  key: string,
   type: string,
-  detail: ObjectRecord | undefined,
+  fields: ReadonlyArray<readonly [string, Value]>,
   cancelable: boolean,
 ): number {
   const copy = createObject(vm, null);
-  if (detail !== undefined) {
-    for (const name of detail.keys) writeMember(copy, name, detail.members[name]!);
-  }
+  for (const [name, value] of fields) writeMember(copy, name, value);
   const event = createObject(vm, null);
   writeMember(event, "type", type);
-  writeMember(event, "target", { kind: "object", handle: emitter.handle, className: emitter.className });
-  writeMember(event, "detail", { kind: "object", handle: copy.handle, className: copy.className });
+  writeMember(event, "target", objectValueOf(emitter));
+  writeMember(event, "detail", objectValueOf(copy));
   writeMember(event, "cancelable", cancelable ? 1 : 0);
   writeMember(event, "canceled", 0);
   writeMember(event, "cancel", { type: "callable", def: CANCEL_EVENT, captures: [], receiver: String(event.handle) });
-  events.queue.push({ emitter: objectEmitter(emitter.handle), event: event.handle });
+  events.queue.push({ emitter: key, event: event.handle });
   return event.handle;
+}
+
+/** The script value of one plain detail field of a TypeScript emit (EMIT-21), or `undefined` when it is not a scalar. */
+function plainField(value: PlainData | undefined): Value | undefined {
+  if (typeof value === "number" || typeof value === "string") return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (value === null) return 0;
+  return undefined;
+}
+
+/** The emitter a TypeScript emit names (EMIT-21): the game, a registered built-in key or a live `object:<handle>`. */
+function nativeEmitter(vm: VmState, events: EventsSection, key: string): { readonly record: ObjectRecord; readonly key: string } {
+  if (key === GAME_EMITTER) return { record: registerEmitter(vm, events, key), key };
+  const registered = events.emitters !== undefined && Object.hasOwn(events.emitters, key) ? findObject(vm, events.emitters[key]!) : undefined;
+  if (registered !== undefined) return { record: registered, key };
+  const handle = emitterHandle(key);
+  const record = handle === null ? undefined : findObject(vm, handle);
+  if (record === undefined || emitterKeyOf(events, record.handle) !== key) {
+    throw new ScriptError(OBJECT_INVALID, `emit: "${key}" names no emitter`);
+  }
+  return { record, key };
+}
+
+/**
+ * Apply the `emit` effect a TypeScript plugin's command reported (EMIT-21): `args` is
+ * `[emitter key, type, detail?]`. The event enters the one queue exactly as a script's
+ * plain `emit` does (EMIT-14); no listener runs.
+ */
+export function applyEmitEffect(vm: VmState, events: EventsSection, args: readonly PlainData[]): void {
+  const key = args[0];
+  const type = args[1];
+  const detail = args[2];
+  if (typeof key !== "string") throw badArg("emit", "the emitter key must be a string");
+  if (typeof type !== "string") throw badArg("emit", "the event type must be a string");
+  const fields: Array<readonly [string, Value]> = [];
+  if (detail !== undefined && detail !== null) {
+    if (typeof detail !== "object" || Array.isArray(detail)) throw badArg("emit", "the detail must be a plain object");
+    for (const name of Object.keys(detail)) {
+      const value = plainField(detail[name]);
+      if (value === undefined) throw badArg("emit", `the detail field "${name}" must be a number, a string, a boolean or null`);
+      fields.push([name, value]);
+    }
+  }
+  const emitter = nativeEmitter(vm, events, key);
+  queueEvent(vm, events, emitter.record, emitter.key, type, fields, false);
+}
+
+/** The located failure the game `error` event reports (EMIT-9, EMIT-22). */
+export type ErrorEventDetail = {
+  readonly code: string;
+  readonly message: string;
+  readonly file: string;
+  readonly line: number;
+  readonly handled: boolean;
+};
+
+/**
+ * Queue the game `error` event for one runtime failure (EMIT-22): a plain emit on `game`
+ * whose `detail` holds `code`, `message`, `file`, `line` and `handled` (`1` or `0`), in that
+ * order. `thread` is the failing thread; a failure of the thread that is running a listener
+ * of an `error` event on the game is not emitted again, so a faulty listener cannot loop.
+ * Returns whether an event was queued.
+ */
+export function queueErrorEvent(vm: VmState, events: EventsSection, thread: number, error: ErrorEventDetail): boolean {
+  const cursor = events.dispatch;
+  if (cursor !== null && cursor.thread === thread && cursor.emitter === GAME_EMITTER) {
+    const delivering = findObject(vm, cursor.event);
+    if (delivering !== undefined && readMember(delivering, "type") === ERROR_EVENT) return false;
+  }
+  const game = registerEmitter(vm, events, GAME_EMITTER);
+  queueEvent(
+    vm,
+    events,
+    game,
+    GAME_EMITTER,
+    ERROR_EVENT,
+    [
+      ["code", error.code],
+      ["message", error.message],
+      ["file", error.file],
+      ["line", error.line],
+      ["handled", error.handled ? 1 : 0],
+    ],
+    false,
+  );
+  return true;
 }
 
 /** Drop every listener of a freed object (EMIT-14, "A freed emitter"). */
@@ -208,7 +346,8 @@ export function forgetEmitter(events: EventsSection, handle: number): void {
 /**
  * Drop the listeners of every emitter the handle table no longer holds; returns
  * how many went. Run after the end-of-tick collection (R-34), before any new
- * object can take a freed handle.
+ * object can take a freed handle. A built-in emitter's listeners are filed under its
+ * key and go with `unregisterEmitter`, not here.
  */
 export function pruneDeadEmitters(events: EventsSection, vm: Pick<VmState, "objects">): number {
   if (events.listeners.length === 0) return 0;
@@ -225,8 +364,9 @@ export function pruneDeadEmitters(events: EventsSection, vm: Pick<VmState, "obje
 /**
  * The script values kept alive outside the `vm` section's own roots: every
  * listener's callable (the cells and receiver it names), the event object of every
- * queued or in-progress event (EMIT-14) and the event object of every thread parked
- * on a cancelable emit (EMIT-16). They are extra roots of the end-of-tick pass.
+ * queued or in-progress event (EMIT-14), the event object of every thread parked
+ * on a cancelable emit (EMIT-16) and the object of every registered built-in emitter
+ * (EMIT-20). They are extra roots of the end-of-tick pass.
  */
 export function eventRoots(events: EventsSection, vm: Pick<VmState, "threads">): Value[] {
   const roots: Value[] = [];
@@ -236,6 +376,9 @@ export function eventRoots(events: EventsSection, vm: Pick<VmState, "threads">):
   for (const thread of vm.threads) {
     const handle = thread.wait?.kind === EVENT_DISPATCH_WAIT ? thread.wait.payload[0] : undefined;
     if (typeof handle === "number") roots.push({ kind: "object", handle, className: "" });
+  }
+  if (events.emitters !== undefined) {
+    for (const key of Object.keys(events.emitters)) roots.push({ kind: "object", handle: events.emitters[key]!, className: "" });
   }
   return roots;
 }
