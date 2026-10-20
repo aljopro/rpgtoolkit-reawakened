@@ -303,15 +303,19 @@ test("the threads phase runs ready threads in ascending id order", () => {
 });
 
 test("treats constructor and __proto__ as ordinary variables", () => {
-  const state = makeState("x = constructor\n__proto__ = 5\ny = __proto__\n");
+  const state = makeState("x = constructor\nconstructor = 7\nz = constructor\n__proto__ = 5\ny = __proto__\n");
   advanceScriptTick(state, createScriptServices(state));
 
   equal(state.vm.globals.x, 0);
+  equal(state.vm.globals.constructor, 7);
+  equal(state.vm.globals.z, 7);
   equal(state.vm.globals.__proto__, 5);
   equal(state.vm.globals.y, 5);
+  equal(Object.hasOwn(state.vm.globals, "constructor"), true);
   equal(Object.hasOwn(state.vm.globals, "__proto__"), true);
 
   const json = canon(state);
+  equal(json.includes('"constructor":7'), true);
   equal(json.includes('"__proto__":5'), true);
   equal(typeof hashState(state), "string");
   equal(canon(restoreGameState(snapshot(state))), json);

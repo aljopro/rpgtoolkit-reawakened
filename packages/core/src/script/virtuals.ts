@@ -31,7 +31,8 @@ const ACTOR_ALIASES: Readonly<Record<string, keyof ActorStats>> = {
 };
 
 function actorAlias(name: string): keyof ActorStats | undefined {
-  return ACTOR_ALIASES[name.endsWith("!") ? name.slice(0, -1) : name];
+  const key = name.endsWith("!") ? name.slice(0, -1) : name;
+  return Object.hasOwn(ACTOR_ALIASES, key) ? ACTOR_ALIASES[key] : undefined;
 }
 
 function isCompileTimeConstant(name: string): boolean {
