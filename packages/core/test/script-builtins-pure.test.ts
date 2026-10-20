@@ -589,7 +589,7 @@ test("local and global allocate variables dynamically", () => {
 // E-92 Virtual Variables
 // ---------------------------------------------------------------------------
 
-test("E-92 virtual gametime reads tick elapsed and assignment breaks link", () => {
+test("E-92 virtual gametime is read-only", () => {
   const state = createGameState({ seed: 0 });
   state.time.tick = 180; // 3 seconds at 60 fps
   startProgram(state.vm, {
@@ -601,10 +601,13 @@ test("E-92 virtual gametime reads tick elapsed and assignment breaks link", () =
     `,
     compiler: "2",
   });
-  advanceScriptTick(state, createScriptServices(state));
+  const services = createScriptServices(state);
+  const error = errorOf(() => advanceOrFail(state, services));
+  equal(error.code, "assign.read-only");
   equal(state.vm.globals.t1, 3);
-  equal(state.vm.globals.t2, 999);
-  equal(state.vm.globals.gametime, 999);
+  equal(state.vm.globals.t2, 3);
+  equal(state.vm.globals.gametime, undefined);
+  equal(services.virtuals.read("gametime"), 3);
 });
 
 test("E-92 virtual variables read engine state sections", () => {

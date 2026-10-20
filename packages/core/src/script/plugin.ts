@@ -46,6 +46,7 @@ import type { Wait } from "../ports/wait.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import type { EffectKind } from "./effects.ts";
+import type { HostObjectType } from "./host.ts";
 
 /**
  * The read-only view a command runs against (AD-8; decision U2). It holds game
@@ -153,6 +154,8 @@ export type PluginDefinition = {
    * `emit` effect (`emitEffect`), never by calling a listener.
    */
   readonly listeners?: readonly NativeListener[];
+  /** Session-only host object declarations hydrated by type name (OOP-12). */
+  readonly hostTypes?: readonly HostObjectType[];
 };
 
 /**

@@ -18,10 +18,13 @@ import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
 import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
+import { createActorHostType, createActorService } from "../actors/port.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
 import { recordDiagnostic, recordEffect, type EffectRecord } from "./effects.ts";
+import type { HostObjectContext, HostObjectType } from "./host.ts";
 import {
+  ASSIGN_READ_ONLY,
   CALLABLE_ARITY,
   CALLABLE_NOT_CALLABLE,
   CALLABLE_UNKNOWN_DEF,
@@ -30,6 +33,7 @@ import {
   HANDLER_TOP_LEVEL,
   HANDLER_UNKNOWN_LABEL,
   INCLUDE_CYCLE,
+  KILL_SYSTEM_OWNED,
   locateError,
   ScriptError,
   toDiagnostic,
@@ -54,6 +58,7 @@ import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, is
 import { GAME_EMITTER, type EventsSection } from "../events/model.ts";
 import { registerNativeListeners } from "../events/native.ts";
 import { classInfo, findMember, findMethod } from "./classes.ts";
+import { hostMethodDef, parseHostMethodDef } from "./host.ts";
 import {
   checkMemberAccess,
   createObject,
@@ -102,6 +107,7 @@ import {
   localRef,
   refreshBlock,
   startThread,
+  virtualRef,
   type Frame,
   type LocalSlot,
   type ObjectRecord,
@@ -149,6 +155,8 @@ export type ScriptServices = {
   readonly pluginOptions: ReadonlyMap<string, PlainData>;
   /** The `namespace.prg` files a package namespace already warned about, so each warns once (PKG-4); a log aid, never state. */
   readonly hiddenFileWarned: Set<string>;
+  /** Session host declarations keyed by the saved object's `hostType` name. */
+  readonly hostTypes: ReadonlyMap<string, HostObjectType>;
   /**
    * The command layers `registerPlugin` registered (MOD-4, PKG-5; entry 19.8): session data, never state,
    * rebuilt by package start-up and not saved. A call reaches them through the first entry of the environment table.
@@ -175,6 +183,7 @@ export function createScriptServices(
   postEffect?: (section: SectionKey, effect: EffectRecord) => void,
   postRequest?: (request: CommandRequest) => void,
   layers: PluginLayers = createPluginLayers(),
+  hostTypes: readonly HostObjectType[] = [],
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
@@ -198,6 +207,12 @@ export function createScriptServices(
   for (const plugin of plugins) {
     if (plugin.options !== undefined) pluginOptions.set(plugin.definition.id, plugin.options);
   }
+  const hydratedTypes = new Map<string, HostObjectType>();
+  hydratedTypes.set("actor", createActorHostType(createActorService(state.actors)));
+  for (const plugin of plugins) {
+    for (const type of plugin.definition.hostTypes ?? []) hydratedTypes.set(type.name, type);
+  }
+  for (const type of hostTypes) hydratedTypes.set(type.name, type);
   // The engine's own packs are the built-in tier (R-35); every other plugin is an extension.
   const builtinPacks = new Set(ENGINE_DEFAULT_MANIFEST.map((entry) => entry.id));
   const commands = createCommandLookup({
@@ -242,6 +257,7 @@ export function createScriptServices(
     diagnostics,
     pluginOptions,
     hiddenFileWarned: new Set(),
+    hostTypes: hydratedTypes,
     layers,
     ...(loader === undefined ? {} : { loader }),
     ...(postEffect === undefined ? {} : { postEffect }),
@@ -262,25 +278,26 @@ export function runWaitsPhase(
   view: WaitView,
   poll: WaitPoll = defaultWaitPoll,
   claim?: (seq: number) => void,
+  services?: ScriptServices,
 ): void {
   const waiting = vm.threads.filter((thread) => thread.status === "waiting" && thread.wait !== null);
   waiting.sort((left, right) => left.id - right.id);
   const blocker = findBlockingThread(vm);
   if (blocker !== null) {
-    resolveWait(vm, view, poll, blocker, claim);
+    resolveWait(vm, view, poll, blocker, claim, services);
     if (blocker.status === "waiting") {
       refreshBlock(vm, view.tick);
       return;
     }
   }
   for (const thread of waiting) {
-    if (thread !== blocker) resolveWait(vm, view, poll, thread, claim);
+    if (thread !== blocker) resolveWait(vm, view, poll, thread, claim, services);
   }
   refreshBlock(vm, view.tick);
 }
 
 /** Poll one thread's wait; on a result, make the thread ready and hand it the wake value. */
-function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread, claim?: (seq: number) => void): void {
+function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread, claim?: (seq: number) => void, services?: ScriptServices): void {
   const wait = thread.wait;
   if (wait === null) return;
   if (wait.kind === "input.key" && wait.parkSeq === undefined) wait.parkSeq = view.input?.nextSeq ?? 0;
@@ -312,7 +329,7 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
   }
   if ("resumeRefs" in wait && wait.resumeRefs !== undefined) {
     const topIndex = thread.frames.length - 1;
-    for (const ref of wait.resumeRefs) writeRef(vm, thread, topIndex, ref as RefId, result.value);
+    for (const ref of wait.resumeRefs) writeRef(vm, thread, topIndex, ref as RefId, result.value, services);
   }
   if (wait.kind === "sleep" && !wait.resumesCall) return;
   frame.operands.push({ value: result.value, ref: null });
@@ -546,11 +563,14 @@ function peekVariable(
   frameIndex: number,
   name: string,
   virtuals?: VirtualVariablePort,
+  services?: ScriptServices,
 ): Value | undefined {
   const frame = thread.frames[frameIndex]!;
-  if (Object.hasOwn(frame.locals, name)) return readRef(vm, thread, frameIndex, frame.locals[name]!.ref);
+  if (Object.hasOwn(frame.locals, name)) return readRef(vm, thread, frameIndex, frame.locals[name]!.ref, services);
+  const virtual = virtuals?.read(name);
+  if (virtual !== undefined) return virtual;
   if (Object.hasOwn(vm.globals, name)) return vm.globals[name];
-  return name === GAME_EMITTER ? virtuals?.read(name) : undefined;
+  return undefined;
 }
 
 /**
@@ -563,7 +583,7 @@ function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base:
     base.ref === null && typeof base.value === "string" ? peekVariable(vm, thread, frameIndex, base.value, virtuals) : base.value;
   if (!isObjectValue(value)) return undefined;
   const record = findObject(vm, value.handle);
-  return record !== undefined && isDictionary(record) ? record : undefined;
+  return record !== undefined && (isDictionary(record) || record.hostType !== undefined) ? record : undefined;
 }
 
 /** Copy a callable with the target as receiver unless it already has one (OOP-11). */
@@ -615,13 +635,14 @@ function peekName(
   name: string,
   shadowed: boolean,
   virtuals?: VirtualVariablePort,
+  services?: ScriptServices,
 ): Value | undefined {
   const frame = thread.frames[frameIndex]!;
   if (frame.objectHandle !== undefined && isImplicitField(vm, program, frame, name, shadowed)) {
     const record = findObject(vm, frame.objectHandle);
     return record === undefined ? undefined : readMember(record, name);
   }
-  return peekVariable(vm, thread, frameIndex, name, virtuals);
+  return peekVariable(vm, thread, frameIndex, name, virtuals, services);
 }
 
 /** The live object `value` names; `what` is the message when `value` is no object at all (OOP-3). */
@@ -648,11 +669,41 @@ function releaseObject(vm: VmState, services: ScriptServices, handle: number): v
 
 /**
  * Whether reading `name` of `record` finds a host-provided method (OOP-12): an emitter method
- * of every object, unless the object's own data field or its class's declaration has the name.
+ * of every object, or a method in the object's session-hydrated host type.
  */
-function isHostMethod(program: Program, record: ObjectRecord, name: string): boolean {
-  if (!isEmitterMethod(name) || Object.hasOwn(record.members, name)) return false;
-  return isDictionary(record) || findMember(program, record.className, name) === undefined;
+function isHostMethod(program: Program, record: ObjectRecord, name: string, services: ScriptServices): boolean {
+  if (Object.hasOwn(record.members, name)) return false;
+  if (isEmitterMethod(name)) return isDictionary(record) || findMember(program, record.className, name) === undefined;
+  const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
+  return type?.methods?.[name] !== undefined && isDictionary(record);
+}
+
+function hostContext(services: ScriptServices, record: ObjectRecord): HostObjectContext | null {
+  const state = services.view.state;
+  return state === undefined ? null : { state, events: state.events, vm: state.vm, record };
+}
+
+function hostMemberName(name: string): string {
+  return name.startsWith("[") && name.endsWith("]") ? name.slice(1, -1) : name;
+}
+
+function readObjectValue(services: ScriptServices, record: ObjectRecord, name: string): Value {
+  if (Object.hasOwn(record.members, name)) return readMember(record, name);
+  const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
+  const context = hostContext(services, record);
+  const hydrated = type?.read !== undefined && context !== null ? type.read(context, hostMemberName(name)) : undefined;
+  return hydrated === undefined ? readMember(record, name) : hydrated;
+}
+
+function writeObjectValue(services: ScriptServices, record: ObjectRecord, name: string, value: Value): void {
+  if (!Object.hasOwn(record.members, name)) {
+    const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
+    const context = hostContext(services, record);
+    const result = type?.write !== undefined && context !== null ? type.write(context, hostMemberName(name), value) : "not-host";
+    if (result === "written") return;
+    if (result === "read-only") throw new ScriptError(ASSIGN_READ_ONLY, `host member "${name}" is read-only`);
+  }
+  writeMember(record, name, value);
 }
 
 /** Park `thread` on the cancelable event `handle` (EMIT-16), straight after the call queued it. */
@@ -737,13 +788,25 @@ function invokeMember(
     }
     if (findMember(program, record.className, name) === undefined) {
       if (isEmitterMethod(name)) return callEmitterMethod(thread, vm, services, frame, record, name, args);
+      if (isHostMethod(program, record, name, services)) {
+        const value: CallableValue = { type: "callable", def: hostMethodDef(record.hostType!, name), captures: [], receiver: String(record.handle) };
+        return performCallable(thread, vm, services, program, frame, frameIndex, value, args, pos);
+      }
+      if (record.hostType !== undefined && !Object.hasOwn(record.members, name) && !services.hostTypes.has(record.hostType)) {
+        throw new ScriptError("object.invalid", `host type "${record.hostType}" is not installed`, pos);
+      }
       throw new ScriptError("object.invalid", `method ${name} not found`, pos);
     }
     checkMemberAccess(program, record, name, frame.objectClass, pos);
   } else if (isEmitterMethod(name) && !Object.hasOwn(record.members, name)) {
     return callEmitterMethod(thread, vm, services, frame, record, name, args);
+  } else if (isHostMethod(program, record, name, services)) {
+    const value: CallableValue = { type: "callable", def: hostMethodDef(record.hostType!, name), captures: [], receiver: String(record.handle) };
+    return performCallable(thread, vm, services, program, frame, frameIndex, value, args, pos);
+  } else if (record.hostType !== undefined && !Object.hasOwn(record.members, name) && !services.hostTypes.has(record.hostType)) {
+    throw new ScriptError("object.invalid", `host type "${record.hostType}" is not installed`, pos);
   }
-  const member = bindMemberValue(readMember(record, name), record.handle);
+  const member = bindMemberValue(readObjectValue(services, record, name), record.handle);
   if (!isCallableValue(member)) {
     const kind = isDictionary(record) ? "dictionary member" : "member";
     throw new ScriptError(CALLABLE_NOT_CALLABLE, `${kind} "${name}" is not callable`, pos);
@@ -980,29 +1043,24 @@ function resumeAfterFailure(frame: Frame, frameIndex: number, pos: SourcePos): v
   handler.active = false;
 }
 
-function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId): Value {
+function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId, services?: ScriptServices): Value {
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
-  // A closure cell belongs to the callable value that captured the name, not to
-  // any frame: every call of the closure reads and writes this one slot (FUN-8).
-  if (scope === "cell") {
-    return vm.cells?.[name] ?? 0;
-  }
+  if (scope === "cell") return vm.cells?.[name] ?? 0;
+  if (scope === "virtual") return services?.virtuals.read(name) ?? 0;
   if (scope === "object") {
     const object = parseObjectRef(ref);
     const record = object === null ? undefined : findObject(vm, object.handle);
-    return record === undefined || object === null ? 0 : readMember(record, object.name);
+    return record === undefined || object === null ? 0 : services === undefined ? readMember(record, object.name) : readObjectValue(services, record, object.name);
   }
-  if (scope === "global") {
-    return vm.globals[name] ?? 0;
-  }
+  if (scope === "global") return vm.globals[name] ?? 0;
   for (let i = frameIndex; i >= 0; i--) {
     const f = thread.frames[i];
     if (f && Object.hasOwn(f.locals, name)) {
       const s = f.locals[name]!;
       if (s.ref === localRef(name)) return s.value ?? 0;
-      return readRef(vm, thread, i, s.ref);
+      return readRef(vm, thread, i, s.ref, services);
     }
   }
   return 0;
@@ -1014,6 +1072,7 @@ function writeRef(
   frameIndex: number,
   ref: RefId,
   value: Value,
+  services?: ScriptServices,
 ): void {
   const stored = value === null ? 0 : value;
   const separator = ref.indexOf(":");
@@ -1023,10 +1082,20 @@ function writeRef(
     setOwnValue((vm.cells ??= {}), name, stored);
     return;
   }
+  if (scope === "virtual") {
+    const result = services?.virtuals.write?.(name, stored) ?? "not-virtual";
+    if (result === "read-only") throw new ScriptError(ASSIGN_READ_ONLY, `system-owned name "${name}" is read-only`);
+    if (result === "written") return;
+    setOwnValue(vm.globals, name, stored);
+    return;
+  }
   if (scope === "object") {
     const object = parseObjectRef(ref);
     const record = object === null ? undefined : findObject(vm, object.handle);
-    if (record !== undefined && object !== null) writeMember(record, object.name, stored);
+    if (record !== undefined && object !== null) {
+      if (services === undefined) writeMember(record, object.name, stored);
+      else writeObjectValue(services, record, object.name, stored);
+    }
     return;
   }
   if (scope === "global") {
@@ -1041,49 +1110,32 @@ function writeRef(
         s.value = stored;
         return;
       }
-      writeRef(vm, thread, i, s.ref, stored);
+      writeRef(vm, thread, i, s.ref, stored, services);
       return;
     }
   }
   const currentFrame = thread.frames[frameIndex];
-  if (currentFrame) {
-    setOwnSlot(currentFrame.locals, name, { value: stored, ref: localRef(name) });
-  }
+  if (currentFrame) setOwnSlot(currentFrame.locals, name, { value: stored, ref: localRef(name) });
 }
 
-function deleteVariable(vm: VmState, thread: Thread, frameIndex: number, target: string): void {
+function deleteVariable(vm: VmState, thread: Thread, frameIndex: number, target: string, services?: ScriptServices): void {
+  if (services?.virtuals.kill?.(target) === true) return;
   const isWholeArray = !target.includes("[");
   const prefix = `${target}[`;
-
   for (let i = frameIndex; i >= 0; i--) {
     const f = thread.frames[i];
     if (f) {
       const slot = f.locals[target];
-      // A captured name is bound to a cell, which has no "unset" state: `kill`
-      // empties the cell and keeps the binding, so the closure's next read
-      // still reaches its own storage instead of creating a global (FUN-8).
-      if (slot !== undefined && slot.ref.startsWith("cell:")) {
-        setOwnValue((vm.cells ??= {}), slot.ref.slice(5), 0);
-      } else {
-        delete f.locals[target];
-      }
+      if (slot !== undefined && slot.ref.startsWith("cell:")) setOwnValue((vm.cells ??= {}), slot.ref.slice(5), 0);
+      else delete f.locals[target];
       if (isWholeArray) {
-        for (const key of Object.keys(f.locals)) {
-          if (key.startsWith(prefix)) {
-            delete f.locals[key];
-          }
-        }
+        for (const key of Object.keys(f.locals)) if (key.startsWith(prefix)) delete f.locals[key];
       }
     }
   }
-
   delete vm.globals[target];
   if (isWholeArray) {
-    for (const key of Object.keys(vm.globals)) {
-      if (key.startsWith(prefix)) {
-        delete vm.globals[key];
-      }
-    }
+    for (const key of Object.keys(vm.globals)) if (key.startsWith(prefix)) delete vm.globals[key];
   }
 }
 
@@ -1093,57 +1145,37 @@ function loadArg(
   frameIndex: number,
   name: string,
   scope?: VarScope,
-  virtuals?: VirtualVariablePort,
+  services?: ScriptServices,
 ): Arg {
+  const virtuals = services?.virtuals;
   if (scope === "global") {
-    if (Object.hasOwn(vm.globals, name)) {
-      return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
-    }
     const virt = virtuals?.read(name);
-    if (virt !== undefined) {
-      return { value: virt, ref: globalRef(name) };
-    }
+    if (virt !== undefined) return { value: virt, ref: virtualRef(name) };
+    if (Object.hasOwn(vm.globals, name)) return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
     setOwnValue(vm.globals, name, 0);
     return { value: 0, ref: globalRef(name) };
   }
-
   const frame = thread.frames[frameIndex]!;
   if (scope === "local") {
-    if (!Object.hasOwn(frame.locals, name)) {
-      setOwnSlot(frame.locals, name, { value: 0, ref: localRef(name) });
-    }
+    if (!Object.hasOwn(frame.locals, name)) setOwnSlot(frame.locals, name, { value: 0, ref: localRef(name) });
     const slot = frame.locals[name]!;
-    if (slot.ref === localRef(name)) {
-      return { value: slot.value ?? 0, ref: slot.ref };
-    }
-    const val = readRef(vm, thread, frameIndex, slot.ref);
+    if (slot.ref === localRef(name)) return { value: slot.value ?? 0, ref: slot.ref };
+    const val = readRef(vm, thread, frameIndex, slot.ref, services);
     return { value: val, ref: slot.ref };
   }
-
   if (Object.hasOwn(frame.locals, name)) {
     const slot = frame.locals[name]!;
-    if (slot.ref === localRef(name)) {
-      return { value: slot.value ?? 0, ref: slot.ref };
-    }
-    const val = readRef(vm, thread, frameIndex, slot.ref);
+    if (slot.ref === localRef(name)) return { value: slot.value ?? 0, ref: slot.ref };
+    const val = readRef(vm, thread, frameIndex, slot.ref, services);
     return { value: val, ref: slot.ref };
   }
-
-  if (Object.hasOwn(vm.globals, name)) {
-    return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
-  }
-
   const virtVal = virtuals?.read(name);
-  if (virtVal !== undefined) {
-    return { value: virtVal, ref: globalRef(name) };
-  }
-
+  if (virtVal !== undefined) return { value: virtVal, ref: virtualRef(name) };
+  if (Object.hasOwn(vm.globals, name)) return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
   if (frame.autoLocal) {
     setOwnSlot(frame.locals, name, { value: 0, ref: localRef(name) });
     return { value: 0, ref: localRef(name) };
   }
-
-  // SEM-4/SEM-5: Read creates the variable as global (unset -> 0)
   setOwnValue(vm.globals, name, 0);
   return { value: 0, ref: globalRef(name) };
 }
@@ -1164,10 +1196,11 @@ function heldCallable(
   thread: Thread,
   frameIndex: number,
   name: string,
+  services?: ScriptServices,
 ): CallableValue | undefined {
   const frame = thread.frames[frameIndex]!;
   if (Object.hasOwn(frame.locals, name)) {
-    const value = readRef(vm, thread, frameIndex, frame.locals[name]!.ref);
+    const value = readRef(vm, thread, frameIndex, frame.locals[name]!.ref, services);
     return isCallableValue(value) ? value : undefined;
   }
   const global = Object.hasOwn(vm.globals, name) ? vm.globals[name] : undefined;
@@ -1205,7 +1238,7 @@ function bindingOfCall(
   const handle = bindingOf(
     name,
     services.commands,
-    heldCallable(vm, thread, frameIndex, name) ?? topLayerHandle(services.layers, name),
+    heldCallable(vm, thread, frameIndex, name, services) ?? topLayerHandle(services.layers, name),
     (candidate) => findDefinition(vm, services, program, candidate)?.infos.some((info) => info.entry >= 0) ?? false,
   );
   if (handle === undefined) {
@@ -1265,6 +1298,7 @@ function applyOut(
   out: readonly (readonly [number, Value])[],
   name: string,
   pos: SourcePos,
+  services?: ScriptServices,
 ): void {
   for (const [index, value] of out) {
     const param = spec.params[index];
@@ -1276,7 +1310,7 @@ function applyOut(
         pos,
       );
     }
-    writeRef(vm, thread, frameIndex, arg.ref, value);
+    writeRef(vm, thread, frameIndex, arg.ref, value, services);
   }
 }
 
@@ -1526,6 +1560,22 @@ function performCallable(
   args: Arg[],
   pos: SourcePos,
 ): CallOutcome {
+  const hydrated = parseHostMethodDef(value.def);
+  if (hydrated !== null) {
+    const holder = value.receiver === null ? undefined : findObject(vm, Number(value.receiver));
+    if (holder === undefined || holder.hostType !== hydrated.typeName) {
+      throw new ScriptError("object.invalid", "hydrated host method receiver is not live", pos);
+    }
+    const type = services.hostTypes.get(hydrated.typeName);
+    const commandName = type?.methods?.[hydrated.methodName];
+    if (type === undefined || commandName === undefined) {
+      throw new ScriptError("object.invalid", `host type "${hydrated.typeName}" is not installed`, pos);
+    }
+    const command = services.commands.builtin(commandName) ?? services.commands.extension(commandName);
+    if (command === undefined) throw new ScriptError("unknown.command", `host method command "${commandName}" is not registered`, pos);
+    const given: Arg[] = [{ value: { kind: "object", handle: holder.handle, className: holder.className }, ref: null }, ...args];
+    return dispatchResolved(thread, vm, services, program, frame, frameIndex, value.def, { kind: "command", command }, given, pos, true);
+  }
   const layerId = layerIdOf(value.def);
   if (layerId !== null) return performLayer(thread, vm, services, program, frame, frameIndex, layerId, args, pos);
   const registrationId = registrationIdOf(value.def);
@@ -1814,13 +1864,18 @@ function dispatchResolved(
         const targets = (effect.args?.slice(1) ?? []) as Array<string | { readonly ref: string }>;
         for (const target of targets) {
           if (typeof target === "string") {
-            deleteVariable(vm, thread, frameIndex, target);
+            deleteVariable(vm, thread, frameIndex, target, services);
             continue;
           }
-          // `kill(obj.field)` and `kill(obj["field"])` remove the key from a dictionary (KILL-1).
           const member = parseObjectRef(target.ref as RefId);
           const record = member === null ? undefined : findObject(vm, member.handle);
-          if (member !== null && record !== undefined) removeMember(record, member.name);
+          if (member !== null && record !== undefined) {
+            const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
+            const context = hostContext(services, record);
+            const result = type?.remove !== undefined && context !== null ? type.remove(context, member.name) : "not-host";
+            if (result === "system-owned") throw new ScriptError(KILL_SYSTEM_OWNED, `host member "${member.name}" is system-owned`);
+            if (result !== "removed") removeMember(record, member.name);
+          }
         }
       }
       if (action === "split") {
@@ -1831,7 +1886,7 @@ function dispatchResolved(
         for (let i = 0; i < parts.length; i++) {
           const elemName = `${baseName}[${i}]`;
           const elemRef = isGlobal ? globalRef(elemName) : localRef(elemName);
-          writeRef(vm, thread, frameIndex, elemRef, parts[i]!);
+          writeRef(vm, thread, frameIndex, elemRef, parts[i]!, services);
         }
       }
       if (action === "local") {
@@ -2057,7 +2112,7 @@ function dispatchResolved(
     return "yield";
   }
 
-  applyOut(vm, thread, frameIndex, resolved.command.spec, args, result.out ?? [], name, pos);
+  applyOut(vm, thread, frameIndex, resolved.command.spec, args, result.out ?? [], name, pos, services);
   frame.operands.push({ value: produced !== undefined ? produced : result.value, ref: null });
   return "continue";
 }
@@ -2242,7 +2297,7 @@ export function stepThread(
             : undefined;
         if (objectHandle !== undefined) {
           const ref = objectRef(objectHandle, op.name);
-          frame.operands.push({ value: readRef(vm, thread, frameIndex, ref), ref });
+          frame.operands.push({ value: readRef(vm, thread, frameIndex, ref, services), ref });
         } else if (op.name === "this" && frame.objectHandle !== undefined && frame.objectClass !== undefined) {
           // The object's own class, not the class of the running method (OOP-10, two class identities).
           frame.operands.push({
@@ -2256,7 +2311,7 @@ export function stepThread(
         } else if (op.name === "this") {
           frame.operands.push({ value: null, ref: null });
         } else {
-          frame.operands.push(loadArg(vm, thread, frameIndex, op.name, op.scope, services.virtuals));
+          frame.operands.push(loadArg(vm, thread, frameIndex, op.name, op.scope, services));
         }
         frame.ip += 1;
         break;
@@ -2266,21 +2321,19 @@ export function stepThread(
       case "get_member_bound": {
         const receiver = frame.operands.pop();
         const record = liveObject(vm, receiver?.value, op.pos, "member access requires a live object");
-        if (op.op === "get_member_bound" && isHostMethod(program, record, op.name)) {
-          // A host-provided method read without a call is a bound callable (OOP-11, OOP-12; EMIT-2).
+        const hostMethod = isHostMethod(program, record, op.name, services);
+        if (op.op === "get_member_bound" && hostMethod) {
+          const def = isEmitterMethod(op.name) ? op.name : hostMethodDef(record.hostType!, op.name);
           frame.operands.push({
-            value: { type: "callable", def: op.name, captures: [], receiver: String(record.handle) },
+            value: { type: "callable", def, captures: [], receiver: String(record.handle) },
             ref: objectRef(record.handle, op.name),
           });
           frame.ip += 1;
           break;
         }
         checkMemberAccess(program, record, op.name, frame.objectClass, op.pos);
-        const value = readMember(record, op.name);
-        frame.operands.push({
-          value: op.op === "get_member_bound" ? bindMemberValue(value, record.handle) : value,
-          ref: objectRef(record.handle, op.name),
-        });
+        const value = readObjectValue(services, record, op.name);
+        frame.operands.push({ value: bindMemberValue(value, record.handle), ref: objectRef(record.handle, op.name) });
         frame.ip += 1;
         break;
       }
@@ -2314,7 +2367,7 @@ export function stepThread(
           }
           const slot = frame.locals[op.name]!;
           // A slot redirected to a cell (a captured local, FUN-8) or aliasing another variable holds a stale copy: read through it.
-          const current = slot.ref === localRef(op.name) ? slot.value ?? 0 : readRef(vm, thread, frameIndex, slot.ref);
+          const current = slot.ref === localRef(op.name) ? slot.value ?? 0 : readRef(vm, thread, frameIndex, slot.ref, services);
           frame.operands.push({ value: current, ref: slot.ref });
         } else {
           if (!Object.hasOwn(vm.globals, op.name)) {
@@ -2349,7 +2402,7 @@ export function stepThread(
             break;
           }
         }
-        writeRef(vm, thread, frameIndex, refArg.ref, stored);
+        writeRef(vm, thread, frameIndex, refArg.ref, stored, services);
         frame.operands.push({ value: stored, ref: null });
         frame.ip += 1;
         break;
@@ -2361,7 +2414,7 @@ export function stepThread(
         if (!valueArg || !refArg || refArg.ref === null) {
           throw new ScriptError("vm.stack-underflow", "compound assignment stack underflow", op.pos);
         }
-        const current = readRef(vm, thread, frameIndex, refArg.ref);
+        const current = readRef(vm, thread, frameIndex, refArg.ref, services);
         if (isObjectValue(current)) {
           const record = vm.objects.find((item) => item.handle === current.handle);
           const method = record === undefined ? undefined : findMethod(program, record.className, `operator${op.operator}`, 1);
@@ -2383,7 +2436,7 @@ export function stepThread(
           : op.operator === "/=" ? Number(current) / Number(rhs)
           : op.operator === "%=" ? Number(current) % Number(rhs)
           : Number(rhs);
-        writeRef(vm, thread, frameIndex, refArg.ref, result);
+        writeRef(vm, thread, frameIndex, refArg.ref, result, services);
         frame.operands.push({ value: result, ref: null });
         frame.ip += 1;
         break;
@@ -2407,15 +2460,25 @@ export function stepThread(
             throw new ScriptError("object.invalid", "a dictionary key must be a string or a number", op.pos);
           }
           const key = indexKey(keyArg.value);
-          frame.operands.push({ value: bindMemberValue(readMember(dictionary, key), dictionary.handle), ref: objectRef(dictionary.handle, key) });
+          frame.operands.push({ value: bindMemberValue(readObjectValue(services, dictionary, key), dictionary.handle), ref: objectRef(dictionary.handle, key) });
           frame.ip += 1;
           break;
+        }
+        const namedValue = baseArg.ref === null && typeof baseArg.value === "string" ? peekVariable(vm, thread, frameIndex, baseArg.value, services.virtuals, services) : baseArg.value;
+        if (isObjectValue(namedValue)) {
+          const record = findObject(vm, namedValue.handle);
+          if (record !== undefined && findMethod(program, record.className, "operator[]", 1) === undefined) {
+            const ref = objectRef(record.handle, `[${keyText}]`);
+            frame.operands.push({ value: readObjectValue(services, record, `[${keyText}]`), ref });
+            frame.ip += 1;
+            break;
+          }
         }
         if (baseArg.ref !== null) {
           const object = parseObjectRef(baseArg.ref);
           if (object !== null) {
             const ref = objectRef(object.handle, `${object.name}[${keyText}]`);
-            frame.operands.push({ value: readRef(vm, thread, frameIndex, ref), ref });
+            frame.operands.push({ value: readRef(vm, thread, frameIndex, ref, services), ref });
             frame.ip += 1;
             break;
           }
@@ -2435,14 +2498,14 @@ export function stepThread(
             break;
           }
           const ref = objectRef(baseObject.handle, `[${keyText}]`);
-          frame.operands.push({ value: record.members[`[${keyText}]`] ?? 0, ref });
+          frame.operands.push({ value: readObjectValue(services, record, `[${keyText}]`), ref });
           frame.ip += 1;
           break;
         }
         const baseName = baseArg.ref !== null ? refName(baseArg.ref) : toStringValue(baseArg.value);
         if (frame.objectHandle !== undefined && isImplicitField(vm, program, frame, baseName, op.baseParam === true)) {
           const memberRef = objectRef(frame.objectHandle, `${baseName}[${keyText}]`);
-          frame.operands.push({ value: readRef(vm, thread, frameIndex, memberRef), ref: memberRef });
+          frame.operands.push({ value: readRef(vm, thread, frameIndex, memberRef, services), ref: memberRef });
           frame.ip += 1;
           break;
         }
@@ -2459,11 +2522,17 @@ export function stepThread(
             });
             break;
           }
+          if (record !== undefined) {
+            const ref = objectRef(record.handle, `[${keyText}]`);
+            frame.operands.push({ value: readObjectValue(services, record, `[${keyText}]`), ref });
+            frame.ip += 1;
+            break;
+          }
         }
         let scope: VarScope | null = null;
         if (baseArg.ref !== null) scope = baseArg.ref.startsWith("global:") ? "global" : "local";
         const fullName = `${baseName}[${keyText}]`;
-        const elementArg = loadArg(vm, thread, frameIndex, fullName, scope ?? undefined, services.virtuals);
+        const elementArg = loadArg(vm, thread, frameIndex, fullName, scope ?? undefined, services);
         frame.operands.push(elementArg);
         frame.ip += 1;
         break;
@@ -2720,7 +2789,7 @@ export function stepThread(
           }
           vm.cellSeq = (vm.cellSeq ?? 0) + 1;
           const id = `cell${vm.cellSeq}`;
-          setOwnValue((vm.cells ??= {}), id, readRef(vm, thread, frameIndex, slot.ref));
+          setOwnValue((vm.cells ??= {}), id, readRef(vm, thread, frameIndex, slot.ref, services));
           captures.push(id);
           if (slot.ref === localRef(name)) slot.ref = cellRef(id);
         }
@@ -2778,7 +2847,7 @@ export function stepThread(
           break;
         }
         if (op.file !== undefined) {
-          const receiverValue = peekName(vm, thread, frameIndex, program, op.file, op.fileParam === true, services.virtuals);
+          const receiverValue = peekName(vm, thread, frameIndex, program, op.file, op.fileParam === true, services.virtuals, services);
           const record = isObjectValue(receiverValue) ? findObject(vm, receiverValue.handle) : undefined;
           if (record !== undefined) {
             if (invokeMember(thread, vm, services, program, frame, frameIndex, record, op.name, args, op.pos) === "yield") {
@@ -2799,7 +2868,7 @@ export function stepThread(
         // plugin command. A `file.`-qualified call never asks the scope.
         const held =
           op.file === undefined
-            ? (heldCallable(vm, thread, frameIndex, op.name) ?? topLayerHandle(services.layers, op.name))
+            ? (heldCallable(vm, thread, frameIndex, op.name, services) ?? topLayerHandle(services.layers, op.name))
             : undefined;
         const resolved = inPackage ?? resolveCall(op.name, op.argc, program, services.commands, op.file, held);
         if (resolved === undefined) {

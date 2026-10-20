@@ -47,16 +47,23 @@ export function allocateHandle(vm: Pick<VmState, "objects">): number {
 export function createObject(
   vm: Pick<VmState, "objects">,
   tag: { readonly className: string; readonly program: ProgramRef } | null,
+  hostType?: string,
 ): ObjectRecord {
   const record: ObjectRecord = {
     handle: allocateHandle(vm),
     className: tag === null ? DICTIONARY_CLASS : tag.className,
     program: tag === null ? null : tag.program,
+    ...(hostType === undefined ? {} : { hostType }),
     members: {},
     keys: [],
   };
   vm.objects.push(record);
   return record;
+}
+
+/** Make a host-provided dictionary object whose methods are hydrated in session. */
+export function createHostObject(vm: Pick<VmState, "objects">, hostType: string): ObjectRecord {
+  return createObject(vm, null, hostType);
 }
 
 /**

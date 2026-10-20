@@ -57,15 +57,21 @@ export type ObjectRecord = {
   handle: number;
   className: string;
   program: ProgramRef | null;
+  /**
+   * The session-hydrated host declaration name (OOP-12). It is a name only;
+   * the declaration and its methods are rebuilt by the host and never saved.
+   */
+  hostType?: string;
   members: { [name: string]: Value };
   keys: string[];
 };
 
-/** One local variable storage slot in a call frame (AD-7). */
+/** One local variable storage slot in a call frame (AD-7, AD-8). */
 export type LocalSlot = {
   value: Value;
   ref: RefId;
 };
+
 
 /**
  * One frame's error-handler slot (AD-7; ERR-1). Plain data: the handler belongs
@@ -238,6 +244,11 @@ export function incrementStepCounter(vm: VmState, owner: string | undefined): vo
 /** Build a global-scope variable reference (AD-8's `Arg.ref`). */
 export function globalRef(name: string): RefId {
   return `global:${name}` as RefId;
+}
+
+/** Build a live engine-virtual reference; it never falls back to VM globals. */
+export function virtualRef(name: string): RefId {
+  return `virtual:${name}` as RefId;
 }
 
 /** Build a local-scope variable reference (AD-8's `Arg.ref`). */
