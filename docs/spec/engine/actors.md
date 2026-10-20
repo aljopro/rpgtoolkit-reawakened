@@ -58,12 +58,23 @@ A behaviour that supplies `levelUp` receives the actor and a plain-data context,
 A package registers behaviours separately from `registerPlugin` during package startup:
 
 ```text
-registerBehaviour("namespace.name", hooks)
+registerBehaviour("stock-rpg.hero", hooks)
 ```
 
-Behaviour names use `namespace.name`. The hook list is closed and defined by core. Unknown behaviour names, unknown hooks, malformed names, wrong namespaces, and duplicate registrations produce located diagnostics and register nothing. Registrations are session data, rebuilt at boot, reset, and restore before actor hydration.
+Behaviour names use a hyphenated package namespace followed by a dot and a
+behaviour identifier (`namespace.name`). The hook list is closed and defined by
+core. Unknown behaviour names, unknown hooks, malformed names, wrong namespaces,
+and duplicate registrations produce located diagnostics and register nothing.
+Registrations are session data, rebuilt at boot, reset, and restore before actor
+hydration.
 
-A behaviour hook takes the actor as an explicit argument. The actor is the canonical read view; the owner applies the returned plain-data result. Hooks may emit queued events. A hook invoked by a script thread may use ordinary script waits or cancelable event dispatch. An engine-originated hook is synchronous and non-waiting; interactive follow-up belongs in an event listener.
+A behaviour hook takes the actor as an explicit argument. The actor is the
+canonical plain-data read view; the hydrated RPGCode object wrapper is a
+separate runtime object and owns method dispatch. No method, emitter, host
+object, or callable is stored directly on the serialized actor record. Hooks
+may emit queued events. A hook invoked by a script thread may use ordinary
+script waits or cancelable event dispatch. An engine-originated hook is
+synchronous and non-waiting; interactive follow-up belongs in an event listener.
 
 A save stores actor data and a behaviour name only. On load, package startup rebuilds the session registry and hydration resolves the name. A missing behaviour uses the core default and emits one located diagnostic; it never refuses the save. Package versions and executable code are not stored in actor data.
 
