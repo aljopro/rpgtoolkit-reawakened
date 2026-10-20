@@ -25,6 +25,9 @@ Epic 19 builds the object runtime, receiver binding, RPGCode packages on the sin
 | D-08 | Step counters in the state hash | Assumption A-5: excluded | 19.13 re-records goldens |
 | D-09 | Legacy classes on dictionaries | Assumption A-6: yes, in 19.5 | Defer 19.5; 19.7 and 19.8 still use dictionaries |
 | D-10 | AD-32 synchronous event bus | Superseded in 19.1 | n/a |
+| D-11 | Host package loader | Owner decision, 2026-10-20: new follow-up 19.16 maps manifest/package-list names to catalogue descriptors and owner-tagged start-up `ProgramRef`s, runs start-ups at boot/reset/restore, and diagnoses unresolved names | Epic 20.11 would own loading; rejected |
+| D-12 | Package-name grammar | Assumption A-6, 2026-10-20: retain lower-case underscore identifiers; stock ids are `stock_battle`/`stock_menu` | If owner chooses hyphens, 19.6 parser and namespace rule change <!-- OWNER: confirm --> |
+| D-13 | Package source descriptor | Assumption A-7, 2026-10-20: host reads a project package folder and supplies plain catalogue data; core performs no I/O | Package file format and editor distribution are deferred <!-- OWNER: confirm --> |
 
 ## 3. Breakdown
 
@@ -44,9 +47,9 @@ Epic 19 builds the object runtime, receiver binding, RPGCode packages on the sin
 | 12 | Game emitter, emitter registration seam and one bus for TypeScript plugins | 11 | no | medium |
 | 13 | Per-package VM step counters | 6, 11 | no | medium |
 | 14 | Pure-RPGCode package fixtures and legacy golden verification | 5, 8, 9, 12, 13 | no | high |
-| 15 | Refactor sweep | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 | no | low |
+| 16 | Host package loader: manifest entry to source program and start-up | 6, 7, 8, 9, 13 | no | high |
 
-Lanes: A objects (3, 4, 5, then 13), B packages (6, 7, 8), C main-file list (9), D events (10, 11, 12). Shared seams: 10 owns the `events` section and its phase registration; 15 reconciles barrels, the phase list and the `GameState` section list.
+Lanes: A objects (3, 4, 5, then 13), B packages (6, 7, 8, then 16), C main-file list (9), D events (10, 11, 12). Shared seams: 10 owns the `events` section and its phase registration; 15 reconciles barrels, the phase list and the `GameState` section list; 16 owns the host catalogue and package start-up seam in boot.
 
 ## 4. Cross-epic `after` wiring
 
@@ -54,15 +57,16 @@ Lanes: A objects (3, 4, 5, then 13), B packages (6, 7, 8), C main-file list (9),
 |---|---|---|
 | 19.1 | 18.7, 3.23, 3.25 | epics 18, 3 |
 | 19.2 | 18.5, 18.6 | epic 18 |
-| 19.9 | 2.9 | epic 2 |
+| 19.16 | 19.6, 19.7, 19.8, 19.9, 19.13 | initiative epic 19 (already declared by Epic 20) |
 
-Initiative `[[epic]]` 19 after: epic 3, epic 18, epic 2. Epic 20 after 19; Epic 7 gains 19 and 20; Epic 8 gains 20 (the stock-menu package).
+Initiative `[[epic]]` 19 after: epic 3, epic 18, epic 2. Epic 20 after 19 now names 19.16 in its needs text; Epic 7 gains 19 and 20; Epic 8 gains 20 (the stock_menu package).
 
 ## 5. Parallelism
 
-After 19.1: 19.2 (spike), 19.3 (lane A), 19.6 (lane B) and 19.9 once 19.6 is done can run side by side; lane D waits for lane A (19.4) and the spike. The vm.ts step loop is touched by 19.13 only after 19.11.
+After 19.1: 19.2 (spike), 19.3 (lane A), 19.6 (lane B) and 19.9 once 19.6 is done can run side by side; 19.16 follows the package manifest, namespace, layer, main-file and step-counter seams (6, 7, 8, 9, 13) and is the prerequisite for Epic 20's package consumers; lane D waits for lane A (19.4) and the spike. The vm.ts step loop is touched by 19.13 only after 19.11.
 
 ## 6. Validation rounds
 
 Round 1 (author, 2026-10-19): `tickets.py status` and `next` run; results recorded in the PR.
 Round 2 (self-review against validate-checks.md, Ticket, Set, Dependencies; 2026-10-19): `status` and `next` clean (no cycle, `undeclared_after`, `unpinned_after`, `order_conflict`; only `ready_to_start` is 19.1). Findings fixed: 19.12 claimed per-board emitters whose board state belongs to Epics 4 and 5 and is not in epic 19's `after`, so it now builds the game emitter and the registration seam and 20.9 creates the board emitters; 19.7 and 19.10 shared vm.ts and the resolver with 19.5 with no path between them, so each now lists 5; 19.13's verify needed two-package fixtures that 19.14 builds later, so it authors its own.
+Round 3 (audit, 2026-10-20): Epic 20's independent object/package/emitter audits found no engine package loader, bare 19.9 entries without version/namespace, no entry-program field, and only corpus-supplied start-ups. Added 19.16 with the G2 host catalogue seam; retained the runner-harness `startups` path; chose underscore package ids as a marked assumption; and recorded the open PKG-4 namespace-export clause. `tickets.py status`/`next` are the required gate before publication.

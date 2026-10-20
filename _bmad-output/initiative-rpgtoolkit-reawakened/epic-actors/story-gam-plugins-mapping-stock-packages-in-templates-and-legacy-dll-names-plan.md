@@ -14,15 +14,17 @@ context:
 
 ## Intent
 
-Mapping function and template default as core data; the editor that writes it is a later epic's consumer.
+Mapping function and template default as core data; `pluginManifestFor` maps `MainFile.menuPlugin`, `fightPlugin` and `plugins[].pluginFile` to versioned `stock_menu`/`stock_battle` catalogue entries without mutating bytes, while the editor that writes `packagePlugins` is a later epic's consumer.
 
 ## Boundaries
 
-Core data and mapping only; the editor's save action is Epic 11 and 12.
+Core data and mapping only; the editor's explicit save action is Epic 11 and 12, and package descriptor resolution is 19.16.
 
 ## Key Decisions
 
 1. Mapping is in memory; explicit writing is an editor save action.
+2. Legacy rows remain byte-preserved on open; templates write the TKR package-list extension, not legacy DLL rows.
+3. An equivalent legacy and explicit package entry deduplicates; an unmapped custom DLL raises a located diagnostic through `boot.ts` while remaining data.
 
 ## Acceptance
 

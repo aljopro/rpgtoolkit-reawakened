@@ -14,15 +14,17 @@ context:
 
 ## Intent
 
-'A service that takes the actor': hydration walks the actor section after the host has rebuilt services. Owns the save section schema version and migration.
+'A service that takes the actor': after `restoreScriptHost` or the engine restore seam rebuilds package services and runs `runPackageStartup` on a scratch state, hydration walks the actor section and resolves the saved behaviour name and host type. It owns the save section schema version and migration.
 
 ## Boundaries
 
-Save/restore only; no new rules.
+Save/restore and hydration only; no new rules or package loader (19.16 owns the catalogue-to-start-up seam).
 
 ## Key Decisions
 
-1. Package version governs code, saves cannot go stale against new code.
+1. Package version governs code, saves cannot go stale against new code, and actors record no version.
+2. Behaviour registrations and host methods are session data rebuilt at package start-up; the save carries actor data, host type name and behaviour name only.
+3. A missing behaviour falls back to the core default with a located diagnostic; a missing host type leaves data loaded and diagnoses when its method is first called.
 
 ## Acceptance
 

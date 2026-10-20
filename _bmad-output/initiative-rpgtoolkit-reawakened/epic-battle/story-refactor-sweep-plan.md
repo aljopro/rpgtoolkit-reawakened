@@ -31,7 +31,7 @@ No new behaviour. If the sweep finds a missing rule, it is fixed in `battle.md` 
 
 4. **Save barrel.** `BattleSection` is exported from the save barrel, the placeholder comment is gone, and the section appears once in the section list and once in the reset list.
 
-5. **Package manifest and `.gam`.** The `stock-battle` package is named in the manifest and mapped in `.gam` the same way as the other stock packages; its absence is the ruled "ends immediately" path, not a crash.
+5. **Package manifest and `.gam`.** The `stock_battle` package is named in the manifest and mapped in `.gam` the same way as the other stock packages; its absence is the ruled "ends immediately" path, not a crash.
 
 6. **Evidence.** Each Done-when item names the test or fixture that proves it in the PR; the epic's Done-when list is checked off with those names. `pnpm provenance` and `pnpm licence` are green.
 

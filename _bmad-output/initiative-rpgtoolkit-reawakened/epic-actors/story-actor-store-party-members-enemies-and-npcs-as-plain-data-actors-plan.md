@@ -15,15 +15,15 @@ context:
 
 ## Intent
 
-Lane A (core/actors): entries 3, 5, 6, 7, 8 run in order; entry 3 owns the actors barrel and the section registration.
+Lane A (core/actors): entries 3, 5, 6, 7, 8 run in order; entry 3 owns the actors barrel, section registration, deterministic scalar actor ids and the mapping from an id to the `actor:<id>` emitter key. Object handles are runtime views and never actor identity.
 
 ## Boundaries
 
-Data, ids, section and StatsPort bridge only. No rules (5), no loading from files (6), no script objects (4).
+Data, ids, section and StatsPort bridge only. No rules (5), no loading from files (6), no script objects or host-method hydration (4).
 
 ## Key Decisions
 
-1. One owner per section (AD-10, amended 2026-10-19): `core/actors` owns the actor section, including actor stats; `vm.globals` character stats are aliases onto it.
+1. One owner per section (AD-10, amended 2026-10-19): `core/actors` owns the actor section, including actor stats; `vm.globals` character stats are aliases onto it. The actor id is stable data identity; the object handle and emitter registration are rebuilt runtime identities.
 
 ## Acceptance
 
