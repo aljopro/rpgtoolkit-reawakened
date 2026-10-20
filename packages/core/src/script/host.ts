@@ -1,0 +1,46 @@
+/** Session-only host object hydration (OOP-10/OOP-12). */
+
+import type { EventsSection } from "../events/model.ts";
+import type { GameState } from "../save/state.ts";
+import type { Value } from "../ports/value.ts";
+import type { ObjectRecord, VmState } from "./state.ts";
+
+/** Context passed to a host type's owner-backed member hooks. */
+export type HostObjectContext = {
+  readonly state: GameState;
+  readonly events: EventsSection;
+  readonly vm: VmState;
+  readonly record: ObjectRecord;
+};
+
+/** The result of an owner-backed host member write. */
+export type HostWriteResult = "written" | "read-only" | "not-host";
+
+/** The result of an owner-backed host member removal. */
+export type HostRemoveResult = "removed" | "system-owned" | "not-host";
+
+/**
+ * A host/package object declaration. The declaration is session data: only the
+ * object's `hostType` name and ordinary members can appear in a save.
+ * `methods` maps hydrated RPGCode names to existing command definitions.
+ */
+export type HostObjectType = {
+  readonly name: string;
+  readonly methods?: Readonly<Record<string, string>>;
+  readonly read?: (context: HostObjectContext, name: string) => Value | undefined;
+  readonly write?: (context: HostObjectContext, name: string, value: Value) => HostWriteResult;
+  readonly remove?: (context: HostObjectContext, name: string) => HostRemoveResult;
+};
+
+/** Stable callable definition used for a hydrated host method tear-off. */
+export function hostMethodDef(typeName: string, methodName: string): string {
+  return `host:${typeName}:${methodName}`;
+}
+
+/** Parse a hydrated host method definition, or return null for ordinary callables. */
+export function parseHostMethodDef(def: string): { typeName: string; methodName: string } | null {
+  if (!def.startsWith("host:")) return null;
+  const separator = def.indexOf(":", 5);
+  if (separator < 0 || separator === 5 || separator === def.length - 1) return null;
+  return { typeName: def.slice(5, separator), methodName: def.slice(separator + 1) };
+}
