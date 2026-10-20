@@ -292,7 +292,8 @@ Source-field rows above whose owner is `movement` or `presentation` (portrait as
 | damage taken | attacker FP, target DP, attacker offensive and target defensive critical values, variance | int | battle operation | OWNER | Epic 7 | battle-rule | [E-74](plugins-and-battle.md#e-74) | Epic 7 |
 
 Defaults are deterministic: missing numeric stats start at zero (except format-declared
-defaults), HP/SMP mutations clamp to `[0,max]`, `fallen` is `HP <= 0`, and the core uses
+defaults and the two critical values, which default to -1, "none"; see E-74), HP/SMP
+mutations clamp to `[0,max]`, `fallen` is `HP <= 0`, and the core uses
 the progression arithmetic in [progression-and-levels.md](progression-and-levels.md).
 Behaviour hooks may replace derived-stat, level-up, revival, status, or equipment results;
 the stock battle package may replace damage and charge rules. Random variance requires the
