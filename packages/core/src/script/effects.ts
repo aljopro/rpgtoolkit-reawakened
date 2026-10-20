@@ -45,7 +45,8 @@ export type EffectKind =
   | "flow-control"
   | "draw-audio-cue"
   | "mixed"
-  | "diagnostic";
+  | "diagnostic"
+  | "emit";
 
 /** How an effect patch indexes into its owning section (command-effect-catalogue.md:580-588). */
 export type EffectPatchOp = "set" | "append" | "remove" | "add" | "merge";

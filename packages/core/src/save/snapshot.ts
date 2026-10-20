@@ -480,6 +480,14 @@ function validateEventsShape(value: unknown, vm: Record<string, unknown>): void 
     if (!isRecord(wait) || wait.kind !== EVENT_DISPATCH_WAIT) continue;
     liveEvent(arrayAt(wait.payload, `vm.threads[${index}].wait.payload`)[0], `vm.threads[${index}].wait.payload[0]`);
   }
+  if (events.emitters !== undefined) {
+    const registered = new Set<number>();
+    for (const [key, handle] of Object.entries(recordAt(events.emitters, "events.emitters"))) {
+      liveEvent(handle, `events.emitters.${key}`);
+      if (registered.has(handle as number)) shapeError(`the snapshot's events.emitters.${key} names a handle another key already names`);
+      registered.add(handle as number);
+    }
+  }
   if (events.dispatch === null) return;
   const dispatch = recordAt(events.dispatch, "events.dispatch");
   stringAt(dispatch.emitter, "events.dispatch.emitter");

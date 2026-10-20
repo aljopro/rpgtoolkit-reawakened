@@ -41,6 +41,7 @@ import type { PlainData } from "../ports/plain-data.ts";
 import type { RngPort } from "../ports/rng.ts";
 import type { ClockPort } from "../ports/time.ts";
 import type { Value } from "../ports/value.ts";
+import type { NativeListener } from "../events/model.ts";
 import type { Wait } from "../ports/wait.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
@@ -144,6 +145,14 @@ export type PluginDefinition = {
   readonly doc?: PluginDoc;
   /** Optional format contributions layered after the core decoder set (AD-31). */
   readonly decoders?: readonly AssetDecoder[];
+  /**
+   * TypeScript listeners the package declares on the one event bus (EMIT-7, EMIT-21). Each
+   * names an emitter key, an event type and one of this definition's commands; the engine
+   * adds it to the listener table when the package starts, and the dispatcher runs the
+   * command with the event as its argument. A command sends an event by returning the
+   * `emit` effect (`emitEffect`), never by calling a listener.
+   */
+  readonly listeners?: readonly NativeListener[];
 };
 
 /**
