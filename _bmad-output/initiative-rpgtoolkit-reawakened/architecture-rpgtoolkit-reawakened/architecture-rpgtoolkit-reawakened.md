@@ -192,6 +192,18 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 Character and actor stats have one owner: the actor section behind its actor port (AD-10). Legacy `.tem`-named stat globals such as `HP!` and `Level!` are live read/write aliases to that section; they are not copies. `SaveState` is `GameState`; snapshot, save, hash and restore use one canonical form. A plugin command never mutates a section (AD-8): it returns plain-data `effects`, and the VM hands each to the section owner that alone applies the change. The one value a command does reach is a by-reference `out`, which the VM writes into the caller's variable as the `vm` section's owner.
 
 - **Reawakened rule (OWNER; section effects).** Effects are plain-data records, never direct section mutation. A registered applier is the section owner's only write path; an unowned effect waits in `engine`'s bounded per-section queue and drains in order when registration occurs.
+
+The section-owner rule is a store/action/service pattern for every core
+section, not only actors. Each section is a plain-data store; callers submit
+plain-data effects or actions; the owning service validates and reduces them
+into state changes. Section methods, host objects, listeners, timers, and
+other runtime machinery are hydrated or registered outside the saved state.
+Snapshots, hashes, saves, restores, and emitted transitions are derived from
+the canonical store state. Section APIs expose discriminated plain-data action
+families such as `ActorAction` and `BoardAction`; exact members belong to the
+owning section. This is a separation contract, not a requirement to copy the
+whole state tree on every tick: an owner may mutate its private live store in
+place while preserving read-only views and deterministic commit boundaries.
 - **Check:** dependency-cruiser rule that only `core/<section>/**` imports its mutable `<Section>State`; a type check that `GameState extends PlainData`.
 
 ```mermaid

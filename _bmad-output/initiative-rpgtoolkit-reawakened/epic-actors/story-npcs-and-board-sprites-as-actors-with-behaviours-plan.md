@@ -1,5 +1,5 @@
 ---
-title: "NPCs and board sprites as actors with behaviours"
+title: "Actor-backed NPCs and board sprites with behaviours"
 type: 'feature'
 ticket: 10
 created: '2026-10-19'
@@ -12,9 +12,9 @@ context:
   - "code - packages/core/src/sprites/"
 ---
 
-## Intent
+Actor data and board sprite data remain separate plain-data records. A board sprite may reference an actor, while actor-backed NPCs receive the same behaviour and action dispatch without making the sprite an actor subtype.
 
-Join the two actor representations without changing observable movement behaviour; Lane A continues.
+Join actor-backed board integration without changing observable movement behaviour; Lane A continues.
 
 ## Boundaries
 
@@ -26,7 +26,7 @@ Representation join only.
 
 ## Acceptance
 
-1. Sprite is an actor; Epic 5 goldens unchanged.
+1. An actor-backed board sprite references an actor; Epic 5 movement, collision, trigger and golden behaviour remains unchanged.
 
 ## Verification
 
