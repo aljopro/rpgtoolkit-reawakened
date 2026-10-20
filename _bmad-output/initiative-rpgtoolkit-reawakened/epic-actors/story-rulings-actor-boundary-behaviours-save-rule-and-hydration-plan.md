@@ -33,11 +33,17 @@ Documentation only. Does not decide the per-field table (20.2) or any package co
 
 ## Acceptance
 
-1. The ACT rows exist, are anchored and cite evidence.
-2. AD-10 amended as ruled; the costs are written.
-3. AD-26 amendment written; default level-up equation ruled.
-3. Every row names the entry that builds it.
+1. Add or amend `docs/spec/engine/actors.md` with anchored `ACT-*` rows. Each row MUST cite its normative evidence and name the owning/building entry (20.2 is the inventory owner; later rows own implementation).
+2. Amend AD-10 so the actor section owns stats, `.tem` globals such as `HP!` and `Level!` are live aliases, protected aliases reject `kill()` with catchable `kill.system-owned`, read-only aliases reject writes with `assign.read-only`, and the deliberate save-golden/reset/virtual-write costs are recorded.
+3. Amend AD-26 so the core phase list does not own battle (battle is a package), and record the default level-up equation as a core rule inherited by the stock battle package.
+4. Specify the save boundary: actor records contain plain data and a behaviour name only; package and behaviour registrations are session data rebuilt by `runPackageStartup` before hydration; missing behaviours fall back to core defaults with a diagnostic; script closures remain the only saved callables under 18.6.
+5. Specify the behaviour contract: separate `registerBehaviour(name, hooks)`, `namespace.name` names, a closed hook list, unknown names/hooks diagnosed, and behaviour-first then core-default resolution.
+6. Settle EMIT-6, EMIT-11, EMIT-13 and OOP-12 with evidence and rejected alternatives: actor-id-or-null `source`; `fallen`, `revived`, `statusChanged`, `leveledUp`, `entered`, `left`, `talked`, `beforeEnter`, `beforeDamage`, and game `error`; namespace-prefixed shared-emitter re-emits; board-unload listener removal; short budgeted engine dispatch for `beforeEnter`; and battle-thread `emitCancelable` for `beforeDamage`.
+7. Keep this checkpoint documentation-only and clean-room: no TypeScript, fixtures, generated output, or legacy source; every changed spec/spine row has a resolvable anchor and link.
 
 ## Verification
 
-Link and anchor check; owner approval at plan and done checkpoints.
+- Run the repository's link/anchor and documentation checks applicable to the changed files.
+- Run `tickets.py` from the clean plan worktree to confirm ticket 20.1 remains `draft`, has no unmet prerequisites, and retains `plan_checkpoint = true` and `done_checkpoint = true`.
+- Review the diff for documentation-only scope and G7 provenance compliance.
+- Owner approval is required at both the plan and done checkpoints; do not mark `ready-for-dev` in this PR.
