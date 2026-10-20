@@ -3,7 +3,7 @@ title: "Actors as RPGCode objects with emitters"
 type: 'feature'
 ticket: 4
 created: '2026-10-19'
-status: in-progress
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "high"
 context:
