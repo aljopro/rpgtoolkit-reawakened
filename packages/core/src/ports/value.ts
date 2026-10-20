@@ -42,6 +42,8 @@ export type CallableValue = {
   readonly def: string;
   readonly captures: string[];
   readonly receiver: string | null;
+  /** Package that owns the callable's definition, when it is package code (PKG-8). */
+  readonly owner?: string;
 };
 
 /** A script value: a double, string, or a tagged live object handle. */

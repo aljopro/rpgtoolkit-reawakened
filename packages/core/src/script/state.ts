@@ -185,6 +185,13 @@ export type VmState = {
    * first callable is made; an entry is dropped when no live callable names its `def`.
    */
   defOwners?: { [def: string]: ProgramRef };
+  /**
+   * Number of executed VM instructions by owning package (PKG-8). Absent until
+   * the first instruction from an owned program runs; counters are excluded from
+   * state hashes because they describe execution history, not game state.
+   */
+  stepCounters?: { [owner: string]: number };
+
   /** Present and true only while debug(false) has switched messages off. */
   messagesOff?: true;
 };
@@ -206,6 +213,20 @@ export function createVmState(): VmState {
     requestSeq: 0,
   };
 }
+const EMPTY_STEP_COUNTERS: Readonly<Record<string, number>> = Object.freeze({});
+
+/** Read the per-package instruction counters without allocating for an untouched VM (PKG-8). */
+export function readStepCounters(vm: VmState): Readonly<Record<string, number>> {
+  return vm.stepCounters ?? EMPTY_STEP_COUNTERS;
+}
+
+/** Attribute one executed VM instruction to its owning package (PKG-8). */
+export function incrementStepCounter(vm: VmState, owner: string | undefined): void {
+  if (owner === undefined || owner === "") return;
+  const counters = (vm.stepCounters ??= {});
+  counters[owner] = (counters[owner] ?? 0) + 1;
+}
+
 
 /** Build a global-scope variable reference (AD-8's `Arg.ref`). */
 export function globalRef(name: string): RefId {

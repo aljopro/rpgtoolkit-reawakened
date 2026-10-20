@@ -9,5 +9,6 @@ import type { GameState } from "./state.ts";
  * they never enter the hash; a snapshot still carries them.
  */
 export function hashGameState(state: GameState): string {
-  return hashState({ ...state, audio: withoutSettings(state.audio) });
+  const { stepCounters: _stepCounters, ...vm } = state.vm;
+  return hashState({ ...state, vm, audio: withoutSettings(state.audio) });
 }

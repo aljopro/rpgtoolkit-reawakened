@@ -248,6 +248,9 @@ function validateProgramRef(value: unknown, path: string): void {
     stringAt(ref.path, `${path}.path`);
     stringAt(ref.sourceHash, `${path}.sourceHash`);
   }
+  if (ref.owner !== undefined) {
+    if (typeof ref.owner !== "string" || ref.owner === "") shapeError(`the snapshot's ${path}.owner must be a non-empty package name`);
+  }
   if (ref.includes !== undefined) {
     for (const [index, item] of arrayAt(ref.includes, `${path}.includes`).entries()) {
       stringAt(item, `${path}.includes[${index}]`);
@@ -269,7 +272,14 @@ function validateVmShape(vm: Record<string, unknown>): void {
   numberAt(vm.effectSeq, "vm.effectSeq");
   numberAt(vm.requestSeq, "vm.requestSeq");
   nullableRecord(vm.block, "vm.block");
-  if (vm.messagesOff !== undefined && vm.messagesOff !== true) shapeError("the snapshot's vm.messagesOff is invalid");
+  if (vm.stepCounters !== undefined) {
+    const counters = recordAt(vm.stepCounters, "vm.stepCounters");
+    for (const [owner, count] of Object.entries(counters)) {
+      if (owner === "" || typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+        shapeError(`the snapshot's vm.stepCounters.${owner} must be a non-negative whole number`);
+      }
+    }
+  }
   for (const [index, threadValue] of arrayAt(vm.threads, "vm.threads").entries()) {
     const thread = recordAt(threadValue, `vm.threads[${index}]`);
     numberAt(thread.id, `vm.threads[${index}].id`);
@@ -360,9 +370,11 @@ function checkValue(path: string, value: unknown, cells: Readonly<Record<string,
   if (value.type !== "callable") {
     return shapeError(`the snapshot's ${path} is not a script value (a number, a string, null, an object handle or a callable)`);
   }
-  const { def, captures, receiver } = value;
+  const { def, captures, receiver, owner } = value;
+  const keyShape = Object.keys(value).sort().join(",");
   if (
-    Object.keys(value).length !== 4 ||
+    (keyShape !== "captures,def,receiver,type" && keyShape !== "captures,def,owner,receiver,type") ||
+    (owner !== undefined && (typeof owner !== "string" || owner === "")) ||
     typeof def !== "string" ||
     def === "" ||
     !Array.isArray(captures) ||
@@ -371,7 +383,7 @@ function checkValue(path: string, value: unknown, cells: Readonly<Record<string,
   ) {
     restoreError(
       RESTORE_CALLABLE_MALFORMED,
-      `${path} is not a whole callable: it must be { type, def, captures, receiver } with a def text, a list of cell ids and a receiver that is text or null`,
+      `${path} is not a whole callable: it must be { type, def, captures, receiver } with an optional owner package name, a def text, a list of cell ids and a receiver that is text or null`,
     );
   }
   for (const [index, id] of (captures as string[]).entries()) {

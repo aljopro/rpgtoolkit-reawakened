@@ -58,7 +58,7 @@ export const CALLABLE_ARITY = "callable.arity";
 // Load-time failures of a saved game's function values (FUN-8, entry 18.6). They are
 // `restore.` codes, so a script's error handler never sees them: a host catches the
 // `ScriptError` and the message names the place in the save.
-/** A value whose `type` is `"callable"` is not exactly `{ type, def, captures, receiver }`. */
+/** A value whose `type` is `"callable"` is not a whole `{ type, def, captures, receiver }` record with an optional `owner` package name. */
 export const RESTORE_CALLABLE_MALFORMED = "restore.callable-malformed";
 /** A `captures` entry, a slot's or operand's `cell:` reference or a wait's resume reference names a cell that is not in `vm.cells`. */
 export const RESTORE_CELL_MISSING = "restore.cell-missing";

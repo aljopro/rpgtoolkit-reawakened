@@ -67,6 +67,8 @@ export type ProgramRef =
       readonly includes?: string[];
       readonly redirects?: RedirectPairs;
       readonly dialect?: ScriptDialect;
+      /** Package that owns definitions compiled from this reference (PKG-8). */
+      readonly owner?: string;
     }
   | {
       readonly kind: "inline";
@@ -75,6 +77,8 @@ export type ProgramRef =
       readonly includes?: string[];
       readonly redirects?: RedirectPairs;
       readonly dialect?: ScriptDialect;
+      /** Package that owns definitions compiled from this reference (PKG-8). */
+      readonly owner?: string;
     };
 
 /** A located note the loader raises while compiling: a clash, a shadowed built-in or an include cycle. */
@@ -128,6 +132,12 @@ export function withRedirects(ref: ProgramRef, redirects: ReadonlyArray<readonly
   if (redirects.length === 0 || ref.redirects !== undefined) return ref;
   return { ...ref, redirects: redirects.map(([from, to]): [string, string] => [from, to]) };
 }
+/** Tag a program reference with its owning package without changing cache identity (PKG-8). */
+export function withOwner(ref: ProgramRef, owner: string): ProgramRef {
+  if (owner === "") throw new ScriptError("program.owner", "a program owner must not be empty");
+  return ref.owner === owner ? ref : { ...ref, owner };
+}
+
 
 /**
  * A file program reference for `name`: the source is read through `loader` to

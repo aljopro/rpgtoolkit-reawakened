@@ -65,6 +65,7 @@ export {
   compileProgram,
   fileProgramRef,
   programKey,
+  withOwner,
   withRedirects,
 } from "./program.ts";
 export type {
@@ -89,9 +90,11 @@ export {
   findThread,
   cellRef,
   globalRef,
+  incrementStepCounter,
   killThread,
   localRef,
   nextThreadId,
+  readStepCounters,
   refreshBlock,
   startProgram,
   startThread,

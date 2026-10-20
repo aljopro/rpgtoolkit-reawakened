@@ -279,6 +279,7 @@ const BINDING_SPECS: readonly BuiltinSpec[] = [
           def: fn.def,
           captures: fn.captures,
           receiver: String(objectHandle.handle),
+          ...(fn.owner === undefined ? {} : { owner: fn.owner }),
         },
       };
     },
