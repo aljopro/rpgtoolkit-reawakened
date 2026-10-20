@@ -42,7 +42,16 @@ const GAMMA: PluginDefinition = {
   commands: [command("greet", (view, args, next) => ({ value: (next(view, args, next).value as number) * 10 }))],
 };
 
-const DEFINITIONS = [ALPHA, BETA, GAMMA];
+/** Three wrappers over one name, each passing the call down and adding its own step (issue #496). */
+function stepper(id: string, step: number): PluginDefinition {
+  return {
+    id,
+    version: "1",
+    commands: [command("greet", (view, args, next) => ({ value: (next(view, args, next).value as number) * 10 + step }))],
+  };
+}
+
+const DEFINITIONS = [ALPHA, BETA, GAMMA, stepper("w1", 3), stepper("w2", 4), stepper("w3", 5)];
 
 function manifestOf(...ids: readonly string[]): PluginManifest {
   return [...ENGINE_DEFAULT_MANIFEST, ...ids.map((id) => ({ id, version: "1" }))];
@@ -144,6 +153,20 @@ test("a wrapper package's namespaced call reaches the layer below it, and the pl
   equal(globalsOf(host).viabeta, 2);
   equal(globalsOf(host).viaalpha, 1);
   equal(overrides(records, "greet").length, 2, "one warning for each override step, nothing per call");
+});
+
+test("three wrapping packages over one command each run once, bottom to top, for the plain and every namespaced call", () => {
+  const { host, diagnostics } = run(
+    "plain = greet()\nv1 = w1.greet()\nv2 = w2.greet()\nv3 = w3.greet()\nvalpha = alpha.greet()\n",
+    ["alpha", "w1", "w2", "w3"],
+  );
+
+  deepEqual(diagnostics, []);
+  equal(globalsOf(host).valpha, 1);
+  equal(globalsOf(host).v1, 13, "w1 over alpha: 1*10+3");
+  equal(globalsOf(host).v2, 134, "w2 over w1");
+  equal(globalsOf(host).v3, 1345, "w3 over w2");
+  equal(globalsOf(host).plain, 1345);
 });
 
 test("a package that supplies nothing under the name is unknown.command, not a fallback to another package", () => {
