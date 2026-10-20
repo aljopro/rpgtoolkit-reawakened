@@ -1,0 +1,221 @@
+# tickets.toml — planned entries of epic-battle, in build order. tickets.py reads it.
+# Table order is the build order; ids are stable names. Entry 1 is an owner-approval docs checkpoint (pending).
+# Lanes: A docs/state (1, 2), B API (3), C package rules (4-8), D starts and media (9, 10), E UI and custom-program proof (11, 12); 13 reconciles seams and closes the epic.
+# The 2026-10-19 owner re-slice: core owns actor data and the battle section (fighter references and charge), the stock-battle RPGCode package owns the loop, rules, AI and UI.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Rulings: the battle package boundary, battle state, the facing API and the defeated event"
+description = "Doc-first (G7), docs only: writes docs/spec/engine/battle.md (BAT-1 to BAT-15) to settle the battle package boundary (the core owns the `battle` section with fighter references and charge, plus the actor model; the `stock-battle` package owns the loop, charge rate, damage, status round effects, AI, outcomes sequence, music cues and UI), the `BattleSection` shape (active battle id, parties of actor references plus charge, background, canRun, outcome 0-4; never copies HP, SMP or status effects), the rebuild mapping of E-79's callbacks 114-132 to actor methods and battle operations (no core `fightTick`), the `defeated` event, R-57 (random start charge, +3 plus or minus 2 per speed/slow, 75/123, `skill` always -1, damage variance and criticals), R-16 (one `experienceIncrease` rule), R-11 (`.spc` flags), outcomes 0-4, the no-enemies message, battle music, the party source, and that the default UI uses existing 3.1 draw primitives. Amends E-72 to E-79 and E-77's outcome wording, EMIT-13's `defeated` row and AD-10's `battle` row; records a rejected alternative for each owner choice."
+verify = "The commit touches only docs and affected spec/spine text; every BAT row has an OWNER marker, evidence and a rejected alternative; the `battle` section is ruled to hold fighter references and charge only, with status effects on actors, and AD-10 matches; E-79's 114-132 map to named rebuild operations with none left unruled; R-57, R-16 and R-11 each have one rule; outcomes 0-4 and the no-enemies message are ruled; a person approves the checkpoint."
+covers = ["CAP-9"]
+after = ["5.11", "19.11", "20.1", "20.2", "20.6", "21.1"]
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "spec - docs/spec/engine/plugins-and-battle.md#e-70 to E-79",
+  "spec - docs/spec/formats/battle-data.md (.bkg, .ste, .spc)",
+  "spec - docs/spec/engine/rpgcode-functions.md (battle, stats and menus rows)",
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-8, EMIT-13)",
+  "discovery - _bmad-output/initiative-rpgtoolkit-reawakened/epic-battle/discovery/all-rpgcode-battle-architecture.md",
+  "spine - _bmad-output/initiative-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened/architecture-rpgtoolkit-reawakened.md, AD-10, AD-26",
+]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Battle state: parties, fighter references and charge"
+description = "Replaces the empty `BattleSection` placeholder with the plain-data battle record ruled by 7.1: one active battle (`id`, `boardKey`, `background`, `canRun`, `outcome` 0-4 or null) with party 0 enemies and party 1 players as ordered `{ party, actorId, charge }` references, status effects left on their actor, and no copied HP/SMP; bumps the per-section version under the save schema-bump rule with a v1 fixture and restore test, and adds snapshot/restore, canonical hash, reset clearing and a located diagnostic for a dangling or duplicate actor reference on load, and updates the `save/sections.ts` header and `BattleSection` comment to match."
+verify = "Save/load round-trip is hash-identical; a mid-fight save restores the same fighters, charge and outcome; the battle section version is bumped under the schema-bump rule and a v1 fixture restores; a dangling or duplicate actor id loads with one located diagnostic and no crash; the section holds no HP, SMP or status effect; reset clears it; the save golden is re-recorded only deliberately (G5)."
+covers = ["CAP-9", "CAP-11"]
+after = [1, "20.3"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-2, BAT-13)",
+  "code - packages/core/src/save/sections.ts, packages/core/src/save/state.ts",
+  "spec - docs/spec/engine/main-loop-and-startup.md#reawakened-reset-sections",
+]
+
+[[entry]]
+id = 3
+type = "story"
+title = "The battle-facing API and the battle built-ins"
+description = "Builds the package-facing battle surface over 7.2 and the actor model: the global `battle` object (party size, fighter lookup by party and index, charge read/add/set/release, charge percent, `canRun`, outcome) and the battle built-ins (`hp`, `givehp`, `gethp`, `maxhp`, `getmaxhp`, `smp`, `givesmp`, `getsmp`, `maxsmp`, `getmaxsmp`, `fp`, `givefp`, `getfp`, `dp`, `getdp`, `applystatus`, `removestatus`, `giveexp`) as aliases onto actor stats, plus fighter-handle resolution for `source`, `target`, a party member name and an enemy reference; no copies of stats and no core `fightTick`."
+verify = "Every operation of the ruled E-79 surface is reachable from a script and resolves to the same actor object; a legacy handle still resolves outside battle; an unknown handle, a bad party or an outcome outside 0-4 is a catchable error with a stable code; stats are read through the actor, never copied; the built-in catalogue and docs rows match the registrations."
+covers = ["CAP-5", "CAP-9"]
+after = [2, "20.4", "20.6"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-3)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-79 (callbacks 114-132)",
+  "spec - docs/spec/engine/rpgcode-functions.md (battle, stats and menus rows)",
+  "code - packages/core/src/script/catalogue-responders.ts, packages/core/src/script/builtins.ts",
+]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Charge-bar turns: the ATB loop"
+description = "Implements the stock battle package's charge-bar loop: initialise each fighter's charge from the seeded shared RNG, add its effective speed (3, plus 2 per active speed effect, minus 2 per active slow effect, floored at zero) each whole engine tick (a `threadSleep` of 1/60 second, which the ruled conversion turns into one tick), freeze a disabled fighter, let a player act when charge reaches 75 and an enemy when it reaches 123, reset the acting fighter's charge on release, and drive the loop from the package's `battle` command, with deterministic turn order (enemies before players, then party index)."
+verify = "Seeded runs reproduce the initial charges and the charge timeline; speed, slow, disable and multiple effects change the rate exactly as ruled; players act at 75 and enemies at 123; release resets; a save/restore or replay produces the same turn order; the loop consumes whole ticks and no wall clock, `Date` or `Math.random`."
+covers = ["CAP-9"]
+after = [3, "20.11"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-4)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-72",
+  "code - packages/core/src/ports/wait.ts, packages/core/src/script/waits.ts",
+]
+
+[[entry]]
+id = 5
+type = "story"
+title = "Player actions and damage: attacks, criticals, specials and items"
+description = "Implements the player's Fight, Special Move and Item actions and E-74 damage inside the stock package: one seeded variance draw for damage (`FP` with a plus or minus 10% variance, rounded by the ruled integer rule), `DP` subtracted unless `giveCrit`/`takeCrit` makes a critical that bypasses it, a minimum of 1, damage to HP or SMP, special-move FP and SMP drain and SMP cost with affordability, the move's animation and status, item fight HP/SMP through an inventory port with a test double and a posted consume effect, and `attackall`/`drainall` without criticals; damage goes through the actor method so `fallen` fires once."
+verify = "A seeded damage table reproduces the ruled values at the edges; a critical bypasses DP; the minimum is 1; SMP damage and special costs clamp; an unaffordable special is unavailable; an item posts exactly one consume effect through the test double and never edits the item list; `attackall`/`drainall` apply without criticals; `fallen` fires once per lethal hit."
+covers = ["CAP-9"]
+after = [3, 4, "20.6"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-4, BAT-5)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-74",
+  "spec - docs/spec/formats/battle-data.md (.spc flags), docs/spec/formats/item.md",
+]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Status effects: rounds, per-round effects, speed and disable"
+description = "Implements E-75 status effects over the core counter: apply a `.ste` by file with re-apply restarting its rounds, expire at zero, and on a fighter becoming charged call the core's `advanceStatus(1)` and apply the status's per-round HP, SMP and program effect, its speed/slow contribution to the charge rate and its disable contribution as a reference count; remove/expire drops the contribution and a lethal status fires `fallen` with cause `status`."
+verify = "Apply, re-apply, remove and expire behave as ruled; a per-round HP, SMP and program effect runs exactly once per round; speed/slow stack per active effect; disable freezes only while at least one disable status is active; a lethal status fires `fallen` once with cause `status`; status state saves with the actor and replays identically."
+covers = ["CAP-9"]
+after = [4, 5, "20.6"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-6)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-75",
+  "spec - docs/spec/formats/battle-data.md (.ste)",
+]
+
+[[entry]]
+id = 7
+type = "story"
+title = "Enemy AI: four levels and a custom AI program"
+description = "Implements E-76 enemy AI in the stock package: the four built-in levels as the table states (random target with a 50/50 physical or special choice, special moves until SMP runs out, weakest target with a 50/50 choice, weakest target with specials first), a deterministic index tie-break for weakest, affordability checks, curative specials choosing the lowest-HP ally, and a custom `useCode` AI program run with `source` as the enemy and `target` as the drawn player; the `ai(level)` built-in sets the acting enemy's level."
+verify = "Each of the four levels makes the ruled choices over a seeded run; an unaffordable special falls back to a physical attack; a curative special targets the lowest-HP ally and an offensive one the player party; a custom AI program drives the action; every random draw is in the ruled order with a deterministic tie-break; an AI program error is reported and ends that turn without ending the battle."
+covers = ["CAP-9"]
+after = [4, 5, 6]
+hitl = false
+risk = "medium"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-7)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-76",
+]
+
+[[entry]]
+id = 8
+type = "story"
+title = "Outcomes, rewards and level-up: win, run and lose"
+description = "Implements E-77 and E-78 outcomes: map the package's outcome to codes 0-4, apply the automatic path (the summed enemy gold as a plain-data inventory effect and experience to every party member, the level-up default from 20.6 that runs the level-up program and raises max HP/DP/FP/max SMP without refilling, and the defeat programs), run the run program or the game-over program (or `reset()` when none), show the reward and level-up messages, and emit `defeated` once per enemy with cause and source; `canRun` gates the Run action."
+verify = "Seeded win, run and lose paths produce the ruled outcomes and rewards; experience is given to every party member and each level-up follows E-78; gold is posted exactly once as an inventory effect and the test double consumes it; `defeated` fires once per enemy per battle and not on a run; the game-over program runs or `reset()` is called; the messages are ordered as ruled."
+covers = ["CAP-9", "CAP-10"]
+after = [5, 6, 7, "20.6"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-8)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-77",
+  "spec - docs/spec/engine/movement-and-collision.md#e-78",
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-13)",
+]
+
+[[entry]]
+id = 9
+type = "story"
+title = "Battle starts and setup: random encounters, Fight and FightEnemy"
+description = "Consumes the 5.11 random-encounter handoff and implements `Fight` and `FightEnemy`: create enemy actors with 20.5 from the handoff, start party 0 enemies and party 1 from the actor store's ordered party, load the `.bkg` background image and `canRun`, show the handoff's no-enemies message and start nothing when the pool is empty, call the registered `battle` command (or the main file's custom fight program) and wait for its outcome, and repoint the 5.11 `battle` phase registration to the phase ruled by 20.1."
+verify = "A random handoff starts a battle with the drawn enemies and board background; the no-enemies handoff shows the exact message and starts no battle; `Fight` and `FightEnemy` create the ruled parties and canRun; a custom fight program replaces the package loop; a game with no battle package ends the battle immediately with a diagnostic; the phase list matches the 20.1 ruling and the phase test is updated deliberately."
+covers = ["CAP-4", "CAP-9"]
+after = [2, 3, 4, 8, "5.11", "20.5"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-9)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-70, #e-71",
+  "code - packages/core/src/sprites/encounters.ts",
+  "handoff - entry 5.11 random-encounter fighter handoff",
+]
+
+[[entry]]
+id = 10
+type = "story"
+title = "Battle music and sounds through the media object"
+description = "Plays the battle's music, sounds and menu cues through the 21.5 media object: play the battle background's music with source `battle`, let a `beforePlay` listener replace or cancel it, play the menu move/confirm/cancel and battle cues as voices, stop the battle track and have the board's music re-posted from the battle's `boardKey` on the outcome, and keep audio out of the save (a mid-battle load stops the stale track and plays the battle track again, with the board track restored from the board after the battle)."
+verify = "The battle track replaces the board track at start and, on the outcome, stops while the board's music is re-posted from `boardKey`; source `battle` reaches `beforePlay` and a listener can replace or cancel; every battle and menu sound is a media cue; a save contains no audio and a mid-battle load restarts the battle track; a null-audio runner produces the same cue stream and state hash."
+covers = ["CAP-7", "CAP-9"]
+after = [9, "21.4", "21.5"]
+hitl = false
+risk = "medium"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-10)",
+  "spec - docs/spec/engine/audio-media.md as amended by 21.1",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-71",
+]
+
+[[entry]]
+id = 11
+type = "story"
+title = "The default battle UI"
+description = "Builds the stock package's default battle UI with existing 3.1 drawing and input primitives: the `.bkg` background, the enemy and player sprites with stances and animations, HP, SMP and charge bars, names, the Fight/Special/Item/Run command list with its cursor, target selection, damage numbers and messages, redrawn each tick into the render-now canvas with the ruled primitives (no new `drawBox`/`drawBar`), and driven by the existing key queue; the owner approves the screen and its golden."
+verify = "A seeded battle renders a deterministic golden frame that the owner approves; every command and target is selectable with the keyboard; the bars and sprites follow the battle state without mutating it; the UI uses only the ruled primitives; the draw list and golden are re-recorded only deliberately (G5)."
+covers = ["CAP-6", "CAP-9"]
+after = [4, 5, 6, 7, 8, 9, 10]
+hitl = true
+risk = "medium"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-11)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-73",
+  "code - packages/core/src/script/packs/graphics.ts, packages/core/src/script/packs/ui.ts",
+]
+
+[[entry]]
+id = 12
+type = "story"
+title = "A custom fight program drives every battle operation"
+description = "Proves the replacement path: a fixture RPGCode fight program registered as the main file's fight program drives every battle-facing operation (party and fighter lookup, charge read/write/release, status and damage through the actor, the enemy `defeated` emit, outcome) and its own drawing and input, without the stock package's loop or UI, over the same core battle state; a seeded short battle pins the state hash and draw list."
+verify = "The custom program calls every ruled battle operation at least once and no internal package function; the same core state is driven with the package removed or replaced; a seeded battle produces a stable state hash and draw list; the automatic outcome path still applies and the program's own `defeated` emit fires once per enemy; the program cannot read package internals."
+covers = ["CAP-5", "CAP-9"]
+after = [3, 8, 9, 11]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1 (BAT-3, BAT-2)",
+  "spec - docs/spec/engine/plugins-and-battle.md#e-79",
+  "spec - docs/spec/engine/plugins-and-battle.md (Plugin roles: without a battle plugin battles end immediately)",
+]
+
+[[entry]]
+id = 13
+type = "story"
+title = "Refactor sweep"
+description = "Reconciles the epic's seams: one registration path for the battle built-ins and the `battle` command, the battle section exported through the save barrel, the 5.11 handoff with a single owner and the 20.1 phase list, the package manifest and `.gam` mapping, the built-in catalogue and command docs, and the spec links and anchors; removes the placeholder and any dead battle-phase code, and closes the epic's Done when list with evidence."
+verify = "No duplicate registration or dead path remains; the phase, catalogue, command-docs, provenance and licence gates are green; every docs link and anchor resolves; each Done when item is checked with a test or fixture named in the PR; the full suite, typecheck and lint pass."
+covers = ["CAP-9"]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+hitl = false
+risk = "low"
+references = [
+  "spec - docs/spec/engine/battle.md as ruled by 7.1",
+  "epic - _bmad-output/initiative-rpgtoolkit-reawakened/epic-battle/epic-battle.md (Done when)",
+  "code - packages/core/src/save/sections.ts, packages/core/src/sprites/encounters.ts",
+]
