@@ -89,16 +89,17 @@ references = [
 id = 5
 tracker_id = "#470"
 type = "story"
-title = "Load actors from character, enemy, item and status data"
-description = "Hydrates actor records from the Epic 2 readers' data: character .tem (and the player), enemy .ene, item .itm and status .ste definitions, filling the stats and state columns of the 20.2 inventory and nothing else."
-verify = "Fixture characters, enemies and items produce actor records whose every inventory row equals the source field; unknown or out-of-range legacy values follow the reader's defaults and diagnostics; the output is stable across two runs."
+title = "Load actors and board-item sprites from character, enemy and item data"
+description = "Hydrates the existing ActorRecord model from Epic 2 character .tem (including players) and enemy .ene data, covering the actor-owned fields assigned to 20.5. It also hydrates only the .itm board/sprite source fields assigned to 20.5 through the existing sprite path; item definitions remain read-only assets outside ActorRecords. Status .ste definitions are explicitly out of scope: status identity/duration belongs to status/core and 20.6, while status modifiers, ticks and programs belong to Epic 7."
+verify = "Fixture characters/players and enemies map every 20.5-owned actor field into ActorRecord; fixture items map only the 20.5-owned board/sprite fields through the existing sprite adapter and never become ActorRecords; reader defaults and diagnostics are preserved; output is stable across two runs; .ste is not loaded by this ticket."
 covers = ["CAP-3", "CAP-9", "CAP-10"]
 after = [3, "2.6", "2.7"]
 hitl = false
 risk = "medium"
 references = [
-  "spec - docs/spec/formats/character.md, enemy.md, item.md, battle-data.md",
-  "code - packages/core/src/formats/",
+  "spec - docs/spec/engine/actors.md (20.5-owned actor and sprite rows; item/status ownership boundaries)",
+  "spec - docs/spec/formats/character.md, enemy.md, item.md",
+  "code - packages/core/src/formats/, packages/core/src/sprites/",
   "fixtures - docs/spec/examples/game/",
 ]
 

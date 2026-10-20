@@ -1,7 +1,12 @@
 import { deepEqual, equal, ok } from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
   ASSIGN_READ_ONLY,
+  actorFromSource,
+  type WorldBoard,
   actorEmitterKey,
   addActor,
   createActorHostType,
@@ -14,13 +19,116 @@ import {
   startProgram,
   KILL_SYSTEM_OWNED,
   hashGameState,
+  hydrateCharacterResult,
+  hydrateEnemyResult,
+  readCharacter,
+  readEnemy,
+  readItem,
   patchActor,
+  BinaryReader,
   resetActorsSection,
   restoreGameState,
   registerActorObject,
   snapshot,
 } from "../src/index.ts";
 import { createScriptServices } from "./script-test-services.ts";
+
+const testDirectory = dirname(fileURLToPath(import.meta.url));
+const examplesDirectory = join(testDirectory, "..", "..", "..", "docs", "spec", "examples", "game");
+
+function example(path: string): Uint8Array {
+  return new Uint8Array(readFileSync(join(examplesDirectory, path)));
+}
+
+test("actor hydration maps character and enemy reader fields deterministically", () => {
+  const characterPath = join(examplesDirectory, "Game", "Example", "Chrs", "ada.tem");
+  const enemyPath = join(examplesDirectory, "Game", "Example", "Enemy", "slime.ene");
+  const character = readCharacter(new BinaryReader(example("Game/Example/Chrs/ada.tem"), characterPath));
+  const enemy = readEnemy(new BinaryReader(example("Game/Example/Enemy/slime.ene"), enemyPath));
+  equal(character.ok, true);
+  equal(enemy.ok, true);
+  if (!character.ok || !enemy.ok) return;
+
+  const first = createActorsSection();
+  const firstCharacter = hydrateCharacterResult(first, "ada.tem", "party", character);
+  const firstEnemy = hydrateEnemyResult(first, "slime.ene", enemy);
+  equal(firstCharacter.ok, true);
+  equal(firstEnemy.ok, true);
+  if (!firstCharacter.ok || !firstEnemy.ok) return;
+  equal(firstCharacter.value.name, character.value.name);
+  deepEqual(firstCharacter.value.stats, {
+    experience: character.value.stats.experience,
+    hp: character.value.stats.hp,
+    maxHp: character.value.stats.maxHp,
+    dp: character.value.stats.dp,
+    fp: character.value.stats.fp,
+    smp: character.value.stats.smp,
+    maxSmp: character.value.stats.maxSmp,
+    level: character.value.stats.level,
+    criticalOn: -1,
+    criticalBy: -1,
+  });
+  deepEqual(firstCharacter.value.progression, {
+    levelType: character.value.firstLevelExp,
+    experienceIncrease: character.value.experienceIncrease,
+    maxLevel: character.value.maxLevel,
+    levelHp: character.value.levelIncreases[0],
+    levelDp: character.value.levelIncreases[1],
+    levelFp: character.value.levelIncreases[2],
+    levelSm: character.value.levelIncreases[3],
+    levelUpType: character.value.levelUpType,
+  });
+  deepEqual(firstCharacter.value.statuses, {});
+  deepEqual(firstEnemy.value.stats, {
+    experience: 0,
+    hp: enemy.value.hp,
+    maxHp: enemy.value.hp,
+    dp: enemy.value.dp,
+    fp: enemy.value.fp,
+    smp: enemy.value.smp,
+    maxSmp: enemy.value.smp,
+    level: 0,
+    criticalOn: enemy.value.criticalOn,
+    criticalBy: enemy.value.criticalBy,
+  });
+
+  const second = createActorsSection();
+  const secondCharacter = hydrateCharacterResult(second, "ada.tem", "party", character);
+  const secondEnemy = hydrateEnemyResult(second, "slime.ene", enemy);
+  equal(secondCharacter.ok, true);
+  equal(secondEnemy.ok, true);
+  deepEqual(second, first);
+});
+
+test("actor hydration keeps reader errors and routes item data outside actor records", () => {
+  const section = createActorsSection();
+  const failed = hydrateCharacterResult(section, "broken.tem", "party", readCharacter(new BinaryReader(new Uint8Array(), "broken.tem")));
+  equal(failed.ok, false);
+  if (!failed.ok) equal(failed.error.path, "broken.tem");
+
+  const item = readItem(new BinaryReader(example("Game/Example/Item/chest.itm"), join(examplesDirectory, "Game", "Example", "Item", "chest.itm")));
+  equal(item.ok, true);
+  equal(section.actors.length, 0);
+  if (item.ok) equal(item.value.name.length > 0, true);
+  if (item.ok) {
+    const sprite = actorFromSource({
+      id: "chest",
+      kind: "item",
+      source: "chest.itm",
+      x: 0,
+      y: 0,
+      layer: 0,
+      item: item.value,
+    }, { coordType: 0 } as WorldBoard, 0, 0);
+    equal(sprite.source, "chest.itm");
+    deepEqual(sprite.visual.movement, item.value.movementAnimations);
+    equal(sprite.multitaskProgram, item.value.multitaskProgram === "" ? null : item.value.multitaskProgram);
+    deepEqual(sprite.visual.idle, item.value.idleAnimations ?? []);
+    deepEqual(sprite.visual.custom, (item.value.customStances ?? []).map((stance) => ({ animation: stance.animation, handle: stance.handle })));
+    if (item.value.vectorBases?.[0] !== undefined) deepEqual(sprite.collisionBase.points, item.value.vectorBases[0].points);
+    if (item.value.vectorBases?.[1] !== undefined) deepEqual(sprite.activationBase.points, item.value.vectorBases[1].points);
+  }
+});
 
 const partyFixture = {
   kind: "party" as const,
