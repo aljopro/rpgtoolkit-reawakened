@@ -46,6 +46,7 @@ function isCompileTimeConstant(name: string): boolean {
 
 function isSystemVirtual(name: string): boolean {
   return (
+    name === "gametime" ||
     name === "music" ||
     name === GAME_EMITTER ||
     name === "boardbackground" ||
@@ -77,7 +78,6 @@ export function createDefaultVirtuals(state: GameState, actors: ActorService = c
     const name = rawName.toLowerCase();
     const stat = actorAlias(name);
     if (stat !== undefined) return actors.activeActor()?.stats[stat] ?? 0;
-    if (name === "gametime" && Object.hasOwn(state.vm.globals, name)) return state.vm.globals[name] ?? 0;
     if (name === "gametime") return Math.floor(state.time.tick / TICKS_PER_SECOND);
     if (name === "music") return musicFile(state.audio) ?? "";
     if (name === GAME_EMITTER) {

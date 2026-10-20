@@ -143,7 +143,7 @@ test("actor aliases write through and protected virtuals keep their links", () =
   equal(virtuals.write?.("HP!", 4), "written");
   equal(state.actors.actors[0]?.stats.hp, 4);
   equal(virtuals.read("HP!"), 4);
-  equal(virtuals.write?.("gametime", 99), "not-virtual");
+  equal(virtuals.write?.("gametime", 99), "read-only");
   equal(virtuals.read("gametime"), 0);
   try {
     virtuals.kill?.("HP!");
