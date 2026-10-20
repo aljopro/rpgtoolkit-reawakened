@@ -583,7 +583,7 @@ function dictionaryOfBase(vm: VmState, thread: Thread, frameIndex: number, base:
     base.ref === null && typeof base.value === "string" ? peekVariable(vm, thread, frameIndex, base.value, virtuals) : base.value;
   if (!isObjectValue(value)) return undefined;
   const record = findObject(vm, value.handle);
-  return record !== undefined && isDictionary(record) ? record : undefined;
+  return record !== undefined && (isDictionary(record) || record.hostType !== undefined) ? record : undefined;
 }
 
 /** Copy a callable with the target as receiver unless it already has one (OOP-11). */
@@ -683,11 +683,15 @@ function hostContext(services: ScriptServices, record: ObjectRecord): HostObject
   return state === undefined ? null : { state, events: state.events, vm: state.vm, record };
 }
 
+function hostMemberName(name: string): string {
+  return name.startsWith("[") && name.endsWith("]") ? name.slice(1, -1) : name;
+}
+
 function readObjectValue(services: ScriptServices, record: ObjectRecord, name: string): Value {
   if (Object.hasOwn(record.members, name)) return readMember(record, name);
   const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
   const context = hostContext(services, record);
-  const hydrated = type?.read !== undefined && context !== null ? type.read(context, name) : undefined;
+  const hydrated = type?.read !== undefined && context !== null ? type.read(context, hostMemberName(name)) : undefined;
   return hydrated === undefined ? readMember(record, name) : hydrated;
 }
 
@@ -695,7 +699,7 @@ function writeObjectValue(services: ScriptServices, record: ObjectRecord, name: 
   if (!Object.hasOwn(record.members, name)) {
     const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
     const context = hostContext(services, record);
-    const result = type?.write !== undefined && context !== null ? type.write(context, name, value) : "not-host";
+    const result = type?.write !== undefined && context !== null ? type.write(context, hostMemberName(name), value) : "not-host";
     if (result === "written") return;
     if (result === "read-only") throw new ScriptError(ASSIGN_READ_ONLY, `host member "${name}" is read-only`);
   }
@@ -2327,6 +2331,7 @@ export function stepThread(
         }
         checkMemberAccess(program, record, op.name, frame.objectClass, op.pos);
         const value = readObjectValue(services, record, op.name);
+        frame.operands.push({ value: bindMemberValue(value, record.handle), ref: objectRef(record.handle, op.name) });
         frame.ip += 1;
         break;
       }
@@ -2453,9 +2458,19 @@ export function stepThread(
             throw new ScriptError("object.invalid", "a dictionary key must be a string or a number", op.pos);
           }
           const key = indexKey(keyArg.value);
-          frame.operands.push({ value: bindMemberValue(readMember(dictionary, key), dictionary.handle), ref: objectRef(dictionary.handle, key) });
+          frame.operands.push({ value: bindMemberValue(readObjectValue(services, dictionary, key), dictionary.handle), ref: objectRef(dictionary.handle, key) });
           frame.ip += 1;
           break;
+        }
+        const namedValue = baseArg.ref === null && typeof baseArg.value === "string" ? peekVariable(vm, thread, frameIndex, baseArg.value, services.virtuals, services) : baseArg.value;
+        if (isObjectValue(namedValue)) {
+          const record = findObject(vm, namedValue.handle);
+          if (record !== undefined && findMethod(program, record.className, "operator[]", 1) === undefined) {
+            const ref = objectRef(record.handle, `[${keyText}]`);
+            frame.operands.push({ value: readObjectValue(services, record, `[${keyText}]`), ref });
+            frame.ip += 1;
+            break;
+          }
         }
         if (baseArg.ref !== null) {
           const object = parseObjectRef(baseArg.ref);
@@ -2481,7 +2496,7 @@ export function stepThread(
             break;
           }
           const ref = objectRef(baseObject.handle, `[${keyText}]`);
-          frame.operands.push({ value: record.members[`[${keyText}]`] ?? 0, ref });
+          frame.operands.push({ value: readObjectValue(services, record, `[${keyText}]`), ref });
           frame.ip += 1;
           break;
         }
@@ -2503,6 +2518,12 @@ export function stepThread(
               errorHandler: null, autoLocal: frame.autoLocal, objectHandle: record.handle,
               objectClass: method.className ?? record.className,
             });
+            break;
+          }
+          if (record !== undefined) {
+            const ref = objectRef(record.handle, `[${keyText}]`);
+            frame.operands.push({ value: readObjectValue(services, record, `[${keyText}]`), ref });
+            frame.ip += 1;
             break;
           }
         }

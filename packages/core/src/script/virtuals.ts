@@ -34,6 +34,15 @@ function actorAlias(name: string): keyof ActorStats | undefined {
   return ACTOR_ALIASES[name.endsWith("!") ? name.slice(0, -1) : name];
 }
 
+function isCompileTimeConstant(name: string): boolean {
+  return (
+    /^tkmv_(?:pause_thread|clear_queue|pathfind|waypoint_path|waypoint_link)$/.test(name) ||
+    /^tkvt_(?:solid|under|stairs|waypoint|bkgimage|all_layers_below|frame_intersect)$/.test(name) ||
+    /^tkprg_(?:step|keypress|repeat|stops_movement)$/.test(name) ||
+    /^tkdir_(?:e|se|s|sw|w|nw|n|ne)$/.test(name)
+  );
+}
+
 function isSystemVirtual(name: string): boolean {
   return (
     name === "gametime" ||
@@ -49,6 +58,7 @@ function isSystemVirtual(name: string): boolean {
     /^boardtitle\[[1-8]\]$/.test(name) ||
     /^constant\[(10|[0-9])\]$/.test(name) ||
     /^threads\[[0-9]+\]$/.test(name) ||
+    isCompileTimeConstant(name) ||
     actorAlias(name) !== undefined
   );
 }

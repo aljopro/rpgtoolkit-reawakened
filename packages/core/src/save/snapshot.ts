@@ -345,6 +345,9 @@ function validateVmObjects(vm: Record<string, unknown>): void {
     const handle = numberAt(record.handle, `${path}.handle`);
     if (handle < 1 || handles.has(handle)) shapeError(`the snapshot's ${path}.handle is not a distinct positive handle`);
     handles.add(handle);
+    if (typeof record.hostType !== "undefined" && (typeof record.hostType !== "string" || record.hostType === "")) {
+      shapeError(`the snapshot's ${path}.hostType must be a non-empty string when present`);
+    }
     if (stringAt(record.className, `${path}.className`) === "") {
       if (record.program !== null) shapeError(`the snapshot's ${path}.program must be null on an object with no class`);
     } else {

@@ -10,14 +10,17 @@ import {
   createDefaultVirtuals,
   createGameState,
   createStatsPort,
+  advanceScriptTick,
+  startProgram,
   KILL_SYSTEM_OWNED,
   hashGameState,
   patchActor,
-  registerActorObject,
   resetActorsSection,
   restoreGameState,
+  registerActorObject,
   snapshot,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 const partyFixture = {
   kind: "party" as const,
@@ -119,6 +122,19 @@ test("actor script object is the owner-backed emitter registration", () => {
   equal(host.read?.(context, "hp"), 9);
 });
 
+test("actor host fields hydrate through dot and indexed VM access", () => {
+  const state = createGameState({ seed: 10 });
+  const actor = addActor(state.actors, partyFixture);
+  const object = registerActorObject(state.vm, state.events, state.actors, actor.id);
+  ok(object !== null);
+  state.vm.globals.actor = { kind: "object", handle: object!.handle, className: object!.className };
+  startProgram(state.vm, { kind: "inline", text: "dot = actor.hp\nactor.hp = 7\nindexed = actor[\"hp\"]\n", compiler: "2" });
+  advanceScriptTick(state, createScriptServices(state));
+  equal(state.vm.globals.dot, 12);
+  equal(state.actors.actors[0]?.stats.hp, 7);
+  equal(state.vm.globals.indexed, 7);
+});
+
 test("actor aliases write through and protected virtuals keep their links", () => {
   const state = createGameState({ seed: 9 });
   const actor = addActor(state.actors, partyFixture);
@@ -137,5 +153,26 @@ test("actor aliases write through and protected virtuals keep their links", () =
   }
   equal(virtuals.write?.("threads[1]", 2), "read-only");
   ok(!Object.hasOwn(state.vm.globals, "HP!"));
+  equal(virtuals.write?.("tkDIR_N", 99), "read-only");
+  try {
+    virtuals.kill?.("tkDIR_N");
+    ok(false, "kill should reject compile-time constants");
+  } catch (error) {
+    equal((error as { code?: string }).code, KILL_SYSTEM_OWNED);
+  }
   equal(ASSIGN_READ_ONLY, "assign.read-only");
+});
+
+test("snapshot rejects a non-string host type name", () => {
+  const state = createGameState({ seed: 11 });
+  const actor = addActor(state.actors, partyFixture);
+  ok(registerActorObject(state.vm, state.events, state.actors, actor.id) !== null);
+  const saved = JSON.parse(snapshot(state)) as { vm: { objects: Array<{ hostType?: unknown }> } };
+  saved.vm.objects[0]!.hostType = 7;
+  try {
+    restoreGameState(saved as never);
+    ok(false, "restore should reject non-string hostType");
+  } catch (error) {
+    equal((error as { code?: string }).code, "restore.shape");
+  }
 });
