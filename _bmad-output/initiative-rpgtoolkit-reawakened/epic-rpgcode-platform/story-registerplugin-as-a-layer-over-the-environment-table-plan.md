@@ -1,9 +1,9 @@
 ---
 title: "registerPlugin as a layer over the environment table"
-type: 'feature'
+type: feature
 ticket: 8
 created: '2026-10-19'
-status: draft
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "high"
 context:
@@ -31,4 +31,4 @@ Commands only; events are entries 10 to 12.
 
 ## Verification
 
-Unit tests, the existing middleware golden unchanged, a new package golden.
+Unit tests (`packages/core/test/script-register-plugin.test.ts`), the existing middleware golden unchanged, the new package golden `synthetic-13-package-layers` (`golden/scripts/golden.json`).

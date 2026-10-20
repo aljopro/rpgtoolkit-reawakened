@@ -283,6 +283,26 @@ const BINDING_SPECS: readonly BuiltinSpec[] = [
       };
     },
   },
+  {
+    name: "registerplugin",
+    aliases: [],
+    params: [{ name: "definition", optional: false, byRef: false, variadic: false }],
+    doc: {
+      summary: "Wrap engine commands in layers of your own: each command you list runs your function first, and your function calls `next` to pass the call down.",
+      behaviour: "Take a dictionary with a name and a commands dictionary of command name to function. Each function takes the command's arguments and then `next`, the layer below it (the layer registered before it, or the engine's own command). A later registration of a command runs first. The layers are rebuilt each time the game starts and are not saved. Return a dictionary with the name and a `remove` function that takes the registered layers out again; layers registered after them keep working. The command does not wait.",
+      groups: ["reawakened-additions-not-part-of-the-282-legacy-catalogue", "core-runtime"],
+      returns: { summary: "A dictionary `{ name, remove }`; calling `remove()` returns 1, or 0 when the layers were already removed." },
+      throws: [
+        { code: "builtin.bad-arg", when: "The argument is not a dictionary, or its name is not a string, or it has no commands dictionary." },
+        { code: CALLABLE_NOT_CALLABLE, when: "A command in the commands dictionary is not a function; nothing is registered." },
+        { code: "unknown.command", when: "A listed command is neither an engine command nor a function; nothing is registered." },
+      ],
+      see: ["docs/spec/engine/rpgcode-modules-and-objects.md#registerplugin-layers-entry-198"],
+      waits: { kind: "never", summary: "Never waits." },
+    },
+    // The VM registers the layers and supplies the value: they need the layer table, the programs and the object table.
+    call: () => ({ value: null, effects: [{ kind: "vm.control", args: ["registerPlugin"] }] }),
+  },
 ];
 
 export const PURE_SPECS: readonly BuiltinSpec[] = [...MATH_SPECS, ...FLOW_SPECS, ...BINDING_SPECS];
