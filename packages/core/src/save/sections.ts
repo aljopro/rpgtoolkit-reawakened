@@ -2,7 +2,7 @@
  * State section declarations for AD-10. The seven sections the board-rendering
  * epic owns (`world`, `camera`, `ui`, `fx`, `surfaces`, `input`, `engine`) live
  * in modules under `save/sections/`; this barrel re-exports them and the
- * sections owned elsewhere (`sprites`, `triggers`, `audio`), and declares
+ * sections owned elsewhere (`sprites`, `triggers`, `audio`, `events`), and declares
  * the four still owned by later epics (`party`, `inventory`, `battle`,
  * `menu`) as explicit empty placeholders.
  *

@@ -1,5 +1,5 @@
 // The save tree, canonical form and restore checks (AD-7, AD-10, AD-11, AD-23):
-// the 18-section shape, a mid-yield round-trip and the two pinned restore errors.
+// the 19-section shape, a mid-yield round-trip and the two pinned restore errors.
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

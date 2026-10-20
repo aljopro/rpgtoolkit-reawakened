@@ -128,6 +128,7 @@ export {
   truthy,
 } from "./values.ts";
 export { CORE_PLUGIN } from "./builtins.ts";
+export { ENGINE_PLUGIN_TABLE } from "./engine-plugins.ts";
 export { RENDER_PLUGIN } from "./packs/render.ts";
 export { UI_COMMANDS, UI_PLUGIN, applyUiEffect } from "./packs/ui.ts";
 export { GRAPHICS_COMMANDS, GRAPHICS_PLUGIN } from "./packs/graphics.ts";

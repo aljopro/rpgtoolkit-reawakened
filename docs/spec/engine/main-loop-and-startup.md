@@ -70,7 +70,7 @@ The editor's "Test game" runs `engine <file.gam>` without saving open editors fi
 
 1. **Step 1** is the host's: `Saved\` is the `saves` blob area, and the main file is the first asset requested. A game-folder root takes its `projectPath` from the main file; a package root ignores it.
 2. **Step 2** requests every `*.ttf` under the project's `Font\` folder, in index order, and installs each that passes the font licence gate into the run's font set; a rejected font is a located diagnostic and is skipped.
-3. **Step 3** builds the plugin manifest: the engine default manifest plus the native packs the main file's plugin list names through the legacy plugin table. A declined or unknown name is a located diagnostic. Menu and battle plugin names belong to those subsystems and are not manifest entries.
+3. **Step 3** builds the plugin manifest: the engine default manifest plus one appended entry for each package name in the main file's [TKR package-list extension](../formats/main-file.md#tkr-package-list-extension), in the stored order (the plugin manifest is the one shared list of PKG-1). A name no definition resolves is a located `plugin.unresolved` diagnostic. The legacy plugin rows of the main file (the menu and battle plugin names and the command-plugin slots) are data the engine keeps and does not interpret: they add no manifest entry and raise no diagnostic.
 4. **Steps 4 and 5** belong to the runner (window, resolution) and to movement-triggers (tile or pixel movement, game speed). The core does nothing for them.
 5. **Program sources** under `Prg\` are requested together with the fonts, because the script runtime resolves `run`, `thread`, includes, board programs and the enter program synchronously from the files already fetched.
 6. **Step 6** posts one `sprites` effect `createplayer(initChar)` with the resolved `Chrs` asset key (no effect when `initChar` is empty). A registered `sprites` owner applies it; until one registers, the record waits in the bounded pending queue. This effect is `InitialPlayerPort.createFromInitChar`'s contract.
@@ -203,7 +203,7 @@ Ambient light (board ambient colour plus script changes) is applied as a gamma r
 | `battle`, `menu` | Close active battle/menu and discard transient screens. |
 | `ui` | Hide/clear mwin/msgBox, cursor maps and buttons; restore project/default font and colour settings. |
 | `camera` | Reset follow target and transform to AD-33 defaults; board startup selects the first player. |
-| `events` | Drop every listener and queued event and any delivery in progress with the `vm` section they refer to; the listener table starts empty ([EMIT-15](rpgcode-modules-and-objects.md#emit-14)). |
+| `events` | Drop every listener and queued event and any delivery in progress with the `vm` section they refer to; the listener table starts empty ([EMIT-15](rpgcode-modules-and-objects.md#emit-15)). |
 | `fx` | Cancel fades, wipes, zoom, animations and pending screen effects. |
 | `audio` | Stop one-shot effects and clear board-music ownership; startup/board entry emits new board music. |
 | `surfaces` | Clear script canvases and screen captures; no old pixels persist. |

@@ -60,7 +60,7 @@ risk = "high"
 references = [
   "spec - docs/spec/engine/rpgcode-modules-and-objects.md (OOP-10)",
   "code - packages/core/src/script/values.ts, vm.ts, cells.ts, lower.ts",
-  "code - packages/core/src/save/sections/vm.ts",
+  "code - packages/core/src/script/state.ts (the `vm` section: `VmState`, `ObjectRecord`)",
 ]
 
 [[entry]]

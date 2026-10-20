@@ -187,6 +187,7 @@ Parent: [ADR 0001](../../../docs/adr/0001-typescript-core.md) and [guardrails.md
 | `rng` | `core/rng` | generator state |
 | `time` | `core/time` | tick counter |
 | `engine` | `core/engine` | phase state, pending requests, queued inputs, open-tick cursor |
+| `events` | `core/events` | the one listener table in registration order, the queue of events waiting for delivery, the dispatch cursor, the keys of built-in emitters (AD-32, EMIT-15) |
 
 Character stats have one owner: `vm.globals` behind `StatsPort` (E-85). `SaveState` is `GameState`; snapshot, save, hash and restore use one canonical form. A plugin command never mutates a section (AD-8): it returns plain-data `effects`, and the VM hands each to the section owner that alone applies it. The one value a command does reach is a by-reference `out`, which the VM writes into the caller's variable as the `vm` section's owner.
 
@@ -212,6 +213,7 @@ graph TD
   GameState --> rng
   GameState --> time
   GameState --> engine
+  GameState --> events
 ```
 
 ### AD-11 — Canonical form and hashes
@@ -332,7 +334,7 @@ graph TD
 
 - **Binds:** CAP-2, CAP-3, CAP-4, CAP-5, CAP-8, CAP-9, CAP-10
 - **Prevents:** epics inserting their phase wherever convenient; changing RNG draw order; undefined behaviour for blocking programs.
-- **Rule:** `core/engine` runs a fixed, named phase list each tick: `input`, `waits`, `threads`, `movement`, `edges`, `triggers`, `battle`, `animation`, `audio`, `time` (E-03). Modules register into named phases only; order inside a phase is fixed by module rank. `Thread.kind` is `blocking`, `board`, `persistent` or `item`; lifecycle owners are `core/script` for kinds and `core/world` for killing board threads on `send` and item threads on removal (E-19, E-93). At most one `blocking` thread exists; it suspends Idle input and triggers but not other threads. `multiRun` defers movement starts and then yields one `movement` wait over the collected sprites (E-33). A blocking program that never yields is preempted at the per-tick budget.
+- **Rule:** `core/engine` runs a fixed, named phase list each tick: `input`, `waits`, `threads`, `events`, `movement`, `edges`, `triggers`, `battle`, `animation`, `audio`, `time` (E-03; `events` is the queued-emit delivery phase of AD-32, entry 19.10, and runs straight after `threads`). Modules register into named phases only; order inside a phase is fixed by module rank. `Thread.kind` is `blocking`, `board`, `persistent` or `item`; lifecycle owners are `core/script` for kinds and `core/world` for killing board threads on `send` and item threads on removal (E-19, E-93). At most one `blocking` thread exists; it suspends Idle input and triggers but not other threads. `multiRun` defers movement starts and then yields one `movement` wait over the collected sprites (E-33). A blocking program that never yields is preempted at the per-tick budget.
 - **Check:** a unit test snapshots the phase list; a test of exclusive-program mode with `multiRun`.
 
 ### AD-27 — Surface model

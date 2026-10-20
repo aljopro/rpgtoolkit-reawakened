@@ -4,7 +4,7 @@
  * `VmState` is AD-10's `vm` section: `threads`, `globals`, `objects`,
  * `redirects`, the effect log (`effects` and `effectSeq`, ticket 3.21), the
  * global-block status (`block`, R-32) and the request counter (`requestSeq`,
- * AD-5). `objects` is entry 6's; `redirects` is the one run-wide redirect table
+ * AD-5). `objects` is the one handle table of every object, dictionaries and legacy class instances alike (OOP-10, entries 19.3 and 19.5); `redirects` is the one run-wide redirect table
  * of entry 8 (R-42), ordered `[folded old, folded new]` pairs. `Thread` and `Frame` carry AD-7's minimum fields with the values
  * this entry fixes: `ThreadKind`/`ThreadOwner` are AD-26's, `source`/`target`
  * are THR-2's per-thread pair and `null` for a plain thread, and `errorHandler`

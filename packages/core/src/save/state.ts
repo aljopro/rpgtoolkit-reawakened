@@ -3,11 +3,12 @@
  *
  * `GameState` has exactly AD-10's 19 sections. Entry 2 owns four of them —
  * `schema` (here), `vm` (`core/script`), `rng` (`core/rng`) and `time`
- * (`core/time`); of the other fourteen, seven are real sections declared under
+ * (`core/time`); of the other fifteen, seven are real sections declared under
  * `save/sections/` (`world`, `camera`, `ui`, `fx`, `surfaces`, `input`,
- * `engine`), three are owned by their own modules (`sprites`, `triggers` and
- * `audio`, schema v2, `core/audio`) and four are the `Record<string, never>`
- * placeholders of `sections.ts` that later epics fill. `SchemaState` is AD-23's per-section version
+ * `engine`), four are owned by their own modules (`sprites`, `triggers`,
+ * `audio`, schema v2, `core/audio`, and `events`, `core/events`, entry 19.10) and
+ * four are the `Record<string, never>` placeholders of `sections.ts` that later
+ * epics fill. `SchemaState` is AD-23's per-section version
  * map plus the compiler version, and `SCHEMA_VERSIONS` is the current version
  * of every section, each starting at 1.
  *
