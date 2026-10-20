@@ -224,7 +224,14 @@ export function readStepCounters(vm: VmState): Readonly<Record<string, number>> 
 export function incrementStepCounter(vm: VmState, owner: string | undefined): void {
   if (owner === undefined || owner === "") return;
   const counters = (vm.stepCounters ??= {});
-  counters[owner] = (counters[owner] ?? 0) + 1;
+  if (Object.hasOwn(counters, owner)) {
+    const count = counters[owner] ?? 0;
+    counters[owner] = count + 1;
+    return;
+  }
+  // A package name may be an Object.prototype key. Define it as data rather than
+  // assigning through a legacy setter such as `__proto__`.
+  Object.defineProperty(counters, owner, { value: 1, writable: true, enumerable: true, configurable: true });
 }
 
 
