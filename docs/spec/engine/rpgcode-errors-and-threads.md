@@ -59,6 +59,8 @@ Every row above except the modulo row and the callable row is legacy behaviour (
 
 **The game `error` event (entry 19.1; Reawakened rule, OWNER).** Every runtime error above, whether or not a handler caught it, is also emitted on the game emitter as the non-cancelable event `error` with `detail` `{ code, message, file, line, handled }`, like `window.onerror`. It is a notification in addition to the handling above: it does not catch, replace or suppress the script's handler, and it fires whether or not a handler caught the error (`handled` says which). The event model, the queueing and the details are in [EMIT-9](rpgcode-modules-and-objects.md#emit-1); entry 19.12 builds it. This is the same diagnostic the host already receives (the rule above this table), now also visible to scripts.
 
+**What `handled` means and when the event fires (entry 19.12).** `handled` is `1` when the failing frame's handler took the error (a label handler whose label was found, or the resume-next handler) and `0` otherwise; the event is queued for every failure the host receives as a diagnostic, `debug(false)` included, and never for a load-time problem or a refused load, where no frame exists. An error raised by the thread running a listener of the `error` event is not emitted again. The rules are [EMIT-22](rpgcode-modules-and-objects.md#emit-22).
+
 **References.** R2-Q3, R2-Q10, R2-Q11 (`docs/provenance/facts-round-2.md`); R3-Q3 (`docs/provenance/facts-round-3.md`); `docs/provenance/facts-round-6.md` Q1, Remainder by zero; the label scope in [rpgcode-language.md](rpgcode-language.md); AD-7 (the frame's handler slot) and AD-24 (diagnostics) in the architecture spine.
 
 ## Threads
