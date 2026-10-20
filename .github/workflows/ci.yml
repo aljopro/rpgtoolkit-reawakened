@@ -137,7 +137,8 @@ jobs:
         with:
           path: fixtures/legacy
           key: legacy-games-${{ hashFiles('tools/fixtures/sources.json') }}
-      # `golden:bun` also replays the closing suite, which boots the fetched sample games under both runtimes.
+      # `golden:bun` replays the golden and closing suites under Bun against the
+      # committed output; the `golden` job already covers the Node replay.
       - run: pnpm fixtures:fetch
       - run: pnpm golden:bun
   gate:

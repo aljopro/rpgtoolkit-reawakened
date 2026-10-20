@@ -37,7 +37,7 @@
     "oracle:check": "python3 tools/fixtures/reference/render.py --check && node tools/fixtures/author/generate.mjs --check && pnpm run audio-protocol:check",
     "golden": "tsc -b && node packages/runner-headless/dist/cli.js golden",
     "golden:record": "tsc -b && node packages/runner-headless/dist/cli.js golden --record",
-    "golden:bun": "pnpm build && node packages/runner-headless/dist/cli.js golden > /tmp/tkr-golden-node.log && bun packages/runner-headless/dist/cli.js golden > /tmp/tkr-golden-bun.log && diff -u /tmp/tkr-golden-node.log /tmp/tkr-golden-bun.log && node packages/runner-headless/dist/cli.js closing > /tmp/tkr-closing-node.log && bun packages/runner-headless/dist/cli.js closing > /tmp/tkr-closing-bun.log && diff -u /tmp/tkr-closing-node.log /tmp/tkr-closing-bun.log",
+    "golden:bun": "pnpm build && bun packages/runner-headless/dist/cli.js golden && bun packages/runner-headless/dist/cli.js closing",
     "closing": "tsc -b && node packages/runner-headless/dist/cli.js closing",
     "closing:record": "tsc -b && node packages/runner-headless/dist/cli.js closing --record",
     "corpus": "tsc -b && node packages/runner-headless/dist/cli.js corpus",
