@@ -1,4 +1,4 @@
-import { deepEqual, equal, ok } from "node:assert/strict";
+import { deepEqual, equal, ok, throws } from "node:assert/strict";
 import { test } from "node:test";
 import {
   createGameState,
@@ -15,6 +15,7 @@ import {
   withOwner,
   type GameState,
   type ProgramRef,
+  type ScriptError,
 } from "../src/index.ts";
 import type { Value } from "../src/ports/value.ts";
 import { createScriptServices } from "./script-test-services.ts";
@@ -129,4 +130,24 @@ test("reserved package IDs count as own numeric counters through snapshot restor
   }
   equal(snapshot(replay), snapshot(state));
   equal(hashGameState(state), hashGameState(createGameState({ seed: 0 })));
+});
+
+test("restore rejects messagesOff=false while retaining valid messagesOff and step counters", () => {
+  const state = createGameState({ seed: 0 });
+  state.vm.stepCounters = { alpha: 17, beta: 4 };
+  const raw = JSON.parse(snapshot(state)) as { vm: { messagesOff?: unknown; stepCounters?: unknown } };
+
+  restoreGameState(JSON.stringify(raw));
+  raw.vm.messagesOff = true;
+  const restored = restoreGameState(JSON.stringify(raw));
+  deepEqual(restored.vm.stepCounters, state.vm.stepCounters);
+
+  raw.vm.messagesOff = false;
+  throws(
+    () => restoreGameState(JSON.stringify(raw)),
+    (error: unknown) => {
+      equal((error as ScriptError).code, "restore.shape");
+      return true;
+    },
+  );
 });
