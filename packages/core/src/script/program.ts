@@ -115,7 +115,7 @@ export type CompileContext = {
   readonly isBuiltin?: (name: string) => boolean;
 };
 
-/** The program-cache identity of `ref`: dialect, source, compiler, includes and redirects (MOD-3, R-42). */
+/** The program-cache identity of `ref`: dialect, source, compiler, includes, redirects and owner (MOD-3, R-42, PKG-8). */
 export function programKey(ref: ProgramRef): string {
   const dialect = ref.dialect ?? "tk3";
   const includes = (ref.includes ?? []).join("\u0001");
@@ -124,7 +124,8 @@ export function programKey(ref: ProgramRef): string {
     ref.kind === "inline"
       ? `inline\u0000${dialect}\u0000${ref.compiler}\u0000${ref.text}`
       : `file\u0000${dialect}\u0000${foldPath(ref.path)}\u0000${ref.sourceHash}\u0000${ref.compiler}`;
-  return `${source}\u0000${includes}\u0000${redirects}`;
+  const metadata = `${includes}\u0000${redirects}`;
+  return ref.owner === undefined ? `${source}\u0000${metadata}` : `${source}\u0000${metadata}\u0000owner\u0000${ref.owner}`;
 }
 
 /** `ref` carrying the redirect table `redirects` unless it already records one (R-42). */
@@ -132,7 +133,7 @@ export function withRedirects(ref: ProgramRef, redirects: ReadonlyArray<readonly
   if (redirects.length === 0 || ref.redirects !== undefined) return ref;
   return { ...ref, redirects: redirects.map(([from, to]): [string, string] => [from, to]) };
 }
-/** Tag a program reference with its owning package without changing cache identity (PKG-8). */
+/** Tag a program reference with its owning package; the owner is part of cache identity (PKG-8). */
 export function withOwner(ref: ProgramRef, owner: string): ProgramRef {
   if (owner === "") throw new ScriptError("program.owner", "a program owner must not be empty");
   return ref.owner === owner ? ref : { ...ref, owner };

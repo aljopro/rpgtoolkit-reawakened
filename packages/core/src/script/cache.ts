@@ -1,13 +1,12 @@
 /**
  * The compiled-program cache (ADR 0004 decision 1; docs/spec/engine/rpgcode-modules-and-objects.md MOD-3, R-42).
  *
- * A `Program` is rebuilt from its `ProgramRef` and kept here, outside saved
  * state. The key is the ref's identity: its source (the text, or the file path
- * and source hash), the compiler version, the ordered run-time include list and
- * the redirect table in force when it was compiled. The same key is the same
- * compile, so a second request parses nothing; a changed include list or
- * redirect table is a different key and compiles afresh instead of mutating
- * call sites that are already bound.
+ * and source hash), the compiler version, the ordered run-time include list, the
+ * redirect table in force when it was compiled and its optional package owner.
+ * The same key is the same compile, so a second request parses nothing; a changed
+ * include list, redirect table or owner is a different key and compiles afresh
+ * instead of mutating call sites that are already bound.
  */
 
 import { compileProgram, programKey, type CompileContext, type Program, type ProgramNotice, type ProgramRef } from "./program.ts";

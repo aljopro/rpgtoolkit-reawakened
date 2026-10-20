@@ -59,6 +59,20 @@ test("per-package counters attribute direct and callable instructions and sum to
   equal(ownerOf(state.vm.globals.g), "beta");
 });
 
+test("same-source direct functions keep each package's instruction attribution", () => {
+  const state = createGameState({ seed: 0 });
+  const text = "function add(x) { return x + 1 }\nr = add(1)\n";
+  const alpha = startProgram(state.vm, packageRef(text, "alpha"));
+  const services = createScriptServices(state);
+  while (alpha.status === "ready") stepThread(alpha, state.vm, services, 1000);
+
+  const beta = startThread(state.vm, { ref: packageRef(text, "beta"), kind: "item", owner: "world" });
+  while (beta.status === "ready") stepThread(beta, state.vm, services, 1000);
+
+  deepEqual(readStepCounters(state.vm), { alpha: 10, beta: 10 });
+  equal(state.vm.globals.r, 2);
+});
+
 test("per-package counters are deterministic across runs, snapshots and restore", () => {
   const first = makeState();
   const second = makeState();
