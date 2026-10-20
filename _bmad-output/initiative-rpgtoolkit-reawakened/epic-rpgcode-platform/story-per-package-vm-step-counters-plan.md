@@ -1,9 +1,9 @@
 ---
 title: "Per-package VM step counters"
-type: 'feature'
+type: feature
 ticket: 13
 created: '2026-10-19'
-status: draft
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "medium"
 context:

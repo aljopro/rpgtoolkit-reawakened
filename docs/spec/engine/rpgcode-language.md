@@ -141,7 +141,7 @@ inline function f(x) { … }           // "inline" is a hint only
 
     | Code | Raised when |
     |---|---|
-    | `restore.callable-malformed` | a value whose `type` is `"callable"` is not exactly `{ type, def, captures, receiver }` with `def` a non-empty string, `captures` an array of strings and `receiver` a string or `null` |
+    | `restore.callable-malformed` | a value whose `type` is `"callable"` is not a whole `{ type, def, captures, receiver }` record with an optional non-empty `owner` package name, `def` a non-empty string, `captures` an array of strings and `receiver` a string or `null` |
     | `restore.cell-missing` | a `captures` entry, a frame slot's or operand's `cell:` reference or a wait's resume reference names a cell that is not in `vm.cells` |
     | `restore.cell-seq` | `vm.cells` and `vm.cellSeq` are not both present, a cell id is not `cell` plus a positive whole number written without leading zeros, or an id is greater than `vm.cellSeq` |
     | `restore.callable-unknown-def` | the `def` is defined by no compiled program and is no command, or its recorded owner does not define it |
@@ -156,7 +156,7 @@ inline function f(x) { … }           // "inline" is a hint only
 
 ### Values and variables
 
-* **Dynamic typing.** A value is a number (a double), a string, a dictionary object, or a first-class callable (`Value.Callable`). Mixing in `+` concatenates (`"Hello " + 32` → `"Hello 32"`). Object handles are numbers or dictionary references. First-class callables are plain serializable data records (`{ type: "callable", def: string, captures: string[], receiver: string | null }`). A callable evaluates to truthy; converting to string yields `"[Function: <def>]"`. [Values, scope and conversion](rpgcode-runtime.md) settles comparison and conversion.
+* **Dynamic typing.** A value is a number (a double), a string, a dictionary object, or a first-class callable (`Value.Callable`). Mixing in `+` concatenates (`"Hello " + 32` → "Hello 32"`). Object handles are numbers or dictionary references. First-class callables are plain serializable data records (`{ type: "callable", def: string, captures: string[], receiver: string | null, owner?: string }`). A callable evaluates to truthy; converting to string yields `"[Function: <def>]"`. [Values, scope and conversion](rpgcode-runtime.md) settles comparison and conversion.
 * **No declaration needed; scope defaults to global (SEM-4).** `local(x)` / `global(x)` select scope explicitly, and `autoLocal(true)` makes new variables local to the current function or program. The full scope rules are in [values, scope and conversion](rpgcode-runtime.md).
 * **Declare and assign (FUN-2).** `local(x) = v` and `global(x) = v` declare the variable in the chosen scope and assign it in one statement; this is the ordinary form for a new local (for example in a `for` initialiser) and it uses the reference-return rule above. `local(x)` on its own declares the variable and leaves it unset. <!-- OWNER: FUN-2 — alternatives: make `local(x)` alone an error (must be assigned), or have it return the variable's value. Decided: it declares and leaves unset, matching an unset variable's `""`/0 read. -->
 <a id="kill-1"></a>
