@@ -60,6 +60,7 @@ import {
   endItemThreads,
   fileProgramRef,
   runThreadsPhase,
+  layerRoots,
   runWaitsPhase,
   ScriptError,
   startProgram,
@@ -1129,7 +1130,7 @@ export function createEngine(init: EngineInit): Engine {
         return;
       case "time":
         runTimePhase(state.time);
-        collectStateGarbage(state);
+        collectStateGarbage(state, layerRoots(services.layers));
         return;
       case "movement":
         state.camera = updateCamera(state.camera, state.world.board ?? null, init.cameraTarget ?? init.spriteRuntime);

@@ -1,4 +1,4 @@
-import { equal, throws } from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -96,13 +96,12 @@ test("verifyCatalogueCompleteness: missing mapped TK2 command throws with diagno
   );
 });
 
-test("corpus: all 23 programs run to completion and pass random-step snapshot restore", () => {
+test("corpus: all 24 programs run to completion and pass random-step snapshot restore", () => {
   const programs = buildCorpus();
-  equal(programs.length, 23);
+  equal(programs.length, 24);
 
   const results = runAllCorpusPrograms(42);
-  equal(results.length, 23);
-
+  equal(results.length, 24);
   for (const result of results) {
     equal(typeof result.stateHash === "string" && result.stateHash.length === 16, true);
     equal(result.ticks > 0, true);
@@ -140,6 +139,38 @@ test("corpus: synthetic-12-cancelable-emit parks on event.dispatch, resumes with
     checkSnapshotRestore(
       { fresh, fromSnapshot: restored },
       { ticks: emit.ticks - split, split, inputsForTick: undefined },
+    );
+    equal(fresh.stateHash(), straight.stateHash(), `split ${split} ends where the straight run ends`);
+  }
+});
+
+test("corpus: synthetic-13-package-layers registers layers, runs onion dispatch, removes mid-run, and restores from every tick to the same state hash (entry 19.8)", () => {
+  const pkg = buildCorpus().find((p) => p.id === "synthetic-13-package-layers");
+  if (!pkg) throw new Error("synthetic-13-package-layers missing");
+
+  const straight = pkg.createHost(0);
+  straight.advance(pkg.ticks, []);
+  const globals = straight.state().vm.globals;
+  equal(
+    globals.trace,
+    "s>c><c<sp><pc><c",
+    "shout was outermost for the first call and doubled sleep; after removal chime ran bare",
+  );
+  const lines = straight
+    .state()
+    .vm.effects.filter((effect) => effect.name === "mwin")
+    .map((effect) => effect.args[0]);
+  deepEqual(lines, ["c:HI", "c:again"]);
+  equal(straight.state().vm.threads[0]?.status, "finished");
+
+  for (let split = 0; split < pkg.ticks; split += 1) {
+    const fresh = pkg.createHost(0);
+    fresh.advance(split, []);
+    const restored = pkg.restoreHost(fresh.snapshot());
+    equal(restored.stateHash(), fresh.stateHash(), `split ${split}`);
+    checkSnapshotRestore(
+      { fresh, fromSnapshot: restored },
+      { ticks: pkg.ticks - split, split, inputsForTick: undefined },
     );
     equal(fresh.stateHash(), straight.stateHash(), `split ${split} ends where the straight run ends`);
   }

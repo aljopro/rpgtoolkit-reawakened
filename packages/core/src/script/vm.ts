@@ -37,6 +37,18 @@ import {
 import { NULL_LOGGER } from "./logging.ts";
 import { ENGINE_DEFAULT_MANIFEST, foldNamespace } from "./manifest.ts";
 import { collectCells, eachLiveRoot, recordOwner } from "./cells.ts";
+import {
+  addRegistration,
+  createPluginLayers,
+  layerIdOf,
+  layerRoots,
+  registrationIdOf,
+  removeHandle,
+  removeRegistration,
+  topLayerHandle,
+  type LayerRequest,
+  type PluginLayers,
+} from "./layers.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
 import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef, queueErrorEvent } from "../events/emitter.ts";
 import { GAME_EMITTER, type EventsSection } from "../events/model.ts";
@@ -136,6 +148,11 @@ export type ScriptServices = {
   readonly pluginOptions: ReadonlyMap<string, PlainData>;
   /** The `namespace.prg` files a package namespace already warned about, so each warns once (PKG-4); a log aid, never state. */
   readonly hiddenFileWarned: Set<string>;
+  /**
+   * The command layers `registerPlugin` registered (MOD-4, PKG-5; entry 19.8): session data, never state,
+   * rebuilt by package start-up and not saved. A call reaches them through the first entry of the environment table.
+   */
+  readonly layers: PluginLayers;
   readonly postEffect?: (section: SectionKey, effect: EffectRecord) => void;
   /** Engine-owned synchronous host-request dispatch hook. */
   readonly postRequest?: (request: CommandRequest) => void;
@@ -156,6 +173,7 @@ export function createScriptServices(
   explicitGameId = "default",
   postEffect?: (section: SectionKey, effect: EffectRecord) => void,
   postRequest?: (request: CommandRequest) => void,
+  layers: PluginLayers = createPluginLayers(),
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
@@ -223,6 +241,7 @@ export function createScriptServices(
     diagnostics,
     pluginOptions,
     hiddenFileWarned: new Set(),
+    layers,
     ...(loader === undefined ? {} : { loader }),
     ...(postEffect === undefined ? {} : { postEffect }),
     ...(postRequest === undefined ? {} : { postRequest }),
@@ -451,7 +470,7 @@ export function advanceScriptTick(
   runEventsPhase(state, services, budget);
   assertNoDeadlock(state.vm, services);
   runTimePhase(state.time);
-  collectStateGarbage(state);
+  collectStateGarbage(state, layerRoots(services.layers));
   return scriptStatus(state);
 }
 
@@ -1179,7 +1198,7 @@ function bindingOfCall(
   const handle = bindingOf(
     name,
     services.commands,
-    heldCallable(vm, thread, frameIndex, name),
+    heldCallable(vm, thread, frameIndex, name) ?? topLayerHandle(services.layers, name),
     (candidate) => findDefinition(vm, services, program, candidate)?.infos.some((info) => info.entry >= 0) ?? false,
   );
   if (handle === undefined) {
@@ -1344,6 +1363,128 @@ function findDefinition(
 }
 
 /**
+ * `registerPlugin(definition)` (MOD-4, PKG-5; entry 19.8). `definition` is a dictionary with a
+ * `name` (a label) and a `commands` dictionary of command name to interceptor, a callable that
+ * takes the command's arguments and then `next`. Each command, in the dictionary's order, gets
+ * a layer in the table of layers in front of the top layer already registered for it, else in
+ * front of the engine's own binding (the answer `bindingOf` gives with no variable in the way,
+ * so the layer below never depends on the scope that registered). Everything is checked before
+ * anything is registered, so a failed call registers nothing. The value is a dictionary
+ * `{ name, remove }`.
+ */
+function registerPluginCall(
+  vm: VmState,
+  services: ScriptServices,
+  program: Program,
+  args: readonly Arg[],
+  pos: SourcePos,
+): Value {
+  const definition = liveObject(vm, args[0]?.value, pos, `"registerPlugin" takes a dictionary with a name and a commands dictionary`);
+  const label = readMember(definition, "name");
+  if (typeof label !== "string") {
+    throw new ScriptError("builtin.bad-arg", `"registerPlugin" takes the plugin's name as a string`, pos);
+  }
+  const commands = liveObject(vm, readMember(definition, "commands"), pos, `"registerPlugin" takes a commands dictionary`);
+  const requests: LayerRequest[] = [];
+  for (const key of commands.keys) {
+    const interceptor = readMember(commands, key);
+    if (!isCallableValue(interceptor)) {
+      throw new ScriptError(CALLABLE_NOT_CALLABLE, `registerPlugin: the command "${key}" is not a callable`, pos);
+    }
+    const command = foldAscii(key);
+    let engine: CallableValue | undefined;
+    if (topLayerHandle(services.layers, command) === undefined) {
+      engine = bindingOf(
+        command,
+        services.commands,
+        undefined,
+        (candidate) => findDefinition(vm, services, program, candidate)?.infos.some((info) => info.entry >= 0) ?? false,
+      );
+      if (engine === undefined) {
+        throw new ScriptError("unknown.command", `no built-in or function named "${command}"`, pos);
+      }
+      // A handle naming a script function is found again after a restore through its recorded owner (entry 18.6).
+      const owner = findDefinition(vm, services, program, engine.def);
+      if (owner !== undefined) recordOwner(vm, engine.def, owner.program.ref);
+    }
+    requests.push({ command, interceptor, engine });
+  }
+  const registration = addRegistration(services.layers, label, requests);
+  const result = createObject(vm, null);
+  writeMember(result, "name", label);
+  writeMember(result, "remove", removeHandle(registration.id));
+  return { kind: "object", handle: result.handle, className: DICTIONARY_CLASS };
+}
+
+/**
+ * Run the layer `id` (entry 19.8): the interceptor takes the call's arguments and then `next`, the
+ * layer below, and runs on the calling thread like any indirect call, so a wait inside it parks the
+ * thread inside its frame. A removed layer hands the call to the layer below unchanged.
+ */
+function performLayer(
+  thread: Thread,
+  vm: VmState,
+  services: ScriptServices,
+  program: Program,
+  frame: Frame,
+  frameIndex: number,
+  id: string,
+  args: Arg[],
+  pos: SourcePos,
+): CallOutcome {
+  const layer = services.layers.layers.get(id);
+  if (layer === undefined) {
+    throw new ScriptError(
+      CALLABLE_UNKNOWN_DEF,
+      `the plugin layer "${id}" is not registered: package layers are rebuilt by package start-up and are not saved (PKG-5)`,
+      pos,
+    );
+  }
+  if (layer.removed) {
+    return performCallable(thread, vm, services, program, frame, frameIndex, layer.below, args, pos);
+  }
+  const found = findDefinition(vm, services, program, layer.interceptor.def);
+  if (found !== undefined) {
+    const takes = found.infos.filter((info) => info.entry >= 0).map((info) => info.params.length);
+    if (!takes.includes(args.length + 1)) {
+      throw new ScriptError(
+        CALLABLE_ARITY,
+        `a layer of "${layer.command}" takes ${takes.map((count) => Math.max(count - 1, 0)).join(" or ")} argument(s) before next, got ${args.length}`,
+        pos,
+      );
+    }
+  }
+  return performCallable(
+    thread, vm, services, program, frame, frameIndex, layer.interceptor,
+    [...args, { value: layer.below, ref: null }], pos,
+  );
+}
+
+/** Run the `remove` callable of registration `id` (entry 19.8): `1` when it removed a layer, `0` when none was left. */
+function performRemove(
+  services: ScriptServices,
+  frame: Frame,
+  id: string,
+  args: readonly Arg[],
+  pos: SourcePos,
+): CallOutcome {
+  if (args.length !== 0) {
+    throw new ScriptError(CALLABLE_ARITY, `"remove" takes 0 argument(s), got ${args.length}`, pos);
+  }
+  const removed = removeRegistration(services.layers, id);
+  if (removed === null) {
+    throw new ScriptError(
+      CALLABLE_UNKNOWN_DEF,
+      `the plugin registration "${id}" is not registered: package layers are rebuilt by package start-up and are not saved (PKG-5)`,
+      pos,
+    );
+  }
+  frame.ip += 1;
+  frame.operands.push({ value: removed, ref: null });
+  return "continue";
+}
+
+/**
  * Dispatch one indirect call (FUN-8; ADR 0004 decision 8; entries 18.4 and
  * 18.5). A handle runs the binding it names through the environment table's
  * lower entries only — an engine command first (R-35), then a compiled
@@ -1373,6 +1514,10 @@ function performCallable(
   args: Arg[],
   pos: SourcePos,
 ): CallOutcome {
+  const layerId = layerIdOf(value.def);
+  if (layerId !== null) return performLayer(thread, vm, services, program, frame, frameIndex, layerId, args, pos);
+  const registrationId = registrationIdOf(value.def);
+  if (registrationId !== null) return performRemove(services, frame, registrationId, args, pos);
   const builtin = services.commands.builtin(value.def);
   if (builtin !== undefined) {
     // A host-provided method read off an object carries it as the receiver; the command takes it first (EMIT-2).
@@ -1554,6 +1699,7 @@ function dispatchResolved(
   const tick = services.view.clock.tick();
   let controlApplied = false;
   let parked = false;
+  let produced: Value | undefined;
   for (const effect of result.effects ?? []) {
     if (effect.kind === "vm.control") {
       const action = effect.args?.[0];
@@ -1641,6 +1787,9 @@ function dispatchResolved(
           parkOnEvent(thread, event);
           parked = true;
         }
+      }
+      if (action === "registerPlugin") {
+        produced = registerPluginCall(vm, services, program, args, pos);
       }
       if (action === "autoLocal") {
         frame.autoLocal = Boolean(effect.args?.[1]);
@@ -1893,7 +2042,7 @@ function dispatchResolved(
   }
 
   applyOut(vm, thread, frameIndex, resolved.command.spec, args, result.out ?? [], name, pos);
-  frame.operands.push({ value: result.value, ref: null });
+  frame.operands.push({ value: produced !== undefined ? produced : result.value, ref: null });
   return "continue";
 }
 
@@ -2620,7 +2769,10 @@ export function stepThread(
         // The environment table (FUN-8; entry 18.5): the running scope's own
         // callable under this name first, then a built-in, a script function and a
         // plugin command. A `file.`-qualified call never asks the scope.
-        const held = op.file === undefined ? heldCallable(vm, thread, frameIndex, op.name) : undefined;
+        const held =
+          op.file === undefined
+            ? (heldCallable(vm, thread, frameIndex, op.name) ?? topLayerHandle(services.layers, op.name))
+            : undefined;
         const resolved = inPackage ?? resolveCall(op.name, op.argc, program, services.commands, op.file, held);
         if (resolved === undefined) {
           const ownClass = frameObjectClass(vm, frame);

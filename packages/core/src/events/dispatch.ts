@@ -102,9 +102,12 @@ export function runEventsPhase(state: GameState, services: ScriptServices, budge
  * The end-of-tick pass with the emitter's roots (R-34, EMIT-14, EMIT-16): the listener
  * table and the queued events keep their callables' cells and receivers and their
  * event objects alive, as does a thread parked on a cancelable emit, and the
- * listeners of an emitter the pass freed go with it.
+ * listeners of an emitter the pass freed go with it. `extra` are further script
+ * values kept outside the state, such as the callables the layer table of
+ * `registerPlugin` holds (entry 19.8).
  */
-export function collectStateGarbage(state: GameState): void {
-  collectGarbage(state.vm, eventRoots(state.events, state.vm));
-  if (pruneDeadEmitters(state.events, state.vm) > 0) collectGarbage(state.vm, eventRoots(state.events, state.vm));
+export function collectStateGarbage(state: GameState, extra: readonly unknown[] = []): void {
+  const roots = (): unknown[] => [...eventRoots(state.events, state.vm), ...extra];
+  collectGarbage(state.vm, roots());
+  if (pruneDeadEmitters(state.events, state.vm) > 0) collectGarbage(state.vm, roots());
 }

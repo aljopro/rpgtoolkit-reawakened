@@ -17,6 +17,7 @@ import type { CallableValue } from "../ports/value.ts";
 import type { ProgramCache } from "./cache.ts";
 import { eachRootValue, isCallableRecord } from "./cells.ts";
 import { RESTORE_CALLABLE_CAPTURES, RESTORE_CALLABLE_RECEIVER, RESTORE_CALLABLE_UNKNOWN_DEF, ScriptError } from "./errors.ts";
+import { isLayerDef } from "./layers.ts";
 import { COMPILER_VERSION, programKey, type Program, type ProgramRef } from "./program.ts";
 import type { CommandLookup } from "./registry.ts";
 import type { VmState } from "./state.ts";
@@ -103,6 +104,17 @@ export function verifyRestoredHandles(vm: VmState, services: RestoreCheckService
   }
 
   for (const { path, value } of callables) {
+    // A layer wrapper or a `remove` handle names the layer table of the running game, which package
+    // start-up rebuilds and a save never holds (entry 19.8): the table answers when the handle is called.
+    if (isLayerDef(value.def)) {
+      if (value.captures.length !== 0) {
+        throw new ScriptError(
+          RESTORE_CALLABLE_CAPTURES,
+          `the snapshot's ${path} names ${value.captures.length} cell(s), but "${value.def}" is a plugin layer handle and captures nothing`,
+        );
+      }
+      continue;
+    }
     // Every compiled program that defines the name, not only the first: two inline
     // programs can share a lambda's `def`, and a handle is valid when its own
     // program's definition agrees with it.

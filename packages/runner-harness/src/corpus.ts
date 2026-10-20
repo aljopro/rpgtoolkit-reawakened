@@ -344,6 +344,50 @@ log = log + "|" + second.canceled + second.detail.dmg
 end()
 `;
 
+// 13. Package command layers through registerPlugin (entry 19.8; MOD-4, PKG-5):
+// two packages register wrappers for mwin and sleep; layers run in reverse registration order;
+// a layer waits; removing a package leaves the remaining layers working; save/restore
+// rebuilds the layer table via packageStartups before resuming parked threads.
+const SYNTHETIC_13_BOOT_CHIME = `registerPlugin({
+  name: "chime",
+  commands: {
+    mwin: (line, next) => {
+      trace = trace + "c>"
+      r = next("c:" + line)
+      trace = trace + "<c"
+      return r
+    }
+  }
+})
+`;
+
+const SYNTHETIC_13_BOOT_SHOUT = `shout = registerPlugin({
+  name: "shout",
+  commands: {
+    mwin: (line, next) => {
+      trace = trace + "s>"
+      r = next(ucase(line))
+      trace = trace + "<s"
+      return r
+    },
+    sleep: (ticks, next) => {
+      trace = trace + "p>"
+      next(ticks * 2)
+      trace = trace + "<p"
+      return 0
+    }
+  }
+})
+`;
+
+const SYNTHETIC_13_GAME = `trace = ""
+mwin("hi")
+sleep(1)
+shout.remove()
+mwin("again")
+end()
+`;
+
 // -------------------------------------------------------------------
 // Synthetic TK2 Program (dialect, # prefixes, sigils, loose dialogue, methods)
 // -------------------------------------------------------------------
@@ -895,6 +939,32 @@ export function buildCorpus(): readonly CorpusProgram[] {
       ticks: 20,
       createHost: (seed) => createScriptHost({ program: SYNTHETIC_12_SOURCE, seed }),
       restoreHost: (json) => restoreScriptHost(json, {}),
+    },
+    {
+      id: "synthetic-13-package-layers",
+      name: "Synthetic 13 (Package Command Layers)",
+      description:
+        "Package command layers registered by registerPlugin in packageStartups, onion dispatch through next, a layer that waits, mid-game package removal, and save/restore",
+      ticks: 3,
+      createHost: (seed) => {
+        const loader = createMemoryLoader({
+          "chime.prg": SYNTHETIC_13_BOOT_CHIME,
+          "shout.prg": SYNTHETIC_13_BOOT_SHOUT,
+          "game.prg": SYNTHETIC_13_GAME,
+        });
+        const ref = fileProgramRef(loader, "game.prg");
+        const startups = [fileProgramRef(loader, "chime.prg"), fileProgramRef(loader, "shout.prg")];
+        return createScriptHost({ program: ref, loader, packageStartups: startups, seed });
+      },
+      restoreHost: (json) => {
+        const loader = createMemoryLoader({
+          "chime.prg": SYNTHETIC_13_BOOT_CHIME,
+          "shout.prg": SYNTHETIC_13_BOOT_SHOUT,
+          "game.prg": SYNTHETIC_13_GAME,
+        });
+        const startups = [fileProgramRef(loader, "chime.prg"), fileProgramRef(loader, "shout.prg")];
+        return restoreScriptHost(json, { loader, packageStartups: startups });
+      },
     },
     {
       id: "synthetic-tk2",

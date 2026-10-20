@@ -33,6 +33,8 @@ import {
   restoreGameState,
   snapshot,
   COMPILER_VERSION,
+  createPluginLayers,
+  runPackageStartup,
   startProgram,
   STEP_BUDGET,
   verifyRestoredHandles,
@@ -156,6 +158,8 @@ export type ScriptHostInit = {
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
   readonly sinks?: readonly LogSink[];
+  /** Optional package start-up programs run in order before the main program starts (PKG-5; entry 19.8). */
+  readonly packageStartups?: readonly ProgramRef[];
 };
 
 /** How to rebuild a host from a snapshot: the registry is code, not state. */
@@ -169,6 +173,10 @@ export type ScriptHostRestore = {
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
   readonly sinks?: readonly LogSink[];
+  /** The same package start-up programs run on a scratch fresh state to rebuild the layer table (PKG-5). */
+  readonly packageStartups?: readonly ProgramRef[];
+  /** Seed for the scratch state during start-up rebuild (defaults to 0). */
+  readonly startupSeed?: number;
 };
 
 /** The tracer's test host: the engine API plus state access for tests. */
@@ -320,6 +328,7 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
       : init.program.kind === "file"
         ? init.program.path
         : fnv1a64(init.program.text));
+  const layers = createPluginLayers();
   const services = createScriptServices(
     gameState,
     resolution.plugins,
@@ -327,7 +336,13 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
     undefined,
     init.loader,
     gameId,
+    undefined,
+    undefined,
+    layers,
   );
+  if (init.packageStartups !== undefined && init.packageStartups.length > 0) {
+    runPackageStartup(gameState, services, init.packageStartups);
+  }
   startProgram(gameState.vm, programRef);
   return createHost(gameState, services, resolution.diagnostics, init.blobs);
 }
@@ -342,6 +357,22 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     init.manifest ??
     (isTk2 ? [...ENGINE_DEFAULT_MANIFEST, { id: "tk2" }] : undefined);
   const resolution = resolveHostPlugins(manifest, init.patch, init.plugins);
+  const layers = createPluginLayers();
+  if (init.packageStartups !== undefined && init.packageStartups.length > 0) {
+    const scratch = createGameState({ seed: init.startupSeed ?? 0 });
+    const scratchServices = createScriptServices(
+      scratch,
+      resolution.plugins,
+      createLogger(init.sinks ?? []),
+      undefined,
+      init.loader,
+      init.gameId ?? "default",
+      undefined,
+      undefined,
+      layers,
+    );
+    runPackageStartup(scratch, scratchServices, init.packageStartups);
+  }
   const services = createScriptServices(
     gameState,
     resolution.plugins,
@@ -349,6 +380,9 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     undefined,
     init.loader,
     init.gameId ?? "default",
+    undefined,
+    undefined,
+    layers,
   );
   // The compiled programs are not in the snapshot: check that every callable in it
   // still resolves against the ones this host rebuilds (FUN-8; entry 18.6).
