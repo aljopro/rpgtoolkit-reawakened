@@ -13,11 +13,13 @@ import {
   advanceScriptTick,
   fileProgramRef,
   PACKAGE_ROOT,
+  readStepCounters,
   restoreGameState,
   SCHEMA_VERSIONS,
   snapshot,
   startProgram,
   startThread,
+  withOwner,
   type GameState,
   type ScriptError,
 } from "../src/index.ts";
@@ -110,7 +112,7 @@ test("restore rejects malformed nested VM state", () => {
   equal(errorOf(() => restoreGameState(JSON.stringify(malformed))).code, "restore.shape");
 });
 
-test("a changed file source restarts the saved thread instead of resuming stale offsets", () => {
+test("a changed owner file source restarts with package attribution", () => {
   const source = { bytes: Uint8Array.from([...`value = 2\nend()\n`].map((char) => char.charCodeAt(0))) };
   const loader = {
     index: createAssetIndex(["Prg/main.prg"]),
@@ -118,7 +120,7 @@ test("a changed file source restarts the saved thread instead of resuming stale 
     read: () => source.bytes,
   };
   const state = createGameState({ seed: 9 });
-  const ref = fileProgramRef(loader, "main.prg");
+  const ref = withOwner(fileProgramRef(loader, "main.prg"), "alpha");
   const thread = startThread(state.vm, { ref, kind: "blocking", owner: "script" });
   const services = createScriptServices(state, [], undefined, undefined, loader);
 
@@ -127,6 +129,49 @@ test("a changed file source restarts the saved thread instead of resuming stale 
 
   equal(state.vm.globals.value, 7);
   equal(thread.status, "finished");
+  const counters = readStepCounters(state.vm);
+  equal(Object.keys(counters).join(","), "alpha");
+  equal(counters.alpha! > 0, true);
+});
+test("a changed unowned file source remains unowned", () => {
+  const source = { bytes: Uint8Array.from([...`value = 2\nend()\n`].map((char) => char.charCodeAt(0))) };
+  const loader = {
+    index: createAssetIndex(["Prg/main.prg"]),
+    root: PACKAGE_ROOT,
+    read: () => source.bytes,
+  };
+  const state = createGameState({ seed: 9 });
+  const thread = startThread(state.vm, { ref: fileProgramRef(loader, "main.prg"), kind: "blocking", owner: "script" });
+  const services = createScriptServices(state, [], undefined, undefined, loader);
+
+  source.bytes = Uint8Array.from([...`value = 7\nend()\n`].map((char) => char.charCodeAt(0)));
+  advanceScriptTick(state, services);
+
+  equal(state.vm.globals.value, 7);
+  equal(thread.status, "finished");
+  equal(Object.keys(readStepCounters(state.vm)).length, 0);
+});
+
+test("a compiler-mismatched owner file thread restarts with package attribution", () => {
+  const bytes = Uint8Array.from([...`value = 42\nend()\n`].map((char) => char.charCodeAt(0)));
+  const loader = {
+    index: createAssetIndex(["Prg/main.prg"]),
+    root: PACKAGE_ROOT,
+    read: () => bytes,
+  };
+  const state = createGameState({ seed: 9 });
+  const ref = withOwner(fileProgramRef(loader, "main.prg"), "alpha");
+  const thread = startThread(state.vm, { ref, kind: "blocking", owner: "script" });
+  thread.frames[0]!.program = { ...thread.frames[0]!.program, compiler: "1" };
+  const services = createScriptServices(state, [], undefined, undefined, loader);
+
+  advanceScriptTick(state, services);
+
+  equal(state.vm.globals.value, 42);
+  equal(thread.status, "finished");
+  const counters = readStepCounters(state.vm);
+  equal(Object.keys(counters).join(","), "alpha");
+  equal(counters.alpha! > 0, true);
 });
 
 test("snapshot rejects script-created nesting at the deterministic bound", () => {

@@ -2089,6 +2089,7 @@ function restartThreadFromSource(thread: Thread, vm: VmState, services: ScriptSe
       ...fresh,
       ...(stale.includes === undefined ? {} : { includes: [...stale.includes] }),
       ...(stale.dialect === undefined ? {} : { dialect: stale.dialect }),
+      ...(stale.owner === undefined ? {} : { owner: stale.owner }),
     };
   } else {
     ref = {
