@@ -102,9 +102,9 @@ export function registerEmitter(
 }
 
 /**
- * Unregister the built-in emitter `key` (EMIT-20): drop its listeners and stop keeping its
- * object alive, which is then ordinary garbage. Events already queued for the key are
- * still taken and have no listener (EMIT-14). A key that is not registered does nothing.
+ * Unregister the built-in emitter `key` (EMIT-20): drop its listeners, stale
+ * queued events and in-progress cursor, and stop keeping its object alive.
+ * A key that is not registered does nothing.
  */
 export function unregisterEmitter(events: EventsSection, key: string): void {
   const emitters = events.emitters;
@@ -112,6 +112,8 @@ export function unregisterEmitter(events: EventsSection, key: string): void {
   delete emitters[key];
   if (Object.keys(emitters).length === 0) delete events.emitters;
   events.listeners = events.listeners.filter((listener) => listener.emitter !== key);
+  events.queue = events.queue.filter((event) => event.emitter !== key);
+  if (events.dispatch?.emitter === key) events.dispatch = null;
 }
 
 /** The live object `value` names, or the catchable `object.invalid` (EMIT-14). */
@@ -277,9 +279,48 @@ function nativeEmitter(vm: VmState, events: EventsSection, key: string): { reado
 }
 
 /**
- * Apply the `emit` effect a TypeScript plugin's command reported (EMIT-21): `args` is
- * `[emitter key, type, detail?]`. The event enters the one queue exactly as a script's
- * plain `emit` does (EMIT-14); no listener runs.
+ * Queue a native event on the shared bus (EMIT-7, EMIT-11, EMIT-21).
+ *
+ * Engine and core owners use this entry point rather than calling listeners
+ * directly. Unlike a plugin `emit` effect, standard-event details may contain
+ * nested plain records (for example `leveledUp.applied`); those records are
+ * hydrated as ordinary dictionary values in the event object.
+ */
+export function queueNativeEvent(
+  vm: VmState,
+  events: EventsSection,
+  key: string,
+  type: string,
+  detail: Readonly<Record<string, PlainData>> = {},
+  cancelable = false,
+): number {
+  if (typeof key !== "string") throw badArg("emit", "the emitter key must be a string");
+  if (typeof type !== "string") throw badArg("emit", "the event type must be a string");
+  const fields: Array<readonly [string, Value]> = [];
+  for (const name of Object.keys(detail)) fields.push([name, nativeField(vm, detail[name] ?? null)]);
+  const emitter = nativeEmitter(vm, events, key);
+  return queueEvent(vm, events, emitter.record, emitter.key, type, fields, cancelable);
+}
+
+function nativeField(vm: VmState, value: PlainData | undefined): Value {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === "number" || typeof value === "string") return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (Array.isArray(value)) {
+    const record = createObject(vm, null);
+    for (let index = 0; index < value.length; index += 1) writeMember(record, String(index), nativeField(vm, value[index] ?? null));
+    return objectValueOf(record);
+  }
+  const record = createObject(vm, null);
+  for (const name of Object.keys(value)) writeMember(record, name, nativeField(vm, value[name] ?? null));
+  return objectValueOf(record);
+}
+
+/**
+ * Apply the `emit` effect a TypeScript plugin's command reported (EMIT-21):
+ * `args` is `[emitter key, type, detail?]`. Plugin effects retain the
+ * documented scalar-only validation; standard-event producers use
+ * `queueNativeEvent` above when they need nested plain detail.
  */
 export function applyEmitEffect(vm: VmState, events: EventsSection, args: readonly PlainData[]): void {
   const key = args[0];

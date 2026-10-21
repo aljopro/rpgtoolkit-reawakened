@@ -335,6 +335,37 @@ test("actor script object is the owner-backed emitter registration", () => {
   equal(host.read?.(context, "hp"), 9);
 });
 
+test("actor owner transitions are queued on the actor emitter and reach script listeners", () => {
+  const state = createGameState({ seed: 41 });
+  const actor = addActor(state.actors, { ...partyFixture, stats: { ...partyFixture.stats, hp: 4 }, statuses: { poison: 2 } });
+  const object = registerActorObject(state.vm, state.events, state.actors, actor.id);
+  ok(object !== null);
+  state.vm.globals.actor = { kind: "object", handle: object!.handle, className: object!.className };
+  const services = createScriptServices(state);
+  startProgram(state.vm, {
+    kind: "inline",
+    compiler: "2",
+    text: `
+fallenCause = ""
+gameCause = ""
+statusName = ""
+actor.on("fallen", (event) => { fallenCause = event.detail.cause })
+game.on("fallen", (event) => { gameCause = event.detail.cause + ":" + event.detail.actorId })
+actor.on("statusChanged", (event) => { statusName = event.detail.status + ":" + event.detail.previousrounds + ":" + event.detail.rounds + ":" + event.detail.expired })
+actor.hp = 0
+`,
+  });
+  advanceScriptTick(state, services);
+  equal(state.vm.globals.fallencause, "script");
+  equal(state.vm.globals.gamecause, "script:1");
+  patchActor(state.actors, actor.id, { statuses: { poison: 2 } });
+  equal(state.actors.actors[0]?.statuses.poison, 2);
+  const statusResult = services.actors.advanceStatus(actor.id, 1);
+  equal(statusResult?.transitions[0]?.type, "statusChanged");
+  advanceScriptTick(state, services);
+  equal(state.vm.globals.statusname, "poison:2:1:0");
+});
+
 test("actor host fields hydrate through dot and indexed VM access", () => {
   const state = createGameState({ seed: 10 });
   const actor = addActor(state.actors, partyFixture);

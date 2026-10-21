@@ -21,8 +21,9 @@ import { findObject, readMember } from "../script/objects.ts";
 import { findBlockingThread, findThread, killThread, localRef, refreshBlock, startThread, type Thread } from "../script/state.ts";
 import { collectGarbage, STEP_BUDGET, stepThread, type ScriptServices } from "../script/vm.ts";
 import type { CallableValue } from "../ports/value.ts";
+import type { PlainData } from "../ports/plain-data.ts";
 import type { GameState } from "../save/state.ts";
-import { eventRoots, pruneDeadEmitters } from "./emitter.ts";
+import { eventRoots, pruneDeadEmitters, queueNativeEvent } from "./emitter.ts";
 import type { DispatchCursor, QueuedEvent } from "./model.ts";
 
 /** The one statement of a listener's thread, and the two locals it reads. */
@@ -96,6 +97,45 @@ export function runEventsPhase(state: GameState, services: ScriptServices, budge
     remaining -= stepThread(thread, vm, services, remaining);
     refreshBlock(vm, services.view.clock.tick());
   }
+}
+
+/**
+ * Dispatch one engine-originated cancelable event without parking the engine
+ * phase (EMIT-11). The listeners still run as ordinary VM listener threads,
+ * through the same callable machinery and registration order as queued events.
+ * A listener that waits, or exhausts the bounded phase budget, is terminated
+ * with a located diagnostic and the operation is rejected.
+ */
+export function runEngineCancelableEvent(
+  state: GameState,
+  services: ScriptServices,
+  emitter: string,
+  type: string,
+  detail: Readonly<Record<string, PlainData>>,
+  budget: number = STEP_BUDGET,
+): boolean {
+  if (state.events.dispatch !== null) {
+    services.diagnostics.push({ code: "event.dispatch-active", file: "<engine>", line: 0, message: "an engine cancelable event cannot start while another event is dispatching" });
+    return false;
+  }
+  const event = queueNativeEvent(state.vm, state.events, emitter, type, detail, true);
+  runEventsPhase(state, services, budget);
+  const active = state.events.dispatch as DispatchCursor | null;
+  if (active !== null) {
+    const thread = active.thread === null ? undefined : findThread(state.vm, active.thread);
+    const waiting = thread?.status === "waiting";
+    services.diagnostics.push({
+      code: waiting ? "event.wait-forbidden" : "event.budget-exceeded",
+      file: "<engine>",
+      line: 0,
+      message: waiting ? `engine event listener for "${type}" attempted to wait` : `engine event "${type}" exceeded its step budget`,
+    });
+    if (thread !== undefined) killThread(state.vm, thread.id);
+    state.events.dispatch = null;
+    return false;
+  }
+  const eventRecord = findObject(state.vm, event);
+  return eventRecord !== undefined && readMember(eventRecord, "canceled") !== 1;
 }
 
 /**

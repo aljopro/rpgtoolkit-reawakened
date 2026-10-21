@@ -10,6 +10,7 @@ import {
   type EquipmentItemDefinition,
   type StatsChangeOptions,
 } from "./rules.ts";
+import type { ActorEventSink } from "./object.ts";
 import type { HostObjectType } from "../script/host.ts";
 import type { Value } from "../ports/value.ts";
 /**
@@ -37,30 +38,44 @@ export type ActorService = StatsPort & ActorOperationService & {
   hooks(actor: ActorId | number): ActorHooks;
 };
 /** Create the owner service over the one authoritative actor section. */
-export function createActorService(section: ActorsSection, resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks = () => ({})): ActorService {
+export function createActorService(
+  section: ActorsSection,
+  resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks = () => ({}),
+  events?: ActorEventSink,
+): ActorService {
   const hooksFor = (actor: ActorId | number): ActorHooks => {
     const record = getActor(section, actorId(actor));
     return record === null ? {} : resolveHooks(record);
   };
-  const stats = createStatsPort(section, (record) => resolveHooks(record));
+  const stats = createStatsPort(section, (record) => resolveHooks(record), events);
   return {
     read(actor) {
       return stats.read(actor);
     },
     write(actor, patch) {
-      return updateActorStats(section, actor, patch, { cause: "script", hooks: hooksFor(actor) }) !== null;
+      const result = updateActorStats(section, actor, patch, { cause: "script", hooks: hooksFor(actor) });
+      if (result !== null) events?.(result);
+      return result !== null;
     },
     updateStats(actor, patch, options) {
-      return updateActorStats(section, actor, patch, { ...options, hooks: hooksFor(actor) });
+      const result = updateActorStats(section, actor, patch, { ...options, hooks: hooksFor(actor) });
+      if (result !== null) events?.(result);
+      return result;
     },
     advanceStatus(actor, amount, options = {}) {
-      return advanceStatus(section, actor, amount, { ...options, hooks: hooksFor(actor) });
+      const result = advanceStatus(section, actor, amount, { ...options, hooks: hooksFor(actor) });
+      if (result !== null) events?.(result);
+      return result;
     },
     applyEquipment(actor, equipped, items) {
-      return applyEquipment(section, actor, equipped, items, hooksFor(actor));
+      const result = applyEquipment(section, actor, equipped, items, hooksFor(actor));
+      if (result !== null) events?.(result);
+      return result;
     },
     awardExperience(actor, amount) {
-      return awardExperience(section, actor, amount, hooksFor(actor));
+      const result = awardExperience(section, actor, amount, hooksFor(actor));
+      if (result !== null) events?.(result);
+      return result;
     },
     readActor(actor) {
       return getActor(section, actorId(actor));
@@ -82,7 +97,8 @@ export function createActorService(section: ActorsSection, resolveHooks: (actor:
 
 export function createStatsPort(
   section: ActorsSection,
-  resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks,
+  resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks = () => ({}),
+  events?: ActorEventSink,
 ): StatsPort {
   return {
     read(actor) {
@@ -90,7 +106,9 @@ export function createStatsPort(
     },
     write(actor, patch) {
       const record = getActor(section, actorId(actor));
-      return updateActorStats(section, actor, patch, { cause: "script", hooks: record === null ? {} : resolveHooks(record) }) !== null;
+      const result = updateActorStats(section, actor, patch, { cause: "script", hooks: record === null ? {} : resolveHooks(record) });
+      if (result !== null) events?.(result);
+      return result !== null;
     },
   };
 }

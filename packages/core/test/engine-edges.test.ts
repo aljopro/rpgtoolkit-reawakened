@@ -1,10 +1,12 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import { createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board } from "../src/index.ts";
+import { queueNativeEvent, registerEmitter, unregisterEmitter } from "../src/events/index.ts";
+import { createHostObject } from "../src/script/objects.ts";
+import { createGameState } from "../src/index.ts";
 import { hydrateSprites } from "../src/sprites/runtime.ts";
 import type { Facing } from "../src/sprites/model.ts";
 import type { GameState } from "../src/save/state.ts";
-
 type EdgeCase = "no-link-edge-is-solid" | "board-link-arrives-opposite-edge" | "arrival-clamps-along-edge" | "blocked-arrival-is-refused" | "program-link-runs-program" | "west-edge-arrives-east-edge";
 
 type EdgeFacts = { readonly board: string | null; readonly x: number | null; readonly y: number | null; readonly pending: Facing | null };
@@ -97,4 +99,16 @@ test("edge transitions have equal facts when advanced one tick or in batches", (
   const batched = runEdgeCase("board-link-arrives-opposite-edge", 2);
   deepEqual(one.facts.at(-1), batched.facts.at(-1));
   equal(one.diagnostics.length, 0);
+});
+
+
+test("unloading a board emitter drops stale queued work", () => {
+  const state = createGameState({ seed: 68 });
+  const object = registerEmitter(state.vm, state.events, "board:old", createHostObject(state.vm, "board"));
+  queueNativeEvent(state.vm, state.events, "board:old", "left", { actorId: 1, boardKey: "old.brd" });
+  equal(state.events.queue.length, 1);
+  unregisterEmitter(state.events, "board:old");
+  equal(state.events.queue.length, 0);
+  equal(state.events.emitters?.["board:old"], undefined);
+  equal(state.vm.objects.some((record) => record.handle === object.handle), true);
 });

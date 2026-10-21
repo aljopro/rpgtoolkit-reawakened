@@ -1,4 +1,5 @@
 import { hashDrawList } from "../canon/index.ts";
+import { actorEmitterKey } from "../actors/model.ts";
 import { resolveAsset, assetKey, resolveTileReference } from "../formats/resolver/resolver.ts";
 import { classifyImageReference } from "../formats/animation/image-reference.ts";
 import { decodeTexture, type DecodedTexture } from "../formats/image/index.ts";
@@ -32,7 +33,7 @@ import { applyFxDrawList, advanceFx, applyFxEffect } from "../render/fx.ts";
 import { advanceAnimations, loadAnimation } from "../render/animation.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
 import { coordLayout, tileToPixel } from "../world/coords.ts";
-import type { WorldBoard } from "../world/model.ts";
+import { boardEmitterKey, type WorldBoard } from "../world/model.ts";
 import type { FxSection } from "../save/sections.ts";
 import { applyInputEvent, createInputSection, inputView, processGamepadEvents, pruneClaimed } from "../input/index.ts";
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
@@ -49,7 +50,8 @@ import { runRandomEncounterPhase } from "../sprites/encounters.ts";
 import { EffectBus, type EffectApplier, type PostEffect } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
 import type { EnginePhase, EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
-import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
+import { collectStateGarbage, runEngineCancelableEvent, runEventsPhase } from "../events/dispatch.ts";
+import { queueNativeEvent, registerEmitter, unregisterEmitter } from "../events/emitter.ts";
 import {
   COMPILER_VERSION,
   createScriptServices,
@@ -833,9 +835,27 @@ export function createEngine(init: EngineInit): Engine {
     }
   }
 
+  /** Emit the board lifecycle notification on the shared queued bus. */
+  function boardLifecycle(type: "entered" | "left", board: WorldBoard, player: SpriteActor | undefined): void {
+    const actor = state.actors.actors.find((candidate) => candidate.kind === "party") ?? state.actors.actors[0];
+    const detail = {
+      actorId: player?.id ?? null,
+      boardKey: board.key,
+    };
+    queueNativeEvent(state.vm, state.events, boardEmitterKey(board.key), type, detail);
+    if (actor !== undefined) queueNativeEvent(state.vm, state.events, actorEmitterKey(actor.id), type, detail);
+  }
+
   /** Board entry (E-19, E-47; docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry). */
   function arrive(board: WorldBoard, arrival: Arrival, fromSend: boolean): void {
+    const previous = state.world.board;
+    const player = state.sprites.players.find((candidate) => candidate.id === state.sprites.selectedPlayer) ?? state.sprites.players[0];
     if (fromSend) stopOldBoardThreads();
+    if (previous !== undefined && previous !== null && previous.key !== board.key) {
+      boardLifecycle("left", previous, player);
+      unregisterEmitter(state.events, boardEmitterKey(previous.key));
+    }
+    registerEmitter(state.vm, state.events, boardEmitterKey(board.key));
     clearPathfindingCache();
     state.world = { board };
     resetTriggersSection(state.triggers);
@@ -846,6 +866,7 @@ export function createEngine(init: EngineInit): Engine {
     state.camera = realignCamera(state.camera, board, cameraAim(board, arrival));
     bus.postEffect("triggers", engineEffect("triggers", "deactivateat", placement));
     postBoardMusic(board);
+    boardLifecycle("entered", board, player);
     // An empty list is stored as one empty string and empty entries are ignored (docs/spec/formats/board.md#threads-constants-and-settings).
     for (const name of board.threads ?? []) if (name !== "") startFileProgram(name, board.key, "board");
     if (board.enterPrg !== undefined && board.enterPrg !== "") startFileProgram(board.enterPrg, board.key, blockingAlive() ? "board" : "blocking");
@@ -876,10 +897,29 @@ export function createEngine(init: EngineInit): Engine {
     }
     const loaded = loadBoard(target.value);
     if (loaded === "pending") return;
-    clearPendingExit(player.id);
-    if (loaded === null) return;
+    if (loaded === null) {
+      clearPendingExit(player.id);
+      return;
+    }
     const arrival = edgeArrival(player, direction, loaded);
-    if (arrival === null) return;
+    if (arrival === null) {
+      clearPendingExit(player.id);
+      return;
+    }
+    registerEmitter(state.vm, state.events, boardEmitterKey(loaded.key));
+    const allowed = runEngineCancelableEvent(
+      state,
+      services,
+      boardEmitterKey(loaded.key),
+      "beforeEnter",
+      { actorId: player.id, boardKey: loaded.key, entry: { x: arrival.x, y: arrival.y, layer: arrival.layer, unit: arrival.unit } },
+      STEP_BUDGET,
+    );
+    if (!allowed) {
+      unregisterEmitter(state.events, boardEmitterKey(loaded.key));
+      return;
+    }
+    clearPendingExit(player.id);
     arrive(loaded, arrival, true);
   }
 
@@ -992,9 +1032,11 @@ export function createEngine(init: EngineInit): Engine {
     if (sceneBoardKey === null || state.world.board !== undefined && state.world.board !== null) return false;
     const loaded = loadBoard(sceneBoardKey);
     if (loaded === "pending" || loaded === null) return false;
+    registerEmitter(state.vm, state.events, boardEmitterKey(loaded.key));
     clearPathfindingCache();
     state.world = { board: loaded };
     state.camera = initCameraForBoard(state.camera, loaded, init.cameraTarget);
+    boardLifecycle("entered", loaded, state.sprites.players[0]);
     return true;
   }
   /**

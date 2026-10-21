@@ -19,6 +19,7 @@ import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
 import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
 import { createActorHostType, createActorService, type ActorService } from "../actors/port.ts";
+import { createActorEventSink } from "../actors/object.ts";
 import { createBehaviourRegistry, resolveBehaviour, type BehaviourRegistry } from "../actors/behaviour.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
@@ -205,6 +206,7 @@ export function createScriptServices(
   const actors = createActorService(
     state.actors,
     (actor) => resolveBehaviour(behaviours, actor, diagnostics),
+    createActorEventSink(state.vm, state.events, state.actors),
   );
   const virt = virtuals ?? createDefaultVirtuals(state, actors);
   const registry = assembleCommands(plugins, logger);
