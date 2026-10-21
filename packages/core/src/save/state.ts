@@ -59,7 +59,7 @@ export const SCHEMA_VERSIONS = {
   schema: 1,
   world: 1,
   sprites: 2,
-  actors: 1,
+  actors: 2,
   party: 1,
   inventory: 1,
   triggers: 2,

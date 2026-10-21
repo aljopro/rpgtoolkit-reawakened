@@ -346,17 +346,18 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
   // moved: hashing each final state without them gives every previous value (bcccb726d88cf025, c7276b9169328503,
   // 9128c9fb95d1f969, a7e3084cbafc59c0, 2e8a007d7bae1d31, 6717598c0b7e163a, 69af004598505635 and eaef689c32b9ae98).
   // Re-pinned by ticket 20.3: the empty `actors` section is now part of the hashed state tree.
+  // Re-pinned by ticket 20.6: the actor section schema and persisted progression contract advanced to version 2.
   const expectedHashes: Record<string, string> = {
-    "sample-start-demo": "cb7c80f68c24843a",
-    "sample-system-demo": "6dabd6841be3e90a",
-    "sample-sys-test-demo": "6dabd6841be3e90a",
-    "sample-win-demo": "cf795dc46174bb80",
-    "sample-oldman-demo": "ad574b96ad4e57a3",
-    "sample-man-demo": "d833d3885dea6f78",
-    "sample-man-wander-demo": "151d56a8a392c7fd",
-    "sample-start-basic": "959d5bd2fe3d269e",
-    "sample-system-basic": "6dabd6841be3e90a",
-    "sample-wander-basic": "a7bdc349df217dcd",
+    "sample-start-demo": "61b3ec146b27dc7a",
+    "sample-system-demo": "cf3ae942df9cf5ca",
+    "sample-sys-test-demo": "cf3ae942df9cf5ca",
+    "sample-win-demo": "fc40bf295888db40",
+    "sample-oldman-demo": "9d9679670cc52fe3",
+    "sample-man-demo": "f73cab36512054b8",
+    "sample-man-wander-demo": "fd10229dc706673d",
+    "sample-start-basic": "f369667bac5feb5e",
+    "sample-system-basic": "cf3ae942df9cf5ca",
+    "sample-wander-basic": "beb7a9eaf8b62295",
   };
 
   for (const res of results) {
@@ -379,7 +380,7 @@ test("corpus: defined finish line for programs that never end (Basic/Prg/wander.
   const hash2 = host2.stateHash();
 
   equal(hash1, hash2);
-  equal(hash1, "a7bdc349df217dcd");
+  equal(hash1, "beb7a9eaf8b62295");
 
   for (let split = 0; split <= 5; split++) {
     const fresh = wander.createHost(0);

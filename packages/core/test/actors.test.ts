@@ -20,6 +20,7 @@ import {
   KILL_SYSTEM_OWNED,
   hashGameState,
   hydrateCharacterResult,
+  actorInputFromCharacter,
   hydrateEnemyResult,
   readCharacter,
   readEnemy,
@@ -77,6 +78,9 @@ test("actor hydration maps character and enemy reader fields deterministically",
     levelFp: character.value.levelIncreases[2],
     levelSm: character.value.levelIncreases[3],
     levelUpType: character.value.levelUpType,
+    remainingExperience: Math.max(0, character.value.firstLevelExp - character.value.stats.experience),
+    nextRequirement: character.value.firstLevelExp,
+    legacyLevelUp: character.value.levelUpProgram.length > 0,
   });
   deepEqual(firstCharacter.value.statuses, {});
   deepEqual(firstEnemy.value.stats, {
@@ -98,6 +102,31 @@ test("actor hydration maps character and enemy reader fields deterministically",
   equal(secondCharacter.ok, true);
   equal(secondEnemy.ok, true);
   deepEqual(second, first);
+});
+
+test("actor hydration derives the current threshold for stored levels above one", () => {
+  const source = readCharacter(new BinaryReader(new Uint8Array(example("Game/Example/Chrs/ada.tem")), "threshold.tem"));
+  equal(source.ok, true);
+  if (!source.ok) return;
+  const base = source.value;
+  const character = {
+    ...base,
+    firstLevelExp: 10,
+    experienceIncrease: 5,
+    levelUpType: 1,
+    stats: { ...base.stats, level: 2, experience: 24 },
+  };
+  const near = actorInputFromCharacter("threshold.tem", "party", character);
+  ok(near.progression);
+  equal(near.progression.nextRequirement, 15);
+  equal(near.progression.remainingExperience, 1);
+  const crossing = actorInputFromCharacter("threshold.tem", "party", {
+    ...character,
+    stats: { ...character.stats, experience: 25 },
+  });
+  ok(crossing.progression);
+  equal(crossing.progression.nextRequirement, 15);
+  equal(crossing.progression.remainingExperience, 0);
 });
 
 test("actor hydration preserves reader warnings from character residue", () => {
@@ -149,6 +178,9 @@ test("actor hydration carries defaults from an authored minor-zero character", (
     levelFp: read.value.levelIncreases[2],
     levelSm: read.value.levelIncreases[3],
     levelUpType: read.value.levelUpType,
+    remainingExperience: Math.max(0, read.value.firstLevelExp - read.value.stats.experience),
+    nextRequirement: read.value.firstLevelExp,
+    legacyLevelUp: read.value.levelUpProgram.length > 0,
   });
   deepEqual(hydrated.value.statuses, {});
   equal(hydrated.value.behaviour, null);

@@ -5,11 +5,10 @@
  * handles, emitter registrations and behaviour implementations are deliberately
  * absent; those are hydrated by later runtime layers.
  */
-import type { EngineResetRegistration } from "../engine/engine.ts";
-import type { GameState } from "../save/state.ts";
+import { isRecord } from "../script/cells.ts";
 
 /** The current actor-section schema (docs/spec/engine/actors.md#actor-data-and-identity). */
-export const ACTORS_SCHEMA_VERSION = 1;
+export const ACTORS_SCHEMA_VERSION = 2;
 
 /** Actors share one record shape; the kind selects the source domain only. */
 export const ACTOR_KINDS = ["party", "enemy", "npc"] as const;
@@ -55,6 +54,12 @@ export type ActorProgression = {
   levelFp: number;
   levelSm: number;
   levelUpType: number;
+  /** XP still required before the next level threshold. */
+  remainingExperience: number;
+  /** Requirement used to derive the next threshold after a level-up. */
+  nextRequirement: number;
+  /** Source supplied a non-empty legacy level-up program; null means source resolution is pending. */
+  legacyLevelUp: boolean | null;
 };
 
 /** One actor record in the owned state section. */
@@ -139,6 +144,9 @@ const ZERO_PROGRESSION: ActorProgression = {
   levelFp: 0,
   levelSm: 0,
   levelUpType: 0,
+  remainingExperience: 0,
+  nextRequirement: 0,
+  legacyLevelUp: false,
 };
 
 /** Convert an untrusted numeric value to an actor id. */
@@ -157,8 +165,8 @@ export function createActorsSection(): ActorsSection {
   return { version: ACTORS_SCHEMA_VERSION, nextId: 1, actors: [] };
 }
 
-function finiteNumber(value: unknown, field: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) throw new RangeError(`${field} must be finite`);
+function safeInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new RangeError(`${field} must be a safe integer`);
   return value;
 }
 
@@ -170,45 +178,89 @@ function stringList(values: readonly unknown[] | undefined, field: string): stri
 
 function stats(values: Partial<ActorStats> | undefined): ActorStats {
   return {
-    experience: finiteNumber(values?.experience ?? ZERO_STATS.experience, "stats.experience"),
-    hp: finiteNumber(values?.hp ?? ZERO_STATS.hp, "stats.hp"),
-    maxHp: finiteNumber(values?.maxHp ?? ZERO_STATS.maxHp, "stats.maxHp"),
-    dp: finiteNumber(values?.dp ?? ZERO_STATS.dp, "stats.dp"),
-    fp: finiteNumber(values?.fp ?? ZERO_STATS.fp, "stats.fp"),
-    smp: finiteNumber(values?.smp ?? ZERO_STATS.smp, "stats.smp"),
-    maxSmp: finiteNumber(values?.maxSmp ?? ZERO_STATS.maxSmp, "stats.maxSmp"),
-    level: finiteNumber(values?.level ?? ZERO_STATS.level, "stats.level"),
-    criticalOn: finiteNumber(values?.criticalOn ?? ZERO_STATS.criticalOn, "stats.criticalOn"),
-    criticalBy: finiteNumber(values?.criticalBy ?? ZERO_STATS.criticalBy, "stats.criticalBy"),
+    experience: safeInteger(values?.experience ?? ZERO_STATS.experience, "stats.experience"),
+    hp: safeInteger(values?.hp ?? ZERO_STATS.hp, "stats.hp"),
+    maxHp: safeInteger(values?.maxHp ?? ZERO_STATS.maxHp, "stats.maxHp"),
+    dp: safeInteger(values?.dp ?? ZERO_STATS.dp, "stats.dp"),
+    fp: safeInteger(values?.fp ?? ZERO_STATS.fp, "stats.fp"),
+    smp: safeInteger(values?.smp ?? ZERO_STATS.smp, "stats.smp"),
+    maxSmp: safeInteger(values?.maxSmp ?? ZERO_STATS.maxSmp, "stats.maxSmp"),
+    level: safeInteger(values?.level ?? ZERO_STATS.level, "stats.level"),
+    criticalOn: safeInteger(values?.criticalOn ?? ZERO_STATS.criticalOn, "stats.criticalOn"),
+    criticalBy: safeInteger(values?.criticalBy ?? ZERO_STATS.criticalBy, "stats.criticalBy"),
   };
 }
 
 function bonuses(values: Partial<ActorEquipmentBonuses> | undefined): ActorEquipmentBonuses {
   return {
-    hp: finiteNumber(values?.hp ?? ZERO_BONUSES.hp, "equipment.bonuses.hp"),
-    dp: finiteNumber(values?.dp ?? ZERO_BONUSES.dp, "equipment.bonuses.dp"),
-    fp: finiteNumber(values?.fp ?? ZERO_BONUSES.fp, "equipment.bonuses.fp"),
-    smp: finiteNumber(values?.smp ?? ZERO_BONUSES.smp, "equipment.bonuses.smp"),
+    hp: safeInteger(values?.hp ?? ZERO_BONUSES.hp, "equipment.bonuses.hp"),
+    dp: safeInteger(values?.dp ?? ZERO_BONUSES.dp, "equipment.bonuses.dp"),
+    fp: safeInteger(values?.fp ?? ZERO_BONUSES.fp, "equipment.bonuses.fp"),
+    smp: safeInteger(values?.smp ?? ZERO_BONUSES.smp, "equipment.bonuses.smp"),
   };
 }
 
 function progression(values: Partial<ActorProgression> | undefined): ActorProgression {
+  const legacyLevelUp = values?.legacyLevelUp === undefined ? ZERO_PROGRESSION.legacyLevelUp : values.legacyLevelUp;
+  if (typeof legacyLevelUp !== "boolean" && legacyLevelUp !== null) throw new TypeError("progression.legacyLevelUp must be boolean or null");
   return {
-    levelType: finiteNumber(values?.levelType ?? ZERO_PROGRESSION.levelType, "progression.levelType"),
-    experienceIncrease: finiteNumber(values?.experienceIncrease ?? ZERO_PROGRESSION.experienceIncrease, "progression.experienceIncrease"),
-    maxLevel: finiteNumber(values?.maxLevel ?? ZERO_PROGRESSION.maxLevel, "progression.maxLevel"),
-    levelHp: finiteNumber(values?.levelHp ?? ZERO_PROGRESSION.levelHp, "progression.levelHp"),
-    levelDp: finiteNumber(values?.levelDp ?? ZERO_PROGRESSION.levelDp, "progression.levelDp"),
-    levelFp: finiteNumber(values?.levelFp ?? ZERO_PROGRESSION.levelFp, "progression.levelFp"),
-    levelSm: finiteNumber(values?.levelSm ?? ZERO_PROGRESSION.levelSm, "progression.levelSm"),
-    levelUpType: finiteNumber(values?.levelUpType ?? ZERO_PROGRESSION.levelUpType, "progression.levelUpType"),
+    levelType: safeInteger(values?.levelType ?? ZERO_PROGRESSION.levelType, "progression.levelType"),
+    experienceIncrease: safeInteger(values?.experienceIncrease ?? ZERO_PROGRESSION.experienceIncrease, "progression.experienceIncrease"),
+    maxLevel: safeInteger(values?.maxLevel ?? ZERO_PROGRESSION.maxLevel, "progression.maxLevel"),
+    levelHp: safeInteger(values?.levelHp ?? ZERO_PROGRESSION.levelHp, "progression.levelHp"),
+    levelDp: safeInteger(values?.levelDp ?? ZERO_PROGRESSION.levelDp, "progression.levelDp"),
+    levelFp: safeInteger(values?.levelFp ?? ZERO_PROGRESSION.levelFp, "progression.levelFp"),
+    levelSm: safeInteger(values?.levelSm ?? ZERO_PROGRESSION.levelSm, "progression.levelSm"),
+    levelUpType: safeInteger(values?.levelUpType ?? ZERO_PROGRESSION.levelUpType, "progression.levelUpType"),
+    remainingExperience: safeInteger(values?.remainingExperience ?? ZERO_PROGRESSION.remainingExperience, "progression.remainingExperience"),
+    nextRequirement: safeInteger(values?.nextRequirement ?? ZERO_PROGRESSION.nextRequirement, "progression.nextRequirement"),
+    legacyLevelUp,
   };
 }
 
 function statusCounters(values: Readonly<Record<string, number>> | undefined): { [status: string]: number } {
   const result: { [status: string]: number } = {};
-  for (const [name, count] of Object.entries(values ?? {})) result[name] = finiteNumber(count, `statuses.${name}`);
+  for (const [name, count] of Object.entries(values ?? {})) {
+    const safeCount = safeInteger(count, `statuses.${name}`);
+    Object.defineProperty(result, name, { value: safeCount, enumerable: true, writable: true, configurable: true });
+  }
   return result;
+}
+
+function validateProgression(statsValue: ActorStats, progressionValue: ActorProgression): void {
+  for (const [name, value] of Object.entries(progressionValue)) {
+    if (name === "legacyLevelUp") continue;
+    safeInteger(value, `progression.${name}`);
+  }
+  if (typeof progressionValue.legacyLevelUp !== "boolean" && progressionValue.legacyLevelUp !== null) throw new TypeError("progression.legacyLevelUp must be boolean or null");
+  if (
+    progressionValue.levelType < 0
+    || progressionValue.experienceIncrease < 0
+    || progressionValue.maxLevel < 0
+    || progressionValue.levelHp < 0
+    || progressionValue.levelDp < 0
+    || progressionValue.levelFp < 0
+    || progressionValue.levelSm < 0
+    || ![0, 1].includes(progressionValue.levelUpType)
+    || progressionValue.remainingExperience < 0
+    || progressionValue.nextRequirement < 0
+  ) throw new RangeError("invalid actor progression policy");
+  if (!Number.isSafeInteger(statsValue.level) || statsValue.level < 0 || !Number.isSafeInteger(statsValue.experience) || statsValue.experience < 0) {
+    throw new RangeError("invalid actor progression stats");
+  }
+  if (progressionValue.maxLevel > 0 && statsValue.level < progressionValue.maxLevel && progressionValue.nextRequirement <= 0) {
+    throw new RangeError("invalid actor progression threshold");
+  }
+}
+
+/** Validate progression policy and persisted state against actor stats. */
+export function validateActorProgression(statsValue: ActorStats, progressionValue: ActorProgression): void {
+  validateProgression(statsValue, progressionValue);
+}
+
+function validateRecord(record: ActorRecord): void {
+  if (record.stats.maxHp < 0 || record.stats.maxSmp < 0) throw new RangeError("actor maximum stats must not be negative");
+  validateProgression(record.stats, record.progression);
 }
 
 /** Build one actor record without retaining any caller-owned arrays or methods. */
@@ -219,7 +271,7 @@ export function createActorRecord(id: ActorId | number, input: ActorCreateInput)
   if (input.source.toLowerCase().endsWith(".prg")) throw new RangeError("actor source must be an asset, not a raw program path");
   if (input.name !== undefined && typeof input.name !== "string") throw new TypeError("actor name must be a string");
   if (input.behaviour !== undefined && input.behaviour !== null && typeof input.behaviour !== "string") throw new TypeError("actor behaviour must be a name");
-  return {
+  const record: ActorRecord = {
     id: stableId,
     kind: input.kind,
     source: input.source,
@@ -234,6 +286,8 @@ export function createActorRecord(id: ActorId | number, input: ActorCreateInput)
     behaviour: input.behaviour ?? null,
     customEvents: stringList(input.customEvents, "customEvents"),
   };
+  validateRecord(record);
+  return record;
 }
 
 /** Add an actor with a deterministic monotonically allocated id. */
@@ -278,6 +332,7 @@ export function patchActor(section: ActorsSection, id: ActorId | number, patch: 
   const index = section.actors.findIndex((actor) => actor.id === stableId);
   if (index < 0) return null;
   const updated = patchedActor(section.actors[index]!, patch);
+  validateRecord(updated);
   section.actors[index] = updated;
   return updated;
 }
@@ -305,43 +360,46 @@ export function resetActorsSection(section: ActorsSection): void {
   section.nextId = 1;
   section.actors = [];
 }
-
-/** Engine reset seam for the actor owner. */
-export function actorResetRegistration(rank = 0): EngineResetRegistration {
-  return { section: "actors", rank, reset: (state: GameState) => resetActorsSection(state.actors) };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+function isSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value);
 }
 
 function isStats(value: unknown): value is ActorStats {
   if (!isRecord(value)) return false;
-  return ["experience", "hp", "maxHp", "dp", "fp", "smp", "maxSmp", "level", "criticalOn", "criticalBy"].every((key) => isFiniteNumber(value[key]));
+  return ["experience", "hp", "maxHp", "dp", "fp", "smp", "maxSmp", "level", "criticalOn", "criticalBy"].every((key) => isSafeInteger(value[key]))
+    && (value.maxHp as number) >= 0
+    && (value.maxSmp as number) >= 0;
 }
 
 function isBonuses(value: unknown): value is ActorEquipmentBonuses {
   if (!isRecord(value)) return false;
-  return ["hp", "dp", "fp", "smp"].every((key) => isFiniteNumber(value[key]));
+  return ["hp", "dp", "fp", "smp"].every((key) => isSafeInteger(value[key]));
 }
 
 function isNumberRecord(value: unknown): value is Record<string, number> {
-  return isRecord(value) && Object.values(value).every((entry) => isFiniteNumber(entry));
+  return isRecord(value) && Object.values(value).every((entry) => isSafeInteger(entry) && entry >= 0);
+}
+
+function isProgression(value: unknown, statsValue: ActorStats): value is ActorProgression {
+  if (!isRecord(value) || (value.legacyLevelUp !== null && typeof value.legacyLevelUp !== "boolean")) return false;
+  const keys = ["levelType", "experienceIncrease", "maxLevel", "levelHp", "levelDp", "levelFp", "levelUpType", "remainingExperience", "nextRequirement"] as const;
+  if (!keys.every((key) => isSafeInteger(value[key]))) return false;
+  try {
+    validateProgression(statsValue, value as unknown as ActorProgression);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Runtime shape guard used by snapshot restore. */
 export function isActorRecord(value: unknown): value is ActorRecord {
   if (!isRecord(value) || !Number.isSafeInteger(value.id) || (value.id as number) < 1) return false;
-  if (!ACTOR_KINDS.includes(value.kind as ActorKind) || typeof value.source !== "string" || typeof value.name !== "string") return false;
+  if (!ACTOR_KINDS.includes(value.kind as ActorKind) || typeof value.source !== "string" || value.source.length === 0 || typeof value.name !== "string") return false;
   if (!isStats(value.stats) || !isNumberRecord(value.statuses)) return false;
   const equipmentValue = value.equipment;
   if (!isRecord(equipmentValue) || !Array.isArray(equipmentValue.equipped) || !equipmentValue.equipped.every((entry) => typeof entry === "string") || !isBonuses(equipmentValue.bonuses)) return false;
-  const progressionValue = value.progression;
-  if (!isRecord(progressionValue) || !["levelType", "experienceIncrease", "maxLevel", "levelHp", "levelDp", "levelFp", "levelSm", "levelUpType"].every((key) => isFiniteNumber(progressionValue[key]))) return false;
+  if (!isProgression(value.progression, value.stats)) return false;
   if (value.behaviour !== null && typeof value.behaviour !== "string") return false;
   return Array.isArray(value.customEvents) && value.customEvents.every((entry) => typeof entry === "string");
 }
@@ -350,7 +408,7 @@ export function isActorRecord(value: unknown): value is ActorRecord {
 export function asActorsSection(value: unknown): ActorsSection | null {
   if (!isRecord(value) || value.version !== ACTORS_SCHEMA_VERSION || !Array.isArray(value.actors)) return null;
   const nextId = value.nextId;
-  if (!isFiniteNumber(nextId) || !Number.isSafeInteger(nextId) || nextId < 1) return null;
+  if (!isSafeInteger(nextId) || nextId < 1) return null;
   const actors = value.actors;
   if (!actors.every(isActorRecord)) return null;
   const ids = new Set(actors.map((actor) => actor.id));
