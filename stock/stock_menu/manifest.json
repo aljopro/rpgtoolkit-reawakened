@@ -1,0 +1,7 @@
+{
+  "name": "stock_menu",
+  "version": "1.0.0",
+  "namespace": "stock_menu",
+  "requests": [],
+  "program": "startup.prg"
+}
