@@ -23,8 +23,8 @@ Two marks are acknowledged as references:
    the grip and the dark ribbed grip follow that design. The animation's
    author is not recorded on the site.
 
-The animated mark's blade is broken. In this logo it is whole and glowing: the
-blade is mended, and the glow is the point.
+The animated mark's blade is broken. In this logo it is whole: the blade is
+mended.
 
 No pixel data from either reference file is present in this image. It was not
 upscaled, filtered or auto-traced from them, and it is not derived from any
