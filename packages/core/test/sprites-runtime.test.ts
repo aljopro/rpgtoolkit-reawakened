@@ -76,6 +76,10 @@ test("actor-backed board sprites link to actor behaviour dispatch without copyin
   equal("stats" in sprite, false);
   equal(service.updateStats(sprite.actorId, { hp: 11 }, { cause: "script" })?.actor.stats.dp, 9);
   equal(actors.actors[0]?.behaviour, "npc-pack.guard");
+  const save = createGameState({ seed: 1 });
+  save.actors = actors;
+  save.sprites = linked;
+  equal(restoreGameState(snapshot(save)).sprites.items[0]?.actorId, npc.id);
 
   const plain = hydrateSprites({
     board: board(),
