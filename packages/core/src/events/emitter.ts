@@ -47,6 +47,20 @@ export function isHostMethodDef(def: string): boolean {
   return def === CANCEL_EVENT || isEmitterMethod(def);
 }
 
+/**
+ * Whether a declared listener emitter covers the emitter key an event was sent on
+ * (EMIT-21): an exact key, or the one supported pattern `actor:*` for every actor emitter.
+ */
+export function listenerCoversEmitter(declared: string, key: string): boolean {
+  if (declared === key) return true;
+  return declared.endsWith("*") && key.startsWith(declared.slice(0, -1));
+}
+
+/** Whether `emitter` is a listener pattern: a non-empty prefix followed by one trailing `*` (EMIT-21). */
+export function isEmitterPattern(emitter: string): boolean {
+  return emitter.endsWith("*") && emitter.length > 1 && !emitter.slice(0, -1).includes("*");
+}
+
 /** Whether two callables are the same listener for `off` (EMIT-4): same `def`, `captures` and receiver. */
 export function callablesEqual(left: CallableValue, right: CallableValue): boolean {
   if (left.def !== right.def || left.receiver !== right.receiver || left.captures.length !== right.captures.length) return false;
