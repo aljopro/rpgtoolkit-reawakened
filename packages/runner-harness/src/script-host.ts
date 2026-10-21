@@ -324,6 +324,8 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
         ? init.program.path
         : fnv1a64(init.program.text));
   const layers = createPluginLayers();
+  const packageStartupLifecycle = { active: false, packageName: undefined as string | undefined };
+  const listenersBeforeStartup = [...gameState.events.listeners];
   const services = createScriptServices(
     gameState,
     resolution.plugins,
@@ -334,12 +336,15 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
     undefined,
     undefined,
     layers,
+    undefined,
+    packageStartupLifecycle,
   );
   runPackageStartup(
     gameState,
     services,
     init.packageStartups ?? [],
     resolution.plugins,
+    listenersBeforeStartup,
   );
   startProgram(gameState.vm, programRef);
   return createHost(gameState, services, resolution.diagnostics, init.blobs);
@@ -355,9 +360,11 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     init.manifest ??
     (isTk2 ? [...ENGINE_DEFAULT_MANIFEST, { id: "tk2" }] : undefined);
   const resolution = resolveHostPlugins(manifest, init.patch, init.plugins);
+  const packageStartupLifecycle = { active: false, packageName: undefined as string | undefined };
   const layers = createPluginLayers();
   if (init.packageStartups !== undefined && init.packageStartups.length > 0) {
     const scratch = createGameState({ seed: init.startupSeed ?? 0 });
+    const scratchListenersBeforeStartup = [...scratch.events.listeners];
     const scratchServices = createScriptServices(
       scratch,
       resolution.plugins,
@@ -368,9 +375,12 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
       undefined,
       undefined,
       layers,
+      undefined,
+      packageStartupLifecycle,
     );
-    runPackageStartup(scratch, scratchServices, init.packageStartups, resolution.plugins);
+    runPackageStartup(scratch, scratchServices, init.packageStartups, resolution.plugins, scratchListenersBeforeStartup);
   }
+  const listenersBeforeStartup = [...gameState.events.listeners];
   const services = createScriptServices(
     gameState,
     resolution.plugins,
@@ -381,8 +391,10 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     undefined,
     undefined,
     layers,
+    undefined,
+    packageStartupLifecycle,
   );
-  runPackageStartup(gameState, services, [], resolution.plugins);
+  runPackageStartup(gameState, services, [], resolution.plugins, listenersBeforeStartup);
   // The compiled programs are not in the snapshot: check that every callable in it
   // still resolves against the ones this host rebuilds (FUN-8; entry 18.6).
   verifyRestoredHandles(gameState.vm, services, gameState.events);

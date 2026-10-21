@@ -17,6 +17,7 @@ import type { CallableValue, ObjectValue, RefId, Value, VarScope } from "../port
 import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
+import type { ClockPort } from "../ports/time.ts";
 import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
 import { createActorHostType, createActorService, type ActorService } from "../actors/port.ts";
 import { createActorEventSink } from "../actors/object.ts";
@@ -144,8 +145,22 @@ export type ScriptStatus = "running" | "waiting" | "finished";
  * debug channel (AD-24); `diagnostics` collects the located host diagnostics
  * of every runtime failure until the engine drains them into a `TickReport`.
  */
+export type PackageStartupLifecycle = {
+  active: boolean;
+  packageName: string | undefined;
+};
+
 export type ScriptServices = {
   readonly view: CommandView;
+  /** Unrestricted clock used by the deterministic VM scheduler; commands use view.clock. */
+  readonly clock: ClockPort;
+  /** Private lifecycle capability; native command code receives no startup-mode mutator. */
+  readonly isPackageStartup: () => boolean;
+  readonly packageStartupForbidden: (operation: string) => ScriptError;
+  readonly setPackageStartup: (active: boolean, packageName?: string) => void;
+  readonly setCommandThread: (thread: number | undefined) => void;
+  /** Listener baseline captured before this service installs its plugin listeners. */
+  readonly listenersBeforePackageStartup: readonly GameState["events"]["listeners"][number][];
   readonly commands: CommandLookup;
   readonly programs: ProgramCache;
   /** Where file programs and includes load from; absent when the host serves none (G2). */
@@ -189,19 +204,71 @@ export function createScriptServices(
   postRequest?: (request: CommandRequest) => void,
   layers: PluginLayers = createPluginLayers(),
   hostTypes: readonly HostObjectType[] = [],
-  packageStartup = false,
+  packageStartup: boolean | PackageStartupLifecycle = false,
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
-  const view: CommandView = {
-    rng: packageStartup
-      ? { nextUint32: () => { throw new ScriptError("package.startup-forbidden", "package startup cannot consume the seeded RNG"); } }
-      : createRngPort(state.rng),
-    clock: createClockPort(state.time),
-    ...(packageStartup ? { packageStartup: true } : {}),
-    state,
+  const runtimeRng = createRngPort(state.rng);
+  const runtimeClock = createClockPort(state.time);
+  const lifecycle: PackageStartupLifecycle = typeof packageStartup === "boolean" ? { active: packageStartup, packageName: undefined } : packageStartup;
+  const packageStartupActive = lifecycle;
+  const packageStartupName = lifecycle;
+  const startupForbidden = (operation: string): ScriptError =>
+    new ScriptError("package.startup-forbidden", `package "${packageStartupName.packageName ?? "unknown"}" startup cannot ${operation}`);
+  let commandThread: number | undefined;
+  const listenersBeforePackageStartup = [...state.events.listeners];
+  const commandState = new Proxy(state, {
+    get(target, property, receiver) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "consume the seeded RNG" : "read the simulation clock");
+      }
+      return Reflect.get(target, property, receiver);
+    },
+    set(target, property, value, receiver) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "consume the seeded RNG" : "read the simulation clock");
+      }
+      return Reflect.set(target, property, value, receiver);
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "consume the seeded RNG" : "read the simulation clock");
+      }
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+    defineProperty(target, property, descriptor) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "replace the seeded RNG" : "replace the simulation clock");
+      }
+      return Reflect.defineProperty(target, property, descriptor);
+    },
+    deleteProperty(target, property) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "delete the seeded RNG" : "delete the simulation clock");
+      }
+      return Reflect.deleteProperty(target, property);
+    },
+  });
+  const rng = Object.freeze({
+    nextUint32: () => {
+      if (packageStartupActive.active) throw startupForbidden("consume the seeded RNG");
+      return runtimeRng.nextUint32();
+    },
+  });
+  const clock = Object.freeze({
+    tick: () => {
+      if (packageStartupActive.active) throw startupForbidden("read the simulation clock");
+      return runtimeClock.tick();
+    },
+  });
+  const view = Object.freeze({
+    rng,
+    clock,
+    state: commandState,
     gameId,
-  };
+    get packageStartup() { return packageStartupActive.active; },
+    get thread() { return commandThread; },
+  }) as CommandView;
   const diagnostics: Diagnostic[] = [];
   const behaviours = createBehaviourRegistry(
     plugins.map((plugin) => plugin.namespace ?? plugin.definition.id),
@@ -268,6 +335,15 @@ export function createScriptServices(
   );
   return {
     view,
+    clock: runtimeClock,
+    isPackageStartup: () => packageStartupActive.active,
+    packageStartupForbidden: startupForbidden,
+    setPackageStartup: (active, packageName) => {
+      packageStartupActive.active = active;
+      packageStartupActive.packageName = packageName;
+    },
+    setCommandThread: (thread) => { commandThread = thread; },
+    listenersBeforePackageStartup,
     commands,
     programs,
     virtuals: virt,
@@ -394,9 +470,9 @@ export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: n
     if (findBlockingThread(vm) !== null) break;
     if (thread.status !== "ready") continue;
     stepThread(thread, vm, services, budget);
-    refreshBlock(vm, services.view.clock.tick());
+    refreshBlock(vm, services.clock.tick());
   }
-  refreshBlock(vm, services.view.clock.tick());
+  refreshBlock(vm, services.clock.tick());
 }
 
 /**
@@ -526,7 +602,7 @@ function scriptStatus(state: GameState): ScriptStatus {
 }
 
 /** `file:line` of the call a thread is parked at, or the program's name when it has none. */
-function threadLocation(thread: Thread, services: ScriptServices): SourcePos | null {
+export function threadLocation(thread: Thread, services: ScriptServices): SourcePos | null {
   const frame = thread.frames[thread.frames.length - 1];
   if (frame === undefined) return null;
   const program = services.programs.get(frame.program);
@@ -557,7 +633,7 @@ function assertNoDeadlock(vm: VmState, services: ScriptServices): void {
   });
   throw new ScriptError(
     "vm.deadlock",
-    `deadlock at tick ${services.view.clock.tick()}: ${parts.join("; ")}`,
+    `deadlock at tick ${services.clock.tick()}: ${parts.join("; ")}`,
     threadLocation(stuck[0]!, services),
   );
 }
@@ -1063,12 +1139,19 @@ function resumeAfterFailure(frame: Frame, frameIndex: number, pos: SourcePos): v
   handler.active = false;
 }
 
+function readVirtual(services: ScriptServices, name: string): Value | undefined {
+  if (services.isPackageStartup() && name.toLowerCase() === "gametime") {
+    throw services.packageStartupForbidden("read the simulation clock");
+  }
+  return services.virtuals.read(name);
+}
+
 function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId, services?: ScriptServices): Value {
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
   if (scope === "cell") return vm.cells?.[name] ?? 0;
-  if (scope === "virtual") return services?.virtuals.read(name) ?? 0;
+  if (scope === "virtual") return services === undefined ? 0 : readVirtual(services, name) ?? 0;
   if (scope === "object") {
     const object = parseObjectRef(ref);
     const record = object === null ? undefined : findObject(vm, object.handle);
@@ -1167,9 +1250,8 @@ function loadArg(
   scope?: VarScope,
   services?: ScriptServices,
 ): Arg {
-  const virtuals = services?.virtuals;
   if (scope === "global") {
-    const virt = virtuals?.read(name);
+    const virt = services === undefined ? undefined : readVirtual(services, name);
     if (virt !== undefined) return { value: virt, ref: virtualRef(name) };
     if (Object.hasOwn(vm.globals, name)) return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
     setOwnValue(vm.globals, name, 0);
@@ -1189,7 +1271,7 @@ function loadArg(
     const val = readRef(vm, thread, frameIndex, slot.ref, services);
     return { value: val, ref: slot.ref };
   }
-  const virtVal = virtuals?.read(name);
+  const virtVal = services === undefined ? undefined : readVirtual(services, name);
   if (virtVal !== undefined) return { value: virtVal, ref: virtualRef(name) };
   if (Object.hasOwn(vm.globals, name)) return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
   if (frame.autoLocal) {
@@ -1782,7 +1864,7 @@ function dispatchResolved(
   }
   if (advance) frame.ip += 1;
 
-  const tick = services.view.clock.tick();
+  const tick = services.clock.tick();
   let controlApplied = false;
   let parked = false;
   let produced: Value | undefined;
@@ -2090,7 +2172,7 @@ function dispatchResolved(
   }
 
   if (result.request !== undefined) {
-    if (services.view.packageStartup) {
+    if (services.isPackageStartup()) {
       const packageName = frame.program.owner ?? "unknown";
       throw new ScriptError("package.startup-forbidden", `package "${packageName}" startup cannot issue host request "${result.request.kind}"`, pos);
     }
@@ -2229,10 +2311,10 @@ export function stepThread(
 ): number {
   let steps = 0;
   const finish = (): number => {
-    refreshBlock(vm, services.view.clock.tick());
+    refreshBlock(vm, services.clock.tick());
     return steps;
   };
-  services.view.thread = thread.id;
+  services.setCommandThread(thread.id);
   while (thread.status === "ready" && steps < budget) {
     const frameBeforeRestore = thread.frames[thread.frames.length - 1];
     if (frameBeforeRestore !== undefined) {

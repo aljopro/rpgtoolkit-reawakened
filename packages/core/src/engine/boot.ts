@@ -70,7 +70,7 @@ export function mainFilePluginPatch(main: MainFile, catalogue: readonly PackageC
       entry: packageEntry === undefined
         ? { id }
         : {
-            id,
+            id: foldNamespace(packageEntry.name),
             version: packageEntry.version,
             ...(packageEntry.namespace === undefined ? {} : { namespace: packageEntry.namespace }),
             requests: [...packageEntry.requests],
@@ -129,9 +129,8 @@ export function resolveManifestPlugins(
     if (
       packageEntry === undefined
       || duplicates.has(packageName)
-      || packageEntry.name !== entry.id
       || packageEntry.version !== entry.version
-      || packageEntry.definition.id !== entry.id
+      || foldNamespace(packageEntry.definition.id) !== packageName
       || packageEntry.definition.version !== entry.version
     ) {
       const packageIndex = index - ENGINE_DEFAULT_MANIFEST.length;
@@ -143,14 +142,14 @@ export function resolveManifestPlugins(
       });
       continue;
     }
-    const namespace = entry.namespace ?? entry.id;
-    const startup = packageEntry.startup === undefined ? undefined : withOwner(packageEntry.startup, entry.id);
+    const namespace = entry.namespace ?? packageName;
+    const startup = packageEntry.startup === undefined ? undefined : withOwner(packageEntry.startup, packageName);
     plugins.push({
       definition: packageEntry.definition,
       namespace,
       package: {
-        name: entry.id,
-        version: entry.version!,
+        name: packageName,
+        version: packageEntry.version,
         namespace,
         requests: [...(entry.requests ?? [])],
       },

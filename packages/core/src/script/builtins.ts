@@ -158,6 +158,9 @@ export const CORE_PLUGIN: PluginDefinition = {
         waits: { kind: "ticks", summary: "Blocks for the requested number of simulation ticks." },
       },
       call: (view, args) => {
+        if (view.packageStartup === true) {
+          throw new ScriptError("package.startup-unfinished", "a package start-up program waits; start-up programs must not wait");
+        }
         const ticks = args[0]?.value;
         if (typeof ticks !== "number" || !Number.isInteger(ticks) || ticks <= 0) {
           throw new ScriptError(

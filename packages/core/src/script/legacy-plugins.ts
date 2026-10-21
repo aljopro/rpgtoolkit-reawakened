@@ -694,7 +694,6 @@ export const GSMISC_PLUGIN: PluginDefinition = {
       aliases: [],
       params: [{ name: "dest", optional: true, byRef: true, variadic: false }],
       call: (view, args) => {
-        if (view.packageStartup) throw new ScriptError("package.startup-forbidden", 'package startup cannot use "gettime"');
         const time = view.clock.tick();
         const out = byRefOut(args, 0, time);
         return { value: time, out, effects: [{ kind: "mixed", section: "time" }] };
