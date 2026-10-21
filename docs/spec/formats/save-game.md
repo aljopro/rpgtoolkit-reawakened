@@ -7,6 +7,44 @@ Header text: `RPGTLKIT SAVE`. The engine writes major **3**, minor **4** (Toolki
 **Counts here are exact counts** (not upper bounds), except the thread list.
 
 **Our own save format — Reawakened rule (R-13).** A rebuild may use its own save format; the legacy `.sav` layout on this page is an **import** concern only, not a format this project must write. Reading legacy saves is scoped with the menu/party/save work. Also note that the split into separate lists — numeric globals, object-handle globals and string globals, then redirects, party, inventory, equipment and the miscellany — is what a loader must reproduce; and since the serialised interpreter state (field 46) is engine-specific, a rebuild may fall back to restarting each saved thread from the top rather than resuming mid-program.
+### Reawakened canonical actor state
+
+The Reawakened runtime uses its canonical state snapshot for its own save/load
+surface. The legacy binary layout above remains an import specification. The
+canonical state contains an `actors` section with schema version `1`, a
+monotonic `nextId`, and an `actors` array. Each actor record stores only:
+
+| Field | Type | Save rule |
+|---|---|---|
+| `id` | positive integer | Stable actor identity; never a VM object handle |
+| `kind` | `party`, `enemy`, or `npc` | Actor source domain |
+| `source` | asset reference string | Source asset, never a raw program path |
+| `name` | string | Actor display name |
+| `stats` | plain-data record | Current and maximum stats |
+| `statuses` | string-to-integer record | Active status counters |
+| `equipment` | plain-data record | Equipped references and derived bonuses |
+| `progression` | plain-data record | Compatibility and policy values |
+| `behaviour` | string or `null` | Package behaviour name only |
+| `customEvents` | string array | Declared actor event names |
+
+An actor record MUST NOT contain a callable, compiled program, host object,
+emitter listener, closure, or raw `.prg` path. VM object records may retain a
+host type name and ordinary plain-data members; their host methods are
+re-hydrated from the installed packages after load.
+
+Package startup runs in manifest order before actor hydration on boot and
+restore. It rebuilds the session behaviour registry and host declarations from
+the installed package code; neither registry is save data. Hydration resolves
+each saved behaviour name against that rebuilt registry. A missing behaviour
+keeps the actor data, uses core defaults, and emits one located
+`behaviour.missing` diagnostic per missing name. Loading never refuses a save
+for that condition. Reinstalling a package before loading resolves the same
+saved name to the newly installed implementation; actor records do not carry a
+package version.
+
+The actor section schema version MUST be bumped, with a migration and a
+previous-version restore fixture, whenever the persisted actor shape changes.
+
 
 ## Layout (minor 4)
 
