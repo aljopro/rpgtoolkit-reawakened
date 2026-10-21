@@ -133,9 +133,7 @@ export function checkMemberAccess(
  */
 export function readMember(record: ObjectRecord, key: string): Value {
   if (Object.hasOwn(record.members, key)) return record.members[key]!;
-  const folded = key.toLowerCase();
-  const match = record.keys.find((name) => name.toLowerCase() === folded);
-  return match === undefined ? 0 : record.members[match]!;
+  return 0;
 }
 
 /**

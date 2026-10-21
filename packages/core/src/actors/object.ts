@@ -39,13 +39,12 @@ export function queueActorTransition(vm: VmState, events: EventsSection, actors:
       {
         const detail = { cause: transition.cause, source: transition.source };
         queueNativeEvent(vm, events, actorEmitterKey(actor.id), transition.type, detail);
-        if (transition.type === "fallen") queueNativeEvent(vm, events, "game", transition.type, { actorId: actor.id, ...detail });
       }
       return;
     case "statusChanged":
       queueNativeEvent(vm, events, actorEmitterKey(actor.id), transition.type, {
         status: transition.status,
-        previousRounds: transition.previousRounds,
+        previousrounds: transition.previousRounds,
         rounds: transition.rounds,
         expired: transition.expired,
         source: transition.source,

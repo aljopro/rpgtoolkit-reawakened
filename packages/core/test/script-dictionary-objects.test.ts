@@ -202,6 +202,16 @@ c = d["exact"]
   deepEqual(objectKeys(only(state)), ["mixed", "Exact"]);
 });
 
+test("a string index keeps dictionary key case at the object boundary", () => {
+  const state = runOnce(`
+o = { "Foo": 1 }
+exact = o["Foo"]
+lower = o["foo"]
+`);
+  equal(state.vm.globals.exact, 1);
+  equal(state.vm.globals.lower, 0);
+});
+
 test("nested access reads and updates through every form, and a compound write works", () => {
   const state = runOnce(`
 d = { stats: { hp: 10, mp: 4 }, tags: { first: "a" } }

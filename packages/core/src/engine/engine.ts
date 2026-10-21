@@ -1,5 +1,6 @@
 import { hashDrawList } from "../canon/index.ts";
 import { actorEmitterKey } from "../actors/model.ts";
+import { registerActorObject } from "../actors/object.ts";
 import { resolveAsset, assetKey, resolveTileReference } from "../formats/resolver/resolver.ts";
 import { classifyImageReference } from "../formats/animation/image-reference.ts";
 import { decodeTexture, type DecodedTexture } from "../formats/image/index.ts";
@@ -51,7 +52,7 @@ import { EffectBus, type EffectApplier, type PostEffect } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
 import type { EnginePhase, EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
 import { collectStateGarbage, runEngineCancelableEvent, runEventsPhase } from "../events/dispatch.ts";
-import { queueNativeEvent, registerEmitter, unregisterEmitter } from "../events/emitter.ts";
+import { deferUnregisterEmitter, queueNativeEvent, registerEmitter, unregisterEmitter } from "../events/emitter.ts";
 import {
   COMPILER_VERSION,
   createScriptServices,
@@ -836,14 +837,18 @@ export function createEngine(init: EngineInit): Engine {
   }
 
   /** Emit the board lifecycle notification on the shared queued bus. */
-  function boardLifecycle(type: "entered" | "left", board: WorldBoard, player: SpriteActor | undefined): void {
+  function boardLifecycle(type: "entered" | "left", board: WorldBoard, player: SpriteActor | undefined): number {
     const actor = state.actors.actors.find((candidate) => candidate.kind === "party") ?? state.actors.actors[0];
     const detail = {
-      actorId: player?.id ?? null,
-      boardKey: board.key,
+      actorid: actor?.id ?? null,
+      boardkey: board.key,
     };
-    queueNativeEvent(state.vm, state.events, boardEmitterKey(board.key), type, detail);
-    if (actor !== undefined) queueNativeEvent(state.vm, state.events, actorEmitterKey(actor.id), type, detail);
+    const boardEvent = queueNativeEvent(state.vm, state.events, boardEmitterKey(board.key), type, detail);
+    if (actor !== undefined) {
+      registerActorObject(state.vm, state.events, state.actors, actor.id);
+      queueNativeEvent(state.vm, state.events, actorEmitterKey(actor.id), type, detail);
+    }
+    return boardEvent;
   }
 
   /** Board entry (E-19, E-47; docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry). */
@@ -852,8 +857,8 @@ export function createEngine(init: EngineInit): Engine {
     const player = state.sprites.players.find((candidate) => candidate.id === state.sprites.selectedPlayer) ?? state.sprites.players[0];
     if (fromSend) stopOldBoardThreads();
     if (previous !== undefined && previous !== null && previous.key !== board.key) {
-      boardLifecycle("left", previous, player);
-      unregisterEmitter(state.events, boardEmitterKey(previous.key));
+      const leftEvent = boardLifecycle("left", previous, player);
+      deferUnregisterEmitter(state.events, boardEmitterKey(previous.key), leftEvent);
     }
     registerEmitter(state.vm, state.events, boardEmitterKey(board.key));
     clearPathfindingCache();
@@ -907,16 +912,19 @@ export function createEngine(init: EngineInit): Engine {
       return;
     }
     registerEmitter(state.vm, state.events, boardEmitterKey(loaded.key));
+    const actor = state.actors.actors.find((candidate) => candidate.kind === "party") ?? state.actors.actors[0];
     const allowed = runEngineCancelableEvent(
       state,
       services,
       boardEmitterKey(loaded.key),
       "beforeEnter",
-      { actorId: player.id, boardKey: loaded.key, entry: { x: arrival.x, y: arrival.y, layer: arrival.layer, unit: arrival.unit } },
+      { actorid: actor?.id ?? null, boardkey: loaded.key, entry: { x: arrival.x, y: arrival.y, layer: arrival.layer, unit: arrival.unit } },
       STEP_BUDGET,
     );
     if (!allowed) {
-      unregisterEmitter(state.events, boardEmitterKey(loaded.key));
+      clearPendingExit(player.id);
+      // A canceled entry leaves the target board available for another attempt; preserve
+      // its package/script listeners rather than treating it as an unloaded board.
       return;
     }
     clearPendingExit(player.id);

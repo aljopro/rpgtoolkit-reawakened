@@ -14,6 +14,7 @@ import {
   emitEffect,
   hashState,
   readEvent,
+  queueNativeEvent,
   registerEmitter,
   restoreGameState,
   runEventsPhase,
@@ -29,6 +30,7 @@ import {
   type Diagnostic,
   type EventView,
   type GameState,
+  type PlainData,
   type PluginDefinition,
   type ScriptServices,
   type Value,
@@ -151,6 +153,22 @@ test("a script emit reaches a TypeScript listener, which runs only when the disp
     [{ type: "ping", emitter: "game", detail: { n: 5, s: "x" }, cancelable: false, canceled: false }],
     "the listener got a plain-data copy of the event, and only the type it listens to",
   );
+});
+
+test("a native listener preserves an own nested __proto__ detail key without prototype mutation", () => {
+  const state = createGameState({ seed: 0 });
+  const heard: Heard[] = [];
+  const services = createScriptServices(state, [makePlugin(heard, PING_LISTENER)]);
+  const detail = JSON.parse('{"nested":{"__proto__":{"safe":1},"ok":2}}') as PlainData;
+  if (detail === null || typeof detail !== "object" || Array.isArray(detail)) throw new Error("test detail must be a record");
+  queueNativeEvent(state.vm, state.events, "game", "ping", detail);
+  runEventsPhase(state, services, STEP_BUDGET);
+  equal(heard.length, 1);
+  const nested = heard[0]!.event.detail.nested;
+  ok(typeof nested === "object" && nested !== null);
+  equal(Object.hasOwn(nested, "__proto__"), true);
+  deepEqual(Object.getOwnPropertyDescriptor(nested, "__proto__")?.value, { safe: 1 });
+  equal(({} as { readonly safe?: unknown }).safe, undefined);
 });
 
 test("the TypeScript side cannot call a listener synchronously: its emit only queues, in the same step the command returns (EMIT-21)", () => {

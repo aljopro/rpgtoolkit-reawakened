@@ -300,6 +300,20 @@ function nullableRecord(value: unknown, path: string): Record<string, unknown> |
   if (value === null) return null;
   return recordAt(value, path);
 }
+function validateNativeData(value: unknown, path: string): void {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) shapeError(`the snapshot's ${path} must be finite`);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) validateNativeData(entry, `${path}[${index}]`);
+    return;
+  }
+  const record = recordAt(value, path);
+  for (const [name, entry] of Object.entries(record)) validateNativeData(entry, `${path}.${name}`);
+}
+
 
 function validateProgramRef(value: unknown, path: string): void {
   const ref = recordAt(value, path);
@@ -554,6 +568,17 @@ function validateEventsShape(value: unknown, vm: Record<string, unknown>): void 
     stringAt(queued.emitter, `events.queue[${index}].emitter`);
     liveEvent(queued.event, `events.queue[${index}].event`);
   }
+  if (events.nativeDetails !== undefined) {
+    const nativeDetails = recordAt(events.nativeDetails, "events.nativeDetails");
+    for (const [rawHandle, detailValue] of Object.entries(nativeDetails)) {
+      const path = `events.nativeDetails.${rawHandle}`;
+      const handle = Number(rawHandle);
+      if (!Number.isSafeInteger(handle) || handle < 1) shapeError(`the snapshot's ${path} must name a positive event handle`);
+      liveEvent(handle, path);
+      const detail = recordAt(detailValue, path);
+      for (const [name, entry] of Object.entries(detail)) validateNativeData(entry, `${path}.${name}`);
+    }
+  }
   for (const [index, threadValue] of arrayAt(vm.threads, "vm.threads").entries()) {
     const wait = recordAt(threadValue, `vm.threads[${index}]`).wait;
     if (!isRecord(wait) || wait.kind !== EVENT_DISPATCH_WAIT) continue;
@@ -565,6 +590,18 @@ function validateEventsShape(value: unknown, vm: Record<string, unknown>): void 
       liveEvent(handle, `events.emitters.${key}`);
       if (registered.has(handle as number)) shapeError(`the snapshot's events.emitters.${key} names a handle another key already names`);
       registered.add(handle as number);
+    }
+  }
+  if (events.retiring !== undefined) {
+    const retiring = arrayAt(events.retiring, "events.retiring");
+    if (!isRecord(events.emitters)) shapeError("the snapshot's events.retiring requires registered emitters");
+    const seen = new Set<string>();
+    for (const [index, value] of retiring.entries()) {
+      stringAt(value, `events.retiring[${index}]`);
+      const key = value as string;
+      if (seen.has(key)) shapeError(`the snapshot's events.retiring[${index}] repeats an emitter`);
+      seen.add(key);
+      if (!Object.hasOwn(events.emitters, key)) shapeError(`the snapshot's events.retiring[${index}] names no registered emitter`);
     }
   }
   if (events.dispatch === null) return;
