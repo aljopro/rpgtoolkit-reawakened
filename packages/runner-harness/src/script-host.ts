@@ -41,11 +41,11 @@ import {
   type Engine,
   type GameState,
   type InputRecord,
-  type LogSink,
   type PluginDefinition,
-  type PluginManifest,
-  type PluginManifestDiagnostic,
   type PluginManifestPatch,
+  type PluginManifestDiagnostic,
+  type PluginManifest,
+  type LogSink,
   type ProgramLoader,
   type ProgramRef,
   type ResolvedPlugin,
@@ -54,6 +54,7 @@ import {
   type SurfaceId,
   type SurfacePixels,
   type TickReport,
+  withOwner,
 } from "@tk-reawakened/core";
 import { TK2_COMPAT_PLUGIN } from "@tk-reawakened/plugin-tk2-compat";
 import type { AssetKey } from "@tk-reawakened/core";
@@ -133,6 +134,11 @@ function resolveHostPlugins(
     diagnostics: toRuntimeDiagnostics([...patched.diagnostics, ...resolved.diagnostics]),
   };
 }
+/** A package start-up reference with its required canonical catalogue owner. */
+export type PackageStartupRef = {
+  readonly owner: string;
+  readonly ref: ProgramRef;
+};
 /** How to build a fresh host: the inline program, seed, manifest and plugin layers. */
 export type ScriptHostInit = {
   readonly program: string | ProgramRef;
@@ -149,8 +155,8 @@ export type ScriptHostInit = {
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
   readonly sinks?: readonly LogSink[];
-  /** Optional package start-up programs run in order before the main program starts (PKG-5; entry 19.8). */
-  readonly packageStartups?: readonly ProgramRef[];
+  /** Optional package start-up programs with explicit catalogue ownership (PKG-5; entry 19.8). */
+  readonly packageStartups?: readonly PackageStartupRef[];
 };
 
 /** How to rebuild a host from a snapshot: the registry is code, not state. */
@@ -169,7 +175,7 @@ export type ScriptHostRestore = {
    * package layer table. The restored host then reruns package registration
    * against its actual services before it resumes.
    */
-  readonly packageStartups?: readonly ProgramRef[];
+  readonly packageStartups?: readonly PackageStartupRef[];
   /** Seed for the scratch state during start-up rebuild (defaults to 0). */
   readonly startupSeed?: number;
 };
@@ -302,6 +308,10 @@ function createHost(
 }
 
 /** Start `program` (inline source) in a manifest-resolved VM. */
+function ownedPackageStartups(startups: readonly PackageStartupRef[]): readonly ProgramRef[] {
+  return startups.map((startup) => withOwner(startup.ref, startup.owner));
+}
+
 export function createScriptHost(init: ScriptHostInit): ScriptHost {
   const gameState = createGameState({ seed: init.seed });
   const manifest =
@@ -342,7 +352,7 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
   runPackageStartup(
     gameState,
     services,
-    init.packageStartups ?? [],
+    ownedPackageStartups(init.packageStartups ?? []),
     resolution.plugins,
     listenersBeforeStartup,
   );
@@ -378,7 +388,13 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
       undefined,
       packageStartupLifecycle,
     );
-    runPackageStartup(scratch, scratchServices, init.packageStartups, resolution.plugins, scratchListenersBeforeStartup);
+    runPackageStartup(
+      scratch,
+      scratchServices,
+      ownedPackageStartups(init.packageStartups),
+      resolution.plugins,
+      scratchListenersBeforeStartup,
+    );
   }
   const listenersBeforeStartup = [...gameState.events.listeners];
   const services = createScriptServices(

@@ -387,23 +387,25 @@ test("restore reruns startup hooks on scratch and actual services", () => {
     dialect: "tk3" as const,
   };
   const host = createScriptHost({
-    program: "HP! = 6\nend()\n",
     seed: 0,
+    program: "HP! = 6\nend()\n",
+    packageStartups: [{ owner: "test-startup-actors", ref: packageStartup }],
     plugins: [ACTOR_STARTUP_PLUGIN],
-    packageStartups: [packageStartup],
   });
   equal(ACTOR_STARTUP_CALLS.length, 1);
   equal(host.state().actors.actors[0]?.stats.hp, 5);
   equal(host.state().actors.actors[0]?.stats.dp, 42);
+  equal((host.state().vm.stepCounters?.["test-startup-actors"] ?? 0) > 0, true);
 
   const restored = restoreScriptHost(host.snapshot(), {
     plugins: [ACTOR_STARTUP_PLUGIN],
-    packageStartups: [packageStartup],
+    packageStartups: [{ owner: "test-startup-actors", ref: packageStartup }],
   });
   restored.advance(1, []);
   equal(ACTOR_STARTUP_CALLS.length, 3);
   equal(restored.state().actors.actors[0]?.stats.hp, 6);
   equal(restored.state().actors.actors[0]?.stats.dp, 42);
+  equal((restored.state().vm.stepCounters?.["test-startup-actors"] ?? 0) > 0, true);
 });
 
 test("a runtime failure reaches the report as a located diagnostic and runLog observes it", () => {
