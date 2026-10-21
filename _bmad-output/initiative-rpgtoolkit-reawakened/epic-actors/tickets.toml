@@ -143,7 +143,7 @@ tracker_id = "#473"
 type = "story"
 title = "Save and hydrate actors by behaviour name"
 description = "Saves actor data, host type names and behaviour names only, then restores the script host by rebuilding package services and behaviour registrations before hydration; a missing behaviour or host type leaves data loaded, uses the core default or raises the located OOP-12 error only on first method call, and never refuses the save."
-verify = "Save, remove the package, and load: the game loads, a missing behaviour uses core defaults with a located diagnostic, and a missing host type keeps data until its first method call; reinstall a newer package version and load: the newer code runs on the saved data without an actor version; a scan of every saved actor record finds no callable; hydration runs after `runPackageStartup` in `restoreScriptHost` and script closures still save per 18.6."
+verify = "Save, remove the package, and load: the game loads, a missing behaviour uses core defaults with exactly one located diagnostic, and a missing host type keeps data until its first method call; reinstall a newer package version and load: the newer code runs on the saved data without an actor version; a scan of every saved actor record finds no callable or hook dictionary; hydration runs after `runPackageStartup` on the actual restored services in `restoreScriptHost`; manifest startup order and script closures still save per 18.6."
 covers = ["CAP-11"]
 after = [7, "18.6", "19.16"]
 hitl = false
@@ -151,7 +151,7 @@ risk = "high"
 references = [
   "spec - docs/spec/formats/save-game.md (new actors section, version bump rules)",
   "spec - docs/spec/engine/rpgcode-modules-and-objects.md (OOP-12)",
-  "code - packages/core/src/save/sections/, packages/runner-harness/src/script-host.ts (restoreScriptHost)",
+  "code - packages/core/src/actors/model.ts, packages/core/src/save/snapshot.ts, packages/runner-harness/src/script-host.ts (restoreScriptHost)",
   "adr - docs/adr/0004 (18.6 saving closures)",
 ]
 
