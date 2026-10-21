@@ -21,8 +21,9 @@ import { findObject, readMember } from "../script/objects.ts";
 import { findBlockingThread, findThread, killThread, localRef, refreshBlock, startThread, type Thread } from "../script/state.ts";
 import { collectGarbage, STEP_BUDGET, stepThread, type ScriptServices } from "../script/vm.ts";
 import type { CallableValue } from "../ports/value.ts";
+import type { PlainData } from "../ports/plain-data.ts";
 import type { GameState } from "../save/state.ts";
-import { eventRoots, pruneDeadEmitters } from "./emitter.ts";
+import { eventRoots, forgetNativeDetail, pruneDeadEmitters, queueNativeEvent, unregisterEmitter } from "./emitter.ts";
 import type { DispatchCursor, QueuedEvent } from "./model.ts";
 
 /** The one statement of a listener's thread, and the two locals it reads. */
@@ -39,6 +40,13 @@ function beginDispatch(state: GameState, next: QueuedEvent): DispatchCursor | nu
     .filter((listener) => listener.emitter === next.emitter && listener.type === type)
     .map((listener) => listener.id);
   return { emitter: next.emitter, event: next.event, order, index: 0, thread: null };
+}
+function retireCompletedEmitters(state: GameState): void {
+  const retiring = state.events.retiring;
+  if (retiring === undefined) return;
+  const active = state.events.dispatch?.emitter;
+  const pending = new Set(state.events.queue.map((queued) => queued.emitter));
+  for (const key of retiring) if (key !== active && !pending.has(key)) unregisterEmitter(state.events, key);
 }
 
 /** Start the thread that calls `callable` with the event object (EMIT-14). */
@@ -59,16 +67,33 @@ function startListenerThread(state: GameState, callable: CallableValue, event: n
  * the queue is empty, the shared step budget is spent, a listener is still
  * running or a blocking command waits.
  */
-export function runEventsPhase(state: GameState, services: ScriptServices, budget: number = STEP_BUDGET): void {
+export function runEventsPhase(
+  state: GameState,
+  services: ScriptServices,
+  budget: number = STEP_BUDGET,
+  onlyEvent?: QueuedEvent,
+): void {
   const { vm, events } = state;
   let remaining = budget;
+  let pendingOnly = onlyEvent;
   for (;;) {
     if (findBlockingThread(vm) !== null) return;
     const cursor = events.dispatch;
     if (cursor === null) {
+      if (pendingOnly !== undefined) {
+        const pending = beginDispatch(state, pendingOnly);
+        events.dispatch = pending;
+        if (pending === null) forgetNativeDetail(events, pendingOnly.event);
+        pendingOnly = undefined;
+        continue;
+      }
       const next = events.queue.shift();
-      if (next === undefined) return;
+      if (next === undefined) {
+        retireCompletedEmitters(state);
+        return;
+      }
       events.dispatch = beginDispatch(state, next);
+      if (events.dispatch === null) forgetNativeDetail(events, next.event);
       continue;
     }
     if (cursor.thread !== null) {
@@ -80,7 +105,9 @@ export function runEventsPhase(state: GameState, services: ScriptServices, budge
       continue;
     }
     if (cursor.index >= cursor.order.length) {
+      forgetNativeDetail(events, cursor.event);
       events.dispatch = null;
+      if (onlyEvent !== undefined) return;
       continue;
     }
     if (remaining <= 0) return;
@@ -96,6 +123,55 @@ export function runEventsPhase(state: GameState, services: ScriptServices, budge
     remaining -= stepThread(thread, vm, services, remaining);
     refreshBlock(vm, services.view.clock.tick());
   }
+}
+
+/**
+ * Dispatch one engine-originated cancelable event without parking the engine
+ * phase (EMIT-11). The listeners still run as ordinary VM listener threads,
+ * through the same callable machinery and registration order as queued events.
+ * A listener that waits, or exhausts the bounded phase budget, is terminated
+ * with a located diagnostic and the operation is rejected.
+ */
+export function runEngineCancelableEvent(
+  state: GameState,
+  services: ScriptServices,
+  emitter: string,
+  type: string,
+  detail: Readonly<Record<string, PlainData>>,
+  budget: number = STEP_BUDGET,
+): boolean {
+  if (state.events.dispatch !== null || findBlockingThread(state.vm) !== null) {
+    services.diagnostics.push({
+      code: "event.dispatch-active",
+      file: "<engine>",
+      line: 0,
+      message: "an engine cancelable event cannot start while another event is dispatching",
+    });
+    return false;
+  }
+  const event = queueNativeEvent(state.vm, state.events, emitter, type, detail, true);
+  const queued = state.events.queue.filter((item) => item.event !== event);
+  state.events.queue = [];
+  runEventsPhase(state, services, budget, { emitter, event });
+  const generated = state.events.queue;
+  state.events.queue = [...queued, ...generated];
+  const active = state.events.dispatch as unknown as DispatchCursor | null;
+  if (active !== null) {
+    const thread = active.thread === null ? undefined : findThread(state.vm, active.thread);
+    const waiting = thread?.status === "waiting";
+    services.diagnostics.push({
+      code: waiting ? "event.wait-forbidden" : "event.budget-exceeded",
+      file: "<engine>",
+      line: 0,
+      message: waiting ? `engine event listener for "${type}" attempted to wait` : `engine event "${type}" exceeded its step budget`,
+    });
+    if (thread !== undefined) killThread(state.vm, thread.id);
+    forgetNativeDetail(state.events, event);
+    state.events.dispatch = null;
+    return false;
+  }
+  const eventRecord = findObject(state.vm, event);
+  return eventRecord !== undefined && readMember(eventRecord, "canceled") !== 1;
 }
 
 /**

@@ -105,6 +105,11 @@ export type WorldRuntime = DataRecord & {
   readonly tileTypes: string[];
 };
 
+/** Runtime emitter key for a loaded board (EMIT-8, ACT-9). */
+export function boardEmitterKey(key: AssetKey | string): string {
+  return `board:${key}`;
+}
+
 /** Hydrated, JSON-safe board data used by the compositor and movement systems. */
 export type WorldBoard = DataRecord & {
   readonly key: AssetKey;

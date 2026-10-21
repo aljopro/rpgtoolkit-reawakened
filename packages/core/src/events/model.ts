@@ -11,7 +11,7 @@
  * Owner: entry 19.10. Entries 19.11 (cancelable emit) and 19.12 (the game
  * emitter, the registration seam of built-in emitters) extend it.
  */
-
+import type { PlainData } from "../ports/plain-data.ts";
 import type { CallableValue } from "../ports/value.ts";
 
 /**
@@ -65,12 +65,15 @@ export type EventsSection = {
   listeners: ListenerRecord[];
   /** The events waiting for delivery, oldest first. */
   queue: QueuedEvent[];
-  /** The delivery in progress, or `null` between deliveries. */
+  /** Original native detail values for queued events, preserving booleans and null across the script-value bridge. */
+  nativeDetails?: { [event: string]: { [field: string]: PlainData } };
+  /** The listener cursor of the event currently being delivered, or `null`. */
   dispatch: DispatchCursor | null;
-  /**
-   * The built-in emitters a section owner registered (EMIT-20): key to the handle of
-   * the object that stands for it. Absent until the first registration, like `cells`
-   * in the `vm` section, so a state that never registered one keeps the shape it had.
+  /** Board emitters whose transition `left` event must finish before unload cleanup. */
+  retiring?: string[];
+  /** The built-in emitters a section owner registered (EMIT-20): key to the handle of
+   * the object that stands for it (absent until the first registration, like `cells`
+   * in the `vm` section).
    */
   emitters?: { [key: string]: number };
 };

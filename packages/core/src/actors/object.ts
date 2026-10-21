@@ -1,10 +1,13 @@
 import { actorEmitterKey, actorId, getActor, type ActorId, type ActorsSection } from "./model.ts";
-import { registerEmitter } from "../events/emitter.ts";
+import type { ActorRuleResult, ActorTransition } from "./rules.ts";
+import { queueNativeEvent, registerEmitter } from "../events/emitter.ts";
 import type { EventsSection } from "../events/model.ts";
 import { createHostObject } from "../script/objects.ts";
 import type { VmState } from "../script/state.ts";
 import type { ObjectRecord } from "../script/state.ts";
 
+/** The callback shape used by the actor owner to publish committed transitions. */
+export type ActorEventSink = (result: ActorRuleResult) => void;
 /** Register the actor's one script object and emitter under `actor:<id>`. */
 export function registerActorObject(
   vm: VmState,
@@ -18,4 +21,52 @@ export function registerActorObject(
   const existingHandle = events.emitters?.[key];
   const existing = existingHandle === undefined ? undefined : vm.objects.find((record) => record.handle === existingHandle);
   return registerEmitter(vm, events, key, existing ?? createHostObject(vm, "actor"));
+}
+
+/** Register all currently-owned actors before their first event can be queued. */
+export function registerActorObjects(vm: VmState, events: EventsSection, actors: ActorsSection): void {
+  for (const actor of actors.actors) registerActorObject(vm, events, actors, actor.id);
+}
+
+/** Queue one committed actor transition on the actor's emitter in result order. */
+export function queueActorTransition(vm: VmState, events: EventsSection, actors: ActorsSection, transition: ActorTransition): void {
+  const actor = getActor(actors, transition.actorId);
+  if (actor === null) return;
+  registerActorObject(vm, events, actors, actor.id);
+  switch (transition.type) {
+    case "fallen":
+    case "revived":
+      {
+        const detail = { cause: transition.cause, source: transition.source };
+        queueNativeEvent(vm, events, actorEmitterKey(actor.id), transition.type, detail);
+      }
+      return;
+    case "statusChanged":
+      queueNativeEvent(vm, events, actorEmitterKey(actor.id), transition.type, {
+        status: transition.status,
+        previousrounds: transition.previousRounds,
+        rounds: transition.rounds,
+        expired: transition.expired,
+        source: transition.source,
+      });
+      return;
+    case "leveledUp":
+      queueNativeEvent(vm, events, actorEmitterKey(actor.id), transition.type, {
+        level: transition.level,
+        experience: transition.experience,
+        applied: transition.applied,
+      });
+      return;
+  }
+}
+
+/** Publish all transitions from one actor owner operation through the shared queued bus. */
+export function queueActorTransitions(vm: VmState, events: EventsSection, actors: ActorsSection, result: ActorRuleResult): void {
+  for (const transition of result.transitions) queueActorTransition(vm, events, actors, transition);
+}
+
+/** Build the actor-owner publisher used by script services and host aliases. */
+export function createActorEventSink(vm: VmState, events: EventsSection, actors: ActorsSection): ActorEventSink {
+  registerActorObjects(vm, events, actors);
+  return (result) => queueActorTransitions(vm, events, actors, result);
 }

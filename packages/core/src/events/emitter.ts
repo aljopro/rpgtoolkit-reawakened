@@ -102,9 +102,9 @@ export function registerEmitter(
 }
 
 /**
- * Unregister the built-in emitter `key` (EMIT-20): drop its listeners and stop keeping its
- * object alive, which is then ordinary garbage. Events already queued for the key are
- * still taken and have no listener (EMIT-14). A key that is not registered does nothing.
+ * Unregister the built-in emitter `key` (EMIT-20): drop its listeners, stale
+ * queued events and in-progress cursor, and stop keeping its object alive.
+ * A key that is not registered does nothing.
  */
 export function unregisterEmitter(events: EventsSection, key: string): void {
   const emitters = events.emitters;
@@ -112,7 +112,28 @@ export function unregisterEmitter(events: EventsSection, key: string): void {
   delete emitters[key];
   if (Object.keys(emitters).length === 0) delete events.emitters;
   events.listeners = events.listeners.filter((listener) => listener.emitter !== key);
+  const stale = events.queue.filter((queued) => queued.emitter === key);
+  events.queue = events.queue.filter((queued) => queued.emitter !== key);
+  for (const queued of stale) forgetNativeDetail(events, queued.event);
+  if (events.dispatch?.emitter === key) {
+    forgetNativeDetail(events, events.dispatch.event);
+    events.dispatch = null;
+  }
+  if (events.retiring !== undefined) {
+    events.retiring = events.retiring.filter((retiring) => retiring !== key);
+    if (events.retiring.length === 0) delete events.retiring;
+  }
 }
+
+/** Retire a board after its transition `left` event has passed through the shared queue. */
+export function deferUnregisterEmitter(events: EventsSection, key: string, leftEvent: number): void {
+  const stale = events.queue.filter((queued) => queued.emitter === key && queued.event !== leftEvent);
+  events.queue = events.queue.filter((queued) => queued.emitter !== key || queued.event === leftEvent);
+  for (const queued of stale) forgetNativeDetail(events, queued.event);
+  const retiring = events.retiring ?? [];
+  if (!retiring.includes(key)) events.retiring = [...retiring, key];
+}
+
 
 /** The live object `value` names, or the catchable `object.invalid` (EMIT-14). */
 function liveEmitter(vm: VmState, op: string, value: Value | undefined): ObjectRecord {
@@ -226,6 +247,43 @@ function removeListeners(events: EventsSection, emitter: string, type: string, f
   if (at >= 0) events.listeners.splice(at, 1);
 }
 
+function cloneNativeData(value: PlainData): PlainData {
+  if (Array.isArray(value)) return value.map((entry) => cloneNativeData(entry));
+  if (value === null || typeof value !== "object") return value;
+  const copy: { [key: string]: PlainData } = {};
+  for (const name of Object.keys(value)) {
+    Object.defineProperty(copy, name, {
+      value: cloneNativeData(value[name]!),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return copy;
+}
+
+function cloneNativeDetail(detail: Readonly<Record<string, PlainData>>): { [field: string]: PlainData } {
+  return cloneNativeData(detail) as { [field: string]: PlainData };
+}
+
+function rememberNativeDetail(events: EventsSection, event: number, detail: Readonly<Record<string, PlainData>>): void {
+  const nativeDetails = events.nativeDetails ?? {};
+  Object.defineProperty(nativeDetails, String(event), {
+    value: cloneNativeDetail(detail),
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+  events.nativeDetails = nativeDetails;
+}
+
+export function forgetNativeDetail(events: EventsSection, event: number): void {
+  const nativeDetails = events.nativeDetails;
+  if (nativeDetails === undefined) return;
+  delete nativeDetails[String(event)];
+  if (Object.keys(nativeDetails).length === 0) delete events.nativeDetails;
+}
+
 /**
  * Make the event object now, append it to the queue and return its handle (EMIT-3,
  * EMIT-6, EMIT-14, EMIT-16): a dictionary with `type`, `target`, `detail`,
@@ -241,6 +299,7 @@ function queueEvent(
   type: string,
   fields: ReadonlyArray<readonly [string, Value]>,
   cancelable: boolean,
+  nativeDetail?: Readonly<Record<string, PlainData>>,
 ): number {
   const copy = createObject(vm, null);
   for (const [name, value] of fields) writeMember(copy, name, value);
@@ -252,6 +311,7 @@ function queueEvent(
   writeMember(event, "canceled", 0);
   writeMember(event, "cancel", { type: "callable", def: CANCEL_EVENT, captures: [], receiver: String(event.handle) });
   events.queue.push({ emitter: key, event: event.handle });
+  if (nativeDetail !== undefined) rememberNativeDetail(events, event.handle, nativeDetail);
   return event.handle;
 }
 
@@ -277,9 +337,48 @@ function nativeEmitter(vm: VmState, events: EventsSection, key: string): { reado
 }
 
 /**
- * Apply the `emit` effect a TypeScript plugin's command reported (EMIT-21): `args` is
- * `[emitter key, type, detail?]`. The event enters the one queue exactly as a script's
- * plain `emit` does (EMIT-14); no listener runs.
+ * Queue a native event on the shared bus (EMIT-7, EMIT-11, EMIT-21).
+ *
+ * Engine and core owners use this entry point rather than calling listeners
+ * directly. Unlike a plugin `emit` effect, standard-event details may contain
+ * nested plain records (for example `leveledUp.applied`); those records are
+ * hydrated as ordinary dictionary values in the event object.
+ */
+export function queueNativeEvent(
+  vm: VmState,
+  events: EventsSection,
+  key: string,
+  type: string,
+  detail: Readonly<Record<string, PlainData>> = {},
+  cancelable = false,
+): number {
+  if (typeof key !== "string") throw badArg("emit", "the emitter key must be a string");
+  if (typeof type !== "string") throw badArg("emit", "the event type must be a string");
+  const fields: Array<readonly [string, Value]> = [];
+  for (const name of Object.keys(detail)) fields.push([name, nativeField(vm, detail[name] ?? null)]);
+  const emitter = nativeEmitter(vm, events, key);
+  return queueEvent(vm, events, emitter.record, emitter.key, type, fields, cancelable, detail);
+}
+
+function nativeField(vm: VmState, value: PlainData | undefined): Value {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === "number" || typeof value === "string") return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (Array.isArray(value)) {
+    const record = createObject(vm, null);
+    for (let index = 0; index < value.length; index += 1) writeMember(record, String(index), nativeField(vm, value[index] ?? null));
+    return objectValueOf(record);
+  }
+  const record = createObject(vm, null);
+  for (const name of Object.keys(value)) writeMember(record, name, nativeField(vm, value[name] ?? null));
+  return objectValueOf(record);
+}
+
+/**
+ * Apply the `emit` effect a TypeScript plugin's command reported (EMIT-21):
+ * `args` is `[emitter key, type, detail?]`. Plugin effects retain the
+ * documented scalar-only validation; standard-event producers use
+ * `queueNativeEvent` above when they need nested plain detail.
  */
 export function applyEmitEffect(vm: VmState, events: EventsSection, args: readonly PlainData[]): void {
   const key = args[0];
@@ -297,7 +396,7 @@ export function applyEmitEffect(vm: VmState, events: EventsSection, args: readon
     }
   }
   const emitter = nativeEmitter(vm, events, key);
-  queueEvent(vm, events, emitter.record, emitter.key, type, fields, false);
+  queueEvent(vm, events, emitter.record, emitter.key, type, fields, false, detail !== undefined && detail !== null ? detail as { readonly [field: string]: PlainData } : undefined);
 }
 
 /** The located failure the game `error` event reports (EMIT-9, EMIT-22). */

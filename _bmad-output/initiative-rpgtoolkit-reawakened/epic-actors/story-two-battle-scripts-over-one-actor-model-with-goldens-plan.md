@@ -13,7 +13,7 @@ context:
 
 ## Intent
 
-Closing end-to-end proof of the actor boundary. Fixtures are authored (G7) and use the corpus `startups` seam that 19.14 already exercises, while 19.16 supplies the production package loader.
+Closing end-to-end proof of the actor boundary. Fixtures are authored (G7) and use the corpus `startups` seam that 19.14 already exercises, while 19.17 (#562) supplies the production package loader; 19.16 is the closed docs handoff.
 
 ## Boundaries
 

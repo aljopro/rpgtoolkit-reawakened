@@ -249,7 +249,13 @@ test("the events phase delivers an emit made earlier in the tick; an emit made b
       {
         phase: "movement",
         run: (state) => {
-          if (state.time.tick === 0) applyEmitterOp(state.vm, state.events, "emit", { kind: "object", handle: 1, className: "" }, ["late"], null);
+          if (state.time.tick === 0) {
+            const emitter = state.vm.globals.h;
+            if (typeof emitter !== "object" || emitter === null || !("kind" in emitter) || emitter.kind !== "object") {
+              throw new Error("expected h to be an emitter object");
+            }
+            applyEmitterOp(state.vm, state.events, "emit", emitter, ["late"], null);
+          }
         },
       },
       { phase: "audio", run: (state) => seen.push(`${state.time.tick}:${String(state.vm.globals.log)}`) },
@@ -501,9 +507,10 @@ test("the end-of-tick object pass runs in the engine as it does in the script ho
   const request = engine.advance(0, []).requests[0];
   if (request?.kind !== "asset") throw new Error("expected board asset request");
   engine.advance(1, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: board.value } }]);
-  equal(latest!.vm.objects.length, 1, "the object is referenced by a global");
+  const initialObjects = latest!.vm.objects.length;
+  equal(initialObjects > 1, true, "built-in actor and event objects remain rooted alongside the script object");
   engine.advance(1, []);
-  equal(latest!.vm.objects.length, 0, "the tick that dropped the last reference frees it");
+  equal(latest!.vm.objects.length, initialObjects - 1, "the tick that dropped the last script reference frees only that object");
 });
 
 test("the engine frees a closure cell no script can reach, then the objects it alone kept (R-34, FUN-8)", () => {
@@ -542,8 +549,9 @@ test("the engine frees a closure cell no script can reach, then the objects it a
   if (request?.kind !== "asset") throw new Error("expected board asset request");
   engine.advance(1, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: board.value } }]);
   deepEqual(Object.keys(latest!.vm.cells ?? {}), ["cell1"], "the closure's cell is reachable through f");
-  equal(latest!.vm.objects.length, 1);
+  const initialObjects = latest!.vm.objects.length;
+  equal(initialObjects > 1, true, "built-in actor and event objects remain rooted alongside the closure-owned object");
   engine.advance(1, []);
   deepEqual(Object.keys(latest!.vm.cells ?? {}), [], "the tick that dropped f frees its cell");
-  equal(latest!.vm.objects.length, 0, "and the object only that cell named, in the same pass");
+  equal(latest!.vm.objects.length, initialObjects - 1, "and the object only that cell named is freed in the same pass");
 });

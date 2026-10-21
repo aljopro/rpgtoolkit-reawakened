@@ -15,6 +15,8 @@ import {
   createAudioSection,
   createGameState,
   awardExperience,
+  queueNativeEvent,
+  registerEmitter,
   restoreGameState,
   SCHEMA_VERSIONS,
   snapshot,
@@ -213,6 +215,8 @@ test("restore refuses an events section that is not whole", () => {
     [(events: Record<string, unknown>) => { events.listeners = {}; }, "events.listeners"],
     [(events: Record<string, unknown>) => { events.queue = "none"; }, "events.queue"],
     [(events: Record<string, unknown>) => { events.dispatch = 3; }, "events.dispatch"],
+    [(events: Record<string, unknown>) => { events.retiring = "board:old"; }, "events.retiring"],
+    [(events: Record<string, unknown>) => { events.retiring = ["board:old"]; }, "events.retiring"],
   ] as const) {
     const copy = JSON.parse(JSON.stringify(json)) as { events: Record<string, unknown> };
     change(copy.events);
@@ -220,4 +224,15 @@ test("restore refuses an events section that is not whole", () => {
     equal(failure.code, "restore.shape");
     ok(failure.message.includes(place), `${place}: ${failure.message}`);
   }
+});
+
+test("restore refuses malformed native event detail metadata", () => {
+  const state = createGameState({ seed: 0 });
+  registerEmitter(state.vm, state.events, "game");
+  const event = queueNativeEvent(state.vm, state.events, "game", "statusChanged", { expired: false, source: null });
+  const json = JSON.parse(snapshot(state)) as { events: { nativeDetails: Record<string, unknown> } };
+  json.events.nativeDetails[String(event)] = null;
+  const failure = errorOf(() => restoreGameState(JSON.stringify(json)));
+  equal(failure.code, "restore.shape");
+  ok(failure.message.includes(`events.nativeDetails.${event}`), failure.message);
 });
