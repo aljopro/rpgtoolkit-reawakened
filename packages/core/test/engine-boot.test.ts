@@ -287,10 +287,25 @@ test("a restored saved game skips initBoard and its board entry", () => {
   equal(doubles.audio.length, 0);
 });
 
-test("a main file's legacy plugin rows remain data and do not map to the manifest", () => {
-  const game = authorGame({ ...SCRIPTED, plugins: ["no-such-plugin.dll"] });
-  const result = run(bootEngine(game, makeDoubles()), game.files, 10);
-  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved" && diagnostic.message.includes("no-such-plugin.dll")), false);
+test("a legacy stock plugin row installs its package and an unmapped DLL is one located diagnostic", () => {
+  const game = authorGame({ ...SCRIPTED, plugins: ["no-such-plugin.dll", "Plugin\\tk3fight.dll"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "stock_battle",
+    version: "1.0.0",
+    requests: [],
+    definition: { id: "stock_battle", version: "1.0.0", commands: [] },
+    startup: { kind: "inline", text: "packageStarted = 1\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles, catalogue), game.files, 30);
+  deepEqual(
+    result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin.legacy-unmapped").map((diagnostic) => [diagnostic.file, diagnostic.line]),
+    [[game.main, 0]],
+  );
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved"), false);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "manifest.package-name"), false);
+  equal(doubles.state().vm.globals.packagestarted, 1);
+  equal(doubles.state().engine.boot?.stage, "running");
 });
 
 test("the main file's package names feed the manifest in stored order, and a name with no definition is a located diagnostic", () => {
