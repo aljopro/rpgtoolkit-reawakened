@@ -1,0 +1,43 @@
+TK Reawakened logo (media/tkr.png)
+
+Copyright (c) 2026 Jensen Chappell
+Licence: MIT, under the repository LICENSE.
+Authoring date: 2026-10-17.
+
+Original authored work. A remix of the RPG Toolkit sword mark,
+redrawn for TK Reawakened and levelled up into the master logo.
+
+Two marks are acknowledged as references:
+
+1. The sword from the "RPG Toolkit Development System / Version 3" splash
+   screen, by Christopher B. Matthews. The winged guard, its triangular
+   inlays, the silver blade and the pommel stone follow that design.
+2. The animated sword from rpgtoolkit.net, tksword.mp4 and tksword.webm
+   (512x512, 121 frames, 30 fps, 4.03 s). The mp4 is byte-identical to the
+   Wayback Machine's capture of 2017-01-07 and has not changed since; the
+   webm is byte-identical to its capture of 2017-10-09 and has not changed
+   since either (an earlier 2017-01-07 capture of the webm was a different
+   encode). The digests are INM4YT2LAJUNV4W5NIWUWT3OS423LS7N and
+   WNNNN6S65O2X4ULBOHC6KSUG7ZGBL6BE, and the site was still serving both
+   unchanged on 2026-10-20. The centre-set guard stone, the ribbon tied at
+   the grip and the dark ribbed grip follow that design. The animation's
+   author is not recorded on the site.
+
+The animated mark's blade is broken. In this logo it is whole: the blade is
+mended.
+
+No pixel data from either reference file is present in this image. It was not
+upscaled, filtered or auto-traced from them, and it is not derived from any
+legacy binary, game, screenshot or fetched fixture.
+
+media/icons/ is generated from this file by tools/icons/build.mjs.
+
+Both references are third-party works and are not redistributed in this
+repository. They are cited at their original locations; for the animated mark
+the archived copies are the canonical reference:
+
+1. The Toolkit 3 splash screen:
+   https://github.com/chrisbmatthews/rpgtoolkit/blob/master/vb/Toolkit/graphics/splash3.jpg
+2. The animated sword (archived copies, the canonical references):
+   https://web.archive.org/web/20170107181407/https://rpgtoolkit.net/tksword.mp4
+   https://web.archive.org/web/20171009153211/http://rpgtoolkit.net/tksword.webm
