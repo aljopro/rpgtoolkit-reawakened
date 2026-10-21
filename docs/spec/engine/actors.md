@@ -29,6 +29,7 @@ A runtime actor MAY contain:
 - declared custom event names from the source asset.
 
 It MUST NOT contain a callable, compiled program, host object, emitter listener table, or raw `.prg` path. Host methods and emitters are hydrated after load.
+The current persisted actor-section schema is version 2. A version-1 actor section is migrated in place during snapshot restoration without replacing its records: the restore step carries the saved actor, stats, and policy fields forward, derives `nextRequirement` and `remainingExperience` using the recurrence in [progression-and-levels.md](progression-and-levels.md), and sets `legacyLevelUp` to `false` because a version-1 save has no persisted source-program flag. A malformed or unsafe migrated policy is rejected as a restore-shape error; existing actor identity, stats, statuses, equipment, and progression policy are never reset.
 
 ## Store and action boundary
 
@@ -141,6 +142,9 @@ The core hook surface includes:
 The `statusChanged` hook context receives `previousRounds`, clamped post-operation `rounds` (zero on expiry), and the caller-supplied `source` or `null`; countdown advancement supplies no implicit source. Hook result patches are validated separately from the returned `statusChanged` event detail.
 
 These core-originated hooks do not wait. `levelUp` may wait only when it is invoked from a script thread, such as a script-driven XP award. Hook contexts and result patches are separate from standard-event detail payloads; the core validates and mutates actor state and returns plain transition records, while the owning event layer performs dispatch.
+Hook result objects are closed plain-data patches. `revive` accepts only `hp`; `statusChanged` only `rounds` (a safe non-negative integer); `equipmentChanged` only `equipped` and `bonuses`, with bonus keys limited to `hp`, `dp`, `fp`, and `smp` and safe-integer values; `levelUp` only `deltas` and `stats`, with delta keys limited to `maxHp`, `dp`, `fp`, and `maxSmp` and safe-integer values. Unknown keys, unsafe or fractional values, and negative status-round patches are errors rather than silently ignored or clamped. The `statsChanged` patch uses the actor-stat key set and the same safe-integer validation.
+
+For a stat or equipment operation, the core applies its operation-specific hook and then `statsChanged`; if the final proposed HP is positive after those patches and the actor was fallen, it invokes `revive` exactly once. The resulting `revived` transition is returned only when the final committed HP is positive; a revive patch that leaves HP non-positive produces no `revived` transition. An XP award invokes `statsChanged` only when at least one non-legacy level-up applies core stat growth; XP-only, max-level, and legacy-handoff awards do not invoke that hook.
 
 ## Standard actor and board events
 
@@ -256,6 +260,7 @@ permitted to mutate the value (a script may request a mutation through that owne
 | status program | status.code/prg | flag/program reference | statuses | none | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 12–13 | Epic 7 |
 
 Item rows are asset definitions, hydrated by name and never saved. Inventory state (stacks, counts, and which actor has which item in which slot) belongs to the `inventory` section (AD-10) through `InventoryAction`, built by Epic 8. An actor holds only equipped item references and the bonuses derived from them by the core equipment rule (`equipmentChanged`); it never owns item records. The equipment operation receives a normalized catalog built deterministically from `.itm` `itemName`, `equipHP`, `equipDP`, `equipFP`, and `equipSM` fields. Its caller supplies an already validated, unique equipped-reference list after inventory/slot/character eligibility checks; the core operation only resolves references and derives bonuses. A reference matching zero or multiple catalog entries is rejected. Applying a bonus changes current and maximum HP/SMP and DP/FP by the bonus delta; removing a bonus subtracts it and clamps current HP/SMP to their maxima. If the resulting HP crosses the `HP <= 0` boundary, the operation returns `fallen` or `revived` with cause `script` and source `null`; it does not dispatch an event. Equip/remove program references remain item data and are executed by Epic 8's owning inventory/equipment script layer, not by this pure derivation operation. Item speed, idle time, hulls and board animation belong to the sprite that represents a board item.
+The normalized catalog mapping is explicit: raw `.itm` `itemName` becomes `name`, and `equipHP`, `equipDP`, `equipFP`, and `equipSM` become the normalized `[hp, dp, fp, smp]` bonus tuple in that order. A supplied catalog `id` is a non-empty string; every bonus is a safe integer. The boundary rejects malformed entries and rejects a reference matching zero or more than one catalog entry. The caller supplies a unique, already validated equipped-reference list after inventory/slot/character-eligibility checks; this core operation does not perform inventory writes, slot checks, eligibility checks, or equip/remove program execution.
 
 ### Runtime state (actor)
 
@@ -270,6 +275,7 @@ Item rows are asset definitions, hydrated by name and never saved. Inventory sta
 | behaviour name | runtime actor.behaviour | string or absent | identity | none | hydration/registry | core-rule | [behaviours](#behaviours-and-hydration) | 20.7/20.8 |
 | declared custom events | runtime actor.customEvents | array<string> | identity | none | hydration | core-rule | [custom events](#custom-actor-events) | 20.5/20.9 |
 Progression state is saved as plain data. In addition to the compatibility policy fields, it contains `remainingExperience` (the unspent XP toward the next level), `nextRequirement` (the requirement used for the next threshold), and `legacyLevelUp` (a boolean indicating that the source supplied a non-empty legacy level-up program). The program source itself is resolved by the package/runtime and is never stored in the actor record. Hydration starts with `nextRequirement = firstLevelExp` and, when the source level is greater than one, applies the documented threshold recurrence once for each prior level while carrying the starting total experience into `remainingExperience`; it clamps a currently crossed threshold to zero. A restored record keeps its persisted values unchanged.
+The actor section migration is part of the save/restore boundary: version 1 records retain their actor ids and all existing fields, receive only the missing persisted progression fields, and set the unavailable legacy-program flag to `false`. Version 2 snapshots preserve all progression fields exactly; neither path stores a program path or callable.
 
 ### Sprite state (sprites section, separate from actors)
 
@@ -303,3 +309,4 @@ the progression arithmetic in [progression-and-levels.md](progression-and-levels
 Behaviour hooks may replace derived-stat, level-up, revival, status, or equipment results;
 the stock battle package may replace damage and charge rules. Random variance requires the
 injected seeded RNG; no equation may read wall-clock time or an ambient RNG.
+All progression policy fields, persisted threshold fields, actor level/experience values, equipment bonuses, and hook patches are safe integers at their validation boundaries. Arithmetic that would produce a non-safe result is rejected before the actor section is changed. The `statsChanged` hook is not a general XP observer: it runs for a level-up only when core stat growth is actually applied.
