@@ -76,6 +76,9 @@ export function actorInputFromCharacter(
       levelFp: character.levelIncreases[2] ?? 0,
       levelSm: character.levelIncreases[3] ?? 0,
       levelUpType: character.levelUpType,
+      remainingExperience: Math.max(0, character.firstLevelExp - character.stats.experience),
+      nextRequirement: character.firstLevelExp,
+      legacyLevelUp: character.levelUpProgram.length > 0,
     },
     behaviour: options.behaviour ?? null,
   };

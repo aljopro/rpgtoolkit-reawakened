@@ -55,6 +55,12 @@ export type ActorProgression = {
   levelFp: number;
   levelSm: number;
   levelUpType: number;
+  /** XP still required before the next level threshold. */
+  remainingExperience: number;
+  /** Requirement used to derive the next threshold after a level-up. */
+  nextRequirement: number;
+  /** Source supplied a non-empty legacy level-up program. */
+  legacyLevelUp: boolean;
 };
 
 /** One actor record in the owned state section. */
@@ -139,6 +145,9 @@ const ZERO_PROGRESSION: ActorProgression = {
   levelFp: 0,
   levelSm: 0,
   levelUpType: 0,
+  remainingExperience: 0,
+  nextRequirement: 0,
+  legacyLevelUp: false,
 };
 
 /** Convert an untrusted numeric value to an actor id. */
@@ -202,6 +211,12 @@ function progression(values: Partial<ActorProgression> | undefined): ActorProgre
     levelFp: finiteNumber(values?.levelFp ?? ZERO_PROGRESSION.levelFp, "progression.levelFp"),
     levelSm: finiteNumber(values?.levelSm ?? ZERO_PROGRESSION.levelSm, "progression.levelSm"),
     levelUpType: finiteNumber(values?.levelUpType ?? ZERO_PROGRESSION.levelUpType, "progression.levelUpType"),
+    remainingExperience: finiteNumber(values?.remainingExperience ?? ZERO_PROGRESSION.remainingExperience, "progression.remainingExperience"),
+    nextRequirement: finiteNumber(values?.nextRequirement ?? ZERO_PROGRESSION.nextRequirement, "progression.nextRequirement"),
+    legacyLevelUp: values?.legacyLevelUp === undefined ? ZERO_PROGRESSION.legacyLevelUp : (() => {
+      if (typeof values.legacyLevelUp !== "boolean") throw new TypeError("progression.legacyLevelUp must be boolean");
+      return values.legacyLevelUp;
+    })(),
   };
 }
 
@@ -341,8 +356,7 @@ export function isActorRecord(value: unknown): value is ActorRecord {
   const equipmentValue = value.equipment;
   if (!isRecord(equipmentValue) || !Array.isArray(equipmentValue.equipped) || !equipmentValue.equipped.every((entry) => typeof entry === "string") || !isBonuses(equipmentValue.bonuses)) return false;
   const progressionValue = value.progression;
-  if (!isRecord(progressionValue) || !["levelType", "experienceIncrease", "maxLevel", "levelHp", "levelDp", "levelFp", "levelSm", "levelUpType"].every((key) => isFiniteNumber(progressionValue[key]))) return false;
-  if (value.behaviour !== null && typeof value.behaviour !== "string") return false;
+  if (!isRecord(progressionValue) || !["levelType", "experienceIncrease", "maxLevel", "levelHp", "levelDp", "levelFp", "levelSm", "levelUpType", "remainingExperience", "nextRequirement"].every((key) => isFiniteNumber(progressionValue[key])) || typeof progressionValue.legacyLevelUp !== "boolean") return false;
   return Array.isArray(value.customEvents) && value.customEvents.every((entry) => typeof entry === "string");
 }
 

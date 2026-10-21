@@ -77,6 +77,9 @@ test("actor hydration maps character and enemy reader fields deterministically",
     levelFp: character.value.levelIncreases[2],
     levelSm: character.value.levelIncreases[3],
     levelUpType: character.value.levelUpType,
+    remainingExperience: Math.max(0, character.value.firstLevelExp - character.value.stats.experience),
+    nextRequirement: character.value.firstLevelExp,
+    legacyLevelUp: character.value.levelUpProgram.length > 0,
   });
   deepEqual(firstCharacter.value.statuses, {});
   deepEqual(firstEnemy.value.stats, {
@@ -149,6 +152,9 @@ test("actor hydration carries defaults from an authored minor-zero character", (
     levelFp: read.value.levelIncreases[2],
     levelSm: read.value.levelIncreases[3],
     levelUpType: read.value.levelUpType,
+    remainingExperience: Math.max(0, read.value.firstLevelExp - read.value.stats.experience),
+    nextRequirement: read.value.firstLevelExp,
+    legacyLevelUp: read.value.levelUpProgram.length > 0,
   });
   deepEqual(hydrated.value.statuses, {});
   equal(hydrated.value.behaviour, null);
