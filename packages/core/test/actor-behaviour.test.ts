@@ -49,8 +49,7 @@ test("behaviour registration is namespaced, closed, and behaviour-first", () => 
   equal(diagnostics.length, 5);
 });
 
-test("behaviour definitions retain only the actor name outside the session registry", () => {
-  const registry = createBehaviourRegistry(["stock-rpg"]);
+test("behaviour names survive save as plain data and re-resolve after restore", () => {
   const plugin: ResolvedPlugin = {
     namespace: "stock-rpg",
     definition: {
@@ -62,9 +61,30 @@ test("behaviour definitions retain only the actor name outside the session regis
       },
     },
   };
-  registerPackageBehaviours(registry, [plugin]);
-  deepEqual(registry.definitions().map((entry) => entry.name), ["stock-rpg.hero"]);
-  deepEqual({ behaviour: "stock-rpg.hero" }, { behaviour: "stock-rpg.hero" });
+  const state = createGameState({ seed: 4 });
+  const actor = addActor(state.actors, {
+    kind: "party",
+    source: "hero.tem",
+    behaviour: "stock-rpg.hero",
+    stats: { level: 1, experience: 0, dp: 1 },
+    progression: { maxLevel: 2, remainingExperience: 10, nextRequirement: 10, legacyLevelUp: false },
+  });
+  const services = createScriptServices(state, [plugin]);
+  runPackageStartup(state, services, [], [plugin]);
+  const encoded = snapshot(state);
+  const saved = JSON.parse(encoded) as { actors: { actors: Array<{ behaviour: string }> } };
+  equal(saved.actors.actors[0]?.behaviour, "stock-rpg.hero");
+  const savedActor = saved.actors.actors[0]!;
+  equal(Object.hasOwn(savedActor, "levelUp"), false);
+  equal(Object.hasOwn(savedActor, "hooks"), false);
+
+  const restored = restoreGameState(encoded);
+  const restoredServices = createScriptServices(restored, [plugin]);
+  runPackageStartup(restored, restoredServices, [], [plugin]);
+  equal(restored.actors.actors[0]?.behaviour, "stock-rpg.hero");
+  equal(typeof restoredServices.actors.hooks(actor.id).levelUp, "function");
+  const result = restoredServices.actors.awardExperience(actor.id, 10);
+  equal(result?.actor.stats.dp, 3);
 });
 
 test("package-scoped startup registers behaviours used by actor operations", () => {

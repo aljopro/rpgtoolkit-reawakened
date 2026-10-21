@@ -7,10 +7,10 @@ status: 'built'
 baseline_revision: 'ce05dd4d34d9c0f0fa998cb7d8614ab89d17a47a'
 route: 'full'
 route_source: 'pinned'
-review: 'changes-requested'
-review_source: 'fresh independent remote-head reviewer'
-lenses_ran: ['implementation', 'migration', 'boundary-validation', 'regression-baselines', 'fresh-implementation', 'fresh-boundary', 'fresh-tests', 'remote-head-implementation', 'remote-head-boundary', 'remote-head-tests']
-review_loop_iteration: 4
+review: 'approve'
+review_source: 'fresh independent remote-head fix reviewer'
+lenses_ran: ['implementation', 'migration', 'boundary-validation', 'regression-baselines', 'fresh-implementation', 'fresh-boundary', 'fresh-tests', 'remote-head-implementation', 'remote-head-boundary', 'remote-head-tests', 'latest-hydration-lifecycle', 'latest-contract-regression', 'latest-hydration-tests']
+review_loop_iteration: 5
 risk: "high"
 context:
   - "spec - docs/spec/engine/actors.md"
@@ -282,3 +282,53 @@ licence, and gate checks.
 
 **FIXED** in the working tree. Full gates, push, and a fresh independent
 review of the new remote head remain required. No merge is authorized yet.
+
+## Save-shape review follow-up (2026-10-21)
+
+- **Fixed:** the previous persistence test compared two identical object
+  literals and proved nothing. It now snapshots a consumer-created actor,
+  asserts the saved behaviour name remains plain data with no serialized hook
+  members, restores the state, rebuilds package startup, and verifies the
+  saved name resolves to a callable hook used by an actor operation.
+
+## Final remote-head fix re-review (2026-10-21)
+
+The exact pushed PR head is `c71870e50e038f42bf07160bfad060f20e5821d5`.
+The worktree was clean before this plan-only update. `origin/main` is
+`96f580a9300199b01b738250b13194216a7dc808`, and the merge base is the same
+commit; the PR is already based on the latest available main and needs no
+rebase.
+
+The prior lazy missing-behaviour finding is fixed. `runPackageStartup` first
+registers package behaviours, then resolves every actor already hydrated in
+the supplied state (`packages/core/src/script/package-startup.ts:40-48`).
+`missingReported` deduplicates diagnostics by behaviour name, while later
+actor operations reuse the same registry and do not duplicate the diagnostic.
+The actual restored-state path in
+`packages/runner-harness/src/script-host.ts:374-388` runs this sequence after
+loading the snapshot; the scratch restore path is separate and runs before
+the actual restored services. Engine boot/reset rebuilds services through
+`makeServices` with the active plugin list. The restored-unused-actor
+regression test passed in the focused run (`7/7` tests), including the
+unused actor diagnostic, and the independent lifecycle and contract lenses
+found no remaining correctness bug.
+
+### Hosted checks
+
+GitHub Actions run `#39536278271` for commit `c71870e50e03` completed
+successfully. All nine hosted jobs passed: unit, typecheck, lint, golden,
+golden-bun, graph, provenance, licence, and gate.
+
+### Remaining verification gaps
+
+The previously noted persistence-test gap is closed by the save-shape
+consumer assertion in the follow-up section above. No acceptance finding
+remains in this review thread.
+No GitHub review was submitted because the PR author is the same identity;
+this review did not self-approve.
+
+### Disposition
+
+**APPROVE** the exact pushed PR head for implementation correctness. This is
+a plan/review disposition only; no implementation edit, GitHub approval,
+commit, or push was performed.
