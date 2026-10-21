@@ -4,6 +4,7 @@
  * This module contains only JSON-safe data. Actor files are decoded before they
  * cross this seam; bytes and parser models never become part of `GameState`.
  */
+import { actorId, type ActorId, type ActorRecord, type ActorsSection } from "../actors/model.ts";
 import type { Character, Item } from "../formats/actor/index.ts";
 import type { ProgramRef } from "../script/program.ts";
 import type { VmState } from "../script/state.ts";
@@ -92,6 +93,8 @@ export type RandomEncounterProgress = {
 export type SpriteActor = {
   readonly id: string;
   readonly kind: SpriteKind;
+  /** Optional stable actor-section id; absent means asset-only sprite. */
+  readonly actorId?: ActorId | null;
   /** Stable category-local index; players precede items in draw order. */
   readonly index: number;
   /** Compact runtime item handle; null for players. */
@@ -134,6 +137,8 @@ export type SpriteActorSource = {
   readonly id: string;
   readonly kind: SpriteKind;
   readonly source: string;
+  /** Explicit actor-section link; null suppresses source matching. */
+  readonly actorId?: ActorId | null;
   readonly x: number;
   readonly y: number;
   readonly layer: number;
@@ -150,6 +155,7 @@ export type SpriteActorSource = {
 export type SpriteHydrationInput = {
   readonly board: WorldBoard;
   readonly players?: readonly SpriteActorSource[];
+  readonly actors?: ActorsSection;
   readonly actorFiles?: ReadonlyMap<string, Character | Item>;
   readonly selectedPlayer?: string | null;
   readonly tick?: number;
@@ -202,15 +208,19 @@ function actorBase(actor: Character | Item | undefined, fallback: SpriteBase, in
   return base === undefined ? fallback : points(base.points);
 }
 
-/** Turn a world board item and decoded actor file into one canonical runtime actor. */
+/** Turn a board placement into one canonical runtime sprite. */
 export function actorFromSource(source: SpriteActorSource, board: WorldBoard, index: number, handle: number | null): SpriteActor {
   const actor = source.character ?? source.item;
   const fallback = defaultBases((board.coordType & 3) !== 0);
   const item = source.boardItem;
   const multitask = source.item?.multitaskProgram ?? (item?.multitaskPrg || null);
+  const link = source.actorId === undefined
+    ? {}
+    : { actorId: source.actorId === null ? null : actorId(source.actorId) };
   return {
     id: source.id,
     kind: source.kind,
+    ...link,
     index,
     handle: source.kind === "item" ? handle : null,
     sourceSlot: source.kind === "item" ? (source.sourceSlot ?? item?.slot ?? null) : null,
@@ -236,9 +246,30 @@ export function actorFromSource(source: SpriteActorSource, board: WorldBoard, in
   };
 }
 
+
 /** An empty, current-version sprites section. */
 export function createSpritesSection(): SpritesSection {
   return { version: SPRITES_SCHEMA_VERSION, players: [], items: [], selectedPlayer: null, nextItemHandle: 0 };
+}
+
+/** Resolve a board source to an actor id without copying actor state. */
+export function actorLinkForSource(
+  source: Pick<SpriteActorSource, "source" | "actorId">,
+  actors?: ActorsSection,
+): ActorId | null | undefined {
+  if (source.actorId !== undefined) return source.actorId === null ? null : actorId(source.actorId);
+  if (actors === undefined) return undefined;
+  const normalized = source.source.toLowerCase();
+  return actors.actors.find((record) => record.source.toLowerCase() === normalized)?.id;
+}
+
+/** Resolve the actor record linked by a sprite, for owner-service dispatch. */
+export function linkedActor(
+  actors: ActorsSection,
+  sprite: Pick<SpriteActor, "actorId">,
+): Readonly<ActorRecord> | null {
+  if (sprite.actorId === undefined || sprite.actorId === null) return null;
+  return actors.actors.find((record) => record.id === sprite.actorId) ?? null;
 }
 
 /** Convert board slots to source records, compacting empty slots by filtering first. */
@@ -246,14 +277,17 @@ export function boardItemSources(
   board: WorldBoard,
   actorFiles: ReadonlyMap<string, Character | Item> = new Map(),
   variables: Readonly<Record<string, string | number | boolean>> = {},
+  actors?: ActorsSection,
 ): SpriteActorSource[] {
   return (board.items ?? []).filter((item) => item.itemFile !== "").map((item) => {
     const actor = actorFiles.get(item.itemFile);
     const condition = item.loadingVar === "" || String(variables[item.loadingVar] ?? "") === item.loadingValue;
+    const link = actorLinkForSource({ source: item.itemFile }, actors);
     return {
       id: item.itemFile,
       kind: "item",
       source: item.itemFile,
+      ...(link === undefined ? {} : { actorId: link }),
       x: item.x,
       y: item.y,
       layer: item.layer,
@@ -271,7 +305,8 @@ export type SpriteStateRecord = SpriteStateParts & { readonly version: number };
 export function isSpriteActor(value: unknown): value is SpriteActor {
   if (typeof value !== "object" || value === null) return false;
   const actor = value as Partial<SpriteActor>;
-  return typeof actor.id === "string" && (actor.kind === "player" || actor.kind === "item") && typeof actor.x === "number" && typeof actor.y === "number";
+  if (typeof actor.id !== "string" || (actor.kind !== "player" && actor.kind !== "item") || typeof actor.x !== "number" || typeof actor.y !== "number") return false;
+  return !("actorId" in actor) || actor.actorId === null || (typeof actor.actorId === "number" && Number.isSafeInteger(actor.actorId) && actor.actorId > 0);
 }
 
 export function asSpritesSection(value: unknown): SpritesSection | null {
