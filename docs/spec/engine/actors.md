@@ -109,15 +109,27 @@ A behaviour that supplies `levelUp` receives the actor and a plain-data context,
 A package registers behaviours separately from `registerPlugin` during package startup:
 
 ```text
-registerBehaviour("stock-rpg.hero", hooks)
+package.behaviourStartup(registerBehaviour => {
+  registerBehaviour("stock-rpg.hero", hooks)
+})
 ```
+
+The host invokes each resolved package's `behaviourStartup` callback in
+manifest order during `runPackageStartup`, passing a registrar scoped to that
+package's declared namespace. The registrar is valid only while that callback
+executes; retaining it and calling it later MUST be rejected without mutating
+the session registry. A callback's `registerBehaviour(name, hooks)`
+call MUST use that namespace; a cross-package name is rejected with a located
+diagnostic. This is a distinct startup registration surface, not a
+`PluginDefinition.behaviours` data list and not a `registerPlugin` key.
+Registrations are session data, rebuilt at boot, reset, and restore before
+actor hydration.
 
 Behaviour names use a hyphenated package namespace followed by a dot and a
 behaviour identifier (`namespace.name`). The hook list is closed and defined by
-core. Unknown behaviour names, unknown hooks, malformed names, wrong namespaces,
-and duplicate registrations produce located diagnostics and register nothing.
-Registrations are session data, rebuilt at boot, reset, and restore before actor
-hydration.
+core. Unknown behaviour names, unknown hooks, malformed names, wrong
+namespaces, and duplicate registrations produce located diagnostics and
+register nothing.
 
 A behaviour hook takes the actor as an explicit argument. The actor is the
 canonical plain-data read view; the hydrated RPGCode object wrapper is a
