@@ -1,0 +1,7 @@
+{
+  "name": "stock_battle",
+  "version": "1.0.0",
+  "namespace": "stock_battle",
+  "requests": [],
+  "program": "startup.prg"
+}
