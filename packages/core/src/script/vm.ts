@@ -285,8 +285,10 @@ export function createScriptServices(
   for (const problem of registerNativeListeners(state.events, plugins)) {
     logger.warn({
       level: "warn",
-      code: "plugin.listener-unknown-command",
-      message: `plugin "${problem.plugin}" declares a listener for "${problem.listener.type}" on "${problem.listener.emitter}" that names "${problem.listener.command}", which is not one of its commands; it was not registered`,
+      code: problem.reason === "bad-emitter" ? "plugin.listener-bad-emitter" : "plugin.listener-unknown-command",
+      message: problem.reason === "bad-emitter"
+        ? `plugin "${problem.plugin}" declares a listener on "${problem.listener.emitter}", which is not an emitter key or a pattern of a non-empty prefix followed by one trailing "*"; it was not registered`
+        : `plugin "${problem.plugin}" declares a listener for "${problem.listener.type}" on "${problem.listener.emitter}" that names "${problem.listener.command}", which is not one of its commands; it was not registered`,
       data: { plugin: problem.plugin, emitter: problem.listener.emitter, type: problem.listener.type, command: problem.listener.command },
     });
   }

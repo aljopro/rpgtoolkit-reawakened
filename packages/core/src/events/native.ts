@@ -21,13 +21,15 @@ import type { GameState } from "../save/state.ts";
 import type { CommandEffect, PluginDefinition } from "../script/plugin.ts";
 import { findObject, readMember } from "../script/objects.ts";
 import { foldAscii } from "../script/values.ts";
-import { addListener, emitterKeyOf } from "./emitter.ts";
+import { addListener, emitterKeyOf, isEmitterPattern } from "./emitter.ts";
 import type { EventsSection, NativeListener } from "./model.ts";
 
-/** A listener that names a command its package does not define, so it was not registered (EMIT-21). */
+/** A listener that could not be registered, and why (EMIT-21). */
 export type NativeListenerProblem = {
   readonly plugin: string;
   readonly listener: NativeListener;
+  /** `unknown-command`: the package defines no such command. `bad-emitter`: a malformed pattern. */
+  readonly reason: "unknown-command" | "bad-emitter";
 };
 
 /**
@@ -44,9 +46,13 @@ export function registerNativeListeners(
   const problems: NativeListenerProblem[] = [];
   for (const { definition } of plugins) {
     for (const listener of definition.listeners ?? []) {
+      if (listener.emitter.includes("*") && !isEmitterPattern(listener.emitter)) {
+        problems.push({ plugin: definition.id, listener, reason: "bad-emitter" });
+        continue;
+      }
       const def = foldAscii(listener.command);
       if (!definition.commands.some((spec) => foldAscii(spec.name) === def)) {
-        problems.push({ plugin: definition.id, listener });
+        problems.push({ plugin: definition.id, listener, reason: "unknown-command" });
         continue;
       }
       const present = events.listeners.some(

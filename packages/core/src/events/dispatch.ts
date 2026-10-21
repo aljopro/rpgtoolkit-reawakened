@@ -23,7 +23,7 @@ import { collectGarbage, STEP_BUDGET, stepThread, type ScriptServices } from "..
 import type { CallableValue } from "../ports/value.ts";
 import type { PlainData } from "../ports/plain-data.ts";
 import type { GameState } from "../save/state.ts";
-import { eventRoots, forgetNativeDetail, pruneDeadEmitters, queueNativeEvent, unregisterEmitter } from "./emitter.ts";
+import { eventRoots, forgetNativeDetail, listenerCoversEmitter, pruneDeadEmitters, queueNativeEvent, unregisterEmitter } from "./emitter.ts";
 import type { DispatchCursor, QueuedEvent } from "./model.ts";
 
 /** The one statement of a listener's thread, and the two locals it reads. */
@@ -37,7 +37,7 @@ function beginDispatch(state: GameState, next: QueuedEvent): DispatchCursor | nu
   if (event === undefined) return null;
   const type = readMember(event, "type");
   const order = state.events.listeners
-    .filter((listener) => listener.emitter === next.emitter && listener.type === type)
+    .filter((listener) => listenerCoversEmitter(listener.emitter, next.emitter) && listener.type === type)
     .map((listener) => listener.id);
   return { emitter: next.emitter, event: next.event, order, index: 0, thread: null };
 }
