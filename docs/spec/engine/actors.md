@@ -46,6 +46,8 @@ the actor record. A hydrated RPGCode object may expose those operations as
 methods, but each method dispatches through the actor service and never turns
 the underlying record into an object with methods.
 
+A package command receives the actor operations themselves — `readActor`, `updateStats`, `advanceStatus`, `applyEquipment` and `awardExperience` — as part of the view it is called with. Calling one dispatches through the actor owner, resolves that actor's behaviour hooks, validates the patch, commits it, and queues the resulting transitions. A command that patched the actor section directly would skip the hooks and the events, so it MUST NOT. An RPGCode battle script applies damage and awards experience by calling its package's commands; it has no actor operation of its own, because a battle's damage formula belongs to the package (Core and battle boundary).
+
 The action type is section-specific: `ActorAction` covers actor operations,
 while `BoardAction`, `InventoryAction`, `BattleAction`, and the other core
 sections use the same boundary for their own state. These are plain-data

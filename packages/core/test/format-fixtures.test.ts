@@ -335,12 +335,16 @@ test("the anonymised Setup-bundle excerpt keeps the Setup layout with neutral na
 
 test("no committed fixture body holds more than the authored stub (nothing legacy-sized)", () => {
   const scanned = ["authored", "real", "anonymised"];
+  /** Every file under `folder`, so a fixture folder (the battle scripts) is scanned too. */
+  const walk = (folder: string): string[] => readdirSync(join(fixtures, folder), { recursive: true })
+    .filter((name) => /\.[a-z0-9]+$/i.test(name))
+    .map((name) => join(folder, name));
   for (const folder of scanned) {
-    for (const name of readdirSync(join(fixtures, folder))) {
-      const bytes = fixture(join(folder, name));
+    for (const name of walk(folder)) {
+      const bytes = fixture(name);
       // The largest authored fixture is the 3,078-byte isometric tileset; a
       // legacy game asset would be orders of magnitude larger.
-      equal(bytes.length <= 8192, true, `${folder}/${name} is ${bytes.length} bytes`);
+      equal(bytes.length <= 8192, true, `${name} is ${bytes.length} bytes`);
     }
   }
 });
