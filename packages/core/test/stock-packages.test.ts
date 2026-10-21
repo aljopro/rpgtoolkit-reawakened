@@ -242,6 +242,23 @@ test("an unmapped custom DLL keeps its row as data and reports one located diagn
   deepEqual(parsed.plugins.map((entry) => entry.pluginFile), ["myCustomFight.dll", "tk3fight.dll"]);
 });
 
+test("a legacy row named like an Object.prototype member maps to nothing and reports one diagnostic", () => {
+  const main = {
+    ...createEmptyMainFile(),
+    major: 2,
+    minor: 9,
+    menuPlugin: "Constructor",
+    plugins: [{ enabled: 0, pluginFile: "__proto__" }],
+  };
+  const parsed = unwrap(readMainFile(new BinaryReader(unwrap(writeMainFile(main)), "main.gam")));
+  const result = pluginManifestFor(parsed, "main.gam", packageCatalogue());
+  deepEqual(
+    result.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.line]),
+    [["plugin.legacy-unmapped", 0], ["plugin.legacy-unmapped", 0]],
+  );
+  deepEqual(result.manifest.slice(-1).map((entry) => entry.id), ["twbutton"]);
+});
+
 test("a new-project template lists both stock packages and round-trips them explicitly", () => {
   const template = newProjectMainFile();
   deepEqual([...(template.packagePlugins ?? [])], ["stock_battle", "stock_menu"]);

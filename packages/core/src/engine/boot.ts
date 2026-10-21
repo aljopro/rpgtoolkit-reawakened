@@ -64,12 +64,15 @@ export function mainFilePluginNames(main: MainFile): string[] {
 
 /**
  * The stock packages the legacy plugin names refer to
- * (docs/spec/engine/main-loop-and-startup.md#reawakened-boot-sequence step 3). Keys are folded file names.
+ * (docs/spec/engine/main-loop-and-startup.md#reawakened-boot-sequence step 3). Keys are folded file
+ * names; the table has no prototype, so a row named like an `Object.prototype` member maps to nothing.
  */
-export const LEGACY_PLUGIN_PACKAGES: Readonly<Record<string, string>> = Object.freeze({
-  "tk3menu.dll": "stock_menu",
-  "tk3fight.dll": "stock_battle",
-});
+const LEGACY_PACKAGE_BY_FILE: Record<string, string> = Object.create(null);
+LEGACY_PACKAGE_BY_FILE["tk3menu.dll"] = "stock_menu";
+LEGACY_PACKAGE_BY_FILE["tk3fight.dll"] = "stock_battle";
+
+/** The legacy plugin file names that name a stock package. */
+export const LEGACY_PLUGIN_PACKAGES: Readonly<Record<string, string>> = Object.freeze(LEGACY_PACKAGE_BY_FILE);
 
 /** A legacy plugin reference's last path segment, ASCII-case-folded; `\` and `/` both separate segments. */
 export function legacyPluginFileName(reference: string): string {
