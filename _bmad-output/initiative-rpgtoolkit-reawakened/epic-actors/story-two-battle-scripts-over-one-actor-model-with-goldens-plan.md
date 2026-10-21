@@ -3,7 +3,7 @@ title: "Two battle scripts over one actor model, with goldens"
 type: 'feature'
 ticket: 13
 created: '2026-10-19'
-status: 'built'
+status: done
 baseline_revision: '660fc2f2'
 risk: "high"
 context:
