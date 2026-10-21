@@ -4,6 +4,7 @@ import {
   addActor,
   advanceStatus,
   applyEquipment,
+  equipmentDefinitionFromItem,
   awardExperience,
   createActorsSection,
   updateActorStats,
@@ -12,6 +13,11 @@ import {
 
 function actor(overrides: Record<string, unknown> = {}) {
   const section = createActorsSection();
+  const progressionOverrides = overrides.progression;
+  const validProgressionOverrides = progressionOverrides !== null && typeof progressionOverrides === "object"
+    ? progressionOverrides as Record<string, unknown>
+    : {};
+  const { progression: _progression, ...actorFields } = overrides;
   const result = addActor(section, {
     kind: "party",
     source: "hero.tem",
@@ -27,9 +33,9 @@ function actor(overrides: Record<string, unknown> = {}) {
       levelFp: 10,
       levelSm: 10,
       levelUpType: 1,
-      ...(overrides.progression as Record<string, unknown> | undefined),
+      ...validProgressionOverrides,
     },
-    ...(overrides as never),
+    ...actorFields,
   });
   return { section, actor: result };
 }
@@ -40,7 +46,6 @@ test("fallen and revival retain the actor and emit one cause/source transition",
   ok(fallen);
   equal(fallen.actor.stats.hp, 0);
   deepEqual(fallen.transitions, [
-    { type: "statsChanged", actorId: state.actor.id, stats: fallen.actor.stats, changed: ["hp"] },
     { type: "fallen", actorId: state.actor.id, cause: "damage", source: 7 },
   ]);
   const duplicate = updateActorStats(state.section, state.actor.id, { hp: 0 }, { cause: "damage", source: 7 });
@@ -64,30 +69,47 @@ test("advanceStatus ages all counters in stable order and supports caller timing
   const first = advanceStatus(perTurn.section, perTurn.actor.id, 2);
   const second = advanceStatus(perTime.section, perTime.actor.id, 1);
   ok(first && second);
-  deepEqual(first.actor.statuses, { poison: 1, slow: 1 });
+  deepEqual(first.actor.statuses, { poison: 1 });
   deepEqual(first.transitions.filter((transition) => transition.type === "statusChanged").map((transition) => transition.status), ["burn", "poison", "slow"]);
   deepEqual(first.transitions.filter((transition) => transition.type === "statusChanged").map((transition) => transition.rounds), [0, 1, 0]);
-  advanceStatus(perTime.section, perTime.actor.id, 1);
-  deepEqual(perTime.actor.statuses, { poison: 1 });
+  deepEqual(first.transitions.filter((transition) => transition.type === "statusChanged").map((transition) => transition.source), [null, null, null]);
+  const noChange = advanceStatus(perTime.section, perTime.actor.id, 0);
+  ok(noChange);
+  deepEqual(noChange.transitions, []);
+  const third = advanceStatus(perTime.section, perTime.actor.id, 1);
+  ok(third);
+  deepEqual(third.actor.statuses, { poison: 1 });
+  let hookRounds = -1;
+  const expired = advanceStatus(perTurn.section, perTurn.actor.id, 2, {
+    hooks: { statusChanged: (_actor, context) => { hookRounds = context.rounds; return {}; } },
+  });
+  ok(expired);
+  equal(hookRounds, 0);
   throws(() => advanceStatus(perTurn.section, perTurn.actor.id, -1));
   throws(() => advanceStatus(perTurn.section, perTurn.actor.id, 1.5));
 });
 
-test("equipment derives four bonuses from item data and applies only stat deltas", () => {
+test("equipment derives four bonuses from item data and applies stat deltas", () => {
   const state = actor();
+  const blade = equipmentDefinitionFromItem({ itemName: "blade", equipHP: 5, equipDP: 2, equipFP: 3, equipSM: 1 });
+  deepEqual(blade, { name: "blade", equipBonus: [5, 2, 3, 1] });
   const equipped = applyEquipment(state.section, state.actor.id, ["blade", "ring"], [
-    { name: "blade", equipBonus: [5, 2, 3, 1] },
+    blade,
     { name: "ring", id: "ring", equipBonus: [2, 1, 4, 2] },
   ]);
   ok(equipped);
   deepEqual(equipped.actor.equipment.bonuses, { hp: 7, dp: 3, fp: 7, smp: 3 });
-  deepEqual(equipped.actor.stats, { ...state.actor.stats, maxHp: 17, dp: 13, fp: 17, maxSmp: 7 });
+  deepEqual(equipped.actor.stats, { ...state.actor.stats, hp: 17, maxHp: 17, dp: 13, fp: 17, smp: 7, maxSmp: 7 });
   const removed = applyEquipment(state.section, state.actor.id, [], [
     { name: "blade", equipBonus: [5, 2, 3, 1] },
     { name: "ring", equipBonus: [2, 1, 4, 2] },
   ]);
   ok(removed);
   deepEqual(removed.actor.stats, state.actor.stats);
+  throws(() => applyEquipment(state.section, state.actor.id, ["blade"], [
+    blade,
+    { name: "blade", equipBonus: [5, 2, 3, 1] },
+  ]));
   throws(() => applyEquipment(state.section, state.actor.id, ["missing"], []));
   throws(() => applyEquipment(state.section, state.actor.id, ["bad"], [{ name: "bad", equipBonus: [1, 2, 3] }]));
 });
@@ -113,10 +135,10 @@ test("XP uses fixed and percentage branches, carries multi-level awards, exclude
   equal(percentageResult.actor.stats.maxHp, 25);
   equal(percentageResult.actor.stats.dp, 25);
   equal(percentageResult.actor.stats.fp, 25);
-  equal(percentageResult.actor.stats.maxSmp, 30);
+  equal(percentageResult.actor.stats.maxSmp, 25);
 });
 
-test("max level retains XP and legacy program precedence suppresses levelUp hook", () => {
+test("max level retains XP and legacy program precedence suppresses core growth", () => {
   const state = actor({ progression: { maxLevel: 2, legacyLevelUp: true } });
   let called = false;
   const hooks: ActorHooks = { levelUp: () => { called = true; return { deltas: { maxHp: 999 } }; } };
@@ -124,12 +146,23 @@ test("max level retains XP and legacy program precedence suppresses levelUp hook
   ok(result);
   equal(result.actor.stats.experience, 100);
   equal(result.actor.stats.level, 2);
+  equal(result.actor.stats.maxHp, 10);
   equal(called, false);
-  equal(result.actor.stats.hp, 10);
+  deepEqual(result.transitions, []);
+  deepEqual(result.legacyLevelUps?.map((handoff) => handoff.level), [2]);
+  equal(result.legacyLevelUps?.[0]?.proposal.deltas.maxHp, 10);
   const maxed = awardExperience(state.section, state.actor.id, 1);
   ok(maxed);
   equal(maxed.actor.stats.experience, 101);
+  equal(maxed.legacyLevelUps, undefined);
   throws(() => awardExperience(state.section, state.actor.id, -1));
+});
+
+test("progression rejects negative configured growth without mutating the actor", () => {
+  const state = actor({ progression: { levelHp: -1 } });
+  throws(() => awardExperience(state.section, state.actor.id, 1));
+  equal(state.actor.stats.experience, 0);
+  equal(state.actor.stats.level, 1);
 });
 
 test("the five hooks are direct synchronous plain-data seams", () => {
@@ -146,6 +179,7 @@ test("the five hooks are direct synchronous plain-data seams", () => {
   updateActorStats(state.section, state.actor.id, { hp: 0 }, { cause: "script", hooks });
   advanceStatus(state.section, state.actor.id, 1, { hooks });
   applyEquipment(state.section, state.actor.id, [], [], hooks);
+  updateActorStats(state.section, state.actor.id, { hp: 1 }, { cause: "script", hooks });
   awardExperience(state.section, state.actor.id, 10, hooks);
   ok(calls.includes("revive"));
   ok(calls.includes("statusChanged"));

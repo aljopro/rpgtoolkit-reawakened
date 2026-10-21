@@ -23,13 +23,19 @@ export type ActorTransition =
   | { readonly type: "fallen"; readonly actorId: ActorId; readonly cause: ActorFallenCause; readonly source: ActorId | null }
   | { readonly type: "revived"; readonly actorId: ActorId; readonly cause: ActorFallenCause; readonly source: ActorId | null }
   | { readonly type: "statusChanged"; readonly actorId: ActorId; readonly status: string; readonly previousRounds: number; readonly rounds: number; readonly expired: boolean; readonly source: ActorId | null }
-  | { readonly type: "equipmentChanged"; readonly actorId: ActorId; readonly equipped: readonly string[]; readonly bonuses: ActorEquipmentBonuses }
-  | { readonly type: "statsChanged"; readonly actorId: ActorId; readonly stats: ActorStats; readonly changed: readonly NumericStat[] }
   | { readonly type: "leveledUp"; readonly actorId: ActorId; readonly level: number; readonly experience: number; readonly applied: Readonly<Partial<Record<LevelStat, number>>> };
+
+export type LegacyLevelUpHandoff = {
+  readonly actorId: ActorId;
+  readonly award: number;
+  readonly level: number;
+  readonly proposal: Readonly<LevelUpProposal>;
+};
 
 export type ActorRuleResult = {
   readonly actor: ActorRecord;
   readonly transitions: readonly ActorTransition[];
+  readonly legacyLevelUps?: readonly LegacyLevelUpHandoff[];
 };
 
 export type StatsChangedContext = {
@@ -139,13 +145,6 @@ function statsWithPatch(base: ActorStats, patch: Partial<ActorStats>): ActorStat
   return result;
 }
 
-function changedStats(before: ActorStats, after: ActorStats): NumericStat[] {
-  return NUMERIC_STATS.filter((key) => before[key] !== after[key]) as NumericStat[];
-}
-
-function statsTransition(id: ActorId, stats: ActorStats, changed: readonly NumericStat[]): ActorTransition | null {
-  return changed.length === 0 ? null : { type: "statsChanged", actorId: id, stats, changed };
-}
 
 function applyStatsHook(actor: ActorRecord, previous: ActorStats, proposal: ActorStats, operation: StatsChangedContext["operation"], hooks: ActorHooks | undefined): ActorStats {
   const hook = hooks?.statsChanged;
@@ -170,13 +169,10 @@ export function updateActorStats(section: ActorsSection, id: ActorId | number, p
     proposal = statsWithPatch(proposal, result);
   }
   proposal = applyStatsHook(actor, previous, proposal, "stats", options.hooks);
-  const changed = changedStats(previous, proposal);
-  if (changed.length > 0) patchActor(section, stableId, { stats: proposal });
+  patchActor(section, stableId, { stats: proposal });
   const current = getActor(section, stableId);
   if (current === null) return null;
   const transitions: ActorTransition[] = [];
-  const statChange = statsTransition(stableId, current.stats, changed);
-  if (statChange !== null) transitions.push(statChange);
   if (!wasFallen && current.stats.hp <= 0) transitions.push({ type: "fallen", actorId: stableId, cause: fallenCause, source });
   if (wasFallen && current.stats.hp > 0) transitions.push({ type: "revived", actorId: stableId, cause: fallenCause, source });
   return { actor: current, transitions };
@@ -197,15 +193,16 @@ export function advanceStatus(section: ActorsSection, id: ActorId | number, amou
   for (const status of Object.keys(actor.statuses).sort()) {
     const previousRounds = integer(actor.statuses[status], `statuses.${status}`);
     if (previousRounds < 0) throw new RangeError(`statuses.${status} must not be negative`);
-    let rounds = previousRounds - age;
+    let rounds = Math.max(0, previousRounds - age);
     if (options.hooks?.statusChanged !== undefined) {
       const result = record(options.hooks.statusChanged(actor, { status, previousRounds, rounds, source }), "statusChanged") as StatusHookResult;
-      if (result.rounds !== undefined) rounds = integer(result.rounds, `status ${status} rounds`);
+      if (result.rounds !== undefined) rounds = Math.max(0, integer(result.rounds, `status ${status} rounds`));
     }
-    if (rounds < 0) rounds = 0;
     const expired = rounds === 0;
     if (!expired) nextStatuses[status] = rounds;
-    transitions.push({ type: "statusChanged", actorId: stableId, status, previousRounds, rounds, expired, source });
+    if (rounds !== previousRounds || expired) {
+      transitions.push({ type: "statusChanged", actorId: stableId, status, previousRounds, rounds, expired, source });
+    }
   }
   patchActor(section, stableId, { statuses: nextStatuses });
   const current = getActor(section, stableId);
@@ -219,11 +216,32 @@ export type EquipmentItemDefinition = {
   readonly id?: string;
 };
 
+/** Raw `.itm` fields accepted at the asset boundary; actor operations use the normalized definition. */
+export type RawEquipmentItem = {
+  readonly itemName: string;
+  readonly equipHP: number;
+  readonly equipDP: number;
+  readonly equipFP: number;
+  readonly equipSM: number;
+  readonly id?: string;
+};
+
+export function equipmentDefinitionFromItem(item: RawEquipmentItem): EquipmentItemDefinition {
+  if (typeof item.itemName !== "string" || item.itemName.length === 0) throw new TypeError("itemName must be non-empty");
+  return {
+    name: item.itemName,
+    ...(item.id === undefined ? {} : { id: item.id }),
+    equipBonus: [item.equipHP, item.equipDP, item.equipFP, item.equipSM],
+  };
+}
+
 function equipmentBonuses(items: readonly EquipmentItemDefinition[], equipped: readonly string[]): ActorEquipmentBonuses {
   const result = { hp: 0, dp: 0, fp: 0, smp: 0 };
   for (const reference of equipped) {
     if (typeof reference !== "string" || reference.length === 0) throw new TypeError("equipment references must be non-empty strings");
-    const item = items.find((candidate) => candidate.name === reference || candidate.id === reference);
+    const matches = items.filter((candidate) => candidate.name === reference || candidate.id === reference);
+    if (matches.length > 1) throw new RangeError(`ambiguous equipped item reference: ${reference}`);
+    const item = matches[0];
     if (item === undefined) throw new RangeError(`unknown equipped item: ${reference}`);
     if (!Array.isArray(item.equipBonus) || item.equipBonus.length !== 4) throw new TypeError(`item ${reference} must have four equip bonuses`);
     item.equipBonus.forEach((value, index) => integer(value, `item ${reference} equipBonus[${index}]`));
@@ -261,27 +279,41 @@ export function applyEquipment(section: ActorsSection, id: ActorId | number, equ
       };
     }
   }
+  const wasFallen = actor.stats.hp <= 0;
+  const hpDelta = nextBonuses.hp - previousBonuses.hp;
+  const smpDelta = nextBonuses.smp - previousBonuses.smp;
   let stats = { ...actor.stats };
-  stats.maxHp += nextBonuses.hp - previousBonuses.hp;
+  stats.hp += hpDelta;
+  stats.maxHp += hpDelta;
   stats.dp += nextBonuses.dp - previousBonuses.dp;
   stats.fp += nextBonuses.fp - previousBonuses.fp;
-  stats.maxSmp += nextBonuses.smp - previousBonuses.smp;
+  stats.smp += smpDelta;
+  stats.maxSmp += smpDelta;
   stats = statsWithPatch(stats, {});
   stats = applyStatsHook(actor, actor.stats, stats, "equipment", hooks);
-  const changed = changedStats(actor.stats, stats);
   patchActor(section, stableId, { equipment: { equipped: nextEquipped, bonuses: nextBonuses }, stats });
   const current = getActor(section, stableId);
   if (current === null) return null;
-  const transitions: ActorTransition[] = [{ type: "equipmentChanged", actorId: stableId, equipped: [...nextEquipped], bonuses: nextBonuses }];
-  const statChange = statsTransition(stableId, current.stats, changed);
-  if (statChange !== null) transitions.push(statChange);
+  const transitions: ActorTransition[] = [];
+  if (!wasFallen && current.stats.hp <= 0) transitions.push({ type: "fallen", actorId: stableId, cause: "script", source: null });
+  if (wasFallen && current.stats.hp > 0) transitions.push({ type: "revived", actorId: stableId, cause: "script", source: null });
   return { actor: current, transitions };
 }
 
 function progressionInput(actor: ActorRecord): ActorProgression {
   const progression = actor.progression;
   for (const key of ["levelType", "experienceIncrease", "maxLevel", "levelHp", "levelDp", "levelFp", "levelSm", "levelUpType", "remainingExperience", "nextRequirement"] as const) integer(progression[key], `progression.${key}`);
-  if (progression.levelType < 0 || progression.experienceIncrease < 0 || progression.maxLevel < 0 || progression.levelUpType < 0 || progression.levelUpType > 1) throw new RangeError("invalid actor progression policy");
+  if (
+    progression.levelType < 0
+    || progression.experienceIncrease < 0
+    || progression.maxLevel < 0
+    || progression.levelHp < 0
+    || progression.levelDp < 0
+    || progression.levelFp < 0
+    || progression.levelSm < 0
+    || progression.levelUpType < 0
+    || progression.levelUpType > 1
+  ) throw new RangeError("invalid actor progression policy");
   if (progression.maxLevel > 0 && actor.stats.level < progression.maxLevel && (progression.nextRequirement <= 0 || progression.remainingExperience < 0)) throw new RangeError("invalid actor progression threshold");
   integer(actor.stats.experience, "stats.experience");
   if (actor.stats.experience < 0 || actor.stats.level < 0) throw new RangeError("invalid actor progression stats");
@@ -326,20 +358,25 @@ export function awardExperience(section: ActorsSection, id: ActorId | number, am
   let nextRequirement = progression.nextRequirement;
   let stats = actor.stats;
   const transitions: ActorTransition[] = [];
+  const legacyLevelUps: LegacyLevelUpHandoff[] = [];
   if (progression.maxLevel > 0 && level < progression.maxLevel) {
     remaining -= award;
     while (remaining <= 0 && level < progression.maxLevel) {
       const proposedLevel = level + 1;
-      let deltas = levelDeltas({ ...actor, stats, progression: { ...progression, level } }, progression);
+      let deltas = levelDeltas({ ...actor, stats }, progression);
       const proposal: LevelUpProposal = { level: proposedLevel, deltas, nextRequirement, remainingExperience: remaining };
-      if (!progression.legacyLevelUp && hooks.levelUp !== undefined) {
-        const hookResult = record(hooks.levelUp({ ...actor, stats }, { award, level: proposedLevel, proposal }), "levelUp") as LevelUpHookResult;
-        if (hookResult.deltas !== undefined) deltas = { ...deltas, ...hookResult.deltas };
-        if (hookResult.stats !== undefined) stats = statsWithPatch(stats, hookResult.stats);
+      if (progression.legacyLevelUp) {
+        legacyLevelUps.push({ actorId: stableId, award, level: proposedLevel, proposal });
+      } else {
+        if (hooks.levelUp !== undefined) {
+          const hookResult = record(hooks.levelUp({ ...actor, stats }, { award, level: proposedLevel, proposal }), "levelUp") as LevelUpHookResult;
+          if (hookResult.deltas !== undefined) deltas = { ...deltas, ...hookResult.deltas };
+          if (hookResult.stats !== undefined) stats = statsWithPatch(stats, hookResult.stats);
+        }
+        stats = applyLevelDelta(stats, deltas);
+        transitions.push({ type: "leveledUp", actorId: stableId, level: proposedLevel, experience, applied: { ...deltas } });
       }
-      stats = applyLevelDelta(stats, deltas);
       level = proposedLevel;
-      transitions.push({ type: "leveledUp", actorId: stableId, level, experience, applied: { ...deltas } });
       if (level >= progression.maxLevel) {
         remaining = 0;
         break;
@@ -355,14 +392,11 @@ export function awardExperience(section: ActorsSection, id: ActorId | number, am
   }
   stats = { ...stats, level, experience };
   stats = applyStatsHook(actor, actor.stats, stats, "levelUp", hooks);
-  const changed = changedStats(actor.stats, stats);
   patchActor(section, stableId, {
     stats,
     progression: { remainingExperience: remaining, nextRequirement },
   });
   const current = getActor(section, stableId);
   if (current === null) return null;
-  const statChange = statsTransition(stableId, current.stats, changed);
-  if (statChange !== null) transitions.push(statChange);
-  return { actor: current, transitions };
+  return legacyLevelUps.length === 0 ? { actor: current, transitions } : { actor: current, transitions, legacyLevelUps };
 }

@@ -202,6 +202,8 @@ function bonuses(values: Partial<ActorEquipmentBonuses> | undefined): ActorEquip
 }
 
 function progression(values: Partial<ActorProgression> | undefined): ActorProgression {
+  const legacyLevelUp = values?.legacyLevelUp ?? ZERO_PROGRESSION.legacyLevelUp;
+  if (typeof legacyLevelUp !== "boolean") throw new TypeError("progression.legacyLevelUp must be boolean");
   return {
     levelType: finiteNumber(values?.levelType ?? ZERO_PROGRESSION.levelType, "progression.levelType"),
     experienceIncrease: finiteNumber(values?.experienceIncrease ?? ZERO_PROGRESSION.experienceIncrease, "progression.experienceIncrease"),
@@ -213,10 +215,7 @@ function progression(values: Partial<ActorProgression> | undefined): ActorProgre
     levelUpType: finiteNumber(values?.levelUpType ?? ZERO_PROGRESSION.levelUpType, "progression.levelUpType"),
     remainingExperience: finiteNumber(values?.remainingExperience ?? ZERO_PROGRESSION.remainingExperience, "progression.remainingExperience"),
     nextRequirement: finiteNumber(values?.nextRequirement ?? ZERO_PROGRESSION.nextRequirement, "progression.nextRequirement"),
-    legacyLevelUp: values?.legacyLevelUp === undefined ? ZERO_PROGRESSION.legacyLevelUp : (() => {
-      if (typeof values.legacyLevelUp !== "boolean") throw new TypeError("progression.legacyLevelUp must be boolean");
-      return values.legacyLevelUp;
-    })(),
+    legacyLevelUp,
   };
 }
 
@@ -357,6 +356,7 @@ export function isActorRecord(value: unknown): value is ActorRecord {
   if (!isRecord(equipmentValue) || !Array.isArray(equipmentValue.equipped) || !equipmentValue.equipped.every((entry) => typeof entry === "string") || !isBonuses(equipmentValue.bonuses)) return false;
   const progressionValue = value.progression;
   if (!isRecord(progressionValue) || !["levelType", "experienceIncrease", "maxLevel", "levelHp", "levelDp", "levelFp", "levelSm", "levelUpType", "remainingExperience", "nextRequirement"].every((key) => isFiniteNumber(progressionValue[key])) || typeof progressionValue.legacyLevelUp !== "boolean") return false;
+  if (value.behaviour !== null && typeof value.behaviour !== "string") return false;
   return Array.isArray(value.customEvents) && value.customEvents.every((entry) => typeof entry === "string");
 }
 
