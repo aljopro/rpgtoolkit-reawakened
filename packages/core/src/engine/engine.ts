@@ -64,6 +64,7 @@ import {
   layerRoots,
   runWaitsPhase,
   ScriptError,
+  toDiagnostic,
   startProgram,
   startThread,
   STEP_BUDGET,
@@ -328,7 +329,7 @@ export function createEngine(init: EngineInit): Engine {
         runPackageStartup(state, nextServices, plugins.flatMap((plugin) => plugin.startup === undefined ? [] : [plugin.startup]), plugins);
       } catch (error) {
         if (!(error instanceof ScriptError)) throw error;
-        fail({ code: error.code, file: mainKey ?? "", line: 0, message: error.message });
+        fail(toDiagnostic(error));
       } finally {
         nextServices.view.packageStartup = false;
       }

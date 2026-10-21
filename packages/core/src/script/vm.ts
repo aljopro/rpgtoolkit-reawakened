@@ -193,7 +193,9 @@ export function createScriptServices(
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
   const view: CommandView = {
-    rng: createRngPort(state.rng),
+    rng: packageStartup
+      ? { nextUint32: () => { throw new ScriptError("package.startup-forbidden", "package startup cannot consume the seeded RNG"); } }
+      : createRngPort(state.rng),
     clock: createClockPort(state.time),
     ...(packageStartup ? { packageStartup: true } : {}),
     state,
