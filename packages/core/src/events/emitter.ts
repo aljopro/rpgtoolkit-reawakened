@@ -47,18 +47,21 @@ export function isHostMethodDef(def: string): boolean {
   return def === CANCEL_EVENT || isEmitterMethod(def);
 }
 
+/** The one supported listener pattern: every actor emitter of the session (EMIT-21). */
+export const ACTOR_EMITTER_PATTERN = "actor:*";
+
 /**
  * Whether a declared listener emitter covers the emitter key an event was sent on
- * (EMIT-21): an exact key, or the one supported pattern `actor:*` for every actor emitter.
+ * (EMIT-21): an exact key, or the one pattern `actor:*` for every actor emitter.
  */
 export function listenerCoversEmitter(declared: string, key: string): boolean {
   if (declared === key) return true;
-  return declared.endsWith("*") && key.startsWith(declared.slice(0, -1));
+  return declared === ACTOR_EMITTER_PATTERN && key.startsWith("actor:");
 }
 
-/** Whether `emitter` is a listener pattern: a non-empty prefix followed by one trailing `*` (EMIT-21). */
+/** Whether `emitter` is the one supported listener pattern `actor:*` (EMIT-21). */
 export function isEmitterPattern(emitter: string): boolean {
-  return emitter.endsWith("*") && emitter.length > 1 && !emitter.slice(0, -1).includes("*");
+  return emitter === ACTOR_EMITTER_PATTERN;
 }
 
 /** Whether two callables are the same listener for `off` (EMIT-4): same `def`, `captures` and receiver. */

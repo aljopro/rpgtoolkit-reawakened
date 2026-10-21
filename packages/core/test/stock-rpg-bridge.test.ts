@@ -246,16 +246,18 @@ test("a restored save delivers the same bridge events and hashes the same", () =
   equal(again.state.vm.globals.log, run.state.vm.globals.log);
 });
 
-test("a malformed listener pattern is a located warning and registers nothing", () => {
-  const state = createGameState({ seed: 0 });
-  const { sink, records } = createCollectingSink();
-  const definition: PluginDefinition = {
-    id: "broken-bridge",
-    version: "1.0.0",
-    commands: [{ name: "nop", aliases: [], params: [], call: () => ({ value: null }) }],
-    listeners: [{ emitter: "actor:*:x", type: "fallen", command: "nop" }],
-  };
-  createScriptServices(state, [{ definition }], createLogger([sink]));
-  equal(state.events.listeners.length, 0, "a malformed pattern registers nothing");
-  deepEqual(records.filter((record) => record.code.startsWith("plugin.listener")).map((record) => record.code), ["plugin.listener-bad-emitter"]);
+test("an unsupported listener pattern is a located warning and registers nothing", () => {
+  for (const emitter of ["actor:*:x", "board:*", "game*", "*"]) {
+    const state = createGameState({ seed: 0 });
+    const { sink, records } = createCollectingSink();
+    const definition: PluginDefinition = {
+      id: "broken-bridge",
+      version: "1.0.0",
+      commands: [{ name: "nop", aliases: [], params: [], call: () => ({ value: null }) }],
+      listeners: [{ emitter, type: "fallen", command: "nop" }],
+    };
+    createScriptServices(state, [{ definition }], createLogger([sink]));
+    equal(state.events.listeners.length, 0, `${emitter} registers nothing`);
+    deepEqual(records.filter((record) => record.code.startsWith("plugin.listener")).map((record) => record.code), ["plugin.listener-bad-emitter"], emitter);
+  }
 });
