@@ -6,6 +6,7 @@ import type { SpriteDraw } from "../render/compose.ts";
 import type { WorldBoard } from "../world/model.ts";
 import {
   actorFromSource,
+  actorLinkForSource,
   boardItemSources,
   createSpritesSection,
   SPRITES_SCHEMA_VERSION,
@@ -70,16 +71,17 @@ function updateItem(section: SpritesSection, index: number, update: (item: Sprit
   return replacement;
 }
 
-function actorSourceForPlayer(source: SpriteActorSource, index: number, board: WorldBoard): SpriteActor {
-  return actorFromSource({ ...source, kind: "player" }, board, index, null);
+function actorSourceForPlayer(source: SpriteActorSource, index: number, board: WorldBoard, actors: SpriteHydrationInput["actors"]): SpriteActor {
+  const link = actorLinkForSource(source, actors);
+  return actorFromSource({ ...source, kind: "player", ...(link === undefined ? {} : { actorId: link }) }, board, index, null);
 }
 
 /** Hydrate players and compacted board items into the authoritative sprites section. */
 export function hydrateSprites(input: SpriteHydrationInput, section = createSpritesSection()): SpritesSection {
   const board = input.board;
   const actors = input.actorFiles ?? new Map();
-  const players = (input.players ?? []).map((source, index) => actorSourceForPlayer(source, index, board));
-  const itemSources = boardItemSources(board, actors, input.variables ?? {});
+  const players = (input.players ?? []).map((source, index) => actorSourceForPlayer(source, index, board, input.actors));
+  const itemSources = boardItemSources(board, actors, input.variables ?? {}, input.actors, input.actorIds);
   const items = itemSources.map((source, index) => {
     const actor = actorFromSource(source, board, index, index);
     const thread = startsItemThread(actor, input.vm, input.programRef);
@@ -102,7 +104,7 @@ export function createInitialPlayer(
   board: WorldBoard,
   source: SpriteActorSource,
 ): SpriteActor {
-  const player = actorSourceForPlayer({ ...source, controlled: source.controlled ?? section.players.length === 0 }, section.players.length, board);
+  const player = actorSourceForPlayer({ ...source, controlled: source.controlled ?? section.players.length === 0 }, section.players.length, board, undefined);
   section.players = [...section.players, player];
   if (section.selectedPlayer === null || player.controlled) section.selectedPlayer = player.id;
   return player;
