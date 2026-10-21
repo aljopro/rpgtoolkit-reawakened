@@ -8,7 +8,7 @@ import { deepEqual, equal, ok } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assetKey, createAssetIndex, createEmptyBoard, createEngine, createFxSection, PACKAGE_ROOT, writeBoard } from "../src/index.ts";
+import { assetKey, createActorService, createAssetIndex, createEmptyBoard, createEngine, createFxSection, PACKAGE_ROOT, writeBoard } from "../src/index.ts";
 import type { AssetIndex, AssetKey, AudioCue, Diagnostic, Engine, EngineInit, FxSection, GameState, InputRecord, TickReport } from "../src/index.ts";
 import { createDefaultVirtuals } from "../src/script/virtuals.ts";
 
@@ -120,7 +120,7 @@ test("board music reaches the audio track: the start bank, a play, a carry-on, a
   ]);
   const music = host.state().audio.tracks[0]!;
   deepEqual([music.state, music.file, music.voices.length, music.flags], ["stopped", null, 0, 1]);
-  equal(createDefaultVirtuals(host.state()).read("music"), "");
+  equal(createDefaultVirtuals(host.state(), createActorService(host.state().actors)).read("music"), "");
   ok(!result.requests.includes("media/nowhere.mid"), "a name the index does not hold is never requested");
   equal(host.state().engine.pendingEffects?.audio?.length ?? 0, 0, "the engine does not queue what the applier applies");
 });
@@ -133,7 +133,7 @@ test("the music virtual and the track hold the file and its decoded length while
   deepEqual([music.state, music.file, music.lengthTicks, music.flags], ["playing", "media/cave.mid", CAVE_TICKS, 1]);
   const voice = music.voices[0]!;
   deepEqual([voice.loop, voice.lengthTicks, voice.endTick, voice.cueId], [true, CAVE_TICKS, null, 4]);
-  equal(createDefaultVirtuals(host.state()).read("music"), "media/cave.mid");
+  equal(createDefaultVirtuals(host.state(), createActorService(host.state().actors)).read("music"), "media/cave.mid");
   deepEqual(result.requests.filter((key) => key.startsWith("media/")), ["media/town.mid", "media/cave.mid"], "each file is asked for once and then known");
 });
 

@@ -184,7 +184,7 @@ Ambient light (board ambient colour plus script changes) is applied as a gamma r
 ## Shutdown and reset
 
 - **Exit** (window closed, or script `windows()` / its alias `dos()`): plugins are shut down first, then threads, graphics, audio and fonts; the frame-rate estimate is saved and any PAK temporary folder is deleted.
-- **Reset** (script `Reset`, or losing a battle with no game-over program): all variables, redirects and threads are cleared, plugins are restarted, and start-up runs again from step 3.
+- **Reset plugin identity.** Reset reuses the manifest-resolved plugin list from the active boot (or the explicitly supplied resolved list for a scene); it MUST NOT fall back to the default manifest after a package manifest has been resolved. Package behaviour callbacks and startup programs therefore see the same package set after reset as at boot.
 - Closing the window while a blocking program or plugin is running exits immediately from inside it.
 
 <a id="e-06"></a>

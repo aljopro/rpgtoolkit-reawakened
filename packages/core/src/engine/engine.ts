@@ -59,6 +59,7 @@ import {
   endBoardThreads,
   endItemThreads,
   fileProgramRef,
+  runPackageStartup,
   runThreadsPhase,
   layerRoots,
   runWaitsPhase,
@@ -293,10 +294,11 @@ export function createEngine(init: EngineInit): Engine {
       state.engine.boot = { stage: "main", main: found, fonts: [] };
     }
   }
+  let activePlugins: readonly ResolvedPlugin[] = init.plugins ?? DEFAULT_ENGINE_PLUGINS;
 
   function makeServices(plugins: readonly ResolvedPlugin[], programLoader?: ProgramLoader): ScriptServices {
     audioDecoders = assembleAudioDecoders(plugins.map((plugin) => plugin.definition), decoderLogger);
-    return createScriptServices(
+    const services = createScriptServices(
       state,
       plugins,
       undefined,
@@ -310,8 +312,10 @@ export function createEngine(init: EngineInit): Engine {
         requestsOut.push({ kind: "playVideo", reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation });
       },
     );
+    runPackageStartup(state, services, [], plugins);
+    return services;
   }
-  let services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS);
+  let services = makeServices(activePlugins);
   if (init.mainFile === undefined && init.program !== undefined) {
     const ref: ProgramRef = typeof init.program === "string"
       ? { kind: "inline", text: init.program, compiler: COMPILER_VERSION, dialect: "tk3" }
@@ -716,7 +720,7 @@ export function createEngine(init: EngineInit): Engine {
         state.engine.boot = { stage: "main", main: found, fonts: [] };
       }
     }
-    services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS, loader ?? undefined);
+    services = makeServices(activePlugins, loader ?? undefined);
     audio.retry();
   }
   function fail(diagnostic: Diagnostic): void {
@@ -926,11 +930,11 @@ export function createEngine(init: EngineInit): Engine {
         boot.fonts.push(key);
       }
       const manifest = pluginManifestFor(mainFile, mainKey);
-      diagnostics.push(...manifest.diagnostics);
       const resolvedPlugins = resolveManifestPlugins(manifest.manifest, mainKey);
       diagnostics.push(...resolvedPlugins.diagnostics);
       loader = { index, root, read: (key) => cache.get(key) };
-      services = makeServices(init.plugins ?? resolvedPlugins.plugins, loader);
+      if (init.plugins === undefined) activePlugins = resolvedPlugins.plugins;
+      services = makeServices(activePlugins, loader);
       if (mainFile.initChar !== "") {
         const player = resolveAsset(index, root, "characters", mainFile.initChar);
         if (player.ok) bus.postEffect("sprites", engineEffect("sprites", "createplayer", [player.value]));

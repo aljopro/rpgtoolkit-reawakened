@@ -162,6 +162,7 @@ export type {
   EffectRecord,
 } from "./effects.ts";
 export type {
+  BehaviourRegistrar,
   CommandContinuation,
   CommandEffect,
   CommandHandler,

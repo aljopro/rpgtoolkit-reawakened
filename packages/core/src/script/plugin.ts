@@ -47,6 +47,7 @@ import type { GameState, SectionKey } from "../save/state.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import type { EffectKind } from "./effects.ts";
 import type { HostObjectType } from "./host.ts";
+import type { ActorHooks } from "../actors/rules.ts";
 
 /**
  * The read-only view a command runs against (AD-8; decision U2). It holds game
@@ -137,6 +138,9 @@ export type PluginDoc = {
   readonly requires?: readonly string[];
 };
 
+/** Package-scoped actor behaviour registration available during start-up. */
+export type BehaviourRegistrar = (name: string, hooks: ActorHooks) => boolean;
+
 /** One plugin: an ordered command and asset pack (ADR 0004 decisions 2 and 6). */
 export type PluginDefinition = {
   readonly id: string;
@@ -156,6 +160,12 @@ export type PluginDefinition = {
   readonly listeners?: readonly NativeListener[];
   /** Session-only host object declarations hydrated by type name (OOP-12). */
   readonly hostTypes?: readonly HostObjectType[];
+  /**
+   * Package-scoped actor behaviour registration. The host calls this during
+   * `runPackageStartup`, passing a registrar that accepts only this package's
+   * declared namespace.
+   */
+  readonly behaviourStartup?: (registerBehaviour: BehaviourRegistrar) => void;
 };
 
 /**

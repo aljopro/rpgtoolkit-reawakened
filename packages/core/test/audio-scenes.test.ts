@@ -4,9 +4,9 @@
 // virtual variable is read at every tick too: it shows the music track's file, kept by a stop (Q19).
 import { test } from "node:test";
 import { deepEqual, equal } from "node:assert/strict";
+import { createActorService } from "../src/actors/port.ts";
 import { createDefaultVirtuals } from "../src/script/virtuals.ts";
 import { loadScene, runCase } from "./audio-oracle.ts";
-
 const SCENES = [
   "board-music-boot",
   "animation-frame-sfx",
@@ -30,7 +30,7 @@ for (const name of SCENES) {
       const run = runCase(sceneCase, {
         afterTick: (tick, row, live) => {
           const music = (row.tr as readonly (readonly unknown[])[]).find((track) => track[0] === "music");
-          equal(createDefaultVirtuals(live.state).read("music"), music === undefined ? "" : music[3] ?? "", `${name}/${sceneCase.name} tick ${tick}: the music virtual`);
+          equal(createDefaultVirtuals(live.state, createActorService(live.state.actors)).read("music"), music === undefined ? "" : music[3] ?? "", `${name}/${sceneCase.name} tick ${tick}: the music virtual`);
         },
       });
       equal(run.rows.length, sceneCase.expect.length, "one row per tick");

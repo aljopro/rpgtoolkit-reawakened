@@ -125,8 +125,8 @@ id = 7
 tracker_id = "#472"
 type = "story"
 title = "Behaviour registration and override precedence"
-description = "Adds `registerBehaviour(name, hooks)` as a separate package-start-up call: a namespaced `namespace.name` identifies a dictionary of hooks from the closed list, an actor carries only that name, and resolution is behaviour override first then the core default; the registry is session data rebuilt by `runPackageStartup` and is never saved, while packages may still emit their own events."
-verify = "A package registers `stock_rpg.hero` with only known hooks and an actor uses its fallen, level-up and damage-taken overrides; no behaviour or an unknown name uses core defaults with one located diagnostic for an unknown name; an unknown hook, malformed name, wrong package namespace or duplicate name diagnoses and registers nothing; two packages keep separate namespaces; an actor record and save contain only the behaviour name and no callable."
+description = "Adds a package-scoped `behaviourStartup(registerBehaviour)` surface separate from `registerPlugin`: the host invokes each resolved package callback during `runPackageStartup` in manifest order, and the callback's `registerBehaviour(name, hooks)` service accepts a namespaced `namespace.name` dictionary from the closed hook list. An actor carries only that name, resolution is behaviour override first then the core default, the registry is session data rebuilt by `runPackageStartup` and never saved, and packages may still emit their own events. The actor owner service supplies resolved hooks to actor operations."
+verify = "Two packages register `stock-rpg.hero` and their own names through package-scoped startup callbacks; cross-namespace registration is rejected; the five known hooks (`levelUp`, `revive`, `statusChanged`, `equipmentChanged`, `statsChanged`) and actor operations (including experience award and direct stat writes) show consumer-visible overrides; no behaviour or an unknown name uses core defaults with one located diagnostic for the unknown name; unknown hooks, malformed names and duplicates diagnose and register nothing; startup requires the resolved plugin list, fresh reset/restore services rebuild callbacks, non-plain hook dictionaries are rejected, and actor records/saves contain only the behaviour name and no callable. Battle-owned `beforeDamage`/damage handling is not part of this registry."
 covers = ["CAP-5", "CAP-9"]
 after = [6, 4, "19.8", "19.16"]
 hitl = false
@@ -134,7 +134,7 @@ risk = "high"
 references = [
   "spec - docs/spec/engine/actors.md",
   "spec - docs/spec/engine/rpgcode-modules-and-objects.md (PKG-5, OOP-12)",
-  "code - packages/core/src/script/ (registerBehaviour beside registerPlugin), packages/core/src/actors/",
+  "code - packages/core/src/script/ (package-scoped behaviourStartup beside registerPlugin), packages/core/src/actors/",
 ]
 
 [[entry]]

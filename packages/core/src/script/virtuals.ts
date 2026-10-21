@@ -3,7 +3,7 @@ import type { Value } from "../ports/value.ts";
 import { musicFile } from "../audio/model.ts";
 import { GAME_EMITTER } from "../events/model.ts";
 import { registerEmitter } from "../events/emitter.ts";
-import { createActorService, type ActorService } from "../actors/port.ts";
+import { type ActorService } from "../actors/port.ts";
 import type { ActorStats } from "../actors/model.ts";
 import type { GameState } from "../save/state.ts";
 import { TICKS_PER_SECOND } from "../time/time.ts";
@@ -73,7 +73,7 @@ function requiresBoard(name: string): boolean {
 }
 
 /** Read the board-backed virtuals and owner-backed actor aliases. */
-export function createDefaultVirtuals(state: GameState, actors: ActorService = createActorService(state.actors)): VirtualVariablePort {
+export function createDefaultVirtuals(state: GameState, actors: ActorService): VirtualVariablePort {
   const read = (rawName: string): Value | undefined => {
     const name = rawName.toLowerCase();
     const stat = actorAlias(name);
@@ -145,10 +145,9 @@ export function createDefaultVirtuals(state: GameState, actors: ActorService = c
       const name = rawName.toLowerCase();
       const stat = actorAlias(name);
       if (stat !== undefined) {
-        if (typeof value !== "number" || actors.activeActor() === null || !actors.write(actors.activeActor()!.id, { [stat]: value } as Partial<ActorStats>)) {
-          return "read-only";
-        }
-        return "written";
+        const active = actors.activeActor();
+        if (typeof value !== "number" || active === null) return "read-only";
+        return actors.updateStats(active.id, { [stat]: value } as Partial<ActorStats>, { cause: "script" }) === null ? "read-only" : "written";
       }
       if (name === "ambientred" || name === "ambientgreen" || name === "ambientblue") {
         const world = asRecord(state.world);

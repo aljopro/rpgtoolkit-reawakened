@@ -164,7 +164,11 @@ export type ScriptHostRestore = {
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
   readonly sinks?: readonly LogSink[];
-  /** The same package start-up programs run on a scratch fresh state to rebuild the layer table (PKG-5). */
+  /**
+   * Optional package start-up programs run on a scratch state to rebuild the
+   * package layer table. The restored host then reruns package registration
+   * against its actual services before it resumes.
+   */
   readonly packageStartups?: readonly ProgramRef[];
   /** Seed for the scratch state during start-up rebuild (defaults to 0). */
   readonly startupSeed?: number;
@@ -331,9 +335,12 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
     undefined,
     layers,
   );
-  if (init.packageStartups !== undefined && init.packageStartups.length > 0) {
-    runPackageStartup(gameState, services, init.packageStartups);
-  }
+  runPackageStartup(
+    gameState,
+    services,
+    init.packageStartups ?? [],
+    resolution.plugins,
+  );
   startProgram(gameState.vm, programRef);
   return createHost(gameState, services, resolution.diagnostics, init.blobs);
 }
@@ -362,7 +369,7 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
       undefined,
       layers,
     );
-    runPackageStartup(scratch, scratchServices, init.packageStartups);
+    runPackageStartup(scratch, scratchServices, init.packageStartups, resolution.plugins);
   }
   const services = createScriptServices(
     gameState,
@@ -375,6 +382,7 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     undefined,
     layers,
   );
+  runPackageStartup(gameState, services, [], resolution.plugins);
   // The compiled programs are not in the snapshot: check that every callable in it
   // still resolves against the ones this host rebuilds (FUN-8; entry 18.6).
   verifyRestoredHandles(gameState.vm, services, gameState.events);
