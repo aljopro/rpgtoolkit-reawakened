@@ -3,21 +3,51 @@
 // the empty Engine contract that keeps the golden job green.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import { addActor, COMPILER_VERSION, hashState, snapshot, type BuiltinSpec, type Diagnostic, type LogRecord, type PluginDefinition, type SurfaceId } from "@tk-reawakened/core";
+import { addActor, COMPILER_VERSION, createHostObject, hashState, snapshot, type BuiltinSpec, type Diagnostic, type LogRecord, type PluginDefinition, type SurfaceId } from "@tk-reawakened/core";
 import { createNullAudio, createScriptHost, restoreScriptHost, runLog, type Run } from "../src/index.ts";
 
 const TRACER = 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n';
 
-const ACTOR_BEHAVIOUR_PLUGIN: PluginDefinition = {
-  id: "test-actors",
+function actorBehaviourPlugin(version: string, delta: number): PluginDefinition {
+  return {
+    id: "test-actors",
+    version,
+    commands: [],
+    behaviourStartup(registerBehaviour) {
+      registerBehaviour("test-actors.hero", {
+        statsChanged: () => ({ dp: delta }),
+      });
+    },
+  };
+}
+
+const ACTOR_BEHAVIOUR_PLUGIN = actorBehaviourPlugin("1.0.0", 42);
+
+const HOST_OBJECT_PLUGIN: PluginDefinition = {
+  id: "test-host-objects",
   version: "1.0.0",
   commands: [],
-  behaviourStartup(registerBehaviour) {
-    registerBehaviour("test-actors.hero", {
-      statsChanged: () => ({ dp: 42 }),
-    });
-  },
+  hostTypes: [{
+    name: "test-object",
+    methods: { ping: "ping" },
+  }],
 };
+
+const MISSING_PACKAGE_PROGRAM = "HP! = 5\nend()\n";
+function savedActorRecord(text: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(text);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed) || !("actors" in parsed)) {
+    throw new Error("snapshot has no actors section");
+  }
+  const actors = parsed.actors;
+  if (typeof actors !== "object" || actors === null || Array.isArray(actors) || !("actors" in actors) || !Array.isArray(actors.actors)) {
+    throw new Error("snapshot actors section has no actor records");
+  }
+  const actor = actors.actors[0];
+  if (typeof actor !== "object" || actor === null || Array.isArray(actor)) throw new Error("snapshot has no first actor");
+  return actor;
+}
+
 
 const ACTOR_STARTUP_CALLS: string[] = [];
 const ACTOR_STARTUP_PLUGIN: PluginDefinition = {
@@ -264,6 +294,60 @@ test("restores the host with behaviour hooks attached to the restored actor serv
   equal(restored.state().actors.actors[0]?.stats.hp, 5);
   equal(restored.state().actors.actors[0]?.stats.dp, 42);
 });
+test("restore keeps actor data with core defaults when its package is absent, then uses newer package code", () => {
+  const host = createScriptHost({
+    program: MISSING_PACKAGE_PROGRAM,
+    seed: 0,
+    plugins: [ACTOR_BEHAVIOUR_PLUGIN],
+  });
+  const actor = addActor(host.state().actors, {
+    kind: "party",
+    source: "hero.tem",
+    behaviour: "test-actors.hero",
+    stats: { hp: 10, maxHp: 10, dp: 1 },
+  });
+  const saved = host.snapshot();
+  const savedActor = savedActorRecord(saved);
+  equal(savedActor.behaviour, "test-actors.hero");
+  equal(Object.hasOwn(savedActor, "hooks"), false);
+  equal(Object.values(savedActor).some((value) => typeof value === "function"), false);
+
+  const withoutPackage = restoreScriptHost(saved, {});
+  const missingReport = withoutPackage.advance(1, []);
+  equal(withoutPackage.state().actors.actors[0]?.stats.hp, 5);
+  equal(withoutPackage.state().actors.actors[0]?.stats.dp, 1);
+  equal(missingReport.diagnostics.filter((entry) => entry.code === "behaviour.missing").length, 1);
+  equal(missingReport.diagnostics.find((entry) => entry.code === "behaviour.missing")?.file, "<package startup>");
+  equal(missingReport.diagnostics.find((entry) => entry.code === "behaviour.missing")?.line, 0);
+
+  const newerPlugin = actorBehaviourPlugin("2.0.0", 99);
+  const withNewerPackage = restoreScriptHost(saved, { plugins: [newerPlugin] });
+  const newerReport = withNewerPackage.advance(1, []);
+  equal(newerReport.diagnostics.some((entry) => entry.code === "behaviour.missing"), false);
+  equal(withNewerPackage.state().actors.actors[0]?.stats.hp, 5);
+  equal(withNewerPackage.state().actors.actors[0]?.stats.dp, 99);
+  equal(withNewerPackage.state().actors.actors[0]?.id, actor.id);
+});
+
+test("restore keeps an unknown host type as data until its first method call", () => {
+  const host = createScriptHost({
+    program: "saved.ping()\nend()\n",
+    seed: 0,
+    plugins: [HOST_OBJECT_PLUGIN],
+  });
+  const object = createHostObject(host.state().vm, "test-object");
+  host.state().vm.globals.saved = { kind: "object", handle: object.handle, className: object.className };
+  const saved = host.snapshot();
+
+  const restored = restoreScriptHost(saved, {});
+  equal(restored.state().vm.objects[0]?.hostType, "test-object");
+  const report = restored.advance(1, []);
+  const failure = report.diagnostics.find((entry) => entry.code === "object.invalid");
+  equal(failure?.file, "<inline>");
+  equal(failure?.line, 1);
+  equal(failure?.message.includes('host type "test-object" is not installed'), true);
+});
+
 
 test("mid-expression yield restores into a fresh host with identical per-tick stateHash", () => {
   const program = "result = 1 + sleep(2) + 3\nend()\n";
