@@ -302,7 +302,7 @@ export function createEngine(init: EngineInit): Engine {
   function makeServices(
     plugins: readonly ResolvedPlugin[],
     programLoader?: ProgramLoader,
-    runStartups = false,
+    runStartups = true,
   ): ScriptServices {
     audioDecoders = assembleAudioDecoders(plugins.map((plugin) => plugin.definition), decoderLogger);
     const nextServices = createScriptServices(

@@ -197,6 +197,7 @@ export function createScriptServices(
     clock: createClockPort(state.time),
     ...(packageStartup ? { packageStartup: true } : {}),
     state,
+    gameId,
   };
   const diagnostics: Diagnostic[] = [];
   const behaviours = createBehaviourRegistry(
