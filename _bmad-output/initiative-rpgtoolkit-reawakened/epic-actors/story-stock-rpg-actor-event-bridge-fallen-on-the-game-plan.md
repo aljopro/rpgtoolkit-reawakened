@@ -3,7 +3,7 @@ title: "Stock RPG actor event bridge: fallen on the game"
 type: 'feature'
 ticket: 15
 created: '2026-10-19'
-status: built
+status: done
 baseline_revision: 'f34059b3'
 risk: "high"
 context:
