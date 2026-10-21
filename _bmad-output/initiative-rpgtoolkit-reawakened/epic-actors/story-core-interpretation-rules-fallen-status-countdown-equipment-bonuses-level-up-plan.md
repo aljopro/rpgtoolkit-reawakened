@@ -8,10 +8,10 @@ baseline_revision: '123ad29d09cc0dd8849344c8d37299f28d1e0fd0'
 route: 'full'
 route_source: 'pinned'
 risk: 'high'
-review: ''
-review_source: ''
-lenses_ran: []
-review_loop_iteration: 0
+review: 'approve'
+review_source: 'independent post-fix reviewer'
+lenses_ran: ['implementation', 'migration', 'boundary-validation', 'regression-baselines']
+review_loop_iteration: 2
 context:
   - "docs/spec/engine/actors.md"
   - "docs/spec/engine/progression-and-levels.md"
@@ -79,18 +79,21 @@ The sequential continuation issue #472's behaviour/damage override work remains 
 
 ## Plan Change Log
 2026-10-20 — Added normative transition payload, progression persistence, equipment input/ownership, legacy handoff, and non-initial hydration wording before implementation commits. Reconciled item equip/remove programs to Epic 8; no executable program path or callable is stored.
+2026-10-20 — Advanced actor schema state changed whole-state hashes; regenerated `golden/scripts/golden.json`, `golden/regression/closing.json`, and corpus expected hashes with the schema-v2 contract. No standalone changelog file exists in the repository.
 
 
 ## Review Triage Log
 2026-10-20 — Independent review fixes: status hook receives clamped post-operation rounds; duplicate equipment references are rejected; negative growth policy is rejected; legacy awards return plain handoffs without core stat growth; stored levels above one derive recurrence state. Full ticket gates passed.
+2026-10-20 — Fresh fix re-review against the working tree found one LIVE P2 boundary defect: actor schema versions newer than v2 were treated as current. Normative docs were amended first in `be169c08`; the restore path now rejects future versions and has a regression test. The nine original review routes remain LIVE and are addressed: v1 migration/fixture and unresolved legacy precedence; duplicate equipment references; final-positive revival hook ordering; XP-only/max-level `statsChanged`; creation/hydration/restore/source-policy validation; closed hook patches; safe arithmetic including exact MAX_SAFE products; `__proto__` status ownership; and raw item normalization.
 
 
 ## Verification
 
+- `node --test packages/core/test/actor-rules.test.ts packages/core/test/actors.test.ts packages/core/test/save-migration.test.ts` — SUCCESS (43)
 - `pnpm fixtures:fetch` — SUCCESS
-- `pnpm fixtures:check` — SUCCESS
+- `pnpm fixtures:check` — SUCCESS (0 tracked fixture files)
 - `pnpm fixtures:test` — SUCCESS (98)
-- `pnpm test:strict` — SUCCESS (1,666; no skips)
+- `pnpm test:strict` — SUCCESS (1,678; no skips)
 - `pnpm typecheck` — SUCCESS
 - `pnpm lint` — SUCCESS
 - `pnpm build` — SUCCESS
@@ -100,4 +103,4 @@ The sequential continuation issue #472's behaviour/damage override work remains 
 - `pnpm licence` / `pnpm licence:test` — SUCCESS
 - `pnpm provenance` / `pnpm provenance:test` — SUCCESS
 - `pnpm catalogue:check` — SUCCESS
-- Repository ticket gates listed in the request — expected: SUCCESS.
+- All ticket gates requested — SUCCESS.

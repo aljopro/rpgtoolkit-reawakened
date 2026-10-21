@@ -12,9 +12,12 @@ import type { Result } from "../formats/result.ts";
 import type { Character, Enemy } from "../formats/actor/model.ts";
 import {
   addActor,
+  validateActorProgression,
   type ActorCreateInput,
   type ActorKind,
   type ActorRecord,
+  type ActorStats,
+  type ActorProgression,
   type ActorsSection,
 } from "./model.ts";
 
@@ -68,7 +71,7 @@ export function actorInputFromCharacter(
   options: ActorHydrationOptions = {},
 ): ActorCreateInput {
   const progressionState = initialProgressionState(character);
-  return {
+  const input: ActorCreateInput = {
     kind,
     source,
     name: character.name,
@@ -101,6 +104,8 @@ export function actorInputFromCharacter(
     },
     behaviour: options.behaviour ?? null,
   };
+  validateActorProgression(input.stats as ActorStats, input.progression as ActorProgression);
+  return input;
 }
 
 /** Build actor-owned fields from an `.ene` enemy model. */

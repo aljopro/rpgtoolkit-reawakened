@@ -5,7 +5,7 @@
 // sleeping thread with the old wait shape) gains the thread, wait and request
 // fields of ticket 3.9; v4 (`fixtures/save/v4-vm.json`) gains only the section
 // version for the module fields of ticket 3.8. All end at the current section version.
-import { deepEqual, equal, ok } from "node:assert/strict";
+import { deepEqual, equal, ok, throws } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -14,6 +14,7 @@ import {
   canon,
   createAudioSection,
   createGameState,
+  awardExperience,
   restoreGameState,
   SCHEMA_VERSIONS,
   snapshot,
@@ -76,6 +77,48 @@ test("a v4 save (no module fields) restores unchanged apart from the v5 section 
   deepEqual(restored.vm.redirects, []);
   deepEqual(restored.vm.threads[0]!.wait, { kind: "sleep", until: 5, global: true, resumesCall: true });
   equal(canon(restoreGameState(snapshot(restored))), canon(restored));
+});
+
+test("a schema-v1 actor save preserves state and marks legacy precedence unresolved", () => {
+  const restored = restoreGameState(fixtureText("actors-v1.json"));
+
+  equal(SCHEMA_VERSIONS.actors, 2);
+  equal(restored.schema.actors, SCHEMA_VERSIONS.actors);
+  const actor = restored.actors.actors[0]!;
+  equal(actor.stats.level, 2);
+  equal(actor.stats.experience, 24);
+  equal(actor.progression.nextRequirement, 15);
+  equal(actor.progression.remainingExperience, 1);
+  equal(actor.progression.legacyLevelUp, null);
+  throws(() => awardExperience(restored.actors, actor.id, 1));
+  equal(canon(restoreGameState(snapshot(restored))), canon(restored));
+});
+test("actor migration accepts an exact MAX_SAFE threshold product and rejects overflow", () => {
+  const exact = JSON.parse(fixtureText("actors-v1.json")) as {
+    actors: { actors: Array<{ progression: Record<string, unknown> }> };
+  };
+  const exactPolicy = exact.actors.actors[0]!.progression;
+  exactPolicy.levelType = 1;
+  exactPolicy.experienceIncrease = Number.MAX_SAFE_INTEGER;
+  exactPolicy.levelUpType = 0;
+  const restored = restoreGameState(JSON.stringify(exact));
+  equal(restored.actors.actors[0]!.progression.nextRequirement, 90071992547410);
+
+  const unsafe = JSON.parse(fixtureText("actors-v1.json")) as {
+    actors: { actors: Array<{ progression: Record<string, unknown> }> };
+  };
+  const unsafePolicy = unsafe.actors.actors[0]!.progression;
+  unsafePolicy.levelType = 2;
+  unsafePolicy.experienceIncrease = Number.MAX_SAFE_INTEGER;
+  unsafePolicy.levelUpType = 0;
+  equal(errorOf(() => restoreGameState(JSON.stringify(unsafe))).code, "restore.shape");
+});
+test("restore refuses a future actor schema version", () => {
+  const json = JSON.parse(snapshot(createGameState({ seed: 0 }))) as {
+    schema: { actors: number };
+  };
+  json.schema.actors = SCHEMA_VERSIONS.actors + 1;
+  equal(errorOf(() => restoreGameState(JSON.stringify(json))).code, "restore.shape");
 });
 
 test("migration is idempotent and leaves a current-version save untouched", () => {

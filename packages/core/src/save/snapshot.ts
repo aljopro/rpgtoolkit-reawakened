@@ -47,7 +47,7 @@ import {
 } from "../script/errors.ts";
 import { COMPILER_VERSION } from "../script/program.ts";
 import { SCHEMA_VERSIONS, type GameState } from "./state.ts";
-import { asActorsSection, createActorsSection, ACTORS_SCHEMA_VERSION } from "../actors/model.ts";
+import { asActorsSection, createActorsSection, ACTORS_SCHEMA_VERSION, validateActorProgression, type ActorProgression, type ActorStats } from "../actors/model.ts";
 import { asSpritesSection, createSpritesSection, SPRITES_SCHEMA_VERSION } from "../sprites/model.ts";
 import { createInputSection } from "../input/input.ts";
 import { createTriggersSection, TRIGGERS_SCHEMA_VERSION } from "../triggers/model.ts";
@@ -161,7 +161,46 @@ function migrateSprites(record: Record<string, unknown>, schema: Record<string, 
   }
 }
 
-/** Add the actor section to saves made before the unified actor owner existed. */
+function migrationInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) shapeError(`the snapshot's ${field} must be a safe integer`);
+  return value;
+}
+
+function migrateActorProgression(actor: Record<string, unknown>, index: number): void {
+  const stats = recordAt(actor.stats, `actors.actors[${index}].stats`) as unknown as ActorStats;
+  const old = recordAt(actor.progression, `actors.actors[${index}].progression`);
+  const fields = ["levelType", "experienceIncrease", "maxLevel", "levelHp", "levelDp", "levelFp", "levelSm", "levelUpType"] as const;
+  const policy = Object.fromEntries(fields.map((field) => [field, migrationInteger(old[field], `actors.actors[${index}].progression.${field}`)])) as unknown as ActorProgression;
+  let nextRequirement = policy.levelType;
+  let remainingExperience = nextRequirement - migrationInteger(stats.experience, `actors.actors[${index}].stats.experience`);
+  const level = migrationInteger(stats.level, `actors.actors[${index}].stats.level`);
+  for (let priorLevel = 1; priorLevel < level; priorLevel += 1) {
+    const product = nextRequirement * policy.experienceIncrease;
+    if (!Number.isSafeInteger(product)) shapeError(`the snapshot's actors.actors[${index}] progression threshold is unsafe`);
+    nextRequirement = policy.levelUpType === 0
+      ? nextRequirement + Math.trunc(product / 100)
+      : nextRequirement + policy.experienceIncrease;
+    if (!Number.isSafeInteger(nextRequirement)) shapeError(`the snapshot's actors.actors[${index}] progression threshold is unsafe`);
+    remainingExperience += nextRequirement;
+    if (!Number.isSafeInteger(remainingExperience)) shapeError(`the snapshot's actors.actors[${index}] remaining experience is unsafe`);
+  }
+  const migrated = {
+    ...old,
+    ...policy,
+    remainingExperience: Math.max(0, remainingExperience),
+    nextRequirement,
+    // Version 1 did not persist whether a source legacy program was present.
+    legacyLevelUp: null,
+  };
+  try {
+    validateActorProgression(stats, migrated);
+  } catch {
+    shapeError(`the snapshot's actors.actors[${index}] has invalid progression`);
+  }
+  actor.progression = migrated;
+}
+
+/** Migrate actor records while retaining their saved identity and state. */
 function migrateActors(record: Record<string, unknown>, schema: Record<string, unknown>): void {
   const version = schema.actors;
   if (version === undefined) {
@@ -170,9 +209,18 @@ function migrateActors(record: Record<string, unknown>, schema: Record<string, u
     return;
   }
   if (typeof version !== "number") shapeError("the snapshot's `schema` has no numeric `actors` version");
-  if (version >= ACTORS_SCHEMA_VERSION) return;
-  record.actors = createActorsSection();
+  if (version > ACTORS_SCHEMA_VERSION) shapeError(`the snapshot's actors schema version ${String(version)} is newer than supported version ${ACTORS_SCHEMA_VERSION}`);
+  if (version === ACTORS_SCHEMA_VERSION) return;
+  if (version !== 1) shapeError(`the snapshot's actors schema version ${String(version)} has no migration`);
+  const section = recordAt(record.actors, "actors");
+  if (section.version !== 1 || !Array.isArray(section.actors)) shapeError("the snapshot's actors section is not a version-1 actor section");
+  for (const [index, value] of section.actors.entries()) {
+    if (!isRecord(value)) shapeError(`the snapshot's actors.actors[${index}] is not an object`);
+    migrateActorProgression(value, index);
+  }
+  section.version = ACTORS_SCHEMA_VERSION;
   schema.actors = ACTORS_SCHEMA_VERSION;
+  record.actors = section;
 }
 
 /** Migrate the old empty trigger placeholder to the activation-state schema. */

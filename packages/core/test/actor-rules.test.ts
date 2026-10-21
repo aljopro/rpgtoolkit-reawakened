@@ -106,12 +106,66 @@ test("equipment derives four bonuses from item data and applies stat deltas", ()
   ]);
   ok(removed);
   deepEqual(removed.actor.stats, state.actor.stats);
+  throws(() => applyEquipment(state.section, state.actor.id, ["blade", "blade"], [blade]));
   throws(() => applyEquipment(state.section, state.actor.id, ["blade"], [
     blade,
     { name: "blade", equipBonus: [5, 2, 3, 1] },
   ]));
   throws(() => applyEquipment(state.section, state.actor.id, ["missing"], []));
   throws(() => applyEquipment(state.section, state.actor.id, ["bad"], [{ name: "bad", equipBonus: [1, 2, 3] }]));
+});
+test("equipment hook patches are closed and preserve unique references", () => {
+  const state = actor({ statuses: { poison: 1 } });
+  throws(() => applyEquipment(state.section, state.actor.id, ["blade"], [{ name: "blade", equipBonus: [1, 1, 1, 1] }], {
+    equipmentChanged: () => ({ equipped: ["blade", "blade"] }),
+  }));
+  throws(() => applyEquipment(state.section, state.actor.id, ["blade"], [{ name: "blade", equipBonus: [1, 1, 1, 1] }], {
+    equipmentChanged: () => ({ bonuses: { hp: 1, unknown: 2 } as never }),
+  }));
+  throws(() => advanceStatus(state.section, state.actor.id, 0, { hooks: { statusChanged: () => ({ rounds: -1 }) } }));
+  throws(() => awardExperience(state.section, state.actor.id, 10, { levelUp: () => ({ deltas: { maxHp: 1, unknown: 2 } as never }) }));
+});
+
+test("equipment source normalization rejects malformed identity and bonuses", () => {
+  throws(() => equipmentDefinitionFromItem({ itemName: "bad", equipHP: Number.NaN, equipDP: 0, equipFP: 0, equipSM: 0 }));
+  throws(() => equipmentDefinitionFromItem({ itemName: "bad", equipHP: 1.5, equipDP: 0, equipFP: 0, equipSM: 0 }));
+  throws(() => equipmentDefinitionFromItem({ itemName: "bad", equipHP: 0, equipDP: 0, equipFP: 0, equipSM: 0, id: 1 as never }));
+});
+
+test("revival hook follows stats hooks and runs once for stats and equipment crossings", () => {
+  const statsState = actor({ stats: { hp: 0, maxHp: 10 } });
+  const statsCalls: string[] = [];
+  const revivedByStats = updateActorStats(statsState.section, statsState.actor.id, { hp: 0 }, {
+    cause: "script",
+    hooks: {
+      statsChanged: () => { statsCalls.push("stats"); return { hp: 5 }; },
+      revive: () => { statsCalls.push("revive"); return {}; },
+    },
+  });
+  ok(revivedByStats);
+  deepEqual(statsCalls, ["stats", "revive"]);
+  deepEqual(revivedByStats.transitions, [{ type: "revived", actorId: statsState.actor.id, cause: "script", source: null }]);
+
+  const equipmentState = actor({ stats: { hp: 0, maxHp: 10 } });
+  const equipmentCalls: string[] = [];
+  const revivedByEquipment = applyEquipment(equipmentState.section, equipmentState.actor.id, ["ring"], [{ name: "ring", equipBonus: [0, 0, 0, 0] }], {
+    statsChanged: () => { equipmentCalls.push("stats"); return { hp: 5 }; },
+    revive: () => { equipmentCalls.push("revive"); return {}; },
+  });
+  ok(revivedByEquipment);
+  deepEqual(equipmentCalls, ["stats", "revive"]);
+  deepEqual(revivedByEquipment.transitions, [{ type: "revived", actorId: equipmentState.actor.id, cause: "script", source: null }]);
+});
+
+test("a revive hook that leaves HP non-positive emits no revived transition", () => {
+  const state = actor({ stats: { hp: 0, maxHp: 10 } });
+  const result = updateActorStats(state.section, state.actor.id, { hp: 1 }, {
+    cause: "script",
+    hooks: { revive: () => ({ hp: 0 }) },
+  });
+  ok(result);
+  equal(result.actor.stats.hp, 0);
+  deepEqual(result.transitions, []);
 });
 
 test("XP uses fixed and percentage branches, carries multi-level awards, excludes equipment and never refills", () => {
@@ -137,6 +191,66 @@ test("XP uses fixed and percentage branches, carries multi-level awards, exclude
   equal(percentageResult.actor.stats.fp, 25);
   equal(percentageResult.actor.stats.maxSmp, 25);
 });
+test("statsChanged runs only for applied core level-ups", () => {
+  const state = actor();
+  let calls = 0;
+  const belowThreshold = awardExperience(state.section, state.actor.id, 1, { statsChanged: () => { calls += 1; return { dp: 999 }; } });
+  ok(belowThreshold);
+  equal(calls, 0);
+  equal(belowThreshold.actor.stats.dp, 10);
+  const levelled = awardExperience(state.section, state.actor.id, 9, { statsChanged: () => { calls += 1; return {}; } });
+  ok(levelled);
+  equal(calls, 1);
+  const maxed = actor({ progression: { maxLevel: 1 } });
+  const maxedResult = awardExperience(maxed.section, maxed.actor.id, 100, { statsChanged: () => { calls += 1; return { dp: 999 }; } });
+  ok(maxedResult);
+  equal(maxedResult.actor.stats.dp, 10);
+  equal(calls, 1);
+});
+
+test("safe arithmetic rejects overflow without partial actor mutation", () => {
+  const equipmentState = actor();
+  const beforeEquipment = { ...equipmentState.actor.stats };
+  throws(() => applyEquipment(equipmentState.section, equipmentState.actor.id, ["a", "b"], [
+    { name: "a", equipBonus: [Number.MAX_SAFE_INTEGER, 0, 0, 0] },
+    { name: "b", equipBonus: [1, 0, 0, 0] },
+  ]));
+  deepEqual(equipmentState.actor.stats, beforeEquipment);
+
+  const levelState = actor({ stats: { maxHp: Number.MAX_SAFE_INTEGER } });
+  const beforeLevel = { ...levelState.actor.stats };
+  throws(() => awardExperience(levelState.section, levelState.actor.id, 10));
+  deepEqual(levelState.actor.stats, beforeLevel);
+});
+test("safe multiplication accepts an exact MAX_SAFE product and rejects the next unsafe product", () => {
+  const exact = actor({
+    stats: { hp: 1, maxHp: 1 },
+    progression: { levelHp: Number.MAX_SAFE_INTEGER, experienceIncrease: 100, levelUpType: 0 },
+  });
+  const exactResult = awardExperience(exact.section, exact.actor.id, 10);
+  ok(exactResult);
+  equal(exactResult.actor.stats.maxHp, 90071992547410);
+
+  const unsafe = actor({
+    stats: { hp: 2, maxHp: 2 },
+    progression: { levelHp: Number.MAX_SAFE_INTEGER, experienceIncrease: 100, levelUpType: 0 },
+  });
+  unsafe.actor.equipment.bonuses.hp = -1;
+  const before = { ...unsafe.actor.stats };
+  throws(() => awardExperience(unsafe.section, unsafe.actor.id, 10));
+  deepEqual(unsafe.actor.stats, before);
+});
+
+test("status names including __proto__ survive countdown ownership", () => {
+  const statuses: Record<string, number> = {};
+  Object.defineProperty(statuses, "__proto__", { value: 2, enumerable: true, writable: true, configurable: true });
+  const state = actor({ statuses });
+  const result = advanceStatus(state.section, state.actor.id, 1);
+  ok(result);
+  equal(Object.prototype.hasOwnProperty.call(result.actor.statuses, "__proto__"), true);
+  equal(result.actor.statuses["__proto__"], 1);
+});
+
 
 test("max level retains XP and legacy program precedence suppresses core growth", () => {
   const state = actor({ progression: { maxLevel: 2, legacyLevelUp: true } });
@@ -157,12 +271,17 @@ test("max level retains XP and legacy program precedence suppresses core growth"
   equal(maxed.legacyLevelUps, undefined);
   throws(() => awardExperience(state.section, state.actor.id, -1));
 });
-
-test("progression rejects negative configured growth without mutating the actor", () => {
-  const state = actor({ progression: { levelHp: -1 } });
+test("unresolved legacy precedence blocks XP instead of choosing core growth", () => {
+  const state = actor({ progression: { legacyLevelUp: null } });
   throws(() => awardExperience(state.section, state.actor.id, 1));
   equal(state.actor.stats.experience, 0);
-  equal(state.actor.stats.level, 1);
+});
+
+
+test("progression rejects invalid configured growth at actor creation", () => {
+  throws(() => actor({ progression: { levelHp: -1 } }));
+  throws(() => actor({ progression: { levelHp: 1.5 } }));
+  throws(() => actor({ progression: { levelUpType: 2 } }));
 });
 
 test("the five hooks are direct synchronous plain-data seams", () => {
