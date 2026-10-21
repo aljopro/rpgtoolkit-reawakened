@@ -18,7 +18,7 @@ import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
 import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
-import { createActorHostType, createActorService } from "../actors/port.ts";
+import { createActorHostType, createActorService, type ActorService } from "../actors/port.ts";
 import { createBehaviourRegistry, resolveBehaviour, type BehaviourRegistry } from "../actors/behaviour.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
@@ -152,9 +152,10 @@ export type ScriptServices = {
   readonly virtuals: VirtualVariablePort;
   readonly logger: Logger;
   readonly diagnostics: Diagnostic[];
+  /** Actor operations resolve the session behaviour before applying core rules. */
+  readonly actors: ActorService;
   /** Session-only actor behaviour registrations; never saved as game state. */
   readonly behaviours: BehaviourRegistry;
-  /** Manifest options remain host/service data and never enter VM state. */
   readonly pluginOptions: ReadonlyMap<string, PlainData>;
   /** The packages' session data, rebuilt at boot/reset/restore. */
   readonly hiddenFileWarned: Set<string>;
@@ -196,7 +197,16 @@ export function createScriptServices(
     state,
     gameId,
   };
-  const virt = virtuals ?? createDefaultVirtuals(state);
+  const diagnostics: Diagnostic[] = [];
+  const behaviours = createBehaviourRegistry(
+    plugins.map((plugin) => plugin.namespace ?? plugin.definition.id),
+    diagnostics,
+  );
+  const actors = createActorService(
+    state.actors,
+    (actor) => resolveBehaviour(behaviours, actor, diagnostics),
+  );
+  const virt = virtuals ?? createDefaultVirtuals(state, actors);
   const registry = assembleCommands(plugins, logger);
   for (const problem of registerNativeListeners(state.events, plugins)) {
     logger.warn({
@@ -218,18 +228,8 @@ export function createScriptServices(
     extension: (name) => registry.get(name),
     namespace: { has: (namespace) => registry.hasNamespace(namespace), get: (namespace, name) => registry.getIn(namespace, name) },
   });
-  const diagnostics: Diagnostic[] = [];
-  const behaviours = createBehaviourRegistry(
-    plugins.flatMap((plugin) => (plugin.namespace === undefined ? [] : [plugin.namespace])),
-    diagnostics,
-  );
-  for (const plugin of plugins) {
-    for (const behaviour of plugin.definition.behaviours ?? []) {
-      behaviours.registerBehaviour(behaviour.name, behaviour.hooks);
-    }
-  }
   const hydratedTypes = new Map<string, HostObjectType>();
-  hydratedTypes.set("actor", createActorHostType(createActorService(state.actors, (actor) => resolveBehaviour(behaviours, actor, diagnostics))));
+  hydratedTypes.set("actor", createActorHostType(actors));
   for (const plugin of plugins) {
     for (const type of plugin.definition.hostTypes ?? []) hydratedTypes.set(type.name, type);
   }
@@ -267,6 +267,7 @@ export function createScriptServices(
     virtuals: virt,
     logger,
     diagnostics,
+    actors,
     behaviours,
     pluginOptions,
     hiddenFileWarned: new Set(),

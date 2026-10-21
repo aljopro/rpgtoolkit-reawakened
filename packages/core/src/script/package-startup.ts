@@ -21,24 +21,28 @@
  */
 
 import type { GameState } from "../save/state.ts";
+import { registerPackageBehaviours } from "../actors/behaviour.ts";
 import { ScriptError } from "./errors.ts";
 import type { ProgramRef } from "./program.ts";
 import { findThread, killThread, startProgram } from "./state.ts";
+import type { ResolvedPlugin } from "./plugin.ts";
 import { runThreadsPhase, STEP_BUDGET, type ScriptServices } from "./vm.ts";
 
 /** The most budget-sized slices one start-up program may take before the run is refused. */
 export const MAX_STARTUP_SLICES = 100;
 
 /**
- * Run each of `startups` in order to its end on `state`, so the `registerPlugin`
- * calls they make fill `services.layers`. `state` must be a fresh state and
- * `services` the services made over it.
+ * Run package startup contributions on a fresh session. Static behaviour definitions
+ * are registered before startup programs so actor operations can resolve them.
+ * `state` must be a fresh state and `services` the services made over it.
  */
 export function runPackageStartup(
   state: GameState,
   services: ScriptServices,
   startups: readonly ProgramRef[],
+  plugins: readonly ResolvedPlugin[] = [],
 ): void {
+  registerPackageBehaviours(services.behaviours, plugins);
   for (const ref of startups) {
     const thread = startProgram(state.vm, ref);
     const id = thread.id;

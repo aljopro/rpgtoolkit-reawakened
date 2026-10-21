@@ -1,6 +1,7 @@
 import type { Diagnostic } from "../ports/engine.ts";
 import type { ActorRecord } from "./model.ts";
 import type { ActorHooks } from "./rules.ts";
+import type { ResolvedPlugin } from "../script/plugin.ts";
 /** The closed core hook surface. */
 export const ACTOR_BEHAVIOUR_HOOKS = ["levelUp", "revive", "statusChanged", "equipmentChanged", "statsChanged"] as const;
 export type ActorBehaviourHook = (typeof ACTOR_BEHAVIOUR_HOOKS)[number];
@@ -30,6 +31,15 @@ export function registerBehaviour(registry: BehaviourRegistry, name: string, hoo
   return registry.registerBehaviour(name, hooks);
 }
 
+/** Register the static behaviour contributions of the resolved packages. */
+export function registerPackageBehaviours(registry: BehaviourRegistry, plugins: readonly ResolvedPlugin[]): void {
+  for (const plugin of plugins) {
+    for (const behaviour of plugin.definition.behaviours ?? []) {
+      registry.registerBehaviour(behaviour.name, behaviour.hooks);
+    }
+  }
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -50,7 +60,7 @@ export function createBehaviourRegistry(
       return false;
     }
     const namespace = match[1]!;
-    if (allowed.size > 0 && !allowed.has(namespace)) {
+    if (!allowed.has(namespace)) {
       diagnostic(diagnostics, "behaviour.namespace", `behaviour ${JSON.stringify(name)} is not provided by a registered package namespace`);
       return false;
     }

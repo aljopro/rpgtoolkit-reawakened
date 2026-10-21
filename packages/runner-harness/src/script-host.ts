@@ -331,9 +331,12 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
     undefined,
     layers,
   );
-  if (init.packageStartups !== undefined && init.packageStartups.length > 0) {
-    runPackageStartup(gameState, services, init.packageStartups);
-  }
+  runPackageStartup(
+    gameState,
+    services,
+    init.packageStartups ?? [],
+    resolution.plugins,
+  );
   startProgram(gameState.vm, programRef);
   return createHost(gameState, services, resolution.diagnostics, init.blobs);
 }
@@ -362,7 +365,7 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
       undefined,
       layers,
     );
-    runPackageStartup(scratch, scratchServices, init.packageStartups);
+    runPackageStartup(scratch, scratchServices, init.packageStartups, resolution.plugins);
   }
   const services = createScriptServices(
     gameState,
@@ -375,6 +378,7 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     undefined,
     layers,
   );
+  runPackageStartup(gameState, services, [], resolution.plugins);
   // The compiled programs are not in the snapshot: check that every callable in it
   // still resolves against the ones this host rebuilds (FUN-8; entry 18.6).
   verifyRestoredHandles(gameState.vm, services, gameState.events);

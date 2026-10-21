@@ -1,5 +1,15 @@
 import { actorId, getActor, patchActor, type ActorId, type ActorPatch, type ActorRecord, type ActorStats, type ActorsSection } from "./model.ts";
-import type { ActorHooks } from "./rules.ts";
+import {
+  advanceStatus,
+  applyEquipment,
+  awardExperience,
+  updateActorStats,
+  type ActorHooks,
+  type AdvanceStatusOptions,
+  type ActorRuleResult,
+  type EquipmentItemDefinition,
+  type StatsChangeOptions,
+} from "./rules.ts";
 import type { HostObjectType } from "../script/host.ts";
 import type { Value } from "../ports/value.ts";
 /**
@@ -13,7 +23,14 @@ export type StatsPort = {
   write(actor: ActorId | number, patch: Partial<ActorStats>): boolean;
 };
 
-export type ActorService = StatsPort & {
+export type ActorOperationService = {
+  updateStats(actor: ActorId | number, patch: Partial<ActorStats>, options: Omit<StatsChangeOptions, "hooks">): ActorRuleResult | null;
+  advanceStatus(actor: ActorId | number, amount: number, options?: Omit<AdvanceStatusOptions, "hooks">): ActorRuleResult | null;
+  applyEquipment(actor: ActorId | number, equipped: readonly string[], items: readonly EquipmentItemDefinition[]): ActorRuleResult | null;
+  awardExperience(actor: ActorId | number, amount: number): ActorRuleResult | null;
+};
+
+export type ActorService = StatsPort & ActorOperationService & {
   readActor(actor: ActorId | number): Readonly<ActorRecord> | null;
   patchActor(actor: ActorId | number, patch: ActorPatch): Readonly<ActorRecord> | null;
   activeActor(): Readonly<ActorRecord> | null;
@@ -22,12 +39,28 @@ export type ActorService = StatsPort & {
 /** Create the owner service over the one authoritative actor section. */
 export function createActorService(section: ActorsSection, resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks = () => ({})): ActorService {
   const stats = createStatsPort(section);
+  const hooksFor = (actor: ActorId | number): ActorHooks => {
+    const record = getActor(section, actorId(actor));
+    return record === null ? {} : resolveHooks(record);
+  };
   return {
     read(actor) {
       return stats.read(actor);
     },
     write(actor, patch) {
       return stats.write(actor, patch);
+    },
+    updateStats(actor, patch, options) {
+      return updateActorStats(section, actor, patch, { ...options, hooks: hooksFor(actor) });
+    },
+    advanceStatus(actor, amount, options = {}) {
+      return advanceStatus(section, actor, amount, { ...options, hooks: hooksFor(actor) });
+    },
+    applyEquipment(actor, equipped, items) {
+      return applyEquipment(section, actor, equipped, items, hooksFor(actor));
+    },
+    awardExperience(actor, amount) {
+      return awardExperience(section, actor, amount, hooksFor(actor));
     },
     readActor(actor) {
       return getActor(section, actorId(actor));
@@ -40,8 +73,7 @@ export function createActorService(section: ActorsSection, resolveHooks: (actor:
       return party ?? section.actors[0] ?? null;
     },
     hooks(actor) {
-      const record = getActor(section, actorId(actor));
-      return record === null ? {} : resolveHooks(record);
+      return hooksFor(actor);
     },
   };
 }
@@ -113,8 +145,8 @@ export function createActorHostType(service: ActorService): HostObjectType {
       if (actor === null) return "not-host";
       const stat = ACTOR_STAT_FIELDS[name.toLowerCase()];
       if (stat !== undefined && typeof value === "number") {
-        service.write(id, { [stat]: value } as Partial<ActorStats>);
-        return "written";
+        const result = service.updateStats(id, { [stat]: value } as Partial<ActorStats>, { cause: "script" });
+        return result === null ? "not-host" : "written";
       }
       if (name.toLowerCase() === "name" && typeof value === "string") {
         service.patchActor(id, { name: value });

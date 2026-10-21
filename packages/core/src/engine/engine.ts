@@ -48,6 +48,7 @@ import { clearPathfindingCache } from "../sprites/pathfinding.ts";
 import { runRandomEncounterPhase } from "../sprites/encounters.ts";
 import { EffectBus, type EffectApplier, type PostEffect } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
+import { registerPackageBehaviours } from "../actors/behaviour.ts";
 import type { EnginePhase, EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
 import {
@@ -296,7 +297,7 @@ export function createEngine(init: EngineInit): Engine {
 
   function makeServices(plugins: readonly ResolvedPlugin[], programLoader?: ProgramLoader): ScriptServices {
     audioDecoders = assembleAudioDecoders(plugins.map((plugin) => plugin.definition), decoderLogger);
-    return createScriptServices(
+    const services = createScriptServices(
       state,
       plugins,
       undefined,
@@ -310,6 +311,8 @@ export function createEngine(init: EngineInit): Engine {
         requestsOut.push({ kind: "playVideo", reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation });
       },
     );
+    registerPackageBehaviours(services.behaviours, plugins);
+    return services;
   }
   let services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS);
   if (init.mainFile === undefined && init.program !== undefined) {

@@ -145,10 +145,9 @@ export function createDefaultVirtuals(state: GameState, actors: ActorService = c
       const name = rawName.toLowerCase();
       const stat = actorAlias(name);
       if (stat !== undefined) {
-        if (typeof value !== "number" || actors.activeActor() === null || !actors.write(actors.activeActor()!.id, { [stat]: value } as Partial<ActorStats>)) {
-          return "read-only";
-        }
-        return "written";
+        const active = actors.activeActor();
+        if (typeof value !== "number" || active === null) return "read-only";
+        return actors.updateStats(active.id, { [stat]: value } as Partial<ActorStats>, { cause: "script" }) === null ? "read-only" : "written";
       }
       if (name === "ambientred" || name === "ambientgreen" || name === "ambientblue") {
         const world = asRecord(state.world);
