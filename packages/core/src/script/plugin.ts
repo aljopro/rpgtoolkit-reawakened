@@ -44,6 +44,7 @@ import type { Value } from "../ports/value.ts";
 import type { NativeListener } from "../events/model.ts";
 import type { Wait } from "../ports/wait.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
+import type { ActorService } from "../actors/port.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import type { EffectKind } from "./effects.ts";
 import type { HostObjectType } from "./host.ts";
@@ -61,6 +62,12 @@ export type CommandView = {
   readonly rng: RngPort;
   readonly clock: ClockPort;
   readonly state?: GameState;
+  /**
+   * The owner-held actor operations (docs/spec/engine/actors.md#store-and-action-boundary).
+   * Every write resolves the actor's behaviour hooks and publishes the resulting
+   * transitions; a command never patches the actor section directly.
+   */
+  readonly actors?: ActorService;
   /** Stable core-derived identity used to scope host storage. */
   readonly gameId?: string;
   /** Manifest options for the layer currently handling this command. */

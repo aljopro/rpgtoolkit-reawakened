@@ -261,14 +261,6 @@ export function createScriptServices(
       return runtimeClock.tick();
     },
   });
-  const view = Object.freeze({
-    rng,
-    clock,
-    state: commandState,
-    gameId,
-    get packageStartup() { return packageStartupActive.active; },
-    get thread() { return commandThread; },
-  }) as CommandView;
   const diagnostics: Diagnostic[] = [];
   const behaviours = createBehaviourRegistry(
     plugins.map((plugin) => plugin.namespace ?? plugin.definition.id),
@@ -279,6 +271,15 @@ export function createScriptServices(
     (actor) => resolveBehaviour(behaviours, actor, diagnostics),
     createActorEventSink(state.vm, state.events, state.actors),
   );
+  const view = Object.freeze({
+    rng,
+    clock,
+    state: commandState,
+    actors,
+    gameId,
+    get packageStartup() { return packageStartupActive.active; },
+    get thread() { return commandThread; },
+  }) as CommandView;
   const virt = virtuals ?? createDefaultVirtuals(state, actors);
   const registry = assembleCommands(plugins, logger);
   for (const problem of registerNativeListeners(state.events, plugins)) {
