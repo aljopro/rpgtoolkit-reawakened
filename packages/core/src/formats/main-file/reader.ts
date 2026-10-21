@@ -153,6 +153,27 @@ export function createEmptyMainFile(): MainFile {
   };
 }
 
+/**
+ * The stock packages a new project names in its TKR package list
+ * (docs/spec/formats/main-file.md#tkr-package-list-extension). The list is the
+ * explicit surface the editor saves; the legacy DLL rows stay data.
+ */
+export const NEW_PROJECT_PACKAGE_PLUGINS: readonly string[] = ["stock_battle", "stock_menu"];
+
+/**
+ * A new-project main file: the current minor and both stock packages in the package list, so a
+ * project saved from the editor names its menu and battle systems explicitly. The menu and battle
+ * DLL rows stay empty — a new project has no legacy rows to preserve.
+ */
+export function newProjectMainFile(): MainFile {
+  return {
+    ...createEmptyMainFile(),
+    minor: MAIN_MAX_MINOR,
+    packagePlugins: [...NEW_PROJECT_PACKAGE_PLUGINS],
+    packagePluginsExtension: true,
+  };
+}
+
 /** Parse a Toolkit 2 line-oriented text main file (docs/spec/formats/legacy/text-formats.md#main-file-toolkit-2-text). */
 export function readTextMainFile(bytes: Uint8Array, path?: string): Result<MainFile> {
   const reader = new TextLineReader(bytes, path);

@@ -145,17 +145,18 @@ test("reserved lower-case package IDs remain valid manifest names", () => {
     { id: "core" },
     { id: "constructor", version: "1" },
     { id: "core-tools", version: "1" },
+    { id: "stock_battle", version: "1", namespace: "stock_battle" },
   ]);
   deepEqual(result.diagnostics, []);
-  deepEqual(result.manifest?.map((entry) => entry.id), ["core", "constructor", "core-tools"]);
+  deepEqual(result.manifest?.map((entry) => entry.id), ["core", "constructor", "core-tools", "stock_battle"]);
 });
 
 test("package fields are validated with located diagnostics", () => {
   const cases: readonly [unknown, string][] = [
     [{ id: "p", version: "" }, "manifest.version"],
     [{ id: "p", version: 3 }, "manifest.version"],
-    [{ id: "stock_rpg", version: "1" }, "manifest.package-name"],
-    [{ id: "p", version: "1", namespace: "stock_rpg" }, "manifest.namespace"],
+    [{ id: "Stock", version: "1" }, "manifest.package-name"],
+    [{ id: "p", version: "1", namespace: "Stock" }, "manifest.namespace"],
     [{ id: "p", version: "1", requests: "saveBlob" }, "manifest.requests"],
     [{ id: "p", version: "1", requests: ["teleport"] }, "manifest.request-kind"],
     [{ id: "p", version: "1", requests: ["quit", "quit"] }, "manifest.request-kind"],

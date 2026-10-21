@@ -20,6 +20,7 @@ import {
   isPluginManifestEntryEnabled,
   type EffectKind,
   type PluginManifest,
+  type PluginManifestOperation,
   type PluginManifestPatch,
   type ResolvedPlugin,
 } from "../script/index.ts";
@@ -61,11 +62,70 @@ export function mainFilePluginNames(main: MainFile): string[] {
   return [...(main.packagePlugins ?? [])];
 }
 
-/** Convert the main file package list into the existing manifest patch seam. */
+/**
+ * The stock packages the legacy plugin names refer to
+ * (docs/spec/engine/main-loop-and-startup.md#reawakened-boot-sequence step 3). Keys are folded file
+ * names; the table has no prototype, so a row named like an `Object.prototype` member maps to nothing.
+ */
+const LEGACY_PACKAGE_BY_FILE: Record<string, string> = Object.create(null);
+LEGACY_PACKAGE_BY_FILE["tk3menu.dll"] = "stock_menu";
+LEGACY_PACKAGE_BY_FILE["tk3fight.dll"] = "stock_battle";
+
+/** The legacy plugin file names that name a stock package. */
+export const LEGACY_PLUGIN_PACKAGES: Readonly<Record<string, string>> = Object.freeze(LEGACY_PACKAGE_BY_FILE);
+
+/** A legacy plugin reference's last path segment, ASCII-case-folded; `\` and `/` both separate segments. */
+export function legacyPluginFileName(reference: string): string {
+  const separator = Math.max(reference.lastIndexOf("\\"), reference.lastIndexOf("/"));
+  return foldNamespace(reference.slice(separator + 1));
+}
+
+/** One non-empty legacy plugin row of the main file, with the stock package it maps to. */
+export type LegacyPluginRow = {
+  /** The main-file field the row came from. */
+  readonly field: "menuPlugin" | "fightPlugin" | "plugins";
+  /** Zero-based command-plugin slot index; `0` for the menu and battle rows. */
+  readonly index: number;
+  /** The stored reference, unchanged. */
+  readonly file: string;
+  /** The mapped stock package, or null when the name maps to none. */
+  readonly package: string | null;
+};
+
+/**
+ * Every non-empty legacy plugin row in mapping order — the menu row, the battle row, then the
+ * command-plugin slots (docs/spec/formats/main-file.md#layout rows 23, 24 and 38b).
+ */
+export function mainFileLegacyPluginRows(main: MainFile): LegacyPluginRow[] {
+  const row = (field: LegacyPluginRow["field"], index: number, file: string): LegacyPluginRow => ({
+    field,
+    index,
+    file,
+    package: LEGACY_PLUGIN_PACKAGES[legacyPluginFileName(file)] ?? null,
+  });
+  const rows: LegacyPluginRow[] = [];
+  if (main.menuPlugin !== "") rows.push(row("menuPlugin", 0, main.menuPlugin));
+  if (main.fightPlugin !== "") rows.push(row("fightPlugin", 0, main.fightPlugin));
+  main.plugins.forEach((entry, index) => {
+    if (entry.pluginFile !== "") rows.push(row("plugins", index, entry.pluginFile));
+  });
+  return rows;
+}
+
+/**
+ * The main file's manifest patch: the package list in stored order, then one entry per mapped legacy
+ * row. A package the list already names is not appended twice, so a legacy row and its explicit
+ * equivalent are one entry (docs/spec/engine/main-loop-and-startup.md#reawakened-boot-sequence step 3).
+ */
 export function mainFilePluginPatch(main: MainFile, catalogue: readonly PackageCatalogueEntry[] = []): PluginManifestPatch {
-  return mainFilePluginNames(main).map((id) => {
-    const packageEntry = catalogue.find((item) => foldNamespace(item.name) === foldNamespace(id));
-    return {
+  const patch: PluginManifestOperation[] = [];
+  const named = new Set<string>();
+  const append = (name: string): void => {
+    const id = foldNamespace(name);
+    if (id === "" || named.has(id)) return;
+    named.add(id);
+    const packageEntry = catalogue.find((item) => foldNamespace(item.name) === id);
+    patch.push({
       op: "append",
       entry: packageEntry === undefined
         ? { id }
@@ -75,13 +135,19 @@ export function mainFilePluginPatch(main: MainFile, catalogue: readonly PackageC
             ...(packageEntry.namespace === undefined ? {} : { namespace: packageEntry.namespace }),
             requests: [...packageEntry.requests],
           },
-    };
-  });
+    });
+  };
+  for (const name of mainFilePluginNames(main)) append(name);
+  for (const row of mainFileLegacyPluginRows(main)) {
+    if (row.package !== null) append(row.package);
+  }
+  return patch;
 }
 
 /**
  * E-02 step 3: the engine default manifest plus the package entries named by
- * the main file. Legacy DLL rows are retained as data and never interpreted.
+ * the main file and by its legacy plugin rows. Legacy rows are data and are
+ * never written back; an unmapped name is one located diagnostic.
  */
 export function pluginManifestFor(
   main: MainFile,
@@ -90,14 +156,25 @@ export function pluginManifestFor(
 ): { readonly manifest: PluginManifest; readonly diagnostics: Diagnostic[] } {
   const baseManifest: PluginManifest = ENGINE_DEFAULT_MANIFEST.map((entry) => ({ id: entry.id }));
   const patched = applyPluginManifestPatch(baseManifest, mainFilePluginPatch(main, catalogue), mainKeyForDiagnostics);
+  const unmapped: Diagnostic[] = mainFileLegacyPluginRows(main)
+    .filter((row) => row.package === null)
+    .map((row) => ({
+      code: "plugin.legacy-unmapped",
+      file: mainKeyForDiagnostics,
+      line: row.index,
+      message: `${row.field === "plugins" ? `plugins[${row.index}]` : row.field} "${row.file}" has no stock package mapping and stays data (docs/spec/engine/main-loop-and-startup.md#reawakened-boot-sequence)`,
+    }));
   return {
     manifest: patched.manifest,
-    diagnostics: patched.diagnostics.map((item) => ({
-      code: item.code,
-      file: item.path,
-      line: item.index,
-      message: item.message,
-    })),
+    diagnostics: [
+      ...patched.diagnostics.map((item) => ({
+        code: item.code,
+        file: item.path,
+        line: item.index,
+        message: item.message,
+      })),
+      ...unmapped,
+    ],
   };
 }
 

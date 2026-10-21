@@ -6,16 +6,19 @@ import { fileURLToPath } from "node:url";
 import { TextEncoder } from "node:util";
 import {
   assetKey,
+  BinaryReader,
   COMPILER_VERSION,
   createAssetIndex,
   createEmptyBoard,
   createEmptyMainFile,
   createEngine,
+  newProjectMainFile,
   PACKAGE_ROOT,
+  readMainFile,
   writeBoard,
   writeMainFile,
 } from "../src/index.ts";
-import { resolveManifestPlugins } from "../src/engine/boot.ts";
+import { pluginManifestFor, resolveManifestPlugins } from "../src/engine/boot.ts";
 import type { BuiltinSpec } from "../src/script/builtins.ts";
 import type { AssetIndex, Engine, EngineInit, GameState, PackageCatalogueEntry } from "../src/index.ts";
 
@@ -182,4 +185,94 @@ test("without stock packages, battle ends and the menu command does nothing", ()
   const result = run(engine, game.files, doubles);
   equal(result.diagnostics.length, 0);
   equal(doubles.state().vm.globals.ended, 1);
+});
+
+/** A legacy main file naming the stock DLLs in all three legacy rows (docs/spec/formats/main-file.md#layout rows 23, 24 and 38b). */
+const LEGACY_PLUGIN_ROWS = {
+  ...createEmptyMainFile(),
+  major: 2,
+  minor: 9,
+  menuPlugin: "tk3menu.dll",
+  fightPlugin: "Plugin\\TK3FIGHT.DLL",
+  plugins: [
+    { enabled: 0, pluginFile: "tk3menu.dll" },
+    { enabled: 0, pluginFile: "" },
+  ],
+};
+
+test("legacy .gam plugin rows map to the stock packages without changing the file's bytes", () => {
+  const bytes = unwrap(writeMainFile(LEGACY_PLUGIN_ROWS));
+  const parsed = unwrap(readMainFile(new BinaryReader(bytes, "main.gam")));
+  deepEqual([...unwrap(writeMainFile(parsed))], [...bytes]);
+  deepEqual(
+    [parsed.menuPlugin, parsed.fightPlugin, parsed.plugins.map((entry) => entry.pluginFile)],
+    ["tk3menu.dll", "Plugin\\TK3FIGHT.DLL", ["tk3menu.dll", ""]],
+  );
+  const result = pluginManifestFor(parsed, "main.gam", packageCatalogue());
+  deepEqual(result.diagnostics, []);
+  deepEqual(
+    result.manifest.slice(-2).map((entry) => [entry.id, entry.version, entry.namespace]),
+    [["stock_menu", "1.0.0", "stock_menu"], ["stock_battle", "1.0.0", "stock_battle"]],
+  );
+});
+
+test("a legacy row and the same package named explicitly are one manifest entry", () => {
+  const main = { ...LEGACY_PLUGIN_ROWS, packagePlugins: ["stock_battle", "stock_menu"], packagePluginsExtension: true };
+  const parsed = unwrap(readMainFile(new BinaryReader(unwrap(writeMainFile(main)), "main.gam")));
+  const result = pluginManifestFor(parsed, "main.gam", packageCatalogue());
+  deepEqual(result.diagnostics, []);
+  deepEqual(result.manifest.slice(-2).map((entry) => entry.id), ["stock_battle", "stock_menu"]);
+});
+
+test("an unmapped custom DLL keeps its row as data and reports one located diagnostic", () => {
+  const main = {
+    ...createEmptyMainFile(),
+    major: 2,
+    minor: 9,
+    plugins: [
+      { enabled: 0, pluginFile: "myCustomFight.dll" },
+      { enabled: 0, pluginFile: "tk3fight.dll" },
+    ],
+  };
+  const parsed = unwrap(readMainFile(new BinaryReader(unwrap(writeMainFile(main)), "main.gam")));
+  const result = pluginManifestFor(parsed, "main.gam", packageCatalogue());
+  deepEqual(result.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.file, diagnostic.line]), [["plugin.legacy-unmapped", "main.gam", 0]]);
+  equal(result.diagnostics[0]!.message.includes("myCustomFight.dll"), true);
+  deepEqual(result.manifest.slice(-1).map((entry) => entry.id), ["stock_battle"]);
+  deepEqual(parsed.plugins.map((entry) => entry.pluginFile), ["myCustomFight.dll", "tk3fight.dll"]);
+});
+
+test("a legacy row named like an Object.prototype member maps to nothing and reports one diagnostic", () => {
+  const main = {
+    ...createEmptyMainFile(),
+    major: 2,
+    minor: 9,
+    menuPlugin: "Constructor",
+    plugins: [{ enabled: 0, pluginFile: "__proto__" }],
+  };
+  const parsed = unwrap(readMainFile(new BinaryReader(unwrap(writeMainFile(main)), "main.gam")));
+  const result = pluginManifestFor(parsed, "main.gam", packageCatalogue());
+  deepEqual(
+    result.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.line]),
+    [["plugin.legacy-unmapped", 0], ["plugin.legacy-unmapped", 0]],
+  );
+  deepEqual(result.manifest.slice(-1).map((entry) => entry.id), ["twbutton"]);
+});
+
+test("a new-project template lists both stock packages and round-trips them explicitly", () => {
+  const template = newProjectMainFile();
+  deepEqual([...(template.packagePlugins ?? [])], ["stock_battle", "stock_menu"]);
+  equal(template.packagePluginsExtension, true);
+  equal(template.menuPlugin, "");
+  equal(template.fightPlugin, "");
+  const parsed = unwrap(readMainFile(new BinaryReader(unwrap(writeMainFile(template)), "main.gam")));
+  equal(parsed.packagePluginsExtension, true);
+  deepEqual([...(parsed.packagePlugins ?? [])], ["stock_battle", "stock_menu"]);
+  const catalogue = packageCatalogue();
+  const resolved = resolveManifestPlugins(pluginManifestFor(parsed, "main.gam", catalogue).manifest, "main.gam", catalogue);
+  equal(resolved.diagnostics.length, 0);
+  deepEqual(
+    resolved.plugins.flatMap((plugin) => (plugin.package === undefined ? [] : [plugin.package.name])),
+    ["stock_battle", "stock_menu"],
+  );
 });

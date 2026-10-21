@@ -1017,7 +1017,7 @@ export function createEngine(init: EngineInit): Engine {
       }
       const manifest = pluginManifestFor(mainFile, mainKey, init.packageCatalogue ?? []);
       const resolvedPlugins = resolveManifestPlugins(manifest.manifest, mainKey, init.packageCatalogue ?? []);
-      diagnostics.push(...resolvedPlugins.diagnostics);
+      diagnostics.push(...manifest.diagnostics, ...resolvedPlugins.diagnostics);
       loader = { index, root, read: (key) => cache.get(key) };
       activePlugins = init.plugins ?? resolvedPlugins.plugins;
       if (!startupServicesReady) services = makeServices(activePlugins, loader, true);

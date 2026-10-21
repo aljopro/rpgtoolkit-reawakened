@@ -144,7 +144,7 @@ function isPlainData(value: unknown, seen: Set<object> = new Set()): value is Pl
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
-const FOLDED_IDENTIFIER = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const FOLDED_IDENTIFIER = /^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$/;
 
 function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   const allowed = new Set(keys);
