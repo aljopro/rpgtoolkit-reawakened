@@ -81,7 +81,7 @@ export function hydrateSprites(input: SpriteHydrationInput, section = createSpri
   const board = input.board;
   const actors = input.actorFiles ?? new Map();
   const players = (input.players ?? []).map((source, index) => actorSourceForPlayer(source, index, board, input.actors));
-  const itemSources = boardItemSources(board, actors, input.variables ?? {}, input.actors);
+  const itemSources = boardItemSources(board, actors, input.variables ?? {}, input.actors, input.actorIds);
   const items = itemSources.map((source, index) => {
     const actor = actorFromSource(source, board, index, index);
     const thread = startsItemThread(actor, input.vm, input.programRef);

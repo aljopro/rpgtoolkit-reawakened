@@ -80,6 +80,11 @@ test("actor-backed board sprites link to actor behaviour dispatch without copyin
   save.actors = actors;
   save.sprites = linked;
   equal(restoreGameState(snapshot(save)).sprites.items[0]?.actorId, npc.id);
+  addActor(actors, { kind: "npc", source: "clerk", name: "Other Clerk", stats: { hp: 8, maxHp: 8 } });
+  const ambiguous = hydrateSprites({ board: board(), actors });
+  equal(ambiguous.items[0]?.actorId, undefined);
+  const selected = hydrateSprites({ board: board(), actors, actorIds: { clerk: npc.id } });
+  equal(selected.items[0]?.actorId, npc.id);
 
   const plain = hydrateSprites({
     board: board(),

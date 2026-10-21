@@ -156,6 +156,8 @@ export type SpriteHydrationInput = {
   readonly board: WorldBoard;
   readonly players?: readonly SpriteActorSource[];
   readonly actors?: ActorsSection;
+  /** Optional explicit board-sprite id → actor id mapping for shared assets. */
+  readonly actorIds?: Readonly<Record<string, ActorId | number | null>>;
   readonly actorFiles?: ReadonlyMap<string, Character | Item>;
   readonly selectedPlayer?: string | null;
   readonly tick?: number;
@@ -260,7 +262,8 @@ export function actorLinkForSource(
   if (source.actorId !== undefined) return source.actorId === null ? null : actorId(source.actorId);
   if (actors === undefined) return undefined;
   const normalized = source.source.toLowerCase();
-  return actors.actors.find((record) => record.source.toLowerCase() === normalized)?.id;
+  const matches = actors.actors.filter((record) => record.source.toLowerCase() === normalized);
+  return matches.length === 1 ? matches[0]!.id : undefined;
 }
 
 /** Resolve the actor record linked by a sprite, for owner-service dispatch. */
@@ -278,11 +281,15 @@ export function boardItemSources(
   actorFiles: ReadonlyMap<string, Character | Item> = new Map(),
   variables: Readonly<Record<string, string | number | boolean>> = {},
   actors?: ActorsSection,
+  actorIds?: Readonly<Record<string, ActorId | number | null>>,
 ): SpriteActorSource[] {
   return (board.items ?? []).filter((item) => item.itemFile !== "").map((item) => {
     const actor = actorFiles.get(item.itemFile);
     const condition = item.loadingVar === "" || String(variables[item.loadingVar] ?? "") === item.loadingValue;
-    const link = actorLinkForSource({ source: item.itemFile }, actors);
+    const explicit = actorIds?.[item.itemFile];
+    const link = explicit === undefined
+      ? actorLinkForSource({ source: item.itemFile }, actors)
+      : actorLinkForSource({ source: item.itemFile, actorId: explicit === null ? null : actorId(explicit) }, actors);
     return {
       id: item.itemFile,
       kind: "item",
