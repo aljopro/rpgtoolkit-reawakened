@@ -1,7 +1,7 @@
 import { actorId, getActor, patchActor, type ActorId, type ActorPatch, type ActorRecord, type ActorStats, type ActorsSection } from "./model.ts";
+import type { ActorHooks } from "./rules.ts";
 import type { HostObjectType } from "../script/host.ts";
 import type { Value } from "../ports/value.ts";
-
 /**
  * The actor-owned stats path used by legacy aliases (AD-10, E-85).
  *
@@ -13,15 +13,14 @@ export type StatsPort = {
   write(actor: ActorId | number, patch: Partial<ActorStats>): boolean;
 };
 
-/** The owner seam used by script views; runtime objects never own actor data. */
 export type ActorService = StatsPort & {
   readActor(actor: ActorId | number): Readonly<ActorRecord> | null;
   patchActor(actor: ActorId | number, patch: ActorPatch): Readonly<ActorRecord> | null;
   activeActor(): Readonly<ActorRecord> | null;
+  hooks(actor: ActorId | number): ActorHooks;
 };
-
 /** Create the owner service over the one authoritative actor section. */
-export function createActorService(section: ActorsSection): ActorService {
+export function createActorService(section: ActorsSection, resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks = () => ({})): ActorService {
   const stats = createStatsPort(section);
   return {
     read(actor) {
@@ -39,6 +38,10 @@ export function createActorService(section: ActorsSection): ActorService {
     activeActor() {
       const party = section.actors.find((candidate) => candidate.kind === "party");
       return party ?? section.actors[0] ?? null;
+    },
+    hooks(actor) {
+      const record = getActor(section, actorId(actor));
+      return record === null ? {} : resolveHooks(record);
     },
   };
 }

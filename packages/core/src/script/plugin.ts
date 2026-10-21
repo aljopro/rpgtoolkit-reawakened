@@ -137,6 +137,8 @@ export type PluginDoc = {
   readonly requires?: readonly string[];
 };
 
+import type { ActorHooks } from "../actors/rules.ts";
+
 /** One plugin: an ordered command and asset pack (ADR 0004 decisions 2 and 6). */
 export type PluginDefinition = {
   readonly id: string;
@@ -156,6 +158,8 @@ export type PluginDefinition = {
   readonly listeners?: readonly NativeListener[];
   /** Session-only host object declarations hydrated by type name (OOP-12). */
   readonly hostTypes?: readonly HostObjectType[];
+  /** Session-only actor behaviour definitions registered during package startup. */
+  readonly behaviours?: readonly { readonly name: string; readonly hooks: ActorHooks }[];
 };
 
 /**

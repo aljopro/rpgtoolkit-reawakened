@@ -19,6 +19,7 @@ import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
 import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
 import { createActorHostType, createActorService } from "../actors/port.ts";
+import { createBehaviourRegistry, resolveBehaviour, type BehaviourRegistry } from "../actors/behaviour.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
 import { recordDiagnostic, recordEffect, type EffectRecord } from "./effects.ts";
@@ -151,9 +152,11 @@ export type ScriptServices = {
   readonly virtuals: VirtualVariablePort;
   readonly logger: Logger;
   readonly diagnostics: Diagnostic[];
+  /** Session-only actor behaviour registrations; never saved as game state. */
+  readonly behaviours: BehaviourRegistry;
   /** Manifest options remain host/service data and never enter VM state. */
   readonly pluginOptions: ReadonlyMap<string, PlainData>;
-  /** The `namespace.prg` files a package namespace already warned about, so each warns once (PKG-4); a log aid, never state. */
+  /** The packages' session data, rebuilt at boot/reset/restore. */
   readonly hiddenFileWarned: Set<string>;
   /** Session host declarations keyed by the saved object's `hostType` name. */
   readonly hostTypes: ReadonlyMap<string, HostObjectType>;
@@ -207,12 +210,6 @@ export function createScriptServices(
   for (const plugin of plugins) {
     if (plugin.options !== undefined) pluginOptions.set(plugin.definition.id, plugin.options);
   }
-  const hydratedTypes = new Map<string, HostObjectType>();
-  hydratedTypes.set("actor", createActorHostType(createActorService(state.actors)));
-  for (const plugin of plugins) {
-    for (const type of plugin.definition.hostTypes ?? []) hydratedTypes.set(type.name, type);
-  }
-  for (const type of hostTypes) hydratedTypes.set(type.name, type);
   // The engine's own packs are the built-in tier (R-35); every other plugin is an extension.
   const builtinPacks = new Set(ENGINE_DEFAULT_MANIFEST.map((entry) => entry.id));
   const commands = createCommandLookup({
@@ -222,6 +219,21 @@ export function createScriptServices(
     namespace: { has: (namespace) => registry.hasNamespace(namespace), get: (namespace, name) => registry.getIn(namespace, name) },
   });
   const diagnostics: Diagnostic[] = [];
+  const behaviours = createBehaviourRegistry(
+    plugins.flatMap((plugin) => (plugin.namespace === undefined ? [] : [plugin.namespace])),
+    diagnostics,
+  );
+  for (const plugin of plugins) {
+    for (const behaviour of plugin.definition.behaviours ?? []) {
+      behaviours.registerBehaviour(behaviour.name, behaviour.hooks);
+    }
+  }
+  const hydratedTypes = new Map<string, HostObjectType>();
+  hydratedTypes.set("actor", createActorHostType(createActorService(state.actors, (actor) => resolveBehaviour(behaviours, actor, diagnostics))));
+  for (const plugin of plugins) {
+    for (const type of plugin.definition.hostTypes ?? []) hydratedTypes.set(type.name, type);
+  }
+  for (const type of hostTypes) hydratedTypes.set(type.name, type);
   // Load-time notices (clashes, shadowed built-ins, include cycles) are raised once, when a program
   // compiles: each is a located warn record, and a cycle is also a located host diagnostic (MOD-3).
   const programs = createProgramCache(
@@ -255,6 +267,7 @@ export function createScriptServices(
     virtuals: virt,
     logger,
     diagnostics,
+    behaviours,
     pluginOptions,
     hiddenFileWarned: new Set(),
     hostTypes: hydratedTypes,

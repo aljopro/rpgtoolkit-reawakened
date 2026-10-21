@@ -1,4 +1,5 @@
 import type { Diagnostic } from "../ports/engine.ts";
+import type { ActorRecord } from "./model.ts";
 import type { ActorHooks } from "./rules.ts";
 /** The closed core hook surface. */
 export const ACTOR_BEHAVIOUR_HOOKS = ["levelUp", "revive", "statusChanged", "equipmentChanged", "statsChanged"] as const;
