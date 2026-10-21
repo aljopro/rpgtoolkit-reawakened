@@ -164,7 +164,11 @@ export type ScriptHostRestore = {
   readonly plugins?: readonly PluginDefinition[];
   /** Where the VM's Logger records go, in order; none means they are dropped. */
   readonly sinks?: readonly LogSink[];
-  /** The same package start-up programs run on a scratch fresh state to rebuild the layer table (PKG-5). */
+  /**
+   * Optional package start-up programs run on a scratch state to rebuild the
+   * package layer table. The restored host then reruns package registration
+   * against its actual services before it resumes.
+   */
   readonly packageStartups?: readonly ProgramRef[];
   /** Seed for the scratch state during start-up rebuild (defaults to 0). */
   readonly startupSeed?: number;

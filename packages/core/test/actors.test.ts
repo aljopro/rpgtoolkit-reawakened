@@ -287,7 +287,7 @@ test("actor records round-trip through the owned state section with equal hash",
 test("StatsPort reads and writes the actor-owned stats without a vm.globals copy", () => {
   const state = createGameState({ seed: 5 });
   const actor = addActor(state.actors, partyFixture);
-  const port = createStatsPort(state.actors);
+  const port = createStatsPort(state.actors, () => ({}));
   const before = port.read(actor.id);
   ok(before === actor.stats);
   ok(!Object.hasOwn(state.vm.globals, "HP!"));
@@ -351,7 +351,7 @@ test("actor host fields hydrate through dot and indexed VM access", () => {
 test("actor aliases write through and protected virtuals keep their links", () => {
   const state = createGameState({ seed: 9 });
   const actor = addActor(state.actors, partyFixture);
-  const virtuals = createDefaultVirtuals(state);
+  const virtuals = createDefaultVirtuals(state, createActorService(state.actors));
   equal(virtuals.read("HP!"), 12);
   equal(virtuals.write?.("HP!", 4), "written");
   equal(state.actors.actors[0]?.stats.hp, 4);

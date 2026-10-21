@@ -1,4 +1,4 @@
-import { actorId, getActor, patchActor, type ActorId, type ActorPatch, type ActorRecord, type ActorStats, type ActorsSection } from "./model.ts";
+import { actorId, getActor, patchActor as patchActorModel, type ActorId, type ActorRecord, type ActorStats, type ActorsSection } from "./model.ts";
 import {
   advanceStatus,
   applyEquipment,
@@ -32,23 +32,23 @@ export type ActorOperationService = {
 
 export type ActorService = StatsPort & ActorOperationService & {
   readActor(actor: ActorId | number): Readonly<ActorRecord> | null;
-  patchActor(actor: ActorId | number, patch: ActorPatch): Readonly<ActorRecord> | null;
+  rename(actor: ActorId | number, name: string): Readonly<ActorRecord> | null;
   activeActor(): Readonly<ActorRecord> | null;
   hooks(actor: ActorId | number): ActorHooks;
 };
 /** Create the owner service over the one authoritative actor section. */
 export function createActorService(section: ActorsSection, resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks = () => ({})): ActorService {
-  const stats = createStatsPort(section);
   const hooksFor = (actor: ActorId | number): ActorHooks => {
     const record = getActor(section, actorId(actor));
     return record === null ? {} : resolveHooks(record);
   };
+  const stats = createStatsPort(section, (record) => resolveHooks(record));
   return {
     read(actor) {
       return stats.read(actor);
     },
     write(actor, patch) {
-      return stats.write(actor, patch);
+      return updateActorStats(section, actor, patch, { cause: "script", hooks: hooksFor(actor) }) !== null;
     },
     updateStats(actor, patch, options) {
       return updateActorStats(section, actor, patch, { ...options, hooks: hooksFor(actor) });
@@ -65,8 +65,8 @@ export function createActorService(section: ActorsSection, resolveHooks: (actor:
     readActor(actor) {
       return getActor(section, actorId(actor));
     },
-    patchActor(actor, patch) {
-      return patchActor(section, actorId(actor), patch);
+    rename(actor, name) {
+      return patchActorModel(section, actorId(actor), { name });
     },
     activeActor() {
       const party = section.actors.find((candidate) => candidate.kind === "party");
@@ -79,13 +79,18 @@ export function createActorService(section: ActorsSection, resolveHooks: (actor:
 }
 
 /** Create the StatsPort view over the one authoritative actor section. */
-export function createStatsPort(section: ActorsSection): StatsPort {
+
+export function createStatsPort(
+  section: ActorsSection,
+  resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks,
+): StatsPort {
   return {
     read(actor) {
       return getActor(section, actorId(actor))?.stats ?? null;
     },
     write(actor, patch) {
-      return patchActor(section, actorId(actor), { stats: patch }) !== null;
+      const record = getActor(section, actorId(actor));
+      return updateActorStats(section, actor, patch, { cause: "script", hooks: record === null ? {} : resolveHooks(record) }) !== null;
     },
   };
 }
@@ -149,7 +154,7 @@ export function createActorHostType(service: ActorService): HostObjectType {
         return result === null ? "not-host" : "written";
       }
       if (name.toLowerCase() === "name" && typeof value === "string") {
-        service.patchActor(id, { name: value });
+        service.rename(id, value);
         return "written";
       }
       return "read-only";

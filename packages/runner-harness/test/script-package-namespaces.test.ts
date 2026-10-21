@@ -180,18 +180,17 @@ test("a package that supplies nothing under the name is unknown.command, not a f
   equal(run("a = beta.onlybeta()\n", ["alpha", "beta"]).host.state().vm.globals.a, 200);
 });
 
-test("a declared namespace is the qualifier, and the qualifier is case-folded", () => {
+test("a declared lower-case namespace is the qualifier", () => {
   const records: LogRecord[] = [];
   const host = createScriptHost({
-    program: "a = al.greet()\nb = AL.greet()\n",
+    program: "a = al.greet()\n",
     seed: 0,
-    manifest: [...ENGINE_DEFAULT_MANIFEST, { id: "alpha", version: "1", namespace: "Al" }],
+    manifest: [...ENGINE_DEFAULT_MANIFEST, { id: "alpha", version: "1", namespace: "al" }],
     plugins: [ALPHA],
     sinks: [(record) => records.push(record)],
   });
   deepEqual(host.advance(1, []).diagnostics, []);
   equal(globalsOf(host).a, 1);
-  equal(globalsOf(host).b, 1);
 });
 
 test("a live object under the namespace's name keeps the object-first rule; a namespace wins over a file", () => {

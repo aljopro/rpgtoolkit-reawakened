@@ -86,7 +86,7 @@ function freshGame(
   const state = createGameState({ seed });
   const layers = createPluginLayers();
   const services = servicesOf(state, loader, layers);
-  runPackageStartup(state, services, startups.map((name) => fileProgramRef(loader, name)));
+  runPackageStartup(state, services, startups.map((name) => fileProgramRef(loader, name)), []);
   startProgram(state.vm, fileProgramRef(loader, main));
   return { state, services, layers };
 }
@@ -104,7 +104,7 @@ function restoreGame(
   const scratch = createGameState({ seed });
   const layers = createPluginLayers();
   const scratchServices = servicesOf(scratch, loader, layers);
-  runPackageStartup(scratch, scratchServices, startups.map((name) => fileProgramRef(loader, name)));
+  runPackageStartup(scratch, scratchServices, startups.map((name) => fileProgramRef(loader, name)), []);
 
   const state = restoreGameState(json);
   const services = servicesOf(state, loader, layers);
@@ -368,7 +368,7 @@ test("package start-up that waits is refused with package.startup-unfinished", (
   const state = createGameState({ seed: 0 });
   const services = servicesOf(state, loader, createPluginLayers());
   throws(
-    () => runPackageStartup(state, services, [fileProgramRef(loader, "waiter.prg")]),
+    () => runPackageStartup(state, services, [fileProgramRef(loader, "waiter.prg")], []),
     (error: unknown) =>
       error instanceof ScriptError &&
       error.code === "package.startup-unfinished" &&

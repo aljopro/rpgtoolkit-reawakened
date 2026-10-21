@@ -3,10 +3,50 @@
 // the empty Engine contract that keeps the golden job green.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import { hashState, snapshot, type BuiltinSpec, type Diagnostic, type LogRecord, type PluginDefinition, type SurfaceId } from "@tk-reawakened/core";
+import { addActor, COMPILER_VERSION, hashState, snapshot, type BuiltinSpec, type Diagnostic, type LogRecord, type PluginDefinition, type SurfaceId } from "@tk-reawakened/core";
 import { createNullAudio, createScriptHost, restoreScriptHost, runLog, type Run } from "../src/index.ts";
 
 const TRACER = 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n';
+
+const ACTOR_BEHAVIOUR_PLUGIN: PluginDefinition = {
+  id: "test-actors",
+  version: "1.0.0",
+  commands: [],
+  behaviourStartup(registerBehaviour) {
+    registerBehaviour("test-actors.hero", {
+      statsChanged: () => ({ dp: 42 }),
+    });
+  },
+};
+
+const ACTOR_STARTUP_CALLS: string[] = [];
+const ACTOR_STARTUP_PLUGIN: PluginDefinition = {
+  id: "test-startup-actors",
+  version: "1.0.0",
+  commands: [{
+    name: "seedactor",
+    aliases: [],
+    params: [],
+    call: (view) => {
+      if (view.state === undefined) return { value: null };
+      addActor(view.state.actors, {
+        kind: "party",
+        source: "hero.tem",
+        behaviour: "test-startup-actors.hero",
+        stats: { hp: 10, maxHp: 10, dp: 1 },
+      });
+      return { value: null };
+    },
+  }],
+  behaviourStartup(registerBehaviour) {
+    registerBehaviour("test-startup-actors.hero", {
+      statsChanged: () => {
+        ACTOR_STARTUP_CALLS.push("statsChanged");
+        return { dp: 42 };
+      },
+    });
+  },
+};
 
 test("selects the TK2 dialect and compatibility manifest entry", () => {
   const host = createScriptHost({
@@ -188,6 +228,43 @@ test("a fixture built-in drawing through view.rng leaves the draw in state and r
   equal(restored.stateHash(), host.stateHash());
 });
 
+test("registers behaviour-only plugins before a host program runs", () => {
+  const host = createScriptHost({
+    program: "HP! = 5\nend()\n",
+    seed: 0,
+    plugins: [ACTOR_BEHAVIOUR_PLUGIN],
+  });
+  addActor(host.state().actors, {
+    kind: "party",
+    source: "hero.tem",
+    behaviour: "test-actors.hero",
+    stats: { hp: 10, maxHp: 10, dp: 1 },
+  });
+
+  host.advance(1, []);
+  equal(host.state().actors.actors[0]?.stats.hp, 5);
+  equal(host.state().actors.actors[0]?.stats.dp, 42);
+});
+
+test("restores the host with behaviour hooks attached to the restored actor service", () => {
+  const host = createScriptHost({
+    program: "HP! = 5\nend()\n",
+    seed: 0,
+    plugins: [ACTOR_BEHAVIOUR_PLUGIN],
+  });
+  addActor(host.state().actors, {
+    kind: "party",
+    source: "hero.tem",
+    behaviour: "test-actors.hero",
+    stats: { hp: 10, maxHp: 10, dp: 1 },
+  });
+
+  const restored = restoreScriptHost(host.snapshot(), { plugins: [ACTOR_BEHAVIOUR_PLUGIN] });
+  restored.advance(1, []);
+  equal(restored.state().actors.actors[0]?.stats.hp, 5);
+  equal(restored.state().actors.actors[0]?.stats.dp, 42);
+});
+
 test("mid-expression yield restores into a fresh host with identical per-tick stateHash", () => {
   const program = "result = 1 + sleep(2) + 3\nend()\n";
   const host = createScriptHost({ program, seed: 0 });
@@ -212,8 +289,37 @@ test("mid-expression yield restores into a fresh host with identical per-tick st
   equal(restored.stateHash(), host.stateHash());
   equal(host.state().vm.globals.result, 4);
   equal(restored.state().vm.globals.result, 4);
+
   equal(host.state().vm.threads[0]!.status, "finished");
   equal(restored.state().vm.threads[0]!.status, "finished");
+});
+
+test("restore reruns startup hooks on scratch and actual services", () => {
+  ACTOR_STARTUP_CALLS.length = 0;
+  const packageStartup = {
+    kind: "inline" as const,
+    text: "seedactor()\nHP! = 5\nend()\n",
+    compiler: COMPILER_VERSION,
+    dialect: "tk3" as const,
+  };
+  const host = createScriptHost({
+    program: "HP! = 6\nend()\n",
+    seed: 0,
+    plugins: [ACTOR_STARTUP_PLUGIN],
+    packageStartups: [packageStartup],
+  });
+  equal(ACTOR_STARTUP_CALLS.length, 1);
+  equal(host.state().actors.actors[0]?.stats.hp, 5);
+  equal(host.state().actors.actors[0]?.stats.dp, 42);
+
+  const restored = restoreScriptHost(host.snapshot(), {
+    plugins: [ACTOR_STARTUP_PLUGIN],
+    packageStartups: [packageStartup],
+  });
+  restored.advance(1, []);
+  equal(ACTOR_STARTUP_CALLS.length, 3);
+  equal(restored.state().actors.actors[0]?.stats.hp, 6);
+  equal(restored.state().actors.actors[0]?.stats.dp, 42);
 });
 
 test("a runtime failure reaches the report as a located diagnostic and runLog observes it", () => {

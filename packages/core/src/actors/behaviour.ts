@@ -6,6 +6,9 @@ import type { ResolvedPlugin } from "../script/plugin.ts";
 export const ACTOR_BEHAVIOUR_HOOKS = ["levelUp", "revive", "statusChanged", "equipmentChanged", "statsChanged"] as const;
 export type ActorBehaviourHook = (typeof ACTOR_BEHAVIOUR_HOOKS)[number];
 
+/** Package-scoped actor behaviour registrar accepted by the registry. */
+type BehaviourRegistryRegistrar = (name: string, hooks: unknown) => boolean;
+
 /** A package's session-only behaviour definition. */
 export type BehaviourDefinition = {
   readonly name: string;
@@ -14,7 +17,14 @@ export type BehaviourDefinition = {
 
 /** Session registry; never part of game or actor save state. */
 export type BehaviourRegistry = {
-  readonly registerBehaviour: (name: string, hooks: unknown) => boolean;
+  /**
+   * Host-only owner-scoped registration capability. Package code receives a
+   * namespace-bound `BehaviourRegistrar` through `behaviourStartup`, never
+   * this method directly.
+   */
+  readonly registerForNamespace: (namespace: string, name: string, hooks: unknown) => boolean;
+  /** Close all callback registrars after the startup pass. */
+  readonly closeRegistrations: () => void;
   readonly resolve: (name: string | null | undefined) => ActorHooks;
   readonly definitions: () => readonly BehaviourDefinition[];
   readonly missingReported: (name: string) => boolean;
@@ -26,22 +36,27 @@ function diagnostic(diagnostics: Diagnostic[] | undefined, code: string, message
   diagnostics?.push({ code, file: "<package startup>", line: 0, message });
 }
 
-/** Register one behaviour in the supplied session registry. */
-export function registerBehaviour(registry: BehaviourRegistry, name: string, hooks: unknown): boolean {
-  return registry.registerBehaviour(name, hooks);
-}
-
-/** Register the static behaviour contributions of the resolved packages. */
+/** Register package-scoped startup contributions in manifest order. */
 export function registerPackageBehaviours(registry: BehaviourRegistry, plugins: readonly ResolvedPlugin[]): void {
-  for (const plugin of plugins) {
-    for (const behaviour of plugin.definition.behaviours ?? []) {
-      registry.registerBehaviour(behaviour.name, behaviour.hooks);
+  try {
+    for (const plugin of plugins) {
+      const namespace = plugin.namespace ?? plugin.definition.id;
+      const register = (name: string, hooks: ActorHooks): boolean => registry.registerForNamespace(namespace, name, hooks);
+      plugin.definition.behaviourStartup?.(register);
     }
+  } finally {
+    registry.closeRegistrations();
   }
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  } catch {
+    return false;
+  }
 }
 
 /** Create a fresh registry for one boot/reset/restore session. */
@@ -53,32 +68,44 @@ export function createBehaviourRegistry(
   const allowed = new Set(namespaces);
   const definitions = new Map<string, BehaviourDefinition>();
   const missing = new Set<string>();
-  const registerBehaviour = (name: string, hooks: unknown): boolean => {
+  let registrationsClosed = false;
+  const register = (ownerNamespace: string, name: string, hooks: unknown): boolean => {
+    if (registrationsClosed) {
+      diagnostic(diagnostics, "behaviour.startup-closed", "behaviour registrar is no longer active after package startup");
+      return false;
+    }
     const match = typeof name === "string" ? NAME.exec(name) : null;
     if (match === null) {
       diagnostic(diagnostics, "behaviour.malformed-name", `behaviour name ${JSON.stringify(name)} must use namespace.name with a lower-case hyphenated namespace`);
       return false;
     }
     const namespace = match[1]!;
-    if (!allowed.has(namespace)) {
-      diagnostic(diagnostics, "behaviour.namespace", `behaviour ${JSON.stringify(name)} is not provided by a registered package namespace`);
+    if (!allowed.has(ownerNamespace) || namespace !== ownerNamespace) {
+      diagnostic(diagnostics, "behaviour.namespace", `behaviour ${JSON.stringify(name)} is not owned by package namespace ${JSON.stringify(ownerNamespace)}`);
       return false;
     }
-    if (!isObject(hooks)) {
-      diagnostic(diagnostics, "behaviour.hooks", `behaviour ${JSON.stringify(name)} hooks must be a dictionary`);
+    if (!isPlainObject(hooks)) {
+      diagnostic(diagnostics, "behaviour.hooks", `behaviour ${JSON.stringify(name)} hooks must be a plain dictionary`);
       return false;
     }
     const result: ActorHooks = {};
-    for (const key of Object.keys(hooks)) {
-      if (!(ACTOR_BEHAVIOUR_HOOKS as readonly string[]).includes(key)) {
-        diagnostic(diagnostics, "behaviour.unknown-hook", `behaviour ${JSON.stringify(name)} has unknown hook ${JSON.stringify(key)}`);
+    for (const key of Reflect.ownKeys(hooks)) {
+      const descriptor = Object.getOwnPropertyDescriptor(hooks, key);
+      if (
+        typeof key !== "string" ||
+        descriptor === undefined ||
+        descriptor.enumerable !== true ||
+        !("value" in descriptor) ||
+        !(ACTOR_BEHAVIOUR_HOOKS as readonly string[]).includes(key)
+      ) {
+        diagnostic(diagnostics, "behaviour.unknown-hook", `behaviour ${JSON.stringify(name)} has unknown or non-enumerable hook ${typeof key === "string" ? JSON.stringify(key) : String(key)}`);
         return false;
       }
-      if (typeof hooks[key] !== "function") {
+      if (typeof descriptor.value !== "function") {
         diagnostic(diagnostics, "behaviour.hook", `behaviour ${JSON.stringify(name)} hook ${JSON.stringify(key)} must be callable`);
         return false;
       }
-      (result as Record<string, unknown>)[key] = hooks[key];
+      (result as Record<string, unknown>)[key] = descriptor.value;
     }
     if (definitions.has(name)) {
       diagnostic(diagnostics, "behaviour.duplicate", `behaviour ${JSON.stringify(name)} is already registered`);
@@ -87,6 +114,7 @@ export function createBehaviourRegistry(
     definitions.set(name, { name, hooks: result });
     return true;
   };
+  const registerForNamespace = (namespace: string, name: string, hooks: unknown): boolean => register(namespace, name, hooks);
   const resolve = (name: string | null | undefined): ActorHooks => {
     if (name === null || name === undefined || name === "") return defaults;
     return definitions.get(name)?.hooks ?? defaults;
@@ -96,8 +124,8 @@ export function createBehaviourRegistry(
     missing.add(name);
     return false;
   };
-  return { registerBehaviour, resolve, definitions: () => [...definitions.values()], missingReported };
-
+  const closeRegistrations = (): void => { registrationsClosed = true; };
+  return { registerForNamespace, closeRegistrations, resolve, definitions: () => [...definitions.values()], missingReported };
 }
 
 /** Resolve actor hooks and report one diagnostic when the saved name is absent. */

@@ -1,6 +1,7 @@
 import { deepEqual, equal } from "node:assert/strict";
+import { TextEncoder } from "node:util";
 import { test } from "node:test";
-import { ENGINE_PHASES, applyEmitterOp, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board, type GameState } from "../src/index.ts";
+import { addActor, applyEmitterOp, createAssetIndex, createEmptyBoard, createEmptyMainFile, createEngine, ENGINE_PHASES, ENGINE_PLUGIN_TABLE, PACKAGE_ROOT, writeBoard, writeMainFile, type Board, type GameState, type PluginDefinition, type ResolvedPlugin } from "../src/index.ts";
 
 function boardBytes(board: Board): Uint8Array {
   const encoded = writeBoard(board);
@@ -60,6 +61,149 @@ function loadedEngine(registrations: Parameters<typeof createEngine>[0]["phaseRe
   if (loaded.loading) throw new Error("expected authored board to load");
   return engine;
 }
+
+test("createEngine routes actor alias writes through package behaviour hooks", () => {
+  const plugin: ResolvedPlugin = {
+    namespace: "engine-actors",
+    definition: {
+      id: "engine-actors",
+      version: "1.0.0",
+      commands: [],
+      behaviourStartup(register) {
+        register("engine-actors.hero", { statsChanged: () => ({ dp: 33 }) });
+      },
+    },
+  };
+  const encoded = writeBoard(createEmptyBoard());
+  if (!encoded.ok) throw new Error(encoded.error.message);
+  let seen: GameState["actors"]["actors"][number] | undefined;
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program: "HP! = 5\n",
+    plugins: [plugin],
+    phaseRegistrations: [
+      {
+        phase: "input",
+        run: (state) => {
+          if (state.time.tick !== 0) return;
+          addActor(state.actors, {
+            kind: "party",
+            source: "hero.tem",
+            behaviour: "engine-actors.hero",
+            stats: { hp: 10, maxHp: 10, dp: 1 },
+          });
+        },
+      },
+      {
+        phase: "movement",
+        run: (state) => { seen = state.actors.actors[0]; },
+      },
+    ],
+  });
+  const request = engine.advance(0, []).requests[0];
+  if (request?.kind !== "asset") throw new Error("expected authored board request");
+  engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: encoded.value } }]);
+  engine.advance(3, []);
+  equal(seen?.stats.hp, 5);
+  equal(seen?.stats.dp, 33);
+});
+
+test("createEngine preserves manifest package behaviours and actor operations across reset", () => {
+  let registrations = 0;
+  const plugin: PluginDefinition = {
+    id: "test-reset-package",
+    version: "1.0.0",
+    commands: [{
+      name: "seedactor",
+      aliases: [],
+      params: [],
+      call: (view) => {
+        if (view.state !== undefined) addActor(view.state.actors, {
+          kind: "party",
+          source: "hero.tem",
+          behaviour: "test-reset-package.hero",
+          stats: { hp: 10, maxHp: 10, dp: 1 },
+        });
+        return { value: null };
+      },
+    }],
+    behaviourStartup(register) {
+      registrations += 1;
+      register("test-reset-package.hero", { statsChanged: () => ({ dp: 42 }) });
+    },
+  };
+  const main = writeMainFile({
+    ...createEmptyMainFile(),
+    major: 2,
+    minor: 9,
+    projectPath: "",
+    plugins: [],
+    startupPrg: "start.prg",
+    initBoard: "start.brd",
+    initChar: "hero.tem",
+    packagePluginsExtension: true,
+    packagePlugins: ["test-reset-package"],
+  });
+  if (!main.ok) throw new Error(main.error.message);
+  const board = writeBoard(createEmptyBoard());
+  if (!board.ok) throw new Error(board.error.message);
+  const files = new Map([
+    ["main.gam", main.value],
+    ["prg/start.prg", new TextEncoder().encode("seedactor()\nHP! = 5\nend()\n")],
+    ["boards/start.brd", board.value],
+    ["chrs/hero.tem", new Uint8Array([0])],
+  ]);
+  const table = ENGINE_PLUGIN_TABLE as Record<string, PluginDefinition>;
+  const previous = table["test-reset-package"];
+  table["test-reset-package"] = plugin;
+  try {
+    let resetRequested = false;
+    let latestActor: GameState["actors"]["actors"][number] | undefined;
+    const engine = createEngine({
+      seed: 7,
+      assetIndex: createAssetIndex([...files.keys()]),
+      assetRoot: PACKAGE_ROOT,
+      mainFile: "main.gam",
+      startup: { presence: { hasPlayer: () => true }, savedGame: { load: () => ({ kind: "missing" }), restored: () => false } },
+      width: 32,
+      height: 32,
+      maxTicks: 8,
+      phaseRegistrations: [
+        {
+          phase: "events",
+          run: (state, postEffect) => {
+            if (state.time.tick === 2 && !resetRequested) {
+              resetRequested = true;
+              postEffect?.("engine", { thread: 0, name: "reset", kind: "state-write", args: [], out: {}, result: null, patch: null, wait: null, request: null });
+            }
+          },
+        },
+        { phase: "movement", run: (state) => { latestActor = state.actors.actors[0]; } },
+      ],
+    });
+    let report = engine.advance(0, []);
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const replies = report.requests.flatMap((request) => {
+        if (request.kind !== "asset") return [];
+        return [{ tick: report.tickAfter, event: { kind: "asset" as const, reqId: request.reqId, bytes: files.get(request.key) ?? null } }];
+      });
+      report = engine.advance(report.loading ? 0 : 1, replies);
+    }
+    equal(resetRequested, true);
+    equal(registrations, 3);
+    equal(latestActor?.stats.hp, 5);
+    equal(latestActor?.stats.dp, 42);
+  } finally {
+    if (previous === undefined) delete table["test-reset-package"];
+    else table["test-reset-package"] = previous;
+  }
+});
 
 test("engine runs the fixed phase order, registers audio after animation, and pauses on focus loss", () => {
   deepEqual(ENGINE_PHASES, ["input", "waits", "threads", "events", "movement", "edges", "triggers", "battle", "animation", "audio", "time"]);
