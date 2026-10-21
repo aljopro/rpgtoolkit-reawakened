@@ -61,6 +61,8 @@ levelUpType = 1:
 
 Truncation happens after the multiplication and division. The calculation MUST NOT truncate `experienceIncrease / 100` before multiplying by the old requirement. This preserves percentage values below 100 as fractional growth that may truncate only after the full calculation. Progression fields and awards are safe integers. `levelUpType` MUST be `0` or `1`; a non-max-level actor MUST have a positive integer `nextRequirement` and a non-negative integer `remainingExperience`; and `maxLevel` MUST be a non-negative integer. An invalid award or policy is rejected without mutating the actor. A non-negative award is recorded even when the actor is already at `maxLevel`; no further level or stat changes occur there. Percentage growth and percentage stat increases truncate toward zero only after the full multiplication and division.
 
+`maxLevel = 0` disables level advancement while still recording awarded experience. Configured stat-growth values (`levelHp`, `levelDp`, `levelFp`, and `levelSm`) MUST be non-negative safe integers. A malformed threshold or growth policy is rejected before any actor field is changed.
+
 The legacy ecosystem contains different arithmetic expectations in live advancement and restoration. The compatibility boundary keeps the field meanings above explicit; the Reawakened runtime uses the deterministic contract above for new evaluation and records any legacy restoration conversion during import rather than silently mixing formulas.
 
 ## Stat changes on level-up
@@ -78,13 +80,13 @@ The default level-up does not directly refill current HP or current SMP.
 
 `levelUpType = 1` applies those configured values as fixed points. Equipment bonuses remain separate from intrinsic progression and are not compounded by percentage growth.
 
-A non-empty legacy `levelUpProgram` runs as the authoritative level-up implementation for compatibility. It takes precedence over a modern behaviour `levelUp` hook. If it is empty, a resolved behaviour may return a partial plain-data result patch; otherwise the core default applies. Omitted result fields mean unchanged, and executable code is never stored in actor or save data.
+A non-empty legacy `levelUpProgram` wins over a modern behaviour `levelUp` hook. Core advancement records each crossed level and returns a plain-data legacy level-up handoff containing the actor id, award, target level, and default proposal for the owning script layer; it does not invoke the program, invoke the behaviour hook, apply default stat growth, or emit `leveledUp` for that pending result. The handoff contains no program path or callable. If the legacy program is empty, a resolved behaviour may return a partial plain-data result patch; otherwise the core default applies. Omitted result fields mean unchanged, and executable code is never stored in actor or save data.
 
 ## Modern actor progression
 
 Modern actors MAY carry explicit progression policy data, such as a supported percentage rate, fixed increment, rounding rule, or minimum increase. Policy data is actor-owned plain data and can differ between actors.
 
-A resolved behaviour receives the actor and a plain-data context. It may reuse or replace the core proposal, but the core remains responsible for validation, actor-owned mutation, progression state, and the `leveledUp` event.
+A resolved behaviour receives the actor and a plain-data context. It may reuse or replace the core proposal, but the core remains responsible for validation, actor-owned mutation, progression state, and the `leveledUp` event when the result is not delegated to a legacy program.
 
 The precedence is:
 

@@ -138,7 +138,9 @@ The core hook surface includes:
 - `equipmentChanged(actor, context)`: may alter equipment-derived stat results;
 - `statsChanged(actor, context)`: may alter derived-stat results.
 
-These core-originated hooks do not wait. `levelUp` may wait only when it is invoked from a script thread, such as a script-driven XP award. The core owns validation, mutation, state transitions, and event emission.
+The `statusChanged` hook context receives `previousRounds`, clamped post-operation `rounds` (zero on expiry), and the caller-supplied `source` or `null`; countdown advancement supplies no implicit source. Hook result patches are validated separately from the returned `statusChanged` event detail.
+
+These core-originated hooks do not wait. `levelUp` may wait only when it is invoked from a script thread, such as a script-driven XP award. Hook contexts and result patches are separate from standard-event detail payloads; the core validates and mutates actor state and returns plain transition records, while the owning event layer performs dispatch.
 
 ## Standard actor and board events
 
@@ -156,7 +158,7 @@ Notifications use past-tense lowerCamelCase names. Core actor and board events a
 | `beforeEnter` | board | yes | board transition; canceled step does not happen |
 | `beforeDamage` | actor/battle operation | yes | battle RPGCode thread, not a core actor rule |
 
-`fallen` detail contains `cause` (`damage`, `status`, or `script`) and `source` (an actor id or `null`). `revived` carries the same `cause` and `source` fields; the revival cause is the operation that raised HP above zero. `statusChanged` detail is `{ status, previousRounds, rounds, expired, source }`, where `rounds` is the post-operation counter, `expired` is true only when the status is removed, and `source` is an actor id or `null`. `equipmentChanged` detail is `{ equipped, bonuses }`, and `statsChanged` detail is `{ stats, changed }`, where `changed` names the stat fields whose values changed. These are plain transition records returned by core operations; the core does not dispatch an event bus. `defeated` belongs to the stock battle package and is not a core actor event. Package events re-emitted on shared emitters receive the package namespace prefix.
+`fallen` detail contains `cause` (`damage`, `status`, or `script`) and `source` (an actor id or `null`). `revived` carries the same `cause` and `source` fields; the revival cause is the operation that raised HP above zero. `statusChanged` detail is `{ status, previousRounds, rounds, expired, source }`, where `rounds` is the post-operation counter (zero when the status expires), `expired` is true only when the status is removed, and `source` is the actor id supplied by the caller when it attributes the operation, otherwise `null`; a countdown has no implicit source. Core hook result patches are not event details: `equipmentChanged` and `statsChanged` are hook names only. These are plain transition records returned by core operations; the core does not dispatch an event bus. `defeated` belongs to the stock battle package and is not a core actor event. Package events re-emitted on shared emitters receive the package namespace prefix.
 
 An unloaded board unregisters its emitter and drops its listeners. Queued work targeting that emitter is stale and is discarded; it does not keep the board or its actors alive.
 
@@ -253,7 +255,7 @@ permitted to mutate the value (a script may request a mutation through that owne
 | status HP/SMP tick | status.hp/hpAmount/smp/smpAmount | flags/shorts | statuses | none | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 8–11 | Epic 7 |
 | status program | status.code/prg | flag/program reference | statuses | none | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 12–13 | Epic 7 |
 
-Item rows are asset definitions, hydrated by name and never saved. Inventory state (stacks, counts, and which actor has which item in which slot) belongs to the `inventory` section (AD-10) through `InventoryAction`, built by Epic 8. An actor holds only equipped item references and the bonuses derived from them by the core equipment rule (`equipmentChanged`); it never owns item records. The equipment operation receives a plain-data item catalog; each equipped reference MUST resolve to an item with exactly four finite integer `equipBonus` values in HP/DP/FP/SMP order. Unknown references and malformed definitions are rejected before mutation. Item speed, idle time, hulls and board animation belong to the sprite that represents a board item.
+Item rows are asset definitions, hydrated by name and never saved. Inventory state (stacks, counts, and which actor has which item in which slot) belongs to the `inventory` section (AD-10) through `InventoryAction`, built by Epic 8. An actor holds only equipped item references and the bonuses derived from them by the core equipment rule (`equipmentChanged`); it never owns item records. The equipment operation receives a normalized catalog built deterministically from `.itm` `itemName`, `equipHP`, `equipDP`, `equipFP`, and `equipSM` fields. Its caller supplies an already validated equipped-reference list after inventory/slot/character eligibility checks; the core operation only resolves references and derives bonuses. A reference matching zero or multiple catalog entries is rejected. Item speed, idle time, hulls and board animation belong to the sprite that represents a board item.
 
 ### Runtime state (actor)
 
@@ -267,7 +269,7 @@ Item rows are asset definitions, hydrated by name and never saved. Inventory sta
 | progression state/policy | runtime actor.progression | plain-data record | progression | aliases above | actor/behaviour | core-rule | [Progression](#progression) | 20.6/20.7 |
 | behaviour name | runtime actor.behaviour | string or absent | identity | none | hydration/registry | core-rule | [behaviours](#behaviours-and-hydration) | 20.7/20.8 |
 | declared custom events | runtime actor.customEvents | array<string> | identity | none | hydration | core-rule | [custom events](#custom-actor-events) | 20.5/20.9 |
-Progression state is saved as plain data. In addition to the compatibility policy fields, it contains `remainingExperience` (the unspent XP toward the next level), `nextRequirement` (the requirement used for the next threshold), and `legacyLevelUp` (a boolean indicating that the source supplied a non-empty legacy level-up program). The program source itself is resolved by the package/runtime and is never stored in the actor record. Hydration initializes `remainingExperience` and `nextRequirement` from the source's first-level requirement and current experience; a restored record keeps its values unchanged.
+Progression state is saved as plain data. In addition to the compatibility policy fields, it contains `remainingExperience` (the unspent XP toward the next level), `nextRequirement` (the requirement used for the next threshold), and `legacyLevelUp` (a boolean indicating that the source supplied a non-empty legacy level-up program). The program source itself is resolved by the package/runtime and is never stored in the actor record. Hydration initializes `nextRequirement` from the source's first-level requirement and `remainingExperience` to the non-negative remainder after the actor's starting experience; a restored record keeps its values unchanged.
 
 ### Sprite state (sprites section, separate from actors)
 
