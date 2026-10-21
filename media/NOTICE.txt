@@ -1,0 +1,37 @@
+TK Reawakened logo (media/tkr.png)
+
+Copyright (c) 2026 Jensen Chappell
+Licence: MIT, under the repository LICENSE.
+Authoring date: 2026-10-17.
+
+Original authored work. A remix of the RPG Toolkit sword mark,
+redrawn for TK Reawakened and levelled up into the master logo.
+
+Two marks are acknowledged as references:
+
+1. The sword from the "RPG Toolkit Development System / Version 3" splash
+   screen, by Christopher B. Matthews. The winged guard, its triangular
+   inlays, the silver blade and the pommel stone follow that design.
+2. The animated sword from rpgtoolkit.net (tksword.mp4 / tksword.webm),
+   the imagery on the rpgtoolkit.net since 2017-01-07 and byte-identical
+   in every capture since (digest INM4YT2LAJUNV4W5NIWUWT3OS423LS7N). The
+   centre-set guard stone, the ribbon tied at the grip and the dark ribbed
+   grip follow that design. The animation's author is not recorded on the
+   site.
+
+The animated mark's blade is broken. In this logo it is whole and glowing: the
+blade is mended, and the glow is the point.
+
+No pixel data from either reference file is present in this image. It was not
+upscaled, filtered or auto-traced from them, and it is not derived from any
+legacy binary, game, screenshot or fetched fixture.
+
+media/icons/ is generated from this file by tools/icons/build.mjs.
+
+Both references are third-party works and are not redistributed in this
+repository. They remain at their original locations:
+
+1. The Toolkit 3 splash screen:
+   https://github.com/chrisbmatthews/rpgtoolkit/blob/master/vb/Toolkit/graphics/splash3.jpg
+2. The animated sword:
+   http://www.rpgtoolkit.net/tksword.webm
