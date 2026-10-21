@@ -1,5 +1,5 @@
 ---
-title: "Actor, board and game events: fallen, status, leveledUp, enter and leave"
+title: "Actor and board events: fallen, status, leveledUp, enter and leave"
 type: 'feature'
 ticket: 9
 created: '2026-10-19'
@@ -26,35 +26,39 @@ production, board lifecycle, and the engine-phase cancelable seam.
 
 ## Boundaries
 
-The implementation MUST use the existing queued event bus for non-cancelable
-events and must not duplicate listener tables or invoke listeners through a
-synchronous side door. `beforeDamage` remains a battle-thread
-`emitCancelable`; this entry only preserves the standard event surface and
-does not implement battle rules. TypeScript/native listeners remain ordinary
-bus listeners.
+- Actor owner operations are the only producer of `fallen`, `revived`,
+  `statusChanged`, and `leveledUp`; the producer queues plain detail after the
+  validated mutation and preserves transition order.
+- The core `fallen` transition is queued on the actor emitter with actor-owned
+  detail; the package game re-emission is owned by 20.15 (#563), and `talked` by
+  20.16 (#564). Package/native listeners consume the existing bus.
+- Board lifecycle emits `entered` and `left` on board and actor keys. The actor
+  emitter is registered before its lifecycle event is queued. An unloaded board
+  unregisters its emitter and drops queued work targeting that board; a canceled
+  entry is not an unload, so its target emitter/listeners remain available for
+  a later attempt.
+- `beforeEnter` uses the bounded synchronous engine dispatch seam from EMIT-11.
+  A listener may cancel, but a listener that waits is terminated and produces
+  one located `event.wait-forbidden` diagnostic. Battle-thread `beforeDamage`
+  mutation is owned by Epic 7 story 7.14 (#565), not this story.
 
-### Package and battle prerequisites
+### Package and battle follow-ups
 
-This worktree has no stock actor package runtime or package behaviour source,
-so the package-owned `stock-rpg.fallen` game bridge remains an explicit
-prerequisite rather than a core implementation claim. Likewise, no battle
-runtime is present here to send the `beforeDamage` event. The normative
-boundary is preserved: core does not add damage resolution or a substitute
-engine listener; the stock battle RPGCode thread must later call
-`emitCancelable("beforeDamage", ...)` and prove that a listener can change the
-damage before the battle applies it.
+The stock actor game bridge is owned by 20.15 (#563), the dialogue `talked`
+bridge by 20.16 (#564), and the battle-thread `beforeDamage` consumer by Epic 7
+story 7.14 (#565). Those package/runtime implementations are intentionally
+outside this core/board story; core does not add damage resolution, a stock
+package substitute, or a second listener path.
 
-### Owner decision required before closure
+This worktree therefore proves the core actor and board event surface only.
+The follow-up tickets consume the existing bus and engine cancelable seam:
+`stock_rpg` package startup re-emits the actor transition on `game`,
+`stock_rpg` dialogue emits actor-scoped `talked`, and the stock battle thread
+calls `emitCancelable("beforeDamage", ...)` before applying damage.
 
-Issue #474 remains open until the owner chooses one of these paths:
-
-1. defer or split the stock actor bridge and battle-thread damage acceptance
-   into the package/runtime tickets that provide those implementations; or
-2. add the stock actor package and stock battle runtime as explicit
-   prerequisites and deliver them before closing this ticket.
-
-This core/board work does not claim either missing acceptance and must not
-close or merge #474 on its behalf.
+Issue #474 is scoped to the core/board implementation in this story. Its
+follow-up package/runtime behavior remains tracked by #563, #564, and #565 and
+is not an acceptance claim or closure prerequisite for #474.
 
 ## Key Decisions
 
@@ -66,8 +70,8 @@ close or merge #474 on its behalf.
    `statusChanged` carries the exact status transition fields; `leveledUp`
    carries level, experience, and applied stat deltas.
 3. The core actor owner emits `fallen` only on the actor emitter. The
-   stock-RPG package bridge listens to that actor event and emits the
-   namespaced `stock-rpg.fallen` event on the shared `game` emitter. Core
+   stock_rpg package bridge (20.15/#563) listens to that actor event and emits
+   the namespaced `stock-rpg.fallen` event on the shared `game` emitter. Core
    does not emit package-owned game events.
 4. A board emitter is registered before its board is observable. Departure
    queues `left` first and defers emitter retirement until that event has
@@ -80,14 +84,20 @@ close or merge #474 on its behalf.
 
 ## Acceptance
 
-1. Core actor transitions emit the normative events once per committed
-   transition, including isolation between actor emitters. The stock-RPG
-   package's namespaced game bridge is a separate package prerequisite, not
-   core behavior.
-2. Board arrival emits one cancelable `beforeEnter`; cancellation leaves the
-   source board/position unchanged. Successful transitions emit one `entered`
-   and one `left`, and board unload removes listeners.
-3. A damage-taken `beforeDamage` remains a script-thread cancelable event.
+1. Owner-backed actor writes, status advancement, experience, and other actor
+   operations reach the actor emitter with transition-specific plain details;
+   listeners are isolated by actor key.
+2. HP-zero and HP-positive transitions produce fallen/revived only on the
+   relevant actor transition; the stock package game re-emit is verified by
+   20.15 (#563).
+3. Board edge entry is canceled before mutation when a listener cancels;
+   successful entry changes board and emits entered/left once. A waiting
+   beforeEnter listener cannot stall the engine and receives a located
+   diagnostic.
+4. Board unload removes listeners and stale queued board work; a later load
+   starts with a fresh board emitter. Existing event/save behavior remains
+   deterministic. Dialogue `talked` and battle-thread `beforeDamage` are
+   verified by 20.16 (#564) and 7.14 (#565), not this story.
 
 ## Verification
 
@@ -96,11 +106,14 @@ arrival, board unload/reload, listener isolation, and engine-phase cancellation.
 Tests MUST assert event details (including nested plain records), one-shot
 transitions, registration order, source-board `left` delivery before deferred
 retirement, native boolean conversion, and that waiting or over-budget engine
-listeners are diagnosed rather than stalling the tick. The stock-RPG
-namespaced game bridge and battle-thread `beforeDamage` consumer are not
-claimed by this core ticket because neither runtime is present in this
-repository; both package implementations are explicit prerequisites for the
-remaining game-level and damage acceptance criteria.
+listeners are diagnosed rather than stalling the tick.
+
+The focused actor/events/edge/save/dictionary suites pass 96/96, and the full
+repository gate run passes 1702/1702 with no skips, including typecheck, lint,
+build, Node and Bun goldens, closing 8/8, graph, licence, provenance and
+catalogue checks. The approved scope split assigns the package bridge, dialogue
+bridge, and battle-thread consumer to 20.15 (#563), 20.16 (#564), and 7.14
+(#565), respectively; those follow-ups are not claimed by this core ticket.
 
 ## Review triage
 

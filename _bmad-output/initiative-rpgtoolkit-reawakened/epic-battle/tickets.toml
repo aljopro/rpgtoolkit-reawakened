@@ -1,6 +1,6 @@
 # tickets.toml — planned entries of epic-battle, in build order. tickets.py reads it.
 # Table order is the build order; ids are stable names. Entry 1 is an owner-approval docs checkpoint (pending).
-# Lanes: A docs/state (1, 2), B API (3), C package rules (4-8), D starts and media (9, 10), E UI and custom-program proof (11, 12); 13 reconciles seams and closes the epic.
+# Lanes: A docs/state (1, 2), B API (3), C package rules (4-8), D starts and media (9, 10), E UI and custom-program proof (11, 12), F battle-thread event seam (14); 13 reconciles seams and closes the epic.
 # The 2026-10-19 owner re-slice: core owns actor data and the battle section (fighter references and charge), the stock_battle RPGCode package owns the loop, rules, AI and UI.
 
 [[entry]]
@@ -224,11 +224,29 @@ title = "Refactor sweep"
 description = "Reconciles the epic's seams: one registration path for the battle built-ins and the `battle` command, the battle section exported through the save barrel, the 5.11 handoff with a single owner and the 20.1 phase list, the package manifest and `.gam` mapping, the built-in catalogue and command docs, and the spec links and anchors; removes the placeholder and any dead battle-phase code, and closes the epic's Done when list with evidence."
 verify = "No duplicate registration or dead path remains; the phase, catalogue, command-docs, provenance and licence gates are green; every docs link and anchor resolves; each Done when item is checked with a test or fixture named in the PR; the full suite, typecheck and lint pass."
 covers = ["CAP-9"]
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14]
 hitl = false
 risk = "low"
 references = [
   "spec - docs/spec/engine/battle.md as ruled by 7.1",
   "epic - _bmad-output/initiative-rpgtoolkit-reawakened/epic-battle/epic-battle.md (Done when)",
   "code - packages/core/src/save/sections.ts, packages/core/src/sprites/encounters.ts",
+]
+
+[[entry]]
+id = 14
+tracker_id = "#565"
+type = "story"
+title = "Battle-thread beforeDamage mutation"
+description = "The stock battle package sends `emitCancelable('beforeDamage', detail)` from its RPGCode battle thread for every damage operation, then applies listener mutation to the proposed damage before resolving HP/SMP damage and fallen/defeated outcomes; core actor rules remain battle-agnostic."
+verify = "Physical, special and all-target damage paths emit once from the battle thread, park and resume through the cancelable wait, apply a listener's damage mutation before resolution, suppress all damage and lethal events on cancellation, and preserve the unmodified result without listeners; save/restore mid-dispatch and deterministic listener order are covered."
+covers = ["CAP-9"]
+after = [5, 20.11, "19.11", "19.17", "20.9"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/battle.md (damage operation)",
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-5, EMIT-11, EMIT-13)",
+  "handoff - Epic 20 story 20.9 / issue #474",
+  "prerequisite - Epic 19 story 19.17 / issue #562",
 ]

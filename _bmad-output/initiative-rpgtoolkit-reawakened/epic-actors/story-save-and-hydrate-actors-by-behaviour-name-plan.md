@@ -18,7 +18,7 @@ context:
 
 ## Boundaries
 
-Save/restore and hydration only; no new rules or package loader (19.16 owns the catalogue-to-start-up seam).
+Save/restore and hydration only; no new rules or package loader (19.17 owns the catalogue-to-start-up seam; 19.16 is the closed docs handoff).
 
 ## Key Decisions
 

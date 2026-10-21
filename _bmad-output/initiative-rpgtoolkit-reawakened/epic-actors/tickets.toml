@@ -128,7 +128,7 @@ title = "Behaviour registration and override precedence"
 description = "Adds a package-scoped `behaviourStartup(registerBehaviour)` surface separate from `registerPlugin`: the host invokes each resolved package callback during `runPackageStartup` in manifest order, and the callback's `registerBehaviour(name, hooks)` service accepts a namespaced `namespace.name` dictionary from the closed hook list. An actor carries only that name, resolution is behaviour override first then the core default, the registry is session data rebuilt by `runPackageStartup` and never saved, and packages may still emit their own events. The actor owner service supplies resolved hooks to actor operations."
 verify = "Two packages register `stock-rpg.hero` and their own names through package-scoped startup callbacks; cross-namespace registration is rejected; the five known hooks (`levelUp`, `revive`, `statusChanged`, `equipmentChanged`, `statsChanged`) and actor operations (including experience award and direct stat writes) show consumer-visible overrides; no behaviour or an unknown name uses core defaults with one located diagnostic for the unknown name; unknown hooks, malformed names and duplicates diagnose and register nothing; startup requires the resolved plugin list, fresh reset/restore services rebuild callbacks, non-plain hook dictionaries are rejected, and actor records/saves contain only the behaviour name and no callable. Battle-owned `beforeDamage`/damage handling is not part of this registry."
 covers = ["CAP-5", "CAP-9"]
-after = [6, 4, "19.8", "19.16"]
+after = [6, 4, "19.8", "19.17"]
 hitl = false
 risk = "high"
 references = [
@@ -145,7 +145,7 @@ title = "Save and hydrate actors by behaviour name"
 description = "Saves actor data, host type names and behaviour names only, then restores the script host by rebuilding package services and behaviour registrations before hydration; a missing behaviour or host type leaves data loaded, uses the core default or raises the located OOP-12 error only on first method call, and never refuses the save."
 verify = "Save, remove the package, and load: the game loads, a missing behaviour uses core defaults with exactly one located diagnostic, and a missing host type keeps data until its first method call; reinstall a newer package version and load: the newer code runs on the saved data without an actor version; a scan of every saved actor record finds no callable or hook dictionary; hydration runs after `runPackageStartup` on the actual restored services in `restoreScriptHost`; manifest startup order and script closures still save per 18.6."
 covers = ["CAP-11"]
-after = [7, "18.6", "19.16"]
+after = [7, "18.6", "19.17"]
 hitl = false
 risk = "high"
 references = [
@@ -159,9 +159,9 @@ references = [
 id = 9
 tracker_id = "#474"
 type = "story"
-title = "Actor, board and game events: fallen, status, leveledUp, enter and leave"
-description = "Registers each board through 19.12's seam and emits the core actor and board events: `fallen`, `revived`, `statusChanged`, `leveledUp`, `talked`, `beforeEnter`, `entered` and `left`; it implements the engine-side, budgeted `beforeEnter` send from the edges phase under EMIT-11, keeps `beforeDamage` as an RPGCode `emitCancelable` sent by the battle thread, and drops board listeners on `unregisterEmitter` at unload. The stock actor package owns the namespaced `stock-rpg.fallen` game bridge through `behaviourStartup`; that package runtime is a prerequisite and is not replaced by a core listener."
-verify = "Core acceptance: an actor at HP 0 emits actor-scoped `fallen` and stays in the party, raising HP emits `revived`, and board/engine consumers observe the ruled details and lifecycle. Package acceptance, once the stock actor package is available, is a quest script receiving the `stock-rpg.fallen` game re-emit from package behavior; a core implementation must never emit that package-owned event. Other checks cover statusChanged, leveledUp, talked, actor isolation, budgeted beforeEnter cancellation, entered/left, and board unload. The `beforeDamage` listener-changing-damage check is battle-package acceptance: no battle runtime is present in this worktree, so the prerequisite is explicitly recorded rather than substituted with a core implementation."
+title = "Actor and board events: fallen, status, leveledUp, enter and leave"
+description = "Registers each board through 19.12's seam and emits the core actor transitions `fallen`, `revived`, `statusChanged` and `leveledUp`, plus board `beforeEnter`, `entered` and `left`; it implements the engine-side, budgeted `beforeEnter` send from the edges phase under EMIT-11 and drops board listeners on `unregisterEmitter` at unload. Package bridges are separate follow-ups in 20.15 (#563) and 20.16 (#564), while battle-thread `beforeDamage` is 7.14 (#565)."
+verify = "An actor at HP 0 emits `fallen` and stays in the party, raising HP emits `revived`, and status/level transitions carry the ruled scalar details; a listener on one actor sees only that actor; engine-originated `beforeEnter` runs within the edge phase, can cancel the step without waiting for input, and `entered`/`left` fire once; board unload unregisters the emitter and drops its listeners. Stock package game re-emission, `talked`, and battle damage mutation are verified by 20.15 (#563), 20.16 (#564), and 7.14 (#565), not this story."
 covers = ["CAP-5", "CAP-9"]
 after = [4, 6, "19.11", "19.12", "5.9", 1]
 hitl = false
@@ -194,17 +194,17 @@ id = 11
 tracker_id = "#476"
 type = "story"
 title = "stock_battle and stock_menu package scaffolds"
-description = "Creates the `stock_battle` and `stock_menu` RPGCode packages as loadable, versioned, namespaced packages in the host catalogue, with source and start-up programs for 19.16; the battle package registers layers over existing `fight` and `fightenemy` commands and the menu package uses the host-defined no-op menu role, giving the spec's no-plugin result and no placeholder behavior beyond that."
-verify = "Both packages load through the 19.16 catalogue and the 19.9 plugins list, report version, namespace and declared host requests, register their real role mappings (`fight`/`fightenemy` and the menu role), and give the spec's no-plugin results in a headless test; package names use the lower-case underscore grammar and no placeholder logic exists beyond that behavior."
+description = "Creates the `stock_battle` and `stock_menu` RPGCode packages as loadable, versioned, namespaced packages in the host catalogue, with source and start-up programs for 19.17; the battle package registers layers over existing `fight` and `fightenemy` commands and the menu package uses the host-defined no-op menu role, giving the spec's no-plugin result and no placeholder behavior beyond that."
+verify = "Both packages load through the 19.17 catalogue and the 19.9 plugins list, report version, namespace and declared host requests, register their real role mappings (`fight`/`fightenemy` and the menu role), and give the spec's no-plugin results in a headless test; package names use the lower-case underscore grammar and no placeholder logic exists beyond that behavior."
 covers = ["CAP-9", "CAP-10"]
-after = [8, "19.6", "19.9", "19.16"]
+after = [8, "19.6", "19.9", "19.17"]
 hitl = false
 risk = "medium"
 references = [
   "spec - docs/spec/engine/plugins-and-battle.md (Plugin roles: without a battle plugin battles end immediately)",
   "spec - docs/spec/engine/rpgcode-modules-and-objects.md (PKG-2, PKG-7)",
   "code - packages/core/src/script/manifest.ts, packages/core/src/script/catalogue-responders.ts",
-  "handoff - epic-rpgcode-platform/story-host-package-loader-manifest-entry-to-source-program-and-start-up-plan.md (19.16)",
+  "handoff - epic-rpgcode-platform/story-host-package-loader-manifest-entry-to-source-program-and-start-up-plan.md (19.17 implementation, issue #562)",
 ]
 
 [[entry]]
@@ -215,7 +215,7 @@ title = ".gam plugins mapping: stock packages in templates and legacy DLL names"
 description = "Maps `MainFile.menuPlugin`, `fightPlugin` and `plugins[].pluginFile` in memory to `stock_menu` and `stock_battle` through `pluginManifestFor` without changing legacy bytes, keeps `packagePlugins` as the explicit template/save surface, deduplicates an equivalent legacy and package entry, and reports an unmapped custom DLL through the `boot.ts` diagnostic path."
 verify = "Opening a legacy `.gam` yields the versioned stock package mapping without changing its bytes; a template writes `packagePlugins` with both underscore-named packages; saving from the editor writes the extension explicitly; an equivalent duplicate is one manifest entry; a custom DLL name produces a located boot diagnostic and remains data."
 covers = ["CAP-9", "CAP-10"]
-after = [11, "19.9", "19.16"]
+after = [11, "19.9", "19.17"]
 hitl = false
 risk = "medium"
 references = [
@@ -245,12 +245,48 @@ id = 14
 tracker_id = "#479"
 type = "story"
 title = "Refactor sweep"
-description = "Reconciles shared seams touched here (actors barrel, section list, built-in registrations, catalogue and command docs), removes the old parallel actor representation made obsolete, and closes the epic against its Done when."
-verify = "One actor representation remains; barrels and docs describe the final shape; the Done when is checked item by item with evidence in the PR."
+description = "Reconciles the shared core seams touched by the actor stories (actors barrel, section list, built-in registrations, catalogue and command docs), removes the old parallel actor representation made obsolete, and records the core refactor without claiming the package-owned follow-ups."
+verify = "One core actor representation remains; barrels, core registrations and docs describe the final core/board shape; the core portions of the Done when are checked item by item with evidence in the PR, while package-owned event bridges remain in 20.15 and 20.16."
 covers = ["CAP-3", "CAP-9", "CAP-10", "CAP-11"]
 after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 hitl = false
 risk = "low"
 references = [
   "epic - epic-actors.md, Done when",
+]
+
+[[entry]]
+id = 15
+tracker_id = "#563"
+type = "story"
+title = "Stock RPG actor event bridge: fallen on the game"
+description = "Loads the `stock_rpg` package through 19.17 and re-emits each core actor `fallen` transition as one namespaced `stock-rpg.fallen` event on the game emitter, preserving actor id and ruled scalar cause/source details without changing core actor delivery."
+verify = "A package startup fixture loads through 19.17, registers one actor listener, and receives exactly one game `stock-rpg.fallen` event per transition; repeated HP-zero writes do not duplicate it, actor listeners remain isolated, and save/reset/restore preserve deterministic queued delivery."
+covers = ["CAP-5", "CAP-9"]
+after = [9, "19.17"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/actors.md (fallen transition and stock package bridge)",
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-8, EMIT-13)",
+  "handoff - Epic 20 story 20.9 / issue #474",
+  "prerequisite - Epic 19 story 19.17 / issue #562",
+]
+
+[[entry]]
+id = 16
+tracker_id = "#564"
+type = "story"
+title = "Stock RPG dialogue event bridge: talked"
+description = "Loads the `stock_rpg` dialogue bridge through 19.17 and emits one actor-scoped `talked` event after a completed interaction, carrying actorId, targetId (or null) and exact displayed text as plain scalar data; interrupted interactions emit none."
+verify = "A package startup fixture loads through 19.17, completed dialogue emits one queued actor `talked` event, interrupted dialogue emits none, listeners remain isolated between actors, and save/reset/restore preserve deterministic delivery."
+covers = ["CAP-5", "CAP-9"]
+after = [9, "19.17"]
+hitl = false
+risk = "high"
+references = [
+  "spec - docs/spec/engine/actors.md (standard talked event)",
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-13)",
+  "handoff - Epic 20 story 20.9 / issue #474",
+  "prerequisite - Epic 19 story 19.17 / issue #562",
 ]

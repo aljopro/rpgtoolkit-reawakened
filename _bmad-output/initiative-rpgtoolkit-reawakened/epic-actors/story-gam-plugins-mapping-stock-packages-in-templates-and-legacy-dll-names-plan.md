@@ -18,7 +18,7 @@ Mapping function and template default as core data; `pluginManifestFor` maps `Ma
 
 ## Boundaries
 
-Core data and mapping only; the editor's explicit save action is Epic 11 and 12, and package descriptor resolution is 19.16.
+Core data and mapping only; the editor's explicit save action is Epic 11 and 12, and package descriptor resolution is 19.17 (#562), with 19.16 as the closed docs handoff.
 
 ## Key Decisions
 

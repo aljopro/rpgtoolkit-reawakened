@@ -24,7 +24,7 @@ A behaviour is a separate package-start-up registration, not a `registerPlugin`
 key: each resolved package supplies a package-scoped `behaviourStartup` callback,
 and the host passes it a `registerBehaviour(name, hooks)` service during
 `runPackageStartup`. The callback is invoked in manifest order and rebuilt by
-the 19.16 loader at every boot/reset/restore. The resulting session registry is
+the 19.17 loader at every boot/reset/restore; 19.16 is the closed docs handoff. The resulting session registry is
 injected into the actor owner service, so actor operations resolve behaviour
 hooks before applying core rules.
 
