@@ -11,7 +11,7 @@ Header text: `RPGTLKIT SAVE`. The engine writes major **3**, minor **4** (Toolki
 
 The Reawakened runtime uses its canonical state snapshot for its own save/load
 surface. The legacy binary layout above remains an import specification. The
-canonical state contains an `actors` section with schema version `1`, a
+canonical state contains an `actors` section with schema version `2`, a
 monotonic `nextId`, and an `actors` array. Each actor record stores only:
 
 | Field | Type | Save rule |

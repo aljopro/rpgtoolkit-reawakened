@@ -90,3 +90,10 @@ the implementation tree: fixture fetch/check, `test:strict` (1692/1692 with
 no skips), typecheck, lint, build, Node golden, Bun golden/closing (8/8),
 graph tests (8), licence tests (35), provenance tests (56), and catalogue
 check.
+
+## Remote review disposition
+
+The exact remote-head review identified one documentation mismatch: the new
+save-format section said actor schema version `1`, while the normative actor
+contract and implementation use version `2` with version-1 migration. The
+save-format wording is corrected to `2`; no runtime change is required.
