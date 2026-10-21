@@ -22,6 +22,7 @@ import {
   writeBoard,
   writeMainFile,
 } from "../src/index.ts";
+import { resolveManifestPlugins } from "../src/engine/boot.ts";
 import type { AssetIndex, AssetRoot, Engine, EffectRecord, EngineInit, GameState, InputRecord, PackageCatalogueEntry, PlainData, TickReport } from "../src/index.ts";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
@@ -304,18 +305,22 @@ test("a host catalogue resolves the listed package and runs its owned startup be
   const game = authorGame({
     ...SCRIPTED,
     startup: "start.prg",
-    packages: ["weather"],
-    programs: { ...SCRIPTED.programs, "start.prg": "result = packagecmd()\nobserved = packageStarted\nend()\n" },
+    packages: ["WEATHER"],
+    programs: { ...SCRIPTED.programs, "start.prg": 'result = packagecmd()\ngame.emit("ping")\nobserved = packageStarted\nend()\n' },
   });
   const catalogue: readonly PackageCatalogueEntry[] = [{
-    name: "weather",
+    name: "Weather",
     version: "1.2",
     namespace: "climate",
     requests: ["asset"],
     definition: {
       id: "weather",
       version: "1.2",
-      commands: [{ name: "packagecmd", aliases: [], params: [], call: () => ({ value: 42 }) }],
+      commands: [
+        { name: "packagecmd", aliases: [], params: [], call: () => ({ value: 42 }) },
+        { name: "packagelistener", aliases: [], params: [{ name: "event", optional: false, byRef: false, variadic: false }], call: (view) => { const state = view.state; if (state === undefined) return { value: 0 }; state.vm.globals.packageEvents = Number(state.vm.globals.packageEvents ?? 0) + 1; return { value: 0 }; } },
+      ],
+      listeners: [{ emitter: "game", type: "ping", command: "packagelistener" }],
     },
     startup: { kind: "inline", text: "packageStarted = 1\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
   }];
@@ -324,9 +329,26 @@ test("a host catalogue resolves the listed package and runs its owned startup be
   equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved"), false);
   equal(doubles.state().vm.globals.result, 42);
   equal(doubles.state().vm.globals.observed, 1);
-  equal((doubles.state().vm.stepCounters?.weather ?? 0) > 0, true);
+  equal(doubles.state().vm.globals.packageEvents, 1);
 });
-test("a package startup that waits stops boot with the lifecycle diagnostic", () => {
+
+test("manifest package lookup folds ASCII package identity", () => {
+  const resolved = resolveManifestPlugins(
+    [{ id: "WEATHER", version: "1.2" }],
+    "main.gam",
+    [{
+      name: "Weather",
+      version: "1.2",
+      requests: [],
+      definition: { id: "weather", version: "1.2", commands: [] },
+      startup: { kind: "inline", text: "end()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+    }],
+  );
+  equal(resolved.diagnostics.length, 0);
+  equal(resolved.plugins[0]?.package?.name, "weather");
+  equal(resolved.plugins[0]?.startup?.owner, "weather");
+});
+test("a package startup that waits is rejected by the lifecycle clock guard", () => {
   const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
   const catalogue: readonly PackageCatalogueEntry[] = [{
     name: "weather",
@@ -351,6 +373,89 @@ test("a package startup that consumes randomness is rejected by the lifecycle gu
   const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
   equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
 });
+test("a package startup cannot read gametime through the virtual variable", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: { id: "weather", version: "1.2", commands: [] },
+    startup: { kind: "inline", text: "observed = gametime\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden" && diagnostic.message.includes('package "weather"') && diagnostic.message.includes("simulation clock")), true);
+});
+
+
+test("a direct package command cannot consume RNG during startup", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "directrng", aliases: [], params: [], call: (view) => { try { Object.assign(view, { packageStartup: false, rng: { nextUint32: () => 1 } }); } catch { /* frozen command view */ } try { Object.defineProperty(view, "rng", { value: { nextUint32: () => 1 } }); } catch { /* frozen command view */ } try { Object.defineProperty(view.rng, "nextUint32", { value: () => 1 }); } catch { /* frozen RNG port */ } view.rng.nextUint32(); return { value: null }; } }],
+    },
+    startup: { kind: "inline", text: "directrng()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
+test("a direct package command cannot consume the simulation clock during startup", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "directclock", aliases: [], params: [], call: (view) => { view.clock.tick(); return { value: null }; } }],
+    },
+    startup: { kind: "inline", text: "directclock()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
+test("a direct package command cannot reach RNG through state during startup", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "staterng", aliases: [], params: [], call: (view) => { Object.getOwnPropertyDescriptor(view.state!, "rng")?.value; return { value: null }; } }],
+    },
+    startup: { kind: "inline", text: "staterng()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
+test("a direct package command cannot reach the simulation clock through state during startup", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "stateclock", aliases: [], params: [], call: (view) => { Object.getOwnPropertyDescriptor(view.state!, "time")?.value; return { value: null }; } }],
+    },
+    startup: { kind: "inline", text: "stateclock()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
 
 
 test("a game-folder root takes its project path from the main file", () => {

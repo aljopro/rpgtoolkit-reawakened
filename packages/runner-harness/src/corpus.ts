@@ -13,7 +13,6 @@ import {
   fileProgramRef,
   PACKAGE_ROOT,
   utf8Encode,
-  withOwner,
   CORE_PLUGIN,
   MEDIA_PLUGIN,
   CATALOGUE_PLUGIN,
@@ -21,7 +20,6 @@ import {
   type AssetKey,
   type InputRecord,
   type ProgramLoader,
-  type ProgramRef,
 } from "@tk-reawakened/core";
 import { TK2_COMPAT_PLUGIN } from "@tk-reawakened/plugin-tk2-compat";
 import { PLATFORM_FIXTURE_SOURCES } from "./platform-fixtures.ts";
@@ -29,10 +27,10 @@ import { checkSnapshotRestore, randomSplit } from "./restore-check.ts";
 import {
   createScriptHost,
   restoreScriptHost,
+  type PackageStartupRef,
   type ScriptHost,
   type ScriptHostBlobs,
 } from "./script-host.ts";
-
 export type CorpusSessionContext = {
   readonly blobs?: ScriptHostBlobs;
 };
@@ -818,11 +816,11 @@ type PlatformFixture = {
 };
 
 function platformProgram(fixture: PlatformFixture): CorpusProgram {
-  const make = (): { loader: ProgramLoader; startups: readonly ProgramRef[] } => {
+  const make = (): { loader: ProgramLoader; startups: readonly PackageStartupRef[] } => {
     const loader = createMemoryLoader(PLATFORM_FIXTURE_SOURCES);
     return {
       loader,
-      startups: fixture.startups.map((entry) => withOwner(fileProgramRef(loader, entry.file), entry.owner)),
+      startups: fixture.startups.map((entry) => ({ owner: entry.owner, ref: fileProgramRef(loader, entry.file) })),
     };
   };
   return {
@@ -1033,7 +1031,10 @@ export function buildCorpus(): readonly CorpusProgram[] {
           "game.prg": SYNTHETIC_13_GAME,
         });
         const ref = fileProgramRef(loader, "game.prg");
-        const startups = [fileProgramRef(loader, "chime.prg"), fileProgramRef(loader, "shout.prg")];
+        const startups = [
+          { owner: "chime", ref: fileProgramRef(loader, "chime.prg") },
+          { owner: "shout", ref: fileProgramRef(loader, "shout.prg") },
+        ];
         return createScriptHost({ program: ref, loader, packageStartups: startups, seed });
       },
       restoreHost: (json) => {
@@ -1042,7 +1043,10 @@ export function buildCorpus(): readonly CorpusProgram[] {
           "shout.prg": SYNTHETIC_13_BOOT_SHOUT,
           "game.prg": SYNTHETIC_13_GAME,
         });
-        const startups = [fileProgramRef(loader, "chime.prg"), fileProgramRef(loader, "shout.prg")];
+        const startups = [
+          { owner: "chime", ref: fileProgramRef(loader, "chime.prg") },
+          { owner: "shout", ref: fileProgramRef(loader, "shout.prg") },
+        ];
         return restoreScriptHost(json, { loader, packageStartups: startups });
       },
     },

@@ -64,8 +64,9 @@ import {
   fileProgramRef,
   runPackageStartup,
   runThreadsPhase,
-  layerRoots,
   runWaitsPhase,
+  layerRoots,
+  withOwner,
   ScriptError,
   toDiagnostic,
   startProgram,
@@ -302,12 +303,14 @@ export function createEngine(init: EngineInit): Engine {
     }
   }
   let activePlugins: readonly ResolvedPlugin[] = init.plugins ?? DEFAULT_ENGINE_PLUGINS;
-
+  const packageStartupLifecycle = { active: false, packageName: undefined as string | undefined };
+  let startupServicesReady = false;
   function makeServices(
     plugins: readonly ResolvedPlugin[],
     programLoader?: ProgramLoader,
     runStartups = true,
   ): ScriptServices {
+    const listenersBeforeStartup = [...state.events.listeners];
     audioDecoders = assembleAudioDecoders(plugins.map((plugin) => plugin.definition), decoderLogger);
     const nextServices = createScriptServices(
       state,
@@ -324,23 +327,32 @@ export function createEngine(init: EngineInit): Engine {
       },
       undefined,
       undefined,
-      false,
+      packageStartupLifecycle,
     );
     if (runStartups) {
-      nextServices.view.packageStartup = true;
+      nextServices.setPackageStartup(true);
       try {
-        runPackageStartup(state, nextServices, plugins.flatMap((plugin) => plugin.startup === undefined ? [] : [plugin.startup]), plugins);
+        runPackageStartup(
+          state,
+          nextServices,
+          plugins.flatMap((plugin) => plugin.startup === undefined ? [] : [withOwner(plugin.startup, plugin.package?.name ?? plugin.definition.id)]),
+          plugins,
+          listenersBeforeStartup,
+        );
       } catch (error) {
         if (!(error instanceof ScriptError)) throw error;
         fail(toDiagnostic(error));
       } finally {
-        nextServices.view.packageStartup = false;
+        nextServices.setPackageStartup(false);
       }
     }
+    startupServicesReady = runStartups;
     return nextServices;
   }
-  let services = makeServices(activePlugins);
-  if (init.mainFile === undefined && init.program !== undefined) {
+  let services = init.mainFile === undefined
+    ? makeServices(activePlugins, undefined, true)
+    : makeServices([], undefined, false);
+  if (init.mainFile === undefined && !failed && init.program !== undefined) {
     const ref: ProgramRef = typeof init.program === "string"
       ? { kind: "inline", text: init.program, compiler: COMPILER_VERSION, dialect: "tk3" }
       : init.program;
@@ -744,7 +756,12 @@ export function createEngine(init: EngineInit): Engine {
         state.engine.boot = { stage: "main", main: found, fonts: [] };
       }
     }
-    services = makeServices(activePlugins, loader ?? undefined);
+    if (nextMain !== undefined) {
+      startupServicesReady = false;
+      services = makeServices([], loader ?? undefined, false);
+    } else {
+      services = makeServices(activePlugins, loader ?? undefined, true);
+    }
     audio.retry();
   }
   function fail(diagnostic: Diagnostic): void {
@@ -1003,7 +1020,7 @@ export function createEngine(init: EngineInit): Engine {
       diagnostics.push(...resolvedPlugins.diagnostics);
       loader = { index, root, read: (key) => cache.get(key) };
       activePlugins = init.plugins ?? resolvedPlugins.plugins;
-      services = makeServices(activePlugins, loader, true);
+      if (!startupServicesReady) services = makeServices(activePlugins, loader, true);
       if (failed) return false;
       if (mainFile.initChar !== "") {
         const player = resolveAsset(index, root, "characters", mainFile.initChar);

@@ -1,7 +1,7 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { TextEncoder } from "node:util";
 import { test } from "node:test";
-import { addActor, applyEmitterOp, createAssetIndex, createEmptyBoard, createEmptyMainFile, createEngine, ENGINE_PHASES, ENGINE_PLUGIN_TABLE, PACKAGE_ROOT, writeBoard, writeMainFile, type Board, type GameState, type PluginDefinition, type ResolvedPlugin } from "../src/index.ts";
+import { addActor, applyEmitterOp, COMPILER_VERSION, createAssetIndex, createEmptyBoard, createEmptyMainFile, createEngine, ENGINE_PHASES, ENGINE_PLUGIN_TABLE, PACKAGE_ROOT, writeBoard, writeMainFile, type Board, type GameState, type PluginDefinition, type ResolvedPlugin } from "../src/index.ts";
 
 function boardBytes(board: Board): Uint8Array {
   const encoded = writeBoard(board);
@@ -116,6 +116,9 @@ test("createEngine routes actor alias writes through package behaviour hooks", (
 
 test("createEngine preserves manifest package behaviours and actor operations across reset", () => {
   let registrations = 0;
+  let startupProgramRuns = 0;
+  let retainedGuardFailures = 0;
+  let retainedView: { readonly packageStartup?: boolean; readonly rng: { readonly nextUint32: () => number } } | undefined;
   const plugin: PluginDefinition = {
     id: "test-reset-package",
     version: "1.0.0",
@@ -132,11 +135,27 @@ test("createEngine preserves manifest package behaviours and actor operations ac
         });
         return { value: null };
       },
+    }, {
+      name: "countstartup",
+      aliases: [],
+      params: [],
+      call: (view) => {
+        if (retainedView === undefined) retainedView = view;
+        else if (view.packageStartup) {
+          try { retainedView.rng.nextUint32(); } catch { retainedGuardFailures += 1; }
+        }
+        startupProgramRuns += 1;
+        return { value: null };
+      },
     }],
     behaviourStartup(register) {
       registrations += 1;
       register("test-reset-package.hero", { statsChanged: () => ({ dp: 42 }) });
     },
+  };
+  const resolvedPlugin: ResolvedPlugin = {
+    definition: plugin,
+    startup: { kind: "inline", text: "countstartup()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
   };
   const main = writeMainFile({
     ...createEmptyMainFile(),
@@ -170,6 +189,7 @@ test("createEngine preserves manifest package behaviours and actor operations ac
       assetIndex: createAssetIndex([...files.keys()]),
       assetRoot: PACKAGE_ROOT,
       mainFile: "main.gam",
+      plugins: [resolvedPlugin],
       startup: { presence: { hasPlayer: () => true }, savedGame: { load: () => ({ kind: "missing" }), restored: () => false } },
       width: 32,
       height: 32,
@@ -196,7 +216,9 @@ test("createEngine preserves manifest package behaviours and actor operations ac
       report = engine.advance(report.loading ? 0 : 1, replies);
     }
     equal(resetRequested, true);
-    equal(registrations, 3);
+    equal(registrations, 2);
+    equal(startupProgramRuns, 2);
+    equal(retainedGuardFailures, 1);
     equal(latestActor?.stats.hp, 5);
     equal(latestActor?.stats.dp, 42);
   } finally {
@@ -204,6 +226,89 @@ test("createEngine preserves manifest package behaviours and actor operations ac
     else table["test-reset-package"] = previous;
   }
 });
+
+test("createEngine runs inline-program package startup exactly once", () => {
+  let registrations = 0;
+  const plugin: PluginDefinition = {
+    id: "test-inline-package",
+    version: "1.0.0",
+    commands: [],
+    behaviourStartup(register) {
+      registrations += 1;
+      register("test-inline-package.hero", { statsChanged: () => ({ dp: 1 }) });
+    },
+  };
+  createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program: "end()\n",
+    plugins: [{ definition: plugin }],
+  });
+  equal(registrations, 1);
+});
+test("createEngine installs one native listener for inline package boot", () => {
+  let listenerCalls = 0;
+  const plugin: PluginDefinition = {
+    id: "test-inline-listener-package",
+    version: "1.0.0",
+    commands: [{ name: "onping", aliases: [], params: [{ name: "event", optional: false, byRef: false, variadic: false }], call: () => { listenerCalls += 1; return { value: null }; } }],
+    listeners: [{ emitter: "game", type: "ping", command: "onping" }],
+  };
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program: 'game.emit("ping")\nend()\n',
+    plugins: [{ definition: plugin }],
+  });
+  const request = engine.advance(0, []).requests[0];
+  if (request?.kind !== "asset") throw new Error("expected authored board request");
+  engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: boardBytes(createEmptyBoard()) } }]);
+  engine.advance(2, []);
+  equal(listenerCalls, 1);
+});
+test("createEngine does not start inline main program after package startup failure", () => {
+  let mainRuns = 0;
+  const plugin: ResolvedPlugin = {
+    definition: {
+      id: "test-inline-failure-package",
+      version: "1.0.0",
+      commands: [{
+        name: "markmain",
+        aliases: [],
+        params: [],
+        call: () => {
+          mainRuns += 1;
+          return { value: null };
+        },
+      }],
+    },
+    startup: { kind: "inline", text: "sleep(1)\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  };
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program: "markmain()\nend()\n",
+    plugins: [plugin],
+  });
+  engine.advance(0, []);
+  equal(mainRuns, 0);
+});
+
 
 test("engine runs the fixed phase order, registers audio after animation, and pauses on focus loss", () => {
   deepEqual(ENGINE_PHASES, ["input", "waits", "threads", "events", "movement", "edges", "triggers", "battle", "animation", "audio", "time"]);

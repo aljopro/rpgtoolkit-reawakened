@@ -241,7 +241,8 @@ export {
   STEP_BUDGET,
   stepThread,
 } from "./vm.ts";
-export { createPluginLayers, layerRoots } from "./layers.ts";
+export type { PackageStartupLifecycle } from "./vm.ts";
+export { clearPluginLayers, createPluginLayers, layerRoots } from "./layers.ts";
 export type { PluginLayers } from "./layers.ts";
 export { runPackageStartup } from "./package-startup.ts";
 export {

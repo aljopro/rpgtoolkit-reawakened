@@ -61,14 +61,14 @@ export type CommandView = {
   readonly rng: RngPort;
   readonly clock: ClockPort;
   readonly state?: GameState;
-  /** True only while deterministic package startup programs are running. */
-  packageStartup?: boolean;
   /** Stable core-derived identity used to scope host storage. */
   readonly gameId?: string;
   /** Manifest options for the layer currently handling this command. */
   readonly options?: PlainData;
+  /** True only while package startup is running; exposed read-only to lifecycle-aware built-ins. */
+  readonly packageStartup?: boolean;
   /** The id of the thread whose call is running; the VM sets it before every call. */
-  thread?: number;
+  readonly thread?: number;
 };
 
 /**

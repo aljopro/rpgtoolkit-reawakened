@@ -65,6 +65,34 @@ export function createPluginLayers(): PluginLayers {
   return { seq: 0, layers: new Map(), stacks: new Map(), registrations: new Map() };
 }
 
+/** Discard package layers after an aborted startup pass. */
+export function clearPluginLayers(table: PluginLayers): void {
+  table.seq = 0;
+  table.layers.clear();
+  table.stacks.clear();
+  table.registrations.clear();
+}
+/** Capture a restorable copy of a session layer table before a startup pass. */
+export function snapshotPluginLayers(table: PluginLayers): PluginLayers {
+  return {
+    seq: table.seq,
+    layers: new Map([...table.layers].map(([id, layer]) => [id, { ...layer, interceptor: copyCallable(layer.interceptor), below: copyCallable(layer.below) }])),
+    stacks: new Map([...table.stacks].map(([command, ids]) => [command, [...ids]])),
+    registrations: new Map([...table.registrations].map(([id, registration]) => [id, { ...registration, layers: [...registration.layers] }])),
+  };
+}
+
+/** Restore a session layer table to a pre-startup snapshot without replacing its object. */
+export function restorePluginLayers(table: PluginLayers, snapshot: PluginLayers): void {
+  table.seq = snapshot.seq;
+  table.layers.clear();
+  for (const [id, layer] of snapshot.layers) table.layers.set(id, { ...layer, interceptor: copyCallable(layer.interceptor), below: copyCallable(layer.below) });
+  table.stacks.clear();
+  for (const [command, ids] of snapshot.stacks) table.stacks.set(command, [...ids]);
+  table.registrations.clear();
+  for (const [id, registration] of snapshot.registrations) table.registrations.set(id, { ...registration, layers: [...registration.layers] });
+}
+
 /** The layer id a `def` names, or `null` when `def` is not a layer wrapper. */
 export function layerIdOf(def: string): string | null {
   return def.startsWith(LAYER_PREFIX) ? def.slice(LAYER_PREFIX.length) : null;

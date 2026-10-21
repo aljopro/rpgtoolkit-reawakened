@@ -16,6 +16,12 @@ export type BehaviourDefinition = {
 };
 
 /** Session registry; never part of game or actor save state. */
+export type BehaviourRegistrySnapshot = {
+  readonly definitions: readonly BehaviourDefinition[];
+  readonly registrationsClosed: boolean;
+};
+
+/** Session registry; never part of game or actor save state. */
 export type BehaviourRegistry = {
   /**
    * Host-only owner-scoped registration capability. Package code receives a
@@ -25,6 +31,11 @@ export type BehaviourRegistry = {
   readonly registerForNamespace: (namespace: string, name: string, hooks: unknown) => boolean;
   /** Close all callback registrars after the startup pass. */
   readonly closeRegistrations: () => void;
+  /** Discard package registrations after an aborted startup pass. */
+  readonly clearRegistrations: () => void;
+  /** Capture and restore an aborted startup pass without losing prior definitions. */
+  readonly snapshot: () => BehaviourRegistrySnapshot;
+  readonly restore: (snapshot: BehaviourRegistrySnapshot) => void;
   readonly resolve: (name: string | null | undefined) => ActorHooks;
   readonly definitions: () => readonly BehaviourDefinition[];
   readonly missingReported: (name: string) => boolean;
@@ -125,7 +136,22 @@ export function createBehaviourRegistry(
     return false;
   };
   const closeRegistrations = (): void => { registrationsClosed = true; };
-  return { registerForNamespace, closeRegistrations, resolve, definitions: () => [...definitions.values()], missingReported };
+  const clearRegistrations = (): void => {
+    definitions.clear();
+    missing.clear();
+    registrationsClosed = true;
+  };
+  const snapshot = (): BehaviourRegistrySnapshot => ({
+    definitions: [...definitions.values()],
+    registrationsClosed,
+  });
+  const restore = (saved: BehaviourRegistrySnapshot): void => {
+    definitions.clear();
+    for (const definition of saved.definitions) definitions.set(definition.name, definition);
+    missing.clear();
+    registrationsClosed = saved.registrationsClosed;
+  };
+  return { registerForNamespace, closeRegistrations, clearRegistrations, snapshot, restore, resolve, definitions: () => [...definitions.values()], missingReported };
 }
 
 /** Resolve actor hooks and report one diagnostic when the saved name is absent. */
