@@ -7,10 +7,10 @@ status: 'built'
 baseline_revision: 'ce05dd4d34d9c0f0fa998cb7d8614ab89d17a47a'
 route: 'full'
 route_source: 'pinned'
-review: 'approve'
-review_source: 'fresh independent post-fix reviewer'
-lenses_ran: ['implementation', 'migration', 'boundary-validation', 'regression-baselines', 'fresh-implementation', 'fresh-boundary', 'fresh-tests']
-review_loop_iteration: 3
+review: 'changes-requested'
+review_source: 'fresh independent remote-head reviewer'
+lenses_ran: ['implementation', 'migration', 'boundary-validation', 'regression-baselines', 'fresh-implementation', 'fresh-boundary', 'fresh-tests', 'remote-head-implementation', 'remote-head-boundary', 'remote-head-tests']
+review_loop_iteration: 4
 risk: "high"
 context:
   - "spec - docs/spec/engine/actors.md"
@@ -250,3 +250,35 @@ implementer. Remaining non-blocking verification gaps are:
 **APPROVE** the Epic 20.7 implementation review at this stable snapshot.
 This is a review disposition only; no GitHub approval, commit, or push was
 performed by this reviewer.
+
+## Remote-head fix re-review (2026-10-21)
+
+The pushed PR was independently reviewed at exact `HEAD
+9efb3c094683ab94bfdcba96b3a7162580993631`. The worktree was clean before
+this plan-only update. `origin/main` was `96f580a9300199b01b738250b13194216a7dc808`,
+and the merge base was the same commit, so the pushed head is already based on
+the latest available main and no rebase wait is required. The hosted CI run
+for this exact head (`#39535570614`) completed successfully: all nine jobs
+passed, including unit, typecheck, lint, build/golden, graph, provenance,
+licence, and gate checks.
+
+### Actionable finding
+
+- **Medium — fixed:** `runPackageStartup` now resolves every hydrated actor
+  immediately after package behaviour registration. This covers boot and actual
+  restore services, emits one deduplicated located `behaviour.missing`
+  diagnostic for absent saved names, and preserves the same resolver for later
+  operations. A restored unused actor is covered by a consumer test.
+
+### Verification gaps
+
+- **Closed:** callback order is asserted in manifest order.
+- **Closed:** hook validation has independent accessor and non-callable tests,
+  including located diagnostics.
+- **Closed:** save/restore coverage asserts re-resolution and diagnostics for an
+  unused restored actor.
+
+### Disposition
+
+**FIXED** in the working tree. Full gates, push, and a fresh independent
+review of the new remote head remain required. No merge is authorized yet.

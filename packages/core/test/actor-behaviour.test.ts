@@ -193,6 +193,7 @@ test("package callbacks own namespaces and reject non-plain hook dictionaries", 
       version: "1.0.0",
       commands: [],
       behaviourStartup(register) {
+        order.push("first");
         lateRegister = register;
         register("second-pack.hero", { levelUp: hook });
         register("first-pack.hero", new HookBag() as unknown as ActorHooks);
@@ -227,6 +228,7 @@ test("package callbacks own namespaces and reject non-plain hook dictionaries", 
     },
   };
   registerPackageBehaviours(registry, [first, second, duplicate]);
+  equal(order.join(","), "first,second,duplicate");
   equal(lateRegister?.("first-pack.late", { levelUp: hook }), false);
   equal(registry.definitions().length, 1);
   const lateDiagnostics = diagnostics.filter((entry) => entry.code === "behaviour.startup-closed");
@@ -243,6 +245,18 @@ test("package callbacks own namespaces and reject non-plain hook dictionaries", 
   const locatedDiagnostics = diagnostics.filter((entry) => entry.code === "behaviour.unknown-hook");
   equal(locatedDiagnostics[0]?.file, "<package startup>");
   equal(locatedDiagnostics[0]?.line, 0);
+});
+
+test("behaviour hook dictionaries reject accessors and non-callable values", () => {
+  const diagnostics: Diagnostic[] = [];
+  const registry = createBehaviourRegistry(["stock-rpg"], diagnostics);
+  const accessor: Record<string, unknown> = {};
+  Object.defineProperty(accessor, "levelUp", { get: () => hook, enumerable: true });
+  const nonCallable = { levelUp: 1 };
+  equal(registry.registerForNamespace("stock-rpg", "stock-rpg.accessor", accessor), false);
+  equal(registry.registerForNamespace("stock-rpg", "stock-rpg.value", nonCallable), false);
+  equal(diagnostics.map((entry) => entry.code).join(","), "behaviour.unknown-hook,behaviour.hook");
+  equal(diagnostics.every((entry) => entry.file === "<package startup>" && entry.line === 0), true);
 });
 
 test("fresh startup services rebuild registrations and report a missing behaviour once", () => {
@@ -266,6 +280,13 @@ test("fresh startup services rebuild registrations and report a missing behaviou
       stats: { level: 1, experience: 0, dp: 1 },
       progression: { maxLevel: 2, remainingExperience: 10, nextRequirement: 10, legacyLevelUp: false },
     });
+    addActor(state.actors, {
+      kind: "enemy",
+      source: "unused.tem",
+      behaviour: "missing.hero",
+      stats: { level: 1, experience: 0, dp: 1 },
+      progression: { maxLevel: 2, remainingExperience: 10, nextRequirement: 10, legacyLevelUp: false },
+    });
     const services = createScriptServices(state, [plugin]);
     runPackageStartup(state, services, [], [plugin]);
     return { actor, services, state };
@@ -278,15 +299,17 @@ test("fresh startup services rebuild registrations and report a missing behaviou
   const restoredServices = createScriptServices(restored, [plugin]);
   runPackageStartup(restored, restoredServices, [], [plugin]);
   equal(restoredServices.behaviours.definitions().length, 1);
+  const restoredUnused = restored.actors.actors[1]!;
+  equal(restoredUnused.behaviour, "missing.hero");
+  const restoredMissing = drainDiagnostics(restoredServices).filter((entry) => entry.code === "behaviour.missing");
+  equal(restoredMissing.length, 1);
+  equal(restoredMissing[0]?.file, "<package startup>");
+  equal(restoredMissing[0]?.line, 0);
   const restoredActor = restored.actors.actors[0]!;
   const restoredResult = restoredServices.actors.awardExperience(restoredActor.id, 10);
   if (restoredResult === null) throw new Error("expected default progression result");
   equal(restoredResult.transitions.length, 1);
   equal(restoredServices.actors.readActor(restoredActor.id)?.stats.level, 2);
-  const restoredMissing = drainDiagnostics(restoredServices).filter((entry) => entry.code === "behaviour.missing");
-  equal(restoredMissing.length, 1);
-  equal(restoredMissing[0]?.file, "<package startup>");
-  equal(restoredMissing[0]?.line, 0);
   first.services.actors.awardExperience(first.actor.id, 10);
   first.services.actors.awardExperience(first.actor.id, 0);
   const missing = drainDiagnostics(first.services).filter((entry) => entry.code === "behaviour.missing");

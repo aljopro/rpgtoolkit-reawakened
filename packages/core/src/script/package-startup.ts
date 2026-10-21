@@ -21,7 +21,7 @@
  */
 
 import type { GameState } from "../save/state.ts";
-import { registerPackageBehaviours } from "../actors/behaviour.ts";
+import { registerPackageBehaviours, resolveBehaviour } from "../actors/behaviour.ts";
 import { ScriptError } from "./errors.ts";
 import type { ProgramRef } from "./program.ts";
 import { findThread, killThread, startProgram } from "./state.ts";
@@ -44,6 +44,7 @@ export function runPackageStartup(
   plugins: readonly ResolvedPlugin[],
 ): void {
   registerPackageBehaviours(services.behaviours, plugins);
+  for (const actor of state.actors.actors) resolveBehaviour(services.behaviours, actor, services.diagnostics);
   for (const ref of startups) {
     const thread = startProgram(state.vm, ref);
     const id = thread.id;
