@@ -3,7 +3,7 @@ title: ".gam plugins mapping: stock packages in templates and legacy DLL names"
 type: 'feature'
 ticket: 12
 created: '2026-10-19'
-status: draft
+status: ready-for-dev
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "medium"
 context:
