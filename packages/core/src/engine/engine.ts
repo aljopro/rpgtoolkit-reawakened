@@ -67,6 +67,7 @@ import {
   layerRoots,
   runWaitsPhase,
   ScriptError,
+  toDiagnostic,
   startProgram,
   startThread,
   STEP_BUDGET,
@@ -80,6 +81,7 @@ import {
   createVmState,
 } from "../script/index.ts";
 import type { Thread } from "../script/state.ts";
+import type { PackageCatalogueEntry } from "../script/plugin.ts";
 import { DEFAULT_FONT } from "../script/packs/ui.ts";
 import type { WaitView } from "../ports/wait.ts";
 import { runTimePhase } from "../time/time.ts";
@@ -138,6 +140,8 @@ type EngineCommonInit = {
   readonly maxTicks: number;
   /** Resolved plugin layers; when absent boot builds them from the main file (E-02 step 3). */
   readonly plugins?: readonly ResolvedPlugin[];
+  /** Host-resolved package catalogue; it supplies definitions and program references, never file access. */
+  readonly packageCatalogue?: readonly PackageCatalogueEntry[];
   readonly resetRegistrations?: readonly EngineResetRegistration[];
   readonly phaseRegistrations?: readonly EnginePhaseRegistration[];
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
@@ -299,9 +303,13 @@ export function createEngine(init: EngineInit): Engine {
   }
   let activePlugins: readonly ResolvedPlugin[] = init.plugins ?? DEFAULT_ENGINE_PLUGINS;
 
-  function makeServices(plugins: readonly ResolvedPlugin[], programLoader?: ProgramLoader): ScriptServices {
+  function makeServices(
+    plugins: readonly ResolvedPlugin[],
+    programLoader?: ProgramLoader,
+    runStartups = true,
+  ): ScriptServices {
     audioDecoders = assembleAudioDecoders(plugins.map((plugin) => plugin.definition), decoderLogger);
-    const services = createScriptServices(
+    const nextServices = createScriptServices(
       state,
       plugins,
       undefined,
@@ -311,12 +319,25 @@ export function createEngine(init: EngineInit): Engine {
       (section, effect) => bus.dispatchRecorded(section, effect),
       (request) => {
         if (request.kind !== "playVideo" || typeof request.key !== "string" || (request.presentation !== "full" && request.presentation !== "small") || typeof request.reqId !== "number") return;
-        state.engine.video = { reqId: request.reqId, key: request.key, presentation: request.presentation, ended: false };
+        state.engine.video = { reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation, ended: false };
         requestsOut.push({ kind: "playVideo", reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation });
       },
+      undefined,
+      undefined,
+      false,
     );
-    runPackageStartup(state, services, [], plugins);
-    return services;
+    if (runStartups) {
+      nextServices.view.packageStartup = true;
+      try {
+        runPackageStartup(state, nextServices, plugins.flatMap((plugin) => plugin.startup === undefined ? [] : [plugin.startup]), plugins);
+      } catch (error) {
+        if (!(error instanceof ScriptError)) throw error;
+        fail(toDiagnostic(error));
+      } finally {
+        nextServices.view.packageStartup = false;
+      }
+    }
+    return nextServices;
   }
   let services = makeServices(activePlugins);
   if (init.mainFile === undefined && init.program !== undefined) {
@@ -977,12 +998,13 @@ export function createEngine(init: EngineInit): Engine {
         installedFonts.set(key, cache.get(key) ?? new Uint8Array());
         boot.fonts.push(key);
       }
-      const manifest = pluginManifestFor(mainFile, mainKey);
-      const resolvedPlugins = resolveManifestPlugins(manifest.manifest, mainKey);
+      const manifest = pluginManifestFor(mainFile, mainKey, init.packageCatalogue ?? []);
+      const resolvedPlugins = resolveManifestPlugins(manifest.manifest, mainKey, init.packageCatalogue ?? []);
       diagnostics.push(...resolvedPlugins.diagnostics);
       loader = { index, root, read: (key) => cache.get(key) };
-      if (init.plugins === undefined) activePlugins = resolvedPlugins.plugins;
-      services = makeServices(activePlugins, loader);
+      activePlugins = init.plugins ?? resolvedPlugins.plugins;
+      services = makeServices(activePlugins, loader, true);
+      if (failed) return false;
       if (mainFile.initChar !== "") {
         const player = resolveAsset(index, root, "characters", mainFile.initChar);
         if (player.ok) bus.postEffect("sprites", engineEffect("sprites", "createplayer", [player.value]));

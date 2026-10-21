@@ -119,7 +119,7 @@ const CATCHABLE: { readonly [code: string]: FailureClass } = {
 };
 
 /** Code prefixes that are load-time or restore failures: reported once, never caught. */
-const LOAD_TIME_PREFIXES: readonly string[] = ["syntax.", "compile.", "program.", "restore.", "thread."];
+const LOAD_TIME_PREFIXES: readonly string[] = ["syntax.", "compile.", "program.", "restore.", "thread.", "package."];
 
 /**
  * The failure family of `code`, or `null` when it is not a catchable runtime

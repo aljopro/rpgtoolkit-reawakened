@@ -15,13 +15,14 @@ import {
   assetKey,
   createAssetIndex,
   createEmptyBoard,
+  COMPILER_VERSION,
   createEmptyMainFile,
   createEngine,
   PACKAGE_ROOT,
   writeBoard,
   writeMainFile,
 } from "../src/index.ts";
-import type { AssetIndex, AssetRoot, Engine, EffectRecord, EngineInit, GameState, InputRecord, PlainData, TickReport } from "../src/index.ts";
+import type { AssetIndex, AssetRoot, Engine, EffectRecord, EngineInit, GameState, InputRecord, PackageCatalogueEntry, PlainData, TickReport } from "../src/index.ts";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(testDir, "..", "..", "..");
@@ -153,7 +154,7 @@ function makeDoubles(restored = false): Doubles {
   };
 }
 
-type RunResult = { readonly report: TickReport; readonly requests: string[]; readonly diagnostics: { readonly code: string; readonly file: string; readonly message: string }[]; readonly ticksRun: number };
+type RunResult = { readonly report: TickReport; readonly requests: string[]; readonly diagnostics: { readonly code: string; readonly file: string; readonly line: number; readonly message: string }[]; readonly ticksRun: number };
 
 /** Play the host: answer every asset request from `files` and keep advancing until `ticks` ran or the engine stops. */
 function run(engine: Engine, files: Files, ticks: number, inputs: readonly InputRecord[] = []): RunResult {
@@ -178,7 +179,7 @@ function run(engine: Engine, files: Files, ticks: number, inputs: readonly Input
   throw new Error("the host loop did not settle");
 }
 
-function bootEngine(game: AuthoredGame, doubles: Doubles): Engine {
+function bootEngine(game: AuthoredGame, doubles: Doubles, packageCatalogue?: readonly PackageCatalogueEntry[]): Engine {
   return createEngine({
     seed: 11,
     assetIndex: game.index,
@@ -188,6 +189,7 @@ function bootEngine(game: AuthoredGame, doubles: Doubles): Engine {
     width: 320,
     height: 240,
     maxTicks: 600,
+    ...(packageCatalogue === undefined ? {} : { packageCatalogue }),
     ...doubles.options,
   });
 }
@@ -296,7 +298,60 @@ test("the main file's package names feed the manifest in stored order, and a nam
   const unresolved = result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin.unresolved");
   deepEqual(unresolved.map((diagnostic) => diagnostic.message.includes("weather") ? "weather" : diagnostic.message.includes("quests") ? "quests" : "other"), ["weather", "quests"]);
   equal(unresolved.every((diagnostic) => diagnostic.file === game.main), true);
+  deepEqual(unresolved.map((diagnostic) => diagnostic.line), [0, 1]);
 });
+test("a host catalogue resolves the listed package and runs its owned startup before main startup", () => {
+  const game = authorGame({
+    ...SCRIPTED,
+    startup: "start.prg",
+    packages: ["weather"],
+    programs: { ...SCRIPTED.programs, "start.prg": "result = packagecmd()\nobserved = packageStarted\nend()\n" },
+  });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    namespace: "climate",
+    requests: ["asset"],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "packagecmd", aliases: [], params: [], call: () => ({ value: 42 }) }],
+    },
+    startup: { kind: "inline", text: "packageStarted = 1\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles, catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved"), false);
+  equal(doubles.state().vm.globals.result, 42);
+  equal(doubles.state().vm.globals.observed, 1);
+  equal((doubles.state().vm.stepCounters?.weather ?? 0) > 0, true);
+});
+test("a package startup that waits stops boot with the lifecycle diagnostic", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: { id: "weather", version: "1.2", commands: [] },
+    startup: { kind: "inline", text: "sleep(1)\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-unfinished"), true);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "startup.no-player"), false);
+});
+test("a package startup that consumes randomness is rejected by the lifecycle guard", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: { id: "weather", version: "1.2", commands: [] },
+    startup: { kind: "inline", text: "random(3)\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
 
 test("a game-folder root takes its project path from the main file", () => {
   const game = authorGame({ ...SCRIPTED, project: "Sample" });

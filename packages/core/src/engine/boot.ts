@@ -23,6 +23,9 @@ import {
   type PluginManifestPatch,
   type ResolvedPlugin,
 } from "../script/index.ts";
+import { withOwner } from "../script/program.ts";
+import type { PackageCatalogueEntry } from "../script/plugin.ts";
+import { foldNamespace } from "../script/manifest.ts";
 import type { PostEffect } from "./effects.ts";
 
 /** The canonical key prefix of `kind`'s folder under `root` (docs/spec/formats/README.md#paths-inside-files). */
@@ -59,40 +62,100 @@ export function mainFilePluginNames(main: MainFile): string[] {
 }
 
 /** Convert the main file package list into the existing manifest patch seam. */
-export function mainFilePluginPatch(main: MainFile): PluginManifestPatch {
-  return mainFilePluginNames(main).map((id) => ({ op: "append", entry: { id } }));
+export function mainFilePluginPatch(main: MainFile, catalogue: readonly PackageCatalogueEntry[] = []): PluginManifestPatch {
+  return mainFilePluginNames(main).map((id) => {
+    const packageEntry = catalogue.find((item) => foldNamespace(item.name) === foldNamespace(id));
+    return {
+      op: "append",
+      entry: packageEntry === undefined
+        ? { id }
+        : {
+            id,
+            version: packageEntry.version,
+            ...(packageEntry.namespace === undefined ? {} : { namespace: packageEntry.namespace }),
+            requests: [...packageEntry.requests],
+          },
+    };
+  });
 }
 
 /**
  * E-02 step 3: the engine default manifest plus the package entries named by
  * the main file. Legacy DLL rows are retained as data and never interpreted.
  */
-export function pluginManifestFor(main: MainFile, mainKeyForDiagnostics: string): { readonly manifest: PluginManifest; readonly diagnostics: Diagnostic[] } {
+export function pluginManifestFor(
+  main: MainFile,
+  mainKeyForDiagnostics: string,
+  catalogue: readonly PackageCatalogueEntry[] = [],
+): { readonly manifest: PluginManifest; readonly diagnostics: Diagnostic[] } {
   const baseManifest: PluginManifest = ENGINE_DEFAULT_MANIFEST.map((entry) => ({ id: entry.id }));
-  const patched = applyPluginManifestPatch(baseManifest, mainFilePluginPatch(main), mainKeyForDiagnostics);
+  const patched = applyPluginManifestPatch(baseManifest, mainFilePluginPatch(main, catalogue), mainKeyForDiagnostics);
   return {
     manifest: patched.manifest,
-    diagnostics: patched.diagnostics.map((diagnostic) => ({
-      code: diagnostic.code,
-      file: diagnostic.path,
-      line: diagnostic.index,
-      message: diagnostic.message,
+    diagnostics: patched.diagnostics.map((item) => ({
+      code: item.code,
+      file: item.path,
+      line: item.index,
+      message: item.message,
     })),
   };
 }
 
-/** Resolve manifest ids to the engine's own definitions; a disabled entry is skipped and an unknown id is a diagnostic. */
-export function resolveManifestPlugins(manifest: PluginManifest, file = ""): { readonly plugins: ResolvedPlugin[]; readonly diagnostics: Diagnostic[] } {
+/** Resolve manifest ids against engine defaults and the host's package catalogue. */
+export function resolveManifestPlugins(
+  manifest: PluginManifest,
+  file = "",
+  catalogue: readonly PackageCatalogueEntry[] = [],
+): { readonly plugins: ResolvedPlugin[]; readonly diagnostics: Diagnostic[] } {
   const plugins: ResolvedPlugin[] = [];
   const diagnostics: Diagnostic[] = [];
-  for (const entry of manifest) {
+  const byName = new Map<string, PackageCatalogueEntry>();
+  const duplicates = new Set<string>();
+  for (const item of catalogue) {
+    const name = foldNamespace(item.name);
+    if (byName.has(name)) duplicates.add(name);
+    else byName.set(name, item);
+  }
+  for (let index = 0; index < manifest.length; index += 1) {
+    const entry = manifest[index]!;
     if (!isPluginManifestEntryEnabled(entry)) continue;
     const definition = ENGINE_PLUGIN_TABLE[entry.id];
-    if (definition === undefined) {
-      diagnostics.push({ code: "plugin.unresolved", file, line: 0, message: `manifest id "${entry.id}" has no engine definition` });
+    if (definition !== undefined) {
+      plugins.push(entry.options === undefined ? { definition } : { definition, options: entry.options });
       continue;
     }
-    plugins.push(entry.options === undefined ? { definition } : { definition, options: entry.options });
+    const packageName = foldNamespace(entry.id);
+    const packageEntry = byName.get(packageName);
+    if (
+      packageEntry === undefined
+      || duplicates.has(packageName)
+      || packageEntry.name !== entry.id
+      || packageEntry.version !== entry.version
+      || packageEntry.definition.id !== entry.id
+      || packageEntry.definition.version !== entry.version
+    ) {
+      const packageIndex = index - ENGINE_DEFAULT_MANIFEST.length;
+      diagnostics.push({
+        code: "plugin.unresolved",
+        file,
+        line: packageIndex >= 0 ? packageIndex : 0,
+        message: `manifest id "${entry.id}" has no matching host package definition`,
+      });
+      continue;
+    }
+    const namespace = entry.namespace ?? entry.id;
+    const startup = packageEntry.startup === undefined ? undefined : withOwner(packageEntry.startup, entry.id);
+    plugins.push({
+      definition: packageEntry.definition,
+      namespace,
+      package: {
+        name: entry.id,
+        version: entry.version!,
+        namespace,
+        requests: [...(entry.requests ?? [])],
+      },
+      ...(startup === undefined ? {} : { startup }),
+    });
   }
   return { plugins, diagnostics };
 }

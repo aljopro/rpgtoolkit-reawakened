@@ -169,8 +169,10 @@ export type {
   CommandRequest,
   CommandResult,
   CommandView,
+  PackageCatalogueEntry,
   PluginDefinition,
   PluginDoc,
+  ResolvedPackageMetadata,
   ResolvedPlugin,
 } from "./plugin.ts";
 export type {

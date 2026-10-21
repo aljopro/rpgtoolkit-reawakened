@@ -189,12 +189,16 @@ export function createScriptServices(
   postRequest?: (request: CommandRequest) => void,
   layers: PluginLayers = createPluginLayers(),
   hostTypes: readonly HostObjectType[] = [],
+  packageStartup = false,
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
   const view: CommandView = {
-    rng: createRngPort(state.rng),
+    rng: packageStartup
+      ? { nextUint32: () => { throw new ScriptError("package.startup-forbidden", "package startup cannot consume the seeded RNG"); } }
+      : createRngPort(state.rng),
     clock: createClockPort(state.time),
+    ...(packageStartup ? { packageStartup: true } : {}),
     state,
     gameId,
   };
@@ -2086,6 +2090,10 @@ function dispatchResolved(
   }
 
   if (result.request !== undefined) {
+    if (services.view.packageStartup) {
+      const packageName = frame.program.owner ?? "unknown";
+      throw new ScriptError("package.startup-forbidden", `package "${packageName}" startup cannot issue host request "${result.request.kind}"`, pos);
+    }
     const timeout = result.timeoutTicks;
     let deadline: number | null = null;
     if (timeout !== undefined) {
