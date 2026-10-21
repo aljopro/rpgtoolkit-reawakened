@@ -80,6 +80,16 @@ the normal board default. Visual bounds are presentation data and do not
 implicitly define gameplay geometry. Sprite state, geometry, movement queues,
 and animation playback belong to the sprites/presentation owner; actor state
 contains gameplay identity and rules.
+Board hydration joins the two records by copying only the actor's stable
+`actorId` onto the sprite. A sprite source MAY provide that id explicitly; when
+the source is a board NPC whose actor record is selected by the board
+hydration input, the owner resolves the matching actor before creating the
+sprite. The sprite never copies stats, behaviour hooks, or actor methods.
+Actor operations (including behaviour resolution) dispatch through the actor
+owner using this id; movement, collision, activation, trigger state, and
+presentation continue to dispatch through the sprite owner. An asset-only
+sprite has no actor id and follows the same sprite phases as before.
+
 
 ## Progression
 
