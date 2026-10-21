@@ -47,6 +47,8 @@ import type { GameState, SectionKey } from "../save/state.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import type { EffectKind } from "./effects.ts";
 import type { HostObjectType } from "./host.ts";
+import type { ProgramRef } from "./program.ts";
+import type { HostRequestKind } from "./manifest.ts";
 import type { ActorHooks } from "../actors/rules.ts";
 
 /**
@@ -59,6 +61,8 @@ export type CommandView = {
   readonly rng: RngPort;
   readonly clock: ClockPort;
   readonly state?: GameState;
+  /** True only while deterministic package startup programs are running. */
+  packageStartup?: boolean;
   /** Stable core-derived identity used to scope host storage. */
   readonly gameId?: string;
   /** Manifest options for the layer currently handling this command. */
@@ -168,6 +172,23 @@ export type PluginDefinition = {
   readonly behaviourStartup?: (registerBehaviour: BehaviourRegistrar) => void;
 };
 
+/** A host-resolved package record; core receives definitions and source from the runner (G2). */
+export type PackageCatalogueEntry = {
+  readonly name: string;
+  readonly version: string;
+  readonly namespace?: string;
+  readonly requests: readonly HostRequestKind[];
+  readonly definition: PluginDefinition;
+  readonly startup?: ProgramRef;
+};
+
+export type ResolvedPackageMetadata = {
+  readonly name: string;
+  readonly version: string;
+  readonly namespace: string;
+  readonly requests: readonly HostRequestKind[];
+};
+
 /**
  * A host-resolved definition plus its manifest configuration. `namespace` is set
  * for a package entry (PKG-2, PKG-4): the host copies `packageNamespace(entry)`, and
@@ -178,4 +199,6 @@ export type ResolvedPlugin = {
   readonly definition: PluginDefinition;
   readonly options?: PlainData;
   readonly namespace?: string;
+  readonly package?: ResolvedPackageMetadata;
+  readonly startup?: ProgramRef;
 };
