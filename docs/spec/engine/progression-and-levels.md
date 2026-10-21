@@ -59,7 +59,7 @@ levelUpType = 1:
   nextRequirement = oldRequirement + experienceIncrease
 ```
 
-Truncation happens after the multiplication and division. The calculation MUST NOT truncate `experienceIncrease / 100` before multiplying by the old requirement. This preserves percentage values below 100 as fractional growth that may truncate only after the full calculation.
+Truncation happens after the multiplication and division. The calculation MUST NOT truncate `experienceIncrease / 100` before multiplying by the old requirement. This preserves percentage values below 100 as fractional growth that may truncate only after the full calculation. Progression fields and awards are safe integers. `levelUpType` MUST be `0` or `1`; a non-max-level actor MUST have a positive integer `nextRequirement` and a non-negative integer `remainingExperience`; and `maxLevel` MUST be a non-negative integer. An invalid award or policy is rejected without mutating the actor. A non-negative award is recorded even when the actor is already at `maxLevel`; no further level or stat changes occur there. Percentage growth and percentage stat increases truncate toward zero only after the full multiplication and division.
 
 The legacy ecosystem contains different arithmetic expectations in live advancement and restoration. The compatibility boundary keeps the field meanings above explicit; the Reawakened runtime uses the deterministic contract above for new evaluation and records any legacy restoration conversion during import rather than silently mixing formulas.
 
@@ -114,9 +114,7 @@ This allows a game to unlock abilities through XP, level, items, quests, or othe
 
 ## Persistence and restoration
 
-Save data preserves each actor's current progression state, including total experience, level, remaining XP to the next level, and current progression requirement. It also preserves the actor's policy data and behaviour name when present. It never stores a callable, compiled hook, or raw program path.
-
-On restoration, package startup rebuilds behaviour registrations before actor hydration. A missing behaviour uses the core default and emits a located diagnostic; it never refuses the save.
+Save data preserves each actor's current progression state, including total experience, level, remaining XP to the next level, and current progression requirement. It also preserves the actor's policy data, `legacyLevelUp` precedence flag, and behaviour name when present. The exact persisted progression fields are `experience` in `stats`, `level` in `stats`, `remainingExperience`, `nextRequirement`, `levelType`, `experienceIncrease`, `maxLevel`, `levelHp`, `levelDp`, `levelFp`, `levelSm`, and `levelUpType` in `progression`; `legacyLevelUp` is a plain boolean in `progression`. It never stores a callable, compiled hook, or raw program path. On restoration, package startup rebuilds behaviour registrations before actor hydration. A missing behaviour uses the core default and emits a located diagnostic; it never refuses the save.
 
 ## Maximum level
 
