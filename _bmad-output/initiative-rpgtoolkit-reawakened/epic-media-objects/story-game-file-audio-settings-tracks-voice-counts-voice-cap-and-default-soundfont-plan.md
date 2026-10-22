@@ -3,7 +3,7 @@ title: "Game-file audio settings: tracks, voice counts, voice cap and default So
 type: 'feature'
 ticket: 2
 created: '2026-10-22'
-status: 'ready-for-dev'
+status: 'in-progress'
 baseline_revision: 'fb53f26250e9aa821f095788a0f522e8a8b819ad'
 route: 'full'
 route_source: 'auto'
@@ -29,9 +29,9 @@ context:
 
 ## Boundaries & Constraints
 
-**Always:** Legacy rows and the package-list block stay byte-identical and are never derived from audio settings; missing block means Epic 6 defaults and cap 32; the five built-ins stay first in fixed order and are unique; envelope names, counts, cap and font bounds are validated with located errors before the model exists; settings never enter a game save and a load never changes them; core stays pure (G2, G3).
+**Always:** Legacy rows and the package-list block stay byte-identical and are never derived from audio settings; missing block means Epic 6 defaults and cap 32; the five built-ins stay first in fixed order and are unique; envelope names, counts, cap and font bounds are validated with located errors before the model exists; an over-cap aggregate uses the Epic 6 default tracks and cap 32, keeps the independent `defaultSoundFont`, and reports one diagnostic at the first offending track; package-declared tracks that do exist go through the same validation/cap check; settings never enter a game save and a load never changes them; core stays pure (G2, G3).
 
-**Never:** Do not implement the package-declared-track clause of the old draft: recon found no manifest field, spec or owner path for it, so there is no contract to implement. Do not retire the procedural media surface, add event/object APIs, change the cue/state timing, or invent a runner SoundFont layer. Do not consult legacy source (G7).
+**Never:** Do not invent a manifest, descriptor or package-track field that 19.9/19.16 does not define, and do not invent duplicate/overflow precedence for package-declared tracks. Do not retire the procedural media surface, add event/object APIs, change the cue/state timing, or invent a runner SoundFont layer. Do not consult legacy source (G7).
 
 ## I/O & Edge-Case Matrix
 
@@ -40,7 +40,7 @@ context:
 | Legacy file | No TKR blocks | `audioSettings` absent; byte-identical round-trip; Epic 6 tracks, cap 32 | No error |
 | Authored block | 5 built-ins with overrides, extra tracks, cap, font | Same order/counts after read/write; boot configures `state.audio.tracks`; `soundfont.set` carries the font | No error |
 | Both blocks | Package list then audio block, then residue | Both recognised in that order; residue preserved | No error |
-| `voiceCap` overflow | Sum of counts > cap, structurally valid | File loads; built-in default tracks/cap 32; one `media.voice-cap` diagnostic at the offending track index | Non-fatal diagnostic |
+| `voiceCap` overflow | Sum of counts > cap, structurally valid | File loads; Epic 6 default tracks/cap 32; block `defaultSoundFont` still applies; one `media.voice-cap` diagnostic at the first track whose cumulative count crosses the cap | Non-fatal diagnostic |
 | Invalid envelope | Bad tag shape, duplicate/out-of-order built-in, bad name, count out of range, truncated | Located format error; no partial model | Refuse read/write |
 | Missing font asset | Font key not in the index | Treated as `null`; one `media.soundfont-missing`; cue carries `null` | Diagnostic, boot continues |
 | Save and load | Configured tracks/font, then save + load | Projection omits voice counts/config; load keeps current names/counts/cap/font and applies only configured tracks | No setting change |
@@ -51,6 +51,7 @@ context:
 
 - `docs/spec/formats/main-file.md` — package-list section is the precedent; add the byte layout and validation for the audio block.
 - `packages/core/src/formats/main-file/model.ts` — `MainFileAudioTrack`, `MainFileAudioSettings`, optional model fields, tag/bound constants.
+- `packages/core/src/script/manifest.ts`, `script/plugin.ts`, `script/package-startup.ts` and Epic 19.9/19.16 (#459/#540) — the only package declaration surfaces; inspect for a track-declaration source, and use the existing `configureTrack` validation/cap check for any package-side declaration that exists.
 - `packages/core/src/formats/main-file/reader.ts` / `writer.ts` — parse package block then audio block then residue; write package then audio then residue.
 - `packages/core/src/audio/model.ts` — `asFold`, `createTrack`, built-in defaults and `MAX_VOICES`; add the resolved default settings helper here or in `runtime.ts`.
 - `packages/core/src/audio/runtime.ts` — closure `voiceCap` and `defaultSoundFont`; new `applyGameAudio`; `configureTrack` checks the configured cap; `load` preserves configuration and ignores unconfigured saved tracks.
@@ -69,6 +70,7 @@ context:
 - [ ] `packages/core/src/audio/runtime.ts` — add `applyGameAudio`, use the configured cap in `configureTrack`, and make `load` apply playback onto configured tracks only — runtime contract.
 - [ ] `packages/core/src/audio/save.ts` — omit `voiceCount` from the saved track projection — configuration is not save data.
 - [ ] `packages/core/src/engine/engine.ts` — apply the decoded settings before audio registration in boot mode and report overflow once — real startup path.
+- [ ] `packages/core/src/audio/runtime.ts` + package surfaces — inspect 19.9/19.16 for a package track-declaration source; if one exists, merge it through the same validation/cap check; if none exists, record that clause as blocked with the searched surfaces and finish everything else — owner instruction, no invented contract.
 - [ ] Tests — cover every I/O matrix row and the #481 verification list — permanent regressions.
 - [ ] Re-run `pnpm dump:check`/`dump:check:examples` (or `pnpm dump` when fixtures are absent) — legacy digests unchanged.
 
@@ -78,14 +80,18 @@ context:
 - Given a booted game with a block, when the engine starts, then `state.audio.tracks` match the block, the applier emits one `soundfont.set` with the configured key, and a missing key is one located diagnostic.
 - Given an over-cap block, when booted, then the game still runs with default tracks and exactly one located `media.voice-cap` diagnostic.
 - Given a configured game, when a save is taken and loaded, then the projection has no track definition or cap/font, and `state.audio` keeps its names, counts, cap and default font.
+- Given a package-declared track from a source 19.9 defines, when it is registered, then it passes the same name/count/track-limit/cap validation as game-file settings and no precedence is invented; given no source exists, then that clause alone is reported blocked with the searched surfaces.
 
 ## Design Notes
 
-The block is a sibling tagged block, not a new field inside `TKRPLUG`: the package parser owns `TKRPLUG` and its trailing residue, so the reader tries package first, then audio, then keeps residue. The audio module receives the decoded settings after the format layer has validated structure; the only semantic check left is the cap total, deliberately non-fatal per #481. On overflow the whole track configuration falls back to Epic 6 defaults (and cap 32) so the game still boots; the block's `defaultSoundFont` still applies. This reading of "defaults for the excess" is recorded as an assumption because MEDIA-4 does not spell out the recovery; it is surfaced in the final report for owner review.
+The block is a sibling tagged block, not a new field inside `TKRPLUG`: the package parser owns `TKRPLUG` and its trailing residue, so the reader tries package first, then audio, then keeps residue. The marker is the literal seven bytes `TRKAUD\0` (six ASCII letters plus NUL), per the owner's correction. The audio module receives the decoded settings after the format layer has validated structure; the only semantic check left is the cap total, deliberately non-fatal per #481. On overflow the whole track configuration falls back to the Epic 6 default tracks and cap 32 so the game still boots, the first track whose cumulative count crosses the cap locates the single `media.voice-cap` diagnostic, and the block's independent `defaultSoundFont` is still applied. This recovery is owner-approved (2026-10-22).
+
+Package-declared tracks remain required. The inspection covers the 19.9/19.16 tickets and plans plus `script/manifest.ts`, `script/plugin.ts` and the package start-up surface; if no declaration source exists, only that clause is reported blocked, with the searched surfaces named, and every other criterion is completed. No manifest/descriptor field and no duplicate/overflow precedence are invented.
 
 ## Plan Change Log
 
-- 2026-10-22 — Replaced the stale `draft` plan (baseline `0975a26b…`) with the pinned plan at `fb53f262…`. Resolved the old draft's "package-declared tracks" line as a conflict: no manifest field, spec anchor or owner path exists, so it is out of scope and reported, not invented.
+- 2026-10-22 — Replaced the stale `draft` plan (baseline `0975a26b…`) with the pinned plan at `fb53f262…`.
+- 2026-10-22 — Owner decisions: keep the literal `TRKAUD\0` and correct the spec to seven bytes; approve over-cap recovery (Epic 6 default tracks/cap 32, retain `defaultSoundFont`, one diagnostic at the first offending track); package-declared tracks remain required and must use the same validation/cap check, blocking only that clause if 19.9 has no declaration source. Replaced the earlier "out of scope" wording; no invented precedence.
 
 ## Review Triage Log
 

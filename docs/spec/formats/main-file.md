@@ -87,7 +87,7 @@ The package list is the only part of the main file the plugin manifest reads: th
 <a id="tkr-audio-settings-extension"></a>
 ## TKR audio-settings extension
 
-TK Reawakened may append a native audio-settings block after the package-list block. It is a separate tagged block, not a field inside `TKRPLUG`, so a reader that knows only one of the two keeps the other as residue. It begins with the eight-byte marker `TRKAUD\0` (seven ASCII bytes followed by NUL), then an unsigned little-endian `u16` true track count, then that many tracks in authored order:
+TK Reawakened may append a native audio-settings block after the package-list block. It is a separate tagged block, not a field inside `TKRPLUG`, so a reader that knows only one of the two keeps the other as residue. It begins with the seven-byte marker `TRKAUD\0` (six ASCII bytes followed by NUL), then an unsigned little-endian `u16` true track count, then that many tracks in authored order:
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -100,7 +100,7 @@ The block is the full ordered track list: the five built-in names `music`, `sfx`
 
 The block order is fixed: the package list, when present, comes first; the audio block, when present, comes next; any remaining bytes are residue. Each block may be present without the other. The writer emits the audio block when the model carries audio settings and never derives it from, or into, the package list or the legacy rows.
 
-Structural violations — a truncated block, a count or voice count out of range, an unknown font flag, an oversized or empty name, a duplicate name, or built-in names missing, out of order or repeated — are located format errors and no model is produced. A structurally valid block whose total voice count exceeds its cap is accepted as data; at load the engine reports one located `media.voice-cap` diagnostic and uses the Epic 6 default track counts and cap 32 for that game.
+Structural violations — a truncated block, a count or voice count out of range, an unknown font flag, an oversized or empty name, a duplicate name, or built-in names missing, out of order or repeated — are located format errors and no model is produced. A structurally valid block whose total voice count exceeds its cap is accepted as data; at load the engine reports one located `media.voice-cap` diagnostic at the first track whose cumulative count crosses the cap, replaces the track configuration with the Epic 6 default tracks and cap 32, and still applies the block's independent `defaultSoundFont`. The game therefore boots with the defaults rather than refusing the file.
 
 ## Compatibility notes
 
