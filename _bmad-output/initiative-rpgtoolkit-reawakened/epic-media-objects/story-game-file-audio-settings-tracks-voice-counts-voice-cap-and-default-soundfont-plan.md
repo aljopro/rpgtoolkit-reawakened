@@ -3,7 +3,7 @@ title: "Game-file audio settings: tracks, voice counts, voice cap and default So
 type: 'feature'
 ticket: 2
 created: '2026-10-22'
-status: 'built'
+status: 'done'
 baseline_revision: 'fb53f26250e9aa821f095788a0f522e8a8b819ad'
 route: 'full'
 route_source: 'auto'
