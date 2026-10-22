@@ -18,6 +18,14 @@ import { err, ok, type Result } from "../result.ts";
 import { BinaryWriter } from "../binary/writer.ts";
 import {
   encodeGameSpeed,
+  MAIN_AUDIO_BUILTIN_TRACKS,
+  MAIN_AUDIO_EXTENSION_TAG,
+  MAIN_AUDIO_MAX_FONT_BYTES,
+  MAIN_AUDIO_MAX_NAME_BYTES,
+  MAIN_AUDIO_MAX_TRACKS,
+  MAIN_AUDIO_MAX_VOICE_CAP,
+  MAIN_AUDIO_MIN_TRACKS,
+  MAIN_AUDIO_MIN_VOICE_CAP,
   MAIN_MAGIC,
   MAIN_MAX_MINOR,
   MAIN_MIN_MINOR,
@@ -26,6 +34,7 @@ import {
   MAIN_PACKAGE_MAX_COUNT,
   MAIN_SECTION,
   type MainFile,
+  type MainFileAudioSettings,
 } from "./model.ts";
 import { asciiLower } from "./layout.ts";
 
@@ -308,6 +317,46 @@ function checkModel(writer: BinaryWriter, model: MainFile): Result<never> | unde
     if (seen.has(folded)) return fail(writer, `duplicate TKR package name "${name}" (docs/spec/formats/main-file.md#tkr-package-list-extension)`);
     seen.add(folded);
   }
+  return checkAudioSettings(writer, model.audioSettings);
+}
+
+/**
+ * `undefined` when the audio-settings block is absent or representable; otherwise a located error
+ * (docs/spec/formats/main-file.md#tkr-audio-settings-extension). An aggregate count above the cap is
+ * representable: the block is data, and the engine reports it once at load.
+ */
+function checkAudioSettings(writer: BinaryWriter, settings: MainFileAudioSettings | null): Result<never> | undefined {
+  if (settings === null) return undefined;
+  const anchor = "docs/spec/formats/main-file.md#tkr-audio-settings-extension";
+  if (settings === undefined || typeof settings !== "object" || !Array.isArray(settings.tracks)) {
+    return fail(writer, `TKR audio settings must be null or an explicit settings object (${anchor})`);
+  }
+  if (settings.tracks.length < MAIN_AUDIO_MIN_TRACKS || settings.tracks.length > MAIN_AUDIO_MAX_TRACKS) {
+    return fail(writer, `TKR audio track count ${settings.tracks.length} is outside ${MAIN_AUDIO_MIN_TRACKS}–${MAIN_AUDIO_MAX_TRACKS} (${anchor})`);
+  }
+  if (!Number.isInteger(settings.voiceCap) || settings.voiceCap < MAIN_AUDIO_MIN_VOICE_CAP || settings.voiceCap > MAIN_AUDIO_MAX_VOICE_CAP) {
+    return fail(writer, `TKR audio voice cap ${settings.voiceCap} is outside ${MAIN_AUDIO_MIN_VOICE_CAP}–${MAIN_AUDIO_MAX_VOICE_CAP} (${anchor})`);
+  }
+  const seen = new Set<string>();
+  for (let index = 0; index < settings.tracks.length; index += 1) {
+    const track = settings.tracks[index]!;
+    const folded = asciiLower(track.name);
+    if (track.name.length === 0 || track.name.length > MAIN_AUDIO_MAX_NAME_BYTES || track.name.includes("\0") || !/^[a-z0-9_.-]+$/.test(folded)) {
+      return fail(writer, `TKR audio track name "${track.name}" must match [A-Za-z0-9_.-]+ in 1–${MAIN_AUDIO_MAX_NAME_BYTES} bytes (${anchor})`);
+    }
+    if (index < MAIN_AUDIO_BUILTIN_TRACKS.length && folded !== MAIN_AUDIO_BUILTIN_TRACKS[index]) {
+      return fail(writer, `TKR audio track ${index} must be the built-in "${MAIN_AUDIO_BUILTIN_TRACKS[index]}" (${anchor})`);
+    }
+    if (seen.has(folded)) return fail(writer, `duplicate TKR audio track name "${track.name}" (${anchor})`);
+    seen.add(folded);
+    if (!Number.isInteger(track.voiceCount) || track.voiceCount < 1 || track.voiceCount > MAIN_AUDIO_MAX_VOICE_CAP) {
+      return fail(writer, `TKR audio track "${track.name}" voice count ${track.voiceCount} is outside 1–${MAIN_AUDIO_MAX_VOICE_CAP} (${anchor})`);
+    }
+  }
+  const font = settings.defaultSoundFont;
+  if (font !== null && (typeof font !== "string" || font.length === 0 || font.length > MAIN_AUDIO_MAX_FONT_BYTES || font.includes("\0"))) {
+    return fail(writer, `a TKR audio default SoundFont must be 1–${MAIN_AUDIO_MAX_FONT_BYTES} bytes and must not contain NUL (${anchor})`);
+  }
   return undefined;
 }
 
@@ -537,6 +586,26 @@ export function writeMainFile(model: MainFile): Result<Uint8Array> {
     for (const name of packagePlugins) {
       const encoded = writer.str(name);
       if (!encoded.ok) return encoded;
+    }
+  }
+
+  // The audio-settings block follows the package list and precedes residue
+  // (`docs/spec/formats/main-file.md#tkr-audio-settings-extension`).
+  if (model.audioSettings !== null) {
+    writer.writeBytes(MAIN_AUDIO_EXTENSION_TAG);
+    writer.u16(model.audioSettings.tracks.length);
+    for (const track of model.audioSettings.tracks) {
+      const name = writer.str(track.name);
+      if (!name.ok) return name;
+      writer.u16(track.voiceCount);
+    }
+    writer.u16(model.audioSettings.voiceCap);
+    if (model.audioSettings.defaultSoundFont === null) {
+      writer.u8(0);
+    } else {
+      writer.u8(1);
+      const font = writer.str(model.audioSettings.defaultSoundFont);
+      if (!font.ok) return font;
     }
   }
   writer.writeBytes(model.residue);

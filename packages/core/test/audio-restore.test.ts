@@ -22,7 +22,7 @@ const RESTARTS: readonly Restart[] = [
   { scene: "animation-frame-sfx", name: "two-sfx-voices-when-the-author-raises-the-count", at: 2 },
   { scene: "settings-versus-save", name: "save-and-load-restore-playback-not-settings", at: 5 },
   { scene: "settings-versus-save", name: "save-and-load-restore-playback-not-settings", at: 14 },
-  { scene: "soundfont-setting", name: "load-reemits-the-saved-bank-first", at: 5 },
+  { scene: "soundfont-setting", name: "load-reemits-the-current-bank-first", at: 5 },
   { scene: "battle-music-handoff", name: "battle-music-then-return", at: 8 },
   { scene: "fades", name: "linear-half-up", at: 4 },
   { scene: "media-wait-suspend", name: "wait-wakes-on-the-end-tick", at: 6 },
@@ -113,22 +113,20 @@ test("the state hash never sees the script volume settings, and a snapshot alway
   equal(hashGameState(restored), hashGameState(loud));
 });
 
-test("a game save keeps the tracks, counter and script bank and never the settings or the player's mix", () => {
+test("a game save keeps playback and the counter, never track configuration, banks or the player's mix", () => {
   const state = createGameState({ seed: 0 });
   state.audio.soundFont = "media/boss.sf2" as never;
   state.audio.cueId = 12;
   state.audio.settings.masterVolume = 40;
   state.audio.settings.trackVolumes.push({ name: "sfx", volume: 25, fade: null });
   const saved = audioSaveProjection(state.audio, 77);
-  deepEqual(Object.keys(saved), ["tick", "cueId", "soundFont", "tracks"]);
+  deepEqual(Object.keys(saved), ["tick", "cueId", "tracks"]);
   equal(saved.tick, 77);
   equal(saved.cueId, 12);
-  equal(saved.soundFont, "media/boss.sf2");
-  deepEqual(saved.tracks, createAudioSection().tracks);
   const text = JSON.stringify(saved);
-  ok(!text.includes("masterVolume") && !text.includes("trackVolumes") && !text.includes("settings"), "no settings in the save");
-  state.audio.tracks[0]!.voiceCount = 3;
-  equal(saved.tracks[0]?.voiceCount, 1, "the projection is a copy, not a view of the live state");
+  ok(!text.includes("masterVolume") && !text.includes("trackVolumes") && !text.includes("settings") && !text.includes("voiceCount") && !text.includes("soundFont"), "no configuration in the save");
+  state.audio.tracks[0]!.name = "changed";
+  equal(saved.tracks[0]?.name, "music", "the projection is a copy, not a view of the live state");
 });
 
 test("an empty restore keeps the section at its schema and a fresh state hashes the same on every restore", () => {

@@ -113,6 +113,7 @@ const MAIN_FILE: MainFile = {
   magic: "RPGTLKIT MAIN",
   major: 2,
   minor: 0,
+  audioSettings: null,
   registrationFlag: 1,
   registrationCode: "NOCODE",
   projectPath: "demo",

@@ -455,7 +455,7 @@ test("media-wait-suspend: waits wake on the end tick, are held by pause, and wak
 test("settings-versus-save: load restores playback in track order and leaves settings alone", () => {
   const c = theCase("settings-versus-save", "save-and-load-restore-playback-not-settings");
   deepEqual(cuesAt(c, 20).map((q) => [q.kind, q.track, q.asset, q.tick, q.positionTicks]), [
-    ["soundfont.set", null, "media/boss.sf2", 20, null],
+    ["soundfont.set", null, "media/town.sf2", 20, null],
     ["media.play", "music", "media/song.mid", 20, 0],
     ["media.play", "sfx", "media/hit.wav", 14, 0],
     ["media.play", "ambience", "media/loop.wav", 12, 0],
@@ -464,7 +464,7 @@ test("settings-versus-save: load restores playback in track order and leaves set
   deepEqual([rowAt(c, 20).master, rowAt(c, 20).bus], [30, [["music", 90, null]]]); // the newer values, not the saved 80 and 60
   deepEqual([rowAt(c, 10).master, rowAt(c, 10).bus], [80, [["music", 60, null]]]);
   equal(rowAt(c, 19).sf === undefined, true); // reset at tick 13, before the load
-  equal(rowAt(c, 20).sf, "media/boss.sf2"); // the saved script bank returns
+  equal(rowAt(c, 20).sf, undefined); // load retains the current bank reset, not the saved script bank
   equal(cuesAt(c, 20)[0].cueId, 12); // eleven cues were issued before the load; ids are never reused
   const stopped = theCase("settings-versus-save", "stopped-tracks-stay-stopped-after-load");
   deepEqual(cuesAt(stopped, 10).map((q) => [q.kind, q.track, q.tick]), [["soundfont.set", null, 10], ["media.play", "ambience", 5]]);
@@ -498,9 +498,9 @@ test("soundfont-setting: the 6.3 worked example's cue ids, order and values", ()
   const bad = theCase("soundfont-setting", "invalid-names-change-nothing");
   deepEqual(diags(bad), [[1, "media.soundfont-name"], [2, "media.soundfont-missing"]]);
   deepEqual(allCues(bad).map((q) => q.asset), [null, "media/alt.sf3"]);
-  const reload = theCase("soundfont-setting", "load-reemits-the-saved-bank-first");
+  const reload = theCase("soundfont-setting", "load-reemits-the-current-bank-first");
   deepEqual(kinds(reload, 8), ["soundfont.set", "media.play/music#0"]);
-  equal(cuesAt(reload, 8)[0].asset, "media/boss.sf2");
+  equal(cuesAt(reload, 8)[0].asset, "media/town.sf2");
 });
 
 test("battle-music-handoff: stop then play, silence without music, restart on return", () => {

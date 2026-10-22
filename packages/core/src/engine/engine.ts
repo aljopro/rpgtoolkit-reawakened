@@ -251,7 +251,9 @@ export function createEngine(init: EngineInit): Engine {
     warn: (record) => void diagnostics.push({ code: record.code, file: "", line: 0, message: record.message }),
     error: (record) => void diagnostics.push({ code: record.code, file: "", line: 0, message: record.message }),
   };
-  let defaultSoundFont = init.defaultSoundFont ?? null;
+  // Scene mode has no game file, so a host may supply the author default directly. Boot mode
+  // takes it from the main file's audio-settings block and ignores this start-up value.
+  let defaultSoundFont = init.mainFile === undefined ? init.defaultSoundFont ?? null : null;
   if (defaultSoundFont !== null && !index.byKey.has(defaultSoundFont)) {
     diagnostics.push({ code: "media.soundfont-missing", file: defaultSoundFont, line: 0, message: `default SoundFont "${defaultSoundFont}" is not in the asset index` });
     defaultSoundFont = null;
@@ -270,8 +272,21 @@ export function createEngine(init: EngineInit): Engine {
       diagnostics.push({ code: note.code, file: typeof file === "string" ? file : "", line: 0, message: `${note.op}: ${note.code} ${detail}`.trimEnd() });
     },
   });
-  audio.register(bus);
-  for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
+  let audioRegistered = false;
+  function registerAudio(): void {
+    if (audioRegistered) return;
+    audioRegistered = true;
+    audio.register(bus);
+    // Keep the host's explicit section override last, just as in scene mode.
+    for (const registration of init.effectAppliers ?? []) {
+      if (registration.section === "audio") bus.register("audio", registration.applier);
+    }
+  }
+  // Boot mode registers after the main file supplies the game's audio settings; scene mode has none.
+  if (init.mainFile === undefined) registerAudio();
+  for (const registration of init.effectAppliers ?? []) {
+    if (registration.section !== "audio") bus.register(registration.section, registration.applier);
+  }
   let nextRequestId = 1;
   let failed = false;
   let quitRequested = false;
@@ -982,6 +997,87 @@ export function createEngine(init: EngineInit): Engine {
     }
     return resolved.value;
   }
+  /**
+   * Apply package-owned track metadata after game-file settings and before the
+   * audio applier registers (docs/spec/engine/audio-media.md#media-4).
+   */
+  function applyPackageAudioTracks(plugins: readonly ResolvedPlugin[]): void {
+    const report = (packageName: string, index: number, reason: string): void => {
+      diagnostics.push({
+        code: "media.package-track",
+        file: mainKey ?? "",
+        line: 0,
+        message: `package "${packageName}" audioTracks[${index}] rejected: ${reason} (docs/spec/engine/audio-media.md#media-4)`,
+      });
+    };
+    for (const plugin of plugins) {
+      const packageMetadata = plugin.package;
+      if (packageMetadata === undefined) continue;
+      const declarations: unknown = plugin.definition.audioTracks;
+      if (declarations === undefined) continue;
+      if (!Array.isArray(declarations)) {
+        report(packageMetadata.name, 0, "audioTracks must be an array");
+        continue;
+      }
+      for (let index = 0; index < declarations.length; index += 1) {
+        const declaration: unknown = declarations[index];
+        if (typeof declaration !== "object" || declaration === null || Array.isArray(declaration)) {
+          report(packageMetadata.name, index, "declaration must be an object");
+          continue;
+        }
+        const record = declaration as { readonly name?: unknown; readonly voiceCount?: unknown };
+        const hasVoiceCount = Object.prototype.hasOwnProperty.call(record, "voiceCount");
+        const voiceCount = hasVoiceCount ? record.voiceCount : 1;
+        if (typeof record.name !== "string" || typeof voiceCount !== "number" || !Number.isInteger(voiceCount) || voiceCount < 1) {
+          report(packageMetadata.name, index, "name must be a string and voiceCount must be a positive integer when present");
+          continue;
+        }
+        const problem = audio.configurePackageTrack(record.name, voiceCount);
+        if (problem !== null) report(packageMetadata.name, index, problem);
+      }
+    }
+  }
+
+  /**
+   * Apply the main file's audio-settings block before the audio applier registers
+   * (docs/spec/formats/main-file.md#tkr-audio-settings-extension). An over-cap block keeps the
+   * Epic 6 defaults and cap 32, keeps the independent default SoundFont and reports once.
+   */
+  function applyMainFileAudio(main: MainFile, plugins: readonly ResolvedPlugin[]): void {
+    const settings = main.audioSettings;
+    if (settings === null) {
+      audio.setDefaultSoundFont(null);
+    } else {
+      let font: AssetKey | null = null;
+      if (settings.defaultSoundFont !== null) {
+        const resolved = assetKey(settings.defaultSoundFont);
+        if (index.byKey.has(resolved)) {
+          font = resolved;
+        } else {
+          diagnostics.push({
+            code: "media.soundfont-missing",
+            file: resolved,
+            line: 0,
+            message: `TKR audio default SoundFont "${settings.defaultSoundFont}" is not in the asset index (docs/spec/formats/main-file.md#tkr-audio-settings-extension)`,
+          });
+        }
+      }
+      audio.setDefaultSoundFont(font);
+      const applied = audio.applyGameAudio({ tracks: settings.tracks, voiceCap: settings.voiceCap });
+      if (!applied.ok) {
+        const track = settings.tracks[applied.overflowIndex]!;
+        diagnostics.push({
+          code: "media.voice-cap",
+          file: mainKey ?? "",
+          line: applied.overflowIndex,
+          message: `TKR audio settings exceed the ${settings.voiceCap}-voice cap at track ${applied.overflowIndex} "${track.name}"; Epic 6 defaults and cap 32 apply (docs/spec/formats/main-file.md#tkr-audio-settings-extension)`,
+        });
+      }
+    }
+    applyPackageAudioTracks(plugins);
+    registerAudio();
+  }
+
   function startBoot(boot: NonNullable<EngineSection["boot"]>): boolean {
     if (mainKey === null) return false;
     if (boot.stage === "main") {
@@ -1020,6 +1116,7 @@ export function createEngine(init: EngineInit): Engine {
       diagnostics.push(...manifest.diagnostics, ...resolvedPlugins.diagnostics);
       loader = { index, root, read: (key) => cache.get(key) };
       activePlugins = init.plugins ?? resolvedPlugins.plugins;
+      applyMainFileAudio(mainFile, activePlugins);
       if (!startupServicesReady) services = makeServices(activePlugins, loader, true);
       if (failed) return false;
       if (mainFile.initChar !== "") {

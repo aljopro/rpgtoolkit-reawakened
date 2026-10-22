@@ -24,11 +24,21 @@ import {
   MAIN_MAX_MINOR,
   MAIN_MIN_MINOR,
   decodeGameSpeed,
+  MAIN_AUDIO_BUILTIN_TRACKS,
+  MAIN_AUDIO_EXTENSION_TAG,
+  MAIN_AUDIO_MAX_FONT_BYTES,
+  MAIN_AUDIO_MAX_NAME_BYTES,
+  MAIN_AUDIO_MAX_TRACKS,
+  MAIN_AUDIO_MAX_VOICE_CAP,
+  MAIN_AUDIO_MIN_TRACKS,
+  MAIN_AUDIO_MIN_VOICE_CAP,
   MAIN_PACKAGE_EXTENSION_TAG,
   MAIN_PACKAGE_MAX_BYTES,
   MAIN_PACKAGE_MAX_COUNT,
   MAIN_SECTION,
   type MainFile,
+  type MainFileAudioSettings,
+  type MainFileAudioTrack,
   type MainFileEnemy,
   type MainFileExtKey,
   type MainFilePlugin,
@@ -85,6 +95,95 @@ function parsePackageExtension(bytes: Uint8Array, path: string | undefined, base
   if (!residue.ok) return residue;
   return ok({ packagePlugins, packagePluginsExtension: true, residue: residue.value });
 }
+
+/**
+ * The TKR audio-settings block (docs/spec/formats/main-file.md#tkr-audio-settings-extension): a tagged
+ * sibling of the package list, recognised at the start of whatever the package parser left as
+ * residue. A non-matching tag leaves the bytes untouched, so legacy files keep their residue.
+ */
+function parseAudioExtension(
+  bytes: Uint8Array,
+  path: string | undefined,
+  baseOffset: number,
+): Result<{ readonly audioSettings: MainFileAudioSettings | null; readonly residue: Uint8Array }> {
+  const tag = MAIN_AUDIO_EXTENSION_TAG;
+  const anchor = "docs/spec/formats/main-file.md#tkr-audio-settings-extension";
+  const located = <T>(result: Result<T>): Result<T> => (result.ok ? result : err({ ...result.error, offset: result.error.offset + baseOffset, section: anchor, message: `${result.error.message} (${anchor})` }));
+  if (bytes.length < tag.length || tag.some((value, index) => bytes[index] !== value)) {
+    return ok({ audioSettings: null, residue: bytes });
+  }
+  const extension = new BinaryReader(bytes, path);
+  extension.readBytes(tag.length);
+  const count = located(extension.u16());
+  if (!count.ok) return count;
+  if (count.value < MAIN_AUDIO_MIN_TRACKS || count.value > MAIN_AUDIO_MAX_TRACKS) {
+    return fail(extension, baseOffset + tag.length, `TKR audio track count ${count.value} is outside ${MAIN_AUDIO_MIN_TRACKS}–${MAIN_AUDIO_MAX_TRACKS} (${anchor})`);
+  }
+  const tracks: MainFileAudioTrack[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < count.value; index += 1) {
+    const nameStart = extension.offset;
+    const scanLimit = Math.min(extension.bytes.length, nameStart + MAIN_AUDIO_MAX_NAME_BYTES + 1);
+    let nulAt = nameStart;
+    while (nulAt < scanLimit && extension.bytes[nulAt] !== 0) nulAt += 1;
+    if (nulAt === scanLimit && scanLimit - nameStart > MAIN_AUDIO_MAX_NAME_BYTES) {
+      return fail(extension, baseOffset + nameStart, `TKR audio track name exceeds ${MAIN_AUDIO_MAX_NAME_BYTES} bytes (${anchor})`);
+    }
+    const name = located(extension.str());
+    if (!name.ok) return name;
+    if (name.value.includes("\0") || name.value.length === 0) {
+      return fail(extension, baseOffset + extension.offset, `a TKR audio track name must be 1–${MAIN_AUDIO_MAX_NAME_BYTES} bytes (${anchor})`);
+    }
+    const folded = asciiLower(name.value);
+    if (name.value.length > MAIN_AUDIO_MAX_NAME_BYTES || !/^[a-z0-9_.-]+$/.test(folded)) {
+      return fail(extension, baseOffset + extension.offset, `TKR audio track name "${name.value}" must match [A-Za-z0-9_.-]+ in 1–${MAIN_AUDIO_MAX_NAME_BYTES} bytes (${anchor})`);
+    }
+    if (index < MAIN_AUDIO_BUILTIN_TRACKS.length && folded !== MAIN_AUDIO_BUILTIN_TRACKS[index]) {
+      return fail(extension, baseOffset + extension.offset, `TKR audio track ${index} must be the built-in "${MAIN_AUDIO_BUILTIN_TRACKS[index]}" (${anchor})`);
+    }
+    if (seen.has(folded)) return fail(extension, baseOffset + extension.offset, `duplicate TKR audio track name "${name.value}" (${anchor})`);
+    seen.add(folded);
+    const voiceCount = located(extension.u16());
+    if (!voiceCount.ok) return voiceCount;
+    if (voiceCount.value < 1 || voiceCount.value > MAIN_AUDIO_MAX_VOICE_CAP) {
+      return fail(extension, baseOffset + extension.offset, `TKR audio track "${name.value}" voice count ${voiceCount.value} is outside 1–${MAIN_AUDIO_MAX_VOICE_CAP} (${anchor})`);
+    }
+    tracks.push({ name: name.value, voiceCount: voiceCount.value });
+  }
+  const voiceCap = located(extension.u16());
+  if (!voiceCap.ok) return voiceCap;
+  if (voiceCap.value < MAIN_AUDIO_MIN_VOICE_CAP || voiceCap.value > MAIN_AUDIO_MAX_VOICE_CAP) {
+    return fail(extension, baseOffset + extension.offset, `TKR audio voice cap ${voiceCap.value} is outside ${MAIN_AUDIO_MIN_VOICE_CAP}–${MAIN_AUDIO_MAX_VOICE_CAP} (${anchor})`);
+  }
+  const fontPresent = located(extension.u8());
+  if (!fontPresent.ok) return fontPresent;
+  if (fontPresent.value !== 0 && fontPresent.value !== 1) {
+    return fail(extension, baseOffset + extension.offset, `TKR audio font-present flag ${fontPresent.value} must be 0 or 1 (${anchor})`);
+  }
+  let defaultSoundFont: string | null = null;
+  if (fontPresent.value === 1) {
+    const fontStart = extension.offset;
+    const fontScanLimit = Math.min(extension.bytes.length, fontStart + MAIN_AUDIO_MAX_FONT_BYTES + 1);
+    let fontNul = fontStart;
+    while (fontNul < fontScanLimit && extension.bytes[fontNul] !== 0) fontNul += 1;
+    if (fontNul === fontScanLimit && fontScanLimit - fontStart > MAIN_AUDIO_MAX_FONT_BYTES) {
+      return fail(extension, baseOffset + fontStart, `TKR audio default SoundFont exceeds ${MAIN_AUDIO_MAX_FONT_BYTES} bytes (${anchor})`);
+    }
+    const font = located(extension.str());
+    if (!font.ok) return font;
+    if (font.value.length === 0 || font.value.length > MAIN_AUDIO_MAX_FONT_BYTES) {
+      return fail(extension, baseOffset + extension.offset, `a TKR audio default SoundFont must be 1–${MAIN_AUDIO_MAX_FONT_BYTES} bytes (${anchor})`);
+    }
+    defaultSoundFont = font.value;
+  }
+  const residue = located(extension.readBytes(extension.remaining));
+  if (!residue.ok) return residue;
+  return ok({
+    audioSettings: { tracks, voiceCap: voiceCap.value, defaultSoundFont },
+    residue: residue.value,
+  });
+}
+
 /** An empty placeholder main file for zero-byte files (Z-1). */
 export function createEmptyMainFile(): MainFile {
   return {
@@ -120,6 +219,7 @@ export function createEmptyMainFile(): MainFile {
     skinButton: "",
     skinWindow: "",
     plugins: [],
+    audioSettings: null,
     useDayNight: 0,
     dayNightType: 0,
     dayLengthMinutes: 0,
@@ -342,6 +442,7 @@ export function readTextMainFile(bytes: Uint8Array, path?: string): Result<MainF
     magic: MAIN_MAGIC,
     major: major.value,
     minor: minor.value,
+    audioSettings: null,
     registrationFlag: regFlag.value,
     registrationCode: registrationCode.value,
     projectPath: projectPath.value,
@@ -841,10 +942,13 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
   if (!trailing.ok) return trailing;
   const extension = parsePackageExtension(trailing.value, reader.path, trailingStart);
   if (!extension.ok) return extension;
+  const audioStart = trailingStart + trailing.value.length - extension.value.residue.length;
+  const audio = parseAudioExtension(extension.value.residue, reader.path, audioStart);
+  if (!audio.ok) return audio;
   const warnings: string[] = [];
-  if (extension.value.residue.length > 0) {
+  if (audio.value.residue.length > 0) {
     warnings.push(
-      `${extension.value.residue.length} trailing byte(s) after the main file were kept as residue (docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
+      `${audio.value.residue.length} trailing byte(s) after the main file were kept as residue (docs/spec/formats/README.md#bytes-after-the-last-documented-field)`,
     );
   }
 
@@ -884,6 +988,7 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     ...(extension.value.packagePluginsExtension
       ? { packagePlugins: extension.value.packagePlugins, packagePluginsExtension: true }
       : {}),
+    audioSettings: audio.value.audioSettings,
     useDayNight: useDayNight.value,
     dayNightType: dayNightType.value,
     dayLengthMinutes: dayLengthMinutes.value,
@@ -908,6 +1013,6 @@ export function readMainFile(reader: BinaryReader): Result<MainFile> {
     movementControls,
     movementScanCodes,
     reservedRuns,
-    residue: extension.value.residue,
+    residue: audio.value.residue,
   }, warnings);
 }

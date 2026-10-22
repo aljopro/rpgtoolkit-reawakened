@@ -33,10 +33,13 @@ export { AUDIO_HEADER_BYTES, assembleAudioDecoders, decodeAudioInfo } from "./in
 export {
   createAudioRuntime,
   type AudioEffectBus,
+  type AudioGameApply,
+  type AudioGameSettings,
   type AudioHost,
   type AudioLookup,
   type AudioNote,
   type AudioNoteDetail,
+  type AudioPackageTrackProblem,
   type AudioPlayRequest,
   type AudioPlayResult,
   type AudioRuntime,
@@ -45,4 +48,4 @@ export {
   type AudioWait,
   type AudioWaitState,
 } from "./runtime.ts";
-export { audioSaveProjection, type AudioSaveProjection, type AudioSaveProjectionIsPlainData } from "./save.ts";
+export { audioSaveProjection, type AudioSaveProjection, type AudioSaveProjectionIsPlainData, type AudioSavedTrack } from "./save.ts";

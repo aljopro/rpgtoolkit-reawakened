@@ -117,13 +117,35 @@ export type AudioEffectBus = {
   register(section: "audio", applier: (effect: EffectRecord) => void): void;
 };
 
+/** The decoded game-file audio settings the runtime applies at start-up (docs/spec/formats/main-file.md#tkr-audio-settings-extension). */
+export type AudioGameSettings = {
+  readonly tracks: readonly { readonly name: string; readonly voiceCount: number }[];
+  readonly voiceCap: number;
+};
+
+/** Whether the settings were applied, or the first track index whose cumulative voice count crosses the cap. */
+export type AudioGameApply = { readonly ok: true } | { readonly ok: false; readonly overflowIndex: number };
+/** Why a package track declaration was rejected during game configuration. */
+export type AudioPackageTrackProblem = "invalid-name" | "voice-count" | "track-limit" | "voice-cap";
+
+
 export type AudioRuntime = {
   /** Emit the start `soundfont.set`, then take the `audio` section's effects from `bus` (draining any already queued). */
   register(bus: AudioEffectBus): void;
+  /**
+   * Apply the game-file track configuration before playback starts
+   * (docs/spec/formats/main-file.md#tkr-audio-settings-extension). An aggregate count above the cap leaves
+   * the Epic 6 defaults and cap 32 in place and reports the first offending track.
+   */
+  applyGameAudio(settings: AudioGameSettings): AudioGameApply;
+  /** Set the authored default bank without emitting; `register` emits it once (docs/spec/engine/audio-media.md#soundfont-layers). */
+  setDefaultSoundFont(font: AssetKey | null): void;
   /** Apply one `audio` effect, or hold it behind an earlier one that is waiting for an asset. */
   apply(effect: EffectRecord): void;
   /** Apply held effects, in order, until one still waits for its asset. */
   retry(): void;
+  /** Apply one package declaration without allowing a duplicate to reduce the configured count. */
+  configurePackageTrack(name: string, voices: number): AudioPackageTrackProblem | null;
   /** The `audio` phase: end finished one-shots and refresh positions. */
   phase(): void;
   /** The cues emitted since the last call, in order. */
@@ -167,7 +189,8 @@ const MAX_POSITION = 9007199254740991;
 
 export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions): AudioRuntime {
   const cues: AudioCue[] = [];
-  const defaultSoundFont = options.defaultSoundFont ?? null;
+  let defaultSoundFont = options.defaultSoundFont ?? null;
+  let voiceCap = MAX_VOICES;
   const notify = options.notify ?? ((): void => undefined);
 
   function emit(kind: AudioCueKind, fields: CueFields = {}, tick: number = host.time.tick): number {
@@ -494,10 +517,55 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     if (applyEffect(effect) === "pending") hold(effect);
   }
 
+  function applyTrackConfiguration(name: string, voices: number): AudioPackageTrackProblem | null {
+    if (typeof name !== "string" || !MEDIA_TRACK_NAME.test(name)) return "invalid-name";
+    if (!Number.isInteger(voices) || voices < 1) return "voice-count";
+    const existing = findTrack(host.audio, name);
+    const sum = host.audio.tracks.reduce((total, track) => total + track.voiceCount, 0) - (existing?.voiceCount ?? 0) + voices;
+    if (existing !== undefined) {
+      if (existing.voices.some((voice) => voice.index >= voices)) return "voice-count";
+      if (sum > voiceCap) return "voice-cap";
+      existing.voiceCount = voices;
+      return null;
+    }
+    if (host.audio.tracks.length >= MAX_TRACKS) return "track-limit";
+    if (sum > voiceCap) return "voice-cap";
+    host.audio.tracks.push(createTrack(asciiFold(name), voices));
+    return null;
+  }
+
+  function reportTrackConfiguration(name: string, voices: number, problem: AudioPackageTrackProblem): void {
+    const code = problem === "invalid-name"
+      ? "media.invalid-track-name"
+      : problem === "voice-count"
+        ? "media.voice-count"
+        : problem === "track-limit"
+          ? "media.track-limit"
+          : "media.voice-cap";
+    const detail = problem === "invalid-name" || problem === "track-limit" ? { name } : { name, voices };
+    diag(code, "mediaTrack", detail);
+  }
+
   const runtimeApi: AudioRuntime = {
     register(bus) {
       emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
       bus.register("audio", apply);
+    },
+    applyGameAudio(settings) {
+      let sum = 0;
+      for (let index = 0; index < settings.tracks.length; index += 1) {
+        sum += settings.tracks[index]!.voiceCount;
+        if (sum > settings.voiceCap) {
+          voiceCap = MAX_VOICES;
+          return { ok: false, overflowIndex: index };
+        }
+      }
+      voiceCap = settings.voiceCap;
+      host.audio.tracks = settings.tracks.map((track) => createTrack(asciiFold(track.name), track.voiceCount));
+      return { ok: true };
+    },
+    setDefaultSoundFont(font) {
+      defaultSoundFont = font;
     },
     apply,
     retry,
@@ -519,39 +587,21 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     heldCount() {
       return queued().length;
     },
+    configurePackageTrack(name, voices) {
+      if (typeof name === "string" && MEDIA_TRACK_NAME.test(name) && Number.isInteger(voices) && voices >= 1) {
+        const existing = findTrack(host.audio, name);
+        if (existing !== undefined && voices <= existing.voiceCount) return null;
+      }
+      return applyTrackConfiguration(name, voices);
+    },
     configureTrack(name, voices = 1) {
-      if (!MEDIA_TRACK_NAME.test(name)) {
-        diag("media.invalid-track-name", "mediaTrack", { name });
-        return false;
-      }
-      if (!Number.isInteger(voices) || voices < 1) {
-        diag("media.voice-count", "mediaTrack", { name, voices });
-        return false;
-      }
-      const existing = findTrack(host.audio, name);
-      const sum = host.audio.tracks.reduce((total, track) => total + track.voiceCount, 0) - (existing?.voiceCount ?? 0) + voices;
-      if (existing !== undefined) {
-        if (existing.voices.some((voice) => voice.index >= voices)) {
-          diag("media.voice-count", "mediaTrack", { name: existing.name, voices });
-          return false;
-        }
-        if (sum > MAX_VOICES) {
-          diag("media.voice-cap", "mediaTrack", { name: existing.name, voices });
-          return false;
-        }
-        existing.voiceCount = voices;
-        return true;
-      }
-      if (host.audio.tracks.length >= MAX_TRACKS) {
-        diag("media.track-limit", "mediaTrack", { name });
-        return false;
-      }
-      if (sum > MAX_VOICES) {
-        diag("media.voice-cap", "mediaTrack", { name, voices });
-        return false;
-      }
-      host.audio.tracks.push(createTrack(asciiFold(name), voices));
-      return true;
+      const existing = typeof name === "string" && MEDIA_TRACK_NAME.test(name) ? findTrack(host.audio, name) : undefined;
+      const problem = applyTrackConfiguration(name, voices);
+      if (problem === null) return true;
+      const existingFailure = existing !== undefined &&
+        (problem === "voice-cap" || (problem === "voice-count" && Number.isInteger(voices) && voices >= 1));
+      reportTrackConfiguration(existingFailure ? existing.name : name, voices, problem);
+      return false;
     },
     play(request) {
       const found = findTrack(host.audio, request.track);
@@ -787,15 +837,21 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       const tick = host.time.tick;
       const shift = tick - saved.tick;
       host.audio.cueId = Math.max(host.audio.cueId, saved.cueId);
-      host.audio.soundFont = saved.soundFont;
-      emit("soundfont.set", { asset: saved.soundFont ?? defaultSoundFont });
+      emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
+      const savedByName = new Map(saved.tracks.map((track) => [asciiFold(track.name), track]));
       const tracks: AudioTrackState[] = [];
-      for (const savedTrack of saved.tracks) {
-        const track = createTrack(savedTrack.name, savedTrack.voiceCount);
+      for (const configured of host.audio.tracks) {
+        const track = createTrack(configured.name, configured.voiceCount);
+        const savedTrack = savedByName.get(configured.name);
+        if (savedTrack === undefined) {
+          tracks.push(track);
+          continue;
+        }
         track.flags = savedTrack.flags;
         track.file = savedTrack.file;
-        const isMusic = savedTrack.name === "music";
+        const isMusic = configured.name === "music";
         for (const source of [...savedTrack.voices].sort((a, b) => a.index - b.index)) {
+          if (source.index >= configured.voiceCount) continue;
           const voice = copyVoice(source, saved.tick);
           if (voice.state === "paused") {
             voice.startTick += shift;

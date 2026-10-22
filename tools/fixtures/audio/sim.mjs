@@ -514,10 +514,8 @@ function audioPhase(st) {
 function snapshot(st) {
   return {
     cueId: st.cueId,
-    soundFont: st.soundFont,
     tracks: st.tracks.map((t) => ({
       name: t.name,
-      configured: t.configured,
       flags: t.flags,
       file: t.file,
       voices: t.voices.map((v) => ({
@@ -538,17 +536,18 @@ function snapshot(st) {
 function load(st, snap) {
   if (st.waits.length > 0) unruled("loading while a thread is parked in a wait");
   st.cueId = Math.max(st.cueId, snap.cueId);
-  st.soundFont = snap.soundFont;
   emit(st, "soundfont.set", { asset: st.soundFont ?? st.defaultSoundFont });
-  const old = new Map(st.tracks.map((t) => [t.name, t]));
-  st.tracks = snap.tracks.map((s) => {
-    const prev = old.get(s.name);
-    const t = newTrack(s.name, s.configured);
+  const playback = new Map(snap.tracks.map((t) => [t.name, t]));
+  st.tracks = st.tracks.map((configured) => {
+    const s = playback.get(configured.name);
+    const t = newTrack(configured.name, configured.configured);
+    t.bus = configured.bus;
+    t.busFade = configured.busFade;
+    if (s === undefined) return t;
     t.flags = s.flags;
     t.file = s.file;
-    t.bus = prev?.bus ?? 100;
-    t.busFade = prev?.busFade ?? null;
     for (const sv of s.voices) {
+      if (sv.index >= t.configured) continue;
       if (sv.state === "paused") unruled("loading a paused voice");
       if (sv.length !== null && !sv.loop && sv.pos >= sv.length) continue;
       const music = s.name === "music";
