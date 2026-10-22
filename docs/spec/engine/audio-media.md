@@ -569,6 +569,7 @@ live seams identified by F-04. The fixed end formula and phase ordering are
 sound is held. Polling a runner `audio.ended` set makes wait timing
 non-replayable.
 <a id="media-command-family"></a>
+<a id="audio-layer-rulings"></a>
 <a id="media-1"></a>
 ## MEDIA-1 — media, track and voice objects
 
