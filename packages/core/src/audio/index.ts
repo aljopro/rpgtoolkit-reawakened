@@ -49,3 +49,4 @@ export {
   type AudioWaitState,
 } from "./runtime.ts";
 export { audioSaveProjection, type AudioSaveProjection, type AudioSaveProjectionIsPlainData, type AudioSavedTrack } from "./save.ts";
+export { MEDIA_EMITTER, mediaTrackEmitterKey, mediaVoiceEmitterKey, queueAudioEvent, mediaEventsActive, type AudioLifecycleType, type AudioLifecycleDetail, type AudioLifecycleEvent } from "./events.ts";

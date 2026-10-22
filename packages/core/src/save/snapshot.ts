@@ -540,6 +540,17 @@ function validateEventsShape(value: unknown, vm: Record<string, unknown>): void 
   const events = recordAt(value, "events");
   const next = numberAt(events.nextListener, "events.nextListener");
   if (next < 1) shapeError("the snapshot's events.nextListener must be at least 1");
+  if (events.audioPasses !== undefined) {
+    const passes = recordAt(events.audioPasses, "events.audioPasses");
+    for (const [cue, pass] of Object.entries(passes)) {
+      if (!Number.isSafeInteger(Number(cue)) || Number(cue) < 1 || String(Number(cue)) !== cue) {
+        shapeError(`the snapshot's events.audioPasses.${cue} must name a positive cue id`);
+      }
+      if (typeof pass !== "number" || !Number.isSafeInteger(pass) || pass < 0) {
+        shapeError(`the snapshot's events.audioPasses.${cue} must be a non-negative pass number`);
+      }
+    }
+  }
   const objects = new Set<number>();
   for (const object of arrayAt(vm.objects, "vm.objects")) objects.add(numberAt(recordAt(object, "vm.objects[]").handle, "vm.objects[].handle"));
   const threads = new Set<number>();

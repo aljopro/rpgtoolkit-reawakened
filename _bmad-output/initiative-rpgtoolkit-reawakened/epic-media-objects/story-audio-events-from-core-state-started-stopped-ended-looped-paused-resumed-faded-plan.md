@@ -3,7 +3,7 @@ title: "Audio events from core state: started, stopped, ended, looped, paused, r
 type: 'feature'
 ticket: 3
 created: '2026-10-19'
-status: ready-for-dev
+status: in-progress
 baseline_revision: '6863560522aea599a75e9317270dfa648a3290a3'
 risk: "medium"
 route: 'full'
@@ -56,10 +56,10 @@ Implement #482 / 21.3: observe core-authoritative voice transitions through the 
 
 **Execution:**
 - [x] `docs/spec/engine/audio-media.md#media-2` — record owner answers in a separate docs-first commit, reconcile P2/P5 timing, then complete this plan and commit `ready-for-dev` before code.
-- [ ] `packages/core/src/audio/runtime.ts`, `engine/engine.ts` — produce all seven ruled events at their authoritative transition points without changing cues or waits.
-- [ ] `packages/core/src/events/emitter.ts`, `native.ts` — reuse registered emitter identities and the one queue; expose detail with the exact ruled keys and casing.
-- [ ] `packages/core/test/audio-runtime.test.ts`, `audio-engine.test.ts`, `audio-restore.test.ts` — cover every event, relay and registration order, wake timing, replacement, fade/loop edge cases, and restore at every tick.
-- [ ] `docs/spec/engine/rpgcode-modules-and-objects.md#emit-13` — register the implemented lifecycle surface; update this plan to built only after verification, never done before review/merge.
+- [x] `packages/core/src/audio/runtime.ts`, `engine/engine.ts` — produce all seven ruled events at authoritative transition points without moving retirement or waits.
+- [x] `packages/core/src/audio/events.ts`, `events/native.ts`, `events/model.ts`, `save/snapshot.ts` — reuse registered emitter identities and the one queue, preserve exact detail casing, and save/validate loop-observation cursors.
+- [x] `packages/core/test/audio-{events,lifecycle-runtime,lifecycle-engine,lifecycle-replay}.test.ts`, `packages/synth/test/core-lifecycle.test.ts`, `audio-engine.test.ts` — cover all events, relay order, wake race, replacement, fade/loop edges, every-tick queued/in-flight restoration, and actual null/PCM source parity.
+- [x] `docs/spec/engine/rpgcode-modules-and-objects.md#emit-13` — register lifecycle events; final built status is held at the explicit G5 owner-decision gate documented below.
 
 **Acceptance Criteria:**
 - Given an authored scripted run, when playback changes, then all seven event types have the ruled detail, order, and core tick; listener delivery and wait wake match the resolved phase contract.
@@ -69,16 +69,25 @@ Implement #482 / 21.3: observe core-authoritative voice transitions through the 
 
 ## Verification
 
-Planned, not executed: install dependencies, build, then run changed-path audio/engine/emitter/restore tests and null/real backend equivalence smoke. Run CONTRIBUTING.md's available local gates: typecheck, lint, tests and fixture-backed strict tests, golden/closing/dump/oracle checks, graph, licence/audit, provenance, fixture/catalogue/command-doc/no-skips/icon tool tests, and Bun replay. Record actual results and unavailable prerequisites individually; do not claim a real-device check from a null-backend test.
+`pnpm install --frozen-lockfile`, `pnpm fixtures:fetch` and `pnpm build` completed. Final changed-path smoke: 126 passed, 0 failed/skipped. Full `pnpm test` and fixture-backed `pnpm test:strict`: each 1770 passed, 0 failed/skipped. Passed gates: typecheck, lint, fixtures:check, closing (8/8 baselines), dump:check, oracle:check, graph:test/graph, licence:test/licence, audit --prod, provenance:test/provenance, fixtures:test, fixtures:author:check, catalogue:check, command-docs:test/check, no-skips:test, icons:test. Local logs: `/private/tmp/rpgtoolkit-482-gates/`. Tools: Node 26.8.1 (not CI-pinned 24.21.0), pnpm 12.10.1, Bun 1.4.2, Pillow 12.3.0.
+
+`pnpm golden` and `pnpm golden:bun` fail at the same single reported mismatch: `audio-golden: synthetic battle (demo): cue stream drifted`. Normal sample-game cue rows are unchanged; closing baselines pass. The repaired documented script routing now applies initial title music at tick 1 before the synthetic battle handoff: title `media.play`, its `media.stop`, then battle `media.play`. The committed synthetic oracle has only the battle play there. The later tick-61 village handoff is unchanged apart from monotonic cue ids. No golden was re-recorded.
+
+**Owner decision required before final built/PR:** authorize a deliberate G5 synthetic-oracle update for the necessary documented-alias repair, or split that repair into a prerequisite before #482. Do not silently weaken script acceptance, disable real playback, or rewrite the old golden while the epic also promises unchanged prior cue goldens. The implementation and all behavioral acceptance tests pass; golden-preservation adjudication remains outstanding.
 
 ## Implementation Notes
 
-No implementation or normative spec changes made. Dedicated worktree `/private/tmp/rpgtoolkit-482-audio-events`, branch `feat/482-audio-events`; other worktrees and tracked root-checkout content are preserved.
+Implemented in dedicated worktree `/private/tmp/rpgtoolkit-482-audio-events`, branch `feat/482-audio-events`; other worktrees/root checkout preserved. Owner-approved transitions are core-authoritative; native and script listeners share the existing queue. Media registration is lazy so an unused event domain does not change old state hashes. Voice registrations retire after pending notifications; loop cursors are plain saved event state, including mid-boundary snapshots. Game-load cue reconstruction suppresses lifecycle callbacks.
+
+Acceptance exposed a pre-existing script/applier mismatch: VM effect records retain the called name (`wav`, `mediaplay`, etc.) while audio dispatch expected canonical dotted operations. The applier now maps the already-documented names to their existing canonical argument layouts without copying or rewriting the saved effect log. This makes actual script transitions observable rather than testing a fabricated callback. The existing batching regression driver was corrected to count total consumed ticks across asset stalls instead of only its last report.
+
+Permanent tests include 55 snapshots, fresh runtime/script-service reconstruction from every one, and comparison of every subsequent state hash and delivered script history with queued and waiting in-flight dispatch. A separate one-tick-wrap test proves a snapshot inside a boundary/loop-setting tick cannot duplicate a wrap. The real engine waiter tests cover no mutation, explicit stop and an applied cached-asset restart before retirement. Null/real runner equivalence uses actual `VoiceMachine` null and PCM source registries, decodes/renders the authored WAV, verifies real non-zero PCM versus silence, feeds actual source completion reports back to core, and compares per-tick hashes and lifecycle histories. No physical audio device/browser check is claimed.
 
 ## Plan Change Log
 
 - 2026-10-22 — Rebased the skeletal draft from `0975a26b54f8d7bf569f463a02b783b16ec0ea98` to `6863560522aea599a75e9317270dfa648a3290a3`; expanded the verified MEDIA-2/EMIT contract and isolated missing owner decisions rather than treating draft as approved.
 - 2026-10-22 — Owner approved the defaults and authorized explicit FIFO/traversal-consistent order. Normative MEDIA-2/P2/P5 amended in `89dc5576`; removed the resolved questions and marked ready-for-dev before implementation.
+- 2026-10-22 — Implemented and exercised the full lifecycle contract; kept status in-progress and old goldens unchanged pending owner adjudication of the pre-existing alias repair versus cue-golden preservation.
 
 ## Review Triage Log
 

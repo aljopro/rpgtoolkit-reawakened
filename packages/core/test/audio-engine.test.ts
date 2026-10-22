@@ -173,11 +173,12 @@ test("sample-game replay is invariant under 1-, 5- and 20-tick advance batching"
     const host = startEngine(game, program);
     const cues: AudioCue[] = run(host.engine, game.files, 0).cues;
     let remaining = 60;
+    const endTick = host.engine.advance(0, []).tickAfter + remaining;
     let last: TickReport | null = null;
     while (remaining > 0) {
       const result = run(host.engine, game.files, Math.min(batch, remaining));
       cues.push(...result.cues);
-      remaining -= result.report.ticksRun;
+      remaining = endTick - result.report.tickAfter;
       last = result.report;
     }
     if (last === null) throw new Error(`batch ${batch} did not run`);

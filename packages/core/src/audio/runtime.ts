@@ -22,6 +22,7 @@ import type { AudioCue, AudioCueKind } from "../ports/audio.ts";
 import type { AssetKey } from "../ports/keys.ts";
 import type { EffectRecord } from "../script/effects.ts";
 import type { GameState } from "../save/state.ts";
+import type { AudioLifecycleEvent } from "./events.ts";
 import {
   BUILTIN_TRACKS,
   MAX_TRACKS,
@@ -65,7 +66,7 @@ export type AudioNote =
   | { readonly kind: "diag"; readonly code: string; readonly op: string; readonly detail: AudioNoteDetail };
 
 /** The part of a game state the runtime owns or reads. */
-export type AudioHost = Pick<GameState, "audio" | "time" | "engine">;
+export type AudioHost = Pick<GameState, "audio" | "time" | "engine" | "events">;
 
 export type AudioRuntimeOptions = {
   /** The length of `asset`; `pending` makes the runtime hold effects and call `need`. */
@@ -75,6 +76,10 @@ export type AudioRuntimeOptions = {
   /** The author's default SoundFont (rank 3 of the bank layers); `null` when there is none. */
   readonly defaultSoundFont?: AssetKey | null;
   readonly notify?: (note: AudioNote) => void;
+  /** Queue a deterministic applied playback transition (MEDIA-2). */
+  readonly transition?: (event: AudioLifecycleEvent) => void;
+  /** Whether the lazy event domain is active; omitted means transitions are observed. */
+  readonly transitionsActive?: () => boolean;
 };
 
 /** A voice selector accepts the stable slot index or a cue-checked handle. */
@@ -188,11 +193,50 @@ type StartOptions = {
 /** The 2^53 - 1 limit of an exact integer tick; a seek position above it is invalid. */
 const MAX_POSITION = 9007199254740991;
 
+/** Script effects retain their command name; args already use the owner's canonical layout. */
+const SCRIPT_AUDIO_OPERATIONS: Readonly<Record<string, string>> = {
+  mediatrack: "media.track", mediaload: "media.load", mediaplay: "media.play",
+  midiplay: "media.play", playmidi: "media.play", wav: "media.play", mp3: "media.play", mp3pause: "media.play",
+  mediastop: "media.stop", mediarest: "media.stop", midirest: "media.stop", wavstop: "media.stop",
+  mediapause: "media.pause", mediaresume: "media.resume", mediaseek: "media.seek",
+  medialoop: "media.loop", mediafade: "media.fade", mediavolume: "media.volume", setvolume: "media.volume",
+  soundfont: "soundfont.set", soundfontreset: "soundfont.set",
+};
+
 export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions): AudioRuntime {
   const cues: AudioCue[] = [];
   let defaultSoundFont = options.defaultSoundFont ?? null;
   let voiceCap = MAX_VOICES;
   const notify = options.notify ?? ((): void => undefined);
+  const transition = options.transition;
+  let lifecycleEnabled = true;
+  /** Snapshot-owned cursors; never hide semantic event history in a session Map. */
+  const observedPass = {
+    get(voice: AudioVoiceState): number | undefined {
+      return host.events.audioPasses?.[String(voice.cueId)];
+    },
+    set(voice: AudioVoiceState, pass: number): void {
+      if (transition === undefined || options.transitionsActive?.() === false) return;
+      (host.events.audioPasses ??= {})[String(voice.cueId)] = pass;
+    },
+    delete(voice: AudioVoiceState): void {
+      const passes = host.events.audioPasses;
+      if (passes === undefined) return;
+      delete passes[String(voice.cueId)];
+      if (Object.keys(passes).length === 0) delete host.events.audioPasses;
+    },
+    clear(): void {
+      delete host.events.audioPasses;
+    },
+  };
+
+  function emitTransition(type: AudioLifecycleEvent["type"], track: AudioTrackState, voice: AudioVoiceState, tick: number): void {
+    if (!lifecycleEnabled || transition === undefined || options.transitionsActive?.() === false) return;
+    transition({
+      type,
+      detail: { track: track.name, slot: voice.index, cueId: voice.cueId, file: voice.file, tick },
+    });
+  }
 
   function emit(kind: AudioCueKind, fields: CueFields = {}, tick: number = host.time.tick): number {
     const cueId = host.audio.cueId;
@@ -227,6 +271,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         if (voice.state === "playing" && tick - voice.fade.startTick >= voice.fade.durationTicks) {
           voice.volume = voice.fade.targetVolume;
           voice.fade = null;
+          emitTransition("faded", track, voice, tick);
         }
       }
     }
@@ -237,6 +282,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         bus.volume = bus.fade.targetVolume;
         bus.fade = null;
         trackVolumeEntry(track.name, bus.volume, null);
+        for (const voice of track.voices) emitTransition("faded", track, voice, tick);
       }
     }
     const primary = track.voices.find((voice) => voice.index === 0);
@@ -245,10 +291,11 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     track.lengthTicks = primary?.lengthTicks ?? null;
     track.fade = copyFade(primary?.fade ?? null);
   }
-
-  function stopVoice(track: AudioTrackState, voice: AudioVoiceState): void {
+  function stopVoice(track: AudioTrackState, voice: AudioVoiceState, event: "stopped" | "ended" | null = "stopped"): void {
     emit("media.stop", { track: track.name, voice: voice.index });
     track.voices = track.voices.filter((item) => item !== voice);
+    observedPass.delete(voice);
+    if (event !== null) emitTransition(event, track, voice, host.time.tick);
   }
 
   function locate(op: string, name: string, selector: AudioVoiceSelector | undefined): Located | null {
@@ -324,6 +371,11 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     track.voices.sort((a, b) => a.index - b.index);
     track.file = asset;
     if (index === 0) track.flags = o.loop ? MEDIA_LOOP : 0;
+    if (voice.loop) {
+      const pass = voicePass(voice, host.time.tick);
+      if (pass !== null) observedPass.set(voice, pass);
+    }
+    emitTransition("started", track, voice, host.time.tick);
     if (info.kind === "unsupported") diag("media.asset-format", o.op, { file: asset });
     refresh(track);
     return voice;
@@ -358,7 +410,8 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
   /** Decide one effect: `pending` when its file's length is not known yet and nothing was changed. */
   function applyEffect(effect: EffectRecord): "applied" | "pending" {
     const args = effect.args;
-    if (effect.name === "media.track") {
+    const operation = Object.hasOwn(SCRIPT_AUDIO_OPERATIONS, effect.name) ? SCRIPT_AUDIO_OPERATIONS[effect.name]! : effect.name;
+    if (operation === "media.track") {
       if (typeof args[0] !== "string" || typeof args[1] !== "number") {
         diag("audio.effect", effect.name, { reason: "malformed arguments" });
         return "applied";
@@ -366,7 +419,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       runtime.configureTrack(args[0], args[1]);
       return "applied";
     }
-    if (effect.name === "media.load") {
+    if (operation === "media.load") {
       const trackName = args[0];
       const asset = args[1];
       if (typeof trackName !== "string" || typeof asset !== "string") {
@@ -389,7 +442,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       emit("media.load", { track: track.name, asset: track.file });
       return "applied";
     }
-    if (effect.name === "media.play") {
+    if (operation === "media.play") {
       const asset = args[0];
       const track = args[1];
       const loop = args[2];
@@ -412,36 +465,36 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       });
       return result.kind === "pending" ? "pending" : "applied";
     }
-    if (effect.name === "media.stop" || effect.name === "media.pause" || effect.name === "media.resume") {
+    if (operation === "media.stop" || operation === "media.pause" || operation === "media.resume") {
       const track = args[0];
       const voice = args[1];
       if (typeof track !== "string" || (voice !== null && typeof voice !== "number")) {
         diag("audio.effect", effect.name, { reason: "malformed arguments" });
         return "applied";
       }
-      if (effect.name === "media.stop") runtime.stop(track, voice === null ? undefined : voice);
-      else if (effect.name === "media.pause") runtime.pause(track, voice === null ? undefined : voice);
+      if (operation === "media.stop") runtime.stop(track, voice === null ? undefined : voice);
+      else if (operation === "media.pause") runtime.pause(track, voice === null ? undefined : voice);
       else runtime.resume(track, voice === null ? undefined : voice);
       return "applied";
     }
-    if (effect.name === "media.seek" || effect.name === "media.loop" || effect.name === "media.fade" || effect.name === "media.volume") {
+    if (operation === "media.seek" || operation === "media.loop" || operation === "media.fade" || operation === "media.volume") {
       const track = args[0];
       const second = args[1];
       const third = args[2];
-      if (effect.name === "media.volume" && track === null && typeof second === "number" && third === null) runtime.setMasterVolume(second);
+      if (operation === "media.volume" && track === null && typeof second === "number" && third === null) runtime.setMasterVolume(second);
       else if (typeof track !== "string") {
         diag("audio.effect", effect.name, { reason: "malformed arguments" });
         return "applied";
-      } else if (effect.name === "media.seek" && typeof second === "number" && (third === null || typeof third === "number")) runtime.seek(track, second, third === null ? undefined : third);
-      else if (effect.name === "media.loop" && typeof second === "boolean" && (third === null || typeof third === "number")) runtime.setLoop(track, second, third === null ? undefined : third);
-      else if (effect.name === "media.fade" && typeof second === "number" && typeof third === "number" && (args[3] === null || typeof args[3] === "number")) runtime.fade(track, second, third, args[3] === null ? undefined : args[3] as number);
-      else if (effect.name === "media.volume" && typeof second === "number" && (third === null || typeof third === "number")) {
+      } else if (operation === "media.seek" && typeof second === "number" && (third === null || typeof third === "number")) runtime.seek(track, second, third === null ? undefined : third);
+      else if (operation === "media.loop" && typeof second === "boolean" && (third === null || typeof third === "number")) runtime.setLoop(track, second, third === null ? undefined : third);
+      else if (operation === "media.fade" && typeof second === "number" && typeof third === "number" && (args[3] === null || typeof args[3] === "number")) runtime.fade(track, second, third, args[3] === null ? undefined : args[3] as number);
+      else if (operation === "media.volume" && typeof second === "number" && (third === null || typeof third === "number")) {
         if (third === null) runtime.setTrackVolume(track, second);
         else runtime.setVoiceVolume(track, third, second);
       } else diag("audio.effect", effect.name, { reason: "malformed arguments" });
       return "applied";
     }
-    if (effect.name === "soundfont.set") {
+    if (operation === "soundfont.set") {
       const asset = args[0] ?? null;
       if (asset !== null && typeof asset !== "string") {
         diag("audio.effect", effect.name, { reason: "asset is not a key or null" });
@@ -451,7 +504,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
       return "applied";
     }
-    if (effect.name !== "music.play" && effect.name !== "sfx.play") {
+    if (operation !== "music.play" && operation !== "sfx.play") {
       diag("audio.effect", effect.name, { reason: "unknown audio effect" });
       return "applied";
     }
@@ -459,11 +512,11 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     const loop = args[1];
     const restart = args[2] ?? null;
     const source = args[3];
-    if ((asset !== null && typeof asset !== "string") || typeof loop !== "boolean" || (restart !== null && typeof restart !== "boolean") || typeof source !== "string" || (effect.name === "sfx.play" && asset === null)) {
+    if ((asset !== null && typeof asset !== "string") || typeof loop !== "boolean" || (restart !== null && typeof restart !== "boolean") || typeof source !== "string" || (operation === "sfx.play" && asset === null)) {
       diag("audio.effect", effect.name, { reason: "malformed arguments" });
       return "applied";
     }
-    const isMusic = effect.name === "music.play";
+    const isMusic = operation === "music.play";
     const track = findTrack(host.audio, isMusic ? "music" : source === "ui" ? "ui" : "sfx");
     if (track === undefined) {
       diag("media.unknown-track", effect.name, { track: isMusic ? "music" : source === "ui" ? "ui" : "sfx" });
@@ -583,7 +636,23 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         for (const voice of [...track.voices]) {
           if (voice.state === "playing" && !voice.loop && voice.endTick !== null && tick >= voice.endTick) {
             notify({ kind: "finished", track: track.name, voice: voice.index, cueId: voice.cueId, endTick: voice.endTick });
-            stopVoice(track, voice);
+            stopVoice(track, voice, "ended");
+          }
+        }
+        for (const voice of [...track.voices]) {
+          if (voice.state !== "playing" || !voice.loop) continue;
+          const pass = voicePass(voice, tick);
+          if (pass === null) continue;
+          const previous = observedPass.get(voice);
+          if (previous === undefined) {
+            const baseline = voicePass(voice, tick - 1);
+            if (baseline !== null) {
+              for (let crossed = baseline + 1; crossed <= pass; crossed += 1) emitTransition("looped", track, voice, tick);
+            }
+            observedPass.set(voice, pass);
+          } else {
+            for (let crossed = previous + 1; crossed <= pass; crossed += 1) emitTransition("looped", track, voice, tick);
+            observedPass.set(voice, pass);
           }
         }
         refresh(track, tick);
@@ -678,9 +747,14 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       const tick = host.time.tick;
       refresh(at.track, tick);
       target.positionTicks = voicePosition(target, tick);
+      if (target.loop) {
+        const pass = voicePass(target, tick);
+        if (pass !== null) observedPass.set(target, pass);
+      }
       target.pausedTick = tick;
       target.state = "paused";
       emit("media.pause", { track: at.track.name, voice: at.index });
+      emitTransition("paused", at.track, target, tick);
       refresh(at.track);
       return true;
     },
@@ -699,7 +773,12 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       if (target.fade !== null) target.fade.startTick += tick - Math.max(target.pausedTick, target.fade.startTick);
       target.state = "playing";
       target.pausedTick = null;
+      if (target.loop) {
+        const pass = voicePass(target, tick);
+        if (pass !== null) observedPass.set(target, pass);
+      }
       emit("media.resume", { track: at.track.name, voice: at.index });
+      emitTransition("resumed", at.track, target, tick);
       refresh(at.track);
       return true;
     },
@@ -725,6 +804,10 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       target.startTick = base - position;
       if (target.state === "paused") target.positionTicks = position;
       target.endTick = target.loop ? null : target.startTick + length;
+      if (target.loop) {
+        const pass = target.state === "paused" ? floorDiv(target.positionTicks, length) : voicePass(target, host.time.tick);
+        if (pass !== null) observedPass.set(target, pass);
+      }
       emit("media.seek", { track: at.track.name, voice: at.index, positionTicks: position });
       refresh(at.track);
       return true;
@@ -745,6 +828,12 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
           const base = target.state === "paused" && target.pausedTick !== null ? target.pausedTick : host.time.tick;
           target.endTick = target.startTick + (floorDiv(base - target.startTick, length) + 1) * length;
         }
+      }
+      if (loop) {
+        const pass = target.state === "paused" && length !== null ? floorDiv(target.positionTicks, length) : voicePass(target, host.time.tick);
+        if (pass !== null) observedPass.set(target, pass);
+      } else {
+        observedPass.delete(target);
       }
       if (at.index === 0) at.track.flags = loop ? MEDIA_LOOP : 0;
       emit("media.flags", { track: at.track.name, voice: at.index, loop, flags: loop ? MEDIA_LOOP : 0 });
@@ -808,6 +897,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         const fade = durationTicks === 0 ? null : { fromVolume: from, targetVolume: percent, startTick: tick, durationTicks };
         trackVolumeEntry(found.name, durationTicks === 0 ? percent : from, fade);
         emit("media.fade", { track: found.name, volume: from, targetVolume: percent, durationTicks });
+        if (durationTicks === 0) for (const active of found.voices) emitTransition("faded", found, active, tick);
         return true;
       }
       const at = locate("mediaFade", track, voice);
@@ -817,6 +907,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       at.voice.fade = durationTicks === 0 ? null : { fromVolume: from, targetVolume: percent, startTick: tick, durationTicks };
       at.voice.volume = durationTicks === 0 ? percent : from;
       emit("media.fade", { track: at.track.name, voice: at.index, volume: from, targetVolume: percent, durationTicks });
+      if (durationTicks === 0) emitTransition("faded", at.track, at.voice, tick);
       refresh(at.track, tick);
       return true;
     },
@@ -842,49 +933,60 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       return voice.endTick !== null && tick >= voice.endTick ? { wake: true, why: "end" } : { wake: false };
     },
     load(saved) {
-      const tick = host.time.tick;
-      const shift = tick - saved.tick;
-      host.audio.cueId = Math.max(host.audio.cueId, saved.cueId);
-      emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
-      const savedByName = new Map(saved.tracks.map((track) => [asciiFold(track.name), track]));
-      const tracks: AudioTrackState[] = [];
-      for (const configured of host.audio.tracks) {
-        const track = createTrack(configured.name, configured.voiceCount);
-        const savedTrack = savedByName.get(configured.name);
-        if (savedTrack === undefined) {
-          tracks.push(track);
-          continue;
-        }
-        track.flags = savedTrack.flags;
-        track.file = savedTrack.file;
-        const isMusic = configured.name === "music";
-        for (const source of [...savedTrack.voices].sort((a, b) => a.index - b.index)) {
-          if (source.index >= configured.voiceCount) continue;
-          const voice = copyVoice(source, saved.tick);
-          if (voice.state === "paused") {
-            voice.startTick += shift;
-            if (voice.endTick !== null) voice.endTick += shift;
-            voice.pausedTick = (voice.pausedTick ?? saved.tick) + shift;
-            voice.fade = copyFade(source.fade, shift);
-            voice.cueId = emit("media.play", { track: track.name, voice: voice.index, asset: voice.file, loop: voice.loop, flags: voice.loop ? MEDIA_LOOP : 0, positionTicks: voice.positionTicks, volume: voice.volume });
-            emit("media.pause", { track: track.name, voice: voice.index });
-          } else {
-            const length = voice.lengthTicks;
-            if (length !== null && !voice.loop && voice.positionTicks >= length) continue;
-            const position = isMusic ? 0 : voice.positionTicks;
-            voice.startTick = tick - position;
-            voice.positionTicks = position;
-            voice.endTick = length !== null && !voice.loop ? voice.startTick + length : null;
-            voice.pausedTick = null;
-            voice.fade = copyFade(source.fade, shift);
-            voice.cueId = emit("media.play", { track: track.name, voice: voice.index, asset: voice.file, loop: voice.loop, flags: voice.loop ? MEDIA_LOOP : 0, positionTicks: 0, volume: voice.volume }, voice.startTick);
+      const wasEnabled = lifecycleEnabled;
+      lifecycleEnabled = false;
+      observedPass.clear();
+      try {
+        const tick = host.time.tick;
+        const shift = tick - saved.tick;
+        host.audio.cueId = Math.max(host.audio.cueId, saved.cueId);
+        emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
+        const savedByName = new Map(saved.tracks.map((track) => [asciiFold(track.name), track]));
+        const tracks: AudioTrackState[] = [];
+        for (const configured of host.audio.tracks) {
+          const track = createTrack(configured.name, configured.voiceCount);
+          const savedTrack = savedByName.get(configured.name);
+          if (savedTrack === undefined) {
+            tracks.push(track);
+            continue;
           }
-          track.voices.push(voice);
+          track.flags = savedTrack.flags;
+          track.file = savedTrack.file;
+          const isMusic = configured.name === "music";
+          for (const source of [...savedTrack.voices].sort((a, b) => a.index - b.index)) {
+            if (source.index >= configured.voiceCount) continue;
+            const voice = copyVoice(source, saved.tick);
+            if (voice.state === "paused") {
+              voice.startTick += shift;
+              if (voice.endTick !== null) voice.endTick += shift;
+              voice.pausedTick = (voice.pausedTick ?? saved.tick) + shift;
+              voice.fade = copyFade(source.fade, shift);
+              voice.cueId = emit("media.play", { track: track.name, voice: voice.index, asset: voice.file, loop: voice.loop, flags: voice.loop ? MEDIA_LOOP : 0, positionTicks: voice.positionTicks, volume: voice.volume });
+              emit("media.pause", { track: track.name, voice: voice.index });
+            } else {
+              const length = voice.lengthTicks;
+              if (length !== null && !voice.loop && voice.positionTicks >= length) continue;
+              const position = isMusic ? 0 : voice.positionTicks;
+              voice.startTick = tick - position;
+              voice.positionTicks = position;
+              voice.endTick = length !== null && !voice.loop ? voice.startTick + length : null;
+              voice.pausedTick = null;
+              voice.fade = copyFade(source.fade, shift);
+              voice.cueId = emit("media.play", { track: track.name, voice: voice.index, asset: voice.file, loop: voice.loop, flags: voice.loop ? MEDIA_LOOP : 0, positionTicks: 0, volume: voice.volume }, voice.startTick);
+            }
+            track.voices.push(voice);
+            if (voice.loop && voice.lengthTicks !== null) {
+              const pass = voice.state === "paused" ? floorDiv(voice.positionTicks, voice.lengthTicks) : voicePass(voice, tick);
+              if (pass !== null) observedPass.set(voice, pass);
+            }
+          }
+          refresh(track);
+          tracks.push(track);
         }
-        refresh(track);
-        tracks.push(track);
+        host.audio.tracks = tracks;
+      } finally {
+        lifecycleEnabled = wasEnabled;
       }
-      host.audio.tracks = tracks;
     },
   };
   runtime = runtimeApi;
