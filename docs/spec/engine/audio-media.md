@@ -10,12 +10,7 @@ implementation entries start.
 
 ## What an author sees
 
-An author plays a file on a named track. The built-in tracks are `music`,
-`sfx`, `ambience`, `voice` and `ui`; later command work may add an author-named
-track. Music normally loops, a sound effect normally plays once, and a track
-can be stopped, paused, resumed, sought or faded. A script can wait for a
-finite sound to finish. Pausing holds the sound and also holds that wait;
-stopping or replacing it ends the wait.
+`media` is the game's sound desk. Use `mediaPlay(file[, options])` to start a voice and get back the voice object; built-in tracks are available as `media.music`, `media.sfx`, `media.ambience`, `media.voice` and `media.ui`, and `media.track(name)` reaches a configured track. A voice can be stopped, paused, resumed, sought, faded or waited on. Its `loop` and `volume` fields, and a track's `volume`, can be assigned through the audio owner. A track-wide fade is `track.fade(percent, seconds)`. A script can wait for a finite sound or its next loop pass. Pausing holds the sound and its wait; stopping or replacing it ends that wait.
 
 The game, not the speakers, owns the clock. Therefore a wait finishes on the
 same simulation tick on every runner, even when a decoder is slow or a headless
@@ -36,13 +31,11 @@ failure behavior.
 * A **pass** is one traversal of a finite asset. A looping voice has a new pass
   at each length boundary; a one-shot voice finishes at its first boundary.
 * A **track** is a named, ordered container of voices. Its name is the stable
-  identity used in state, cues and waits. The five built-in names are created
-  in the order listed above. Author-created track-name validation and voice
-  counts are owned by Epic 6.2, but they use this same state shape and cue
-  contract.
+  identity used in state, cues and waits. The five built-in names are present
+  in the order listed above; MEDIA-4 defines game-file tracks and voice counts.
 * A **voice** is one playback slot inside a track. A single-voice track keeps
-  the legacy one-slot behavior; multi-voice allocation and stealing are
-  specified by Epic 6.2, not by a second core audio model.
+  the legacy one-slot behavior; MEDIA-1 defines multi-voice allocation and
+  stealing while preserving the same core state shape and cue contract.
 * `AssetKey` is the case-folded, package-relative key used by the asset
   resolver. A missing or empty board music request carries no `AssetKey`.
 
@@ -59,8 +52,7 @@ JSON shape (the arrays are ordered; no map iteration order is observable):
 AudioStateV2 = {
   schema: 2,
   cueId: integer,                    // next unused cue id, starts at 1
-  soundFont: AssetKey | null,        // 6.3: script-chosen bank; null = author default
-  tracks: AudioTrackState[],         // built-ins first, then creation order
+  tracks: AudioTrackState[],         // configured tracks in game-file order
   settings: {
     masterVolume: integer,           // script volume, 0..100
     trackVolumes: AudioTrackVolume[] // script volume, sparse, ascending name order (6.6 pin 1)
@@ -70,12 +62,12 @@ AudioStateV2 = {
 AudioTrackVolume = {
   name: string,
   volume: integer,                   // 0..100
-  fade: AudioFadeState | null        // a track-wide fade (6.2 `mediaFade` without a voice)
+  fade: AudioFadeState | null        // a track-wide fade set by track.fade()
 }
 
 AudioTrackState = {
   name: string,
-  voiceCount: integer,               // configured voice slots, at least 1 (6.2 `mediaTrack`; 6.6 pin 1)
+  voiceCount: integer,               // live mirror of game-file configuration; excluded from playback save
   state: "stopped" | "playing" | "paused",
   flags: integer,
   file: AssetKey | null,             // last/current file; stop retains it
@@ -201,24 +193,9 @@ back by a later resume and is not needed by the existing cue set. A separate
 ### Save, snapshot and reset
 
 <!-- OWNER: 6.1/P1-persistence -->
-**Proposed ruling (pending owner review; P1; persistence).** The Reawakened
-save projection includes `AudioStateV2.tracks`, `cueId` and (6.3 amendment,
-[soundfont-state](#soundfont-state)) `soundFont`, including active
-voice positions, flags, pause state and fade descriptors. It excludes
-`AudioStateV2.settings`, all player-mix fields and all runner handles. A
-snapshot is a full core-state snapshot and therefore includes `settings`; it
-is not a device snapshot.
+**Ruling.** The playback save is `{ tick, cueId, tracks }`; each track entry carries playback state and its name, but not configured `voiceCount`. It includes active voice positions, loop/priority values, pause state and fade descriptors. It excludes `AudioStateV2.settings`, track definitions, voice counts, voice cap and `defaultSoundFont`, all player-mix fields and all runner handles. On load, the current game's ordered track definitions and voice counts construct the runtime tracks; saved playback is applied only to configured tracks. A snapshot is a full core-state snapshot and includes live settings and configuration; it is not a device snapshot.
 
-Loading merges the saved playback state into the existing settings. Active
-music restarts from position zero at the load tick, preserving its loop flag;
-this makes the board's music restart deterministically after load. Active
-non-music voices resume at the saved `positionTicks` (a new `startTick` is
-chosen so that the position is unchanged), while paused and stopped states
-remain paused and stopped. A saved one-shot whose position is at or beyond its
-length is restored stopped. On restore, core re-emits cues in track order and
-voice-index order, allocating fresh monotonic cue ids; the music cue has the
-load tick as its due tick, while a resumed non-music cue carries the past due
-tick needed for catch-up. No runner state is trusted from a save.
+Loading restores playback against the audio configuration of the game file being loaded. Active music restarts from position zero at the load tick, preserving its loop value; active non-music voices resume at the saved `positionTicks` with a new `startTick` chosen to preserve that position. Paused and stopped voices remain paused and stopped. A saved one-shot at or beyond its length is restored stopped. Before re-emitting cues, loading sets the next `cueId` to the greater of the live and saved counters, so an id is never reused; it allocates fresh monotonic cue ids in configured track order and voice-index order. The music cue has the load tick as its due tick, while a resumed non-music cue carries the past due tick needed for catch-up. No runner state is trusted from a save.
 
 `reset()` leaves the whole audio section untouched, including active music and
 settings. Normal board-entry effects may then be applied; the same-file rule
@@ -250,19 +227,16 @@ implementation must settle; they are written down here once so the code, the
 scenes of entry 6.4 (whose `P-1` to `P-18` proposals these adopt, listed in
 `tools/fixtures/audio/index.mjs`) and the later entries agree. Technically:
 
-1. *State fields.* The section carries three fields the P1 text did not list,
-   because the oracle's facts need them: `AudioTrackState.voiceCount` (the
-   configured slots, saved, so a load restores the author's `mediaTrack`),
-   `AudioVoiceState.loop` and `AudioVoiceState.pausedTick`. `settings.trackVolumes`
-   is sparse: an entry exists only for a track whose script volume is not 100 or
-   that has a track-wide fade, and entries are in ascending ASCII name order.
-   `flags` on a track is the loop bit of voice 0 (`tkMD_LOOP`, 1) and is kept
-   after a stop; `tkMD_WAIT` and `tkMD_RESTART` are play-time instructions and
-   are not retained. A track's `file` is the file most recently started on it,
-   and only a null music request clears it. The primary view (`positionTicks`,
-   `lengthTicks`, `fade`) of a track with no voice 0 is `0`, `null`, `null`. The
-   section is refreshed at the end of the `audio` phase of every tick, so a
-   voice's stored `positionTicks` is its position at that phase.
+1. *State fields.* `AudioTrackState.voiceCount` comes from game-file audio
+   settings and is not part of a playback save; `AudioVoiceState.loop` and
+   `AudioVoiceState.pausedTick` are playback state. `settings.trackVolumes` is
+   sparse: an entry exists only for a track whose script volume differs from
+   100 or that has a track-wide fade, in ascending ASCII name order. The
+   internal `flags` field mirrors voice 0's loop bit and is retained after stop;
+   it is not a public constant-based API. A track's `file` is the most recently
+   started file, and only a null music request clears it. Its primary
+   (`positionTicks`, `lengthTicks`, `fade`) view with no voice 0 is `0`, `null`,
+   `null`. State refreshes at the end of the `audio` phase of each tick.
 2. *Apply tick.* A transition and the cues it makes carry the tick at which the
    applier processes the effect, which is `time.tick` at that moment. For an
    effect posted before the applier registered, or held for an asset reply
@@ -294,9 +268,9 @@ scenes of entry 6.4 (whose `P-1` to `P-18` proposals these adopt, listed in
    stop.
 5. *End and finish.* At the `audio` phase of a one-shot's end tick the voice is
    removed, one `media.stop` cue is emitted and the track keeps its `file` and
-   `flags`; voices of one track end in ascending index order and tracks in track
-   order. A voice that reaches its end because `mediaSeek` clamped it to its
-   length ends in the same tick's `audio` phase.
+   `flags`; voices end in ascending slot order within track order. A voice that
+   reaches its end because `voice.seek()` clamped it to its length ends in that
+   same tick's `audio` phase.
 6. *Pause.* A paused voice keeps its `startTick`, `endTick` and fade `startTick`
    and records `pausedTick`; resume adds the paused span (`resume tick - pausedTick`)
    to each of them, so position and any fade continue without a jump. A seek on a
@@ -305,37 +279,32 @@ scenes of entry 6.4 (whose `P-1` to `P-18` proposals these adopt, listed in
 7. *The state hash.* `hashGameState` is `hashState` of the `GameState` without
    `audio.settings`. Snapshots (`snapshot`, `restoreGameState`) include it; a
    game save never does ([audio-save-load](#audio-save-load)).
-8. *Game load.* The saved projection is `{ tick, cueId, soundFont, tracks }`: the
-   tick it was taken at, the counter, the script bank and every track with its
-   voices. Loading sets the counter to the larger of the live and saved values,
-   takes `soundFont` and the tracks (a live track the save lacks is dropped, a
-   saved track is recreated with its `voiceCount`), leaves `settings` untouched,
-   and emits `soundfont.set` and then, per track and voice in ascending order,
-   `media.play` for each playing voice as [audio-save-load](#audio-save-load)
-   rules. A paused voice is restored paused: its `startTick`, `endTick`,
-   `pausedTick` and fade `startTick` shift by `load tick - saved tick`, and the
-   re-emission is a `media.play` at the held position followed by `media.pause`,
-   both due at the load tick. A voice whose saved fade is running keeps it with
-   `startTick` shifted the same way.
-9. *Engine start and snapshot restore.* The applier's registration emits
-   `soundfont.set` and nothing else ([soundfont-commands](#soundfont-commands)
-   item 4): a snapshot is a state, and the host that wants a runner brought up to
-   date calls the game-load re-emission.
+8. *Game load.* The saved playback projection is `{ tick, cueId, tracks }`.
+   Loading restores those voices against the current game's configured tracks
+   and keeps the next cue id at the greater of the live and saved counters,
+   leaving audio settings and `defaultSoundFont` untouched. It emits
+   `media.play` and `media.pause` cues for restored voices in track/slot order
+   as [audio-save-load](#audio-save-load) specifies. A paused voice preserves
+   its held position and shifts `startTick`, `endTick`, `pausedTick` and fade
+   `startTick` by `load tick - saved tick`; a running fade keeps its remaining
+   duration.
+9. *Engine start and snapshot restore.* Applier registration emits the
+   configured `defaultSoundFont` through `soundfont.set`; the host restoring a
+   snapshot uses the game-load re-emission to bring the runner up to date.
 10. *Effect records.* `music.play` and `sfx.play` carry `[asset, loop, restart,
-    source]`: `asset` an `AssetKey` or `null`, `loop` a boolean (`sfx.play` is
-    always one-shot and ignores it), `restart` a boolean or `null` (`null` means
-    `false`) and `source` a string. `sfx.play` goes to the `ui` track when `source`
-    is `"ui"` and to `sfx` otherwise; animation frame sounds post source
-    `"frame"`. `soundfont.set` carries `[asset]`. The board producer posts one
-    `music.play` for every arrival with the resolved key or `null`; the removed
-    `engine.musicAsset` field is not replaced.
+    source]`: `asset` is an `AssetKey` or `null`, `loop` is a boolean (`sfx.play`
+    is always one-shot), `restart` is a boolean or `null` (`null` means `false`),
+    and `source` is a string. `sfx.play` goes to `ui` when source is `"ui"` and
+    to `sfx` otherwise; animation frame sounds post source `"frame"`.
+    `soundfont.set` carries the configured `defaultSoundFont`. The board
+    producer posts one `music.play` per arrival with its resolved key or `null`;
+    the removed `engine.musicAsset` field is not replaced.
 11. *Pass waits.* The `audio.track` wait payload of [audio-track-wait](#audio-track-wait)
-    gains one field, `passIndex: integer | null`: for a pass wait the voice's pass
-    number `floor((tick - startTick) / lengthTicks)` when the wait was created, and
-    the wait wakes in the first `waits` phase where the voice, not paused, has a
-    greater pass number; `null` for a terminal wait, which wakes when the voice's
-    current `endTick` is reached. A voice that is gone or replaced (`cueId`
-    differs) wakes the wait.
+    carries `passIndex: integer | null`: for a pass wait it is
+    `floor((tick - startTick) / lengthTicks)` when the wait is created, and the
+    wait wakes in the first `waits` phase where the voice is not paused and has a
+    greater pass number; `null` for a terminal wait, which wakes when its
+    `endTick` is reached. A gone or replaced voice (`cueId` differs) wakes it.
 
 **Evidence.** The oracle scenes of entry 6.4 (every fact above is a row or an
 event in them), the P1 and P2 text above, AD-5's blocking `asset` reply and
@@ -378,9 +347,8 @@ Technically:
    `max(0, R - tick)` ticks into the asset. A looping asset wraps this offset;
    a one-shot whose offset is at least `lengthTicks` is not started. Late
    playback therefore cannot alter core state.
-6. `mediaPosition` and `mediaLength` (owned by Epic 6.2) expose integer ticks
-   to core queries; any seconds presentation is a pure conversion from these
-   ticks and never a device-reported float.
+6. The public `voice.position` and `voice.length` values are seconds derived
+   from integer ticks; they never use device-reported floating-point position.
 
 `audio.ended { cueId }` remains a valid AD-14 input for diagnostics and runner
 voice cleanup, but it is advisory. Core ignores an early, late or unknown
@@ -428,9 +396,9 @@ removes.
 <!-- OWNER: 6.1/P4 -->
 **Proposed ruling (pending owner review; P4; generic per-track cues).** In
 plain terms, cues say what a named track should do; they do not contain a
-runner handle or a callback. Technically, the core port becomes this generic
-set. Entry 6.3 adds the platform kind `soundfont.set` as a documented
-amendment ([soundfont-cue](#soundfont-cue)); every other kind is unchanged:
+set. Entry 6.3 adds the platform kind `soundfont.set`, carrying the game's
+configured `defaultSoundFont` ([soundfont-cue](#soundfont-cue)); every other
+kind is unchanged:
 
 ```text
 AudioCueKind =
@@ -564,284 +532,106 @@ to replay without the device.
 
 <a id="audio-track-wait"></a>
 <!-- OWNER: 6.1/P5 -->
-**Proposed ruling (pending owner review; P5; `audio.track` wait).** In plain
-terms, a script can wait for a track or voice to finish, but a paused sound
-holds that wait. Technically the unresolved `audio.sfx` kind is replaced by
+**Ruling.** In plain terms, a script can wait for one voice to finish or reach
+its next loop boundary; a paused voice holds that wait. Technically the wait is
 this plain-data payload:
 
 ```text
 Wait = {
   kind: "audio.track",
   global: false,
-  id: "mediaWait",
-  payload: [{ track: string, voice: integer | null,
-              cueId: integer, endTick: integer | null,
-              pass: boolean, passIndex: integer | null }],
+  id: "voice.wait",
+  payload: [{ track: string, slot: integer, cueId: integer,
+              endTick: integer | null, pass: boolean,
+              passIndex: integer | null }],
   resumeRefs: []
 }
 ```
 
-The implementation may use the repository's positional `NamedWait.payload`
-array, but the decoded object above is the normative shape and contains no
-closure, timer, device handle or `Promise`. `cueId` identifies the voice that
-was playing when the wait was created; a replacement cannot accidentally wake
-an old wait for a new voice. `pass: true` means the next finite pass boundary
-rather than terminal completion.
-
-The resolver runs in the AD-26 `waits` phase, once per waiting thread in
-ascending thread id. Its deterministic table is:
-
-| Track/voice condition at the current tick | Result |
-|---|---|
-| playing finite one-shot and `tick < endTick` | remain parked |
-| playing finite one-shot and `tick >= endTick` | wake with the normal wait result |
-| playing loop and `pass` true at next pass boundary | wake |
-| playing loop and `pass` false | a direct `mediaWait` is diagnosed; it cannot wait forever |
-| paused, with the same `cueId` | remain parked; resume continues the same wait |
-| stopped or replaced, with the same `cueId` | wake at the first waits phase after the stop/replacement effect |
-| unknown track, voice or `cueId` | located diagnostic; do not park |
-| `lengthTicks: null` | located diagnostic; do not park |
-
-`mediaPlay` with a combined loop-and-wait flag is a diagnostic at the call;
-`mediaWait` on an already looping track may request its current pass only.
-Those command signatures and diagnostics are owned by Epic 6.2, but no command
-may recreate `audio.sfx`.
+`cueId` identifies the voice that was playing when the wait was created; a
+replacement cannot wake a wait for a later occupant of the slot. The resolver
+runs in the AD-26 `waits` phase, once per waiting thread in ascending thread id.
+A finite one-shot wait wakes at its end tick. `voice.wait()` on a loop waits for
+the next pass boundary; on a finite voice it waits for completion. Pausing parks
+the wait until resume; stopping or replacing the identified voice wakes it in
+the first waits phase after that transition. Unknown or stale voices and voices
+with unknown length produce a located diagnostic and do not park. A looped
+`mediaPlay(..., { wait: true })` is diagnosed because it has no terminal
+completion. The payload contains no closure, timer, device handle or `Promise`.
 
 **Evidence.** AD-9 requires one named wait registry, plain-data payloads and
 ascending-thread polling. `packages/core/src/ports/wait.ts` currently lists
 `audio.sfx`; `script/waits.ts` and the generic catalogue responder are the
-live seams identified by F-04. Owner direction D-3 says pause suspends and the
-wait ends on finish or stop. The fixed end formula and phase ordering are
+live seams identified by F-04. The fixed end formula and phase ordering are
 [audio-time-model](#audio-time-model) and AD-26.
 
 **Rejected alternative.** Waking on pause makes a script continue while the
 sound is held. Polling a runner `audio.ended` set makes wait timing
-non-replayable. Reusing `audio.sfx` hides track/voice identity and leaves
-legacy catalogue calls parked on an unregistered resolver.
+non-replayable.
 <a id="media-command-family"></a>
-## P3/P6/P7 — standard media commands, voices and layers
+<a id="media-1"></a>
+## MEDIA-1 — media, track and voice objects
 
-<!-- OWNER: 6.2/P3 -->
-**Proposed ruling (pending owner review; P3; standard command family).** In
-plain terms, these commands give an author named players for music, effects,
-dialogue and ambience. A command either changes one of those players or waits
-for one to finish; it never asks the speaker what happened. Precisely, every
-command below is a synchronous RPGCode built-in. A `void` command returns
-`null`; a query returns the value shown; an optional `&ret` or `&voice` writes
-that same value to the caller's variable. A diagnostic is located at the
-argument, makes no state or cue change, and returns the command's documented
-failure value.
+<!-- OWNER: MEDIA-1 — Jensen, 2026-10-19; evidence: epic-media-objects.md §§ Notes (2026-10-19 object model and API names), rpgcode-modules-and-objects.md#oop-12; rejected alternative: retaining an integer `&voice` handle or adding a façade over the procedural API, because the approved model has one object handle. -->
+**Ruling (owner; approved).** In plain terms, `media` is the game's sound desk, each named track is a player on that desk, and `mediaPlay` returns the voice it starts. Technically, `media` is the global emitter; `media.track(name)` returns a configured track object and built-in tracks are `media.music`, `media.sfx`, `media.ambience`, `media.voice` and `media.ui`. `mediaPlay(file[, options])` returns a data-only voice identified by `(track, slot, cueId)`. It exposes readable `track`, `file`, `state`, `position`, `length`, `volume` and `loop`; `volume` and `loop` are writable through the audio owner. A track exposes its configured `name`, writable `volume`, and `fade(percent, seconds)`. The voice becomes stale when its slot is replaced; stale reads reflect no live voice, and attempted writes or methods diagnose without affecting the replacement.
 
-Track names are non-empty ASCII strings of 1–32 characters matching
-`[A-Za-z0-9_.-]+`. Core canonicalizes only ASCII letters to lower case; it
-does not use locale-sensitive case folding. The five built-in tracks are
-created in this order: `music`, `sfx`, `ambience`, `voice`, `ui`. Unknown
-tracks are an error; `mediaPlay` never silently creates a misspelled track.
-There are at most 16 named tracks, including the five built-ins. `mediaTrack`
-is the only creation/configuration command.
+`options` is a dictionary with optional fields `track`, `loop`, `volume`, `priority`, `sync` and `wait`. The track defaults to `music`; its name is 1–32 ASCII characters matching `[A-Za-z0-9_.-]+`, canonicalized by ASCII lowercasing only. Unknown names diagnose and do not create tracks. `loop` defaults true on `music` and false elsewhere; `volume` is an integer 0–100 and defaults to 100; `priority` is an integer and defaults to 0; `sync` is an optional configured source-track name; `wait` is a boolean and defaults false. Invalid fields diagnose at the call and leave playback unchanged. `sync` requires known positive lengths for both tracks and an active primary voice on the source track; it starts at the source position modulo the destination length, or at the held source position modulo that length when the source is paused. Without `sync`, playback starts at position zero.
 
-| Command and signature | Return and deterministic behavior |
-|---|---|
-| `void mediaTrack(string name[, int voices = 1])` | Creates `name` with the requested voice count, or changes an existing track's configured count. `voices` is a positive integer. Reducing below a live voice index is a diagnostic and leaves the track unchanged. |
-| `void mediaLoad(string track, string file)` | Resolves `file` and loads its metadata onto the named track without starting it. The track becomes `stopped`, retains the file, and emits `media.load`; an unknown file is a located diagnostic and does not clear a prior file. |
-| `void mediaPlay(string file[, string track = "music"[, int flags = default[, int priority = 0[, string syncTrack = ""[, int &voice]]]]])` | Starts or reuses one voice. `&voice` receives the selected zero-based voice index. `default` is `tkMD_LOOP` on `music` and `tkMD_ONCE` on every other track. `tkMD_WAIT` parks this thread until that voice finishes; loop plus wait is a diagnostic. |
-| `void mediaStop([string track = "music"[, int voice = 0]])` | Stops and rewinds the selected voice, retaining its file and flags. A stop ends a wait for that voice at the next waits phase. |
-| `void mediaPause([string track = "music"[, int voice = 0]])` | Pauses the selected playing voice at its integer position. Its wait and fade clock are suspended. Pausing an already paused or stopped voice is a no-op. |
-| `void mediaResume([string track = "music"[, int voice = 0]])` | Resumes a paused voice from its saved position. Resuming a playing or stopped voice is a no-op. |
-| `void mediaSeek(string track, number seconds[, int voice = 0])` | Converts a finite non-negative `seconds` value to ticks with `max(0, floor(seconds * 60 + 0.5))`. A known one-shot clamps to its length; a known loop wraps modulo its length. Unknown length is a diagnostic. |
-| `void mediaLoop(string track, bool on[, int voice = 0])` | Changes the loop flag in place without restarting. `on=false` lets the current pass finish; `on=true` creates pass boundaries after the current position. |
-| `void mediaFade(string track, int percent, number seconds[, int voice = 0])` | Clamps no values silently: `percent` must be 0..100 and `seconds` finite and non-negative. It linearly ramps the selected voice's script volume over the converted duration. A zero-duration fade is an immediate set. With no voice argument, it ramps the track volume setting. |
-| `void mediaWait([string track = "sfx"[, int voice = 0]])` | Parks until the selected finite one-shot finishes, or until its current loop pass ends when it is looping. An unknown, stopped, replaced, or unknown-length voice does not park; it returns a located diagnostic or the normal stopped result as specified below. |
-| `void mediaVolume(string track, int percent[, int voice])` | Sets the track's integer script volume (0..100), or a selected voice's volume when `voice` is present, without restarting. |
+A free slot is selected by lowest index. If every slot is active, the voice with the lowest `priority`, then oldest `startTick`, then lowest slot index is replaced; paused voices count as active. Replacement emits stop before start and wakes the displaced wait in the next waits phase. On a single-voice music track, a same-file request while playing carries on without restart; on another single-voice track it is ignored. Multi-voice tracks may overlap the same file. `voice.loop = false` completes the current pass; `true` adds loop boundaries after the current position. Assigning `voice.volume` or `track.volume` sets an integer percentage 0–100 immediately in script order. Invalid assignments diagnose and do not mutate state. A stale voice write cannot reach a replacement in the same slot.
 
-The one-argument `mediaVolume` query is an overload:
-`int mediaVolume(string track[, int voice[, int &ret]])` returns the track
-volume when `voice` is omitted, or the selected voice volume when it is
-present, and optionally writes it to `ret`. The setter and query are
-distinguished by the presence of the `percent` argument. Effective script
-gain is the deterministic integer product of track and voice volumes,
-rounded half-up to a percentage; both settings start at 100.
+Hydrated voice methods are `stop()`, `pause()`, `resume()`, `seek(seconds)`, `fade(percent, seconds)` and `wait()`. `position` and `length` are seconds derived from integer ticks at 60 ticks per second. `seek` and fade durations are finite non-negative seconds converted by `max(0, floor(seconds * 60 + 0.5))`; seek clamps to the known asset interval and an end-position seek finishes in the same audio phase. Fade targets are integer percentages from 0 through 100. A fade is linear between integer endpoints with half-up rounding, exact at its end tick, and frozen while paused; zero duration sets the target immediately. Voice and track gain are multiplied and rounded half-up before the cue. Fading to zero does not stop playback. A voice fade and a track fade are independent data-state ramps; each changes only its own gain layer. Invalid method inputs diagnose without changing playback. Hydrated methods are host-provided behavior, not saved closures ([OOP-12](rpgcode-modules-and-objects.md#oop-12)).
+There is no automatic ducking or duck-group state; authors may compose track and voice fades for the same effect.
 
+**Evidence.** Owner decisions recorded 2026-10-19 in `epic-media-objects.md` Notes; OOP-12 at `rpgcode-modules-and-objects.md#oop-12`; allocation, tick, same-file, pause and cue rules in the preserved Epic 6 core contract above.
+**Rejected alternative.** Retaining the procedural commands as the primary API or using an integer slot handle would leave two handle models and let a stale script handle control a replacement voice.
 
-The matching query built-ins are:
+<a id="media-2"></a>
+## MEDIA-2 — playback events and detail
 
-| Query | Return |
-|---|---|
-| `int mediaState(string track[, int voice = 0[, int &ret]])` | `tkMD_STOPPED`, `tkMD_PLAYING` or `tkMD_PAUSED`. A track query with no explicit voice is the aggregate: playing if any voice plays, paused if active voices are all paused, otherwise stopped. |
-| `int mediaFlags(string track[, int voice = 0[, int &ret]])` | The selected voice's current flag bitmask; stopped tracks retain their last flags. |
-| `bool mediaPlaying(string track[, int voice = 0[, bool &ret]])` | True exactly when the selected voice is playing. |
-| `string mediaFile(string track[, int voice = 0[, string &ret]])` | The selected or last file, or `""` when no file has been loaded. |
-| `number mediaPosition(string track[, int voice = 0[, number &ret]])` | Current position in seconds, computed from integer ticks as `positionTicks / 60`; no device float is read. |
-| `number mediaLength(string trackOrFile[, number &ret])` | Length in seconds from asset metadata. An unknown length returns `0` and emits a diagnostic only when used by a wait or seek. |
-| `string[] mediaTracks([string[] &ret])` | Track names in built-in order followed by creation order, canonicalized as stored. |
-| `int getVolume([int &ret])` | Script master volume, 0..100; it is the query counterpart of `setvolume`. |
+<!-- OWNER: MEDIA-2 — Jensen, 2026-10-19; evidence: epic-media-objects.md Notes (past-tense event names and cues remain imperative), `rpgcode-modules-and-objects.md#emit-1` EMIT-2/EMIT-6/EMIT-10; rejected alternative: exposing runner completion notifications or imperative cue names as script events, because those would make event history host-dependent or conflate commands with state changes. -->
+**Ruling (owner; approved).** In plain terms, a voice tells scripts when its playback state changes; its track and the shared `media` object relay the same news so a listener may observe one voice or all voices. Technically, emitted event types are `started`, `stopped`, `ended`, `looped`, `paused`, `resumed` and `faded`. Each event's plain-data `detail` has exactly `track`, `slot`, `cueId`, `file` and `tick`. `tick` is the deterministic core tick at which the state change is applied. The voice emits its own event; its track and `media` re-emit it in that order, preserving the detail. All are non-cancelable notifications. They are derived from core transitions, not runner device reports; cue names such as `media.play` remain imperative.
 
-An invalid query returns the type's zero value (`0`, `false` or `""`) and
-diagnoses the call. Query results are from core state and asset metadata, so
-a runner cannot make two runs disagree. `mediaPlay` returns no handle by
-value: `&voice` is the stable integer slot index, while `cueId` distinguishes
-a current occupant from a stale handle after replacement.
+**Evidence.** Owner event-name decision in `epic-media-objects.md` Notes; event object/detail and queued dispatcher contract in `rpgcode-modules-and-objects.md#emit-1` (EMIT-2, EMIT-6, EMIT-10); fixed tick and application ordering in [audio-time-model](#audio-time-model).
+**Rejected alternative.** Emitting only at `media` loses the voice/track subscription scopes; emitting runner `ended` reports or using cue names as event types makes notifications depend on output-device timing or confuses state changes with requests.
 
-The `tkMD_` constants are compile-time integer constants. Flags are
-bitwise-orable; state values are mutually exclusive and are not flags:
+<a id="media-3"></a>
+## MEDIA-3 — cancelable `beforePlay`
 
-| Constant | Value | Meaning |
-|---|---:|---|
-| `tkMD_ONCE` | 0 | Finish at the first asset boundary. |
-| `tkMD_LOOP` | 1 | Continue at every asset boundary. |
-| `tkMD_WAIT` | 2 | Park the calling thread until this voice's wait condition is met. |
-| `tkMD_RESTART` | 4 | Restart a same-file voice from tick zero instead of applying the same-file carry-on rule. |
-| `tkMD_STOPPED` | 0 | Query state: no active voice. |
-| `tkMD_PLAYING` | 1 | Query state: at least one selected voice is playing. |
-| `tkMD_PAUSED` | 2 | Query state: the selected active voice is paused. |
+<!-- OWNER: MEDIA-3 — Jensen, 2026-10-19; evidence: epic-media-objects.md Notes (all sound sources share beforePlay), `rpgcode-modules-and-objects.md#emit-1` EMIT-11; rejected alternative: bypassing script listeners for engine-originated sounds, because board, animation, battle, menu and video playback must pass the same observable decision point. -->
+**Ruling (owner; approved).** In plain terms, scripts get one chance to veto or adjust a sound before it starts, regardless of what asked for it. Technically, `beforePlay` is emitted cancelably on `media` for every attempted voice start. Its detail contains `source`, `track`, `slot`, `cueId`, `file`, `volume` and `loop`; source is exactly one of `script`, `board`, `animation`, `battle`, `menu` or `video`. Listeners may cancel the event or change `file`, `volume` and `loop`. Mutated values are validated; an invalid mutation diagnoses and leaves that field at its pre-dispatch value. Cancellation means no start, no play cue and no `cueId` consumption; a canceled script `mediaPlay` returns `null`. Accepted mutations are used by the pending start. A non-cancelable playback notification is emitted only for a start actually applied.
 
-**Errors and no-op rules.** The stable diagnostics are
-`media.invalid-track-name`, `media.track-limit`, `media.voice-count`,
-`media.voice-cap`, `media.unknown-track`, `media.unknown-voice`,
-`media.asset-missing`, `media.asset-length`, `media.invalid-time`,
-`media.invalid-volume`, `media.wait-loop`, and `media.sync-source`.
-They are located at the offending argument. Invalid names, counts, flags,
-times, volumes, missing assets and unknown handles make no mutation and emit
-no cue. A requested track configuration cannot make the sum of configured
-voice slots exceed 32. The initial master and every track volume are 100.
+For a script-thread start, ordinary cancelable dispatch parks that thread until listeners finish. For an engine-originated start, dispatch runs inside the originating engine phase in listener-registration order under the step budget and never waits for input, as specified by [EMIT-11](rpgcode-modules-and-objects.md#emit-11). A listener that would wait for input is a catchable runtime error; the engine phase itself does not park.
 
-**Author help text (simple first).** `mediaTrack` gives a name to a player
-and reserves its overlap slots; it returns nothing and fails rather than
-silently making a typo. `mediaLoad` prepares a file without starting it.
-`mediaPlay` starts music or a sound and can tell the script which voice slot
-it received. `mediaStop`, `mediaPause` and `mediaResume` control that slot.
-`mediaSeek` jumps to a time in seconds, `mediaLoop` changes whether the next
-boundary repeats, and `mediaWait` lets a script wait for completion.
-`mediaFade` changes loudness smoothly and `mediaVolume` changes it directly.
-The query commands report the same track data the engine will replay.
+**Evidence.** Owner source list and mutable fields in `epic-media-objects.md` Notes; engine-phase rule at `rpgcode-modules-and-objects.md#emit-11`; cancellation and shared event mutation at `rpgcode-modules-and-objects.md#emit-1` (EMIT-5/EMIT-6).
+**Rejected alternative.** A script-only wrapper cannot see board, animation, battle, menu or video starts; parking an engine phase would stop the tick and is expressly excluded by EMIT-11.
 
-For exact behavior, all times are converted to 60-Hz ticks with half-up
-rounding; state changes are applied in the current thread's order and
-observed by the waits phase before later threads. `mediaPlay` waits only with
-`tkMD_WAIT`; `mediaWait` waits only for a finite voice or its next loop pass.
-For example:
+<a id="media-4"></a>
+## MEDIA-4 — additive game-file audio settings
 
-```rpgcode
-mediaTrack("effects", 8)
-mediaPlay("click.wav", "effects", tkMD_ONCE, 1, "", &voice)
-mediaFade("music", 30, 0.5)
-mediaWait("effects", voice)
-```
+<!-- OWNER: MEDIA-4 — Jensen, 2026-10-19; evidence: `epic-media-objects.md` Notes (game-file ownership and SoundFont), `main-file.md#tkr-package-list-extension` (additive TKR extension precedent), audio-media.md#soundfont-layers; rejected alternative: runtime `mediaTrack` configuration or an engine startup-only default SoundFont, because authored configuration belongs to the game file and must not be script-created or lost on load. -->
+**Ruling (owner; approved).** In plain terms, the game file declares which tracks exist, how many voices each has, and the maximum voices the game may use. Technically, the additive TKR audio-settings block sits beside (not inside or instead of) the package-list block and has logical shape `{ tracks: [{ name, voiceCount }], voiceCap, defaultSoundFont? }`. `tracks` is the full ordered track list; `name` is a track name and `voiceCount` a positive integer. `defaultSoundFont`, when present, is an `AssetKey`; when absent, the game supplies no default bank and the decoded core setting is `defaultSoundFont: null`. Track names are unique, 1–32 ASCII characters matching `[A-Za-z0-9_.-]+` after ASCII lowercasing.
+At most 16 tracks may be configured, `voiceCap` is an integer from 1 through 32, and the sum of voice counts must not exceed it. The five built-in tracks are always first and never duplicated. Their Epic 6 voice counts `{ music: 1, sfx: 1, ambience: 4, voice: 2, ui: 4 }` are defaults; a game-file block may override them. Without a block, Epic 6 defaults apply and the default cap is 32. Additional tracks follow in file order. The block does not alter legacy main-file rows or package-list encoding; these game settings are not playback-save data.
 
-The example creates eight slots, allocates the lowest free `effects` slot,
-ramps `music` to 30% over 30 ticks, then parks until the click's finite
-one-shot ends. It does not wait on the fade. A script can layer a stinger
-without a special command:
+**Evidence.** Owner decision recorded in `epic-media-objects.md` Notes; additive encoding precedent in `main-file.md#tkr-package-list-extension`; Epic 6 default counts and allocation ordering; SoundFont resolution in [soundfont-layers](#soundfont-layers).
+**Rejected alternative.** Modifying legacy rows breaks byte-compatible round-tripping; runtime track creation changes game configuration from scripts; keeping the SoundFont only as a runner startup option loses the game's authored default.
 
-```rpgcode
-mediaPlay("stinger.mid", "ui", tkMD_ONCE)
-mediaFade("music", 25, 0.25)
-```
+<a id="media-5"></a>
+## MEDIA-5 — retired Reawakened procedural surface
 
-The two commands apply in source order in the same tick. A later track
-controller may use that same fade rule for ducking; this ticket adds no
-automatic duck.
+<!-- OWNER: MEDIA-5 — Jensen, 2026-10-19; evidence: `epic-media-objects.md` Notes (Epic 6 API is net-new, only 3.1 compatibility survives), the audio rows in `rpgcode-functions.md` (catalogue spellings checked); rejected alternative: compatibility shims for Epic 6-only names, because 3.1 never exposed them and the approved model is object-based. -->
+**Ruling (owner; approved).** In plain terms, new Reawakened scripts use `mediaPlay`, voice methods and track methods; the old positional command family is not retained as a second API. Technically, retire the canonical lowercase command spellings `mediatrack`, `mediaload`, `mediapause`, `mediaresume`, `mediaseek`, `medialoop`, `mediafade`, `mediawait`, `mediavolume`, `mediastate`, `mediaflags`, `mediaplaying`, `mediafile`, `mediaposition`, `medialength`, `mediatracks`, `getvolume`, `soundfont` and `soundfontreset`; retire `tkMD_ONCE`, `tkMD_LOOP`, `tkMD_WAIT`, `tkMD_RESTART`, `tkMD_STOPPED`, `tkMD_PLAYING` and `tkMD_PAUSED`, the positional `priority` and `syncTrack` arguments, and the integer `&voice` output. RPGCode command lookup is case-insensitive; the lowercase forms here match the command catalogue. These names, constants and argument forms have no aliases or deprecated shims.
 
-**Evidence.** P3 in
-`_bmad-output/initiative-rpgtoolkit-reawakened/epic-audio-synth/discovery/audio-exploration.md`
-requires exact signatures, a creation command, name validation and
-documentation-only deprecation; F-08 and F-14 record the current catalogue
-wait and obsolete hazards. AD-1 requires structured-cloneable results,
-AD-8/AD-9 require by-reference outputs and named waits, and the existing
-`rpgcode-language.md` constants establish the `tk*` naming convention.
+Toolkit 3.1 compatibility remains. `mediaplay(file)` remains accepted as the one-argument legacy call with its music-looping behavior; `mediaPlay(file[, options])` is case-insensitive in RPGCode and adds named options plus the returned voice object. `mediaStop(track[, voice])` is the retained case-insensitive extension; no-argument `mediastop()` remains the 3.1 form. Preserve `midiplay(file)`, `playmidi(file)`, `mediarest()`, `midirest()`, `wav(file)`, `mp3(file)`, `wavstop()`, `mp3pause(file)`, `setvolume(percent)` and the legacy plugin stubs `fademidiin`, `fademidiout`, `setmidivolume` with their established names, arguments and behavior.
 
-**Rejected alternative.** Letting a typo create a track, making every legacy
-name runtime-obsolete, returning device handles, or allowing command
-failures to partially mutate state would make old games noisy or make a
-save/replay depend on the host. The `deprecated` command-docs tag with
-`replacedBy` is documentation-only; the catalogue `obsolete` field and the
-word `obsolete` in a spec-table row remain reserved for commands that really
-raise `builtin.obsolete`.
+**Catalogue spelling check.** RPGCode command lookup is case-insensitive, and the inventory uses lowercase canonical spellings. Names that have rows in `rpgcode-functions.md` match them exactly; the query-only names carried forward from the retired Epic 6 spec have no catalogue rows. No catalogue row is edited here. `mediaplay` and `mediastop` remain only for their Toolkit 3.1 forms, not their old Reawakened positional extensions.
 
-<!-- OWNER: 6.2/P6 -->
-**Proposed ruling (pending owner review; P6; voices and allocation).** A
-voice handle is the pair `(track, index)` exposed to RPGCode as the integer
-`index` in `&voice`; core additionally checks the current `cueId`, so a
-handle from an earlier occupant cannot control a replacement. The configured
-voice counts are:
+**Evidence.** `epic-media-objects.md` Notes explicitly says the Epic 6 procedural API is net-new and preserves only 3.1 compatibility; the listed spellings were checked against `rpgcode-functions.md` audio rows; the prior 3.1 mapping and calls are recorded in [legacy-audio-command-mapping](#legacy-audio-command-mapping).
+**Rejected alternative.** Keeping unmodified legacy-shaped Reawakened calls as shims would preserve a second handle/control model without serving any Toolkit 3.1 caller.
 
-| Track | Default voices | Legacy significance |
-|---|---:|---|
-| `music` | 1 | Background music single slot. |
-| `sfx` | 1 | Legacy sound-effect single slot. |
-| `ambience` | 4 | Overlapping environmental loops. |
-| `voice` | 2 | Dialogue overlap. |
-| `ui` | 4 | Menu and cursor sounds. |
+The former P3/P6/P7 procedural Reawakened command descriptions have been retired and removed. Their deterministic playback, cue, timing, wait, allocation and fade rules remain normative where applicable and are expressed through the objects in MEDIA-1 through MEDIA-5. The Toolkit 3.1 alias names and call behavior in the mapping table below remain unchanged.
 
-`mediaTrack` may change these counts, and may create up to 16 named tracks,
-but the sum of configured slots is at most 32. A new multi-voice track starts
-with all voices stopped. With no explicit voice, `mediaPlay` takes the lowest
-free index. When none is free, it steals exactly one active voice by lowest
-`priority`, then oldest `startTick`, then lowest index. Paused voices remain
-active for allocation. An explicit voice always addresses that slot and
-replaces its occupant; it never invokes the stealing tie-breaker.
+**Playback rules retained from Epic 6.** The object surface does not change fixed-tick advancement, apply ordering, cue identity, pause-frozen position/fade clocks, one-shot completion, loop boundaries, waits, integer fade interpolation, late-sound presentation policy, or the runner's cue protocol. A track's configured voices and allocation/stealing retain the deterministic limits and tie-breaks already specified for the core state; they are now game-file settings rather than script-configured track calls. Script method operations act on the voice object's identified `(track, slot, cueId)`, so a stale object cannot affect a replacement. For ordinary waits and fades, see [audio waits](#audio-track-wait), [audio state](#audio-state) and [cue-player](#cue-player).
 
-On a single-voice track, a same-file `mediaPlay` while playing carries on
-without a cue, except with `tkMD_RESTART`, which stops then starts at zero.
-This keeps `music`'s legacy carry-on behavior and `sfx`'s legacy same-file
-ignore behavior: both are one-voice tracks, and `sfx` calls without
-`tkMD_RESTART` are ignored when the same file is already playing. On a
-multi-voice track, each play takes a free slot; the same file may overlap.
-Every replacement or steal emits `media.stop` before `media.play` and wakes
-the displaced voice's wait in the next waits phase.
-
-The state extension is plain data: each `AudioVoiceState` carries
-`priority: integer` (default 0), and a voice's `cueId` remains its identity.
-Allocation, stop-before-play ordering, and the ascending-index query order
-are part of core state, never runner policy.
-
-**Evidence.** P6 records the recommended `&voice` handle, single-voice
-same-file exception, proposed built-in counts, owner decision for the 32
-voice cap, and deterministic stealing candidates. Q3/Q5 in round 8 and
-M2/M4 in round 9 establish the legacy single-slot and same-file defaults.
-AD-10/G1 require plain saveable state; AD-16 requires voice-indexed cues.
-
-**Rejected alternative.** A runner-owned voice pool, oldest-only stealing,
-or silently increasing a track on an unknown name would produce different
-cue histories across devices and hide author errors. Treating paused voices
-as free would cut off a sound merely because its script is temporarily held.
-
-<a id="audio-layer-rulings"></a>
-<!-- OWNER: 6.2/P7 -->
-**Proposed ruling (pending owner review; P7; fades, sync and ducking
-reservation).** A fade is linear in fixed ticks. If its start volume is
-`A`, target is `B`, duration is `D > 0`, and `d` ticks have elapsed, the
-volume is the nearest integer to
-`A + (B - A) * d / D`, with half values rounded upward; `d` is clamped to
-`0..D`. Starting a new fade first evaluates the old fade at the current
-tick, then replaces it from that integer. A paused voice freezes both
-position and fade elapsed time. At `D`, the target is exact. Fading to zero
-leaves a playing voice alive and silent; only `mediaStop` ends it.
-
-`mediaPlay`'s `syncTrack` argument names an existing track whose primary
-voice is active. At the play tick, the new voice's starting position is the
-source's current integer position modulo the destination asset length, and
-its `startTick` is chosen to preserve that position. A paused source supplies
-its held position but the new voice starts playing. Unknown tracks, inactive
-sources or unknown lengths diagnose without starting the new voice. Unequal
-lengths are therefore deterministic, but stems stay musically aligned only
-when their lengths and loop points agree. For example, a source at tick 137
-with position 17 and a 10-tick destination starts at position 7; it does not
-round or query the device.
-
-The late-sound threshold is 15 ticks (250 ms at 60 Hz). A runner MAY suppress
-rendering of a late, finite, non-looping non-music voice when
-`receiveTick - cue.tick >= 15`; it MUST still consume the cue and core keeps
-the voice timeline. Music and looping voices catch up by modulo position
-instead of being dropped. This is a presentation optimization, not a second
-end or wait rule.
-
-Ducking is reserved, not implemented by this ticket. Authors can reproduce a
-duck manually with `mediaFade("music", 30, 0.1)` while a stinger plays on
-another track. A future `mediaDuck` controller MUST compose the same
-per-track fade descriptors and cue ordering; it MUST NOT add runner-owned
-mix state or change the `media.fade` meaning. No automatic ducking,
-duck-group field or hidden side effect exists in this contract.
 
 **Evidence.** P7 recommends integer linear fades, frozen pause clocks,
 modulo sync for unequal lengths, and a fade-based ducking reservation.
@@ -869,12 +659,12 @@ entries must encode:
 
 | Legacy name | Standard call and disposition |
 |---|---|
-| `midiplay(file)`, `playmidi(file)`, `mediaplay(file)` | `mediaPlay(file, "music", tkMD_LOOP)`; `mediaplay` is extended, not deprecated. |
-| `mediastop()`, `mediarest()`, `midirest()` | `mediaStop("music")`; `mediastop` is extended, not deprecated. |
-| `wav(file)`, `mp3(file)` | `mediaPlay(file, "sfx", tkMD_ONCE)`; mark each `deprecated`. |
-| `wavstop()` | `mediaStop("sfx")`; mark `deprecated`. |
-| `mp3pause(file)` | `mediaPlay(file, "sfx", tkMD_ONCE | tkMD_WAIT)`; mark `deprecated`. The file argument is required. |
-| `setvolume(percent)` | `mediaVolume("music", percent)` is not an equivalent because it would change only one track; retain `setvolume` as the master-volume setter and pair it with `getVolume`. |
+| `midiplay(file)`, `playmidi(file)`, `mediaplay(file)` | `mediaPlay(file, { track: "music", loop: true })`; preserve the accepted one-argument legacy calls and music-looping behavior. |
+| `mediastop()`, `mediarest()`, `midirest()` | `mediaStop("music")`; preserve no-argument `mediastop()` and the legacy aliases. |
+| `wav(file)`, `mp3(file)` | `mediaPlay(file, { track: "sfx", loop: false })`; preserve their one-shot behavior. |
+| `wavstop()` | `mediaStop("sfx")`. |
+| `mp3pause(file)` | `mediaPlay(file, { track: "sfx", loop: false, wait: true })`; the file argument remains required and the call waits for completion. |
+| `setvolume(percent)` | Keep as the Toolkit 3.1 master-volume compatibility call; a single-track `track.volume` assignment is not equivalent. |
 
 The aliases retain their legacy defaults (case-insensitive Media-folder
 lookup, music looping, one-shot SFX). `mp3pause` follows 3.1.0 and waits;
@@ -906,11 +696,11 @@ format policy are owned by Epic 6.2/6.3; they must preserve these rows.
 
 | Evidence | Owner-relayed 3.1 fact | Reawakened deterministic disposition |
 |---|---|---|
-| Q1 | `mp3pause` takes a file; 3.1.0 waits while music keeps playing; final does not wait; no command pauses music | Follow 3.1.0: `mp3pause(file)` maps to SFX `tkMD_ONCE \| tkMD_WAIT`; `mediaPause` is a new track command, not a legacy music pause. |
+| Q1 | `mp3pause` takes a file; 3.1.0 waits while music keeps playing; final does not wait; no command pauses music | Follow 3.1.0: `mp3pause(file)` starts a one-shot SFX voice with `wait: true` while music keeps playing. Toolkit 3.1 has no music-pause command; Reawakened object control uses `voice.pause()`. |
 | Q2 | `wav` never waits; `mp3` aliases it | Keep: both map to non-waiting SFX `mediaPlay`. |
 | Q3 | One SFX slot replaces a different file and ignores the same playing name | Keep on the one-voice `sfx` track. |
 | Q4 | `wavStop` stops the script/default-menu/default-battle SFX slot, not music or animation-frame sounds | Keep its `sfx` mapping; frame sounds retain their separate producer/player path. |
-| Q5 | Same music name is case-insensitive; it carries on while playing and restarts when stopped | Keep in the `music` applier; explicit `tkMD_RESTART` is the new override. |
+| Q5 | Same music name is case-insensitive; it carries on while playing and restarts when stopped | Keep the `music` same-file carry-on rule; explicitly restart by stopping the current voice before starting it again. |
 | Q6 | Missing music stops old music first, then gives silent no-error result | Keep: a null/missing board request stops and clears `music` without a runtime error. |
 | Q7 | Board entry compares against music loaded now; empty means silence; final blocks replay after failed/empty name | Follow 3.1.0 under the version rule: compare current track, empty means stop, and do not adopt the final-version replay restriction. |
 | Q8 | Battle stops board music; a fight without music has no fallback | Keep: battle hand-off uses `music` and no fallback track. |
@@ -925,10 +715,10 @@ format policy are owned by Epic 6.2/6.3; they must preserve these rows.
 | Q17 | 3.1.0 played all listed formats and looped music; final played only MIDI | Follow 3.1.0 for playback of MP3/OGG through import-time transcoding ([audio-import-policy](#audio-import-policy)); tracker files are a documented departure ([audio-tracker-policy](#audio-tracker-policy)). |
 | Q18 | Files are under Media; subfolders allowed; no extension added; case-insensitive; PAK does not unpack frame sounds or check videos | Keep path resolution and case folding. The PAK gaps are not reproduced: frame sounds and videos resolve through the same package index as every asset ([r-59-routing](#r-59-routing), [video-request](#video-request)). |
 | Q19 | `music` shows battle music and is non-empty after `mediaStop` | Keep: the virtual reads the canonical `music` file retained by stop. |
-| M1 | Music always loops in both versions and had no once argument | Keep `tkMD_LOOP` as the music default; `tkMD_ONCE` is a Reawakened addition. |
-| M2 | Replaying an already-playing track carries on | Keep as the same-file rule unless `tkMD_RESTART` is explicit. |
+| M1 | Music always loops in both versions and had no once argument | Keep `loop: true` as the music default. |
+| M2 | Replaying an already-playing track carries on | Keep the same-file rule; explicitly restart by stopping the voice and then starting it again. |
 | M3 | Board and battle music use the same repeat setting | Keep: both use looping `music`. |
-| M4 | `wav`, `mp3` and `mp3pause` never loop | Keep: all legacy SFX mappings force `tkMD_ONCE`. |
+| M4 | `wav`, `mp3` and `mp3pause` never loop | Keep: all legacy SFX mappings set `loop: false`. |
 
 <!-- OWNER: 6.2/P8 -->
 **Proposed ruling (pending owner review; parity/version rule).** Where the
@@ -951,14 +741,13 @@ compatibility change.
 <a id="platform-overview"></a>
 ### What a player and an author see
 
-An author can use a MIDI file or a WAV file directly. An MP3 or Ogg song is
-converted to WAV once, when the game is imported, and then plays like any other
-WAV. MIDI music needs a **SoundFont**, a file of instrument samples: the game
-ships one, an author can pick another for the whole game or for one scene with
-`soundFont("file.sf2")`, and a player can override both with a file of their
-own. Choosing a SoundFont never changes what the game does, only how the notes
-sound. A cutscene video stops the game and the music, plays to its end, cannot
-be skipped, and then the music starts again from its beginning.
+MIDI music needs a **SoundFont**, a file of instrument samples. A game may
+declare a default SoundFont in its TKR audio-settings block; the player can
+override that default in runner preferences. Choosing a SoundFont changes the
+instrument samples, not the game state or playback timing. An MP3 or Ogg song
+is converted to WAV at import and then plays like any other WAV. A cutscene
+video stops the game and the music, plays to its end, cannot be skipped, and
+then the music starts again from its beginning.
 
 Behind that, a runner (the browser app, the desktop app, the headless test
 runner, or one written in another language) follows one small, language-neutral
@@ -984,10 +773,10 @@ here and at its own anchor:
 
 | # | Amends | Change | Anchor |
 |---|---|---|---|
-| A1 | P1 state schema | `AudioStateV2` gains the top-level field `soundFont: AssetKey \| null`; it is in the save projection. | [soundfont-state](#soundfont-state) |
+| A1 | P1 state schema | Replaced by MEDIA-4: the optional `defaultSoundFont` is game configuration, never script audio state or playback-save data. | [MEDIA-4](#media-4), [soundfont-layers](#soundfont-layers) |
 | A2 | P4 cue vocabulary | `AudioCueKind` gains `soundfont.set`; `media.volume` with `track: null` is the script master volume. | [soundfont-cue](#soundfont-cue), [cue-player](#cue-player) |
-| A3 | P2 restore order | On load, `soundfont.set` is emitted before every media cue; at engine start it is the first cue. | [soundfont-commands](#soundfont-commands) |
-| A4 | 6.2 stable diagnostics | Adds `media.asset-format`, `media.soundfont-missing`, `media.soundfont-name`, `media.video-missing`, `media.video-busy`. | [audio-format-policy](#audio-format-policy), [soundfont-commands](#soundfont-commands), [video-request](#video-request) |
+| A3 | P2 restore order | The configured `defaultSoundFont` cue is emitted at engine start and before playback cues on game-load re-emission. | [soundfont-cue](#soundfont-cue), [audio-save-load](#audio-save-load) |
+| A4 | 6.2 stable diagnostics | Retains `media.asset-format`, `media.soundfont-missing`, `media.video-missing` and `media.video-busy`; there is no script-name diagnostic for a retired SoundFont command. | [audio-format-policy](#audio-format-policy), [MEDIA-4](#media-4), [video-request](#video-request) |
 | A5 | Parity ledger Q14 | The separate frame-sound player is not reproduced. | [r-59-routing](#r-59-routing) |
 | A6 | P7 late-sound threshold | The 15-tick lateness is measured when the voice is ready to start, not when the cue is received. | [audio-late-sounds](#audio-late-sounds) |
 | A7 | AD-14 `video.ended` | The input gains `reqId`. | [video-request](#video-request) |
@@ -1033,11 +822,10 @@ that a decoder returns a `FormatError` for, is played with an unknown length:
 the transition is applied and cued exactly as for a known file, with
 `lengthTicks: null` and `endTick: null`; the voice's position is the elapsed
 ticks since `startTick`, which never wrap or clamp; it ends only by stop or
-replacement; `tkMD_WAIT` and `mediaWait` follow the existing unknown-length
-rule (a diagnostic, the thread does not park). The command raises one located
-diagnostic `media.asset-format` at the file argument. The cue stream, the
-state and the hash are therefore the same on every runner whatever sources it
-has installed.
+replacement; `voice.wait()` and `mediaPlay(..., { wait: true })` follow the
+unknown-length rule: a located diagnostic, and the thread does not park.
+The cue stream, state and hash remain the same on every runner regardless of
+installed sources.
 
 *Unsupported file (runner).* A runner with no source for the bytes realises
 silence and reports `error { code: "format.unsupported" }`
@@ -1264,12 +1052,12 @@ Technically:
 4. *Amendment of ledger Q14 (A5).* The legacy frame-sound player was separate
    from `setVolume` and `wavStop`. Reawakened frame sounds share the `sfx`
    track, so `wavstop` / `mediaStop("sfx")` stops a playing frame sound, a frame
-   sound and a script `wav` replace each other on the one-voice track, and script
-   volume scales them. An author who needs both at once raises the voice count
-   with `mediaTrack("sfx", n)`; which voice each takes follows the lowest-free
-   rule of 6.2. Menu and battle-menu sounds go to `ui`, so they are no longer
-   stopped by `wavstop` (Q4 grouped them with the script slot). Frame-0
-   per-case timing stays unruled (Q14's missing breakdown).
+   sound and a script voice replace each other on the one-voice `sfx` track, and script
+   volume scales them. An author who needs both at once configures a larger
+   voice count in the game's audio-settings block (MEDIA-4); allocation remains
+   deterministic by the lowest-free rule.
+   Menu and battle-menu sounds go to `ui`, so `wavstop` does not stop them.
+   Frame-0 per-case timing stays unruled (Q14's missing breakdown).
 5. Missing runner audio is silence plus a diagnostic and never alters game
    state (6.1 R-59 text).
 
@@ -1357,9 +1145,8 @@ the other makes the sound. Neither touches the core's rules. Technically:
    are the same on every runner (AD-16).
 6. Banks are general: a source declares a bank kind and the layered choice of
    [soundfont-layers](#soundfont-layers) applies per kind; the only kind in epic 6
-   is `"soundfont"`. The script command keeps the name `soundFont`; a later
-   source with another bank kind adds its own command rather than overloading
-   this one.
+   is `"soundfont"`. A game's default bank comes from its audio-settings block;
+   a source needing another bank kind requires its own game-setting contract.
 7. **Conformance kit** (entry 6.15, as vectors): a source's length equals its
    decoder's `AudioInfo`; loop, stop, pause, resume and seek behave as the state
    machine says; bus and voice gain apply; an offline render is non-silent where
@@ -1379,25 +1166,20 @@ combined registration, which would force every pack to write both halves.
 
 <a id="soundfont-layers"></a>
 <!-- OWNER: 6.3/B1 -->
-**Proposed ruling (pending owner review; B1; the SoundFont layers).** In plain
-terms, three people can choose the instrument set: the player, the game, and the
-runner. The player wins, then the game (script first, then the author's default),
-then the runner, then the bundled default. Choosing a set never changes game
-state. Technically the **effective bank** is the first non-null of:
+**Ruling.** In plain terms, the player may choose their own MIDI instruments, or let each game supply its default. Technically the effective bank is the first non-null of:
 
 | Rank | Layer | Where it lives | Saved? |
 |---|---|---|---|
-| 1 | Player | the runner's preferences: "Game's choice" (null), a bundled bank, a CDN bank or a custom `.sf2` | never; not in `GameState` |
-| 2 | Script | `GameState.audio.soundFont` set by `soundFont()` ([soundfont-state](#soundfont-state)) | yes, in the save |
-| 3 | Author | a project-level default SoundFont `AssetKey`, read by the engine at start | with the game data |
-| 4 | Runner | `RunConfig.audio.bank` (`BankRef \| null`) | no |
-| 5 | Bundled default | the in-repo bank of [path-b-bank](#path-b-bank) / TK-16, lazy-loaded | no |
+| 1 | Player | Runner preferences: game choice, bundled, CDN or user bank | Never in `GameState` |
+| 2 | Author | `defaultSoundFont` in the TKR audio-settings block | With game configuration, not in a save |
+| 3 | Runner | `RunConfig.audio.bank` (`BankRef \| null`) | No |
+| 4 | Bundled default | The in-repo bank of [path-b-bank](#path-b-bank) / TK-16, lazy-loaded | No |
 
-The core contributes ranks 2 and 3 as one value, `soundFont ?? defaultSoundFont`,
-in the `soundfont.set` cue ([soundfont-cue](#soundfont-cue)); the cue player
-adds ranks 1, 4 and 5 and sends the result as the protocol's `setBank`. If every
-rank is null there is no bank: MIDI voices report `error { code: "bank.missing" }`
-and are silent; WAV is unaffected.
+The core supplies the game's `defaultSoundFont` in the `soundfont.set` cue
+([soundfont-cue](#soundfont-cue)); the cue player applies player precedence,
+then the runner and bundled layers, and sends the result as the protocol's
+`setBank`. If all layers are null there is no bank: MIDI voices report
+`error { code: "bank.missing" }` and are silent; WAV is unaffected.
 
 A bank is named by a `BankRef`:
 
@@ -1415,12 +1197,7 @@ has fixed keys `backend` (the `MidiSynth` id, `"null"` for headless), `bank`
 (`BankRef | null`), `focus` (`"pause" | "continue"`, [audio-focus](#audio-focus))
 and the player mix; entry 6.11 owns its TypeScript type.
 
-The project-level default (rank 3) enters the engine as the plain-data startup
-value `defaultSoundFont: AssetKey | null`; if the key does not resolve in the
-asset index, the engine raises `media.soundfont-missing` once at start and
-treats it as `null`. Where that value is stored in a game project (the legacy
-`.gam` has no field for it) belongs to the native project file and is an
-**owner deferral** ([audio-deferrals](#audio-deferrals)).
+The project-level default (rank 3) is the optional `defaultSoundFont` in the additive TKR audio-settings block ([MEDIA-4](#media-4)). It enters engine state as the plain-data `defaultSoundFont: AssetKey | null`; if the key does not resolve in the asset index, the engine raises `media.soundfont-missing` once at start and treats it as `null`. The TKR audio-settings block is game configuration, not save data.
 
 **Evidence.** Owner direction (epic envelope, 2026-10-18) names the runner,
 author and player layers and says a player override is never saved in game
@@ -1435,75 +1212,11 @@ sound.
 
 <a id="soundfont-state"></a>
 <a id="soundfont-commands"></a>
-<!-- OWNER: 6.3/B2 -->
-**Proposed ruling (pending owner review; B2; `soundFont`, `soundFontReset`,
-state and persistence).**
+<!-- OWNER: MEDIA-5; supersedes the script-selected SoundFont proposal in 6.3/B2. -->
+**Ruling (owner; approved).** The script-selected SoundFont commands are retired by [MEDIA-5](#media-5); scripts cannot replace or reset the game's bank. The optional `defaultSoundFont` in [MEDIA-4](#media-4) is the sole game-authored bank setting. It is plain game configuration, not `AudioStateV2`, playback-save data or a runner handle. `soundfont.set` remains a platform cue: the applier emits the configured default at engine start and before playback cues on game-load re-emission. A missing configured asset raises `media.soundfont-missing` once at start and the cue carries `null`; a runner bank load failure remains a runner diagnostic and does not change core state.
 
-| Command | Behavior |
-|---|---|
-| `void soundFont(string file)` | Names a `.sf2` or `.sf3` file in the game's Media folder as the script-chosen bank. The name resolves like every Media name (subfolders allowed, no extension added, case-insensitive; Q18). Immediate; never waits. |
-| `void soundFontReset()` | Clears the script-chosen bank, so the author's default applies again. Immediate; never waits. |
-
-**Help text (simple first).** `soundFont` changes the instrument set that MIDI
-music plays through, for example to give a boss fight its own sound. Give the
-name of a `.sf2` or `.sf3` file in your game's Media folder. Music that is
-already playing switches to the new instruments without restarting; WAV sounds
-are not affected. `soundFontReset` goes back to the game's own default set. For
-exact behavior: both commands act at the tick they run, never wait for the file
-to load, are kept when the game is saved and loaded, and a missing or wrongly
-named file raises a diagnostic and changes nothing.
-
-Technically:
-
-1. Each command posts one `audio` effect record `soundfont.set`, whose single
-   argument is the resolved `AssetKey` or `null`; the audio applier owns the
-   state. Effect order is post order, so `soundFont("boss.sf2")` followed by
-   `mediaPlay("boss.mid")` in one thread step emits the bank cue before the play
-   cue.
-2. *State.* `AudioStateV2.soundFont: AssetKey | null` (amendment A1). The
-   applier sets it to the key (`soundFont`) or `null` (`soundFontReset`), then
-   emits one `soundfont.set` cue whose `asset` is `soundFont ?? defaultSoundFont`.
-   The cue is emitted on every accepted command, even when the value is
-   unchanged; a runner treats an unchanged bank as a no-op.
-3. *Diagnostics.* A name that is not `.sf2` or `.sf3` (ASCII-folded) raises
-   `media.soundfont-name`; a name that does not resolve in the asset index
-   raises `media.soundfont-missing`. Both are located at the argument and make
-   no state or cue change (the 6.2 error rule). A bank that resolves but fails to
-   load is the runner's problem: it reports `bank.invalid` or `bank.unavailable`
-   and keeps its current bank; core state is unchanged.
-4. *Start, save and load (amendment A3).* The applier emits one `soundfont.set`
-   cue, with `asset = soundFont ?? defaultSoundFont`, when it registers at engine
-   start (before it drains pending effects) and again at the head of every load
-   re-emission, before any media cue. The bank is part of the save projection;
-   `reset()` leaves it untouched with the rest of the audio section.
-5. *Null and headless.* The cue is recorded in the cue stream and nothing is
-   loaded.
-6. Not ruled: a `getSoundFont` read-back. No author need was found; adding one
-   later changes no state.
-
-*Worked example.* The cue counter is at 7 and the author default is
-`media/town.sf2`. At tick 600 a thread runs `soundFont("boss.sf2")` then
-`mediaPlay("boss.mid")`; at tick 900 another runs `soundFontReset()`:
-
-| cueId | tick | kind | track | asset |
-|---:|---:|---|---|---|
-| 7 | 600 | `soundfont.set` | `null` | `media/boss.sf2` |
-| 8 | 600 | `media.play` | `music` | `media/boss.mid` |
-| 9 | 900 | `soundfont.set` | `null` | `media/town.sf2` |
-
-After tick 900 `soundFont` is `null` again; saving then loading re-emits one
-`soundfont.set` for `media/town.sf2` before any media cue.
-
-**Evidence.** Exploration §5 (owner direction: the two commands, restore after
-load, a bad bank is non-fatal and keeps the current one); AD-16's closed kind
-list (the amendment); 6.1 save/restore and reset rulings; 6.2's error rule; Q18
-(Media-folder name resolution).
-**Rejected alternative.** Treating the script bank as a setting (not saved) would
-lose the author's chosen sound after a load in a new session; letting the runner
-resolve the bank name loses deterministic diagnostics and a replayable state;
-deduplicating the cue needs a second field of "last emitted bank" state for no
-gain; failing the command when the bank cannot be decoded would make game
-behavior depend on the runner's file support.
+**Evidence.** The MEDIA-4 and MEDIA-5 owner decisions in `epic-media-objects.md`; MEDIA-4's additive game-file setting; the closed `soundfont.set` cue at [soundfont-cue](#soundfont-cue) and AD-16.
+**Rejected alternative.** Saving a script-selected bank would make a playback save override the game file loaded into it; leaving a second runner startup-only game default would make the authored setting ineffective.
 
 <a id="soundfont-cue"></a>
 <!-- OWNER: 6.3/B3 -->
@@ -1517,12 +1230,12 @@ keys as every cue:
   volume: null, targetVolume: null, durationTicks: null }
 ```
 
-`asset` is the effective core-side bank (`soundFont ?? defaultSoundFont`);
-`null` means "no game bank; use the runner and bundled layers". `tick` is the tick
-the effect was applied. The cue is added to the closed `AudioCueKind` union, so
-the runner-side exhaustive `switch` and the port fixture change with it. A
-runner realises it as in [cue-player](#cue-player); an unrealisable bank is a
-diagnostic and silence for MIDI voices only.
+`asset` is the configured `defaultSoundFont`; `null` means "no game bank; use
+the runner and bundled layers". `tick` is the tick the effect was applied.
+The cue is added to the closed `AudioCueKind` union, so the runner-side
+exhaustive `switch` and port fixture change with it.
+The cue is realized by the runner as described in [cue-player](#cue-player);
+an unrealisable bank is a runner diagnostic and silence for MIDI voices only.
 
 **Evidence.** AD-16; exploration §5 and §11; 6.1 P4's fixed-key rule.
 **Rejected alternative.** A cue per voice (a bank is global to a MIDI source); a
@@ -1718,8 +1431,8 @@ or a hash mismatch), `bank.unavailable` (not fetched, quota, too large),
 multiplies it after the script volumes, and the vectors run with it at unity.
 
 *Added message.* The owner direction listed nine messages. The 6.1 cue
-`media.flags` and 6.2's `mediaLoop` change looping in place, which none of the
-nine can express, so `setLoop` is added. **Rejected alternatives:** overloading
+`voice.loop` changes looping in place, which none of the original nine protocol
+messages can express, so `setLoop` is added. **Rejected alternatives:** overloading
 `seek` or `play` with a loop field (a `seek` would then do two things and a
 second `play` is illegal in `playing`).
 
@@ -1954,7 +1667,7 @@ platform's); exploration §6.13 (music pauses through the existing `focus`
 input) and the 6.1 P8 note (audio continues unless the runner decides
 otherwise).
 **Rejected alternative.** Always continue: with the core frozen, the device
-position drifts ahead of `mediaPosition` and of synced stems; always pause:
+position drifts ahead of `voice.position` and of synced stems; always pause:
 removes the choice a background-music player might want.
 
 <a id="audio-late-sounds"></a>
@@ -1985,7 +1698,7 @@ only fetches and decodes ahead. Technically the audio assets by tier are:
 
 | Tier | Audio assets |
 |---|---|
-| `now` | the current board's `bkgMusic`; the `.anm` frame sounds of the animations the board uses; the effective bank (`soundFont ?? defaultSoundFont`) when any MIDI is in this tier |
+| `now` | the current board's `bkgMusic`; the `.anm` frame sounds of the animations the board uses; the configured `defaultSoundFont` when any MIDI is in this tier |
 | `next` | the music of boards reachable by edge links and literal `send(...)` targets; the battle background's `music`, `selectSound`, `chooseSound`, `readySound`, `cantDoSound` |
 | `always` | the main file's `cursorMoveSound`, `cursorSelectSound`, `cursorCancelSound`; the default bank |
 
@@ -2235,10 +1948,10 @@ must do. Technically:
    at project import and package export, and write the name-preserving
    import report. Nothing in epic 6 builds them (**[UNCHECKED]** whether any
    epic schedules them).
-2. *Project default SoundFont* (rank 3 of the layers) is a project setting; its
-   storage in the native project file is the project-file entry's
-   ([audio-deferrals](#audio-deferrals)). The editor's project settings page
-   shows it and the licence warning below.
+2. *Game default SoundFont* (rank 3 of the layers) is the optional
+   `defaultSoundFont` in the additive TKR game-file audio settings
+   ([MEDIA-4](#media-4)). The editor's game audio settings show it and the
+   licence warning below.
 3. *Packaging.* Exporting a game that has a `game` bank bundles that bank in the
    package. The exporter reads the bank's `ICOP` and `ICMT` chunks and **warns**
    (does not block) when they are absent or name no licence of the class PB-4
@@ -2264,6 +1977,7 @@ not prove the shipped sound).
 ### Deferrals and the disposition index
 
 <a id="audio-deferrals"></a>
+The game-default SoundFont's storage decision is MEDIA-4: it is the optional `defaultSoundFont` in the additive TKR audio-settings block ([MEDIA-4](#media-4)), not a deferred native-project-file field.
 <!-- OWNER: 6.3/deferrals -->
 **Proposed ruling (pending owner review; deferrals).** These are deferred by
 name, each with an owner and the condition that reopens it. None changes a ruling
@@ -2273,15 +1987,15 @@ above.
 |---|---|---|
 | Ogg Vorbis or Opus as a recommended delivery format; authored loop points (Ogg `LOOPSTART`/`LOOPLENGTH` tags, MIDI controller 111 or markers); gapless-loop conventions beyond whole-file loops | the owner, as a nice-to-have (exploration §10; `nice-to-have.md`) | promoted to scope; loop points then add `AudioInfo`, state and cue fields in one change |
 | Tracker and chip formats (MOD/XM/S3M/IT through libopenmpt; SPC, NSF, GBS, SID, VGM) and their licence survey | the owner (exploration §10 "Settle first") | promoted; a pack registers through S1 and S2 |
-| Crossfade and `musicFade` commands | none needed: fade out `music`, play the next file on another track with `mediaFade`, using 6.2's fade rule | an author need that composition cannot meet |
+| Crossfade | none needed: fade a voice and play the next file on another track with `voice.fade` and `track.fade`, using MEDIA-1's fade rule | an author need that composition cannot meet |
 | Media metadata `mediaInfo(file, key)` | 6.2 / `nice-to-have.md` | promoted |
-| Storage of the project default SoundFont in the native project file | the project-file entry (ADR 0005; research flow `08-project-file-by-convention`) | that entry is incepted; until then the engine takes `defaultSoundFont` as a startup value |
+| Project-file storage of the game default SoundFont | MEDIA-4 in this spec | not used; `defaultSoundFont` is an optional TKR game-file audio setting |
 | Reword guard-rail G6 rule 3, ADR 0001 point 5, the spine's pinned-version table and `architecture-options.md` §7, which still name FluidR3_GM as the default SoundFont | the owner (a guard-rail change needs an ADR, `guardrails.md` "Changing a rule") | at this checkpoint's approval: write the ADR or accept the superseding text of [path-b-bank](#path-b-bank) |
 | The prefetch hint wire shape and the core prefetch planner | epic 9's inception (a core entry at the AD-5 seam) | epic 9 inception |
 | The audio and video import tools | the editor and asset epics (**[UNCHECKED]** that any entry schedules them) | editor epics' inception |
 | Frame-0 per-case sound timing (Q14) | the owner (a legacy fact still unanswered) | the fact is supplied |
 | Visual sound indicators | later accessibility work | an accessibility entry |
-| A `getSoundFont` read-back | none | an author need |
+| Script read-back of the game default SoundFont | none; MEDIA-5 retires script-level SoundFont control | a demonstrated author need |
 | Battle-music and volume-settings notes in epics 7 and 8 | entry 6.17 (downstream handoffs) | 6.17 |
 
 **Evidence.** Exploration §10 and §11; `nice-to-have.md`; the epic envelope's
@@ -2296,7 +2010,7 @@ are ruled earlier on this page and are unchanged.
 
 | Source | Decision | Ruled at |
 |---|---|---|
-| Exploration §5 | `soundFont`, `soundFontReset`, the `soundfont.set` cue, restore after load, non-fatal bad bank | [soundfont-commands](#soundfont-commands), [soundfont-cue](#soundfont-cue) |
+| Exploration §5 | configured game SoundFont, the `soundfont.set` cue, restore after load, non-fatal bad bank | [MEDIA-4](#media-4), [soundfont-cue](#soundfont-cue) |
 | §6.1 | shared WAV decoder, PCM, ADPCM, resampling | [audio-wav-midi-length](#audio-wav-midi-length), [audio-source-seam](#audio-source-seam) |
 | §6.2 | MP3/OGG | [audio-import-policy](#audio-import-policy) |
 | §6.3 | tracker modules | [audio-tracker-policy](#audio-tracker-policy) |
@@ -2307,11 +2021,11 @@ are ruled earlier on this page and are unchanged.
 | §6.8 | SFX channels, menu, battle and frame sound routing | 6.2 voices ([media-command-family](#media-command-family)); [r-59-routing](#r-59-routing) |
 | §6.9 | battle music hand-off | parity ledger Q8/Q9; [battle-music-synthetic](#battle-music-synthetic) |
 | §6.10 | two volume layers; SoundFont split | 6.1 settings split; [soundfont-layers](#soundfont-layers) |
-| §6.11 | crossfades, `musicFade`, authored loop points | [audio-deferrals](#audio-deferrals) |
+| §6.11 | crossfades and authored loop points | [audio-deferrals](#audio-deferrals); MEDIA-1 voice and track fades |
 | §6.12 | autoplay unlock | [audio-autoplay](#audio-autoplay) |
 | §6.13 | focus pause | [audio-focus](#audio-focus) |
 | §6.14 | preload and cache; SF3 and the CSP | [audio-prefetch](#audio-prefetch), [audio-soundfont-cache](#audio-soundfont-cache), [audio-browser-test](#audio-browser-test) |
-| §6.15 | project default SoundFont storage | [soundfont-layers](#soundfont-layers), [audio-deferrals](#audio-deferrals) |
+| §6.15 | game-file default SoundFont setting | [MEDIA-4](#media-4), [soundfont-layers](#soundfont-layers) |
 | §6.16 | packaging, bank licence warning, legacy MIDI pack | [audio-authoring-handoff](#audio-authoring-handoff) |
 | §6.17, §6.18 | editor preview; accessibility | [audio-authoring-handoff](#audio-authoring-handoff) |
 | §7 items 1–9 | load modes, prefetch plan, content-addressed cache, worker decode, late SFX, stall presentation, author feedback, SoundFont cache, storage limits | audio's share: [audio-prefetch](#audio-prefetch), [audio-late-sounds](#audio-late-sounds), [audio-soundfont-cache](#audio-soundfont-cache); the rest is epic 9's and the editor epics' ([audio-deferrals](#audio-deferrals)) |
@@ -2350,9 +2064,10 @@ following without introducing a second model:
   ordering, voice cap, fade maths or `audio.track` wake contract.
 * Entry **6.5** owns the `audio.wav` and `audio.midi` decoders against
   [audio-info-seam](#audio-info-seam) and [audio-wav-midi-length](#audio-wav-midi-length).
-* Entry **6.6** owns the `soundFont` applier, the `soundfont.set` cue and the
-  startup/load re-emission ([soundfont-commands](#soundfont-commands)); entry
-  **6.8** adds the two commands' catalogue and Audio-table rows.
+* Entry **6.6** owns applying the game's `defaultSoundFont` setting as the
+  `soundfont.set` cue and startup/load re-emission ([MEDIA-4](#media-4),
+  [soundfont-cue](#soundfont-cue)); entry **6.8** adds catalogue and Audio-table
+  rows only for any retained Toolkit 3.1 compatibility commands.
 * Entry **6.10** owns `playavi`/`playavismall` against [video-request](#video-request),
   [video-wait-hold](#video-wait-hold) and [video-music](#video-music); it also
   adds the `video.ended { reqId }` validator change.
