@@ -653,6 +653,18 @@ notifications. Runner `audio.ended` reports never create a notification.
 schedule and retirement-before-refresh processing, while separating observed
 core transitions from device reports and presentation reconstruction.
 
+**Emitter ownership.** Reuse EMIT-20's lazy registration seam: the first
+media-emitter access or declared native media listener activates the media
+event domain. A world that never uses media emitters keeps its previous
+unobserved state shape. Once active, queue all three scopes even if a scope
+currently has no listeners; a listener added before dispatch can still hear
+the queued event under EMIT-14. The owner keys are `media`,
+`media.track:<canonical name>`, and `media.voice:<track>:<slot>:<cueId>`.
+Voice identity includes its starting cue id, so displaced and replacement
+voices cannot share listeners. A terminal voice's registration retires only
+after its queued and in-flight notifications finish; track and media
+registrations last until reset. Snapshot restore retains these registrations.
+
 **Evidence.** Owner event-name decision in `epic-media-objects.md` Notes; event object/detail and queued dispatcher contract in `rpgcode-modules-and-objects.md#emit-1` (EMIT-2, EMIT-6, EMIT-10); fixed tick and application ordering in [audio-time-model](#audio-time-model).
 **Rejected alternative.** Emitting only at `media` loses the voice/track subscription scopes; emitting runner `ended` reports or using cue names as event types makes notifications depend on output-device timing or confuses state changes with requests.
 

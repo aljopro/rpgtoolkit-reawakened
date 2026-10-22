@@ -151,6 +151,7 @@ registerPlugin({
 | `beforeEnter` | board | yes (the step does not happen) | actor id, board key, entry detail | 20.9 |
 | `defeated` | actor (battle package) | no | `cause` (`damage`, `status`, `script`), `source` (actor id or null) | Epic 7 |
 | `itemAdded`, `itemRemoved`, `goldChanged` | party / inventory | no | ruled in Epic 8 | Epic 8 |
+| `started`, `stopped`, `ended`, `looped`, `paused`, `resumed`, `faded` | voice, then its track, then `media` | no | exactly `track`, `slot`, `cueId`, `file`, `tick`; [MEDIA-2](audio-media.md#media-2) defines transitions and ordering | 21.3 |
 
 <a id="emit-14"></a>
 ### How a queued emit is delivered (EMIT-14, EMIT-15) — entry 19.10
