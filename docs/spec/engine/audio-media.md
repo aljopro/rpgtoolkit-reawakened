@@ -665,6 +665,14 @@ voices cannot share listeners. A terminal voice's registration retires only
 after its queued and in-flight notifications finish; track and media
 registrations last until reset. Snapshot restore retains these registrations.
 
+Loop observation cursors are event state, not session-only memory: when the
+media event domain is active, `events.audioPasses` records the last observed
+natural pass by starting cue id. It is absent until needed and removed when
+empty, survives snapshots (including a snapshot taken within the boundary
+tick), and is discarded/rebased without notifications on game-load playback
+reconstruction. This avoids losing or duplicating wraps when a runtime is
+recreated; it adds no audio playback fields or runner state.
+
 **Evidence.** Owner event-name decision in `epic-media-objects.md` Notes; event object/detail and queued dispatcher contract in `rpgcode-modules-and-objects.md#emit-1` (EMIT-2, EMIT-6, EMIT-10); fixed tick and application ordering in [audio-time-model](#audio-time-model).
 **Rejected alternative.** Emitting only at `media` loses the voice/track subscription scopes; emitting runner `ended` reports or using cue names as event types makes notifications depend on output-device timing or confuses state changes with requests.
 
