@@ -3,7 +3,7 @@ title: "Behaviour registration and override precedence"
 type: 'feature'
 ticket: 7
 created: '2026-10-19'
-status: 'built'
+status: done
 baseline_revision: 'ce05dd4d34d9c0f0fa998cb7d8614ab89d17a47a'
 route: 'full'
 route_source: 'pinned'
