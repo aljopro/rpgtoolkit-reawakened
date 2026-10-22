@@ -1197,7 +1197,7 @@ has fixed keys `backend` (the `MidiSynth` id, `"null"` for headless), `bank`
 (`BankRef | null`), `focus` (`"pause" | "continue"`, [audio-focus](#audio-focus))
 and the player mix; entry 6.11 owns its TypeScript type.
 
-The project-level default (rank 3) is the optional `defaultSoundFont` in the additive TKR audio-settings block ([MEDIA-4](#media-4)). It enters engine state as the plain-data `defaultSoundFont: AssetKey | null`; if the key does not resolve in the asset index, the engine raises `media.soundfont-missing` once at start and treats it as `null`. The TKR audio-settings block is game configuration, not save data.
+The project-level default (rank 2) is the optional `defaultSoundFont` in the additive TKR audio-settings block ([MEDIA-4](#media-4)). It enters engine state as the plain-data `defaultSoundFont: AssetKey | null`; if the key does not resolve in the asset index, the engine raises `media.soundfont-missing` once at start and treats it as `null`. The TKR audio-settings block is game configuration, not save data.
 
 **Evidence.** Owner direction (epic envelope, 2026-10-18) names the runner,
 author and player layers and says a player override is never saved in game
@@ -1948,7 +1948,7 @@ must do. Technically:
    at project import and package export, and write the name-preserving
    import report. Nothing in epic 6 builds them (**[UNCHECKED]** whether any
    epic schedules them).
-2. *Game default SoundFont* (rank 3 of the layers) is the optional
+2. *Game default SoundFont* (rank 2 of the layers) is the optional
    `defaultSoundFont` in the additive TKR game-file audio settings
    ([MEDIA-4](#media-4)). The editor's game audio settings show it and the
    licence warning below.

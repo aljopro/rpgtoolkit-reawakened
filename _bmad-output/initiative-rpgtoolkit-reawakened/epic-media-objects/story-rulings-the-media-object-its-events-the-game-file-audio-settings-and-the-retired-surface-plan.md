@@ -84,3 +84,4 @@ context:
 ## Review Triage Log
 
 - **medium — patch (resolved):** Review found that MEDIA-4's built-in default-count wording conflicted with Q14's requirement to enlarge `sfx` for overlapping frame and script sounds. MEDIA-4 now states that defaults apply unless overridden, while built-in order and uniqueness remain fixed.
+- **medium — patch (resolved):** The SoundFont layer table ranks the game's authored default 2nd (above the runner bank at 3rd), while two following descriptions incorrectly called it rank 3. Corrected the prose to rank 2 in `soundfont-layers` and the authoring handoff.
