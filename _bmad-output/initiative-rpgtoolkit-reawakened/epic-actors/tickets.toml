@@ -160,8 +160,8 @@ id = 9
 tracker_id = "#474"
 type = "story"
 title = "Actor and board events: fallen, status, leveledUp, enter and leave"
-description = "Registers each board through 19.12's seam and emits the core actor transitions `fallen`, `revived`, `statusChanged` and `leveledUp`, plus board `beforeEnter`, `entered` and `left`; it implements the engine-side, budgeted `beforeEnter` send from the edges phase under EMIT-11 and drops board listeners on `unregisterEmitter` at unload. Package bridges are separate follow-ups in 20.15 (#563) and 20.16 (#564), while battle-thread `beforeDamage` is 7.14 (#565)."
-verify = "An actor at HP 0 emits `fallen` and stays in the party, raising HP emits `revived`, and status/level transitions carry the ruled scalar details; a listener on one actor sees only that actor; engine-originated `beforeEnter` runs within the edge phase, can cancel the step without waiting for input, and `entered`/`left` fire once; board unload unregisters the emitter and drops its listeners. Stock package game re-emission, `talked`, and battle damage mutation are verified by 20.15 (#563), 20.16 (#564), and 7.14 (#565), not this story."
+description = "Registers each board through 19.12's seam and emits the core actor transitions `fallen`, `revived`, `statusChanged` and `leveledUp`, plus board `beforeEnter`, `entered` and `left`; it implements the engine-side, budgeted `beforeEnter` send from the edges phase under EMIT-11 and drops board listeners on `unregisterEmitter` at unload. The stock package game bridge is follow-up 20.15 (#563), dialogue completion is bridged in Epic 8.12 (#564), and battle-thread `beforeDamage` is 7.14 (#565)."
+verify = "An actor at HP 0 emits `fallen` and stays in the party, raising HP emits `revived`, and status/level transitions carry the ruled scalar details; a listener on one actor sees only that actor; engine-originated `beforeEnter` runs within the edge phase, can cancel the step without waiting for input, and `entered`/`left` fire once; board unload unregisters the emitter and drops its listeners. Stock package game re-emission, the Epic 8 `talked` bridge, and battle damage mutation are verified by #563, #564, and 7.14 (#565), not this story."
 covers = ["CAP-5", "CAP-9"]
 after = [4, 6, "19.11", "19.12", "5.9", 1]
 hitl = false
@@ -246,7 +246,7 @@ tracker_id = "#479"
 type = "story"
 title = "Refactor sweep"
 description = "Reconciles the shared core seams touched by the actor stories (actors barrel, section list, built-in registrations, catalogue and command docs), removes the old parallel actor representation made obsolete, and records the core refactor without claiming the package-owned follow-ups."
-verify = "One core actor representation remains; barrels, core registrations and docs describe the final core/board shape; the core portions of the Done when are checked item by item with evidence in the PR, while package-owned event bridges remain in 20.15 and 20.16."
+verify = "One core actor representation remains; barrels, core registrations and docs describe the final core/board shape; the core portions of the Done when are checked item by item with evidence in the PR, while the package-owned game bridge remains 20.15 and dialogue `talked` is owned by Epic 8.12."
 covers = ["CAP-3", "CAP-9", "CAP-10", "CAP-11"]
 after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 hitl = false
@@ -269,24 +269,6 @@ risk = "high"
 references = [
   "spec - docs/spec/engine/actors.md (fallen transition and stock package bridge)",
   "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-8, EMIT-13)",
-  "handoff - Epic 20 story 20.9 / issue #474",
-  "prerequisite - Epic 19 story 19.17 / issue #562",
-]
-
-[[entry]]
-id = 16
-tracker_id = "#564"
-type = "story"
-title = "Stock RPG dialogue event bridge: talked"
-description = "Loads the `stock_rpg` dialogue bridge through 19.17 and emits one actor-scoped `talked` event after a completed interaction, carrying actorId, targetId (or null) and exact displayed text as plain scalar data; interrupted interactions emit none."
-verify = "A package startup fixture loads through 19.17, completed dialogue emits one queued actor `talked` event, interrupted dialogue emits none, listeners remain isolated between actors, and save/reset/restore preserve deterministic delivery."
-covers = ["CAP-5", "CAP-9"]
-after = [9, "19.17"]
-hitl = false
-risk = "high"
-references = [
-  "spec - docs/spec/engine/actors.md (standard talked event)",
-  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-13)",
   "handoff - Epic 20 story 20.9 / issue #474",
   "prerequisite - Epic 19 story 19.17 / issue #562",
 ]
