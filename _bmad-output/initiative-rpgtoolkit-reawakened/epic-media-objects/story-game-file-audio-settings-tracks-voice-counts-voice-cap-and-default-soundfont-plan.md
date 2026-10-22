@@ -86,7 +86,11 @@ context:
 
 The block is a sibling tagged block, not a new field inside `TKRPLUG`: the package parser owns `TKRPLUG` and its trailing residue, so the reader tries package first, then audio, then keeps residue. The marker is the literal seven bytes `TRKAUD\0` (six ASCII letters plus NUL), per the owner's correction. The audio module receives the decoded settings after the format layer has validated structure; the only semantic check left is the cap total, deliberately non-fatal per #481. On overflow the whole track configuration falls back to the Epic 6 default tracks and cap 32 so the game still boots, the first track whose cumulative count crosses the cap locates the single `media.voice-cap` diagnostic, and the block's independent `defaultSoundFont` is still applied. This recovery is owner-approved (2026-10-22).
 
-Package-declared tracks remain required. The inspection covers the 19.9/19.16 tickets and plans plus `script/manifest.ts`, `script/plugin.ts` and the package start-up surface; if no declaration source exists, only that clause is reported blocked, with the searched surfaces named, and every other criterion is completed. No manifest/descriptor field and no duplicate/overflow precedence are invented.
+## Blocked Clause (owner-required, no upstream source)
+
+**Package-declared tracks: BLOCKED pending an upstream source and precedence ruling.** Recon found no track-declaration field or merge rule in PKG-1..8, `PackageDeclaration`, `PluginDefinition`, the distribution manifest, the boot patch or MEDIA-4; the package list names packages only, and there is no merge order, collision rule, cap participation, validation or save rule for package tracks. The only package-side track declaration that exists today is a package start-up script calling the retained `mediaTrack` command, which already goes through `configureTrack`; that path will use the same validation and configured cap. No manifest/descriptor field or precedence is invented. The rest of #481 is completed independently.
+
+Package surfaces inspected for the record: `docs/spec/engine/rpgcode-package-loader.md`, `docs/spec/engine/main-loop-and-startup.md`, `docs/spec/engine/audio-media.md#media-4`, `script/manifest.ts`, `script/plugin.ts`, `script/packs/media.ts`, `script/package-startup.ts`, and Epic 19.9/19.16 tickets and plans.
 
 ## Plan Change Log
 
