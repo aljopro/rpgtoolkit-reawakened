@@ -26,6 +26,8 @@ import { resolveManifestPlugins } from "../src/engine/boot.ts";
 import type { AssetIndex, AssetRoot, Engine, EffectRecord, EngineInit, GameState, InputRecord, PackageCatalogueEntry, PlainData, TickReport } from "../src/index.ts";
 import type { MainFileAudioSettings } from "../src/formats/main-file/model.ts";
 import type { AudioCue } from "../src/ports/audio.ts";
+import { BUILTIN_TRACKS } from "../src/audio/model.ts";
+import { createAudioRuntime } from "../src/audio/runtime.ts";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(testDir, "..", "..", "..");
@@ -837,14 +839,17 @@ const AUTHORED_AUDIO: MainFileAudioSettings = {
   defaultSoundFont: "Media/town.sf2",
 };
 
-function audioBoot(game: AuthoredGame): { engine: Engine; state(): GameState } {
+type AudioPhaseRun = NonNullable<EngineInit["phaseRegistrations"]>[number]["run"];
+type ResetRun = NonNullable<EngineInit["resetRegistrations"]>[number]["reset"];
+function audioBoot(game: AuthoredGame, onAudioPhase?: AudioPhaseRun, onReset?: ResetRun, replacementIndex: AssetIndex = game.index): { engine: Engine; state(): GameState } {
   let latest: GameState | null = null;
   const engine = createEngine({
-    seed: 11, assetIndex: game.index, assetRoot: game.root, mainFile: game.main, maxTicks: 10,
+    seed: 11, assetIndex: replacementIndex, assetRoot: game.root, mainFile: game.main, maxTicks: 10,
     width: 320, height: 240,
     startup: { presence: { hasPlayer: () => true }, savedGame: { load: () => ({ kind: "missing" }), restored: () => false } },
     defaultSoundFont: assetKey("media/ignored.sf2"),
-    phaseRegistrations: [{ phase: "audio", run: (state) => { latest = state; } }],
+    phaseRegistrations: [{ phase: "audio", run: (state, postEffect) => { latest = state; onAudioPhase?.(state, postEffect); } }],
+    ...(onReset === undefined ? {} : { resetRegistrations: [{ section: "audio", reset: onReset }] }),
   });
   return { engine, state: () => {
     if (latest === null) throw new Error("boot did not tick");
@@ -860,6 +865,59 @@ test("boot applies authored tracks and SoundFont before emitting exactly one ini
   deepEqual(host.state().audio.tracks.map((track) => [track.name, track.voiceCount]), AUTHORED_AUDIO.tracks.map((track) => [track.name.toLowerCase(), track.voiceCount]));
   deepEqual(result.cues.filter((cue) => cue.kind === "soundfont.set").map((cue) => cue.asset), [assetKey("media/town.sf2")]);
 });
+
+test("reset preserves authored audio settings, active playback and runtime-added tracks", () => {
+  const game = authorGame({ boards: { "start.brd": { music: "theme.mid" } }, programs: {}, audioSettings: AUTHORED_AUDIO });
+  game.files.set(assetKey("media/theme.mid"), readFileSync(join(testDir, "fixtures", "audio", "files", "midi0-480-default-tempo.mid")));
+  let resetRequested = false;
+  let resets = 0;
+  let playbackCueId = 0;
+  const host = audioBoot(game, (state, postEffect) => {
+    if (resetRequested) return;
+    const voice = state.audio.tracks[0]?.voices[0];
+    if (voice === undefined) return;
+    playbackCueId = voice.cueId;
+    const runtime = createAudioRuntime(state, { lookup: () => ({ kind: "known", lengthTicks: 120 }) });
+    equal(runtime.configurePackageTrack("runtime", 2), null);
+    state.audio.settings.masterVolume = 40;
+    state.audio.soundFont = assetKey("media/other.sf2");
+    resetRequested = true;
+    postEffect?.("engine", { thread: 0, name: "reset", kind: "state-write", args: [], out: {}, result: null, patch: null, wait: null, request: null });
+  }, () => { resets += 1; });
+  run(host.engine, game.files, 5);
+  equal(resets, 1);
+  const audio = host.state().audio;
+  deepEqual(audio.tracks.map(({ name, voiceCount }) => [name, voiceCount]), [
+    ["music", 2], ["sfx", 2], ["ambience", 2], ["voice", 2], ["ui", 2], ["weather", 3], ["runtime", 2],
+  ]);
+  equal(audio.tracks[0]?.state, "playing");
+  equal(audio.tracks[0]?.voices[0]?.cueId, playbackCueId);
+  equal(audio.tracks[0]?.voices[0]?.file, assetKey("media/theme.mid"));
+  equal(audio.settings.masterVolume, 40);
+  equal(audio.soundFont, assetKey("media/other.sf2"));
+});
+
+test("replacing the main file without audio settings restores built-in tracks", () => {
+  const game = authorGame({ boards: { "start.brd": {} }, programs: {}, audioSettings: AUTHORED_AUDIO });
+  const files = new Map(game.files);
+  files.set(assetKey("replacement.gam"), unwrap(writeMainFile({ ...createEmptyMainFile(), major: 2, minor: 9, projectPath: "", initBoard: "start.brd" })));
+  const switchedIndex = createAssetIndex([...files.keys()]);
+  let replacementRequested = false;
+  let resets = 0;
+  const host = audioBoot(game, (state, postEffect) => {
+    if (replacementRequested) return;
+    if (!state.audio.tracks.some(({ name }) => name === "weather")) return;
+    const runtime = createAudioRuntime(state, { lookup: () => ({ kind: "known", lengthTicks: 120 }) });
+    equal(runtime.configurePackageTrack("runtime", 2), null);
+    replacementRequested = true;
+    postEffect?.("engine", { thread: 0, name: "mainFile", kind: "state-write", args: [null, "replacement.gam"], out: {}, result: null, patch: null, wait: null, request: null });
+  }, () => { resets += 1; }, switchedIndex);
+  run(host.engine, files, 5);
+  equal(replacementRequested, true);
+  equal(resets, 1);
+  deepEqual(host.state().audio.tracks.map(({ name, voiceCount }) => [name, voiceCount]), BUILTIN_TRACKS);
+});
+
 
 test("boot without an audio block uses Epic 6 defaults and ignores the startup-only bank", () => {
   const game = authorGame({ boards: { "start.brd": {} }, programs: {} });

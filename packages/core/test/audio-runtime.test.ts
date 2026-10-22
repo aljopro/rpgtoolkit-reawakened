@@ -387,17 +387,19 @@ test("a game load drops a finished one-shot, restarts music from zero and keeps 
 
 test("game-file audio configuration sets the live voice cap and overflow leaves the default budget", () => {
   const configured = rig();
-  const tracks = configured.state.audio.tracks.map((track) => ({ name: track.name, voiceCount: 1 }));
-  deepEqual(configured.runtime.applyGameAudio({ tracks, voiceCap: 6 }), { ok: true });
+  const configuredTracks = configured.state.audio.tracks.map((track) => ({ name: track.name, voiceCount: 1 }));
+  deepEqual(configured.runtime.applyGameAudio({ tracks: configuredTracks, voiceCap: 6 }), { ok: true });
   equal(configured.runtime.configureTrack("weather", 1), true);
   equal(configured.runtime.configureTrack("extra", 1), false);
   equal(configured.runtime.configureTrack("music", 2), false);
   deepEqual(codes(configured.notes), ["media.voice-cap", "media.voice-cap"]);
 
   const overflow = rig();
-  const before = JSON.stringify(overflow.state.audio.tracks);
+  const tracks = [...overflow.state.audio.tracks.map((track) => ({ name: track.name, voiceCount: 1 })), { name: "previous-game-track", voiceCount: 6 }];
+  deepEqual(overflow.runtime.applyGameAudio({ tracks: tracks.slice(0, -1), voiceCap: 6 }), { ok: true });
+  overflow.runtime.configureTrack("previous-game-track", 3);
   deepEqual(overflow.runtime.applyGameAudio({ tracks, voiceCap: 4 }), { ok: false, overflowIndex: 4 });
-  equal(JSON.stringify(overflow.state.audio.tracks), before);
+  deepEqual(overflow.state.audio.tracks.map(({ name, voiceCount }) => [name, voiceCount]), [["music", 1], ["sfx", 1], ["ambience", 4], ["voice", 2], ["ui", 4]]);
   equal(overflow.runtime.configureTrack("extra", 20), true, "fallback keeps the default 32-voice cap");
 });
 

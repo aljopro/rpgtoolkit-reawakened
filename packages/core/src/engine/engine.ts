@@ -27,6 +27,7 @@ import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
 import { createAudioRuntime } from "../audio/runtime.ts";
 import type { AudioInfo } from "../formats/audio/model.ts";
 import type { AssetDecoder } from "../formats/registry/decoder.ts";
+import { BUILTIN_TRACKS, MAX_VOICES } from "../audio/model.ts";
 import type { Logger } from "../ports/logger.ts";
 import { composeBoard, type BoardBlit, type SpriteDraw } from "../render/compose.ts";
 import { composeUi, composeUiCursor } from "../render/ui.ts";
@@ -196,6 +197,10 @@ type Arrival = { readonly x: number; readonly y: number; readonly layer: number;
 const DEFAULT_ENGINE_PLUGINS: readonly ResolvedPlugin[] = resolveManifestPlugins(ENGINE_DEFAULT_MANIFEST).plugins;
 
 /** Create the deterministic fixed-tick engine; host assets arrive only as AD-14 replies. */
+const DEFAULT_GAME_AUDIO_SETTINGS = {
+  tracks: BUILTIN_TRACKS.map(([name, voiceCount]) => ({ name, voiceCount })),
+  voiceCap: MAX_VOICES,
+};
 export function createEngine(init: EngineInit): Engine {
   const index = init.assetIndex;
   const state: GameState = createGameState({ seed: init.seed });
@@ -254,6 +259,7 @@ export function createEngine(init: EngineInit): Engine {
   // Scene mode has no game file, so a host may supply the author default directly. Boot mode
   // takes it from the main file's audio-settings block and ignores this start-up value.
   let defaultSoundFont = init.mainFile === undefined ? init.defaultSoundFont ?? null : null;
+  let mainFileAudioNeedsApply = init.mainFile !== undefined;
   if (defaultSoundFont !== null && !index.byKey.has(defaultSoundFont)) {
     diagnostics.push({ code: "media.soundfont-missing", file: defaultSoundFont, line: 0, message: `default SoundFont "${defaultSoundFont}" is not in the asset index` });
     defaultSoundFont = null;
@@ -766,8 +772,7 @@ export function createEngine(init: EngineInit): Engine {
         diagnostics.push({ code: "asset.invalid", file: nextMain, line: 0, message: `main file "${nextMain}" is not in the asset index` });
       } else {
         mainKey = found;
-        mainFile = null;
-        root = init.assetRoot;
+        mainFileAudioNeedsApply = true;
         state.engine.boot = { stage: "main", main: found, fonts: [] };
       }
     }
@@ -1047,6 +1052,7 @@ export function createEngine(init: EngineInit): Engine {
     const settings = main.audioSettings;
     if (settings === null) {
       audio.setDefaultSoundFont(null);
+      audio.applyGameAudio(DEFAULT_GAME_AUDIO_SETTINGS);
     } else {
       let font: AssetKey | null = null;
       if (settings.defaultSoundFont !== null) {
@@ -1116,7 +1122,12 @@ export function createEngine(init: EngineInit): Engine {
       diagnostics.push(...manifest.diagnostics, ...resolvedPlugins.diagnostics);
       loader = { index, root, read: (key) => cache.get(key) };
       activePlugins = init.plugins ?? resolvedPlugins.plugins;
-      applyMainFileAudio(mainFile, activePlugins);
+      if (mainFileAudioNeedsApply) {
+        applyMainFileAudio(mainFile, activePlugins);
+        mainFileAudioNeedsApply = false;
+      } else {
+        registerAudio();
+      }
       if (!startupServicesReady) services = makeServices(activePlugins, loader, true);
       if (failed) return false;
       if (mainFile.initChar !== "") {

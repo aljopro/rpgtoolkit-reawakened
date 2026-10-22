@@ -23,6 +23,7 @@ import type { AssetKey } from "../ports/keys.ts";
 import type { EffectRecord } from "../script/effects.ts";
 import type { GameState } from "../save/state.ts";
 import {
+  BUILTIN_TRACKS,
   MAX_TRACKS,
   MAX_VOICES,
   MEDIA_LOOP,
@@ -542,8 +543,15 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         : problem === "track-limit"
           ? "media.track-limit"
           : "media.voice-cap";
-    const detail = problem === "invalid-name" || problem === "track-limit" ? { name } : { name, voices };
-    diag(code, "mediaTrack", detail);
+    if (problem === "invalid-name" || problem === "track-limit") {
+      diag(code, "mediaTrack", { name });
+      return;
+    }
+    diag(code, "mediaTrack", { name, voices });
+  }
+  function resetGameAudio(): void {
+    voiceCap = MAX_VOICES;
+    host.audio.tracks = BUILTIN_TRACKS.map(([name, voiceCount]) => createTrack(name, voiceCount));
   }
 
   const runtimeApi: AudioRuntime = {
@@ -556,7 +564,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       for (let index = 0; index < settings.tracks.length; index += 1) {
         sum += settings.tracks[index]!.voiceCount;
         if (sum > settings.voiceCap) {
-          voiceCap = MAX_VOICES;
+          resetGameAudio();
           return { ok: false, overflowIndex: index };
         }
       }
