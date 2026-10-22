@@ -19,9 +19,20 @@ A resolved package and its startup source travel together in the existing ordere
 ## Startup and diagnostics
 
 After required main-file, font, and project-program assets are ready, the engine resolves the manifest and creates script services over the resolved plugins. It runs each package startup in manifest order, before the main file's startup program, using the existing deterministic `runPackageStartup` lifecycle. Startup may register package commands, listeners, or behaviors through the existing services. A package startup that waits or exceeds the existing bounded startup slices reports `package.startup-unfinished` as a located boot diagnostic and stops that boot; it is not treated as a successful registration.
+
 Startup has a stricter lifecycle boundary than ordinary package code: it MUST NOT consume the seeded RNG (`random`), read the simulation clock (`gettickcount` or legacy `gettime`), or produce a host request (`request`, including file/blob, save, media, and other host I/O). Each violation reports `package.startup-forbidden` with the package name and operation as a located boot diagnostic and aborts that package-startup pass without retaining partial registrations. This does not change PKG-6's informational declared-request rule for code after startup; it is the deterministic startup contract.
 
 A listed package that is absent from the catalogue installs neither its plugin definition nor its startup program. The engine reports one `plugin.unresolved` diagnostic at the main file and the listed package's zero-based list position, then continues compatibility boot with the remaining resolved plugins and main startup. A game with no TKR package names and no legacy plugin rows has no package diagnostics and retains native/default behavior; a game whose legacy rows map to stock packages still needs those packages in the catalogue, and an unmapped legacy name reports `plugin.legacy-unmapped`.
+
+## Package audio-track declarations
+
+A resolved package definition may declare an ordered `audioTracks` list. Each entry contains a track `name` and an optional positive integer `voiceCount`; omitting `voiceCount` means 1. This is track configuration only: declarations do not name files, provide media bytes, or add an asset root. RPGCode continues to select media through its existing commands.
+
+After the main file's audio settings have been applied, the engine visits selected package definitions in `.gam` package-list order, then each declaration in its stored order. A new name appends after the configured game-file tracks. Names compare using ASCII case-folding; a duplicate keeps its existing position and uses the larger voice count. A declaration with an invalid name/count or whose individual contribution would exceed the effective voice cap or the 16-track limit is rejected without undoing the game-file settings or any earlier accepted declaration. The engine reports a located `media.package-track` diagnostic for each rejected declaration and continues with later declarations.
+
+The effective cap is the authored game-file cap when its aggregate fits; otherwise boot applies the Epic 6 default tracks and cap 32, retaining the independent authored default SoundFont, and reports the single game-file overflow diagnostic at the first crossing track. Package declarations are then merged against that effective configuration.
+
+This metadata is consumed at audio configuration time, not by the package manifest, startup program, or asset resolver.
 
 ## Reset and restore
 

@@ -157,6 +157,8 @@ export type PluginDefinition = {
   readonly id: string;
   readonly version: string;
   readonly commands: readonly BuiltinSpec[];
+  /** Ordered package track configuration applied during game boot (MEDIA-4); files remain RPGCode-selected. */
+  readonly audioTracks?: readonly { readonly name: string; readonly voiceCount?: number }[];
   /** Optional plain-data package documentation, excluded from VM state. */
   readonly doc?: PluginDoc;
   /** Optional format contributions layered after the core decoder set (AD-31). */

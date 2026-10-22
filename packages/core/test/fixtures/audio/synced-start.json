@@ -6,7 +6,7 @@
   "units": "ticks (1/60 s); volumes are integer percentages; seconds in scripts are whole milliseconds",
   "row": "t tick; cfg [track, configured voices] (first tick and on change); tr [track, state, flags, file, positionTicks, lengthTicks, voices] for each track with a file or a voice; voice [index, state, cueId, priority, volume, startTick, positionTicks, endTick, loop, fade [from, to, start, duration] or null]; bus [track, volume, fade]; master; sf (script bank); cues (the 12-key AudioCue records emitted this tick); ev (facts: wait, wake, finished, steal, same-file, diag, legacy, video ...)",
   "spec": [
-    "docs/spec/engine/audio-media.md#audio-layer-rulings",
+    "docs/spec/engine/audio-media.md#audio-state",
     "docs/spec/engine/audio-media.md#audio-time-model",
     "docs/spec/engine/audio-media.md#media-command-family"
   ],

@@ -67,7 +67,10 @@ test("mediaTrack validates names, counts, the 16-track limit and the 32-voice ca
   const live = rig({ "a.wav": 10, "b.wav": 10 });
   live.runtime.play({ track: "voice", asset: key("a.wav"), loop: false });
   live.runtime.play({ track: "voice", asset: key("b.wav"), loop: false });
-  equal(live.runtime.configureTrack("voice", 1), false);
+  equal(live.runtime.configureTrack("VOICE", 1), false);
+  const diagnostic = live.notes.at(-1);
+  equal(diagnostic?.kind, "diag");
+  if (diagnostic?.kind === "diag") deepEqual(diagnostic.detail, { name: "voice", voices: 1 });
   equal(live.state.audio.tracks.find((track) => track.name === "voice")?.voiceCount, 2);
 });
 
@@ -342,7 +345,7 @@ test("a game load of a paused voice restores it paused, shifts its clocks by the
   runtime.phase();
   const saved = audioSaveProjection(state.audio, 10);
   equal(JSON.stringify(saved).includes("settings"), false, "a game save never carries the script volume settings");
-  deepEqual(Object.keys(saved), ["tick", "cueId", "soundFont", "tracks"]);
+  deepEqual(Object.keys(saved), ["tick", "cueId", "tracks"]);
   runtime.drain();
   state.time.tick = 25;
   runtime.load(saved);
@@ -361,7 +364,7 @@ test("a game load of a paused voice restores it paused, shifts its clocks by the
   deepEqual([sfx.startTick, sfx.endTick, sfx.positionTicks], [18, 58, 13], "started at 3 and saved at 10 (position 7), loaded at 25 (start 18), read at 31 (position 13)");
 });
 
-test("a game load drops a finished one-shot, restarts music from zero and recreates a saved author track", () => {
+test("a game load drops a finished one-shot, restarts music from zero and keeps configured author tracks", () => {
   const { state, runtime } = rig({ "song.mid": 50, "short.wav": 5, "x.wav": 9 });
   runtime.configureTrack("extra", 3);
   state.time.tick = 1;
@@ -371,6 +374,7 @@ test("a game load drops a finished one-shot, restarts music from zero and recrea
   runtime.phase();
   const saved = audioSaveProjection(state.audio, 6);
   const fresh = rig({ "song.mid": 50, "short.wav": 5, "x.wav": 9 });
+  fresh.runtime.configureTrack("extra", 3);
   fresh.state.time.tick = 40;
   fresh.runtime.load(saved);
   deepEqual(fresh.state.audio.tracks.map((track) => [track.name, track.voiceCount]), [["music", 1], ["sfx", 1], ["ambience", 4], ["voice", 2], ["ui", 4], ["extra", 3]]);
@@ -379,4 +383,50 @@ test("a game load drops a finished one-shot, restarts music from zero and recrea
   const extra = fresh.state.audio.tracks[5]!.voices[0]!;
   deepEqual([extra.startTick, extra.positionTicks, extra.endTick], [35, 5, 44]);
   ok(fresh.state.audio.cueId >= saved.cueId, "the counter never goes back");
+});
+
+test("game-file audio configuration sets the live voice cap and overflow leaves the default budget", () => {
+  const configured = rig();
+  const configuredTracks = configured.state.audio.tracks.map((track) => ({ name: track.name, voiceCount: 1 }));
+  deepEqual(configured.runtime.applyGameAudio({ tracks: configuredTracks, voiceCap: 6 }), { ok: true });
+  equal(configured.runtime.configureTrack("weather", 1), true);
+  equal(configured.runtime.configureTrack("extra", 1), false);
+  equal(configured.runtime.configureTrack("music", 2), false);
+  deepEqual(codes(configured.notes), ["media.voice-cap", "media.voice-cap"]);
+
+  const overflow = rig();
+  const tracks = [...overflow.state.audio.tracks.map((track) => ({ name: track.name, voiceCount: 1 })), { name: "previous-game-track", voiceCount: 6 }];
+  deepEqual(overflow.runtime.applyGameAudio({ tracks: tracks.slice(0, -1), voiceCap: 6 }), { ok: true });
+  overflow.runtime.configureTrack("previous-game-track", 3);
+  deepEqual(overflow.runtime.applyGameAudio({ tracks, voiceCap: 4 }), { ok: false, overflowIndex: 4 });
+  deepEqual(overflow.state.audio.tracks.map(({ name, voiceCount }) => [name, voiceCount]), [["music", 1], ["sfx", 1], ["ambience", 4], ["voice", 2], ["ui", 4]]);
+  equal(overflow.runtime.configureTrack("extra", 20), true, "fallback keeps the default 32-voice cap");
+});
+
+test("playback load preserves the game's definitions, cap and bank and ignores unconfigured saved tracks", () => {
+  const source = rig({ "x.wav": 100 });
+  source.runtime.configureTrack("weather", 3);
+  source.runtime.configureTrack("obsolete", 1);
+  source.runtime.play({ track: "weather", asset: key("x.wav"), loop: false });
+  source.runtime.play({ track: "obsolete", asset: key("x.wav"), loop: false });
+  source.state.time.tick = 3;
+  const saved = audioSaveProjection(source.state.audio, 3);
+  equal(JSON.stringify(saved).includes("voiceCount"), false);
+
+  const target = rig({ "x.wav": 100 });
+  const tracks = [...target.state.audio.tracks.map((track) => ({ name: track.name, voiceCount: 1 })), { name: "weather", voiceCount: 1 }, { name: "new", voiceCount: 1 }];
+  target.runtime.applyGameAudio({ tracks, voiceCap: 7 });
+  target.runtime.setDefaultSoundFont(key("game.sf2"));
+  target.state.audio.soundFont = key("current.sf2");
+  target.state.time.tick = 10;
+  target.runtime.load(saved);
+  deepEqual(target.state.audio.tracks.map((track) => ({ name: track.name, voiceCount: track.voiceCount })), tracks);
+  equal(target.state.audio.tracks[5]?.voices.length, 1);
+  equal(target.state.audio.tracks[6]?.voices.length, 0);
+  equal(target.state.audio.soundFont, key("current.sf2"));
+  equal(target.runtime.drain()[0]?.asset, key("current.sf2"));
+  equal(target.runtime.configureTrack("extra", 1), false, "load preserves the configured cap");
+  target.state.audio.soundFont = null;
+  target.runtime.load(saved);
+  equal(target.runtime.drain()[0]?.asset, key("game.sf2"), "load preserves the authored default bank");
 });

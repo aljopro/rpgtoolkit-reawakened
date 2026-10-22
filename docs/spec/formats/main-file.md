@@ -80,9 +80,29 @@ The file ends after the last field present.
 
 ## TKR package-list extension
 
-TK Reawakened may append a native package list after the last documented row. This extension is not part of the legacy TK3 layout; a legacy reader therefore sees it as trailing residue. The extension begins with the eight-byte marker `TKRPLUG\0` (seven ASCII bytes followed by NUL), then an unsigned little-endian `u16` true count. Each package name is a NUL-terminated Windows-1252 string in authored order. A count of zero is an explicit empty list. The list is bounded to 256 names and each encoded name to 255 bytes; names must be non-empty and unique under ASCII case-folding. Any bytes after the final name remain opaque residue.
+TK Reawakened may append a native package list after the last documented row. This extension is not part of the legacy TK3 layout; a legacy reader therefore sees it as trailing residue. The extension begins with the eight-byte marker `TKRPLUG\0` (seven ASCII bytes followed by NUL), then an unsigned little-endian `u16` true count. Each package name is a NUL-terminated Windows-1252 string in authored order. A count of zero is an explicit empty list. The list is bounded to 256 names and each encoded name to 255 bytes; names must be non-empty and unique under ASCII case-folding. An optional [TKR audio-settings extension](#tkr-audio-settings-extension) may follow the final name; any bytes after the last recognised block remain opaque residue.
 
 The package list is the only part of the main file the plugin manifest reads: the engine appends one manifest entry per name, in the stored order, after the engine default manifest ([E-02 step 3](../engine/main-loop-and-startup.md#reawakened-boot-sequence)). The legacy plugin rows (23-24, 38a and 38b) stay data: they round-trip byte for byte, and the writer never derives them from the package list or the package list from them. On load the boot sequence maps the stock names in memory — `tk3menu.dll` to the `stock_menu` package and `tk3fight.dll` to the `stock_battle` package ([step 3 of the boot sequence](../engine/main-loop-and-startup.md#reawakened-boot-sequence)) — and reports any other name once as `plugin.legacy-unmapped` while keeping it as data. A new-project template names both stock packages in the package list instead, so a project saved from the editor states them explicitly. A file older than minor 3 carries neither legacy row, so nothing maps: a stock package then installs only from an explicit package-list name.
+
+<a id="tkr-audio-settings-extension"></a>
+## TKR audio-settings extension
+
+TK Reawakened may append a native audio-settings block after the package-list block. It is a separate tagged block, not a field inside `TKRPLUG`, so a reader that knows only one of the two keeps the other as residue. It begins with the seven-byte marker `TRKAUD\0` (six ASCII bytes followed by NUL), then an unsigned little-endian `u16` true track count, then that many tracks in authored order:
+
+| Field | Type | Meaning |
+|---|---|---|
+| track name | NUL-terminated Windows-1252 string | 1–32 bytes matching `[A-Za-z0-9_.-]+` after ASCII case-folding |
+| voice count | `u16` | a positive integer, 1–32 |
+
+After the tracks come an unsigned little-endian `u16` voice cap (1–32), then one `u8` font-present flag. A flag of `1` is followed by a NUL-terminated Windows-1252 `AssetKey` of 1–255 bytes; a flag of `0` means the game supplies no default bank and the decoded setting is `null`. Any byte other than `0` or `1` is malformed.
+
+The block is the full ordered track list: the five built-in names `music`, `sfx`, `ambience`, `voice` and `ui` must be the first five entries, in that order after ASCII case-folding, and may not appear again. Track names must be unique under ASCII case-folding. The count is therefore 5–16. The voice cap (1–32) limits the configuration applied at boot, not the aggregate that the reader or writer may represent; an over-cap aggregate is accepted and recovers as described below. Their Epic 6 defaults are `{ music: 1, sfx: 1, ambience: 4, voice: 2, ui: 4 }`; a block may override any of them. Without a block the Epic 6 tracks and counts apply and the default cap is 32. The game-file tracks, counts, cap and default SoundFont are game configuration, never playback-save data ([MEDIA-4](../engine/audio-media.md#media-4)).
+
+The block order is fixed: the package list, when present, comes first; the audio block, when present, comes next; any remaining bytes are residue. Each block may be present without the other. The writer emits the audio block when the model carries audio settings and never derives it from, or into, the package list or the legacy rows.
+
+The decoded model always carries `audioSettings`: it is `null` when the block is absent, otherwise `{ tracks, voiceCap, defaultSoundFont }`, with `defaultSoundFont: null` when the font flag is zero. These required nullable fields make absence explicit across serialization boundaries; the binary reader validates the envelope before returning this typed model.
+
+Structural violations — a truncated block, a count or voice count out of range, an unknown font flag, an oversized or empty name, a duplicate name, or built-in names missing, out of order or repeated — are located format errors and no model is produced. A structurally valid block whose total voice count exceeds its cap is accepted as data; at load the engine reports one located `media.voice-cap` diagnostic at the first track whose cumulative count crosses the cap, replaces the track configuration with the Epic 6 default tracks and cap 32, and still applies the block's independent `defaultSoundFont`. The game therefore boots with the defaults rather than refusing the file.
 
 ## Compatibility notes
 

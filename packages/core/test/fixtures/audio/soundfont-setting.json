@@ -236,8 +236,8 @@
       "end": {"cueId":3,"soundFont":"media/alt.sf3","master":100}
     },
     {
-      "name": "load-reemits-the-saved-bank-first",
-      "note": "The bank is in the save projection: saved with boss.sf2 set, then reset, a load restores the script bank and re-emits one soundfont.set before any media cue (the music restart).",
+      "name": "load-reemits-the-current-bank-first",
+      "note": "MEDIA-4/audio-save-load (#481): a playback save contains no bank configuration. Saved while boss.sf2 is set, then reset to the game's town.sf2 default, a load keeps that current bank and re-emits one soundfont.set before the music restart.",
       "setup": {
         "defaultSoundFont": "media/town.sf2",
         "assets": {
@@ -267,11 +267,11 @@
         {"t":5,"tr":[["music","playing",1,"media/town.mid",5,40,[[0,"playing",2,0,100,0,5,null,1,null]]]],"sf":"media/boss.sf2"},
         {"t":6,"tr":[["music","playing",1,"media/town.mid",6,40,[[0,"playing",2,0,100,0,6,null,1,null]]]],"cues":[{"cueId":4,"tick":6,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null}]},
         {"t":7,"tr":[["music","playing",1,"media/town.mid",7,40,[[0,"playing",2,0,100,0,7,null,1,null]]]]},
-        {"t":8,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",6,0,100,8,0,null,1,null]]]],"sf":"media/boss.sf2","cues":[{"cueId":5,"tick":8,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/boss.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":6,"tick":8,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"load"}]},
-        {"t":9,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",6,0,100,8,1,null,1,null]]]],"sf":"media/boss.sf2"},
-        {"t":10,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",6,0,100,8,2,null,1,null]]]],"sf":"media/boss.sf2"}
+        {"t":8,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["music","playing",1,"media/town.mid",0,40,[[0,"playing",6,0,100,8,0,null,1,null]]]],"cues":[{"cueId":5,"tick":8,"kind":"soundfont.set","track":null,"voice":null,"asset":"media/town.sf2","loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":6,"tick":8,"kind":"media.play","track":"music","voice":0,"asset":"media/town.mid","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"load"}]},
+        {"t":9,"tr":[["music","playing",1,"media/town.mid",1,40,[[0,"playing",6,0,100,8,1,null,1,null]]]]},
+        {"t":10,"tr":[["music","playing",1,"media/town.mid",2,40,[[0,"playing",6,0,100,8,2,null,1,null]]]]}
       ],
-      "end": {"cueId":7,"soundFont":"media/boss.sf2","master":100}
+      "end": {"cueId":7,"soundFont":null,"master":100}
     }
   ]
 }

@@ -9,7 +9,7 @@ export function voicesAndStealing() {
   const assets = { "a.wav": 100, "b.wav": 100, "c.wav": 100, "d.wav": 100, "e.wav": 100 };
   const fx3 = (t) => cmd(t, "mediaTrack", { name: "fx", voices: 3 });
   return {
-    spec: ["media-command-family", "audio-layer-rulings", "audio-state", "audio-track-wait"],
+    spec: ["media-command-family", "media-4", "audio-state", "audio-track-wait"],
     cases: [
       makeCase(
         "default-voice-counts",
@@ -104,7 +104,7 @@ export function fades() {
   const assets = { "song.mid": 60, "sting.wav": 20, "stinger.mid": 12 };
   const start = cmd(0, "mediaPlay", { file: "song.mid" });
   return {
-    spec: ["audio-layer-rulings", "audio-cue-contract", "audio-lifecycle"],
+    spec: ["media-command-family", "audio-cue-contract", "audio-lifecycle"],
     cases: [
       makeCase(
         "linear-half-up",
@@ -169,7 +169,7 @@ export function fades() {
 export function syncedStart() {
   const assets = { "song.mid": 600, "stem.wav": 10, "long.wav": 600, "pad.wav": 20, "drum.wav": 20, "ten.wav": 10, "five.wav": 40, "half.mid": 50, "x.xm": "unsupported" };
   return {
-    spec: ["audio-layer-rulings", "audio-time-model", "media-command-family"],
+    spec: ["audio-state", "audio-time-model", "media-command-family"],
     cases: [
       makeCase(
         "spec-example-position-17-of-10",
