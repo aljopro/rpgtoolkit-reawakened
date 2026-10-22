@@ -3,7 +3,7 @@ title: "Audio events from core state: started, stopped, ended, looped, paused, r
 type: 'feature'
 ticket: 3
 created: '2026-10-19'
-status: draft
+status: ready-for-dev
 baseline_revision: '6863560522aea599a75e9317270dfa648a3290a3'
 risk: "medium"
 route: 'full'
@@ -19,7 +19,7 @@ context:
 
 ## Intent
 
-Implement #482 / 21.3: observe core-authoritative voice transitions through the existing queued emitter bus, independently of the runner's audio device. This plan is rebased on main after merged #480/#481 and their completion metadata (#597–#599). It remains **draft** because the normative spec leaves the timing and trigger questions below unresolved; it is not approved for implementation.
+Implement #482 / 21.3: observe core-authoritative voice transitions through the existing queued emitter bus, independently of the runner's audio device. Rebased on main after merged #480/#481. Owner-approved defaults and the FIFO/traversal-consistent simultaneous-transition policy are normative in the separate docs-first commit `89dc5576`; this plan is ready for implementation.
 
 ## Boundaries & Constraints
 
@@ -39,22 +39,23 @@ Implement #482 / 21.3: observe core-authoritative voice transitions through the 
 ## Code Map
 
 - `packages/core/src/audio/runtime.ts` — `startVoice`, `stopVoice`, pause/resume, `refresh`, `phase`, `fade`, `pollWait`, and `load` own transitions and cues. Natural end is currently retired in `phase()`; fades are also finalized by refresh calls. Reuse these decisions rather than infer changes from runner cues.
-- `packages/core/src/engine/engine.ts` — constructs audio runtime; `waits` resolves script waits before `threads`; `audio` later calls `audio.phase()`. This is the timing seam requiring a ruling.
+- `packages/core/src/engine/engine.ts` — constructs audio runtime; `waits` resolves script waits before `threads`; `audio` later calls `audio.phase()`. Wire notifications to the shared bus without moving retirement or wakes.
 - `packages/core/src/events/emitter.ts` — `registerEmitter`, `queueNativeEvent`, and unregister/deferred retirement implement built-in identity, plain detail conversion, and queue ownership.
 - `packages/core/src/events/dispatch.ts`, `native.ts` — reuse dispatch, native event views, saved queue, and GC roots; do not create a second bus.
 - `packages/core/test/audio-runtime.test.ts`, `audio-engine.test.ts`, `audio-restore.test.ts` — existing playback, wait, cue and restore regression suites; extend with permanent event tests after the contract is settled.
 - `docs/spec/engine/rpgcode-modules-and-objects.md#emit-13` — add standard-event rows once semantics are ruled; lifecycle events must not accidentally become undeclared custom types.
 
-## Open Questions — Owner Ruling Required
+## Approved Lifecycle Decisions
 
-1. **End-phase conflict and wake ordering.** #482 requires end events at `waits` and asks for the ruled order relative to wake. But P2 item 3 (`audio-media.md`, lines 337–342) says a one-shot is logically finished and its wait may wake in `waits`, while the later `audio` phase records the finished transition. MEDIA-2 gives no enqueue point or ordering against wake. Should `ended` be queued before wait resolution at the due waits phase (delivery after resumed threads), or when the audio phase retires the voice (delivery next tick)? What happens when a resumed waiter stops/replaces that due voice before `audio`? Rule whether natural end also produces `stopped`, and order if both are owed.
-2. **Completion notifications for loops and fades.** MEDIA-2 names `looped` and `faded` without specifying their trigger phases, duplicate suppression, or ordering when an end/pass/fade shares a tick. Rule whether `faded` is a completion notification only, how a zero-duration fade behaves, and whether a track-wide fade emits it. If a track-wide fade emits without a voice, specify its target scopes and the required `slot`, `cueId`, and `file` values; no null/sentinel identity is currently ruled. Rule whether seek/loop changes that cross a pass boundary owe `looped`.
-3. **Restore versus a new playback transition.** `audio-save-load` re-emits imperative play/pause cues with new cue ids on game load, while snapshot restore retains existing state. MEDIA-2 does not specify whether game-load cue re-emission produces new lifecycle `started`/`paused` notifications or is only presentation reconstruction. Choose explicitly so restore tests do not encode an invented notification history.
+- Natural retirement emits `ended` in audio, without `stopped`; a wait may wake first. Explicit stop/displacement before retirement emits `stopped` and suppresses `ended`. Replacement/stealing emits old `stopped` before new `started`.
+- `looped` is only a natural wrap, not a seek/flag change. `faded` is once per completed voice fade, or per active voice at track-fade completion, including zero-duration application; empty tracks emit none.
+- Audio traversal is configured track order: all finite retirements by slot, then natural wraps by slot, then surviving voice-fade completions by slot, then track-fade completions by slot. Each event relays voice → track → media before the next event. Explicit operations and their refreshes retain FIFO application order.
+- Game load reconstructs cues without lifecycle notifications; snapshot restore resumes saved queue/state without duplicates. No outstanding owner questions remain.
 
 ## Tasks & Acceptance
 
-**Execution after rulings:**
-- [ ] `docs/spec/engine/audio-media.md#media-2` — record owner answers in a separate docs-first commit, reconcile P2/P5 timing, then complete this plan and commit `ready-for-dev` before code.
+**Execution:**
+- [x] `docs/spec/engine/audio-media.md#media-2` — record owner answers in a separate docs-first commit, reconcile P2/P5 timing, then complete this plan and commit `ready-for-dev` before code.
 - [ ] `packages/core/src/audio/runtime.ts`, `engine/engine.ts` — produce all seven ruled events at their authoritative transition points without changing cues or waits.
 - [ ] `packages/core/src/events/emitter.ts`, `native.ts` — reuse registered emitter identities and the one queue; expose detail with the exact ruled keys and casing.
 - [ ] `packages/core/test/audio-runtime.test.ts`, `audio-engine.test.ts`, `audio-restore.test.ts` — cover every event, relay and registration order, wake timing, replacement, fade/loop edge cases, and restore at every tick.
@@ -77,6 +78,7 @@ No implementation or normative spec changes made. Dedicated worktree `/private/t
 ## Plan Change Log
 
 - 2026-10-22 — Rebased the skeletal draft from `0975a26b54f8d7bf569f463a02b783b16ec0ea98` to `6863560522aea599a75e9317270dfa648a3290a3`; expanded the verified MEDIA-2/EMIT contract and isolated missing owner decisions rather than treating draft as approved.
+- 2026-10-22 — Owner approved the defaults and authorized explicit FIFO/traversal-consistent order. Normative MEDIA-2/P2/P5 amended in `89dc5576`; removed the resolved questions and marked ready-for-dev before implementation.
 
 ## Review Triage Log
 
