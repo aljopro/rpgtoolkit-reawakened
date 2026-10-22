@@ -59,21 +59,21 @@ Implement #482 / 21.3: observe core-authoritative voice transitions through the 
 - [x] `packages/core/src/audio/runtime.ts`, `engine/engine.ts` — produce all seven ruled events at authoritative transition points without moving retirement or waits.
 - [x] `packages/core/src/audio/events.ts`, `events/native.ts`, `events/model.ts`, `save/snapshot.ts` — reuse registered emitter identities and the one queue, preserve exact detail casing, and save/validate loop-observation cursors.
 - [x] `packages/core/test/audio-{events,lifecycle-runtime,lifecycle-engine,lifecycle-replay}.test.ts`, `packages/synth/test/core-lifecycle.test.ts`, `audio-engine.test.ts` — cover all events, relay order, wake race, replacement, fade/loop edges, every-tick queued/in-flight restoration, and actual null/PCM source parity.
-- [x] `docs/spec/engine/rpgcode-modules-and-objects.md#emit-13` — register lifecycle events; final built status is held at the explicit G5 owner-decision gate documented below.
+- [x] `docs/spec/engine/rpgcode-modules-and-objects.md#emit-13` — register lifecycle events.
 
 **Acceptance Criteria:**
 - Given an authored scripted run, when playback changes, then all seven event types have the ruled detail, order, and core tick; listener delivery and wait wake match the resolved phase contract.
 - Given the same seed and inputs, when run twice and with a snapshot/restore at every tick, then event histories and state hashes match, including queued and in-flight dispatch.
 - Given null and real audio backends, when the same scripted run plays, then core event histories match; early, late, duplicate and unknown `audio.ended` reports create no event and change no state hash.
-- Given existing Toolkit 3.1 audio calls, when the current audio regression/golden suites run, then cue behavior remains unchanged.
+- Given existing Toolkit 3.1 audio calls, when the current audio regression/golden suites run, then cue behavior remains unchanged except the owner-approved alias-routing repair and deliberate synthetic battle oracle update described below.
 
 ## Verification
 
 `pnpm install --frozen-lockfile`, `pnpm fixtures:fetch` and `pnpm build` completed. Final changed-path smoke: 126 passed, 0 failed/skipped. Full `pnpm test` and fixture-backed `pnpm test:strict`: each 1770 passed, 0 failed/skipped. Passed gates: typecheck, lint, fixtures:check, closing (8/8 baselines), dump:check, oracle:check, graph:test/graph, licence:test/licence, audit --prod, provenance:test/provenance, fixtures:test, fixtures:author:check, catalogue:check, command-docs:test/check, no-skips:test, icons:test. Local logs: `/private/tmp/rpgtoolkit-482-gates/`. Tools: Node 26.8.1 (not CI-pinned 24.21.0), pnpm 12.10.1, Bun 1.4.2, Pillow 12.3.0.
 
-`pnpm golden` and `pnpm golden:bun` fail at the same single reported mismatch: `audio-golden: synthetic battle (demo): cue stream drifted`. Normal sample-game cue rows are unchanged; closing baselines pass. The repaired documented script routing now applies initial title music at tick 1 before the synthetic battle handoff: title `media.play`, its `media.stop`, then battle `media.play`. The committed synthetic oracle has only the battle play there. The later tick-61 village handoff is unchanged apart from monotonic cue ids. No golden was re-recorded.
+**Deliberate G5 oracle update approved by owner:** include the documented alias-routing repair in #482 and update only `golden/audio/cues.json`'s `syntheticBattle.cues`. The repair now correctly applies initial title music at tick 1 before the synthetic battle handoff: title `media.play`, its `media.stop`, then battle `media.play`. The old synthetic oracle omitted the title play/stop because script aliases were not dispatched. Insert those two cues and advance subsequent cue ids by two; the tick-61 village handoff is otherwise unchanged. All normal sample-game cue rows and all unrelated goldens remain untouched. This explicit exception supersedes the epic's unchanged-cue-goldens expectation only for that synthetic stream; no mocked playback or weakened acceptance is used.
 
-**Owner decision required before final built/PR:** authorize a deliberate G5 synthetic-oracle update for the necessary documented-alias repair, or split that repair into a prerequisite before #482. Do not silently weaken script acceptance, disable real playback, or rewrite the old golden while the epic also promises unchanged prior cue goldens. The implementation and all behavioral acceptance tests pass; golden-preservation adjudication remains outstanding.
+Rerun evidence: both `pnpm golden` and `pnpm golden:bun` now accept the synthetic correction but fail with `audio-golden: Basic: cue stream drifted`. Direct diagnostic of Basic reports existing `soundfont.set` plus title `media.play` at tick 1 and `media.stop` at tick 61; its committed oracle contains only `soundfont.set`. The earlier claim that all normal sample cue rows were unchanged was incomplete/incorrect. Basic's oracle has not been changed: owner authorization expressly limits this update to the synthetic battle oracle. Plan stays in-progress; built/push/PR are blocked on that additional actual mismatch, not on synthetic approval.
 
 ## Implementation Notes
 
@@ -88,6 +88,7 @@ Permanent tests include 55 snapshots, fresh runtime/script-service reconstructio
 - 2026-10-22 — Rebased the skeletal draft from `0975a26b54f8d7bf569f463a02b783b16ec0ea98` to `6863560522aea599a75e9317270dfa648a3290a3`; expanded the verified MEDIA-2/EMIT contract and isolated missing owner decisions rather than treating draft as approved.
 - 2026-10-22 — Owner approved the defaults and authorized explicit FIFO/traversal-consistent order. Normative MEDIA-2/P2/P5 amended in `89dc5576`; removed the resolved questions and marked ready-for-dev before implementation.
 - 2026-10-22 — Implemented and exercised the full lifecycle contract; kept status in-progress and old goldens unchanged pending owner adjudication of the pre-existing alias repair versus cue-golden preservation.
+- 2026-10-22 — Owner expressly approved including the alias repair and the synthetic-only oracle correction in #482; updated that oracle with its rationale, retaining all unrelated goldens.
 
 ## Review Triage Log
 
