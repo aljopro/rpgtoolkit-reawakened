@@ -3,7 +3,7 @@ title: "Rulings: the media object, its events, the game-file audio settings and 
 type: 'feature'
 ticket: 1
 created: '2026-10-21'
-status: 'built'
+status: 'done'
 baseline_revision: '9de95b3e9d57336f41e3d4bb59ef71fbd57249e9'
 route: 'full'
 route_source: 'auto'
