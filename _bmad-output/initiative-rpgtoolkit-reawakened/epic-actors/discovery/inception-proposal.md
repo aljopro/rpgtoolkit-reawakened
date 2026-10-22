@@ -49,8 +49,9 @@ Epic 20 builds one actor model for party members, NPCs, enemies and board sprite
 | 12 | .gam plugins mapping: stock packages in templates and legacy DLL names | 11, 19.9, 19.17 | no | medium |
 | 13 | Two battle scripts over one actor model, with goldens | 8, 9, 10, 11, 12 | no | high |
 | 14 | Refactor sweep | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | no | low |
+| 15 | Stock RPG actor event bridge: fallen on the game | 9, 19.17 | no | high |
 
-Lanes: A core/actors (3, 5, 6, 7, 8, 10), B script bindings (4), C packages and `.gam` (11, 12). 3 owns the actors barrel and the section; 4 owns actor host-object hydration and the virtual write path; 9 owns board emitter lifecycle and engine-phase cancelable dispatch. 19.17 owns the package catalogue implementation (19.16 is the docs handoff), so 20.11 does not duplicate it.
+Lanes: A core/actors (3, 5, 6, 7, 8, 10), B script bindings (4), C packages and `.gam` (11, 12). 3 owns the actors barrel and the section; 4 owns actor host-object hydration and the virtual write path; 9 owns board emitter lifecycle and engine-phase cancelable dispatch. 19.17 owns the package catalogue implementation (19.16 is the closed docs handoff), so 20.11 does not duplicate it. Decision: 20.16/#564 is removed from this breakdown and rehomed as Epic 8.12; Epic 8 owns its producer.
 
 ## 4. Cross-epic `after` wiring
 
@@ -63,12 +64,13 @@ Lanes: A core/actors (3, 5, 6, 7, 8, 10), B script bindings (4), C packages and 
 | 20.8 | 18.6 | epic 18 |
 | 20.9 | 19.11, 19.12, 5.9, 20.1 | epics 19, 5 |
 | 20.11, 20.12 | 19.6, 19.9, 19.17 | epic 19 |
+| 20.15 | 19.17 | epic 19 |
 
-Initiative `[[epic]]` 20 after: epic 19, epic 2, epic 5, epic 18. The epic-19 `after` needs text must name 19.17's package catalogue implementation and 19.16's closed docs handoff. Epic 21's `beforePlay` entry consumes the engine-phase seam and should add 20.9 to its `after` when that epic is re-baselined.
+Initiative `[[epic]]` 20 after remains: epics 19, 2, 5, 18. The Epic 20 dependency on 19 includes 19.17's package catalogue implementation and 19.16's closed docs handoff. Epic 21's `beforePlay` entry consumes 20.9's engine-phase seam and should add 20.9 to its `after` when that epic is re-baselined. Epic 8 owns moved issue #564 as entry 8.12 and remains gated by the entire Epic 20.
 
 ## 5. Parallelism
 
-20.1 and 20.2 are checkpoints. After 20.2 lane A runs 3 then 5, 6, 7, 8, 10; 20.4 runs beside it after 20.3 and the 19.12 emitter seam; 20.11 waits for 19.17 and 20.8; 20.9 owns the engine-phase cancelable seam before Epic 21.4 consumes it.
+20.1 and 20.2 are checkpoints. After 20.2 lane A runs 3 then 5, 6, 7, 8, 10; 20.4 runs beside it after 20.3 and the 19.12 emitter seam; 20.11 waits for 19.17 and 20.8; 20.9 owns the engine-phase cancelable seam before Epic 21.4 consumes it; 20.15 follows the completed core event source. The dialogue bridge is no longer in Epic 20: it runs as Epic 8.12 after Epic 8.11 and the Epic 20 gate.
 
 ## 6. Validation rounds
 
@@ -81,3 +83,5 @@ Round 3 (audit against `origin/main` at 5fce842c, 2026-10-20): independent Epic 
 Round 4 (independent reviewer, 2026-10-20): the reviewer found three material items: add tracker `#540` to 19.16, add `19.16` to the stock package and `.gam` mapping `after` lists, and align stock package names with the underscore-only grammar. All three were fixed; the dependency list also changed 20.9's self-reference from string `"20.1"` to same-epic entry `1`.
 
 Round 5 (independent reviewer, 2026-10-20): PASS. The reviewer found no material Ticket, Set or Dependencies defects; 19.16 has tracker `#540`, required Epic 20 loader pins and underscore package IDs are consistent, and no undeclared references, cycles or order conflicts were found.
+
+Round 6 (owner-approved Epic 8 rehome, 2026-10-22): #564 moved to Epic 8.12 with a new Epic 8-owned completion producer; removed 20.16 from Epic 20 and updated the actor-event/sweep handoffs. The Epic 20 → Epic 8 whole-epic gate remains, with no reverse edge.

@@ -22,7 +22,7 @@ exactly one event per transition and nothing from another actor.
 
 ## Boundaries
 
-One bridge event and the listener scope it needs. The `talked` bridge is 20.16; the battle-thread
+One bridge event and the listener scope it needs. The `talked` bridge is Epic 8.12 (#564); the battle-thread
 `beforeDamage` mutation is Epic 7.14.
 
 ## Key Decisions

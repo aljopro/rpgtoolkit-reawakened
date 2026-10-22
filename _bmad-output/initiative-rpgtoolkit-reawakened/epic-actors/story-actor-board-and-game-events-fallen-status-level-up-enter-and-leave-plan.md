@@ -30,8 +30,8 @@ production, board lifecycle, and the engine-phase cancelable seam.
   `statusChanged`, and `leveledUp`; the producer queues plain detail after the
   validated mutation and preserves transition order.
 - The core `fallen` transition is queued on the actor emitter with actor-owned
-  detail; the package game re-emission is owned by 20.15 (#563), and `talked` by
-  20.16 (#564). Package/native listeners consume the existing bus.
+  detail; the package game re-emission is owned by 20.15 (#563), and dialogue
+  `talked` is owned by Epic 8.12 (#564). Package/native listeners consume the existing bus.
 - Board lifecycle emits `entered` and `left` on board and actor keys. The actor
   emitter is registered before its lifecycle event is queued. An unloaded board
   unregisters its emitter and drops queued work targeting that board; a canceled
@@ -45,8 +45,8 @@ production, board lifecycle, and the engine-phase cancelable seam.
 ### Package and battle follow-ups
 
 The stock actor game bridge is owned by 20.15 (#563), the dialogue `talked`
-bridge by 20.16 (#564), and the battle-thread `beforeDamage` consumer by Epic 7
-story 7.14 (#565). Those package/runtime implementations are intentionally
+bridge by Epic 8.12 (#564), and the battle-thread `beforeDamage` consumer by
+Epic 7 story 7.14 (#565). Those package/runtime implementations are intentionally
 outside this core/board story; core does not add damage resolution, a stock
 package substitute, or a second listener path.
 
@@ -57,8 +57,7 @@ The follow-up tickets consume the existing bus and engine cancelable seam:
 calls `emitCancelable("beforeDamage", ...)` before applying damage.
 
 Issue #474 is scoped to the core/board implementation in this story. Its
-follow-up package/runtime behavior remains tracked by #563, #564, and #565 and
-is not an acceptance claim or closure prerequisite for #474.
+follow-up package/runtime behavior remains tracked by #563, Epic 8 story 8.12 (#564), and #565; none is an acceptance claim or closure prerequisite for #474.
 
 ## Key Decisions
 
@@ -97,7 +96,7 @@ is not an acceptance claim or closure prerequisite for #474.
 4. Board unload removes listeners and stale queued board work; a later load
    starts with a fresh board emitter. Existing event/save behavior remains
    deterministic. Dialogue `talked` and battle-thread `beforeDamage` are
-   verified by 20.16 (#564) and 7.14 (#565), not this story.
+   verified by Epic 8.12 (#564) and 7.14 (#565), not this story.
 
 ## Verification
 
@@ -111,9 +110,9 @@ listeners are diagnosed rather than stalling the tick.
 The focused actor/events/edge/save/dictionary suites pass 96/96, and the full
 repository gate run passes 1702/1702 with no skips, including typecheck, lint,
 build, Node and Bun goldens, closing 8/8, graph, licence, provenance and
-catalogue checks. The approved scope split assigns the package bridge, dialogue
-bridge, and battle-thread consumer to 20.15 (#563), 20.16 (#564), and 7.14
-(#565), respectively; those follow-ups are not claimed by this core ticket.
+catalogue checks. The approved scope split assigns the package bridge to 20.15
+(#563), dialogue bridge to Epic 8.12 (#564), and battle-thread consumer to 7.14
+(#565); those follow-ups are not claimed by this core ticket.
 
 ## Review triage
 
