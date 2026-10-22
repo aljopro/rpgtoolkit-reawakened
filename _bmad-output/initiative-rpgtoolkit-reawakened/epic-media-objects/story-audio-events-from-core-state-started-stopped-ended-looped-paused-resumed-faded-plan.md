@@ -3,7 +3,7 @@ title: "Audio events from core state: started, stopped, ended, looped, paused, r
 type: 'feature'
 ticket: 3
 created: '2026-10-19'
-status: built
+status: done
 baseline_revision: '6863560522aea599a75e9317270dfa648a3290a3'
 risk: "medium"
 route: 'full'
@@ -77,7 +77,7 @@ Implement #482 / 21.3: observe core-authoritative voice transitions through the 
 
 **Separate Demo oracle approval:** owner expressly approved Demo's missing title play at tick 1 and stop at tick 61; its existing village play at tick 61 is unchanged except cueId 2→4. A read-only in-memory routing-disabled comparison exactly reproduced the prior Demo oracle, proving all its deltas derive from the documented alias repair. Updated only that row; Basic and synthetic approvals remain in force, with every other golden untouched.
 
-Final verification: `pnpm golden` and `pnpm golden:bun` both pass all eight sample cue streams, synthetic battle, script snapshots and independent scene goldens; Bun closing matches 8/8 baselines. Subsequent full rerun passes every gate listed above, including unit/strict (1770 each, no failures/skips), Node closing, and production audit. Final logs: `/private/tmp/rpgtoolkit-482-final-gates/`. Built, not Done; review/merge ownership remains external.
+Final verification: `pnpm golden` and `pnpm golden:bun` both pass all eight sample cue streams, synthetic battle, script snapshots and independent scene goldens; Bun closing matches 8/8 baselines. Subsequent full rerun passes every gate listed above, including unit/strict (1770 each, no failures/skips), Node closing, and production audit. Final logs: `/private/tmp/rpgtoolkit-482-final-gates/`. All nine required hosted checks passed in run 39868809539, including `gate`; independent review found no actionable issues. Owner-authorized normal merge of PR #600 landed at `464d0aa357b1f217a1a6b3cd77717b3b2c40f540` on 2026-10-22; #482 is complete.
 
 ## Implementation Notes
 
@@ -95,6 +95,7 @@ Permanent tests include 55 snapshots, fresh runtime/script-service reconstructio
 - 2026-10-22 — Owner expressly approved including the alias repair and the synthetic-only oracle correction in #482; updated that oracle with its rationale, retaining all unrelated goldens.
 - 2026-10-22 — Owner separately approved Basic's two missing title music cues; made the minimum Basic-only correction, retaining the synthetic update and all other golden rows.
 - 2026-10-22 — Owner separately approved Demo's title cues and consequential village cue-id advance; no other oracle changes authorized or made.
+- 2026-10-22 — Marked done after PR #600 merged normally with all nine required checks green and independent review complete; synchronized issue/project completion separately.
 
 ## Review Triage Log
 
