@@ -108,6 +108,7 @@ function publicDetailName(type: string, name: string): string {
   if ((type === "beforeEnter" || type === "entered" || type === "left") && name === "actorid") return "actorId";
   if ((type === "beforeEnter" || type === "entered" || type === "left") && name === "boardkey") return "boardKey";
   if (type === "statusChanged" && name === "previousrounds") return "previousRounds";
+  if ((type === "started" || type === "stopped" || type === "ended" || type === "looped" || type === "paused" || type === "resumed" || type === "faded") && name === "cueid") return "cueId";
   return name;
 }
 /**

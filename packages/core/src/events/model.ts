@@ -67,9 +67,11 @@ export type EventsSection = {
   queue: QueuedEvent[];
   /** Original native detail values for queued events, preserving booleans and null across the script-value bridge. */
   nativeDetails?: { [event: string]: { [field: string]: PlainData } };
+  /** Last observed natural audio pass by starting cue id, present only for observed looping voices. */
+  audioPasses?: { [cueId: string]: number };
   /** The listener cursor of the event currently being delivered, or `null`. */
   dispatch: DispatchCursor | null;
-  /** Board emitters whose transition `left` event must finish before unload cleanup. */
+  /** Board/voice emitters retained until their queued and in-flight terminal notifications finish. */
   retiring?: string[];
   /** The built-in emitters a section owner registered (EMIT-20): key to the handle of
    * the object that stands for it (absent until the first registration, like `cells`

@@ -335,11 +335,13 @@ Technically:
    `(max(0, tick - S) mod L)` for looping media. Paused voices keep the last
    position; resume sets a new `startTick` so the position is continuous.
 3. At the waits phase of `endTick`, a finite one-shot is logically finished
-   and its `audio.track` wait can wake. The later `audio` phase emits any
-   required stop cue and records the finished transition. This phase ordering
-   is intentional: a stop posted in the threads phase at tick `T` changes the
-   track immediately, and its waiter is observed in the next waits phase at
-   `T + 1`, because waits precedes threads in AD-26.
+   and its `audio.track` wait can wake. If it is still active at the later
+   `audio` phase, that phase retires it, emits the required stop cue and queues
+   `ended`, not a duplicate `stopped` notification. A resumed waiter may
+   explicitly stop or replace it before retirement: that operation queues
+   `stopped` (and `started` for an applied replacement), and no natural `ended`
+   is then owed. A stop posted in threads at tick `T` is observed by its waiter
+   at `T + 1`, because waits precedes threads in AD-26.
 4. A looping track has a pass boundary at every `S + nL`. A pass wait uses
    the next boundary; ordinary looping playback does not finish.
 5. A cue's required `tick` is the tick at which core applied the transition.
@@ -559,6 +561,12 @@ with unknown length produce a located diagnostic and do not park. A looped
 `mediaPlay(..., { wait: true })` is diagnosed because it has no terminal
 completion. The payload contains no closure, timer, device handle or `Promise`.
 
+Waking is not event delivery. At a natural end, the waiter may resume in
+`threads` before the audio phase retires the voice. The retirement's `ended`
+notification is delivered in the following tick's `events` phase, subject to
+the shared dispatch budget. An explicit stop/replacement by the resumed
+thread suppresses that natural notification as specified in MEDIA-2.
+
 **Evidence.** AD-9 requires one named wait registry, plain-data payloads and
 ascending-thread polling. `packages/core/src/ports/wait.ts` currently lists
 `audio.sfx`; `script/waits.ts` and the generic catalogue responder are the
@@ -591,6 +599,79 @@ There is no automatic ducking or duck-group state; authors may compose track and
 
 <!-- OWNER: MEDIA-2 — Jensen, 2026-10-19; evidence: epic-media-objects.md Notes (past-tense event names and cues remain imperative), `rpgcode-modules-and-objects.md#emit-1` EMIT-2/EMIT-6/EMIT-10; rejected alternative: exposing runner completion notifications or imperative cue names as script events, because those would make event history host-dependent or conflate commands with state changes. -->
 **Ruling (owner; approved).** In plain terms, a voice tells scripts when its playback state changes; its track and the shared `media` object relay the same news so a listener may observe one voice or all voices. Technically, emitted event types are `started`, `stopped`, `ended`, `looped`, `paused`, `resumed` and `faded`. Each event's plain-data `detail` has exactly `track`, `slot`, `cueId`, `file` and `tick`. `tick` is the deterministic core tick at which the state change is applied. The voice emits its own event; its track and `media` re-emit it in that order, preserving the detail. All are non-cancelable notifications. They are derived from core transitions, not runner device reports; cue names such as `media.play` remain imperative.
+
+<!-- OWNER: MEDIA-2 lifecycle clarification — Jensen, 2026-10-22, approved #482 defaults and deterministic ordering grounded in the audio phase's retirement-before-refresh traversal. -->
+**Reawakened rule — exact transitions and ordering.** A notification reports an
+applied change, not a request: `started` follows a new voice start, `stopped`
+an explicit stop or displacement (including voice stealing), and
+`paused`/`resumed` a real state change. Replacement/stealing reports the old
+voice's `stopped` before the new voice's `started`, each with its own starting
+cue identity. Carry-on, ignored same-file requests and repeated
+pause/resume/stop no-ops produce none. Natural completion queues `ended`
+when the audio phase retires the finite voice at its core end tick; it does
+not also queue `stopped`, although the imperative `media.stop` cue remains.
+Waits may wake before retirement; an explicit stop/replacement before it
+suppresses `ended`.
+
+`looped` reports a natural playing pass wrap only, once per crossed pass.
+Seeking and changing the loop flag do not themselves synthesize a wrap.
+`faded` reports completion of an applied fade, once per affected active
+voice, not on each interpolation tick. A zero-duration fade completes at its
+application tick. A track-wide fade reports completion for each voice active
+on that track at completion, in ascending slot order, and reports none if
+there are no active voices. A paused voice's own fade remains frozen. A
+stopped/replaced voice cannot later complete its discarded voice fade.
+
+Ordering follows FIFO application order for script/effect operations.
+Within an audio phase, process tracks in configured order. Within each track,
+retire due finite voices in ascending slot order (`ended`), then observe
+natural wraps of surviving playing voices in ascending slot order (`looped`),
+then refresh surviving voice fades in ascending slot order (`faded`), and
+finally complete the track-wide fade (`faded` per active slot). Thus a voice
+retired at its fade deadline emits only `ended`; a surviving loop wrapping
+at its fade deadline emits `looped` before its voice `faded`. Concurrent
+voice and track fades complete independently: voice fade first, then track
+fade. Every notification completes its voice → track → media enqueue sequence
+before the next notification. Refreshes requested by an earlier explicit
+operation may complete a due fade first, in that operation's application
+order; they do not run listeners inline.
+
+The five detail fields identify the affected voice: canonical track name,
+zero-based slot, its starting cue's `cueId`, its `AssetKey` file, and the core
+application tick. There is no lifecycle `source` or `synthetic` field.
+The envelope is EMIT-6's ordinary event object; MEDIA-3's `source` enum is
+only for `beforePlay`. An event queued after the tick's events phase, including
+audio-phase retirement, delivers in the next events phase; `detail.tick`
+still names its application tick, not delivery time.
+
+Game-save loading re-emits presentation cues but creates no lifecycle
+notifications. Snapshot restoration preserves the saved event queue,
+dispatch cursor and playback state: queued history resumes without duplicate
+notifications. Runner `audio.ended` reports never create a notification.
+
+**Reason.** This preserves the established waits-before-threads-before-audio
+schedule and retirement-before-refresh processing, while separating observed
+core transitions from device reports and presentation reconstruction.
+
+**Emitter ownership.** Reuse EMIT-20's lazy registration seam: the first
+media-emitter access or declared native media listener activates the media
+event domain. A world that never uses media emitters keeps its previous
+unobserved state shape. Once active, queue all three scopes even if a scope
+currently has no listeners; a listener added before dispatch can still hear
+the queued event under EMIT-14. The owner keys are `media`,
+`media.track:<canonical name>`, and `media.voice:<track>:<slot>:<cueId>`.
+Voice identity includes its starting cue id, so displaced and replacement
+voices cannot share listeners. A terminal voice's registration retires only
+after its queued and in-flight notifications finish; track and media
+registrations last until reset. Snapshot restore retains these registrations.
+
+Loop observation cursors are event state, not session-only memory: when the
+media event domain is active, `events.audioPasses` records the last observed
+natural pass by starting cue id. It is absent until needed and removed when
+empty, survives snapshots (including a snapshot taken within the boundary
+tick), and is discarded/rebased without notifications on game-load playback
+reconstruction. This avoids losing or duplicating wraps when a runtime is
+recreated; it adds no audio playback fields or runner state.
 
 **Evidence.** Owner event-name decision in `epic-media-objects.md` Notes; event object/detail and queued dispatcher contract in `rpgcode-modules-and-objects.md#emit-1` (EMIT-2, EMIT-6, EMIT-10); fixed tick and application ordering in [audio-time-model](#audio-time-model).
 **Rejected alternative.** Emitting only at `media` loses the voice/track subscription scopes; emitting runner `ended` reports or using cue names as event types makes notifications depend on output-device timing or confuses state changes with requests.

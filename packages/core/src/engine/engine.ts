@@ -25,6 +25,7 @@ import { createGameState, type GameState, type SectionKey } from "../save/state.
 import { hashGameState } from "../save/hash.ts";
 import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
 import { createAudioRuntime } from "../audio/runtime.ts";
+import { mediaEventsActive, queueAudioEvent } from "../audio/events.ts";
 import type { AudioInfo } from "../formats/audio/model.ts";
 import type { AssetDecoder } from "../formats/registry/decoder.ts";
 import { BUILTIN_TRACKS, MAX_VOICES } from "../audio/model.ts";
@@ -271,6 +272,8 @@ export function createEngine(init: EngineInit): Engine {
     },
     need: (key) => request(key, "audio"),
     defaultSoundFont,
+    transition: (event) => queueAudioEvent(state, event),
+    transitionsActive: () => mediaEventsActive(state),
     notify: (note) => {
       if (note.kind !== "diag") return;
       const file = note.detail.file;
