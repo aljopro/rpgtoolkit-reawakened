@@ -3,7 +3,7 @@ title: "Audio events from core state: started, stopped, ended, looped, paused, r
 type: 'feature'
 ticket: 3
 created: '2026-10-19'
-status: in-progress
+status: built
 baseline_revision: '6863560522aea599a75e9317270dfa648a3290a3'
 risk: "medium"
 route: 'full'
@@ -73,7 +73,11 @@ Implement #482 / 21.3: observe core-authoritative voice transitions through the 
 
 **Deliberate G5 oracle update approved by owner:** include the documented alias-routing repair in #482 and update only `golden/audio/cues.json`'s `syntheticBattle.cues`. The repair now correctly applies initial title music at tick 1 before the synthetic battle handoff: title `media.play`, its `media.stop`, then battle `media.play`. The old synthetic oracle omitted the title play/stop because script aliases were not dispatched. Insert those two cues and advance subsequent cue ids by two; the tick-61 village handoff is otherwise unchanged. All normal sample-game cue rows and all unrelated goldens remain untouched. This explicit exception supersedes the epic's unchanged-cue-goldens expectation only for that synthetic stream; no mocked playback or weakened acceptance is used.
 
-Rerun evidence: both `pnpm golden` and `pnpm golden:bun` now accept the synthetic correction but fail with `audio-golden: Basic: cue stream drifted`. Direct diagnostic of Basic reports existing `soundfont.set` plus title `media.play` at tick 1 and `media.stop` at tick 61; its committed oracle contains only `soundfont.set`. The earlier claim that all normal sample cue rows were unchanged was incomplete/incorrect. Basic's oracle has not been changed: owner authorization expressly limits this update to the synthetic battle oracle. Plan stays in-progress; built/push/PR are blocked on that additional actual mismatch, not on synthetic approval.
+**Separate Basic oracle approval:** owner subsequently expressly approved correcting Basic too. The same documented alias-routing repair adds title `media.play` (cue 2) at tick 1 and `media.stop` (cue 3) at tick 61 after its existing `soundfont.set`. Only `games.Basic` gains those two rows; retain the approved synthetic correction and leave every other golden unchanged except the subsequently approved Demo correction below.
+
+**Separate Demo oracle approval:** owner expressly approved Demo's missing title play at tick 1 and stop at tick 61; its existing village play at tick 61 is unchanged except cueId 2→4. A read-only in-memory routing-disabled comparison exactly reproduced the prior Demo oracle, proving all its deltas derive from the documented alias repair. Updated only that row; Basic and synthetic approvals remain in force, with every other golden untouched.
+
+Final verification: `pnpm golden` and `pnpm golden:bun` both pass all eight sample cue streams, synthetic battle, script snapshots and independent scene goldens; Bun closing matches 8/8 baselines. Subsequent full rerun passes every gate listed above, including unit/strict (1770 each, no failures/skips), Node closing, and production audit. Final logs: `/private/tmp/rpgtoolkit-482-final-gates/`. Built, not Done; review/merge ownership remains external.
 
 ## Implementation Notes
 
@@ -89,7 +93,9 @@ Permanent tests include 55 snapshots, fresh runtime/script-service reconstructio
 - 2026-10-22 — Owner approved the defaults and authorized explicit FIFO/traversal-consistent order. Normative MEDIA-2/P2/P5 amended in `89dc5576`; removed the resolved questions and marked ready-for-dev before implementation.
 - 2026-10-22 — Implemented and exercised the full lifecycle contract; kept status in-progress and old goldens unchanged pending owner adjudication of the pre-existing alias repair versus cue-golden preservation.
 - 2026-10-22 — Owner expressly approved including the alias repair and the synthetic-only oracle correction in #482; updated that oracle with its rationale, retaining all unrelated goldens.
+- 2026-10-22 — Owner separately approved Basic's two missing title music cues; made the minimum Basic-only correction, retaining the synthetic update and all other golden rows.
+- 2026-10-22 — Owner separately approved Demo's title cues and consequential village cue-id advance; no other oracle changes authorized or made.
 
 ## Review Triage Log
 
-No implementation review performed.
+Independent reviewer `epic21-audio-review` reviewed committed implementation/source/tests and reported no concrete actionable correctness or maintainability findings. Reviewer ran no gates; all exercised gate evidence above is from this implementation workstream.
