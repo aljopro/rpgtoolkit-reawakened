@@ -3,7 +3,7 @@ title: "Actor and board events: fallen, status, leveledUp, enter and leave"
 type: 'feature'
 ticket: 9
 created: '2026-10-19'
-status: in-progress
+status: done
 baseline_revision: '4c58aa82c36362e424d90ebb098e99496afc519b'
 risk: "medium"
 context:

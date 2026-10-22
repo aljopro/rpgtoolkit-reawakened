@@ -3,7 +3,7 @@ title: "stock_battle and stock_menu package scaffolds"
 type: 'feature'
 ticket: 11
 created: '2026-10-19'
-status: draft
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "medium"
 context:

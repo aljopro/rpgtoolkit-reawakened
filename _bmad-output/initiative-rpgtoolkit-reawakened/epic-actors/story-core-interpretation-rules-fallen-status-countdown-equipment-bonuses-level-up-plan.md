@@ -3,7 +3,7 @@ title: "Core interpretation rules: fallen, status countdown, equipment bonuses, 
 type: 'feature'
 ticket: 6
 created: '2026-10-20'
-status: 'built'
+status: done
 baseline_revision: '123ad29d09cc0dd8849344c8d37299f28d1e0fd0'
 route: 'full'
 route_source: 'pinned'
