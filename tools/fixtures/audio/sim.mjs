@@ -293,8 +293,12 @@ function command(st, op) {
         const src = trackOf(st, op.sync);
         const sv = src === undefined ? undefined : primary(src);
         const dest = st.assets[key].lengthTicks ?? null;
-        if (sv === undefined || sv.length === null || dest === null) return diag(st, "media.sync-source", op.op, { sync: op.sync });
-        pos0 = posOf(sv, st.tick) % dest;
+        if (sv === undefined || sv.length === null || dest === null) {
+          diag(st, "media.sync-source", op.op, { sync: op.sync });
+          pos0 = 0;
+        } else {
+          pos0 = posOf(sv, st.tick) % dest;
+        }
       }
       const v = startVoice(st, tr, key, { loop, restart: (flags & RESTART) !== 0, priority: op.priority ?? 0, pos0, op: op.op });
       if (v !== null && wait) {

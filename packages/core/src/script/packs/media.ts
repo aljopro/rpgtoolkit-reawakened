@@ -265,8 +265,8 @@ function readPlayOptions(view: CommandView, value: unknown): MediaPlayOptions {
 }
 
 /** The pack's one start route: a VM control action owns the object and the posted effect. */
-function playEffect(file: string, options: MediaPlayOptions): CommandEffect {
-  return { kind: "vm.control", args: ["mediaplay", mediaAsset(file), { ...options }] };
+function playEffect(file: string, options: MediaPlayOptions, returnVoice = true): CommandEffect {
+  return { kind: "vm.control", args: ["mediaplay", mediaAsset(file), { ...options }, returnVoice] };
 }
 
 function mediaPlay(): BuiltinSpec {
@@ -285,13 +285,8 @@ function mediaPlay(): BuiltinSpec {
     },
     call: (view, args) => {
       const file = stringArg(args, 0, "mediaPlay");
-      // The one-argument call is the Toolkit 3.1 form (MEDIA-5): it records the
-      // same seven-argument effect under the same command name, creates no
-      // object, returns no value, and so keeps its cue stream and state hash.
-      if (args.length === 1) {
-        return { value: null, effects: [effect("media.play", [mediaAsset(file), "music", true, false, 0, null, null])] };
-      }
-      return { value: null, effects: [playEffect(file, readPlayOptions(view, args[1]?.value))] };
+      const options = readPlayOptions(view, args[1]?.value);
+      return { value: null, effects: [playEffect(file, options)] };
     },
   };
 }
@@ -376,7 +371,10 @@ function mediaTrackGet(): BuiltinSpec {
     call: (view, args) => {
       const name = asciiFold(stringArg(args, 1, "media.track"));
       const audio = readAudioView(view);
-      if (audio === undefined || findTrack(audio, name) === undefined) throw new ScriptError("media.unknown-track", `media.track: unknown track "${name}"`);
+      if (audio === undefined || findTrack(audio, name) === undefined) {
+        view.media?.diagnose("media.unknown-track", "media.track", { track: name });
+        return { value: null };
+      }
       return { value: null, effects: [{ kind: "vm.control", args: ["mediaTrackObject", name] }] };
     },
   };
@@ -729,22 +727,26 @@ const MEDIA_PLAY = mediaPlay();
 const MEDIA_STOP = mediaTransport("mediastop");
 
 
-/**
- * A Toolkit 3.1 alias: it posts the original seven-argument `media.play`
- * effect, so its effect record, cues and state hash are exactly the pre-object
- * ones; it creates no voice object because a 3.1 call is a bare statement and
- * its declared value is void.
- */
-function legacyPlay(name: string, track: string, loop: boolean, summary: string, waits?: BuiltinDoc["waits"]): BuiltinSpec {
+/** A Toolkit 3.1 alias keeps its void result and playback mapping. */
+function legacyPlay(name: string, track: string, loop: boolean, summary: string, wait: boolean, waits?: BuiltinDoc["waits"]): BuiltinSpec {
+  const behaviour = wait
+    ? `Plays once on the ${track} track and parks the calling thread until the sound ends; it returns no value.`
+    : `Maps to the ${track} track with the Toolkit 3.1 loop flag and never returns a value; it preserves the original command's behavior.`;
   return {
     name,
     aliases: [],
     params: [{ name: "file", optional: false, byRef: false, variadic: false }],
-    doc: { ...legacyDoc(summary, `Maps to the ${track} track with the Toolkit 3.1 loop flag and never returns a value; it preserves the original command's behavior.`, waits), replacedBy: { kind: "command", name: "mediaplay" } },
-    call: (_view, args) => ({
-      value: null,
-      effects: [effect("media.play", [mediaAsset(stringArg(args, 0, name)), track, loop, false, 0, null, null])],
-    }),
+    doc: { ...legacyDoc(summary, behaviour, waits), replacedBy: { kind: "command", name: "mediaplay" } },
+    call: (_view, args) => {
+      const file = stringArg(args, 0, name);
+      if (wait) {
+        return {
+          value: null,
+          effects: [playEffect(file, { track, loop, volume: 100, priority: 0, sync: null, wait: true }, false)],
+        };
+      }
+      return { value: null, effects: [effect("media.play", [mediaAsset(file), track, loop, false, 0, null, null])] };
+    },
   };
 }
 
@@ -822,14 +824,14 @@ export const MEDIA_COMMANDS: readonly BuiltinSpec[] = [
   mediaLength(),
   mediaTracks(),
   getVolume(),
-  legacyPlay("midiplay", "music", true, "Play a media file on a named track.", { kind: "never", summary: "Never waits." }),
-  legacyPlay("playmidi", "music", true, "Play a media file on a named track.", { kind: "never", summary: "Never waits." }),
-  legacyPlay("wav", "sfx", false, "Play a wave file (e.g. a sound effect).", { kind: "never", summary: "Never waits." }),
-  legacyPlay("mp3", "sfx", false, "Play a wave file (e.g. a sound effect).", { kind: "never", summary: "Never waits." }),
+  legacyPlay("midiplay", "music", true, "Play a media file on a named track.", false, { kind: "never", summary: "Never waits." }),
+  legacyPlay("playmidi", "music", true, "Play a media file on a named track.", false, { kind: "never", summary: "Never waits." }),
+  legacyPlay("wav", "sfx", false, "Play a wave file (e.g. a sound effect).", false, { kind: "never", summary: "Never waits." }),
+  legacyPlay("mp3", "sfx", false, "Play a wave file (e.g. a sound effect).", false, { kind: "never", summary: "Never waits." }),
   legacyStop("mediarest", "music", "Stop a track or voice."),
   legacyStop("midirest", "music", "Stop a track or voice."),
   legacyStop("wavstop", "sfx", "Stop the current sound effect."),
-  legacyPlay("mp3pause", "sfx", false, "Play a sound effect and pause the engine until it finishes.", { kind: "other", summary: "The calling thread waits on audio.track until the sound effect ends." }),
+  legacyPlay("mp3pause", "sfx", false, "Play a sound effect and pause the engine until it finishes.", true, { kind: "other", summary: "The calling thread waits on audio.track until the sound effect ends." }),
   setVolume(),
   soundFont(),
   soundFontReset(),

@@ -12,10 +12,10 @@
  * VM asks the host type for its `emitterKey`) or a declared native listener.
  */
 
-import { BUILTIN_TRACKS, findVoice, findTrack, trackVolume, voiceWaitPayload, type MediaVoiceRef } from "./model.ts";
+import { BUILTIN_TRACKS, fadeValue, findVoice, findTrack, voicePosition, voiceWaitPayload, type MediaVoiceRef } from "./model.ts";
 import { MEDIA_EMITTER, mediaEventsActive, mediaTrackEmitterKey, mediaVoiceEmitterKey } from "./events.ts";
 import type { AudioPlayResult } from "./runtime.ts";
-import { registerEmitter } from "../events/emitter.ts";
+import { adoptEmitter, registerEmitter } from "../events/emitter.ts";
 import { createHostObject, findObject, writeMember } from "../script/objects.ts";
 import type { HostObjectType } from "../script/host.ts";
 import type { ObjectRecord } from "../script/state.ts";
@@ -129,37 +129,53 @@ export function createMediaScriptService(
         kind: "audio.track",
         global: false,
         id: "mediaWait",
-        payload: [{ track: String(start.record.members["track"]), voice: null, cueId: 0, endTick: null, pass: false, passIndex: null, handle: start.record.handle, seq: start.seq }],
+        payload: [{ track: String(start.record.members["track"]), voice: null, cueId: 0, endTick: null, pass: false, passIndex: null, handle: start.record.handle, seq: start.seq }, null, objectValue(start.record)],
         resumeRefs: [],
       };
     },
     bind(handle, result) {
       const record = findObject(state.vm, handle);
-      if (record !== undefined && (result.kind === "started" || result.kind === "same-file")) {
+      if (record !== undefined && (result.kind === "started" || (result.kind === "same-file" && result.action === "carry-on"))) {
         writeMember(record, "slot", result.voice);
         writeMember(record, "cueId", result.cueId);
+        if (!waiting.has(handle)) {
+          const ref = mediaVoiceRef(record)!;
+          const voice = findVoice(state.audio, ref);
+          if (voice?.lengthTicks === null && state.vm.threads.some((thread) => {
+            const wait = thread.wait;
+            if (wait?.kind !== "audio.track") return false;
+            const payload = wait.payload[0];
+            return payload !== null && typeof payload === "object" && !Array.isArray(payload) && payload.handle === handle;
+          })) diagnose("media.asset-length", "voice.wait", { track: ref.track, voice: ref.slot });
+        }
         if (mediaEventsActive(state)) {
           const name = record.members["track"];
           if (typeof name === "string") {
             const track = service.trackObject(name);
-            if (track !== null) registerEmitter(state.vm, state.events, mediaTrackEmitterKey(name), track);
-            registerEmitter(state.vm, state.events, mediaVoiceEmitterKey({ track: name, slot: result.voice, cueId: result.cueId }), record);
+            if (track !== null) adoptEmitter(state.vm, state.events, mediaTrackEmitterKey(name), track);
+            adoptEmitter(state.vm, state.events, mediaVoiceEmitterKey({ track: name, slot: result.voice, cueId: result.cueId }), record);
           }
-          registerEmitter(state.vm, state.events, MEDIA_EMITTER, service.mediaObject());
+          adoptEmitter(state.vm, state.events, MEDIA_EMITTER, service.mediaObject());
         }
       }
       if (record !== undefined && waiting.has(record.handle)) results.set(record.handle, result);
     },
     mediaObject() {
-      mediaRecord ??= createHostObject(state.vm, "media");
+      if (mediaRecord === null || findObject(state.vm, mediaRecord.handle) !== mediaRecord) {
+        const registered = state.events.emitters?.[MEDIA_EMITTER];
+        const live = registered === undefined ? undefined : findObject(state.vm, registered);
+        mediaRecord = live?.hostType === "media" ? live : createHostObject(state.vm, "media");
+      }
       return mediaRecord;
     },
     trackObject(name) {
       const folded = name.toLowerCase();
       if (findTrack(state.audio, folded) === undefined) return null;
       const existing = trackRecords.get(folded);
-      if (existing !== undefined) return existing;
-      const record = createHostObject(state.vm, "media.track");
+      if (existing !== undefined && findObject(state.vm, existing.handle) === existing) return existing;
+      const registered = state.events.emitters?.[mediaTrackEmitterKey(folded)];
+      const live = registered === undefined ? undefined : findObject(state.vm, registered);
+      const record = live?.hostType === "media.track" ? live : createHostObject(state.vm, "media.track");
       writeMember(record, "name", folded);
       trackRecords.set(folded, record);
       return record;
@@ -179,7 +195,8 @@ export function createMediaScriptService(
     voice(ref) {
       const voice = findVoice(state.audio, ref);
       if (voice === undefined) return null;
-      return { file: voice.file, state: voice.state, positionTicks: voice.positionTicks, lengthTicks: voice.lengthTicks, volume: voice.volume, loop: voice.loop };
+      const volume = voice.fade === null ? voice.volume : fadeValue(voice.fade, state.time.tick, voice.state === "paused" ? voice.pausedTick ?? state.time.tick : undefined);
+      return { file: voice.file, state: voice.state, positionTicks: voicePosition(voice, state.time.tick), lengthTicks: voice.lengthTicks, volume, loop: voice.loop };
     },
     voiceWait(ref) {
       const track = findTrack(state.audio, ref.track);
@@ -221,7 +238,8 @@ export function createMediaScriptService(
       post("media.loop", [ref.track, loop, { track: ref.track, slot: ref.slot, cueId: ref.cueId }]);
     },
     trackVolume(name) {
-      return trackVolume(state.audio, name);
+      const entry = state.audio.settings.trackVolumes.find((item) => item.name === name);
+      return entry === undefined ? 100 : entry.fade === null ? entry.volume : fadeValue(entry.fade, state.time.tick);
     },
     setTrackVolume(name, percent) {
       post("media.volume", [name, percent, null]);

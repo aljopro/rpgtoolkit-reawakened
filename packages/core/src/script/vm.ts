@@ -1988,18 +1988,22 @@ function dispatchResolved(
         if (services.media === undefined) throw new ScriptError("unknown.command", "mediaPlay: the media owner is not installed", pos);
         const file = effect.args?.[1];
         const options = effect.args?.[2] as MediaPlayOptions | undefined;
+        const returnVoice = effect.args?.[3] !== false;
         if (typeof file !== "string" || options === undefined) throw new ScriptError("builtin.bad-arg", "mediaPlay: malformed start", pos);
         const started = services.media.play(file, options);
         const outcome = started.outcome;
-        produced = outcome.kind === "rejected" || (outcome.kind === "same-file" && outcome.action === "ignored") ? null : objectValue(started.record);
+        produced = returnVoice && outcome.kind !== "rejected" && !(outcome.kind === "same-file" && outcome.action === "ignored")
+          ? objectValue(started.record)
+          : null;
         if (options.wait) {
           let wait: Wait | null = null;
           if (outcome.kind === "pending") wait = services.media.pendingWait(started);
-          else if (outcome.kind === "started" || outcome.kind === "same-file") {
+          else if (outcome.kind === "started" || (outcome.kind === "same-file" && outcome.action === "carry-on")) {
             const ref = mediaVoiceRef(started.record);
             wait = ref === null ? null : services.media.voiceWait(ref);
           }
           if (wait !== null) {
+            if (wait.kind === "audio.track") wait.payload[1] = produced;
             thread.wait = wait;
             thread.status = "waiting";
             parked = true;

@@ -119,6 +119,26 @@ export function registerEmitter(
 }
 
 /**
+ * Hydrate a built-in emitter with its host object without dropping its listener
+ * key or queued notifications. Audio can queue `started` before its returned
+ * voice is bound; those notifications must target that same voice object.
+ */
+export function adoptEmitter(vm: VmState, events: EventsSection, key: string, record: ObjectRecord): void {
+  const provisional = objectEmitter(record.handle);
+  for (const listener of events.listeners) if (listener.emitter === provisional) listener.emitter = key;
+  for (const queued of events.queue) if (queued.emitter === provisional) queued.emitter = key;
+  if (events.dispatch?.emitter === provisional) events.dispatch.emitter = key;
+  const current = registerEmitter(vm, events, key, record);
+  if (current === record) return;
+  events.emitters![key] = record.handle;
+  for (const queued of events.queue) {
+    if (queued.emitter !== key) continue;
+    const event = findObject(vm, queued.event);
+    if (event !== undefined) writeMember(event, "target", objectValueOf(record));
+  }
+}
+
+/**
  * Unregister the built-in emitter `key` (EMIT-20): drop its listeners, stale
  * queued events and in-progress cursor, and stop keeping its object alive.
  * A key that is not registered does nothing.

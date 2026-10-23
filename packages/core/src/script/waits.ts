@@ -132,6 +132,13 @@ export function pollRenderMsgBox(view: WaitView, wait: Wait): WaitResult | null 
 /** The audio owner resolver for finite-end and loop-pass waits. */
 export function pollAudioTrack(view: WaitView, wait: Wait): WaitResult | null {
   if (wait.kind !== "audio.track") return null;
+  // mediaPlay preserves its return value here while the call is parked. Legacy
+  // void waits have no second payload entry.
+  const returned = wait.payload[1];
+  const done: WaitResult = returned !== null && typeof returned === "object" && !Array.isArray(returned)
+    && returned.kind === "object" && typeof returned.handle === "number" && typeof returned.className === "string"
+    ? { value: { kind: "object", handle: returned.handle, className: returned.className }, ok: true }
+    : DONE;
   const raw = wait.payload[0];
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
   let trackName = raw.track;
@@ -154,16 +161,17 @@ export function pollAudioTrack(view: WaitView, wait: Wait): WaitResult | null {
     voiceIndex = bound.slot;
     cueId = bound.cueId;
   }
-  if (typeof voiceIndex !== "number" || typeof cueId !== "number") return DONE;
+  if (typeof voiceIndex !== "number" || typeof cueId !== "number") return done;
   const track = view.audio?.tracks.find((item) => item.name === trackName);
   const voice = track?.voices.find((item) => item.index === voiceIndex && item.cueId === cueId);
-  if (voice === undefined) return DONE;
+  if (voice === undefined) return done;
   if (voice.state === "paused") return null;
+  if (!pass && (voice.loop || voice.lengthTicks === null)) return done;
   if (pass && voice.loop && voice.lengthTicks !== null && passIndex !== null) {
     const currentPass = Math.floor((view.tick - voice.startTick) / voice.lengthTicks);
-    return currentPass > passIndex ? DONE : null;
+    return currentPass > passIndex ? done : null;
   }
-  return voice.endTick !== null && view.tick >= voice.endTick ? DONE : null;
+  return voice.endTick !== null && view.tick >= voice.endTick ? done : null;
 }
 /** `video`: wake only for the matching, unskippable video completion reply. */
 export function pollVideo(view: WaitView, wait: Wait): WaitResult | null {

@@ -2,6 +2,8 @@
 import type { AssetKey } from "../ports/keys.ts";
 import type { GameState } from "../save/state.ts";
 import { queueNativeEvent, registerEmitter } from "../events/emitter.ts";
+import { emitterHandle } from "../events/model.ts";
+import { findObject } from "../script/objects.ts";
 
 export type AudioLifecycleType = "started" | "stopped" | "ended" | "looped" | "paused" | "resumed" | "faded";
 export type AudioLifecycleDetail = {
@@ -24,11 +26,16 @@ export function mediaVoiceEmitterKey(voice: Pick<AudioLifecycleDetail, "track" |
 }
 
 /** Lazy like the game emitter: worlds that never use media emitters keep their existing state. */
-export function mediaEventsActive(state: Pick<GameState, "events">): boolean {
+export function mediaEventsActive(state: Pick<GameState, "events" | "vm">): boolean {
   for (const key in state.events.emitters) {
     if (Object.hasOwn(state.events.emitters, key) && isMediaEmitter(key)) return true;
   }
-  return state.events.listeners.some((listener) => isMediaEmitter(listener.emitter));
+  return state.events.listeners.some((listener) => {
+    if (isMediaEmitter(listener.emitter)) return true;
+    const handle = emitterHandle(listener.emitter);
+    // An unbound returned voice already owns ordinary object listeners.
+    return handle !== null && findObject(state.vm, handle)?.hostType === "media.voice";
+  });
 }
 function isMediaEmitter(key: string): boolean {
   return key === MEDIA_EMITTER || key.startsWith("media.track:") || key.startsWith("media.voice:");

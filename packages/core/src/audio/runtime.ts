@@ -747,11 +747,12 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       if (request.syncTrack !== undefined) {
         const sourceTrack = findTrack(host.audio, request.syncTrack);
         const source = sourceTrack?.voices.find((voice) => voice.index === 0);
-        if (sourceTrack === undefined || source === undefined || source.lengthTicks === null || info.kind !== "known" || info.lengthTicks === null) {
+        if (sourceTrack === undefined || source === undefined || source.lengthTicks === null || source.lengthTicks <= 0 || info.kind !== "known" || info.lengthTicks === null || info.lengthTicks <= 0) {
           diag("media.sync-source", "mediaPlay", { sync: request.syncTrack });
-          return { kind: "rejected" };
+          positionTicks = 0;
+        } else {
+          positionTicks = voicePosition(source, host.time.tick) % info.lengthTicks;
         }
-        positionTicks = voicePosition(source, host.time.tick) % info.lengthTicks;
       }
       const started = startVoice(found, request.asset, info, {
         loop: request.loop,

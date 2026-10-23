@@ -4,16 +4,21 @@ type: 'feature'
 ticket: 5
 created: '2026-10-22'
 status: 'built'
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
 baseline_revision: 'c339264d808b6964c504f3ec4c0588a6c782b96'
 route: 'full'
 route_source: 'auto'
 risk: 'high'
 context:
+
   - 'docs/guardrails.md'
   - 'docs/spec/engine/audio-media.md#media-1'
   - 'docs/spec/engine/rpgcode-modules-and-objects.md#oop-12'
   - 'docs/spec/engine/rpgcode-functions.md'
 ---
+
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
@@ -76,7 +81,7 @@ context:
 - [x] `packages/core/src/script/packs/media.ts` — object `mediaplay`, internal (`access: "internal"`) method commands, legacy alias rewrite to options; docs (`see` MEDIA-1) for each.
 - [x] `packages/core/src/script/virtuals.ts` — global `media` virtual.
 - [x] `packages/core/src/engine/engine.ts` — wire service, binding, and declared-listener host emitters.
-- [ ] `packages/core/test/media-objects.test.ts` — drive the real engine/VM for every matrix row, including priority, sync, unknown track, track controls, slot stealing and a save at every tick; update the one positional legacy test.
+- [x] `packages/core/test/media-objects.test.ts` — drive the real engine/VM for every matrix row, including priority, sync (including invalid-source fallback), unknown track, track controls, slot stealing, pending waits, event identity and a save at every tick; update the one positional legacy test.
 
 **Acceptance Criteria:**
 - Given a real engine, when a script plays, reads, fades, pauses, resumes, seeks, loops, sets volume and waits through objects, then it observes the MEDIA-1 results and the same cue stream as the equivalent procedural call.
@@ -102,29 +107,45 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 
 **Results (2026-10-22, commit `1cbf8ee4`, logs `/tmp/rpgtoolkit-484-head/`):** all 23 gates passed — typecheck, lint, `test` (1784 passed, 0 failed, 0 skipped), `test:strict` (1784 passed, 0 skipped), fixtures check/author/test, `golden`, `golden:bun`, `closing` (8/8), `dump:check` (all digests match), graph + graph test, licence + test (0 violations), provenance + test (633 files, 0 violations), catalogue, command-docs + test, no-skips, oracle, audit --prod. A throwaway authored-script smoke against the real engine printed: cues `soundfont.set`, `media.play sfx`, `media.pause`, `media.resume`, `media.play ui`, two `media.stop`; events `paused` delivered voice→track→media and `resumed`, `ended` at ticks 3/31/33; no diagnostics; final hash `ab711894ddd8283b`; artifact removed.
 
+**Results (post-fix full verification in the isolated worktree):** every listed gate passed. Typecheck, lint, focused media regressions, full `test` and `test:strict` (1,795/1,795; zero skips), `golden`, `golden:bun`, `closing`, graph checks, licence checks, provenance checks (633 files, zero violations), catalogue, command docs, fixture author/check/test, audio protocol, dump checks, production dependency audit (no known vulnerabilities), no-skips, independent oracle and corpus (10/10) all passed. The real-engine smoke `node --test --test-name-pattern='finite waited mediaPlay returns its voice after waking' packages/core/test/media-objects.test.ts` passed 1/1. The updated sync oracle and generated fixture pass check mode.
+
 **Commands:**
 - `pnpm fixtures:fetch`, `pnpm typecheck`, `pnpm lint` — pass.
-- `node --test packages/core/test/media-objects.test.ts packages/core/test/audio-lifecycle-engine.test.ts` — pass.
-- `pnpm test`, `pnpm test:strict` — pass, no skips.
-- `pnpm golden`, `pnpm golden:bun`, `pnpm closing` — unchanged.
-- `pnpm graph`, `pnpm licence`, `pnpm provenance`, `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm fixtures:author:check`, `pnpm fixtures:test`, `pnpm dump:check`, `pnpm audit --prod` — pass.
-- Full suite, strict, and every listed gate observed green before the PR is opened.
+- `node --test packages/core/test/media-objects.test.ts packages/core/test/audio-runtime.test.ts packages/core/test/audio-events.test.ts packages/core/test/audio-lifecycle-runtime.test.ts packages/core/test/audio-lifecycle-replay.test.ts packages/core/test/events-emitter.test.ts packages/core/test/script-threads.test.ts packages/core/test/script-closure-save.test.ts packages/core/test/audio-lifecycle-engine.test.ts` — pass.
+- `pnpm test`, `pnpm test:strict` — pass (1,795/1,795, zero skips).
+- `pnpm golden`, `pnpm golden:bun`, `pnpm closing` — pass with approved state-hash changes; no pixel-golden changes.
+- `pnpm graph`, `pnpm graph:test`, `pnpm licence`, `pnpm licence:test`, `pnpm provenance`, `pnpm provenance:test`, `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm command-docs:test`, `pnpm fixtures:author:check`, `pnpm fixtures:test`, `pnpm audio-protocol:check`, `pnpm dump:check`, `pnpm audit --prod`, `pnpm no-skips:test`, `pnpm oracle:check`, `pnpm corpus` — pass.
+- Full suite, strict, and every listed gate must remain green after any rebase or code change; the exact PR head must pass hosted CI before merge.
 
 ## Implementation Notes
 
 - Built `packages/core/src/audio/script.ts` (service + `MEDIA_HOST_TYPES`), the `bindVoice`/scan seam in `runtime.ts`, the VM `mediaplay`/`mediaTrackObject` control actions and lazy `emitterKey` registration, the global `media` virtual, and the object `mediaplay` plus internal method commands in the pack.
 - The one-argument `mediaPlay(file)` follows the MEDIA-1 object-returning contract with the Toolkit 3.1 `music`/loop defaults. Existing corpus callsites are bare statements, so the added object return is ignored; the media voice object still binds to the audio applier's live voice.
-- `mediaPlay(..., {wait:1})` on a start held for its asset parks on an `audio.track` wait with `cueId: 0` and the object handle; the resolver binds from the object and wakes when the held effect is gone. The payload is plain data and survives snapshots; the permanent test replays the whole pending-to-ended path.
+- `mediaPlay(..., {wait:1})` on a start held for its asset parks on an `audio.track` wait with `cueId: 0` and the object handle; plain wait state roots the handle through collection, the wait result returns the voice after waking, and the resolver binds it when the held effect is gone. Unknown-length pending starts diagnose and do not park forever; these paths survive snapshots.
 - Voice `loop` writes reject anything but `0`/`1` with a located `builtin.bad-arg` and no mutation; `volume` writes reject out-of-range values the same way.
-- `media`/track/voice emitters register only on emitter access (or a declared native listener), so a world that never uses them keeps its previous state shape and hashes; `queueAudioEvent` reuses the host objects once active.
+- `mp3pause(file)` uses the common audio applier with a finite SFX wait and suppresses the returned object, preserving the legacy void command; its regression test observes the parked thread and verifies resume at completion.
+- Unknown `media.track(name)` emits `media.unknown-track`, returns `null`, and creates no track.
+- `media`/track/voice emitters register only on emitter access (or a declared native listener), so a world that never uses them keeps its previous state shape and hashes. When a started voice is adopted, provisional listener, queue, and dispatch keys migrate to the bound host identity; pending voice listeners receive the eventual start event.
+- Media/track object caches verify the current VM object table and recreate collected or reset records. Voice position and fade-backed volume read from the current tick, with pause freezing the fade.
 
 ## Plan Change Log
 
 - 2026-10-22 — Director review corrections: reuse `media.unknown-voice` instead of minting a code; record the author-visible derivations as one `Proposed clarification (pending owner review)` paragraph; keep emitter registration on access only; mark method commands `access: "internal"`; add priority, sync, unknown-track and track-control coverage.
 - 2026-10-22 — No golden or closing baseline was re-recorded; `pnpm golden`, `pnpm golden:bun`, `pnpm closing` and `pnpm dump:check` pass unchanged.
 - 2026-10-23 — Owner confirmed the one-argument `mediaPlay(file)` returns a voice under MEDIA-1; the prior corpus review found existing 3.1 callsites are bare statements, so returning an object is compatible. Options remain optional.
+- 2026-10-23 — Re-reviewed the full diff after six quick-review patches: fix-specific and independent final reviews found no remaining issues; the invalid-sync fallback is also pinned by the independent audio oracle and generated fixture.
 
 ## Review Triage Log
+### 2026-10-23 pinned quick review
+
+- `medium / patch — fixed` — A waiting `mediaPlay(..., {wait:1})` loses the voice result: `dispatchResolved` yields before pushing `produced`, and `resolveWait` later pushes the generic `null` audio-wait result. Fixed by preserving the saveable voice in the audio wait result; regression test assigns it after waking.
+- `medium / patch — fixed` — A pending wait's voice handle exists only in `wait.payload`; `eachLiveRoot` did not traverse named-wait payloads, so a collected voice could not bind and the wait could wake before finite playback ended. Fixed by rooting the returned voice in plain wait state; pending-start save/restore test waits through the end.
+- `medium / patch — fixed` — `createMediaScriptService` cached `ObjectRecord`s outside VM state and returned them without checking the live object table. End-of-tick collection or `resetLifecycle` could leave dead records. Fixed by identity-checking the current VM table and rehydrating; regression test covers GC and VM replacement.
+- `medium / patch — fixed` — With media events active, `started` registered a generic emitter before the returned host voice was bound, so voice listeners missed lifecycle events. Fixed by adopting the returned voice emitter, migrating provisional listener/queue/dispatch keys and retargeting queued events; event tests cover bound and pending voices.
+- `false` — `voice.wait()` rejecting a looping voice matches P5: the object method requests terminal completion, `pass:false` on a loop is diagnosed, and the next-pass wait is not part of the object API. The reviewer conflated that with the separate script-level ability to request a pass boundary.
+- `medium / patch — fixed` — The plan's sync matrix requires missing/inactive/unknown-length sources to diagnose and start at zero, but `runtime.play` rejected playback. The MEDIA-1 fallback was added in docs-only commit `4a7f5fb6` before implementation; runtime and the independent audio oracle now diagnose and start the valid destination at zero.
+- `medium / patch — fixed` — `voice.position` and fade-backed volume reads used last audio-phase cached fields. Fixed by deriving position and fade-backed voice/track gain at the current tick, preserving pause behavior; regression test covers tick freshness and paused fade.
+
 
 ## Code Review
 
@@ -134,9 +155,14 @@ Review lenses: `blind-hunter` did not meet its required finding floor (3 finding
 
 **Code review complete: 0 decision-needed, 3 patch, 0 defer, 0 rejected.**
 
-- [ ] [Review][Patch] Implement the MEDIA-1 voice return for one-argument `mediaPlay(file)` [packages/core/src/script/packs/media.ts:288] — The owner confirms the approved MEDIA-1 signature returns a voice with or without options; the corpus review found existing Toolkit 3.1 callsites are bare statements, so callers ignore the additional value. Remove the void-only compatibility branch, retain the music/loop defaults and verify the established playback/cue mapping.
-- [ ] [Review][Patch] Restore `mp3pause(file)`'s wait [packages/core/src/script/packs/media.ts:738] — At the base, the command used `MEDIA_ONCE | MEDIA_WAIT` and returned the `audio.track` wait. The new `legacyPlay` emits only a play effect, while the `mp3pause` row still claims it waits; the new alias test asserts that no alias parks, thereby pinning the regression. Restore the legacy wait and make the test prove the caller resumes only after the finite sound ends.
-- [ ] [Review][Patch] Return `null` for an unknown `media.track(name)` [packages/core/src/script/packs/media.ts:379] — The plan's acceptance matrix and the internal method documentation specify that an unknown name diagnoses and returns `null` without creating a track. The implementation throws `ScriptError("media.unknown-track", ...)` instead, so a script's catchable error path runs rather than receiving the specified null result. Align the method with its documented outcome and cover that behavior.
+- [x] [Review][Patch] Implement the MEDIA-1 voice return for one-argument `mediaPlay(file)` [packages/core/src/script/packs/media.ts:288] — The owner confirms the approved MEDIA-1 signature returns a voice with or without options; the corpus review found existing Toolkit 3.1 callsites are bare statements, so callers ignore the additional value. Remove the void-only compatibility branch, retain the music/loop defaults and verify the established playback/cue mapping.
+- [x] [Review][Patch] Restore `mp3pause(file)`'s wait [packages/core/src/script/packs/media.ts:738] — At the base, the command used `MEDIA_ONCE | MEDIA_WAIT` and returned the `audio.track` wait. The new `legacyPlay` emits only a play effect, while the `mp3pause` row still claims it waits; the new alias test asserts that no alias parks, thereby pinning the regression. Restore the legacy wait and make the test prove the caller resumes only after the finite sound ends.
+- [x] [Review][Patch] Return `null` for an unknown `media.track(name)` [packages/core/src/script/packs/media.ts:379] — The plan's acceptance matrix and the internal method documentation specify that an unknown name diagnoses and returns `null` without creating a track. The implementation throws `ScriptError("media.unknown-track", ...)` instead, so a script's catchable error path runs rather than receiving the specified null result. Align the method with its documented outcome and cover that behavior.
+
+### 2026-10-23 pinned quick review
+
+`BindingKingfisher` found seven findings: six routed to patch and one rejected as false against P5. The prior focused fix reviewers (`MediaFixBehaviorReview` and `MediaFixRegressionReview`) found no issues in the three original patches. All six patch findings are now fixed; `tk-484-builder.MediaFixReview` and final independent reviewer `FinalMediaReview` found no remaining defects.
+
 
 **Owner decision (2026-10-23):** The one-argument form returns a voice, consistent with MEDIA-1 and the existing epic note that the legacy return was unused by bare call sites; options remain optional.
 
