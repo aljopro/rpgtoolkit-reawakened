@@ -2,35 +2,105 @@
 title: "The media object: media, track and voice objects, and mediaPlay returning a voice"
 type: 'feature'
 ticket: 5
-created: '2026-10-19'
-status: draft
-baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
-risk: "high"
+created: '2026-10-22'
+status: 'ready-for-dev'
+baseline_revision: 'c339264d808b6964c504f3ec4c0588a6c782b96'
+route: 'full'
+route_source: 'auto'
+risk: 'high'
 context:
-  - "spec - docs/spec/engine/audio-media.md as amended by 21.1"
-  - "spec - object and receiver rows written by 19.1"
-  - "code - packages/core/src/script/packs/media.ts, packages/core/src/audio/runtime.ts"
+  - 'docs/guardrails.md'
+  - 'docs/spec/engine/audio-media.md#media-1'
+  - 'docs/spec/engine/rpgcode-modules-and-objects.md#oop-12'
+  - 'docs/spec/engine/rpgcode-functions.md'
 ---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent
 
-Lane C (objects). Builds the script-facing object model over the unchanged audio state.
+**Problem:** `mediaPlay` still returns nothing and the only script surface is the procedural family the owner retired in MEDIA-1/MEDIA-5. Scripts cannot hold a sound, read its core state, or observe it as an emitter.
 
-## Boundaries
+**Approach:** Add the global `media` emitter, hydrated `media.track` and `media.voice` host objects over the existing audio state, and make `mediaPlay(file[, options])` return the started voice. Every start still goes through the audio applier so a later `beforePlay` cannot be bypassed.
 
-No new playback behaviour: fades, seeks, loops, waits and stealing are the Epic 6 rules reached through methods. Does not remove the old commands; that is 21.6.
+## Boundaries & Constraints
 
-## Key Decisions
+**Always:** Follow MEDIA-1/2/3 and the preserved Epic 6 playback, cue, wait, fade, allocation and stale rules. The voice object stores only `{track, slot, cueId}`; methods are hydrated by OOP-12 and nothing callable enters a save. Options are the ruled named fields; invalid input changes no playback. All 3.1 aliases keep their current cue streams and waits. G1–G7 hold (plain data, injected clock, no host APIs, doc-cited).
 
-1. The voice object holds data only; the stale check is the cueId check Epic 6 already has.
-2. A method call that waits parks the thread on the existing `audio.track` wait.
+**Never:** Do not implement `beforePlay` or cancellation (21.4), retire `mediatrack`/`mediaload`/the other procedural names (21.6), add positional `priority`/`syncTrack`/`&voice`, change cue or tick timing, add ducking, or touch the runner protocol. Do not open the legacy source. Do not register a media emitter eagerly on `mediaPlay` (it would change every existing audio state hash).
 
-## Acceptance
+## I/O & Edge-Case Matrix
 
-1. Ruled results through objects.
-2. A stale voice cannot control its successor.
-3. No callable in the audio section of a save.
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| Play a sound | `v = mediaPlay("boom.wav", {track:"sfx"})` | `v` has `track="sfx"`, its slot, its live `cueId`; `v.file/state/position/length/volume/loop` read core state | No error |
+| Bad options | unknown key, bad type, volume 101, loop+wait | playback unchanged, call reports the located media/builtin error | Diagnostic/throw at the call |
+| Same file | music playing same file; sfx playing same file | music returns the live voice (carry-on); sfx returns `null` (ignored) | No new cue |
+| Stale voice | slot replaced by a later play | reads project "no live voice"; `stop/pause/resume/seek/fade/wait` and `volume`/`loop` writes emit one `media.stale-voice` diagnostic and do nothing | Replacement unaffected |
+| Asset pending | length unknown at the play | voice object is returned unbound and binds when the held effect applies | No error |
+| Save / load | save at every tick | same hash after restore; audio section has no callable; unbound/bound members restore | No refused load |
+| Legacy aliases | `mediaplay/midiplay/playmidi/wav/mp3/mp3pause` | byte-identical cue stream and wait to today | No error |
+| Emitters | `v.on("ended")`, `track.on`, `media.on` | voice, then track, then `media` hear the ruled detail; lazy registration | No error |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `packages/core/src/audio/model.ts` — `AudioVoiceHandle`, `findTrack`, `voicePosition`, `fadeValue`; add pure `voiceOf(audio, {track, slot, cueId})` and `voiceWaitPayload(track, voice, tick)` reused by pack and script layer.
+- `packages/core/src/audio/runtime.ts` — `applyEffect` `media.play` branch, `startVoice`, `locate`, `stop/pause/resume/seek/setLoop/setVoiceVolume/fade`. Extend the voice selector in effect args to a plain `{track,slot,cueId}`; `locate` emits one `media.stale-voice` diagnostic when `stale`; `media.play` accepts `volume` and calls `options.bindVoice(handle, outcome)`; no rule or cue changes.
+- `packages/core/src/audio/script.ts` (new) — `MediaScriptService`, `createMediaScriptService(state, post)`, and `MEDIA_HOST_TYPES`: `media` (built-in track properties), `media.track` (`name`, writable `volume`, `fade`), `media.voice` (readable `track/file/state/position/length/volume/loop`, writable `volume/loop`, methods). Owns option parsing and the play/bind/wait flow.
+- `packages/core/src/script/host.ts` — optional `emitterKey(record)` on `HostObjectType`; optional `media` on `HostObjectContext`.
+- `packages/core/src/script/plugin.ts` — optional `media?: MediaScriptService` on `CommandView`.
+- `packages/core/src/script/vm.ts` — register the three media host types when the media plugin is active; pass `media` into views/contexts; add control actions `mediaplay` (create voice object, post `media.play`, park on the `audio.track` wait when `wait:true`) and `emitterObject` (register/reuse a `media.track:<name>` emitter); register a host object's derived emitter key on `on/once/off/emit/emitCancelable` access.
+- `packages/core/src/script/packs/media.ts` — replace the six-argument `mediaplay` with `(file[, options])`; add internal `mediatrackget`, `mediatrackfade`, `mediavoicestop`, `mediavoicepause`, `mediavoiceresume`, `mediavoiceseek`, `mediavoicefade`, `mediavoicewait`; route `midiplay/playmidi/wav/mp3/mp3pause` through the options form with today's flags and waits. Leave every other procedural command and `mediastop(track[,voice])` untouched.
+- `packages/core/src/script/virtuals.ts` — read-only `media` virtual returning the registered `media` host emitter (the `game` precedent).
+- `packages/core/src/engine/engine.ts` — build the media service with `bus.postEffect`, `state.vm` and `bindVoice` (write `slot`/`cueId` into the voice object); pass it to the VM; register host emitters when a manifest declares native media listeners.
+- `packages/core/src/audio/index.ts` — export the new module.
+- `docs/spec/engine/rpgcode-functions.md` — `mediaplay` row becomes `object mediaplay(string file[, object options])` with the ruled options note (doc-first commit).
+- `packages/core/test/media-objects.test.ts` (new); update the positional call at `packages/core/test/audio-lifecycle-engine.test.ts:209`.
+- Do not change: `audio/save.ts`, cue shapes, `golden/audio/*`, tracker fields, other epics' plans.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [ ] `docs/spec/engine/rpgcode-functions.md` — update the `mediaplay` row signature/notes from MEDIA-1 and MEDIA-5; commit before code (G7).
+- [ ] `packages/core/src/audio/model.ts` — add the pure voice lookup and shared wait payload; one source for pack and script layer.
+- [ ] `packages/core/src/audio/runtime.ts` — descriptor selectors, stale diagnostic, start volume, `bindVoice` outcome; keep every rule and cue identical.
+- [ ] `packages/core/src/audio/script.ts`, `packages/core/src/audio/index.ts` — media service and host types; option validation, read/write hooks, method dispatch data.
+- [ ] `packages/core/src/script/host.ts`, `packages/core/src/script/plugin.ts`, `packages/core/src/script/vm.ts` — hydration/emitter-key hook, service plumbing, `mediaplay` and `emitterObject` control actions, lazy registration.
+- [ ] `packages/core/src/script/packs/media.ts` — object `mediaplay`, internal method commands, legacy alias rewrite to options; docs (`see` MEDIA-1) for each.
+- [ ] `packages/core/src/script/virtuals.ts` — global `media` virtual.
+- [ ] `packages/core/src/engine/engine.ts` — wire service, binding, and declared-listener host emitters.
+- [ ] `packages/core/test/media-objects.test.ts` — drive the real engine/VM for every matrix row, including slot stealing and a save at every tick; update the one positional legacy test.
+
+**Acceptance Criteria:**
+- Given a real engine, when a script plays, reads, fades, pauses, resumes, seeks, loops, sets volume and waits through objects, then it observes the MEDIA-1 results and the same cue stream as the equivalent procedural call.
+- Given a voice replaced by a later play, when its methods or writable fields are used, then exactly one located `media.stale-voice` diagnostic is reported and the replacement is untouched.
+- Given `mediaPlay(file)` with no options, when run, then it plays `music` looping; a positional `mediaplay("f.wav","sfx",4)` call fails as an arity error (no retired extension remains).
+- Given every 3.1 alias, when replayed, then its cue stream and wait match the recorded legacy parity stream.
+- Given a save at every tick and a restore, then `hashGameState` matches, the audio section contains no callable, and `media`/voice/track objects restore as data with their methods rehydrated.
+- Given a voice/track/`media` listener, when a transition is applied, then it hears the MEDIA-2 detail in voice → track → media order.
+
+## Design Notes
+
+`mediaPlay` cannot read the options dictionary or create an object inside a `BuiltinSpec`, so the pack validates the file and hands the raw options value to one VM control action. That action uses `MediaScriptService.play`, which creates the `media.voice` host object, posts the ordinary `media.play` effect with the object's handle through `bus.postEffect`, and reads the outcome the audio applier reports synchronously. Posting stays the only start route: 21.4 adds `beforePlay` to the shared `media.play`/`music.play`/`sfx.play` start seam. A held (pending) play binds the same handle when the effect is retried, so saves stay plain.
+
+Voice emitters are registered on first emitter access, not at play: that keeps MEDIA-2's lazy domain and every current audio state hash/golden unchanged. `media`/track objects register on first read because reading them is the access.
+
+Unruled details that follow MEDIA-1's wording rather than add rules: a stale voice's reads project "no live voice" as `file=""`, `state="stopped"`, `position=0`, `length=0`, `volume=0`, `loop=0`; a music carry-on returns the live voice, an ignored SFX returns `null`, and a pending play returns its unbound object. `media.stale-voice` is a located diagnostic code in the established `media.*` style, not a new author-facing contract.
 
 ## Verification
 
-Unit tests; snapshot at every tick; alias goldens unchanged.
+**Commands:**
+- `pnpm fixtures:fetch`, `pnpm typecheck`, `pnpm lint` — pass.
+- `node --test packages/core/test/media-objects.test.ts packages/core/test/audio-lifecycle-engine.test.ts` — pass.
+- `pnpm test`, `pnpm test:strict` — pass, no skips.
+- `pnpm golden`, `pnpm golden:bun`, `pnpm closing` — unchanged.
+- `pnpm graph`, `pnpm licence`, `pnpm provenance`, `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm fixtures:author:check`, `pnpm fixtures:test`, `pnpm dump:check`, `pnpm audit --prod` — pass.
+- Full suite, strict, and every listed gate observed green before the PR is opened.
+
+## Implementation Notes
+
+## Plan Change Log
+
+## Review Triage Log
