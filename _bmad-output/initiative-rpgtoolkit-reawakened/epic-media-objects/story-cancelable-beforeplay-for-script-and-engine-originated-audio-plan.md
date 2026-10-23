@@ -3,7 +3,7 @@ title: "Cancelable beforePlay for script and engine-originated audio"
 type: 'feature'
 ticket: 4
 created: '2026-10-19'
-status: in-progress
+status: done
 baseline_revision: '98323e628792e16e31f89810f7fc7c95bdfd1190'
 risk: "high"
 context:
@@ -47,4 +47,4 @@ Use the existing MEDIA-3 contract and event system. Do not change unrelated effe
 
 ## Verification
 
-`pnpm typecheck`; `pnpm test` (1,796 passed; 19 fixture-fetch-dependent skips); `pnpm golden` (headless comparisons and all scene goldens pass); `pnpm lint`; focused audio/event suites and the event step-cost test (within 19.2 headroom).
+`pnpm typecheck`; `pnpm test` (1,796 passed; 19 fixture-fetch-dependent skips); `pnpm golden` (headless comparisons and all scene goldens pass); `pnpm lint`; focused audio/event suites and the event step-cost test (within 19.2 headroom); GitHub CI for PR #607 passed all jobs.
