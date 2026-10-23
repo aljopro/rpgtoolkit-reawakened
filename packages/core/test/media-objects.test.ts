@@ -46,6 +46,7 @@ type Rig = {
   readonly notes: AudioNote[];
   readonly diagnostics: Diagnostic[];
   readonly cues: AudioCue[];
+  postAudioEffect(name: string, args: Parameters<typeof engineEffect>[2]): void;
   tick(): void;
   run(ticks: number): void;
 };
@@ -106,6 +107,9 @@ function rig(lengths: Record<string, number | null | "pending">, program: string
     notes,
     diagnostics,
     cues,
+    postAudioEffect(name, args) {
+      bus.postEffect("audio", engineEffect("audio", name, args, "draw-audio-cue"));
+    },
     tick() {
       runWaitsPhase(state.vm, {
         tick: state.time.tick,
@@ -168,7 +172,7 @@ test("mediaPlay returns a bound voice whose readable fields are the core voice s
 
 test("media.beforePlay mutates file, volume and loop before the shared start", () => {
   const world = rig({ "a.wav": 60, "b.wav": 90 }, [
-    'media.on("beforePlay", (event) => { event.detail.file = "MEDIA/B.WAV"; event.detail.volume = 25; event.detail.loop = 1 })',
+    'media.on("beforePlay", (event) => { source = event.detail.source; event.detail.file = "MEDIA/B.WAV"; event.detail.volume = 25; event.detail.loop = 1 })',
     'v = mediaPlay("a.wav", { track: "sfx" })',
     "after = 1",
   ].join("\n"));
@@ -180,6 +184,7 @@ test("media.beforePlay mutates file, volume and loop before the shared start", (
   equal(started.file, "media/b.wav");
   equal(started.volume, 25);
   equal(started.loop, true);
+  equal(global(world.state, "source"), "script");
   equal(world.cues.filter((cue) => cue.kind === "media.play").length, 1);
 });
 
@@ -199,12 +204,13 @@ test("engine-originated starts share the script listener order and canonical mut
 });
 
 test("engine effect starts cover board, frame, battle, menu and video sources", () => {
-  const board = rig({ "a.wav": 60 }, 'media.on("beforePlay", (event) => { event.cancel() })');
+  const board = rig({ "a.wav": 60 }, 'media.on("beforePlay", (event) => { source = event.detail.source; event.cancel() })');
   board.tick();
   board.audio.drain();
   const boardCueId = board.state.audio.cueId;
-  board.audio.apply(engineEffect("audio", "music.play", ["media/a.wav", true, false, "board"], "draw-audio-cue"));
+  board.postAudioEffect("music.play", ["media/a.wav", true, false, "board"]);
   equal(board.state.audio.cueId, boardCueId);
+  equal(global(board.state, "source"), "board");
   equal(voice(board.state, "music", 0), undefined);
 
   const frame = rig({ "a.wav": 60 }, [
@@ -212,24 +218,25 @@ test("engine effect starts cover board, frame, battle, menu and video sources", 
   ].join("\n"));
   frame.tick();
   frame.audio.drain();
-  frame.audio.apply(engineEffect("audio", "sfx.play", ["media/a.wav", false, null, "frame"], "draw-audio-cue"));
+  frame.postAudioEffect("sfx.play", ["media/a.wav", false, null, "frame"]);
   equal(global(frame.state, "source"), "animation");
   equal(voice(frame.state, "sfx", 0)?.volume, 50);
 
-  frame.audio.apply(engineEffect("audio", "sfx.play", ["media/a.wav", false, null, "ui"], "draw-audio-cue"));
+  frame.postAudioEffect("sfx.play", ["media/a.wav", false, null, "ui"]);
   equal(global(frame.state, "source"), "menu");
   equal(voice(frame.state, "ui", 0)?.volume, 50);
 
-  const battle = rig({ "a.wav": 60, "b.wav": 90 }, 'media.on("beforePlay", (event) => { event.detail.file = "MEDIA/B.WAV" })');
+  const battle = rig({ "a.wav": 60, "b.wav": 90 }, 'media.on("beforePlay", (event) => { source = event.detail.source; event.detail.file = "MEDIA/B.WAV" })');
   battle.tick();
   battle.audio.drain();
-  battle.audio.apply(engineEffect("audio", "music.play", ["media/a.wav", true, false, "battle"], "draw-audio-cue"));
+  battle.postAudioEffect("music.play", ["media/a.wav", true, false, "battle"]);
   equal(voice(battle.state, "music", 0)?.file, "media/b.wav");
+  equal(global(battle.state, "source"), "battle");
 
   const video = rig({ "a.wav": 60 }, 'media.on("beforePlay", (event) => { source = event.detail.source })');
   video.tick();
   video.audio.drain();
-  video.audio.apply(engineEffect("audio", "music.play", ["media/a.wav", true, false, "video"], "draw-audio-cue"));
+  video.postAudioEffect("music.play", ["media/a.wav", true, false, "video"]);
   equal(global(video.state, "source"), "video");
 });
 
