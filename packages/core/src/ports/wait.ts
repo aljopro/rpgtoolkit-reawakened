@@ -59,6 +59,7 @@ export type InputKeyWait = {
   resumeRefs?: string[];
   cursorMap?: number;
   cursorSelection?: number;
+  dialogue?: { actorId: number; targetId: number | null; text: string };
 };
 
 /** A wait for coupled sprite movement (`multiRun`, E-33). */

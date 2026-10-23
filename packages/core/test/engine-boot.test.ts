@@ -12,6 +12,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TextEncoder } from "node:util";
 import {
+  actorFromSource,
+  addActor,
   assetKey,
   createAssetIndex,
   createEmptyBoard,
@@ -21,6 +23,7 @@ import {
   PACKAGE_ROOT,
   writeBoard,
   writeMainFile,
+  startProgram,
 } from "../src/index.ts";
 import { resolveManifestPlugins } from "../src/engine/boot.ts";
 import type { AssetIndex, AssetRoot, Engine, EffectRecord, EngineInit, GameState, InputRecord, PackageCatalogueEntry, PlainData, TickReport } from "../src/index.ts";
@@ -245,6 +248,51 @@ test("a scripted game boots from start.prg to its first board with the ruled eff
   deepEqual({ x: state.camera.x, y: state.camera.y }, { x: 0, y: 0 });
   equal(state.vm.threads.some((thread) => thread.kind === "board" && thread.status !== "finished"), true);
 });
+test("engine-backed dialogue displays through the message window and resumes on input", () => {
+  const game = authorGame(SCRIPTED);
+  const doubles = makeDoubles();
+  const engine = bootEngine(game, doubles);
+  run(engine, game.files, 30);
+  const state = doubles.state();
+  const board = state.world.board;
+  if (board === null) throw new Error("boot did not load its first board");
+  const actor = addActor(state.actors, {
+    kind: "party",
+    source: "hero.tem",
+    stats: { hp: 12, maxHp: 12, smp: 4, maxSmp: 4, dp: 2, fp: 3, level: 1 },
+    behaviour: "stock-rpg.hero",
+  });
+  const source = actorFromSource({
+    id: "dialogue-player",
+    kind: "player",
+    source: "hero.tem",
+    x: 64,
+    y: 64,
+    layer: 1,
+    controlled: true,
+  }, board, 0, null);
+  state.sprites.players = [{ ...source, actorId: actor.id }];
+  const thread = startProgram(state.vm, {
+    kind: "inline",
+    text: 'dialogue("Hello, <name>")',
+    compiler: COMPILER_VERSION,
+  });
+  thread.source = source.id;
+  state.vm.globals.name = "Ada";
+
+  engine.advance(1, []);
+  equal(state.ui.message.text, "Hello, Ada");
+  equal(thread.status, "waiting");
+  engine.advance(1, []);
+
+
+  engine.advance(1, [{
+    tick: state.time.tick,
+    event: { kind: "key", name: "Enter", code: "Enter", char: null, down: true },
+  }]);
+  equal(thread.status, "finished");
+});
+
 
 test("boot is deterministic and independent of how ticks are batched", () => {
   const game = authorGame(SCRIPTED);

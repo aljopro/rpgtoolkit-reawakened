@@ -58,7 +58,7 @@ import {
   type PluginLayers,
 } from "./layers.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
-import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef, queueErrorEvent, registerEmitter } from "../events/emitter.ts";
+import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef, queueErrorEvent, queueNativeEvent, registerEmitter } from "../events/emitter.ts";
 import { GAME_EMITTER, type EventsSection } from "../events/model.ts";
 import { registerNativeListeners } from "../events/native.ts";
 import { classInfo, findMember, findMethod } from "./classes.ts";
@@ -386,25 +386,26 @@ export function runWaitsPhase(
   poll: WaitPoll = defaultWaitPoll,
   claim?: (seq: number) => void,
   services?: ScriptServices,
+  onResolved?: (wait: Wait) => void,
 ): void {
   const waiting = vm.threads.filter((thread) => thread.status === "waiting" && thread.wait !== null);
   waiting.sort((left, right) => left.id - right.id);
   const blocker = findBlockingThread(vm);
   if (blocker !== null) {
-    resolveWait(vm, view, poll, blocker, claim, services);
+    resolveWait(vm, view, poll, blocker, claim, services, onResolved);
     if (blocker.status === "waiting") {
       refreshBlock(vm, view.tick);
       return;
     }
   }
   for (const thread of waiting) {
-    if (thread !== blocker) resolveWait(vm, view, poll, thread, claim, services);
+    if (thread !== blocker) resolveWait(vm, view, poll, thread, claim, services, onResolved);
   }
   refreshBlock(vm, view.tick);
 }
 
 /** Poll one thread's wait; on a result, make the thread ready and hand it the wake value. */
-function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread, claim?: (seq: number) => void, services?: ScriptServices): void {
+function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread, claim?: (seq: number) => void, services?: ScriptServices, onResolved?: (wait: Wait) => void): void {
   const wait = thread.wait;
   if (wait === null) return;
   if (wait.kind === "input.key" && wait.parkSeq === undefined) wait.parkSeq = view.input?.nextSeq ?? 0;
@@ -418,6 +419,7 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
     thread.status = "finished";
     return;
   }
+  onResolved?.(wait);
   if (wait.kind === "request" || wait.kind === "blob") {
     if (!result.ok) {
       recordDiagnostic(vm, view.tick, thread.id, "request.failed", wait.file, wait.line, toStringValue(result.value));
@@ -590,7 +592,11 @@ export function advanceScriptTick(
   budget: number = STEP_BUDGET,
   poll: WaitPoll = defaultWaitPoll,
 ): ScriptStatus {
-  runWaitsPhase(state.vm, { tick: state.time.tick, events: state.events }, poll);
+  runWaitsPhase(state.vm, { tick: state.time.tick, events: state.events }, poll, undefined, undefined, (wait) => {
+    if (wait.kind === "input.key" && wait.dialogue !== undefined) {
+      queueNativeEvent(state.vm, state.events, "game", "dialogue.completed", wait.dialogue);
+    }
+  });
   runThreadsPhase(state.vm, services, budget);
   runEventsPhase(state, services, budget);
   assertNoDeadlock(state.vm, services);

@@ -1349,6 +1349,10 @@ export function createEngine(init: EngineInit): Engine {
         const videoBefore = state.engine.video;
         runWaitsPhase(state.vm, phaseView(), defaultWaitPoll, (seq) => {
           if (!(state.engine.claims ?? []).includes(seq)) (state.engine.claims ??= []).push(seq);
+        }, undefined, (wait) => {
+          if (wait.kind === "input.key" && wait.dialogue !== undefined) {
+            queueNativeEvent(state.vm, state.events, "game", "dialogue.completed", wait.dialogue);
+          }
         });
         if (videoBefore?.ended === true && state.engine.video?.reqId === videoBefore.reqId) {
           const music = state.audio.tracks.find((track) => track.name === "music");
