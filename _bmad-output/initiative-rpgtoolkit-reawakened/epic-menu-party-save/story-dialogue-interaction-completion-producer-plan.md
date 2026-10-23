@@ -40,6 +40,6 @@ Reuse the existing 4.21 message-window and input-wait behavior; add only the `di
 
 1 patch finding; no decision-needed or deferred findings. Blind Hunter and Edge Case Hunter reported no actionable defects; Intent Alignment found the diff implements the wrapper-and-producer intent, while noting tests omit returned key, non-null target, and cancellation/failure cases.
 
-- [ ] [Review][Patch] Assert the key returned by `dialogue(text)` [packages/core/test/events-game.test.ts]
+- [x] [Review][Patch] Assert the key returned by `dialogue(text)` [packages/core/test/events-game.test.ts]
 
 Rejected: none.
