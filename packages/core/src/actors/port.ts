@@ -139,6 +139,7 @@ function actorIdFromEmitter(context: { readonly events: { readonly emitters?: Re
 export function createActorHostType(service: ActorService): HostObjectType {
   return {
     name: "actor",
+    methods: { damage: "actor_damage" },
     read(context, name): Value | undefined {
       const id = actorIdFromEmitter(context);
       if (id === null) return undefined;

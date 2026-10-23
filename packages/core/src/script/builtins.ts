@@ -146,6 +146,52 @@ export const CORE_PLUGIN: PluginDefinition = {
     ],
   },
   commands: [
+    {
+      name: "actor_damage",
+      aliases: [],
+      params: [
+        { name: "target", optional: false, byRef: false, variadic: false },
+        { name: "amount", optional: false, byRef: false, variadic: false },
+        { name: "source", optional: true, byRef: false, variadic: false },
+        { name: "pool", optional: true, byRef: false, variadic: false },
+      ],
+      call: (view, args) => {
+        if (view.state === undefined || view.actors === undefined) return { value: 0 };
+        const target = args[0]?.value;
+        if (
+          typeof target !== "object" ||
+          target === null ||
+          !("kind" in target) ||
+          target.kind !== "object" ||
+          typeof target.handle !== "number"
+        ) {
+          throw new ScriptError("builtin.bad-arg", "actor_damage: target must be a live actor object");
+        }
+        const emitter = Object.entries(view.state.events.emitters ?? {}).find(([, handle]) => handle === target.handle)?.[0];
+        if (emitter === undefined || !emitter.startsWith("actor:")) {
+          throw new ScriptError("builtin.bad-arg", "actor_damage: target must be an actor object");
+        }
+        const id = Number(emitter.slice("actor:".length));
+        const actor = view.actors.readActor(id);
+        const amount = args[1]?.value;
+        if (actor === null || typeof amount !== "number" || !Number.isFinite(amount)) return { value: 0 };
+        const sourceValue = args[2]?.value;
+        const source = typeof sourceValue === "number" && sourceValue > 0 ? sourceValue : null;
+        const pool = args[3]?.value === "smp" ? "smp" : "hp";
+        const before = pool === "smp" ? actor.stats.smp : actor.stats.hp;
+        const patch = pool === "smp" ? { smp: before - amount } : { hp: before - amount };
+        const result = view.actors.updateStats(id, patch, { cause: "damage", source });
+        if (result === null) return { value: 0 };
+        const afterActor = view.actors.readActor(id);
+        const after = afterActor === null ? before : pool === "smp" ? afterActor.stats.smp : afterActor.stats.hp;
+        return { value: before - after };
+      },
+      doc: {
+        summary: "Apply damage to a live actor's HP or SMP pool.",
+        behaviour: "Subtract the requested amount through the actor rules, preserving damage cause and source attribution, and return the actual amount removed after clamping.",
+        groups: ["internal"],
+      },
+    },
     ...PURE_SPECS,
     {
       name: "sleep",
