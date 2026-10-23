@@ -56,7 +56,7 @@ path. Migration changes no actor, VM, RNG or time data.
 
 | Section | Version-2 fields | Fresh value |
 | --- | --- | --- |
-| `party` | `version`, `members` (ordered distinct actor ids), `selected` (member id or `null`), `steps` (non-negative safe integer) | `{ version: 2, members: [], selected: null, steps: 0 }` |
+| `party` | `version`, `members` (ordered, distinct actor ids; at most five), `selected` (member id or `null`), `steps` (non-negative safe integer) | `{ version: 2, members: [], selected: null, steps: 0 }` |
 | `inventory` | `version`, `nextId` (positive monotonic item identity), `items`, `equipment`, `gold` (non-negative safe integer) | `{ version: 2, nextId: 1, items: [], equipment: [], gold: 0 }` |
 | `menu` | `version`, `screens` (ordered navigation stack), `graphic` (asset reference or `null`) | `{ version: 2, screens: [], graphic: null }` |
 
@@ -77,13 +77,30 @@ present, or change an existing id's `(source, handle)` pair. Removing an item
 retires its id; changing quantity preserves identity. Reset starts a new run
 with `nextId: 1`, while restore resumes the saved counter.
 
-Every party member MUST name a live `party` actor. A non-empty party selects
-one member; an empty party selects `null`. A menu screen is exactly
-`{ screen, actorId, selection }`: a non-empty semantic screen name, a live
-actor id or `null`, and a non-negative safe integer selection. Empty optional
-references are explicit `null`; no field is omitted. Screen names and slot
-names are open identifiers, not legacy numeric limits. Modal/input waits
-remain VM-owned; menu state contains no callable, object handle or draw object.
+Every party member MUST name a live `party` actor and the roster MUST contain
+at most five distinct actor ids. Roster order is the party slot order. A
+non-empty party selects exactly one roster member by stable actor id; an empty
+party selects `null`. Adding the first member selects it; later additions
+preserve selection. Removing the selected member selects the member now at its
+former index, or the last remaining member if that index is past the end;
+removing the final member selects `null`. Reordering preserves selection by
+actor id.
+The party section stores membership, order, selection,
+and steps only; actor stats, progression, statuses, and equipment-derived
+state remain actor-owned. A roster operation validates its complete party and
+actor references before committing; failure changes neither owner. Snapshot and
+restore preserve the ordered ids and selected id, then restore the referenced
+actor records through the actor section. Party operations that add, remove,
+restore, select, or swap membership/order/selection emit only after the
+successful commit, exactly once per committed mutation; refusals and no-ops
+emit none (EMIT-13).
+
+A menu screen is exactly `{ screen, actorId, selection }`: a non-empty
+semantic screen name, a live actor id or `null`, and a non-negative safe
+integer selection. Empty optional references are explicit `null`; no field is
+omitted. Screen names and slot names are open identifiers, not legacy numeric
+limits. Modal/input waits remain VM-owned; menu state contains no callable,
+object handle or draw object.
 
 **Owner ports (entry 8.2).** Core exposes an object-valued capability with
 `party`, `inventory` and `menu` members. Each has `read()` (an immutable view)
