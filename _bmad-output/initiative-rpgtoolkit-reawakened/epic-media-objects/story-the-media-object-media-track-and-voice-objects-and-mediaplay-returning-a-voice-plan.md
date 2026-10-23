@@ -83,7 +83,7 @@ context:
 - Given a voice replaced by a later play, when its methods or writable fields are used, then exactly one located `media.unknown-voice` diagnostic names the track and slot, and the replacement is untouched.
 - Given every slot on a track is active, when `mediaPlay` passes `priority`/`sync`, then the ruled stealing order and the source-modulo start position apply.
 - Given `media.track("nosuch")`, when called, then it returns `null` and creates no track; given `track.volume = n` and `track.fade(p, s)`, then the same cues as `mediaVolume`/`mediaFade` are emitted.
-- Given `mediaPlay(file)` with no options, when run, then it plays `music` looping; a positional `mediaplay("f.wav","sfx",4)` call fails as an arity error (no retired extension remains).
+- Given `mediaPlay(file)` with no options, when run, then it uses the `music` looping defaults and returns the voice object; a positional `mediaplay("f.wav","sfx",4)` call fails as an arity error (no retired extension remains).
 - Given every 3.1 alias, when replayed, then its cue stream and wait match the recorded legacy parity stream.
 - Given a save at every tick and a restore, then `hashGameState` matches, the audio section contains no callable, and `media`/voice/track objects restore as data with their methods rehydrated.
 - Given a voice/track/`media` listener, when a transition is applied, then it hears the MEDIA-2 detail in voice → track → media order; a world that never uses media emitters keeps its previous state shape.
@@ -113,7 +113,7 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 ## Implementation Notes
 
 - Built `packages/core/src/audio/script.ts` (service + `MEDIA_HOST_TYPES`), the `bindVoice`/scan seam in `runtime.ts`, the VM `mediaplay`/`mediaTrackObject` control actions and lazy `emitterKey` registration, the global `media` virtual, and the object `mediaplay` plus internal method commands in the pack.
-- The one-argument `mediaPlay(file)` is the Toolkit 3.1 form: the command records the same seven-argument effect under the same name with the calling thread, creates no object and returns no value, so demo/Basic cue streams, effect records and state hashes are unchanged. An options dictionary selects the object form, which creates and binds the voice.
+- The one-argument `mediaPlay(file)` follows the MEDIA-1 object-returning contract with the Toolkit 3.1 `music`/loop defaults. Existing corpus callsites are bare statements, so the added object return is ignored; the media voice object still binds to the audio applier's live voice.
 - `mediaPlay(..., {wait:1})` on a start held for its asset parks on an `audio.track` wait with `cueId: 0` and the object handle; the resolver binds from the object and wakes when the held effect is gone. The payload is plain data and survives snapshots; the permanent test replays the whole pending-to-ended path.
 - Voice `loop` writes reject anything but `0`/`1` with a located `builtin.bad-arg` and no mutation; `volume` writes reject out-of-range values the same way.
 - `media`/track/voice emitters register only on emitter access (or a declared native listener), so a world that never uses them keeps its previous state shape and hashes; `queueAudioEvent` reuses the host objects once active.
@@ -121,7 +121,23 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 ## Plan Change Log
 
 - 2026-10-22 — Director review corrections: reuse `media.unknown-voice` instead of minting a code; record the author-visible derivations as one `Proposed clarification (pending owner review)` paragraph; keep emitter registration on access only; mark method commands `access: "internal"`; add priority, sync, unknown-track and track-control coverage.
-- 2026-10-22 — Implementation settled the one-argument compatibility edge: `mediaPlay(file)` records the same seven-argument effect under the same command name (no object, no value), preserving demo's effect log and state hash; only an options dictionary selects the returned voice. `{wait:1}` on an asset-held start parks on a `cueId: 0` audio.track wait resolved from the object, and invalid `loop`/`volume` writes diagnose without mutating.
 - 2026-10-22 — No golden or closing baseline was re-recorded; `pnpm golden`, `pnpm golden:bun`, `pnpm closing` and `pnpm dump:check` pass unchanged.
+- 2026-10-23 — Owner confirmed the one-argument `mediaPlay(file)` returns a voice under MEDIA-1; the prior corpus review found existing 3.1 callsites are bare statements, so returning an object is compatible. Options remain optional.
 
 ## Review Triage Log
+
+## Code Review
+
+### 2026-10-23
+
+Review lenses: `blind-hunter` did not meet its required finding floor (3 findings returned; 10 required). `edge-case-hunter`, `verification-gap`, and `intent-alignment` completed. The `mp3pause` finding below is corroborated by the edge-case and verification-gap lenses; all findings were re-baselined against `origin/main` at `c339264d808b6964c504f3ec4c0588a6c782b96` and verified at PR head `c2c3aaa6bb91bc90f934679b3066ce36214fa89d`.
+
+**Code review complete: 0 decision-needed, 3 patch, 0 defer, 0 rejected.**
+
+- [ ] [Review][Patch] Implement the MEDIA-1 voice return for one-argument `mediaPlay(file)` [packages/core/src/script/packs/media.ts:288] — The owner confirms the approved MEDIA-1 signature returns a voice with or without options; the corpus review found existing Toolkit 3.1 callsites are bare statements, so callers ignore the additional value. Remove the void-only compatibility branch, retain the music/loop defaults and verify the established playback/cue mapping.
+- [ ] [Review][Patch] Restore `mp3pause(file)`'s wait [packages/core/src/script/packs/media.ts:738] — At the base, the command used `MEDIA_ONCE | MEDIA_WAIT` and returned the `audio.track` wait. The new `legacyPlay` emits only a play effect, while the `mp3pause` row still claims it waits; the new alias test asserts that no alias parks, thereby pinning the regression. Restore the legacy wait and make the test prove the caller resumes only after the finite sound ends.
+- [ ] [Review][Patch] Return `null` for an unknown `media.track(name)` [packages/core/src/script/packs/media.ts:379] — The plan's acceptance matrix and the internal method documentation specify that an unknown name diagnoses and returns `null` without creating a track. The implementation throws `ScriptError("media.unknown-track", ...)` instead, so a script's catchable error path runs rather than receiving the specified null result. Align the method with its documented outcome and cover that behavior.
+
+**Owner decision (2026-10-23):** The one-argument form returns a voice, consistent with MEDIA-1 and the existing epic note that the legacy return was unused by bare call sites; options remain optional.
+
+**Rejected:** None.

@@ -400,7 +400,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `wav` | `void wav(string file)` | Play a wave file (e.g. a sound effect). | deprecated; replaced by `mediaplay` |
 | `midiplay` | `void midiplay(string file)` | Play a media file on a named track. | deprecated; replaced by `mediaplay`; music loops |
 | `playmidi` | `void playmidi(string file)` | Play a media file on a named track. | deprecated; replaced by `mediaplay`; music loops |
-| `mediaplay` | `object mediaplay(string file[, object options])` | Play a media file on a named track. | Reawakened addition (MEDIA-1): returns the voice object; `options` may set `track`, `loop`, `volume`, `priority`, `sync` and `wait`; the one-argument Toolkit 3.1 call plays `music` looping. |
+| `mediaplay` | `object mediaplay(string file[, object options])` | Play a media file on a named track. | Reawakened addition (MEDIA-1): returns the voice object; `options` may set `track`, `loop`, `volume`, `priority`, `sync` and `wait`; the one-argument Toolkit 3.1 call uses `music`/loop defaults and returns the voice object, which existing bare statements ignore. |
 | `mediatrack` | `void mediatrack(string name[, int voices])` | Create or resize a named audio track. |  |
 | `mediaload` | `void mediaload(string track, string file)` | Load a media file for a track without starting it. |  |
 | `mediastop` | `void mediastop([string track[, int voice]])` | Stop a track or voice. |  |
