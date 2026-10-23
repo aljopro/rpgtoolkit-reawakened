@@ -45,6 +45,83 @@ package version.
 The actor section schema version MUST be bumped, with a migration and a
 previous-version restore fixture, whenever the persisted actor shape changes.
 
+### Reawakened canonical party, inventory and menu state
+
+The party, bag and open menu save as three owned sections of the same canonical
+game state, not as a second store. Schema version **2** replaces each section's
+version-1 empty placeholder. A version-1 section MUST be exactly `{}` and
+migrates to the fresh version-2 value below; other old or future versions and
+malformed current sections fail with `restore.shape` and an offending field
+path. Migration changes no actor, VM, RNG or time data.
+
+| Section | Version-2 fields | Fresh value |
+| --- | --- | --- |
+| `party` | `version`, `members` (ordered distinct actor ids), `selected` (member id or `null`), `steps` (non-negative safe integer) | `{ version: 2, members: [], selected: null, steps: 0 }` |
+| `inventory` | `version`, `nextId` (positive monotonic item identity), `items`, `equipment`, `gold` (non-negative safe integer) | `{ version: 2, nextId: 1, items: [], equipment: [], gold: 0 }` |
+| `menu` | `version`, `screens` (ordered navigation stack), `graphic` (asset reference or `null`) | `{ version: 2, screens: [], graphic: null }` |
+
+An inventory item is exactly `{ id, source, handle, quantity }`: a positive
+safe integer identity below `nextId`, a non-empty item asset reference, its
+display/compatibility handle string, and a non-negative safe integer quantity.
+The `(source, handle)` pair is unique. A zero quantity is retained when needed
+to preserve an equipped item's identity. Equipment is an ordered list of
+`{ actorId, slot, itemId }`, with a live actor id, a non-empty slot name, an
+existing inventory identity and at most one entry per actor/slot. This is the
+inventory owner's slot assignment; actor-owned `equipment` remains the derived
+equipped-source/bonus projection updated only through actor operations. It is
+not another roster or another copy of actor stats.
+
+Item identities never recycle during a run. An `items` action MUST NOT decrease
+`nextId`, introduce an id below the previous `nextId` unless that id is still
+present, or change an existing id's `(source, handle)` pair. Removing an item
+retires its id; changing quantity preserves identity. Reset starts a new run
+with `nextId: 1`, while restore resumes the saved counter.
+
+Every party member MUST name a live `party` actor. A non-empty party selects
+one member; an empty party selects `null`. A menu screen is exactly
+`{ screen, actorId, selection }`: a non-empty semantic screen name, a live
+actor id or `null`, and a non-negative safe integer selection. Empty optional
+references are explicit `null`; no field is omitted. Screen names and slot
+names are open identifiers, not legacy numeric limits. Modal/input waits
+remain VM-owned; menu state contains no callable, object handle or draw object.
+
+**Owner ports (entry 8.2).** Core exposes an object-valued capability with
+`party`, `inventory` and `menu` members. Each has `read()` (an immutable view)
+and `apply(action)` returning exactly `{ ok, error }`, where `error` is `null`
+on success or `{ path, message }` on failure. Validation happens before any
+write; a failure changes nothing. The actions are:
+
+| Owner | Plain-data action |
+| --- | --- |
+| `party` | `{ type: "roster", members, selected }` or `{ type: "steps", value }` |
+| `inventory` | `{ type: "items", items, nextId }`, `{ type: "equipment", equipment }`, or `{ type: "gold", value }` |
+| `menu` | `{ type: "navigation", screens }` or `{ type: "graphic", value }` |
+
+These are core section-owner ports, not game-facing unrestricted bag editing.
+Party/item/equipment operations add their semantic checks and events in their
+own tickets before invoking these ports. Cross-section workflows invoke each
+owner rather than mutating its records; an owner only commits its own section.
+Input records are copied on successful commit, and read views are deeply
+read-only. Existing ports keep resolving the current section after engine reset
+or restore rather than retaining an obsolete section object.
+
+The existing section-effect bus accepts the same one-record action in
+`args[0]` for the namespaced command `menu.state`, recorded by the existing VM
+as the unqualified effect name `state` (a manually posted `menu.state` effect
+is also accepted). Its patch names exactly one of `party`, `inventory`, or
+`menu`; that owner applies the action. Rejection is
+the catchable `menu.state-invalid` error with the offending field path.
+This makes authored script/native command adapters exercise the real owner
+path without introducing a second dispatch or public legacy command alias.
+
+**Capability design recommendation.** Prefer this object-valued, contextual
+capability to a flat callback list. TypeScript calls `ports.party.apply(...)`;
+an RPGCode-facing menu package can receive an OOP-12 hydrated capability object
+with equivalent domain queries/actions, with no methods serialized in these
+sections. The exact game-facing façade and calling syntax belong to entry 8.7;
+entry 8.2 does not register global menu objects or decide EMIT-8/EMIT-13. No
+emitter/event ruling is required for this data-only boundary.
+
 
 ## Layout (minor 4)
 

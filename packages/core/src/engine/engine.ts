@@ -22,6 +22,7 @@ import type { RunnerRequest } from "../ports/requests.ts";
 import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
+import { applyMenuStateEffect, createMenuOwnerPorts } from "../menu/index.ts";
 import { hashGameState } from "../save/hash.ts";
 import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
 import { createAudioRuntime } from "../audio/runtime.ts";
@@ -232,6 +233,10 @@ export function createEngine(init: EngineInit): Engine {
     registrationByPhase.set(registration.phase, list);
   }
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
+  const menuOwners = createMenuOwnerPorts(state);
+  for (const section of ["party", "inventory", "menu"] as const) {
+    bus.register(section, (effect) => applyMenuStateEffect(menuOwners, effect));
+  }
   bus.register("world", (effect) => applyWorldEffect(state, effect));
   bus.register("camera", (effect) => applyCameraEffect(state, effect));
   bus.register("ui", (effect) => applyUiEffect(state, effect.name, effect.args));
