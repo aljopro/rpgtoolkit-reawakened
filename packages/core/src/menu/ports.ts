@@ -74,7 +74,7 @@ export function createMenuOwnerPorts(state: OwnerState): MenuOwnerPorts {
         const error = validateActionFields(record, keys, "party.action") ?? validatePartySection(candidate, state.actors);
         if (error !== null) return rejected(error);
         const next = candidate as PartySection;
-        state.party = { ...next, members: next.members === state.party.members ? next.members : [...next.members] };
+        state.party = { ...next, members: record.type === "roster" ? [...next.members] : next.members };
         return ACCEPTED;
       },
     },
@@ -105,10 +105,21 @@ export function createMenuOwnerPorts(state: OwnerState): MenuOwnerPorts {
         if (error !== null) return rejected(error);
         const next = candidate as InventorySection;
         if (next.nextId < state.inventory.nextId) return rejected({ path: "inventory.nextId", message: "item identity counter cannot decrease" });
+        if (record.type === "items") {
+          for (const [index, item] of next.items.entries()) {
+            const prior = state.inventory.items.find((entry) => entry.id === item.id);
+            if (prior === undefined && item.id < state.inventory.nextId) {
+              return rejected({ path: `inventory.items[${index}].id`, message: "retired item identities cannot be reused" });
+            }
+            if (prior !== undefined && (prior.source !== item.source || prior.handle !== item.handle)) {
+              return rejected({ path: `inventory.items[${index}].id`, message: "an existing item identity cannot change source or handle" });
+            }
+          }
+        }
         state.inventory = {
           ...next,
-          items: next.items === state.inventory.items ? next.items : next.items.map((item) => ({ ...item })),
-          equipment: next.equipment === state.inventory.equipment ? next.equipment : next.equipment.map((entry) => ({ ...entry })),
+          items: record.type === "items" ? next.items.map((item) => ({ ...item })) : next.items,
+          equipment: record.type === "equipment" ? next.equipment.map((entry) => ({ ...entry })) : next.equipment,
         };
         return ACCEPTED;
       },
@@ -135,7 +146,7 @@ export function createMenuOwnerPorts(state: OwnerState): MenuOwnerPorts {
         const error = validateActionFields(record, keys, "menu.action") ?? validateMenuSection(candidate, state.actors);
         if (error !== null) return rejected(error);
         const next = candidate as MenuSection;
-        state.menu = { ...next, screens: next.screens === state.menu.screens ? next.screens : next.screens.map((screen) => ({ ...screen })) };
+        state.menu = { ...next, screens: record.type === "navigation" ? next.screens.map((screen) => ({ ...screen })) : next.screens };
         return ACCEPTED;
       },
     },

@@ -176,6 +176,51 @@ test("owner ports copy input and expose deeply immutable read views", () => {
   equal(state.menu.screens.length, 1);
 });
 
+test("owner commits detach action arrays even when they alias the current section", () => {
+  const state = actorState();
+  const ports = createMenuOwnerPorts(state);
+  const actorId = state.actors.actors[0]!.id;
+  ports.party.apply({ type: "roster", members: [actorId], selected: actorId });
+  const members = state.party.members;
+  ports.party.apply({ type: "roster", members, selected: actorId });
+  members.push(actorId);
+  deepEqual(state.party.members, [actorId]);
+
+  ports.inventory.apply({ type: "items", nextId: 2, items: [{ id: 1, source: "potion.itm", handle: "Potion", quantity: 1 }] });
+  const items = state.inventory.items;
+  ports.inventory.apply({ type: "items", nextId: 2, items });
+  items[0]!.quantity = -1;
+  equal(state.inventory.items[0]!.quantity, 1);
+  ports.inventory.apply({ type: "equipment", equipment: [{ actorId, slot: "weapon", itemId: 1 }] });
+  const equipment = state.inventory.equipment;
+  ports.inventory.apply({ type: "equipment", equipment });
+  equipment[0]!.slot = "";
+  equal(state.inventory.equipment[0]!.slot, "weapon");
+
+  ports.menu.apply({ type: "navigation", screens: [{ screen: "items", actorId, selection: 0 }] });
+  const screens = state.menu.screens;
+  ports.menu.apply({ type: "navigation", screens });
+  screens[0]!.selection = -1;
+  equal(state.menu.screens[0]!.selection, 0);
+});
+
+test("item identities survive quantity changes and cannot be recycled or rebound", () => {
+  const state = actorState();
+  const ports = createMenuOwnerPorts(state);
+  const item = { id: 1, source: "potion.itm", handle: "Potion", quantity: 1 };
+  ok(ports.inventory.apply({ type: "items", nextId: 2, items: [item] }).ok);
+  ok(ports.inventory.apply({ type: "items", nextId: 2, items: [{ ...item, quantity: 0 }] }).ok);
+  const before = snapshot(state);
+  rejected(ports.inventory.apply({ type: "items", nextId: 2, items: [{ ...item, source: "ring.itm" }] }));
+  equal(snapshot(state), before);
+  ok(ports.inventory.apply({ type: "items", nextId: 2, items: [] }).ok);
+  const removed = snapshot(state);
+  rejected(ports.inventory.apply({ type: "items", nextId: 2, items: [item] }));
+  equal(snapshot(state), removed);
+  ok(ports.inventory.apply({ type: "items", nextId: 3, items: [{ ...item, id: 2 }] }).ok);
+  rejected(ports.inventory.apply({ type: "items", nextId: 2, items: [] }));
+});
+
 test("existing ports follow section replacement and restored sections", () => {
   const state = actorState();
   const ports = createMenuOwnerPorts(state);
