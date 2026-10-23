@@ -3,7 +3,7 @@ title: "The media object: media, track and voice objects, and mediaPlay returnin
 type: 'feature'
 ticket: 5
 created: '2026-10-22'
-status: 'ready-for-dev'
+status: 'in-progress'
 baseline_revision: 'c339264d808b6964c504f3ec4c0588a6c782b96'
 route: 'full'
 route_source: 'auto'
@@ -109,6 +109,12 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 - Full suite, strict, and every listed gate observed green before the PR is opened.
 
 ## Implementation Notes
+
+- Built `packages/core/src/audio/script.ts` (service + `MEDIA_HOST_TYPES`), the `bindVoice`/scan seam in `runtime.ts`, the VM `mediaplay`/`mediaTrackObject` control actions and lazy `emitterKey` registration, the global `media` virtual, and the object `mediaplay` plus internal method commands in the pack.
+- The one-argument `mediaPlay(file)` keeps the Toolkit 3.1 effect/cue contract exactly (no object, no value, no state-hash change); an options dictionary selects the object form. The recorded demo/Basic baselines stay untouched.
+- `mediaPlay(..., {wait:1})` on a start held for its asset parks on an `audio.track` wait with `cueId: 0` and the object handle; the resolver binds from the object and wakes when the held effect is gone. A save at every tick was exercised over that wait's plain payload.
+- Voice `loop` writes reject anything but `0`/`1` with a located `builtin.bad-arg` and no mutation; `volume` writes reject out-of-range values the same way.
+- `media`/track/voice emitters register only on emitter access (or a declared native listener), so a world that never uses them keeps its previous state shape and hashes; `queueAudioEvent` reuses the host objects once active.
 
 ## Plan Change Log
 
