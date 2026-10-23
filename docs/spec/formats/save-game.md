@@ -71,6 +71,12 @@ inventory owner's slot assignment; actor-owned `equipment` remains the derived
 equipped-source/bonus projection updated only through actor operations. It is
 not another roster or another copy of actor stats.
 
+Item identities never recycle during a run. An `items` action MUST NOT decrease
+`nextId`, introduce an id below the previous `nextId` unless that id is still
+present, or change an existing id's `(source, handle)` pair. Removing an item
+retires its id; changing quantity preserves identity. Reset starts a new run
+with `nextId: 1`, while restore resumes the saved counter.
+
 Every party member MUST name a live `party` actor. A non-empty party selects
 one member; an empty party selects `null`. A menu screen is exactly
 `{ screen, actorId, selection }`: a non-empty semantic screen name, a live
