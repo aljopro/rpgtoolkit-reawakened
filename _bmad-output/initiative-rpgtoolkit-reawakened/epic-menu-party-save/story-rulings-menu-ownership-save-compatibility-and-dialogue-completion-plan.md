@@ -51,9 +51,9 @@ The docs-only PR records accepted/deferred decisions and rejected alternatives, 
 
 ## Follow-up ruling (owner approval, 2026-10-23)
 
-The owner additionally approved party and inventory as the only additional built-in emitters; party roster events on `party`; `itemAdded`, `itemRemoved` and `goldChanged` on `inventory`; successful committed mutation records emitted exactly once after commit and none for refused/no-op operations; item identity distinguishing inventory-entry from asset-definition identity; and `goldChanged` detail `{ previous, current, delta }`. The owner also approved a read-only object-valued replacement-menu context with named core-validated action capabilities and TypeScript/RPGCode semantic parity. Exact item detail fields/semantics and exact public menu method/action names, arguments, results and operation semantics are not approved here and remain required contract work in the 8.3, 8.4 and 8.7 plans before coding. `movement-and-collision.md#e-85` remains a normative party-stats conflict to reconcile before 8.3 implementation.
+The owner additionally approved party and inventory as the only additional built-in emitters; party roster events on `party`; `itemAdded`, `itemRemoved` and `goldChanged` on `inventory`; successful committed mutation records emitted exactly once after commit and none for refused/no-op operations; item identity distinguishing inventory-entry from asset-definition identity; and `goldChanged` detail `{ previous, current, delta }`. The owner also approved a read-only object-valued replacement-menu context with named core-validated action capabilities and TypeScript/RPGCode semantic parity. The owner approved preserving `callplayerswap(...)` as its existing unimplemented/no-op; party swaps remain party-owner/menu actions, with no new RPGCode function or signature. Exact item details and menu member shapes remain required in their consumer plans before relevant implementation. E-85 now establishes actor-owned party stats.
 
-<!-- OWNER: 2026-10-23 follow-up approvals above; exact item-event fields and public menu API shapes remain explicitly deferred to entries 3, 4 and 7. -->
+<!-- OWNER: 2026-10-23 follow-up approvals include preserving the `callplayerswap(...)` no-op; exact item-event fields and public menu API shapes remain deferred to entries 3, 4 and 7. -->
 
 ## Verification
 
