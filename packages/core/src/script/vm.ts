@@ -1987,16 +1987,12 @@ function dispatchResolved(
       if (action === "mediaplay") {
         if (services.media === undefined) throw new ScriptError("unknown.command", "mediaPlay: the media owner is not installed", pos);
         const file = effect.args?.[1];
-        const options = (effect.args?.[2] ?? null) as MediaPlayOptions | null;
-        if (typeof file !== "string") throw new ScriptError("builtin.bad-arg", "mediaPlay: malformed start", pos);
+        const options = effect.args?.[2] as MediaPlayOptions | undefined;
+        if (typeof file !== "string" || options === undefined) throw new ScriptError("builtin.bad-arg", "mediaPlay: malformed start", pos);
         const started = services.media.play(file, options);
         const outcome = started.outcome;
-        produced = options === null
-          ? null
-          : outcome.kind === "rejected" || (outcome.kind === "same-file" && outcome.action === "ignored")
-            ? null
-            : objectValue(started.record);
-        if (options?.wait === true) {
+        produced = outcome.kind === "rejected" || (outcome.kind === "same-file" && outcome.action === "ignored") ? null : objectValue(started.record);
+        if (options.wait) {
           let wait: Wait | null = null;
           if (outcome.kind === "pending") wait = services.media.pendingWait(started);
           else if (outcome.kind === "started" || outcome.kind === "same-file") {

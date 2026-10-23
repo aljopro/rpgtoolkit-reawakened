@@ -78,11 +78,9 @@ export type AudioRuntimeOptions = {
   readonly notify?: (note: AudioNote) => void;
   /**
    * Bind a script-held voice object to the start the applier decided
-   * (MEDIA-1). `handle` is the object the effect carried; `scan` asks the
-   * binder to take the oldest unbound object for `track` (the one-argument
-   * Toolkit 3.1 `mediaplay` form, whose effect keeps its legacy argument list).
+   * (MEDIA-1): `handle` is the plain object handle the object-form effect carried.
    */
-  readonly bindVoice?: (target: { readonly track: string; readonly handle?: number; readonly scan: boolean }, result: AudioPlayResult) => void;
+  readonly bindVoice?: (handle: number, result: AudioPlayResult) => void;
   /** Queue a deterministic applied playback transition (MEDIA-2). */
   readonly transition?: (event: AudioLifecycleEvent) => void;
   /** Whether the lazy event domain is active; omitted means transitions are observed. */
@@ -490,7 +488,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         ...(voice === null ? {} : { voice: voice as number }),
         ...(typeof volume === "number" ? { volume } : {}),
       });
-      options.bindVoice?.({ track, ...(typeof handle === "number" ? { handle } : {}), scan: effect.name === "mediaplay" }, result);
+      if (typeof handle === "number") options.bindVoice?.(handle, result);
       return result.kind === "pending" ? "pending" : "applied";
     }
     if (operation === "media.stop" || operation === "media.pause" || operation === "media.resume") {

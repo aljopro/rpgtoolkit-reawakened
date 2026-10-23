@@ -285,10 +285,11 @@ function mediaPlay(): BuiltinSpec {
     },
     call: (view, args) => {
       const file = stringArg(args, 0, "mediaPlay");
-      // The one-argument call is the Toolkit 3.1 form (MEDIA-5): its effect keeps
-      // the legacy argument list and its cue stream, and the value is void.
+      // The one-argument call is the Toolkit 3.1 form (MEDIA-5): it records the
+      // same seven-argument effect under the same command name, creates no
+      // object, returns no value, and so keeps its cue stream and state hash.
       if (args.length === 1) {
-        return { value: null, effects: [{ kind: "vm.control", args: ["mediaplay", mediaAsset(file), null] }] };
+        return { value: null, effects: [effect("media.play", [mediaAsset(file), "music", true, false, 0, null, null])] };
       }
       return { value: null, effects: [playEffect(file, readPlayOptions(view, args[1]?.value))] };
     },

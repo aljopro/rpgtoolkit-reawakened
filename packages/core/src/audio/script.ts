@@ -57,14 +57,10 @@ export type MediaStart = {
 };
 
 export type MediaScriptService = {
-  /**
-   * Create the voice object and post the start. `options` `null` is the
-   * one-argument Toolkit 3.1 `mediaplay(file)` form: its effect keeps the
-   * legacy argument list and the object binds by track when the effect applies.
-   */
-  play(file: string, options: MediaPlayOptions | null): MediaStart;
+  /** Create the voice object, post the start and bind it. */
+  play(file: string, options: MediaPlayOptions): MediaStart;
   /** Fill a voice object's slot and cue id from the applier's decision. */
-  bind(target: { readonly track: string; readonly handle?: number; readonly scan: boolean }, result: AudioPlayResult): void;
+  bind(handle: number, result: AudioPlayResult): void;
   /** A wait that parks until a pending start binds, then applies the terminal rule. */
   pendingWait(start: MediaStart): NamedWait;
   /** The one `media` host object, reused for the session. */
@@ -120,14 +116,7 @@ export function createMediaScriptService(
   const service: MediaScriptService = {
     play(file, options) {
       const record = createHostObject(state.vm, "media.voice");
-      writeMember(record, "track", options?.track ?? "music");
-      if (options === null) {
-        // A one-argument call is the Toolkit 3.1 form: a `cueId` of 0 marks the
-        // object as awaiting the legacy-shaped effect's apply, in creation order.
-        writeMember(record, "cueId", 0);
-        const posted = post("media.play", [file, "music", true, false, 0, null, null]);
-        return { record, outcome: { kind: "pending" }, seq: posted.seq };
-      }
+      writeMember(record, "track", options.track);
       waiting.add(record.handle);
       const posted = post("media.play", [file, options.track, options.loop, false, options.priority, options.sync, null, options.volume, record.handle]);
       const outcome = results.get(record.handle) ?? { kind: "pending" };
@@ -144,12 +133,8 @@ export function createMediaScriptService(
         resumeRefs: [],
       };
     },
-    bind(target, result) {
-      const record = target.handle !== undefined
-        ? findObject(state.vm, target.handle)
-        : target.scan
-          ? state.vm.objects.find((item) => item.hostType === "media.voice" && item.members["track"] === target.track && item.members["cueId"] === 0)
-          : undefined;
+    bind(handle, result) {
+      const record = findObject(state.vm, handle);
       if (record !== undefined && (result.kind === "started" || result.kind === "same-file")) {
         writeMember(record, "slot", result.voice);
         writeMember(record, "cueId", result.cueId);

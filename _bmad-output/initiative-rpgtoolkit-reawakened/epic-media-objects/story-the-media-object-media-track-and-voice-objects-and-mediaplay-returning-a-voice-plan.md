@@ -111,8 +111,8 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 ## Implementation Notes
 
 - Built `packages/core/src/audio/script.ts` (service + `MEDIA_HOST_TYPES`), the `bindVoice`/scan seam in `runtime.ts`, the VM `mediaplay`/`mediaTrackObject` control actions and lazy `emitterKey` registration, the global `media` virtual, and the object `mediaplay` plus internal method commands in the pack.
-- The one-argument `mediaPlay(file)` keeps the Toolkit 3.1 effect/cue contract exactly (no object, no value, no state-hash change); an options dictionary selects the object form. The recorded demo/Basic baselines stay untouched.
-- `mediaPlay(..., {wait:1})` on a start held for its asset parks on an `audio.track` wait with `cueId: 0` and the object handle; the resolver binds from the object and wakes when the held effect is gone. A save at every tick was exercised over that wait's plain payload.
+- The one-argument `mediaPlay(file)` is the Toolkit 3.1 form: the command records the same seven-argument effect under the same name with the calling thread, creates no object and returns no value, so demo/Basic cue streams, effect records and state hashes are unchanged. An options dictionary selects the object form, which creates and binds the voice.
+- `mediaPlay(..., {wait:1})` on a start held for its asset parks on an `audio.track` wait with `cueId: 0` and the object handle; the resolver binds from the object and wakes when the held effect is gone. The payload is plain data and survives snapshots; the permanent test replays the whole pending-to-ended path.
 - Voice `loop` writes reject anything but `0`/`1` with a located `builtin.bad-arg` and no mutation; `volume` writes reject out-of-range values the same way.
 - `media`/track/voice emitters register only on emitter access (or a declared native listener), so a world that never uses them keeps its previous state shape and hashes; `queueAudioEvent` reuses the host objects once active.
 

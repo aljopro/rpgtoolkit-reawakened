@@ -354,8 +354,9 @@ test("a wait requested on a start held for its asset parks until it binds, then 
   equal(global(world.state, "done"), 0);
   const waiting = world.state.vm.threads.find((thread) => thread.status === "waiting");
   equal(waiting?.wait?.kind, "audio.track");
-  const payload = waiting?.wait?.payload[0] as { readonly cueId: number } | undefined;
-  equal(payload?.cueId, 0);
+  const pending = waiting?.wait;
+  const payload = pending !== undefined && pending !== null && "payload" in pending ? pending.payload[0] : undefined;
+  equal(typeof payload === "object" && payload !== null && "cueId" in payload ? payload.cueId : undefined, 0);
   lengths["a.wav"] = 60;
   world.run(70);
   equal(global(world.state, "done"), 1);
