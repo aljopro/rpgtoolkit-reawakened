@@ -46,7 +46,23 @@ the actor record. A hydrated RPGCode object may expose those operations as
 methods, but each method dispatches through the actor service and never turns
 the underlying record into an object with methods.
 
-A package command receives the actor operations themselves — `readActor`, `updateStats`, `advanceStatus`, `applyEquipment` and `awardExperience` — as part of the view it is called with. Calling one dispatches through the actor owner, resolves that actor's behaviour hooks, validates the patch, commits it, and queues the resulting transitions. A command that patched the actor section directly would skip the hooks and the events, so it MUST NOT. An RPGCode battle script applies damage and awards experience by calling its package's commands; it has no actor operation of its own, because a battle's damage formula belongs to the package (Core and battle boundary).
+A package command receives the actor operations themselves — `readActor`, `updateStats`, `damage`, `advanceStatus`, `applyEquipment` and `awardExperience` — as part of the view it is called with. Calling one dispatches through the actor owner, resolves that actor's behaviour hooks, validates the patch, commits it, and queues the resulting transitions. A command that patched the actor section directly would skip the hooks and the events, so it MUST NOT. An RPGCode battle script applies damage and awards experience through its package's commands and the actor owner's damage operation; the battle's damage formula still belongs to the package (Core and battle boundary).
+
+### Owner-mediated damage operation
+
+The actor host exposes a `damage(amount, source, pool)` operation to package
+code. `amount` MUST be a finite number. `pool` is `hp` by default and is `smp`
+only when explicitly selected; any other pool value resolves to `hp`.
+`source` is an actor id or `null`, and `null` is retained when the operation
+has no attacker attribution. The operation applies the requested subtraction
+through the actor owner with cause `damage`, so the normal stat validation and
+`[0, max]` clamping run before the committed result is observed. It returns
+the actual amount removed after clamping. A committed HP transition to
+non-positive emits the ordinary `fallen` transition with cause `damage` and
+the supplied source; an HP transition from non-positive to positive follows
+the ordinary revival rules. The operation does not choose battle formulas or
+dispatch battle timing events; those remain the stock battle package's
+responsibility.
 
 The action type is section-specific: `ActorAction` covers actor operations,
 while `BoardAction`, `InventoryAction`, `BattleAction`, and the other core
