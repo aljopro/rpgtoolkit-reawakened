@@ -184,7 +184,7 @@ Notifications use past-tense lowerCamelCase names. Core actor and board events a
 | `leveledUp` | actor | no | core after applying the final level-up result |
 | `entered` | actor/board | no | board transition |
 | `left` | actor/board | no | board transition |
-| `talked` | actor | no | dialogue or actor package |
+| `talked` | actor | no | `stock_rpg` bridge after `dialogue.completed`; detail `{ actorId, targetId (actor id or null), text }` |
 | `beforeEnter` | board | yes | board transition; canceled step does not happen |
 | `beforeDamage` | actor/battle operation | yes | battle RPGCode thread, not a core actor rule |
 

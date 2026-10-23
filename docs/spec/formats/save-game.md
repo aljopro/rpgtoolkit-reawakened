@@ -6,7 +6,7 @@ Header text: `RPGTLKIT SAVE`. The engine writes major **3**, minor **4** (Toolki
 
 **Counts here are exact counts** (not upper bounds), except the thread list.
 
-**Our own save format — Reawakened rule (R-13).** A rebuild may use its own save format; the legacy `.sav` layout on this page is an **import** concern only, not a format this project must write. Reading legacy saves is scoped with the menu/party/save work. Also note that the split into separate lists — numeric globals, object-handle globals and string globals, then redirects, party, inventory, equipment and the miscellany — is what a loader must reproduce; and since the serialised interpreter state (field 46) is engine-specific, a rebuild may fall back to restarting each saved thread from the top rather than resuming mid-program.
+**Our own save format — Reawakened rule (R-13).** A rebuild may use its own save format; this project's canonical Reawakened format is the save/load contract. Epic 8 implements that format only; legacy `.sav` import (E-122) is deferred. For compatible saves, restore threads from their serialized execution state only when the saved source and compiler compatibility match the current source/compiler. If they do not match, restart the thread from source rather than resuming an incompatible instruction position. The split into separate lists — numeric globals, object-handle globals and string globals, then redirects, party, inventory, equipment and the miscellany — documents legacy import behavior only.
 ### Reawakened canonical actor state
 
 The Reawakened runtime uses its canonical state snapshot for its own save/load

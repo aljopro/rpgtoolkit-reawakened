@@ -53,8 +53,8 @@ A vision to realize. RPG Toolkit 3 (final release 2007) is a Windows-only, GPL-2
   - **intent:** The default menu, inventory, equipment, shop, inn, party, gold and play-time systems follow legacy rules, and RPGCode can replace them (E-80…E-87).
   - **success:** Scripted play-throughs exercise use, equip, drop, buy, sell, party swap and save-gating with the expected state.
 - **CAP-11**
-  - **intent:** Players can save and load the complete game state, including running threads, board live item list and RNG state (E-120, E-121, E-123).
-  - **success:** Save then load mid-script resumes with identical state hashes and identical subsequent behaviour.
+  - **intent:** Players can save and load the complete game state, including running threads, board live item list and RNG state, using the Reawakened canonical format (E-120, E-121, E-123).
+  - **success:** A compatible save restored mid-script finishes with identical state hashes and subsequent behavior; when source/compiler compatibility does not match, saved threads restart from source rather than resuming an incompatible instruction position.
 - **CAP-12**
   - **intent:** The same core runs in a web runner, a headless runner, a desktop runner and a mobile runner, and games can be packaged for distribution (E-130…E-132).
   - **success:** The sample games play in browser and under the headless runner from the same core build; a packaged single-file game loads.
@@ -123,7 +123,6 @@ The headless runner plays the legacy `demo` and `Basic` sample games end to end 
 ## Open Questions
 
 - Desktop shell: Tauri, Electron or Electrobun? ADR 0001 defers it to a spike on all three OSes (Linux WebKitGTK especially).
-- Is legacy `.sav` import (E-122) in scope for CAP-11, or only the new save format?
 - Are 2.x text boards, other text-era formats and pre-compiled `.prg` rejected with a clear message or supported?
 - AVI video (E-104): transcode on import via an editor tool, or drop?
 - How does a game package ship third-party plugin code (E-99, CAP-5)? The contract and manifest are decided (ADR 0004 decision 6).

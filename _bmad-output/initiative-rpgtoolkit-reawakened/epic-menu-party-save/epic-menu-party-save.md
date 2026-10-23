@@ -43,7 +43,9 @@ Core menu rules and default menu draw lists, inventory, equipment, shop, party, 
 
 ## Notes
 
-- Open question: is legacy `.sav` import (E-122) in scope? Entries for it wait on the spec's answer.
+- Decision: Jensen, 2026-10-22, Epic 8.1 (#583): legacy `.sav` import is deferred; Epic 8 implements the Reawakened canonical save format only. Compatible thread snapshots resume only when source/compiler compatibility matches; otherwise restart from source.
+<!-- OWNER: Decide before dependent implementation tickets start whether party and inventory are built-in event emitters (EMIT-8) and pin the exact item/gold event detail records (EMIT-13). -->
+- Decision: Jensen, 2026-10-22, Epic 8.1 (#583): core owns party, inventory, equipment, gold and menu state; `stock_menu` owns replaceable navigation and presentation. TypeScript and RPGCode receive equivalent semantic query/action capabilities; core validates and applies actions, and menu presentation uses the core draw list rather than writing to the host window. Exact operation/data shapes are deferred to implementation tickets.
 - Decision: epic set approved by the user, 2026-10-10.
 - Waits on rpgcode-vm because: thread snapshot support.
 - Waits on movement-triggers because: party and board state.
