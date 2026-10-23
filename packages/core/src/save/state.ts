@@ -5,12 +5,10 @@
  * `schema` (here), `vm` (`core/script`), `rng` (`core/rng`) and `time`
  * (`core/time`); of the other sixteen, seven are real sections declared under
  * `save/sections/` (`world`, `camera`, `ui`, `fx`, `surfaces`, `input`,
- * `engine`), five are owned by their own modules (`sprites`, `actors`,
- * `triggers`, `audio`, and `events`) and four are the
- * `Record<string, never>` placeholders of `sections.ts` that later
- * epics fill. `SchemaState` is AD-23's per-section version
- * map plus the compiler version, and `SCHEMA_VERSIONS` is the current version
- * of every section, each starting at 1.
+ * `engine`), eight are owned by their modules (`sprites`, `actors`,
+ * `triggers`, `audio`, `events`, `party`, `inventory`, and `menu`) and
+ * `battle` remains an explicit placeholder. `SchemaState` is AD-23's
+ * per-section version map plus the compiler version.
  *
  * **The schema-bump rule (AD-7's check).** A change to any `*State` type or to
  * `StepOp` needs either a section's version in `SCHEMA_VERSIONS` bumped or
@@ -53,6 +51,10 @@ import { createActorsSection } from "../actors/model.ts";
 import { createInputSection } from "../input/input.ts";
 import { createAudioSection } from "../audio/model.ts";
 import { createEventsSection, type EventsSection } from "../events/model.ts";
+import {
+  createPartySection, createInventorySection, createMenuSection,
+  PARTY_SCHEMA_VERSION, INVENTORY_SCHEMA_VERSION, MENU_SCHEMA_VERSION,
+} from "../menu/model.ts";
 
 /** Every `GameState` section key (AD-10), i.e. the schema version map's keys. */
 export const SCHEMA_VERSIONS = {
@@ -60,12 +62,12 @@ export const SCHEMA_VERSIONS = {
   world: 1,
   sprites: 2,
   actors: 2,
-  party: 1,
-  inventory: 1,
+  party: PARTY_SCHEMA_VERSION,
+  inventory: INVENTORY_SCHEMA_VERSION,
   triggers: 2,
   vm: 5,
   battle: 1,
-  menu: 1,
+  menu: MENU_SCHEMA_VERSION,
   input: 2,
   ui: 1,
   camera: 1,
@@ -167,12 +169,12 @@ export function createGameState(init: { seed: number }): GameState {
     world: {},
     sprites: createSpritesSection(),
     actors: createActorsSection(),
-    party: {},
-    inventory: {},
+    party: createPartySection(),
+    inventory: createInventorySection(),
     triggers: createTriggersSection(),
     vm: createVmState(),
     battle: {},
-    menu: {},
+    menu: createMenuSection(),
     input: createInputSection(),
     ui: {} as UiSection,
     camera: {} as CameraSection,

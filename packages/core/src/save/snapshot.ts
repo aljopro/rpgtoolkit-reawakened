@@ -55,6 +55,7 @@ import { INPUT_SCHEMA_VERSION } from "./sections/input.ts";
 import { AUDIO_SCHEMA_VERSION, createAudioSection } from "../audio/model.ts";
 import { createEventsSection } from "../events/model.ts";
 import { EVENT_DISPATCH_WAIT } from "../events/emitter.ts";
+import { migrateMenuSections } from "../menu/migrate.ts";
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
   return canon(tagNonFinite(state) as never);
@@ -771,6 +772,8 @@ export function restoreGameState(json: string): GameState {
 
   migrateEvents(record, schema as Record<string, unknown>);
   migrateActors(record, schema as Record<string, unknown>);
+  validateActorsShape(record.actors);
+  migrateMenuSections(record, schema as Record<string, unknown>);
   for (const key of Object.keys(SCHEMA_VERSIONS)) {
     if (!Object.hasOwn(record, key)) {
       throw new ScriptError("restore.shape", `the snapshot is missing the "${key}" section`);

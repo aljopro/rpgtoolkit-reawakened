@@ -7,7 +7,7 @@ risk: "high"
 context:
   - "spine - AD-10, AD-23"
   - "spec - docs/spec/formats/save-game.md"
-status: in-progress
+status: in-review
 ---
 
 ## Intent
@@ -30,6 +30,14 @@ Own the `party`, `inventory` and `menu` section shapes and their ports/migration
 ## Acceptance
 
 An authored headless script mutates each section through its owner port and observes the same canonical state after snapshot/restore and reset.
+
+The G5 state-hash baselines deliberately change because three formerly empty
+sections and their schema versions now carry explicit version-2 data. Record
+the script corpus, battle-script and sample-game closing hashes; no pixel,
+draw-list, audio-cue or gameplay outcome is intended to change. For both battle
+fixtures, rehashing every captured state with only these three sections and
+schema versions projected back to their version-1 placeholders reproduced
+every previous pinned per-tick hash.
 
 ## Verification
 
