@@ -284,3 +284,25 @@ references = [
   "code - packages/runner-harness/src/script-host.ts (createScriptHost, restoreScriptHost), script-plugin-resolver.ts, corpus.ts (startups)",
   "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-actors/discovery/actor-readiness.md (F-11 to F-14)",
 ]
+
+# Entry 17 tracks the implementation follow-up to the closed 19.16 documentation handoff (#540).
+[[entry]]
+id = 17
+tracker_id = "#562"
+type = "story"
+title = "Implement package catalogue loader and startup runtime"
+description = "Implements the host-supplied package catalogue and startup runtime specified by 19.16: resolve `.gam` package ids to versioned manifest entries, run package startup at boot/reset/restore, and rebuild session registrations without core I/O or serialized callbacks."
+verify = "A host-supplied catalogue resolves listed packages with identity, version, namespace, host requests and startup program; missing packages diagnose and boot continues; startup runs before main startup in manifest order and cannot wait; reset/restore rebuild registrations deterministically; an end-to-end package boots through the real host boundary; no-package/native compatibility and legacy goldens remain unchanged."
+covers = ["CAP-5"]
+after = [16, "19.6", "19.7", "19.8", "19.9", "19.13"]
+hitl = false
+risk = "high"
+references = [
+  "tracker - https://github.com/tk-reawakened/rpgtoolkit-reawakened/issues/562",
+  "handoff - Epic 19.16 docs handoff, issue #540 (closed; do not reopen)",
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (PKG-1 to PKG-8)",
+  "spec - docs/spec/engine/main-loop-and-startup.md (E-02 package boot, reset, restore)",
+  "spec - docs/spec/formats/main-file.md (TKR package-list extension)",
+  "code - packages/core/src/engine, packages/core/src/script/manifest.ts, plugin.ts, package-startup.ts",
+  "code - packages/runner-headless and packages/runner-harness tests/fixtures",
+]
