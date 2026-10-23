@@ -71,7 +71,9 @@ At compile time each unknown command name is offered to every RPGCode plugin's *
 
 ## Menu plugin
 
-`menu(request)`: 1 main menu, 2 inventory, 4 equipment, 8 abilities. The plugin draws its own UI and returns when closed.
+Legacy plugin entry point: `menu(request)`: 1 main menu, 2 inventory, 4 equipment, 8 abilities. The legacy plugin draws its own UI and returns when closed.
+
+**Reawakened rule (OWNER; Epic 8.1 menu ownership and interface).** Core owns authoritative party, inventory, equipment, gold and menu state; each state section validates and applies its own actions. The `stock_menu` package owns replaceable menu navigation and presentation. TypeScript and RPGCode menu implementations receive equivalent semantic query/action capabilities through one shared contract, with language-appropriate calling syntax. The core validates and applies requested actions. Menu presentation contributes to the core draw list; menu code does not mutate section state or draw directly to a host window. Exact query/action members and data shapes are deferred to implementation tickets and MUST be specified before those tickets start.
 
 <a id="e-80"></a>
 **E-80 Default menu.** Opened with the menu key or `InternalMenu(n)`; in legacy the presentation came from a plugin and the rules from the engine:
@@ -94,6 +96,8 @@ A custom menu image can be set (`MenuGraphic`), cursor sounds come from the main
 
 <a id="e-123"></a>
 **E-123 Save gating.** The default menu respects that flag, so the Save option and `Save()` behave as the board allows; the file itself is [../formats/save-game.md](../formats/save-game.md).
+
+**Reawakened rule (OWNER; Epic 8.1 interaction completion).** Epic 8 owns the RPGCode interaction wrapper around Epic 4.21's existing message/modal and input-wait behavior. The wrapper supplies its explicit text and captures the running VM's source actor and target actor (or `null`); Epic 4.21 does not gain actor metadata. After normal completion, the wrapper queues exactly one game-level `dialogue.completed` event with plain-data detail `{ actorId, targetId, text }`. Cancellation or failure queues no completion event. The stock RPG package consumes that event and emits actor-scoped `talked` with the same detail. The wrapper does not draw directly to the host window.
 
 ## Battle protocol
 
