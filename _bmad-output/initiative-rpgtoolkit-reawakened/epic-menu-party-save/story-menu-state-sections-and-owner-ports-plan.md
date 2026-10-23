@@ -7,7 +7,7 @@ risk: "high"
 context:
   - "spine - AD-10, AD-23"
   - "spec - docs/spec/formats/save-game.md"
-status: in-review
+status: done
 ---
 
 ## Intent
