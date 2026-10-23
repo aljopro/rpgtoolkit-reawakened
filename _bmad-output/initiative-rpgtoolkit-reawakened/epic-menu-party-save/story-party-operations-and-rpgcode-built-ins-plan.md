@@ -98,6 +98,33 @@ Retain existing actor tests unchanged.
 
 ## Implementation map
 
-Build on the section/port contracts from entry 2 and actor operations from
-Epic 20. Keep aliases thin and preserve the documented RPGCode calling
-convention.
+- `packages/core/src/menu/model.ts`: enforce the five-member bound in the
+  version-2 party-section validator alongside live party-actor references,
+  distinct membership and selected-member consistency.
+- `packages/core/src/menu/ports.ts`: build semantic add/remove/restore,
+  selection and roster-reorder operations on the validated party owner port;
+  validate each full candidate before one commit and keep actor stats out of
+  party state. The existing `roster` action is a state-level owner action, not
+  a new RPGCode function.
+- `packages/core/src/actors/model.ts` and `actors/hydrate.ts`: reuse stable
+  actor ids and character-file hydration. Permanent destruction must follow the
+  actor owner removal path; removal for later restoration retains the actor.
+- `packages/core/src/sprites/model.ts` and `sprites/runtime.ts`: preserve the
+  actor-id link between party roster and player sprites; keep selected actor
+  visibility/control synchronized without duplicating actor-owned data.
+- `packages/core/src/script/catalogue-responders.ts` and
+  `script/catalogue-stubs.ts`: implement only the catalogued forms in this
+  plan, retaining `callplayerswap(...)` as its existing no-op.
+- `packages/core/src/script/packs/movement.ts`: preserve
+  `activeplayer(variant handle)` read/select behavior while applying selection
+  through the party owner.
+- `packages/core/src/script/virtuals.ts`: make `playerhandle[0..4]` and player
+  position aliases read through the ordered party slots and linked sprites.
+- `packages/core/src/events/emitter.ts` and `packages/core/src/engine/engine.ts`:
+  register the built-in `party` emitter and queue the documented roster event
+  only after each owner mutation commits.
+
+Verification belongs in focused `packages/core/test/` coverage plus the
+repository-required checks: owner validation/refusal/no-op atomicity, catalogued
+RPGCode operations, slot virtuals, actor-owned stats, snapshot/restore,
+post-commit event detail/order and a consumer-visible RPGCode smoke fixture.
