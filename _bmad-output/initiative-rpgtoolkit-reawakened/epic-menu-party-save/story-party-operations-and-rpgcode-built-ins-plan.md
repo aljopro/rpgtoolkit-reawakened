@@ -59,24 +59,23 @@ operation or no-op emits nothing. A reorder with identical resulting order
 and a selection of the already selected actor are no-ops. Each operation is
 atomic across party membership/selection and actor-state references.
 
-The story's party query/action surface to a replacement menu uses the approved
+The party query/action surface used by replacement menus follows the approved
 object-valued read-only context plus named actions validated and applied by
-core. Its exact public members, arguments/results and RPGCode façade are not
-part of this story's settled public contract; do not invent menu method names.
-Menu-specific member shapes remain a required 8.7 plan contract before menu
-implementation. The 8.3 roster owner is exercised via its existing owner port
-and the documented RPGCode built-ins only.
+core. Exact public member names, arguments, results and RPGCode calling forms
+remain unsettled; do not invent them. The relevant 8.3, 8.4 and 8.7 consumer
+plans must define their required shapes before implementing menu integrations.
+The 8.3 roster owner is exercised through its existing owner port and the
+documented RPGCode built-ins only.
 
-## One compatibility decision still requiring owner ruling
+## Preserved RPGCode compatibility contract
 
-`callplayerswap(...)` is listed as unimplemented and a no-op in the function
-catalogue, while this story requires party-position swapping. The documents
-give no argument list or legacy meaning for that command. Do not invent a
-signature or silently turn the compatibility no-op into a different operation.
-Owner must decide whether `callplayerswap` stays a no-op (and swapping remains
-an owner-internal/menu action only) or is intentionally given a new, explicitly
-specified RPGCode contract. Until ruled, the roster contract above defines
-the semantic swap and its event but no RPGCode spelling for it.
+Owner ruling: `callplayerswap(...)` remains the function catalogue's existing
+unimplemented/no-op form. Do not register it as an implemented operation or
+add a signature, arguments, result, or alternate behavior. Party-order swaps
+remain semantic actions of the party owner and replacement-menu capability;
+a successful committed swap emits `membersSwapped` under the contract above.
+The no-op RPGCode form changes no party state and emits no party event. This
+does not settle public menu capability names or data shapes.
 
 ## Boundaries
 
