@@ -106,7 +106,7 @@
         "equal-lengths-stay-aligned",
         "paused-source-supplies-its-held-position",
         "unequal-lengths-are-deterministic",
-        "sync-diagnostics-start-nothing"
+        "sync-diagnostics-fallback-starts-at-zero"
       ],
       "proposed": ["P-7","P-14","P-17"]
     },
@@ -398,7 +398,7 @@
     "P-11": "Legacy names resolve case-insensitively to media/<lower-case name>; each is evaluated as the standard call of 6.2's mapping table and records a legacy fact naming it.",
     "P-12": "Video: playavi stops the music at the call tick (a media.stop only when a voice exists) and parks the thread; video.ended is stamped at the held tick, the row of the next consumed tick, whose waits phase wakes the thread and then posts a restart music.play (source video, retained file and loop flag, restart set) when the music track retained a file.",
     "P-13": "Steal: the victim is the lowest priority, then the oldest startTick, then the lowest index (a paused voice counts as active with its stale start); the stolen index is stopped (media.stop) before the new play; a steal fact names the victim.",
-    "P-14": "A file no decoder accepts plays with length null and endTick null and raises one media.asset-format diagnostic at the play; a seek or a wait on an unknown length raises media.asset-length; a sync on one raises media.sync-source.",
+    "P-14": "A file no decoder accepts plays with length null and endTick null and raises one media.asset-format diagnostic at the play; a seek or a wait on an unknown length raises media.asset-length; a sync on an unknown-length destination raises media.sync-source and starts the otherwise valid destination at position zero.",
     "P-15": "Scripts give seconds as whole milliseconds; ticks = floor((ms x 60 + 500) / 1000), the exact integer form of floor(seconds x 60 + 1/2).",
     "P-16": "Late runner: for a media.play the runner facts apply, in this order, the drop (finite, not looping, not music, lateness at least 15 ticks), then the loop modulo, then not starting a finite one-shot whose caught-up position reaches its length.",
     "P-17": "Diagnostic choice where 6.2 lists several: a voice index at or above the configured count, or a voice with no occupant for a seek, fade or volume, is media.unknown-voice.",

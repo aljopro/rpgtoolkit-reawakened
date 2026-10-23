@@ -352,8 +352,8 @@
       "end": {"cueId":5,"soundFont":null,"master":100}
     },
     {
-      "name": "sync-diagnostics-start-nothing",
-      "note": "An unknown track, an inactive source (stopped sfx) and an unknown-length destination are each media.sync-source and start no voice.",
+      "name": "sync-diagnostics-fallback-starts-at-zero",
+      "note": "An unknown source track, an inactive source and an unknown-length destination each diagnose media.sync-source and start the destination at zero; an unsupported destination also diagnoses media.asset-format.",
       "setup": {
         "defaultSoundFont": null,
         "assets": {
@@ -372,19 +372,19 @@
       "script": [
         {"t":0,"op":"mediaPlay","file":"pad.wav","track":"ambience","flags":1},
         {"t":2,"op":"mediaPlay","file":"drum.wav","track":"ui","flags":1,"sync":"nosuch"},
-        {"t":3,"op":"mediaPlay","file":"drum.wav","track":"ui","flags":1,"sync":"sfx"},
+        {"t":3,"op":"mediaPlay","file":"stem.wav","track":"ui","flags":1,"sync":"sfx"},
         {"t":4,"op":"mediaPlay","file":"x.xm","track":"ui","flags":1,"sync":"ambience"}
       ],
       "ticks": 6,
       "expect": [
         {"t":0,"cfg":[["music",1],["sfx",1],["ambience",4],["voice",2],["ui",4]],"tr":[["ambience","playing",1,"media/pad.wav",0,20,[[0,"playing",2,0,100,0,0,null,1,null]]]],"cues":[{"cueId":1,"tick":0,"kind":"soundfont.set","track":null,"voice":null,"asset":null,"loop":null,"flags":null,"positionTicks":null,"volume":null,"targetVolume":null,"durationTicks":null},{"cueId":2,"tick":0,"kind":"media.play","track":"ambience","voice":0,"asset":"media/pad.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}]},
         {"t":1,"tr":[["ambience","playing",1,"media/pad.wav",1,20,[[0,"playing",2,0,100,0,1,null,1,null]]]]},
-        {"t":2,"tr":[["ambience","playing",1,"media/pad.wav",2,20,[[0,"playing",2,0,100,0,2,null,1,null]]]],"ev":[{"e":"diag","code":"media.sync-source","op":"mediaPlay","sync":"nosuch"}]},
-        {"t":3,"tr":[["ambience","playing",1,"media/pad.wav",3,20,[[0,"playing",2,0,100,0,3,null,1,null]]]],"ev":[{"e":"diag","code":"media.sync-source","op":"mediaPlay","sync":"sfx"}]},
-        {"t":4,"tr":[["ambience","playing",1,"media/pad.wav",4,20,[[0,"playing",2,0,100,0,4,null,1,null]]]],"ev":[{"e":"diag","code":"media.sync-source","op":"mediaPlay","sync":"ambience"}]},
-        {"t":5,"tr":[["ambience","playing",1,"media/pad.wav",5,20,[[0,"playing",2,0,100,0,5,null,1,null]]]]}
+        {"t":2,"tr":[["ambience","playing",1,"media/pad.wav",2,20,[[0,"playing",2,0,100,0,2,null,1,null]]],["ui","playing",1,"media/drum.wav",0,20,[[0,"playing",3,0,100,2,0,null,1,null]]]],"cues":[{"cueId":3,"tick":2,"kind":"media.play","track":"ui","voice":0,"asset":"media/drum.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"diag","code":"media.sync-source","op":"mediaPlay","sync":"nosuch"}]},
+        {"t":3,"tr":[["ambience","playing",1,"media/pad.wav",3,20,[[0,"playing",2,0,100,0,3,null,1,null]]],["ui","playing",1,"media/stem.wav",1,20,[[0,"playing",3,0,100,2,1,null,1,null],[1,"playing",4,0,100,3,0,null,1,null]]]],"cues":[{"cueId":4,"tick":3,"kind":"media.play","track":"ui","voice":1,"asset":"media/stem.wav","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"diag","code":"media.sync-source","op":"mediaPlay","sync":"sfx"}]},
+        {"t":4,"tr":[["ambience","playing",1,"media/pad.wav",4,20,[[0,"playing",2,0,100,0,4,null,1,null]]],["ui","playing",1,"media/x.xm",2,20,[[0,"playing",3,0,100,2,2,null,1,null],[1,"playing",4,0,100,3,1,null,1,null],[2,"playing",5,0,100,4,0,null,1,null]]]],"cues":[{"cueId":5,"tick":4,"kind":"media.play","track":"ui","voice":2,"asset":"media/x.xm","loop":true,"flags":1,"positionTicks":0,"volume":100,"targetVolume":null,"durationTicks":null}],"ev":[{"e":"diag","code":"media.sync-source","op":"mediaPlay","sync":"ambience"},{"e":"diag","code":"media.asset-format","op":"mediaPlay","file":"media/x.xm"}]},
+        {"t":5,"tr":[["ambience","playing",1,"media/pad.wav",5,20,[[0,"playing",2,0,100,0,5,null,1,null]]],["ui","playing",1,"media/x.xm",3,20,[[0,"playing",3,0,100,2,3,null,1,null],[1,"playing",4,0,100,3,2,null,1,null],[2,"playing",5,0,100,4,1,null,1,null]]]]}
       ],
-      "end": {"cueId":3,"soundFont":null,"master":100}
+      "end": {"cueId":6,"soundFont":null,"master":100}
     }
   ]
 }

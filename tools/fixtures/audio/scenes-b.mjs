@@ -200,13 +200,13 @@ export function syncedStart() {
         42,
       ),
       makeCase(
-        "sync-diagnostics-start-nothing",
-        "An unknown track, an inactive source (stopped sfx) and an unknown-length destination are each media.sync-source and start no voice.",
+        "sync-diagnostics-fallback-starts-at-zero",
+        "An unknown source track, an inactive source and an unknown-length destination each diagnose media.sync-source and start the destination at zero; an unsupported destination also diagnoses media.asset-format.",
         setup({ assets }),
         [
           cmd(0, "mediaPlay", { file: "pad.wav", track: "ambience", flags: LOOP }),
           cmd(2, "mediaPlay", { file: "drum.wav", track: "ui", flags: LOOP, sync: "nosuch" }),
-          cmd(3, "mediaPlay", { file: "drum.wav", track: "ui", flags: LOOP, sync: "sfx" }),
+          cmd(3, "mediaPlay", { file: "stem.wav", track: "ui", flags: LOOP, sync: "sfx" }),
           cmd(4, "mediaPlay", { file: "x.xm", track: "ui", flags: LOOP, sync: "ambience" }),
         ],
         6,

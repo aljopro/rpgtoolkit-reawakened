@@ -132,23 +132,46 @@ export function pollRenderMsgBox(view: WaitView, wait: Wait): WaitResult | null 
 /** The audio owner resolver for finite-end and loop-pass waits. */
 export function pollAudioTrack(view: WaitView, wait: Wait): WaitResult | null {
   if (wait.kind !== "audio.track") return null;
+  // mediaPlay preserves its return value here while the call is parked. Legacy
+  // void waits have no second payload entry.
+  const returned = wait.payload[1];
+  const done: WaitResult = returned !== null && typeof returned === "object" && !Array.isArray(returned)
+    && returned.kind === "object" && typeof returned.handle === "number" && typeof returned.className === "string"
+    ? { value: { kind: "object", handle: returned.handle, className: returned.className }, ok: true }
+    : DONE;
   const raw = wait.payload[0];
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const trackName = raw.track;
-  const voiceIndex = raw.voice;
-  const cueId = raw.cueId;
+  let trackName = raw.track;
+  let voiceIndex = raw.voice;
+  let cueId = raw.cueId;
   const pass = raw.pass;
   const passIndex = raw.passIndex;
-  if (typeof trackName !== "string" || typeof voiceIndex !== "number" || typeof cueId !== "number" || typeof pass !== "boolean" || (passIndex !== null && typeof passIndex !== "number")) return null;
+  if (typeof trackName !== "string" || (voiceIndex !== null && typeof voiceIndex !== "number") || (cueId !== null && typeof cueId !== "number") || typeof pass !== "boolean" || (passIndex !== null && typeof passIndex !== "number")) return null;
+  if (cueId === 0) {
+    // A start still held for its asset (MEDIA-1): park until it binds, or wake
+    // when the held effect is gone without a voice ever starting.
+    const handle = raw.handle;
+    const seq = raw.seq;
+    if (typeof handle !== "number" || typeof seq !== "number") return DONE;
+    const bound = view.mediaStart?.(handle) ?? null;
+    if (bound === null || bound.cueId <= 0) {
+      return view.pendingAudio?.some((effect) => effect.seq === seq) === true ? null : DONE;
+    }
+    trackName = bound.track;
+    voiceIndex = bound.slot;
+    cueId = bound.cueId;
+  }
+  if (typeof voiceIndex !== "number" || typeof cueId !== "number") return done;
   const track = view.audio?.tracks.find((item) => item.name === trackName);
   const voice = track?.voices.find((item) => item.index === voiceIndex && item.cueId === cueId);
-  if (voice === undefined) return DONE;
+  if (voice === undefined) return done;
   if (voice.state === "paused") return null;
+  if (!pass && (voice.loop || voice.lengthTicks === null)) return done;
   if (pass && voice.loop && voice.lengthTicks !== null && passIndex !== null) {
     const currentPass = Math.floor((view.tick - voice.startTick) / voice.lengthTicks);
-    return currentPass > passIndex ? DONE : null;
+    return currentPass > passIndex ? done : null;
   }
-  return voice.endTick !== null && view.tick >= voice.endTick ? DONE : null;
+  return voice.endTick !== null && view.tick >= voice.endTick ? done : null;
 }
 /** `video`: wake only for the matching, unskippable video completion reply. */
 export function pollVideo(view: WaitView, wait: Wait): WaitResult | null {

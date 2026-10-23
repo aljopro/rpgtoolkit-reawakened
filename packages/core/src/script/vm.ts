@@ -24,6 +24,7 @@ import { createActorEventSink } from "../actors/object.ts";
 import { createBehaviourRegistry, resolveBehaviour, type BehaviourRegistry } from "../actors/behaviour.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
+import { MEDIA_HOST_TYPES, objectValue, mediaVoiceRef, type MediaPlayOptions, type MediaScriptService } from "../audio/script.ts";
 import { recordDiagnostic, recordEffect, type EffectRecord } from "./effects.ts";
 import type { HostObjectContext, HostObjectType } from "./host.ts";
 import {
@@ -57,7 +58,7 @@ import {
   type PluginLayers,
 } from "./layers.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
-import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef, queueErrorEvent } from "../events/emitter.ts";
+import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef, queueErrorEvent, registerEmitter } from "../events/emitter.ts";
 import { GAME_EMITTER, type EventsSection } from "../events/model.ts";
 import { registerNativeListeners } from "../events/native.ts";
 import { classInfo, findMember, findMethod } from "./classes.ts";
@@ -185,6 +186,8 @@ export type ScriptServices = {
   readonly postEffect?: (section: SectionKey, effect: EffectRecord) => void;
   /** Engine-owned synchronous host-request dispatch hook. */
   readonly postRequest?: (request: CommandRequest) => void;
+  /** The script-facing media owner (MEDIA-1), when the engine provides one. */
+  readonly media?: MediaScriptService;
 };
 
 /** Take every diagnostic collected since the last drain, oldest first. */
@@ -205,6 +208,7 @@ export function createScriptServices(
   layers: PluginLayers = createPluginLayers(),
   hostTypes: readonly HostObjectType[] = [],
   packageStartup: boolean | PackageStartupLifecycle = false,
+  media?: MediaScriptService,
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
@@ -276,11 +280,13 @@ export function createScriptServices(
     clock,
     state: commandState,
     actors,
+    ...(media === undefined ? {} : { media }),
+    objectMembers: (handle: number) => state.vm.objects.find((record) => record.handle === handle)?.members,
     gameId,
     get packageStartup() { return packageStartupActive.active; },
     get thread() { return commandThread; },
   }) as CommandView;
-  const virt = virtuals ?? createDefaultVirtuals(state, actors);
+  const virt = virtuals ?? createDefaultVirtuals(state, actors, media);
   const registry = assembleCommands(plugins, logger);
   for (const problem of registerNativeListeners(state.events, plugins)) {
     logger.warn({
@@ -306,6 +312,7 @@ export function createScriptServices(
   });
   const hydratedTypes = new Map<string, HostObjectType>();
   hydratedTypes.set("actor", createActorHostType(actors));
+  if (media !== undefined) for (const type of MEDIA_HOST_TYPES) hydratedTypes.set(type.name, type);
   for (const plugin of plugins) {
     for (const type of plugin.definition.hostTypes ?? []) hydratedTypes.set(type.name, type);
   }
@@ -361,6 +368,7 @@ export function createScriptServices(
     ...(loader === undefined ? {} : { loader }),
     ...(postEffect === undefined ? {} : { postEffect }),
     ...(postRequest === undefined ? {} : { postRequest }),
+    ...(media === undefined ? {} : { media }),
   };
 }
 
@@ -753,6 +761,21 @@ function liveObject(vm: VmState, value: Value | undefined, pos: SourcePos, what:
 }
 
 /** The events section a host-provided emitter method works on (EMIT-14). */
+/**
+ * Register a host object under the emitter key its type names, on first emitter
+ * access only (MEDIA-2, EMIT-20): the media event domain stays lazy.
+ */
+function registerHostEmitter(vm: VmState, services: ScriptServices, emitter: Value | undefined): void {
+  if (typeof emitter !== "object" || emitter === null || !("kind" in emitter) || emitter.kind !== "object") return;
+  const record = findObject(vm, emitter.handle);
+  if (record === undefined || record.hostType === undefined) return;
+  const key = services.hostTypes.get(record.hostType)?.emitterKey?.(record) ?? null;
+  if (key === null) return;
+  const events = eventsOf(services);
+  if (events.emitters?.[key] === record.handle) return;
+  registerEmitter(vm, events, key, record);
+}
+
 function eventsOf(services: ScriptServices): EventsSection {
   const state = services.view.state;
   if (state === undefined) throw new ScriptError("emit.no-state", "the events section is not reachable");
@@ -779,7 +802,7 @@ function isHostMethod(program: Program, record: ObjectRecord, name: string, serv
 
 function hostContext(services: ScriptServices, record: ObjectRecord): HostObjectContext | null {
   const state = services.view.state;
-  return state === undefined ? null : { state, events: state.events, vm: state.vm, record };
+  return state === undefined ? null : { state, events: state.events, vm: state.vm, record, ...(services.media === undefined ? {} : { media: services.media }) };
 }
 
 function hostMemberName(name: string): string {
@@ -795,10 +818,15 @@ function readObjectValue(services: ScriptServices, record: ObjectRecord, name: s
 }
 
 function writeObjectValue(services: ScriptServices, record: ObjectRecord, name: string, value: Value): void {
+  const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
+  const memberName = hostMemberName(name);
+  const normalizedName = memberName.toLowerCase();
+  if (type?.readOnlyMembers?.some((field) => field.toLowerCase() === normalizedName)) {
+    throw new ScriptError(ASSIGN_READ_ONLY, `host member "${name}" is read-only`);
+  }
   if (!Object.hasOwn(record.members, name)) {
-    const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
     const context = hostContext(services, record);
-    const result = type?.write !== undefined && context !== null ? type.write(context, hostMemberName(name), value) : "not-host";
+    const result = type?.write !== undefined && context !== null ? type.write(context, memberName, value) : "not-host";
     if (result === "written") return;
     if (result === "read-only") throw new ScriptError(ASSIGN_READ_ONLY, `host member "${name}" is read-only`);
   }
@@ -826,6 +854,7 @@ function callEmitterMethod(
   args: Arg[],
 ): CallOutcome {
   const emitter: Value = { kind: "object", handle: record.handle, className: record.className };
+  registerHostEmitter(vm, services, emitter);
   const parked = applyEmitterOp(vm, eventsOf(services), name, emitter, args.map((arg) => arg.value), thread.id);
   frame.ip += 1;
   if (parked !== null) {
@@ -1946,6 +1975,7 @@ function dispatchResolved(
         });
       }
       if (action === "emitter") {
+        registerHostEmitter(vm, services, effect.args?.[2] as Value | undefined);
         const event = applyEmitterOp(
           vm,
           eventsOf(services),
@@ -1958,6 +1988,38 @@ function dispatchResolved(
           parkOnEvent(thread, event);
           parked = true;
         }
+      }
+      if (action === "mediaplay") {
+        if (services.media === undefined) throw new ScriptError("unknown.command", "mediaPlay: the media owner is not installed", pos);
+        const file = effect.args?.[1];
+        const options = effect.args?.[2] as MediaPlayOptions | undefined;
+        const returnVoice = effect.args?.[3] !== false;
+        if (typeof file !== "string" || options === undefined) throw new ScriptError("builtin.bad-arg", "mediaPlay: malformed start", pos);
+        const started = services.media.play(file, options);
+        const outcome = started.outcome;
+        produced = returnVoice && outcome.kind !== "rejected" && !(outcome.kind === "same-file" && outcome.action === "ignored")
+          ? objectValue(started.record)
+          : null;
+        if (options.wait) {
+          let wait: Wait | null = null;
+          if (outcome.kind === "pending") wait = services.media.pendingWait(started);
+          else if (outcome.kind === "started" || (outcome.kind === "same-file" && outcome.action === "carry-on")) {
+            const ref = mediaVoiceRef(started.record);
+            wait = ref === null ? null : services.media.voiceWait(ref);
+          }
+          if (wait !== null) {
+            if (wait.kind === "audio.track") wait.payload[1] = produced;
+            thread.wait = wait;
+            thread.status = "waiting";
+            parked = true;
+          }
+        }
+      }
+      if (action === "mediaTrackObject") {
+        const name = effect.args?.[1];
+        if (typeof name !== "string" || services.media === undefined) throw new ScriptError("builtin.bad-arg", "media.track: malformed track", pos);
+        const record = services.media.trackObject(name);
+        produced = record === null ? null : objectValue(record);
       }
       if (action === "registerPlugin") {
         produced = registerPluginCall(vm, services, program, args, pos);

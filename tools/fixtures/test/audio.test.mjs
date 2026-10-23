@@ -404,9 +404,10 @@ test("synced-start: the position is the source position modulo the destination l
   const unequal = theCase("synced-start", "unequal-lengths-are-deterministic");
   equal(posAt(unequal, 37, "sfx"), 37);
   deepEqual(finishes(unequal), [[40, "sfx", 0]]);
-  const bad = theCase("synced-start", "sync-diagnostics-start-nothing");
-  deepEqual(diags(bad), [[2, "media.sync-source"], [3, "media.sync-source"], [4, "media.sync-source"]]);
-  equal(bad.end.cueId, 3);
+  const bad = theCase("synced-start", "sync-diagnostics-fallback-starts-at-zero");
+  deepEqual(diags(bad), [[2, "media.sync-source"], [3, "media.sync-source"], [4, "media.sync-source"], [4, "media.asset-format"]]);
+  deepEqual(allCues(bad).filter((cue) => cue.kind === "media.play" && cue.track === "ui").map((cue) => [cue.tick, cue.track, cue.positionTicks]), [[2, "ui", 0], [3, "ui", 0], [4, "ui", 0]]);
+  equal(bad.end.cueId, 6);
 });
 
 test("late-start-catch-up: cue-player arithmetic on the cues, hand-worked", () => {

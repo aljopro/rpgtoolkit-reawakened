@@ -6,10 +6,13 @@
  */
 
 import { assetKey } from "../../formats/resolver/resolver.ts";
+import { MEDIA_HOST_TYPES, type MediaPlayOptions } from "../../audio/script.ts";
+import type { MediaVoiceRef } from "../../audio/model.ts";
 import {
   MEDIA_LOOP,
   MEDIA_ONCE,
   MEDIA_RESTART,
+  MEDIA_TRACK_NAME,
   MEDIA_WAIT,
   asciiFold,
   findTrack,
@@ -191,35 +194,218 @@ function mediaLoad(): BuiltinSpec {
   };
 }
 
+/** The handle of an object value, or `null` for any other value. */
+function objectHandle(value: unknown): number | null {
+  if (typeof value !== "object" || value === null || !("kind" in value) || value.kind !== "object") return null;
+  if (!("handle" in value)) return null;
+  return typeof value.handle === "number" ? value.handle : null;
+}
+
+/** Read one `mediaPlay` option as a whole number, or throw the located argument error. */
+function wholeOption(value: unknown, name: string, op: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) throw new ScriptError("builtin.bad-arg", `${op}: option "${name}" must be a whole number`);
+  return value;
+}
+
+/** Read one `mediaPlay` option as `1`/`0`, or throw the located argument error. */
+function flagOption(value: unknown, name: string, op: string): boolean {
+  const flag = wholeOption(value, name, op);
+  if (flag !== 0 && flag !== 1) throw new ScriptError("builtin.bad-arg", `${op}: option "${name}" must be 1 or 0`);
+  return flag === 1;
+}
+
+/**
+ * The ruled `options` dictionary of `mediaPlay(file[, options])` (MEDIA-1):
+ * `track`, `loop`, `volume`, `priority`, `sync` and `wait`, each validated
+ * before any playback change. A value the contract does not allow is a located
+ * call error, so no partial start happens.
+ */
+function readPlayOptions(view: CommandView, value: unknown): MediaPlayOptions {
+  const op = "mediaPlay";
+  let track = "music";
+  let loop = true;
+  let volume = 100;
+  let priority = 0;
+  let sync: string | null = null;
+  let wait = false;
+  if (value !== null && value !== undefined) {
+    const handle = objectHandle(value);
+    if (handle === null) throw new ScriptError("builtin.bad-arg", `${op}: options must be a dictionary`);
+    const members = view.objectMembers?.(handle);
+    if (members === undefined) throw new ScriptError("builtin.bad-arg", `${op}: options must be a live dictionary`);
+    for (const key of Object.keys(members)) {
+      if (key !== "track" && key !== "loop" && key !== "volume" && key !== "priority" && key !== "sync" && key !== "wait") {
+        throw new ScriptError("builtin.bad-arg", `${op}: unknown option "${key}"`);
+      }
+    }
+    if (Object.hasOwn(members, "track")) {
+      const name = members["track"];
+      if (typeof name !== "string") throw new ScriptError("builtin.bad-arg", `${op}: option "track" must be a string`);
+      track = asciiFold(name);
+      if (!MEDIA_TRACK_NAME.test(track)) throw new ScriptError("media.invalid-track-name", `${op}: invalid track name "${name}"`);
+    }
+    if (Object.hasOwn(members, "loop")) loop = flagOption(members["loop"], "loop", op);
+    else loop = track === "music";
+    if (Object.hasOwn(members, "volume")) {
+      volume = wholeOption(members["volume"], "volume", op);
+      if (volume < 0 || volume > 100) throw new ScriptError("media.invalid-volume", `${op}: volume must be between 0 and 100`);
+    }
+    if (Object.hasOwn(members, "priority")) priority = wholeOption(members["priority"], "priority", op);
+    if (Object.hasOwn(members, "sync")) {
+      const source = members["sync"];
+      if (typeof source !== "string") throw new ScriptError("builtin.bad-arg", `${op}: option "sync" must be a string`);
+      sync = source === "" ? null : asciiFold(source);
+    }
+    if (Object.hasOwn(members, "wait")) wait = flagOption(members["wait"], "wait", op);
+  }
+  const audio = readAudioView(view);
+  if (audio === undefined || findTrack(audio, track) === undefined) throw new ScriptError("media.unknown-track", `${op}: unknown track "${track}"`);
+  if (loop && wait) throw new ScriptError("media.wait-loop", `${op}: a looping voice cannot be waited on`);
+  return { track, loop, volume, priority, sync, wait };
+}
+
+/** The pack's one start route: a VM control action owns the object and the posted effect. */
+function playEffect(file: string, options: MediaPlayOptions, returnVoice = true): CommandEffect {
+  return { kind: "vm.control", args: ["mediaplay", mediaAsset(file), { ...options }, returnVoice] };
+}
+
 function mediaPlay(): BuiltinSpec {
   return {
     name: "mediaplay",
     aliases: [],
     params: [
       { name: "file", optional: false, byRef: false, variadic: false },
-      { name: "track", optional: true, byRef: false, variadic: false },
-      { name: "flags", optional: true, byRef: false, variadic: false },
-      { name: "priority", optional: true, byRef: false, variadic: false },
-      { name: "syncTrack", optional: true, byRef: false, variadic: false },
-      { name: "voice", optional: true, byRef: true, variadic: false },
+      { name: "options", optional: true, byRef: false, variadic: false },
     ],
-    doc: doc("Play a media file on a named track.", "Resolves the Media-folder file, applies loop/restart/priority/sync flags, and posts one audio play effect. With tkMD_WAIT the calling thread waits on that voice until its finite end tick.", { kind: "other", summary: "tkMD_WAIT parks the calling thread on the audio.track wait." }),
+    doc: {
+      ...doc("Play a media file on a named track.", "Resolves the Media-folder file, validates the named options, and starts one voice through the audio applier; the value is that voice object (MEDIA-1), or null when the request starts nothing. With `wait` the calling thread parks on the voice's audio.track wait."),
+      returns: { summary: "The started voice object, or null when no voice started." },
+      waits: { kind: "other", summary: "With the wait option, the calling thread waits on the audio.track wait for that finite voice." },
+      see: ["docs/spec/engine/audio-media.md#media-1"],
+    },
     call: (view, args) => {
-      const file = mediaAsset(stringArg(args, 0, "mediaPlay"));
-      const track = asciiFold(optionalTrack(args, 1, "music", "mediaPlay"));
-      const flags = args.length > 2 ? wholeArg(args, 2, "mediaPlay") : (track === "music" ? MEDIA_LOOP : MEDIA_ONCE);
-      if (flags < 0 || (flags & ~(MEDIA_LOOP | MEDIA_WAIT | MEDIA_RESTART | tkMD_SYNC)) !== 0) throw new ScriptError("builtin.bad-arg", "mediaPlay: invalid flags");
-      const priority = args.length > 3 ? wholeArg(args, 3, "mediaPlay") : 0;
-      const syncTrack = args.length > 4 ? asciiFold(stringArg(args, 4, "mediaPlay")) : "";
-      const voice = args.length > 5 ? optionalVoice(args, 5, "mediaPlay") : undefined;
-      const wait = playWait(view, track, voice, flags);
-      const out = voice === undefined || args[5]?.ref === null ? undefined : [[5, voice] as const];
-      return {
-        value: null,
-        ...(out === undefined ? {} : { out }),
-        effects: [effect("media.play", [file, track, (flags & MEDIA_LOOP) !== 0, (flags & MEDIA_RESTART) !== 0, priority, syncTrack || null, voice ?? null])],
-        ...(wait === undefined ? {} : { wait }),
-      };
+      const file = stringArg(args, 0, "mediaPlay");
+      const options = readPlayOptions(view, args[1]?.value);
+      return { value: null, effects: [playEffect(file, options)] };
+    },
+  };
+}
+
+/** A hydrated voice method: read the receiver's `{track, slot, cueId}`, diagnose a stale one, or act. */
+function voiceRef(view: CommandView, args: readonly Arg[], op: string): MediaVoiceRef | null {
+  const handle = objectHandle(args[0]?.value);
+  if (handle === null) throw new ScriptError("builtin.bad-arg", `${op}: the receiver is not a voice object`);
+  const members = view.objectMembers?.(handle);
+  if (members === undefined) throw new ScriptError("builtin.bad-arg", `${op}: the receiver is not a live voice object`);
+  const track = members["track"];
+  const slot = members["slot"];
+  const cueId = members["cueId"];
+  if (typeof track !== "string" || !Number.isInteger(slot) || !Number.isInteger(cueId)) {
+    view.media?.diagnose("media.unknown-voice", op, { track: typeof track === "string" ? track : "", voice: Number.isInteger(slot) ? (slot as number) : -1 });
+    return null;
+  }
+  return { track, slot: slot as number, cueId: cueId as number };
+}
+
+/** The hydrated voice methods (MEDIA-1): each acts on the voice identity the object names. */
+function voiceMethod(name: string): BuiltinSpec {
+  const number = name === "mediavoicefade" ? 2 : name === "mediavoiceseek" ? 1 : 0;
+  const params = [{ name: "voice", optional: false, byRef: false, variadic: false }];
+  if (name === "mediavoiceseek") params.push({ name: "seconds", optional: false, byRef: false, variadic: false });
+  if (name === "mediavoicefade") {
+    params.push({ name: "percent", optional: false, byRef: false, variadic: false });
+    params.push({ name: "seconds", optional: false, byRef: false, variadic: false });
+  }
+  return {
+    name,
+    aliases: [],
+    params,
+    doc: {
+      ...doc(
+        name === "mediavoicestop" ? "Stop a voice object." : name === "mediavoicepause" ? "Pause a voice object." : name === "mediavoiceresume" ? "Resume a voice object." : name === "mediavoiceseek" ? "Move a voice object to a time position." : name === "mediavoicefade" ? "Fade a voice object to a volume." : "Wait for a voice object to finish.",
+        "Hydrated voice method: reads the object's track, slot and cue id and applies the same deterministic audio operation as the procedural command; a stale voice diagnoses and changes nothing.",
+      ),
+      access: "internal",
+      see: ["docs/spec/engine/audio-media.md#media-1"],
+    },
+    call: (view, args) => {
+      const ref = voiceRef(view, args, name);
+      if (ref === null) return { value: 0 };
+      const media = view.media;
+      if (media === undefined) throw new ScriptError("unknown.command", `${name}: the media owner is not installed`);
+      if (name === "mediavoicestop") media.stop(ref);
+      else if (name === "mediavoicepause") media.pause(ref);
+      else if (name === "mediavoiceresume") media.resume(ref);
+      else if (name === "mediavoiceseek") {
+        const ticks = secondsToTicks(numberArg(args, 1, name));
+        if (ticks === null) throw new ScriptError("media.invalid-time", `${name}: seconds must be finite and non-negative`);
+        media.seek(ref, ticks);
+      } else if (name === "mediavoicefade") {
+        const percent = wholeArg(args, 1, name);
+        if (percent < 0 || percent > 100) throw new ScriptError("media.invalid-volume", `${name}: percent must be between 0 and 100`);
+        const ticks = secondsToTicks(numberArg(args, 2, name));
+        if (ticks === null) throw new ScriptError("media.invalid-time", `${name}: seconds must be finite and non-negative`);
+        media.fade(ref, percent, ticks);
+      } else {
+        const wait = media.voiceWait(ref);
+        return wait === null ? { value: 0 } : { value: 0, wait };
+      }
+      return { value: 0 };
+    },
+  };
+}
+
+function mediaTrackGet(): BuiltinSpec {
+  return {
+    name: "mediatrackget",
+    aliases: [],
+    params: [
+      { name: "media", optional: false, byRef: false, variadic: false },
+      { name: "name", optional: false, byRef: false, variadic: false },
+    ],
+    doc: {
+      ...doc("Reach a configured audio track object.", "Hydrated `media.track(name)` method: folds the name, requires a configured track, and returns that track's one host object; an unknown name diagnoses and returns null."),
+      access: "internal",
+      see: ["docs/spec/engine/audio-media.md#media-1"],
+    },
+    call: (view, args) => {
+      const name = asciiFold(stringArg(args, 1, "media.track"));
+      const audio = readAudioView(view);
+      if (audio === undefined || findTrack(audio, name) === undefined) {
+        view.media?.diagnose("media.unknown-track", "media.track", { track: name });
+        return { value: null };
+      }
+      return { value: null, effects: [{ kind: "vm.control", args: ["mediaTrackObject", name] }] };
+    },
+  };
+}
+
+function mediaTrackFade(): BuiltinSpec {
+  return {
+    name: "mediatrackfade",
+    aliases: [],
+    params: [
+      { name: "track", optional: false, byRef: false, variadic: false },
+      { name: "percent", optional: false, byRef: false, variadic: false },
+      { name: "seconds", optional: false, byRef: false, variadic: false },
+    ],
+    doc: {
+      ...doc("Fade a track object to a volume percentage.", "Hydrated `track.fade(percent, seconds)` method: validates the percentage and duration and posts the track-wide fade effect; the track keeps playing when the fade reaches zero."),
+      access: "internal",
+      see: ["docs/spec/engine/audio-media.md#media-1"],
+    },
+    call: (view, args) => {
+      const handle = objectHandle(args[0]?.value);
+      const members = handle === null ? undefined : view.objectMembers?.(handle);
+      const name = members?.["name"];
+      if (typeof name !== "string") throw new ScriptError("builtin.bad-arg", "track.fade: the receiver is not a track object");
+      const percent = wholeArg(args, 1, "track.fade");
+      if (percent < 0 || percent > 100) throw new ScriptError("media.invalid-volume", "track.fade: percent must be between 0 and 100");
+      const ticks = secondsToTicks(numberArg(args, 2, "track.fade"));
+      if (ticks === null) throw new ScriptError("media.invalid-time", "track.fade: seconds must be finite and non-negative");
+      if (view.media === undefined) throw new ScriptError("unknown.command", "track.fade: the media owner is not installed");
+      view.media.trackFade(name, percent, ticks);
+      return { value: 0 };
     },
   };
 }
@@ -541,17 +727,26 @@ const MEDIA_PLAY = mediaPlay();
 const MEDIA_STOP = mediaTransport("mediastop");
 
 
-function legacyPlay(name: string, track: string, flags: number, summary: string, waits?: BuiltinDoc["waits"]): BuiltinSpec {
+/** A Toolkit 3.1 alias keeps its void result and playback mapping. */
+function legacyPlay(name: string, track: string, loop: boolean, summary: string, wait: boolean, waits?: BuiltinDoc["waits"]): BuiltinSpec {
+  const behaviour = wait
+    ? `Plays once on the ${track} track and parks the calling thread until the sound ends; it returns no value.`
+    : `Maps to the ${track} track with the Toolkit 3.1 loop flag and never returns a value; it preserves the original command's behavior.`;
   return {
     name,
     aliases: [],
     params: [{ name: "file", optional: false, byRef: false, variadic: false }],
-    doc: legacyDoc(summary, `Maps to mediaplay on the ${track} track with the legacy playback flags; it preserves the original command's loop and wait behavior.`, waits),
-    call: (view, args, next) => MEDIA_PLAY.call(view, [
-      args[0]!,
-      { value: track, ref: null },
-      { value: flags, ref: null },
-    ], next),
+    doc: { ...legacyDoc(summary, behaviour, waits), replacedBy: { kind: "command", name: "mediaplay" } },
+    call: (_view, args) => {
+      const file = stringArg(args, 0, name);
+      if (wait) {
+        return {
+          value: null,
+          effects: [playEffect(file, { track, loop, volume: 100, priority: 0, sync: null, wait: true }, false)],
+        };
+      }
+      return { value: null, effects: [effect("media.play", [mediaAsset(file), track, loop, false, 0, null, null])] };
+    },
   };
 }
 
@@ -629,22 +824,31 @@ export const MEDIA_COMMANDS: readonly BuiltinSpec[] = [
   mediaLength(),
   mediaTracks(),
   getVolume(),
-  legacyPlay("midiplay", "music", MEDIA_LOOP, "Play a media file on a named track."),
-  legacyPlay("playmidi", "music", MEDIA_LOOP, "Play a media file on a named track."),
-  legacyPlay("wav", "sfx", MEDIA_ONCE, "Play a wave file (e.g. a sound effect)."),
-  legacyPlay("mp3", "sfx", MEDIA_ONCE, "Play a wave file (e.g. a sound effect)."),
+  legacyPlay("midiplay", "music", true, "Play a media file on a named track.", false, { kind: "never", summary: "Never waits." }),
+  legacyPlay("playmidi", "music", true, "Play a media file on a named track.", false, { kind: "never", summary: "Never waits." }),
+  legacyPlay("wav", "sfx", false, "Play a wave file (e.g. a sound effect).", false, { kind: "never", summary: "Never waits." }),
+  legacyPlay("mp3", "sfx", false, "Play a wave file (e.g. a sound effect).", false, { kind: "never", summary: "Never waits." }),
   legacyStop("mediarest", "music", "Stop a track or voice."),
   legacyStop("midirest", "music", "Stop a track or voice."),
   legacyStop("wavstop", "sfx", "Stop the current sound effect."),
-  legacyPlay("mp3pause", "sfx", MEDIA_ONCE | MEDIA_WAIT, "Play a sound effect and pause the engine until it finishes.", { kind: "other", summary: "The calling thread waits on audio.track until the sound effect ends." }),
+  legacyPlay("mp3pause", "sfx", false, "Play a sound effect and pause the engine until it finishes.", true, { kind: "other", summary: "The calling thread waits on audio.track until the sound effect ends." }),
   setVolume(),
   soundFont(),
   soundFontReset(),
+  mediaTrackGet(),
+  mediaTrackFade(),
+  voiceMethod("mediavoicestop"),
+  voiceMethod("mediavoicepause"),
+  voiceMethod("mediavoiceresume"),
+  voiceMethod("mediavoiceseek"),
+  voiceMethod("mediavoicefade"),
+  voiceMethod("mediavoicewait"),
 ];
 
 export const MEDIA_PLUGIN: PluginDefinition = {
   id: "media",
   version: "1.0.0",
+  hostTypes: MEDIA_HOST_TYPES,
   doc: {
     summary: "Deterministic media tracks, voices and SoundFont controls.",
     groups: [{ id: "audio-23", name: "Audio", summary: "Track-based audio control at the fixed simulation tick." }],
