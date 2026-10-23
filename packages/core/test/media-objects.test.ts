@@ -216,6 +216,28 @@ test("a replaced voice reads as no live voice and its methods diagnose without t
   deepEqual(world.diagnostics.map((entry) => entry.code), ["media.unknown-voice"]);
 });
 
+test("voice identity fields cannot be changed to redirect a stale object", () => {
+  const world = rig({ "a.wav": 60, "b.wav": 60, "c.wav": 60 }, [
+    'errors = ""',
+    'game.on("error", (event) => { errors = errors + event.detail.code + ";" })',
+    'old = mediaPlay("a.wav", { track: "sfx" })',
+    'mediaPlay("b.wav", { track: "sfx" })',
+    'target = mediaPlay("c.wav", { track: "music" })',
+    'old.track = "music"',
+    "old.slot = target.slot",
+    "old.cueId = 3",
+    "oldTrack = old.track",
+    "oldSlot = old.slot",
+    "old.stop()",
+  ].join("\n"));
+  world.run(3);
+  equal(global(world.state, "errors"), "assign.read-only;assign.read-only;assign.read-only;");
+  equal(global(world.state, "oldTrack"), "sfx");
+  equal(global(world.state, "oldSlot"), 0);
+  equal(voice(world.state, "music", 0)?.state, "playing");
+  ok(world.diagnostics.some((entry) => entry.code === "media.unknown-voice"));
+});
+
 test("same-file music carries on and returns the live voice; the same request on sfx returns null", () => {
   const world = rig({ "song.mid": 600, "ding.wav": 60 }, [
     'a = mediaPlay("song.mid", { track: "music" })',

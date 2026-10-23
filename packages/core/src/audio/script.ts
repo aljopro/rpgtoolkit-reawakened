@@ -299,6 +299,7 @@ export const MEDIA_HOST_TYPES: readonly HostObjectType[] = [
   },
   {
     name: "media.voice",
+    readOnlyMembers: ["track", "slot", "cueId"],
     methods: {
       stop: "mediavoicestop",
       pause: "mediavoicepause",

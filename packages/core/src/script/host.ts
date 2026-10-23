@@ -38,6 +38,8 @@ export type HostObjectType = {
   readonly emitterKey?: (record: ObjectRecord) => string | null;
   readonly read?: (context: HostObjectContext, name: string) => Value | undefined;
   readonly write?: (context: HostObjectContext, name: string, value: Value) => HostWriteResult;
+  /** Host-owned data members remain readable but reject RPGCode assignment. */
+  readonly readOnlyMembers?: readonly string[];
   readonly remove?: (context: HostObjectContext, name: string) => HostRemoveResult;
 };
 

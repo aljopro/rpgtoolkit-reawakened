@@ -347,20 +347,20 @@ test("corpus: whole fetched corpus suite over fixtures/legacy runs all 10 progra
   // 9128c9fb95d1f969, a7e3084cbafc59c0, 2e8a007d7bae1d31, 6717598c0b7e163a, 69af004598505635 and eaef689c32b9ae98).
   // Re-pinned by ticket 20.3: the empty `actors` section is now part of the hashed state tree.
   // Re-pinned by ticket 20.6: the actor section schema and persisted progression contract advanced to version 2.
-  // Re-pinned by ticket 21.5: MEDIA-1 returns a voice from one-argument `mediaPlay(file)`. The legacy corpus calls
-  // are bare statements, so they ignore the value and keep the same playback cues; the returned object changes the
-  // hashed VM state. The closing image baselines remain visual regression checks, not a record of this state hash.
+  // Re-pinned by tickets 8.2 and 21.5: schema-2 party/inventory/menu state is hashed; MEDIA-1 returns a voice from
+  // one-argument `mediaPlay(file)`. The legacy corpus calls are bare statements, so they ignore the value and keep
+  // the same playback cues; the returned object changes the hashed VM state. Closing PNGs remain visual baselines.
   const expectedHashes: Record<string, string> = {
-    "sample-start-demo": "f844ddf17ebe85b4",
-    "sample-system-demo": "cf3ae942df9cf5ca",
-    "sample-sys-test-demo": "cf3ae942df9cf5ca",
-    "sample-win-demo": "fc40bf295888db40",
-    "sample-oldman-demo": "9d9679670cc52fe3",
-    "sample-man-demo": "f73cab36512054b8",
-    "sample-man-wander-demo": "fd10229dc706673d",
-    "sample-start-basic": "ddd55c1ea61bba50",
-    "sample-system-basic": "cf3ae942df9cf5ca",
-    "sample-wander-basic": "beb7a9eaf8b62295",
+    "sample-start-demo": "3b301e4d4459ac30",
+    "sample-system-demo": "5cac5a042db31f76",
+    "sample-sys-test-demo": "5cac5a042db31f76",
+    "sample-win-demo": "5f3d8852f4ce2eec",
+    "sample-oldman-demo": "79da90dccdb439df",
+    "sample-man-demo": "e43fe10c7064f97c",
+    "sample-man-wander-demo": "dd9c03c6953b6b29",
+    "sample-start-basic": "1d9129cf40b585c4",
+    "sample-system-basic": "5cac5a042db31f76",
+    "sample-wander-basic": "1e73720211ff99d1",
   };
 
   for (const res of results) {

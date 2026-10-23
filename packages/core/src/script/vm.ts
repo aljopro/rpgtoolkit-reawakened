@@ -818,10 +818,15 @@ function readObjectValue(services: ScriptServices, record: ObjectRecord, name: s
 }
 
 function writeObjectValue(services: ScriptServices, record: ObjectRecord, name: string, value: Value): void {
+  const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
+  const memberName = hostMemberName(name);
+  const normalizedName = memberName.toLowerCase();
+  if (type?.readOnlyMembers?.some((field) => field.toLowerCase() === normalizedName)) {
+    throw new ScriptError(ASSIGN_READ_ONLY, `host member "${name}" is read-only`);
+  }
   if (!Object.hasOwn(record.members, name)) {
-    const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
     const context = hostContext(services, record);
-    const result = type?.write !== undefined && context !== null ? type.write(context, hostMemberName(name), value) : "not-host";
+    const result = type?.write !== undefined && context !== null ? type.write(context, memberName, value) : "not-host";
     if (result === "written") return;
     if (result === "read-only") throw new ScriptError(ASSIGN_READ_ONLY, `host member "${name}" is read-only`);
   }

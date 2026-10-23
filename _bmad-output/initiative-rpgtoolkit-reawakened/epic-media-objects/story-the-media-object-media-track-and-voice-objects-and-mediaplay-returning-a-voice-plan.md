@@ -1,9 +1,10 @@
 ---
+status: 'built'
 title: "The media object: media, track and voice objects, and mediaPlay returning a voice"
 type: 'feature'
 ticket: 5
 created: '2026-10-22'
-status: 'built'
+status: 'in-review'
 review: 'quick'
 review_source: 'pinned'
 lenses_ran: ['quick']
@@ -107,15 +108,15 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 
 **Results (2026-10-22, commit `1cbf8ee4`, logs `/tmp/rpgtoolkit-484-head/`):** all 23 gates passed — typecheck, lint, `test` (1784 passed, 0 failed, 0 skipped), `test:strict` (1784 passed, 0 skipped), fixtures check/author/test, `golden`, `golden:bun`, `closing` (8/8), `dump:check` (all digests match), graph + graph test, licence + test (0 violations), provenance + test (633 files, 0 violations), catalogue, command-docs + test, no-skips, oracle, audit --prod. A throwaway authored-script smoke against the real engine printed: cues `soundfont.set`, `media.play sfx`, `media.pause`, `media.resume`, `media.play ui`, two `media.stop`; events `paused` delivered voice→track→media and `resumed`, `ended` at ticks 3/31/33; no diagnostics; final hash `ab711894ddd8283b`; artifact removed.
 
-**Results (post-fix full verification in the isolated worktree):** every listed gate passed. Typecheck, lint, focused media regressions, full `test` and `test:strict` (1,795/1,795; zero skips), `golden`, `golden:bun`, `closing`, graph checks, licence checks, provenance checks (633 files, zero violations), catalogue, command docs, fixture author/check/test, audio protocol, dump checks, production dependency audit (no known vulnerabilities), no-skips, independent oracle and corpus (10/10) all passed. The real-engine smoke `node --test --test-name-pattern='finite waited mediaPlay returns its voice after waking' packages/core/test/media-objects.test.ts` passed 1/1. The updated sync oracle and generated fixture pass check mode.
+- **Results (post-rebase full verification in the isolated worktree):** every listed gate passed after the read-only voice identity guard and corpus-baseline refresh. `pnpm test` and `pnpm test:strict` passed **1,808/1,808, zero skips**; provenance scanned 639 files with zero violations; the fetched corpus passed 10/10. The focused media suite passed 155/155, including the real-VM stale-identity regression, which also passed as a targeted 1/1 test. `golden`, `golden:bun`, and `closing` passed; exact RGBA references matched. The expected state/hash ledgers and corpus hashes were regenerated after rebasing onto newer `main` behavior; no unreviewed drift remains. Production dependency audit found no known vulnerabilities.
 
 **Commands:**
 - `pnpm fixtures:fetch`, `pnpm typecheck`, `pnpm lint` — pass.
 - `node --test packages/core/test/media-objects.test.ts packages/core/test/audio-runtime.test.ts packages/core/test/audio-events.test.ts packages/core/test/audio-lifecycle-runtime.test.ts packages/core/test/audio-lifecycle-replay.test.ts packages/core/test/events-emitter.test.ts packages/core/test/script-threads.test.ts packages/core/test/script-closure-save.test.ts packages/core/test/audio-lifecycle-engine.test.ts` — pass.
-- `pnpm test`, `pnpm test:strict` — pass (1,795/1,795, zero skips).
-- `pnpm golden`, `pnpm golden:bun`, `pnpm closing` — pass with approved state-hash changes; no pixel-golden changes.
-- `pnpm graph`, `pnpm graph:test`, `pnpm licence`, `pnpm licence:test`, `pnpm provenance`, `pnpm provenance:test`, `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm command-docs:test`, `pnpm fixtures:author:check`, `pnpm fixtures:test`, `pnpm audio-protocol:check`, `pnpm dump:check`, `pnpm audit --prod`, `pnpm no-skips:test`, `pnpm oracle:check`, `pnpm corpus` — pass.
-- Full suite, strict, and every listed gate must remain green after any rebase or code change; the exact PR head must pass hosted CI before merge.
+- `pnpm test`, `pnpm test:strict` — pass (1,808/1,808, zero skips).
+- `pnpm golden`, `pnpm golden:bun`, `pnpm closing` — pass; golden exact RGBA references match, and closing reports 8/8 games at their committed baselines.
+- `pnpm graph`, `pnpm graph:test`, `pnpm licence`, `pnpm licence:test`, `pnpm provenance`, `pnpm provenance:test`, `pnpm catalogue:check`, `pnpm command-docs:check`, `pnpm command-docs:test`, `pnpm fixtures:author:check`, `pnpm fixtures:test`, `pnpm audio-protocol:check`, `pnpm dump:check`, `pnpm audit --prod`, `pnpm no-skips:test`, `pnpm oracle:check`, `pnpm corpus` — pass; provenance scanned 639 files with zero violations, audit reports no known vulnerabilities, corpus 10/10.
+- Full suite, strict, and every listed gate were rerun after rebase and the read-only-member fix. The exact PR head still needs hosted CI before merge.
 
 ## Implementation Notes
 
@@ -134,6 +135,7 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 - 2026-10-22 — No golden or closing baseline was re-recorded; `pnpm golden`, `pnpm golden:bun`, `pnpm closing` and `pnpm dump:check` pass unchanged.
 - 2026-10-23 — Owner confirmed the one-argument `mediaPlay(file)` returns a voice under MEDIA-1; the prior corpus review found existing 3.1 callsites are bare statements, so returning an object is compatible. Options remain optional.
 - 2026-10-23 — Re-reviewed the full diff after six quick-review patches: fix-specific and independent final reviews found no remaining issues; the invalid-sync fallback is also pinned by the independent audio oracle and generated fixture.
+- 2026-10-23 — Rebased onto `main` at `ca1816fa`; regenerated script/closing baselines and the corpus expected-hash map for the newer main behavior. Post-rebase gates pass at 1,808 tests with no skips, golden/closing RGBA checks match, and the fetched corpus passes 10/10.
 
 ## Review Triage Log
 ### 2026-10-23 pinned quick review
@@ -145,6 +147,10 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 - `false` — `voice.wait()` rejecting a looping voice matches P5: the object method requests terminal completion, `pass:false` on a loop is diagnosed, and the next-pass wait is not part of the object API. The reviewer conflated that with the separate script-level ability to request a pass boundary.
 - `medium / patch — fixed` — The plan's sync matrix requires missing/inactive/unknown-length sources to diagnose and start at zero, but `runtime.play` rejected playback. The MEDIA-1 fallback was added in docs-only commit `4a7f5fb6` before implementation; runtime and the independent audio oracle now diagnose and start the valid destination at zero.
 - `medium / patch — fixed` — `voice.position` and fade-backed volume reads used last audio-phase cached fields. Fixed by deriving position and fade-backed voice/track gain at the current tick, preserving pause behavior; regression test covers tick freshness and paused fade.
+
+### 2026-10-23 post-rebase review
+
+- `P2 / patch — fixed and re-reviewed` — A stale voice could overwrite its own `track`, `slot` and `cueId` record members; own-member precedence bypassed the host write hook, allowing method redirection to another live voice. Added read-only host-member metadata and VM enforcement; a real-VM regression attempts the three-field redirect, observes assignment errors, and confirms the target remains playing. `IdentityFixRereview` found no remaining issue.
 
 
 ## Code Review
@@ -161,7 +167,11 @@ Review lenses: `blind-hunter` did not meet its required finding floor (3 finding
 
 ### 2026-10-23 pinned quick review
 
-`BindingKingfisher` found seven findings: six routed to patch and one rejected as false against P5. The prior focused fix reviewers (`MediaFixBehaviorReview` and `MediaFixRegressionReview`) found no issues in the three original patches. All six patch findings are now fixed; `tk-484-builder.MediaFixReview` and final independent reviewer `FinalMediaReview` found no remaining defects.
+`BindingKingfisher` found seven findings: six routed to patch and one rejected as false against P5. The prior focused fix reviewers (`MediaFixBehaviorReview` and `MediaFixRegressionReview`) found no issues in the three original patches. All six quick-review patch findings were fixed and re-reviewed before rebase; `tk-484-builder.MediaFixReview` and `FinalMediaReview` found no remaining defects in that pre-rebase diff. `RebasedMediaReview` later found the identity-field issue recorded below.
+
+### 2026-10-23 post-rebase fix re-review
+
+`RebasedMediaReview` found one P2 identity-mutation defect. The read-only member guard and exploit regression were reviewed independently by `IdentityFixRereview`, which found no further issues. The targeted real-engine regression passed 1/1.
 
 
 **Owner decision (2026-10-23):** The one-argument form returns a voice, consistent with MEDIA-1 and the existing epic note that the legacy return was unused by bare call sites; options remain optional.
