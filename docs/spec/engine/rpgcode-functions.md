@@ -23,6 +23,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
 | `mwin` | `void mwin(string str)` | Show the message window. | Uses the logical-resolution message surface; the fixed 600×100 geometry, 50% default translucency and all-at-once text are defined below. |
+| `dialogue` | `void dialogue(string text)` | Show one dialogue message and wait for the player. | Uses the message window and waits for the next unclaimed input key; successful completion queues `dialogue.completed` as defined by [E-123](plugins-and-battle.md#e-123). |
 | `wait` | `string wait([string &ret])` | Wait for a key press. The lowest unclaimed input sequence resumes the thread and is optionally written to `ret`. |  |
 | `mwincls` | `void mwincls()` | Clear and hide the message window. |  |
 | `text` | `void text(double x, double y, string str, [canvas cnv])` | Displays text on the screen. | Uses square cells one current-font-size on a side with 1-based coordinates; non-integer cell coordinates are truncated. |
