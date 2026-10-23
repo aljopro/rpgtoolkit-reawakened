@@ -33,3 +33,13 @@ A deterministic headless fixture checks event queue ordering/detail, normal inpu
 ## Implementation map
 
 Reuse the existing 4.21 message-window and input-wait behavior; add only the `dialogue(text)` wrapper and completion producer. Keep the signal distinct from renderer-level `render.msgbox` and `menu.screen`.
+
+## Code Review
+
+### 2026-10-23
+
+1 patch finding; no decision-needed or deferred findings. Blind Hunter and Edge Case Hunter reported no actionable defects; Intent Alignment found the diff implements the wrapper-and-producer intent, while noting tests omit returned key, non-null target, and cancellation/failure cases.
+
+- [ ] [Review][Patch] Assert the key returned by `dialogue(text)` [packages/core/test/events-game.test.ts]
+
+Rejected: none.

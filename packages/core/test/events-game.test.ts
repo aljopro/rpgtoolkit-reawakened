@@ -39,6 +39,7 @@ import {
   type ScriptServices,
   type Value,
   type WaitPoll,
+  type WorldBoard,
 } from "../src/index.ts";
 import { createScriptServices } from "./script-test-services.ts";
 
@@ -122,9 +123,9 @@ const globalOf = (result: Run, name: string): Value | undefined => result.state.
 test("dialogue completion is queued once after the input wait resumes", () => {
   const state = createGameState({ seed: 0 });
   const actor = addActor(state.actors, { kind: "npc", source: "speaker.tem" });
-  const speaker = actorFromSource({ id: "speaker", kind: "player", source: "speaker.tem", actorId: actor.id, x: 0, y: 0, layer: 0 }, createEmptyBoard(), 0, null);
+  const speaker = actorFromSource({ id: "speaker", kind: "player", source: "speaker.tem", actorId: actor.id, x: 0, y: 0, layer: 0 }, { coordType: 0 } as WorldBoard, 0, null);
   state.sprites.players.push(speaker);
-  const thread = startProgram(state.vm, { kind: "inline", text: 'dialogue("Hello")', compiler: "2" });
+  const thread = startProgram(state.vm, { kind: "inline", text: 'result = dialogue("Hello")', compiler: "2" });
   thread.source = speaker.id;
   const heard: Heard[] = [];
   const services = createScriptServices(state, [
@@ -149,6 +150,7 @@ test("dialogue completion is queued once after the input wait resumes", () => {
   equal(restoredHeard.length, 1);
   deepEqual(restoredHeard[0]?.event.detail, { actorId: actor.id, targetId: null, text: "Hello" });
   equal(restoredThread.wait, null);
+  equal(restored.vm.globals.result, "Enter");
 });
 
 test("a script listens on the game and receives an event a TypeScript plugin emitted, in registration order, in the phase a script emit is delivered in (EMIT-7, EMIT-21)", () => {

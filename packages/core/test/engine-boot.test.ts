@@ -255,7 +255,7 @@ test("engine-backed dialogue displays through the message window and resumes on 
   run(engine, game.files, 30);
   const state = doubles.state();
   const board = state.world.board;
-  if (board === null) throw new Error("boot did not load its first board");
+  if (board == null) throw new Error("boot did not load its first board");
   const actor = addActor(state.actors, {
     kind: "party",
     source: "hero.tem",
