@@ -24,6 +24,9 @@ A deterministic RPGCode fixture adds and removes members, swaps party positions,
 ## Verification
 
 Assert operation results, boundary diagnostics, built-in registration, exact party and actor snapshots, and identical post-restore behavior; retain existing actor tests unchanged.
+## Contract required before coding
+
+Before implementation, specify in this plan the exact party roster event names and details, their successful-commit/no-op/refusal rules, and the party-facing operations/capabilities exposed to replacement menus, including public names, arguments, results, and validation/diagnostics. Keep actor stats actor-owned, and resolve the existing party/selected-player wording conflict with `docs/spec/engine/movement-and-collision.md#e-85` before coding.
 
 ## Implementation map
 
