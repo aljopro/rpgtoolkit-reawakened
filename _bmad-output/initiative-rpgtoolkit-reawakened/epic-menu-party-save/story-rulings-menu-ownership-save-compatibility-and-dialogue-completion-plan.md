@@ -9,7 +9,7 @@ context:
   - "spec - docs/spec/formats/save-game.md (R-13, E-122)"
   - "spec - docs/spec/engine/plugins-and-battle.md (E-80 to E-87, E-95, E-123)"
   - "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-8, EMIT-13)"
-status: in-progress
+status: done
 ---
 
 ## Intent
