@@ -26,6 +26,9 @@ Scripted input opens each screen both directly and through the main menu, observ
 
 Exercise screen request values, unsupported requests, exit behavior, repeated keys, modal wait and reset through a real headless script; compare state hashes and subsequent input consumption.
 
-## Implementation map
+## Contract required before coding
 
+Specify this menu consumer's exact public object/member names, named action capabilities, arguments, results, operation semantics, and validation/error behavior. The context is object-valued and read-only; core validates/applies named actions. Specify equivalent semantics for TypeScript and RPGCode without inventing public API names or shapes in this shared ruling.
+
+## Implementation map
 Use the party, inventory and menu ports from entry 2 and the built-in operations from entries 3–4. Keep `render.msgbox` distinct from `menu.screen` and do not put loop/state ownership in a renderer.
