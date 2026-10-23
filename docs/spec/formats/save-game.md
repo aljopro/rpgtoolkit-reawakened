@@ -100,8 +100,10 @@ read-only. Existing ports keep resolving the current section after engine reset
 or restore rather than retaining an obsolete section object.
 
 The existing section-effect bus accepts the same one-record action in
-`args[0]` for an effect named `menu.state`, with its patch naming exactly one
-of `party`, `inventory`, or `menu`; its owner applies the action. Rejection is
+`args[0]` for the namespaced command `menu.state`, recorded by the existing VM
+as the unqualified effect name `state` (a manually posted `menu.state` effect
+is also accepted). Its patch names exactly one of `party`, `inventory`, or
+`menu`; that owner applies the action. Rejection is
 the catchable `menu.state-invalid` error with the offending field path.
 This makes authored script/native command adapters exercise the real owner
 path without introducing a second dispatch or public legacy command alias.
