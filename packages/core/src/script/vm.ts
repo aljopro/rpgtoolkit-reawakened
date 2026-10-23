@@ -1997,10 +1997,15 @@ function dispatchResolved(
         if (typeof file !== "string" || options === undefined) throw new ScriptError("builtin.bad-arg", "mediaPlay: malformed start", pos);
         const started = services.media.play(file, options);
         const outcome = started.outcome;
-        produced = returnVoice && outcome.kind !== "rejected" && !(outcome.kind === "same-file" && outcome.action === "ignored")
+        produced = returnVoice && (outcome.kind === "pending" || outcome.kind === "started" || (outcome.kind === "same-file" && outcome.action === "carry-on"))
           ? objectValue(started.record)
           : null;
-        if (options.wait) {
+        if (outcome.kind === "before-play") {
+          thread.wait = services.media.beforePlayWait(started, returnVoice, options.wait);
+          thread.status = "waiting";
+          parked = true;
+          produced = null;
+        } else if (options.wait) {
           let wait: Wait | null = null;
           if (outcome.kind === "pending") wait = services.media.pendingWait(started);
           else if (outcome.kind === "started" || (outcome.kind === "same-file" && outcome.action === "carry-on")) {

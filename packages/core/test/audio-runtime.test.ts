@@ -385,6 +385,47 @@ test("a game load drops a finished one-shot, restarts music from zero and keeps 
   ok(fresh.state.audio.cueId >= saved.cueId, "the counter never goes back");
 });
 
+test("engine-originated starts use beforePlay and can be canceled or mutated without side effects", () => {
+  const state = createGameState({ seed: 0 });
+  const initialCueId = state.audio.cueId;
+  state.events.listeners.push({ id: state.events.nextListener++, emitter: "media", type: "beforePlay", once: false, callable: { type: "callable", def: "unused", captures: [], receiver: null } });
+  let cancel = false;
+  const runtime = createAudioRuntime(state, {
+    lookup: () => ({ kind: "known", lengthTicks: 60 }),
+    engineBeforePlay: (detail) => {
+      if (cancel) return "canceled";
+      equal(detail.source, "animation");
+      detail.file = "MEDIA/B.WAV" as typeof detail.file;
+      detail.volume = 30;
+      detail.loop = true;
+      return "allowed";
+    },
+  });
+  const first = runtime.play({ track: "sfx", asset: key("a.wav"), loop: false, source: "animation" });
+  equal(first.kind, "started");
+  deepEqual(runtime.drain().map((cue) => [cue.asset, cue.volume, cue.loop]), [[key("b.wav"), 30, true]]);
+  cancel = true;
+  const second = runtime.play({ track: "sfx", asset: key("a.wav"), loop: false, source: "animation" });
+  equal(second.kind, "canceled");
+  equal(state.audio.cueId, initialCueId + 1);
+  equal(state.audio.tracks.find((track) => track.name === "sfx")?.voices.length, 1);
+});
+
+test("a failed engine beforePlay dispatch rejects the start", () => {
+  const state = createGameState({ seed: 0 });
+  const initialCueId = state.audio.cueId;
+  state.events.listeners.push({ id: state.events.nextListener++, emitter: "media", type: "beforePlay", once: false, callable: { type: "callable", def: "unused", captures: [], receiver: null } });
+  const runtime = createAudioRuntime(state, {
+    lookup: () => ({ kind: "known", lengthTicks: 60 }),
+    engineBeforePlay: () => "failed",
+  });
+  equal(runtime.play({ track: "sfx", asset: key("a.wav"), loop: false, source: "animation" }).kind, "rejected");
+  equal(state.audio.cueId, initialCueId);
+  equal(state.audio.tracks.find((track) => track.name === "sfx")?.voices.length, 0);
+  deepEqual(runtime.drain(), []);
+});
+
+
 test("game-file audio configuration sets the live voice cap and overflow leaves the default budget", () => {
   const configured = rig();
   const configuredTracks = configured.state.audio.tracks.map((track) => ({ name: track.name, voiceCount: 1 }));

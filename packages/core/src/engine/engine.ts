@@ -27,7 +27,7 @@ import { hashGameState } from "../save/hash.ts";
 import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
 import { createAudioRuntime } from "../audio/runtime.ts";
 import { createMediaScriptService, mediaVoiceRef } from "../audio/script.ts";
-import { mediaEventsActive, queueAudioEvent } from "../audio/events.ts";
+import { mediaEventsActive, queueAudioEvent, MEDIA_EMITTER } from "../audio/events.ts";
 import type { AudioInfo } from "../formats/audio/model.ts";
 import type { AssetDecoder } from "../formats/registry/decoder.ts";
 import { BUILTIN_TRACKS, MAX_VOICES } from "../audio/model.ts";
@@ -55,7 +55,7 @@ import { runRandomEncounterPhase } from "../sprites/encounters.ts";
 import { EffectBus, type EffectApplier, type PostEffect } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
 import type { EnginePhase, EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
-import { collectStateGarbage, runEngineCancelableEvent, runEventsPhase } from "../events/dispatch.ts";
+import { collectStateGarbage, runEngineCancelableEvent, runEngineCancelableEventOutcome, runEventsPhase } from "../events/dispatch.ts";
 import { deferUnregisterEmitter, queueNativeEvent, registerEmitter, unregisterEmitter } from "../events/emitter.ts";
 import {
   COMPILER_VERSION,
@@ -264,6 +264,9 @@ export function createEngine(init: EngineInit): Engine {
     applySpriteEffect(state, effect.name, values);
   });
   bus.register("triggers", (effect) => applyTriggerEffect(state, effect));
+  // The audio callback runs during an originating engine phase; services are
+  // initialized below before any phase can post an engine-originated start.
+  let services!: ScriptServices;
   // The audio track engine owns `state.audio`: it applies the `audio` effects and asks for a file's bytes only to
   // learn its length (docs/spec/engine/audio-media.md#audio-core-pins), then drops them.
   let audioDecoders: readonly AssetDecoder[] = [];
@@ -290,6 +293,7 @@ export function createEngine(init: EngineInit): Engine {
     need: (key) => request(key, "audio"),
     defaultSoundFont,
     bindVoice: (handle, result) => media.bind(handle, result),
+    engineBeforePlay: (detail) => runEngineCancelableEventOutcome(state, services, MEDIA_EMITTER, "beforePlay", detail, STEP_BUDGET),
     transition: (event) => queueAudioEvent(state, event),
     transitionsActive: () => mediaEventsActive(state),
     notify: (note) => {
@@ -393,7 +397,7 @@ export function createEngine(init: EngineInit): Engine {
     startupServicesReady = runStartups;
     return nextServices;
   }
-  let services = init.mainFile === undefined
+  services = init.mainFile === undefined
     ? makeServices(activePlugins, undefined, true)
     : makeServices([], undefined, false);
   if (init.mainFile === undefined && !failed && init.program !== undefined) {
@@ -1399,6 +1403,7 @@ export function createEngine(init: EngineInit): Engine {
         return;
       case "audio":
         audio.phase();
+        audio.retry();
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       default: {

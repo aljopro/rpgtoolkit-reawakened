@@ -63,6 +63,8 @@ export type MediaScriptService = {
   bind(handle: number, result: AudioPlayResult): void;
   /** A wait that parks until a pending start binds, then applies the terminal rule. */
   pendingWait(start: MediaStart): NamedWait;
+  /** A wait that parks until a cancelable beforePlay dispatch has completed. */
+  beforePlayWait(start: MediaStart, returnVoice: boolean, waitForEnd: boolean): NamedWait;
   /** The one `media` host object, reused for the session. */
   mediaObject(): ObjectRecord;
   /** The one host object for a configured track; `null` for an unknown name. */
@@ -130,6 +132,15 @@ export function createMediaScriptService(
         global: false,
         id: "mediaWait",
         payload: [{ track: String(start.record.members["track"]), voice: null, cueId: 0, endTick: null, pass: false, passIndex: null, handle: start.record.handle, seq: start.seq }, null, objectValue(start.record)],
+        resumeRefs: [],
+      };
+    },
+    beforePlayWait(start, returnVoice, waitForEnd) {
+      return {
+        kind: "event.dispatch",
+        global: false,
+        id: "media.beforePlay",
+        payload: [start.outcome.kind === "before-play" ? start.outcome.event : 0, objectValue(start.record), start.seq, returnVoice, waitForEnd],
         resumeRefs: [],
       };
     },
