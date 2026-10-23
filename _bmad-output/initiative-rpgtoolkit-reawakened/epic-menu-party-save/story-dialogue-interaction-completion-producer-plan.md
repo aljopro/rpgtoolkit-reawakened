@@ -20,7 +20,7 @@ The `dialogue(text)` wrapper and its queued game-level completion only. Epic 4 c
 
 ## Key decisions
 
-One `dialogue(text)` call is one interaction. It applies the existing message-window variable splicing, displays that string through the message window, then waits for the next unclaimed input key with existing `wait()` semantics. It captures actor IDs from the running VM's source and target; source must resolve to a live actor, while an unresolved target becomes `null`. After normal key completion it queues `{ actorId, targetId, text }` on the game emitter, with `text` matching the displayed string. Cancellation and errors before completion emit nothing.
+One `dialogue(text)` call is one interaction. It applies the existing message-window variable splicing, displays that string through the message window, then waits for the next unclaimed input key with existing `wait()` semantics and returns the consumed key name. It captures actor IDs from the running VM's source and target; source must resolve to a live actor, while an unresolved target becomes `null`. After normal key completion it queues `{ actorId, targetId, text }` on the game emitter, with `text` matching the displayed string. Cancellation and errors before completion emit nothing.
 
 ## Acceptance
 
