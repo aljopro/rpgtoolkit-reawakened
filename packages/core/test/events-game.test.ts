@@ -5,9 +5,12 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
+  actorFromSource,
+  addActor,
   advanceScriptTick,
   canon,
   createCollectingSink,
+  createEmptyBoard,
   createGameState,
   createLogger,
   drainDiagnostics,
@@ -25,6 +28,7 @@ import {
   startProgram,
   STEP_BUDGET,
   unregisterEmitter,
+  UI_PLUGIN,
   verifyRestoredHandles,
   type BuiltinSpec,
   type Diagnostic,
@@ -34,6 +38,8 @@ import {
   type PluginDefinition,
   type ScriptServices,
   type Value,
+  type WaitPoll,
+  type WorldBoard,
 } from "../src/index.ts";
 import { createScriptServices } from "./script-test-services.ts";
 
@@ -114,6 +120,38 @@ function run(program: string, ticks = 6, listeners: PluginDefinition["listeners"
 const globalOf = (result: Run, name: string): Value | undefined => result.state.vm.globals[name];
 
 // --- One bus, both directions ----------------------------------------------------------------
+test("dialogue completion is queued once after the input wait resumes", () => {
+  const state = createGameState({ seed: 0 });
+  const actor = addActor(state.actors, { kind: "npc", source: "speaker.tem" });
+  const speaker = actorFromSource({ id: "speaker", kind: "player", source: "speaker.tem", actorId: actor.id, x: 0, y: 0, layer: 0 }, { coordType: 0 } as WorldBoard, 0, null);
+  state.sprites.players.push(speaker);
+  const thread = startProgram(state.vm, { kind: "inline", text: 'result = dialogue("Hello")', compiler: "2" });
+  thread.source = speaker.id;
+  const heard: Heard[] = [];
+  const services = createScriptServices(state, [
+    UI_PLUGIN,
+    makePlugin(heard, [{ emitter: "game", type: "dialogue.completed", command: "tsheard" }]),
+  ]);
+  advanceScriptTick(state, services);
+  equal(heard.length, 0);
+  const wait = thread.wait;
+  if (wait?.kind !== "input.key") throw new Error("dialogue did not wait for input");
+  equal(wait.dialogue?.actorId, actor.id);
+  const inputPoll: WaitPoll = (_view, pending) => pending.kind === "input.key" ? { value: "Enter", ok: true } : null;
+  const saved = snapshot(state);
+  const restored = restoreGameState(saved);
+  const restoredThread = restored.vm.threads[0]!;
+  const restoredHeard: Heard[] = [];
+  const restoredServices = createScriptServices(restored, [
+    UI_PLUGIN,
+    makePlugin(restoredHeard, [{ emitter: "game", type: "dialogue.completed", command: "tsheard" }]),
+  ]);
+  advanceScriptTick(restored, restoredServices, STEP_BUDGET, inputPoll);
+  equal(restoredHeard.length, 1);
+  deepEqual(restoredHeard[0]?.event.detail, { actorId: actor.id, targetId: null, text: "Hello" });
+  equal(restoredThread.wait, null);
+  equal(restored.vm.globals.result, "Enter");
+});
 
 test("a script listens on the game and receives an event a TypeScript plugin emitted, in registration order, in the phase a script emit is delivered in (EMIT-7, EMIT-21)", () => {
   const state = createGameState({ seed: 0 });
