@@ -35,7 +35,7 @@ import {
 } from "../src/index.ts";
 import { EffectBus } from "../src/engine/effects.ts";
 import { engineEffect } from "../src/engine/boot.ts";
-import type { AssetKey } from "../src/ports/keys.ts";
+import { runEngineCancelableEventOutcome } from "../src/events/dispatch.ts";
 
 type Diagnostic = { readonly code: string; readonly message: string };
 
@@ -64,6 +64,7 @@ function rig(lengths: Record<string, number | null | "pending">, program: string
       diagnostics.push({ code, message: `${op}: ${code}` });
     },
   );
+  let services!: ScriptServices;
   const audio = createAudioRuntime(state, {
     lookup: (asset): AudioLookup => {
       const found = lengths[asset.slice("media/".length)];
@@ -71,6 +72,7 @@ function rig(lengths: Record<string, number | null | "pending">, program: string
       if (found === "pending") return { kind: "pending" };
       return { kind: "known", lengthTicks: found };
     },
+    engineBeforePlay: (detail) => runEngineCancelableEventOutcome(state, services, "media", "beforePlay", detail),
     bindVoice: (handle, result) => media.bind(handle, result),
     transition: (event) => queueAudioEvent(state, event),
     transitionsActive: () => mediaEventsActive(state),
@@ -81,7 +83,7 @@ function rig(lengths: Record<string, number | null | "pending">, program: string
   });
   if (saved === undefined) audio.register(bus);
   else bus.register("audio", audio.apply);
-  const services = createScriptServices(
+  services = createScriptServices(
     state,
     [{ definition: CORE_PLUGIN }, { definition: MEDIA_PLUGIN }, ...extraPlugins.map((definition) => ({ definition }))],
     undefined,
@@ -162,6 +164,109 @@ test("mediaPlay returns a bound voice whose readable fields are the core voice s
   equal(record.file, "media/boom.wav");
   equal(global(world.state, "vpos"), 0);
   deepEqual(cueKinds(world.cues), ["soundfont.set", "media.play"]);
+});
+
+test("media.beforePlay mutates file, volume and loop before the shared start", () => {
+  const world = rig({ "a.wav": 60, "b.wav": 90 }, [
+    'media.on("beforePlay", (event) => { event.detail.file = "MEDIA/B.WAV"; event.detail.volume = 25; event.detail.loop = 1 })',
+    'v = mediaPlay("a.wav", { track: "sfx" })',
+    "after = 1",
+  ].join("\n"));
+  world.tick();
+  equal(global(world.state, "after"), 0);
+  world.run(2);
+  equal(global(world.state, "after"), 1);
+  const started = voice(world.state, "sfx", 0)!;
+  equal(started.file, "media/b.wav");
+  equal(started.volume, 25);
+  equal(started.loop, true);
+  equal(world.cues.filter((cue) => cue.kind === "media.play").length, 1);
+});
+
+test("engine-originated starts share the script listener order and canonical mutation path", () => {
+  const world = rig({ "original.mid": 60, "battle.mid": 90 }, [
+    'order = ""',
+    'media.on("beforePlay", (event) => { order = order + "A"; event.detail.file = "MEDIA/BATTLE.MID"; event.detail.volume = 35; event.detail.loop = 0 })',
+    'media.on("beforePlay", (event) => { order = order + "B" + event.detail.source + event.detail.file })',
+  ].join("\n"));
+  world.tick();
+  const result = world.audio.play({ track: "music", asset: assetKey("media/original.mid"), loop: true, source: "battle" });
+  equal(result.kind, "started");
+  equal(global(world.state, "order"), "ABbattleMEDIA/BATTLE.MID");
+  const started = voice(world.state, "music", 0)!;
+  deepEqual([started.file, started.volume, started.loop], ["media/battle.mid", 35, false]);
+  deepEqual(world.audio.drain().filter((cue) => cue.kind === "media.play").map((cue) => [cue.asset, cue.volume, cue.loop]), [["media/battle.mid", 35, false]]);
+});
+
+test("engine effect starts cover board, frame, battle, menu and video sources", () => {
+  const board = rig({ "a.wav": 60 }, 'media.on("beforePlay", (event) => { event.cancel() })');
+  board.tick();
+  board.audio.drain();
+  const boardCueId = board.state.audio.cueId;
+  board.audio.apply(engineEffect("audio", "music.play", ["media/a.wav", true, false, "board"], "draw-audio-cue"));
+  equal(board.state.audio.cueId, boardCueId);
+  equal(voice(board.state, "music", 0), undefined);
+
+  const frame = rig({ "a.wav": 60 }, [
+    'media.on("beforePlay", (event) => { source = event.detail.source; event.detail.volume = 50 })',
+  ].join("\n"));
+  frame.tick();
+  frame.audio.drain();
+  frame.audio.apply(engineEffect("audio", "sfx.play", ["media/a.wav", false, null, "frame"], "draw-audio-cue"));
+  equal(global(frame.state, "source"), "animation");
+  equal(voice(frame.state, "sfx", 0)?.volume, 50);
+
+  frame.audio.apply(engineEffect("audio", "sfx.play", ["media/a.wav", false, null, "ui"], "draw-audio-cue"));
+  equal(global(frame.state, "source"), "menu");
+  equal(voice(frame.state, "ui", 0)?.volume, 50);
+
+  const battle = rig({ "a.wav": 60, "b.wav": 90 }, 'media.on("beforePlay", (event) => { event.detail.file = "MEDIA/B.WAV" })');
+  battle.tick();
+  battle.audio.drain();
+  battle.audio.apply(engineEffect("audio", "music.play", ["media/a.wav", true, false, "battle"], "draw-audio-cue"));
+  equal(voice(battle.state, "music", 0)?.file, "media/b.wav");
+
+  const video = rig({ "a.wav": 60 }, 'media.on("beforePlay", (event) => { source = event.detail.source })');
+  video.tick();
+  video.audio.drain();
+  video.audio.apply(engineEffect("audio", "music.play", ["media/a.wav", true, false, "video"], "draw-audio-cue"));
+  equal(global(video.state, "source"), "video");
+});
+
+test("a canceled script mediaPlay returns null and consumes no cue or voice", () => {
+  const world = rig({ "a.wav": 60 }, [
+    'media.on("beforePlay", (event) => { event.cancel() })',
+    'v = mediaPlay("a.wav", { track: "sfx" })',
+    "after = 1",
+  ].join("\n"));
+  const initialCueId = world.state.audio.cueId;
+  world.run(2);
+  equal(global(world.state, "v"), 0);
+  equal(global(world.state, "after"), 1);
+  equal(voice(world.state, "sfx", 0), undefined);
+  equal(world.cues.filter((cue) => cue.kind === "media.play").length, 0);
+  equal(world.state.audio.cueId, initialCueId);
+});
+
+test("a save during media.beforePlay dispatch resumes to the same state and cue stream", () => {
+  const program = [
+    'media.on("beforePlay", (event) => { threadSleep(getThreadId(), 0.02); event.detail.volume = 35 })',
+    'v = mediaPlay("a.wav", { track: "sfx" })',
+    "after = 1",
+  ].join("\n");
+  const uninterrupted = rig({ "a.wav": 60 }, program);
+  uninterrupted.tick();
+  equal(uninterrupted.state.events.dispatch?.emitter, "media");
+  const cueBoundary = uninterrupted.cues.length;
+  const saved = snapshot(uninterrupted.state);
+  uninterrupted.run(6);
+  const expectedHash = hashGameState(uninterrupted.state);
+  const expectedCues = uninterrupted.cues.slice(cueBoundary);
+
+  const restored = rig({ "a.wav": 60 }, "", [], saved);
+  restored.run(6);
+  equal(hashGameState(restored.state), expectedHash);
+  deepEqual(restored.cues, expectedCues);
 });
 
 test("voice and track methods apply the same deterministic operations as the procedural commands", () => {

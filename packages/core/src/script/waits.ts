@@ -196,6 +196,26 @@ export function pollEventDispatch(view: WaitView, wait: Wait): WaitResult | null
   const events = view.events;
   if (events === undefined) throw new ScriptError("wait.no-events-view", "an event.dispatch wait was polled with no events state in the wait view");
   if (events.dispatch?.event === handle || events.queue.some((queued) => queued.event === handle)) return null;
+  if (wait.id === "media.beforePlay") {
+    const rawRecord = wait.payload[1];
+    const sequence = wait.payload[2];
+    const returnVoice = wait.payload[3] === true;
+    const waitForEnd = wait.payload[4] === true;
+    if (rawRecord === null || typeof rawRecord !== "object" || Array.isArray(rawRecord) || typeof rawRecord.handle !== "number" || typeof sequence !== "number") return DONE;
+    const bound = view.mediaStart?.(rawRecord.handle) ?? null;
+    if (bound !== null && bound.cueId > 0) {
+      if (waitForEnd) {
+        const track = view.audio?.tracks.find((item) => item.name === bound.track);
+        const voice = track?.voices.find((item) => item.index === bound.slot && item.cueId === bound.cueId);
+        if (voice !== undefined && voice.state === "playing" && voice.endTick !== null && view.tick < voice.endTick) return null;
+      }
+      return returnVoice
+        ? { value: { kind: "object", handle: rawRecord.handle, className: typeof rawRecord.className === "string" ? rawRecord.className : "" }, ok: true }
+        : DONE;
+    }
+    if (view.pendingAudio?.some((effect) => effect.seq === sequence) === true) return null;
+    return DONE;
+  }
   return { value: { kind: "object", handle, className: DICTIONARY_CLASS }, ok: true };
 }
 

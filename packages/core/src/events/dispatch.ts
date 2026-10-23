@@ -126,20 +126,25 @@ export function runEventsPhase(
 }
 
 /**
+ * The result of an engine-originated cancelable event. `failed` means the
+ * listener attempted to wait or exhausted the bounded synchronous budget; the
+ * caller can report the failure without parking its phase.
+ */
+export type EngineCancelableEventOutcome = "allowed" | "canceled" | "failed";
+
+/**
  * Dispatch one engine-originated cancelable event without parking the engine
  * phase (EMIT-11). The listeners still run as ordinary VM listener threads,
  * through the same callable machinery and registration order as queued events.
- * A listener that waits, or exhausts the bounded phase budget, is terminated
- * with a located diagnostic and the operation is rejected.
  */
-export function runEngineCancelableEvent(
+export function runEngineCancelableEventOutcome(
   state: GameState,
   services: ScriptServices,
   emitter: string,
   type: string,
   detail: Readonly<Record<string, PlainData>>,
   budget: number = STEP_BUDGET,
-): boolean {
+): EngineCancelableEventOutcome {
   if (state.events.dispatch !== null || findBlockingThread(state.vm) !== null) {
     services.diagnostics.push({
       code: "event.dispatch-active",
@@ -147,7 +152,7 @@ export function runEngineCancelableEvent(
       line: 0,
       message: "an engine cancelable event cannot start while another event is dispatching",
     });
-    return false;
+    return "failed";
   }
   const event = queueNativeEvent(state.vm, state.events, emitter, type, detail, true);
   const queued = state.events.queue.filter((item) => item.event !== event);
@@ -168,10 +173,40 @@ export function runEngineCancelableEvent(
     if (thread !== undefined) killThread(state.vm, thread.id);
     forgetNativeDetail(state.events, event);
     state.events.dispatch = null;
-    return false;
+    return "failed";
   }
   const eventRecord = findObject(state.vm, event);
-  return eventRecord !== undefined && readMember(eventRecord, "canceled") !== 1;
+  if (eventRecord !== undefined) {
+    const detailValue = readMember(eventRecord, "detail");
+    const detailRecord = typeof detailValue === "object" && detailValue !== null && "kind" in detailValue && detailValue.kind === "object"
+      ? findObject(state.vm, detailValue.handle)
+      : undefined;
+    if (detailRecord !== undefined) {
+      const mutable = detail as unknown as Record<string, PlainData>;
+      for (const name of Object.keys(mutable)) {
+        const original = mutable[name];
+        const value = readMember(detailRecord, name);
+        if (typeof original === "boolean" && (value === 0 || value === 1)) mutable[name] = value === 1;
+        else if (typeof value === "string" || typeof value === "number") mutable[name] = value;
+        else mutable[name] = null;
+      }
+    }
+  }
+  return eventRecord === undefined ? "failed" : readMember(eventRecord, "canceled") === 1 ? "canceled" : "allowed";
+}
+
+/**
+ * Backwards-compatible boolean wrapper used by existing engine events.
+ */
+export function runEngineCancelableEvent(
+  state: GameState,
+  services: ScriptServices,
+  emitter: string,
+  type: string,
+  detail: Readonly<Record<string, PlainData>>,
+  budget: number = STEP_BUDGET,
+): boolean {
+  return runEngineCancelableEventOutcome(state, services, emitter, type, detail, budget) === "allowed";
 }
 
 /**
