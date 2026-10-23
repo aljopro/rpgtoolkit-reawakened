@@ -192,6 +192,43 @@ export function musicFile(audio: AudioStateV2): AssetKey | null {
   return audio.tracks.find((track) => track.name === "music")?.file ?? null;
 }
 
+/** A script-held voice identity: its track, zero-based slot and starting cue id (MEDIA-1). */
+export type MediaVoiceRef = { readonly track: string; readonly slot: number; readonly cueId: number };
+
+/** The live occupant of `ref`'s slot, or `undefined` when the slot is empty or a replacement owns it. */
+export function findVoice(audio: AudioStateV2, ref: MediaVoiceRef): AudioVoiceState | undefined {
+  const track = findTrack(audio, ref.track);
+  if (track === undefined) return undefined;
+  const voice = track.voices.find((item) => item.index === ref.slot);
+  return voice !== undefined && voice.cueId === ref.cueId ? voice : undefined;
+}
+
+/** A track's script volume: its sparse settings entry, else 100 (6.6 pin 1). */
+export function trackVolume(audio: AudioStateV2, name: string): number {
+  const folded = asciiFold(name);
+  return audio.settings.trackVolumes.find((entry) => entry.name === folded)?.volume ?? 100;
+}
+
+/**
+ * The plain payload of the `audio.track` wait on one voice (P5): the voice it
+ * identifies, its end tick when finite, and whether the wait is a pass wait.
+ * `null` when the voice has no known length; the caller diagnoses.
+ */
+export function voiceWaitPayload(audio: AudioStateV2, ref: MediaVoiceRef, tick: number): {
+  track: string;
+  voice: number;
+  cueId: number;
+  endTick: number | null;
+  pass: boolean;
+  passIndex: number | null;
+} | null {
+  const track = findTrack(audio, ref.track);
+  const voice = findVoice(audio, ref);
+  if (track === undefined || voice === undefined || voice.lengthTicks === null) return null;
+  const pass = voice.loop;
+  return { track: track.name, voice: voice.index, cueId: voice.cueId, endTick: voice.endTick, pass, passIndex: pass ? voicePass(voice, tick) : null };
+}
+
 /** ASCII-only case fold; the stored name of a track (the 6.2 P3 rule, never a locale fold). */
 export function asciiFold(text: string): string {
   let out = "";

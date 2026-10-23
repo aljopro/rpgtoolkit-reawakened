@@ -1,5 +1,6 @@
 /** Session-only host object hydration (OOP-10/OOP-12). */
 
+import type { MediaScriptService } from "../audio/script.ts";
 import type { EventsSection } from "../events/model.ts";
 import type { GameState } from "../save/state.ts";
 import type { Value } from "../ports/value.ts";
@@ -11,6 +12,8 @@ export type HostObjectContext = {
   readonly events: EventsSection;
   readonly vm: VmState;
   readonly record: ObjectRecord;
+  /** The script-facing media owner, when the engine provides one (MEDIA-1). */
+  readonly media?: MediaScriptService;
 };
 
 /** The result of an owner-backed host member write. */
@@ -27,6 +30,12 @@ export type HostRemoveResult = "removed" | "system-owned" | "not-host";
 export type HostObjectType = {
   readonly name: string;
   readonly methods?: Readonly<Record<string, string>>;
+  /**
+   * The emitter key an access to this host object registers it under (MEDIA-2).
+   * The key is consulted only when the script uses an emitter method, so the
+   * media event domain stays lazy.
+   */
+  readonly emitterKey?: (record: ObjectRecord) => string | null;
   readonly read?: (context: HostObjectContext, name: string) => Value | undefined;
   readonly write?: (context: HostObjectContext, name: string, value: Value) => HostWriteResult;
   readonly remove?: (context: HostObjectContext, name: string) => HostRemoveResult;

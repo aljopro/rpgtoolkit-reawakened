@@ -51,6 +51,7 @@ import type { HostObjectType } from "./host.ts";
 import type { ProgramRef } from "./program.ts";
 import type { HostRequestKind } from "./manifest.ts";
 import type { ActorHooks } from "../actors/rules.ts";
+import type { MediaScriptService } from "../audio/script.ts";
 
 /**
  * The read-only view a command runs against (AD-8; decision U2). It holds game
@@ -62,6 +63,10 @@ export type CommandView = {
   readonly rng: RngPort;
   readonly clock: ClockPort;
   readonly state?: GameState;
+  /** The script-facing media owner (MEDIA-1): `mediaPlay`, track/voice objects and their operations. */
+  readonly media?: MediaScriptService;
+  /** Read one live object's members without writing them; the media option and method commands use it. */
+  readonly objectMembers?: (handle: number) => Readonly<Record<string, Value>> | undefined;
   /**
    * The owner-held actor operations (docs/spec/engine/actors.md#store-and-action-boundary).
    * Every write resolves the actor's behaviour hooks and publishes the resulting

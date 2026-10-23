@@ -134,12 +134,27 @@ export function pollAudioTrack(view: WaitView, wait: Wait): WaitResult | null {
   if (wait.kind !== "audio.track") return null;
   const raw = wait.payload[0];
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const trackName = raw.track;
-  const voiceIndex = raw.voice;
-  const cueId = raw.cueId;
+  let trackName = raw.track;
+  let voiceIndex = raw.voice;
+  let cueId = raw.cueId;
   const pass = raw.pass;
   const passIndex = raw.passIndex;
-  if (typeof trackName !== "string" || typeof voiceIndex !== "number" || typeof cueId !== "number" || typeof pass !== "boolean" || (passIndex !== null && typeof passIndex !== "number")) return null;
+  if (typeof trackName !== "string" || (voiceIndex !== null && typeof voiceIndex !== "number") || (cueId !== null && typeof cueId !== "number") || typeof pass !== "boolean" || (passIndex !== null && typeof passIndex !== "number")) return null;
+  if (cueId === 0) {
+    // A start still held for its asset (MEDIA-1): park until it binds, or wake
+    // when the held effect is gone without a voice ever starting.
+    const handle = raw.handle;
+    const seq = raw.seq;
+    if (typeof handle !== "number" || typeof seq !== "number") return DONE;
+    const bound = view.mediaStart?.(handle) ?? null;
+    if (bound === null || bound.cueId <= 0) {
+      return view.pendingAudio?.some((effect) => effect.seq === seq) === true ? null : DONE;
+    }
+    trackName = bound.track;
+    voiceIndex = bound.slot;
+    cueId = bound.cueId;
+  }
+  if (typeof voiceIndex !== "number" || typeof cueId !== "number") return DONE;
   const track = view.audio?.tracks.find((item) => item.name === trackName);
   const voice = track?.voices.find((item) => item.index === voiceIndex && item.cueId === cueId);
   if (voice === undefined) return DONE;

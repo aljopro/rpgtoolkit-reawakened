@@ -206,7 +206,7 @@ test("replacement reports stopped before the replacement started transition", ()
 
  
 
-for (const action of ["", "wavStop()", 'mediaPlay("step.wav", "sfx", 4)']) {
+for (const action of ["", "wavStop()", 'mediaPlay("other.wav", {track: "sfx"})']) {
   test(`natural end waiter race: ${action || "no mutation"} before audio retirement`, () => {
     const game = fixture();
     const events: EventRecord[] = [];
@@ -215,7 +215,7 @@ for (const action of ["", "wavStop()", 'mediaPlay("step.wav", "sfx", 4)']) {
     deepEqual(reports.flatMap((report) => report.diagnostics), []);
     const shared = events.filter((event) => event.scope === "media");
     deepEqual(shared.map((event) => event.type), action === "" ? ["started", "ended"]
-      : action === "wavStop()" ? ["started", "stopped"] : ["started", "stopped", "started"]);
+      : action === "wavStop()" ? ["started", "stopped"] : ["started", "ended", "started"]);
     const initial = shared[0]!.detail;
     const completion = shared[1]!.detail;
     equal(completion.tick, Number(initial.tick) + 30);

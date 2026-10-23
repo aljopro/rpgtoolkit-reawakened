@@ -26,6 +26,7 @@ import { applyMenuStateEffect, createMenuOwnerPorts } from "../menu/index.ts";
 import { hashGameState } from "../save/hash.ts";
 import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
 import { createAudioRuntime } from "../audio/runtime.ts";
+import { createMediaScriptService, mediaVoiceRef } from "../audio/script.ts";
 import { mediaEventsActive, queueAudioEvent } from "../audio/events.ts";
 import type { AudioInfo } from "../formats/audio/model.ts";
 import type { AssetDecoder } from "../formats/registry/decoder.ts";
@@ -237,6 +238,17 @@ export function createEngine(init: EngineInit): Engine {
   for (const section of ["party", "inventory", "menu"] as const) {
     bus.register(section, (effect) => applyMenuStateEffect(menuOwners, effect));
   }
+  // The script-facing media owner (MEDIA-1): starts post through the one bus so
+  // the audio applier stays the only start route; `bind` fills the returned voice.
+  const media = createMediaScriptService(
+    state,
+    (name, args) => bus.postEffect("audio", engineEffect("audio", name, args, "draw-audio-cue")),
+    (code, op, detail) => {
+      const file = detail["file"];
+      const text = Object.entries(detail).map(([key, value]) => `${key}=${String(value)}`).join(" ");
+      diagnostics.push({ code, file: typeof file === "string" ? file : "", line: 0, message: `${op}: ${code} ${text}`.trimEnd() });
+    },
+  );
   bus.register("world", (effect) => applyWorldEffect(state, effect));
   bus.register("camera", (effect) => applyCameraEffect(state, effect));
   bus.register("ui", (effect) => applyUiEffect(state, effect.name, effect.args));
@@ -277,6 +289,7 @@ export function createEngine(init: EngineInit): Engine {
     },
     need: (key) => request(key, "audio"),
     defaultSoundFont,
+    bindVoice: (handle, result) => media.bind(handle, result),
     transition: (event) => queueAudioEvent(state, event),
     transitionsActive: () => mediaEventsActive(state),
     notify: (note) => {
@@ -357,7 +370,9 @@ export function createEngine(init: EngineInit): Engine {
       undefined,
       undefined,
       packageStartupLifecycle,
+      media,
     );
+    media.activateDeclared();
     if (runStartups) {
       nextServices.setPackageStartup(true);
       try {
@@ -1240,6 +1255,11 @@ export function createEngine(init: EngineInit): Engine {
       claims: state.engine.claims ?? [],
       audio: state.audio,
       events: state.events,
+      ...(state.engine.pendingEffects?.audio === undefined ? {} : { pendingAudio: state.engine.pendingEffects.audio }),
+      mediaStart: (handle: number) => {
+        const record = state.vm.objects.find((item) => item.handle === handle);
+        return record === undefined ? null : mediaVoiceRef(record);
+      },
       ...(state.engine.video === undefined ? {} : { video: { reqId: state.engine.video.reqId, ended: state.engine.video.ended } }),
     };
   }

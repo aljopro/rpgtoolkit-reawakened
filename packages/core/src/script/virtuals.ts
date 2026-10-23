@@ -1,9 +1,11 @@
 /** E-92 engine-backed virtual variables, including board data (R-37). */
 import type { Value } from "../ports/value.ts";
 import { musicFile } from "../audio/model.ts";
+import { MEDIA_EMITTER } from "../audio/events.ts";
+import { objectValue, type MediaScriptService } from "../audio/script.ts";
 import { GAME_EMITTER } from "../events/model.ts";
 import { registerEmitter } from "../events/emitter.ts";
-import { type ActorService } from "../actors/port.ts";
+import { createActorService, type ActorService } from "../actors/port.ts";
 import type { ActorStats } from "../actors/model.ts";
 import type { GameState } from "../save/state.ts";
 import { TICKS_PER_SECOND } from "../time/time.ts";
@@ -48,6 +50,7 @@ function isSystemVirtual(name: string): boolean {
   return (
     name === "gametime" ||
     name === "music" ||
+    name === "media" ||
     name === GAME_EMITTER ||
     name === "boardbackground" ||
     name === "boardskill" ||
@@ -73,13 +76,21 @@ function requiresBoard(name: string): boolean {
 }
 
 /** Read the board-backed virtuals and owner-backed actor aliases. */
-export function createDefaultVirtuals(state: GameState, actors: ActorService): VirtualVariablePort {
+export function createDefaultVirtuals(
+  state: GameState,
+  actors: ActorService = createActorService(state.actors),
+  media?: MediaScriptService,
+): VirtualVariablePort {
   const read = (rawName: string): Value | undefined => {
     const name = rawName.toLowerCase();
     const stat = actorAlias(name);
     if (stat !== undefined) return actors.activeActor()?.stats[stat] ?? 0;
     if (name === "gametime") return Math.floor(state.time.tick / TICKS_PER_SECOND);
     if (name === "music") return musicFile(state.audio) ?? "";
+    if (name === "media") {
+      const record = media === undefined ? registerEmitter(state.vm, state.events, MEDIA_EMITTER) : media.mediaObject();
+      return objectValue(record);
+    }
     if (name === GAME_EMITTER) {
       const game = registerEmitter(state.vm, state.events, GAME_EMITTER);
       return { kind: "object", handle: game.handle, className: game.className };
