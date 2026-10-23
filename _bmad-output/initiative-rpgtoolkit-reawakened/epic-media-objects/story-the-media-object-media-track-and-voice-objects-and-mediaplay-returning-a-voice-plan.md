@@ -3,7 +3,7 @@ title: "The media object: media, track and voice objects, and mediaPlay returnin
 type: 'feature'
 ticket: 5
 created: '2026-10-22'
-status: 'in-progress'
+status: 'built'
 baseline_revision: 'c339264d808b6964c504f3ec4c0588a6c782b96'
 route: 'full'
 route_source: 'auto'
@@ -68,14 +68,14 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `docs/spec/engine/audio-media.md#media-1` and `docs/spec/engine/rpgcode-functions.md` — add the proposed clarification paragraph and the `object mediaplay(string file[, object options])` row; commit before code (G7).
-- [ ] `packages/core/src/audio/model.ts` — add the pure voice lookup and shared wait payload; one source for pack and script layer.
-- [ ] `packages/core/src/audio/runtime.ts` — descriptor selectors, `media.unknown-voice` for stale, start volume, `priority`, `sync`, `bindVoice` outcome; keep every rule and cue identical.
-- [ ] `packages/core/src/audio/script.ts`, `packages/core/src/audio/index.ts` — media service and host types; option validation, read/write hooks, method dispatch data.
-- [ ] `packages/core/src/script/host.ts`, `packages/core/src/script/plugin.ts`, `packages/core/src/script/vm.ts` — hydration/emitter-key hook, service plumbing, `mediaplay` and `emitterObject` control actions, lazy emitter registration.
-- [ ] `packages/core/src/script/packs/media.ts` — object `mediaplay`, internal (`access: "internal"`) method commands, legacy alias rewrite to options; docs (`see` MEDIA-1) for each.
-- [ ] `packages/core/src/script/virtuals.ts` — global `media` virtual.
-- [ ] `packages/core/src/engine/engine.ts` — wire service, binding, and declared-listener host emitters.
+- [x] `docs/spec/engine/audio-media.md#media-1` and `docs/spec/engine/rpgcode-functions.md` — the proposed clarification paragraph and the `object mediaplay(string file[, object options])` row, committed before code (G7).
+- [x] `packages/core/src/audio/model.ts` — add the pure voice lookup and shared wait payload; one source for pack and script layer.
+- [x] `packages/core/src/audio/runtime.ts` — descriptor selectors, `media.unknown-voice` for stale, start volume, `priority`, `sync`, `bindVoice` outcome; keep every rule and cue identical.
+- [x] `packages/core/src/audio/script.ts`, `packages/core/src/audio/index.ts` — media service and host types; option validation, read/write hooks, method dispatch data.
+- [x] `packages/core/src/script/host.ts`, `packages/core/src/script/plugin.ts`, `packages/core/src/script/vm.ts` — hydration/emitter-key hook, service plumbing, `mediaplay` and `emitterObject` control actions, lazy emitter registration.
+- [x] `packages/core/src/script/packs/media.ts` — object `mediaplay`, internal (`access: "internal"`) method commands, legacy alias rewrite to options; docs (`see` MEDIA-1) for each.
+- [x] `packages/core/src/script/virtuals.ts` — global `media` virtual.
+- [x] `packages/core/src/engine/engine.ts` — wire service, binding, and declared-listener host emitters.
 - [ ] `packages/core/test/media-objects.test.ts` — drive the real engine/VM for every matrix row, including priority, sync, unknown track, track controls, slot stealing and a save at every tick; update the one positional legacy test.
 
 **Acceptance Criteria:**
@@ -100,6 +100,8 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 
 ## Verification
 
+**Results (2026-10-22, commit `1cbf8ee4`, logs `/tmp/rpgtoolkit-484-head/`):** all 23 gates passed — typecheck, lint, `test` (1784 passed, 0 failed, 0 skipped), `test:strict` (1784 passed, 0 skipped), fixtures check/author/test, `golden`, `golden:bun`, `closing` (8/8), `dump:check` (all digests match), graph + graph test, licence + test (0 violations), provenance + test (633 files, 0 violations), catalogue, command-docs + test, no-skips, oracle, audit --prod. A throwaway authored-script smoke against the real engine printed: cues `soundfont.set`, `media.play sfx`, `media.pause`, `media.resume`, `media.play ui`, two `media.stop`; events `paused` delivered voice→track→media and `resumed`, `ended` at ticks 3/31/33; no diagnostics; final hash `ab711894ddd8283b`; artifact removed.
+
 **Commands:**
 - `pnpm fixtures:fetch`, `pnpm typecheck`, `pnpm lint` — pass.
 - `node --test packages/core/test/media-objects.test.ts packages/core/test/audio-lifecycle-engine.test.ts` — pass.
@@ -117,5 +119,9 @@ Unruled author-visible details go into one labelled `Proposed clarification (pen
 - `media`/track/voice emitters register only on emitter access (or a declared native listener), so a world that never uses them keeps its previous state shape and hashes; `queueAudioEvent` reuses the host objects once active.
 
 ## Plan Change Log
+
+- 2026-10-22 — Director review corrections: reuse `media.unknown-voice` instead of minting a code; record the author-visible derivations as one `Proposed clarification (pending owner review)` paragraph; keep emitter registration on access only; mark method commands `access: "internal"`; add priority, sync, unknown-track and track-control coverage.
+- 2026-10-22 — Implementation settled the one-argument compatibility edge: `mediaPlay(file)` records the same seven-argument effect under the same command name (no object, no value), preserving demo's effect log and state hash; only an options dictionary selects the returned voice. `{wait:1}` on an asset-held start parks on a `cueId: 0` audio.track wait resolved from the object, and invalid `loop`/`volume` writes diagnose without mutating.
+- 2026-10-22 — No golden or closing baseline was re-recorded; `pnpm golden`, `pnpm golden:bun`, `pnpm closing` and `pnpm dump:check` pass unchanged.
 
 ## Review Triage Log
