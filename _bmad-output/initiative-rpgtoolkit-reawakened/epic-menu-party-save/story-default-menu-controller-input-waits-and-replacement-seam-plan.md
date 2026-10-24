@@ -8,6 +8,9 @@ context:
   - "spec - docs/spec/engine/plugins-and-battle.md#e-80"
   - "spec - docs/spec/engine/plugins-and-battle.md#e-95"
   - "handoff - Epic 4 ticket 4.21 / issue #406"
+status: blocked
+blocked_at: "2026-10-24"
+blocked_reason: "Awaiting owner ratification of the exact menu façade contract required before coding by the plan and E-80; do not implement until ratified."
 ---
 
 ## Intent

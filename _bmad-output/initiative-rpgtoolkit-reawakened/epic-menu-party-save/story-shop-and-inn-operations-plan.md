@@ -14,6 +14,7 @@ context:
   - "spec - docs/spec/engine/actors.md#store-and-action-boundary"
   - "spec - docs/spec/engine/rpgcode-modules-and-objects.md#emit-13"
   - "spec - docs/spec/formats/item.md#layout"
+status: done
 ---
 
 ## Intent

@@ -3,7 +3,7 @@ title: 'Package catalogue loader runtime and package startup lifecycle'
 type: 'feature'
 ticket: 17
 created: '2026-10-21'
-status: 'in-progress'
+status: done
 baseline_revision: 'ae5021c082895c995106d91683af29fce37f9204'
 route: 'full'
 route_source: 'auto'
