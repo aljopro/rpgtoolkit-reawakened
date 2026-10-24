@@ -63,19 +63,29 @@ path. Migration changes no actor, VM, RNG or time data.
 An inventory item is exactly `{ id, source, handle, quantity }`: a positive
 safe integer identity below `nextId`, a non-empty item asset reference, its
 display/compatibility handle string, and a non-negative safe integer quantity.
-The `(source, handle)` pair is unique. A zero quantity is retained when needed
-to preserve an equipped item's identity. Equipment is an ordered list of
-`{ actorId, slot, itemId }`, with a live actor id, a non-empty slot name, an
-existing inventory identity and at most one entry per actor/slot. This is the
-inventory owner's slot assignment; actor-owned `equipment` remains the derived
-equipped-source/bonus projection updated only through actor operations. It is
-not another roster or another copy of actor stats.
+The `(source, handle)` pair is unique and identifies the item definition; `id`
+(called `entryId` by inventory operations and events) identifies this particular
+saved stack. `quantity` is the unequipped/available count. A zero-quantity stack
+is retained while an equipment record references it and retired only when it
+has neither available quantity nor equipment references. Equipment is an
+ordered list of `{ actorId, slot, itemId }`, with a live actor id, a non-empty
+slot name, an existing inventory identity and at most one entry per actor/slot.
+This is the inventory owner's slot assignment; actor-owned `equipment` remains
+the derived equipped-reference/bonus projection updated only through actor
+operations. It is not another roster or another copy of actor stats.
 
 Item identities never recycle during a run. An `items` action MUST NOT decrease
 `nextId`, introduce an id below the previous `nextId` unless that id is still
-present, or change an existing id's `(source, handle)` pair. Removing an item
-retires its id; changing quantity preserves identity. Reset starts a new run
-with `nextId: 1`, while restore resumes the saved counter.
+present, or change an existing id's `(source, handle)` pair. Removing a stack
+retires its id only after its available quantity and all equipment references
+are absent; changing quantity preserves identity. Reset starts a new run with
+`nextId: 1`, while restore resumes the saved counter. Equipment actor
+references are derived, not saved: each `(actorId, slot, itemId)` tuple gets a
+stable actor-scoped opaque reference, used as both catalog `id` and equipped
+reference. Its deterministic encoding/disambiguation must avoid collisions
+with any catalog `name` or other reference because actor resolution matches
+`name` OR `id`. Thus multiple units from one stack can occupy distinct slots
+without adding save fields, and the same references reconstruct after restore.
 
 Every party member MUST name a live `party` actor and the roster MUST contain
 at most five distinct actor ids. Roster order is the party slot order. A
