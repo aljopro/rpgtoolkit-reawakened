@@ -48,3 +48,6 @@ __pycache__/
 *.pyc
 .serena/
 .tmp-matte2/
+
+# Local CodeGraph index; the indexed root is packages/ only.
+/packages/.codegraph/
