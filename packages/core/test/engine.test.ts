@@ -92,12 +92,14 @@ test("createEngine routes actor alias writes through package behaviour hooks", (
         phase: "input",
         run: (state) => {
           if (state.time.tick !== 0) return;
-          addActor(state.actors, {
+          const actor = addActor(state.actors, {
             kind: "party",
             source: "hero.tem",
             behaviour: "engine-actors.hero",
             stats: { hp: 10, maxHp: 10, dp: 1 },
           });
+          state.party.members = [actor.id];
+          state.party.selected = actor.id;
         },
       },
       {
@@ -127,12 +129,16 @@ test("createEngine preserves manifest package behaviours and actor operations ac
       aliases: [],
       params: [],
       call: (view) => {
-        if (view.state !== undefined) addActor(view.state.actors, {
-          kind: "party",
-          source: "hero.tem",
-          behaviour: "test-reset-package.hero",
-          stats: { hp: 10, maxHp: 10, dp: 1 },
-        });
+        if (view.state !== undefined) {
+          const actor = addActor(view.state.actors, {
+            kind: "party",
+            source: "hero.tem",
+            behaviour: "test-reset-package.hero",
+            stats: { hp: 10, maxHp: 10, dp: 1 },
+          });
+          view.state.party.members = [actor.id];
+          view.state.party.selected = actor.id;
+        }
         return { value: null };
       },
     }, {

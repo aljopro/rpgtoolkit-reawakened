@@ -79,13 +79,6 @@ const STUBS: readonly CatalogueStub[] = [
     params: [],
   },
   {
-    name: "removeplayer",
-    kind: "state-write",
-    sections: ["party"],
-    obsolete: false,
-    params: [{ name: "file", optional: false, byRef: false, variadic: false }],
-  },
-  {
     name: "putplayer",
     kind: "state-write",
     sections: ["sprites"],
@@ -96,13 +89,6 @@ const STUBS: readonly CatalogueStub[] = [
     name: "eraseplayer",
     kind: "state-write",
     sections: ["sprites"],
-    obsolete: false,
-    params: [{ name: "h", optional: false, byRef: false, variadic: false }],
-  },
-  {
-    name: "destroyplayer",
-    kind: "state-write",
-    sections: ["sprites", "party"],
     obsolete: false,
     params: [{ name: "h", optional: false, byRef: false, variadic: false }],
   },
