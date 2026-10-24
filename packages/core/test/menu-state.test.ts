@@ -27,6 +27,8 @@ import {
   validateInventorySection,
   createEmptyCharacter,
   writeCharacter,
+  createEmptyItem,
+  applyEquipment,
   validateMenuSection,
   validatePartySection,
   type EffectRecord,
@@ -38,6 +40,8 @@ import {
   type ScriptError,
 } from "../src/index.ts";
 import { createScriptServices } from "./script-test-services.ts";
+import { writeItem } from "../src/formats/actor/item.ts";
+import { INVENTORY_COMMANDS } from "../src/script/packs/inventory.ts";
 
 const fixtureDirectory = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "menu");
 const saveFixtureDirectory = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "save");
@@ -117,7 +121,7 @@ test("owner actions isolate sections and reject invalid actions atomically", () 
   const vmBefore = JSON.stringify(state.vm);
   const timeBefore = JSON.stringify(state.time);
   const partyAction = { type: "roster" as const, members: [actorId], selected: actorId };
-  const inventoryAction = { type: "items" as const, nextId: 2, items: [{ id: 1, source: "potion.itm", handle: "Potion", quantity: 2 }] };
+  const inventoryAction = { type: "addItem" as const, source: "item/potion.itm", handle: "Potion", amount: 2 };
   const menuAction = { type: "navigation" as const, screens: [{ screen: "status", actorId, selection: 1 }] };
   const inventoryBeforeParty = JSON.stringify(state.inventory);
   const menuBeforeParty = JSON.stringify(state.menu);
@@ -128,8 +132,7 @@ test("owner actions isolate sections and reject invalid actions atomically", () 
   const partyBeforeInventory = JSON.stringify(state.party);
   const menuBeforeInventory = JSON.stringify(state.menu);
   deepEqual(ports.inventory.apply(inventoryAction), { ok: true, error: null });
-  deepEqual(ports.inventory.apply({ type: "equipment", equipment: [{ actorId, slot: "weapon", itemId: 1 }] }), { ok: true, error: null });
-  deepEqual(ports.inventory.apply({ type: "gold", value: 17 }), { ok: true, error: null });
+  deepEqual(ports.inventory.apply({ type: "addGold", amount: 17 }), { ok: true, error: null });
   equal(JSON.stringify(state.party), partyBeforeInventory);
   equal(JSON.stringify(state.menu), menuBeforeInventory);
   const partyBeforeMenu = JSON.stringify(state.party);
@@ -141,7 +144,7 @@ test("owner actions isolate sections and reject invalid actions atomically", () 
   equal(state.party.members.length, 1);
   equal(state.party.steps, 3);
   equal(state.inventory.gold, 17);
-  equal(state.inventory.equipment.length, 1);
+  equal(state.inventory.equipment.length, 0);
   equal(state.menu.screens.length, 1);
   equal(state.menu.graphic, "menu.png");
   equal(JSON.stringify(state.actors), actorBefore);
@@ -154,11 +157,13 @@ test("owner actions isolate sections and reject invalid actions atomically", () 
   equal(snapshot(state), unchanged);
   rejected(ports.party.apply({ type: "steps" } as never));
   equal(snapshot(state), unchanged);
-  rejected(ports.inventory.apply({ type: "items", items: undefined, nextId: 2 } as never));
+  rejected(ports.inventory.apply({ type: "addItem", source: "item/potion.itm", handle: "Potion", amount: 0 }));
   equal(snapshot(state), unchanged);
-  rejected(ports.inventory.apply({ type: "gold", value: Number.MAX_SAFE_INTEGER + 1 } as never));
+  rejected(ports.inventory.apply({ type: "addItem", source: "item/potion.itm", handle: "Potion", amount: 1.5 }));
   equal(snapshot(state), unchanged);
-  rejected(ports.inventory.apply({ type: "equipment", equipment: [{ actorId, slot: "weapon", itemId: 1 }, { actorId, slot: "weapon", itemId: 1 }] }));
+  rejected(ports.inventory.apply({ type: "unequip", actorId, slot: "accessory-17" }));
+  equal(snapshot(state), unchanged);
+  rejected(ports.inventory.apply({ type: "addGold", amount: Number.MAX_SAFE_INTEGER }));
   equal(snapshot(state), unchanged);
   rejected(ports.menu.apply({ type: "navigation", screens: undefined } as never));
   equal(snapshot(state), unchanged);
@@ -309,11 +314,9 @@ test("owner ports copy input and expose deeply immutable read views", () => {
   const ports = createMenuOwnerPorts(state);
   const actorId = state.actors.actors[0]!.id;
   const screens = [{ screen: "status", actorId, selection: 2 }];
-  const items = [{ id: 1, source: "potion.itm", handle: "Potion", quantity: 1 }];
   deepEqual(ports.menu.apply({ type: "navigation", screens }), { ok: true, error: null });
-  deepEqual(ports.inventory.apply({ type: "items", nextId: 2, items }), { ok: true, error: null });
+  deepEqual(ports.inventory.apply({ type: "addItem", source: "item/potion.itm", handle: "Potion", amount: 1 }), { ok: true, error: null });
   screens[0]!.selection = 99;
-  items[0]!.quantity = 99;
   equal(state.menu.screens[0]!.selection, 2);
   equal(state.inventory.items[0]!.quantity, 1);
   const view = ports.menu.read() as unknown as { screens: Array<{ selection: number }> };
@@ -333,16 +336,6 @@ test("owner commits detach action arrays even when they alias the current sectio
   members.push(actorId);
   deepEqual(state.party.members, [actorId]);
 
-  ports.inventory.apply({ type: "items", nextId: 2, items: [{ id: 1, source: "potion.itm", handle: "Potion", quantity: 1 }] });
-  const items = state.inventory.items;
-  ports.inventory.apply({ type: "items", nextId: 2, items });
-  items[0]!.quantity = -1;
-  equal(state.inventory.items[0]!.quantity, 1);
-  ports.inventory.apply({ type: "equipment", equipment: [{ actorId, slot: "weapon", itemId: 1 }] });
-  const equipment = state.inventory.equipment;
-  ports.inventory.apply({ type: "equipment", equipment });
-  equipment[0]!.slot = "";
-  equal(state.inventory.equipment[0]!.slot, "weapon");
 
   ports.menu.apply({ type: "navigation", screens: [{ screen: "items", actorId, selection: 0 }] });
   const screens = state.menu.screens;
@@ -351,21 +344,39 @@ test("owner commits detach action arrays even when they alias the current sectio
   equal(state.menu.screens[0]!.selection, 0);
 });
 
-test("item identities survive quantity changes and cannot be recycled or rebound", () => {
+test("inventory actions preserve stack identity, emit exact quantity events, and reject atomically", () => {
   const state = actorState();
-  const ports = createMenuOwnerPorts(state);
-  const item = { id: 1, source: "potion.itm", handle: "Potion", quantity: 1 };
-  ok(ports.inventory.apply({ type: "items", nextId: 2, items: [item] }).ok);
-  ok(ports.inventory.apply({ type: "items", nextId: 2, items: [{ ...item, quantity: 0 }] }).ok);
-  const before = snapshot(state);
-  rejected(ports.inventory.apply({ type: "items", nextId: 2, items: [{ ...item, source: "ring.itm" }] }));
-  equal(snapshot(state), before);
-  ok(ports.inventory.apply({ type: "items", nextId: 2, items: [] }).ok);
-  const removed = snapshot(state);
-  rejected(ports.inventory.apply({ type: "items", nextId: 2, items: [item] }));
-  equal(snapshot(state), removed);
-  ok(ports.inventory.apply({ type: "items", nextId: 3, items: [{ ...item, id: 2 }] }).ok);
-  rejected(ports.inventory.apply({ type: "items", nextId: 2, items: [] }));
+  const events: { readonly type: string }[] = [];
+  const ports = createMenuOwnerPorts(state, undefined, undefined, (event) => events.push(event));
+  const added = { type: "addItem" as const, source: "Item/Potion.itm", handle: "Potion", amount: 1 };
+  ok(ports.inventory.apply(added).ok);
+  const entryId = state.inventory.items[0]!.id;
+  equal(entryId, 1);
+  equal(state.inventory.items[0]!.source, "item/potion.itm");
+  ok(ports.inventory.apply({ ...added, amount: 2 }).ok);
+  equal(state.inventory.items[0]!.id, entryId);
+  equal(state.inventory.items[0]!.quantity, 3);
+  equal(state.inventory.nextId, 2);
+  ok(ports.inventory.apply({ type: "removeItem", entryId, amount: 1 }).ok);
+  equal(state.inventory.items[0]!.quantity, 2);
+  ok(ports.inventory.apply({ type: "removeItem", entryId, amount: 2 }).ok);
+  equal(state.inventory.items.length, 0);
+  const retired = snapshot(state);
+  rejected(ports.inventory.apply({ type: "removeItem", entryId, amount: 1 }));
+  equal(snapshot(state), retired);
+  ok(ports.inventory.apply(added).ok);
+  equal(state.inventory.items[0]!.id, 2);
+  equal(state.inventory.nextId, 3);
+  const beforeInvalidGold = snapshot(state);
+  rejected(ports.inventory.apply({ type: "addGold", amount: -1 }));
+  equal(snapshot(state), beforeInvalidGold);
+  deepEqual(events, [
+    { type: "itemAdded", detail: { entryId: 1, source: "item/potion.itm", handle: "Potion", amount: 1, previousQuantity: 0, currentQuantity: 1 } },
+    { type: "itemAdded", detail: { entryId: 1, source: "item/potion.itm", handle: "Potion", amount: 2, previousQuantity: 1, currentQuantity: 3 } },
+    { type: "itemRemoved", detail: { entryId: 1, source: "item/potion.itm", handle: "Potion", amount: 1, previousQuantity: 3, currentQuantity: 2 } },
+    { type: "itemRemoved", detail: { entryId: 1, source: "item/potion.itm", handle: "Potion", amount: 2, previousQuantity: 2, currentQuantity: 0 } },
+    { type: "itemAdded", detail: { entryId: 2, source: "item/potion.itm", handle: "Potion", amount: 1, previousQuantity: 0, currentQuantity: 1 } },
+  ]);
 });
 
 test("existing ports follow section replacement and restored sections", () => {
@@ -470,7 +481,7 @@ const graphicCharacterBytes = (() => {
 function menuEngine(onState: (state: GameState) => void, effects: EffectRecord[]): { engine: Engine; state: () => GameState | null } {
   const actions = [
     { section: "party" as const, action: { type: "steps" as const, value: 6 } },
-    { section: "inventory" as const, action: { type: "gold" as const, value: 23 } },
+    { section: "inventory" as const, action: { type: "addGold" as const, amount: 23 } },
     { section: "menu" as const, action: { type: "navigation" as const, screens: [{ screen: "status", actorId: null, selection: 1 }] } },
   ];
   let call = 0;
@@ -564,7 +575,7 @@ test("authored RPGCode dispatches menu.state adapters through all owners and res
   equal(effects.filter((effect) => effect.kind === "state-write").length, 3);
   deepEqual(effects.slice(0, 3).map((effect) => [effect.patch?.section, effect.args[0]]), [
     ["party", { type: "steps", value: 6 }],
-    ["inventory", { type: "gold", value: 23 }],
+    ["inventory", { type: "addGold", amount: 23 }],
     ["menu", { type: "navigation", screens: [{ screen: "status", actorId: null, selection: 1 }] }],
   ]);
   ok(effects.slice(0, 3).every((effect) => effect.name === "state"));
@@ -582,4 +593,165 @@ test("identically seeded authored engines have identical per-tick state hashes",
   const first = menuEngine(() => undefined, []);
   const second = menuEngine(() => undefined, []);
   deepEqual(runEngine(first.engine), runEngine(second.engine));
+});
+test("equipment actions consume and return stack quantities while applying stable actor references", () => {
+  const state = actorState();
+  const actor = state.actors.actors[0]!;
+  const itemName = `tkr-equipment:${JSON.stringify([actor.id, "right-hand", 1])}`;
+  const item = {
+    ...createEmptyItem(),
+    name: itemName,
+    equipable: 1,
+    equipSlots: [0, 0, 0, 1, 1, 0, 0, 0],
+    equipBonus: [2, 1, 1, 3],
+  };
+  const character = {
+    ...createEmptyCharacter(),
+    bodySlots: [0, 1, 1, 1, 1, 1, 1],
+  };
+  const events: { readonly type: string }[] = [];
+  const ports = createMenuOwnerPorts(state, undefined, {
+    item: () => item,
+    character: () => character,
+    applyEquipment: (actorId, equipped, catalog) => applyEquipment(state.actors, actorId, equipped, catalog) !== null,
+  }, (event) => events.push(event));
+  ok(ports.inventory.apply({ type: "addItem", source: "item/sword.itm", handle: itemName, amount: 2 }).ok);
+  const entryId = state.inventory.items[0]!.id;
+  const startingStats = { ...actor.stats };
+  ok(ports.inventory.apply({ type: "equip", actorId: actor.id, slot: "right-hand", entryId }).ok);
+  ok(ports.inventory.apply({ type: "equip", actorId: actor.id, slot: "left-hand", entryId }).ok);
+  equal(state.inventory.items[0]!.quantity, 0);
+  equal(state.inventory.equipment.length, 2);
+  equal(new Set(state.actors.actors[0]!.equipment.equipped).size, 2);
+  ok(state.actors.actors[0]!.equipment.equipped.every((reference) => reference.startsWith("tkr-equipment:")));
+  equal(state.actors.actors[0]!.equipment.equipped.includes(`${itemName}#1`), true);
+  equal(state.actors.actors[0]!.stats.hp, startingStats.hp + 4);
+  equal(state.actors.actors[0]!.stats.maxHp, startingStats.maxHp + 4);
+  equal(state.actors.actors[0]!.stats.smp, startingStats.smp + 6);
+  equal(state.actors.actors[0]!.stats.maxSmp, startingStats.maxSmp + 6);
+  const equippedHash = hashGameState(restoreGameState(snapshot(state)));
+  equal(equippedHash, hashGameState(state));
+  ok(ports.inventory.apply({ type: "unequip", actorId: actor.id, slot: "right-hand" }).ok);
+  equal(state.inventory.items[0]!.quantity, 1);
+  ok(ports.inventory.apply({ type: "unequip", actorId: actor.id, slot: "left-hand" }).ok);
+  equal(state.inventory.items[0]!.quantity, 2);
+  equal(state.inventory.equipment.length, 0);
+  equal(state.actors.actors[0]!.stats.hp, startingStats.hp);
+  equal(state.actors.actors[0]!.stats.maxHp, startingStats.maxHp);
+  equal(state.actors.actors[0]!.stats.smp, startingStats.smp);
+  equal(state.actors.actors[0]!.stats.maxSmp, startingStats.maxSmp);
+  const beforeGold = snapshot(state);
+  equal(ports.inventory.apply({ type: "addGold", amount: 0 }).ok, true);
+  equal(snapshot(state), beforeGold);
+  ok(ports.inventory.apply({ type: "addGold", amount: 100 }).ok);
+  ok(ports.inventory.apply({ type: "removeGold", amount: 40 }).ok);
+  const beforeUnaffordable = snapshot(state);
+  rejected(ports.inventory.apply({ type: "removeGold", amount: 61 }));
+  equal(snapshot(state), beforeUnaffordable);
+  rejected(ports.inventory.apply({ type: "removeGold", amount: -1 }));
+  equal(snapshot(state), beforeUnaffordable);
+  equal(state.inventory.gold, 60);
+  const beforeOverflow = snapshot(state);
+  rejected(ports.inventory.apply({ type: "addGold", amount: Number.MAX_SAFE_INTEGER }));
+  equal(snapshot(state), beforeOverflow);
+  deepEqual(events.map((event) => event.type), [
+    "itemAdded",
+    "itemRemoved",
+    "itemRemoved",
+    "itemAdded",
+    "itemAdded",
+    "goldChanged",
+    "goldChanged",
+  ]);
+  deepEqual(events.slice(-2), [
+    { type: "goldChanged", detail: { previous: 0, current: 100, delta: 100 } },
+    { type: "goldChanged", detail: { previous: 100, current: 60, delta: -40 } },
+  ]);
+});
+test("RPGCode equipment locations map and clamp to all canonical inventory slots", () => {
+  const state = actorState();
+  const actor = state.actors.actors[0]!;
+  state.party.members = [actor.id];
+  const services = createScriptServices(state);
+  const remove = INVENTORY_COMMANDS.find((command) => command.name === "remove");
+  if (remove === undefined) throw new Error("missing remove builtin");
+  const expected = [
+    "head", "head", "neck", "right-hand", "left-hand", "body", "legs",
+    "accessory-7", "accessory-8", "accessory-9", "accessory-10", "accessory-11",
+    "accessory-12", "accessory-13", "accessory-14", "accessory-15", "accessory-16", "accessory-16",
+  ];
+  for (let location = 0; location <= 17; location += 1) {
+    const result = remove.call(services.view, [
+      { value: "Hero", ref: null },
+      { value: location, ref: null },
+    ], () => ({ value: null }));
+    deepEqual(result.effects?.[0]?.args?.[0], {
+      type: "unequip",
+      actorId: actor.id,
+      slot: expected[location],
+    });
+  }
+});
+test("headless RPGCode inventory commands request assets and apply item, equipment and gold operations", () => {
+  const item = writeItem({
+    ...createEmptyItem(),
+    minor: 3,
+    legacyWalk: { frames: Array.from({ length: 16 }, () => ({ top: "", bottom: "" })), restTiles: ["", ""] },
+    name: "Sword",
+    equipable: 1,
+    equipSlots: [0, 0, 0, 1, 1, 0, 0, 0],
+    equipBonus: [2, 1, 1, 3],
+  });
+  if (!item.ok) throw new Error(item.error.message);
+  const character = writeCharacter({
+    ...createEmptyCharacter(),
+    name: "Hero",
+    minor: 8,
+    movementAnimations: Array(8).fill(""),
+    battleStances: Array(6).fill(""),
+    idleAnimations: Array(8).fill(""),
+    idleTime: 3,
+    speed: 0.05,
+    customStances: [],
+    vectorBases: [],
+    bodySlots: [0, 1, 1, 1, 1, 1, 1],
+  });
+  if (!character.ok) throw new Error(character.error.message);
+  const latest: { value: GameState | null } = { value: null };
+  let seeded = false;
+  const engine = createEngine({
+    seed: 31,
+    assetIndex: createAssetIndex(["Boards/test.brd", "Item/sword.itm", "Chrs/hero.tem"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 64,
+    height: 64,
+    maxTicks: 32,
+    program: readFileSync(join(fixtureDirectory, "inventory-operations.prg"), "utf8"),
+    phaseRegistrations: [{ phase: "input", run: (state) => {
+      latest.value = state;
+      if (seeded) return;
+      seeded = true;
+      const hero = addActor(state.actors, { kind: "party", source: "hero.tem", name: "Hero" });
+      state.party.members = [hero.id];
+      state.party.selected = hero.id;
+    }}],
+  });
+  runEngine(engine, new Map([
+    ["boards/test.brd", boardBytes],
+    ["item/sword.itm", item.value],
+    ["chrs/hero.tem", character.value],
+  ]));
+  if (latest.value === null) throw new Error("inventory smoke did not reach the input phase");
+  equal(latest.value.inventory.items.length, 1);
+  equal(latest.value.vm.globals.handlecount, 1);
+  equal(latest.value.vm.globals.filecount, 1);
+  equal(latest.value.vm.globals.goldbeforetake, 50);
+  equal(latest.value.inventory.items[0]!.handle, "Sword");
+  equal(latest.value.inventory.items[0]!.quantity, 1);
+  equal(latest.value.inventory.equipment.length, 0);
+  equal(latest.value.inventory.items[0]!.id, 2);
+  equal(latest.value.inventory.nextId, 3);
+  equal(latest.value.inventory.gold, 49);
+  equal(latest.value.actors.actors[0]!.equipment.equipped.length, 0);
 });

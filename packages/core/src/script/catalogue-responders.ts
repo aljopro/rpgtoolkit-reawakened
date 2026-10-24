@@ -22,6 +22,7 @@ import { UI_COMMANDS } from "./packs/ui.ts";
 import { GRAPHICS_COMMANDS } from "./packs/graphics.ts";
 import { RENDER_PLUGIN } from "./packs/render.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
+import { INVENTORY_COMMANDS, INVENTORY_COMMAND_NAMES } from "./packs/inventory.ts";
 
 const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
   mwin: {
@@ -485,6 +486,7 @@ const CATALOGUE_GRAPHICS_NAMES = new Set(GRAPHICS_COMMANDS.flatMap((command) => 
 const CATALOGUE_OWNED_NAMES = new Set([
   ...CATALOGUE_STUBS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
   ...CATALOGUE_RESPONDERS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
+  ...INVENTORY_COMMAND_NAMES,
 ]);
 const CORE_FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
 const MOVEMENT_PACK_NAMES: Record<string, true> = {
@@ -503,10 +505,11 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
   commands: [
-    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true)),
+    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true && !INVENTORY_COMMAND_NAMES.has(command.name))),
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
-      (command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
+      (command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name) && !INVENTORY_COMMAND_NAMES.has(command.name),
     ),
+    ...INVENTORY_COMMANDS,
     ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
     ...documentCommands(RENDER_PACK_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name))),
   ],

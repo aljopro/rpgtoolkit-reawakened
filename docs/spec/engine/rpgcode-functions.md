@@ -244,22 +244,22 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
-| `giveitem` | `void giveitem(string itm)` | Add an item to the inventory. |  |
-| `takeitem` | `void takeitem(string itm)` | Remove an item from the inventory. |  |
+| `giveitem` | `void giveitem(string itm)` | Add one item from an item file to the inventory. | Filename; `.itm` is appended when absent. |
+| `takeitem` | `void takeitem(string itm)` | Remove one available item from the inventory by item filename. | Filename; `.itm` is appended when absent. This script built-in is not blocked by the stock-menu key-item drop restriction. |
 | `pushitem` | `void pushitem(variant item, string direction [, int flags])` | Push an item in a direction. Each direction queues a fixed movement target, and pause or blocking waits for completion. |  |
 | `wander` | `void wander(variant target, [int restrict = 0])` | Let an item take a deterministic random step. The injected seed controls the chosen direction and the optional restriction. |  |
-| `equip` | `void equip(variant handle, int location, string item)` | Equip an item from the inventory (by handle or filename) to a location on the player's body. |  |
-| `remove` | `void remove(variant handle, int location)` | Remove an equipped item and return it to the inventory. |  |
-| `givegp` | `void givegp(int gp)` | Give gold pieces. |  |
-| `takegp` | `void takegp(int gp)` | Take gold pieces. |  |
-| `getgp` | `int getgp([int &ret])` | Return the amount of gold pieces held. |  |
+| `equip` | `void equip(variant handle, int location, string item)` | Equip one available item on a party member. | `handle` accepts a player handle or character filename; `item` accepts a handle or item filename. The 1-based location clamps to 1–16: head, neck, right hand, left hand, body, legs, then custom accessory slots 7–16. |
+| `remove` | `void remove(variant handle, int location)` | Unequip an item from a party member. | `handle` accepts a player handle or character filename; the 1-based location clamps to 1–16 as documented for `equip`. |
+| `givegp` | `void givegp(int gp)` | Add gold through the inventory owner. | Requires a non-negative safe integer; zero does nothing, and invalid or overflowing additions are refused atomically. |
+| `takegp` | `void takegp(int gp)` | Remove gold through the inventory owner. | Requires a non-negative safe integer; zero does nothing, and invalid or unaffordable removals are refused atomically. |
+| `getgp` | `int getgp([int &ret])` | Read current inventory gold. | Returns the balance and writes it through the optional reference. |
 | `callshop` | `void callshop(string item1, string item2, string item3, ...)` | Displays a basic shop interface that allows the buying of the items given as parameters and the selling of items in the player's inventory. |  |
 | `eraseitem` | `void eraseitem(variant handle)` | Erase an item from the screen, but keep it in memory. |  |
 | `putitem` | `void putitem(variant handle, int x, int y, int layer)` | Place the item on the board at the given location. |  |
 | `createitem` | `int createitem(string filename[, int &pos])` | Load an item and return the slot into which it was loaded. |  |
 | `destroyitem` | `void destroyitem(variant handle)` | Remove an item from memory. |  |
 | `itemwalkspeed` | `void itemwalkspeed()` | Obsolete. | obsolete: raises an error and the statement is skipped |
-| `itemcount` | `int itemcount(string fileName[, int &ret])` | Count the number of a certain item in the inventory. |  |
+| `itemcount` | `int itemcount(string fileName[, int &ret])` | Count available inventory items by filename or handle. | With `.itm`, compare item filenames case-insensitively; otherwise compare item handles case-insensitively. |
 | `itemlocation` | `void itemlocation(variant handle, int &x, int &y, int &layer)` | Read where an item is now. Pixel x/y and the one-based layer are written through the references. |  |
 | `itemstep` | `void itemstep(variant handle, int x, int y [, int flags])` | Move an item to a board point. The engine queues a deterministic path and pause or blocking waits for completion. |  |
 | `getitemname` | `string getitemname(string fileName[, string &ret])` | Get an item's handle. |  |

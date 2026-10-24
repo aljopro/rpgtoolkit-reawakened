@@ -9,6 +9,7 @@ context:
   - "spec - docs/spec/engine/plugins-and-battle.md#e-82"
   - "spec - docs/spec/formats/item.md"
   - "spec - docs/spec/engine/rpgcode-modules-and-objects.md#emit-13"
+status: built
 ---
 
 ## Intent
@@ -36,3 +37,4 @@ The normative contract is E-81/E-82 in `docs/spec/engine/plugins-and-battle.md` 
 
 ## Implementation map
 Use entry 2's state ports and entry 3's party operations. Item data remains a read-only asset definition; inventory records reference item identity and quantity rather than turning items into actors. The inventory owner validates actor/slot/eligibility and coordinates actor 20.6's derived equipment-bonus operation. Equipment references are derived from saved `(actorId, slot, itemId)` tuples, not persisted as additional fields; deterministic collision avoidance against catalog names is required because actor resolution matches catalog `name` or `id`. TKR's string-slot mapping uses the canonical custom-accessory tokens from the design choice above.
+Implementation: `packages/core/src/menu/inventory.ts` owns typed operations, refusal atomicity, quantity/gold events, derived equipment references and actor-rule integration; `packages/core/src/script/packs/inventory.ts` provides the existing RPGCode names and asset continuations, with the engine preloading equipped item/character definitions before equipment actions. `packages/core/test/menu-state.test.ts` covers owner transitions, same-stack two-slot equipment, collision-safe references, snapshot stability, gold refusal boundaries, and the authored RPGCode fixture `packages/core/test/fixtures/menu/inventory-operations.prg`. The normative contract remains E-81/E-82 and EMIT-13; no additional public built-ins or saved fields are introduced.

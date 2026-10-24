@@ -6,12 +6,9 @@ import { ScriptError } from "../script/errors.ts";
 import {
   readonlySection,
   validateActionFields,
-  validateInventorySection,
   validateMenuSection,
   validatePartySection,
   type DeepReadonly,
-  type InventoryEquipment,
-  type InventoryItem,
   type InventorySection,
   type MenuScreen,
   type MenuSection,
@@ -19,17 +16,14 @@ import {
   type PartySection,
   type StateIssue,
 } from "./model.ts";
-
+import { applyInventoryAction, type InventoryAction as InventoryActionType, type InventoryEvent, type InventoryRuntime } from "./inventory.ts";
+export type { InventoryAction } from "./inventory.ts";
 export type PartyAction =
   | { readonly type: "roster"; readonly members: readonly number[]; readonly selected: number | null }
   | { readonly type: "steps"; readonly value: number }
   | { readonly type: "add"; readonly actor?: ActorCreateInput; readonly actorId?: number }
   | { readonly type: "restore" | "remove" | "destroy" | "select"; readonly actorId: number }
   | { readonly type: "swap"; readonly firstActorId: number; readonly secondActorId: number };
-export type InventoryAction =
-  | { readonly type: "items"; readonly items: readonly Readonly<InventoryItem>[]; readonly nextId: number }
-  | { readonly type: "equipment"; readonly equipment: readonly Readonly<InventoryEquipment>[] }
-  | { readonly type: "gold"; readonly value: number };
 export type MenuAction =
   | { readonly type: "navigation"; readonly screens: readonly Readonly<MenuScreen>[] }
   | { readonly type: "graphic"; readonly value: string | null };
@@ -39,7 +33,7 @@ export type SectionOwnerPort<S, A> = {
 };
 export type MenuOwnerPorts = {
   readonly party: SectionOwnerPort<PartySection, PartyAction>;
-  readonly inventory: SectionOwnerPort<InventorySection, InventoryAction>;
+  readonly inventory: SectionOwnerPort<InventorySection, InventoryActionType>;
   readonly menu: SectionOwnerPort<MenuSection, MenuAction>;
 };
 export type PartyEvent =
@@ -48,6 +42,7 @@ export type PartyEvent =
   | { readonly type: "membersSwapped"; readonly detail: { readonly firstActorId: number; readonly secondActorId: number; readonly firstIndex: number; readonly secondIndex: number } }
   | { readonly type: "activeMemberChanged"; readonly detail: { readonly previousActorId: number | null; readonly currentActorId: number | null } };
 export type PartyEventSink = (event: PartyEvent) => void;
+export type InventoryEventSink = (event: InventoryEvent) => void;
 
 function rosterEvents(previous: PartySection, current: PartySection): PartyEvent[] {
   const events: PartyEvent[] = [];
@@ -86,7 +81,12 @@ function actionRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 /** Resolves current section values on every call, including after reset/restore. */
-export function createMenuOwnerPorts(state: OwnerState, onPartyEvent?: PartyEventSink): MenuOwnerPorts {
+export function createMenuOwnerPorts(
+  state: OwnerState,
+  onPartyEvent?: PartyEventSink,
+  inventoryRuntime?: InventoryRuntime,
+  onInventoryEvent?: InventoryEventSink,
+): MenuOwnerPorts {
   const commitParty = (next: PartySection, destroyActorId?: number): MenuStateResult => {
     const previous = state.party;
     const same = previous.selected === next.selected && previous.steps === next.steps &&
@@ -183,47 +183,9 @@ export function createMenuOwnerPorts(state: OwnerState, onPartyEvent?: PartyEven
     inventory: {
       read: () => readonlySection(state.inventory),
       apply(action: unknown): MenuStateResult {
-        const record = actionRecord(action);
-        if (record === null) return rejected({ path: "inventory.action", message: "expected an action object" });
-        let keys: readonly string[];
-        let candidate: unknown;
-        switch (record.type) {
-          case "items":
-            keys = ["type", "items", "nextId"];
-            candidate = { ...state.inventory, items: record.items, nextId: record.nextId };
-            break;
-          case "equipment":
-            keys = ["type", "equipment"];
-            candidate = { ...state.inventory, equipment: record.equipment };
-            break;
-          case "gold":
-            keys = ["type", "value"];
-            candidate = { ...state.inventory, gold: record.value };
-            break;
-          default:
-            return rejected({ path: "inventory.action.type", message: "unknown inventory action" });
-        }
-        const error = validateActionFields(record, keys, "inventory.action") ?? validateInventorySection(candidate, state.actors);
-        if (error !== null) return rejected(error);
-        const next = candidate as InventorySection;
-        if (next.nextId < state.inventory.nextId) return rejected({ path: "inventory.nextId", message: "item identity counter cannot decrease" });
-        if (record.type === "items") {
-          for (const [index, item] of next.items.entries()) {
-            const prior = state.inventory.items.find((entry) => entry.id === item.id);
-            if (prior === undefined && item.id < state.inventory.nextId) {
-              return rejected({ path: `inventory.items[${index}].id`, message: "retired item identities cannot be reused" });
-            }
-            if (prior !== undefined && (prior.source !== item.source || prior.handle !== item.handle)) {
-              return rejected({ path: `inventory.items[${index}].id`, message: "an existing item identity cannot change source or handle" });
-            }
-          }
-        }
-        state.inventory = {
-          ...next,
-          items: record.type === "items" ? next.items.map((item) => ({ ...item })) : next.items,
-          equipment: record.type === "equipment" ? next.equipment.map((entry) => ({ ...entry })) : next.equipment,
-        };
-        return ACCEPTED;
+        const outcome = applyInventoryAction(state, action, inventoryRuntime);
+        for (const event of outcome.events) onInventoryEvent?.(event);
+        return outcome.result;
       },
     },
     menu: {
@@ -264,11 +226,11 @@ export function applyMenuStateEffect(ports: MenuOwnerPorts, effect: EffectRecord
     if (result.error !== null) throw new ScriptError("menu.state-invalid", `${result.error.path}: ${result.error.message}`);
     return;
   }
-  if (effect.name !== "state" && effect.name !== "menu.state") return;
+  if (effect.name !== "state" && effect.name !== "menu.state" && !(section === "inventory" && effect.kind === "state-write")) return;
   if (section !== "party" && section !== "inventory" && section !== "menu") {
     throw new ScriptError("menu.state-invalid", "menu.action: expected a party, inventory or menu section");
   }
   if (effect.args.length !== 1) throw new ScriptError("menu.state-invalid", `${section}.action: expected exactly one action`);
-  const result = ports[section].apply(effect.args[0] as PartyAction & InventoryAction & MenuAction);
+  const result = ports[section].apply(effect.args[0] as PartyAction & InventoryActionType & MenuAction);
   if (result.error !== null) throw new ScriptError("menu.state-invalid", `${result.error.path}: ${result.error.message}`);
 }
