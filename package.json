@@ -8,6 +8,7 @@
     "build": "tsc -b",
     "typecheck": "tsc -b && pnpm -r --if-present run typecheck:tests",
     "test": "tsc -b && node --test \"packages/*/test/*.test.ts\"",
+    "coverage": "tsc -b && mkdir -p coverage && node --experimental-test-coverage --test-coverage-include='packages/*/src/**' --test-coverage-exclude='**/catalogue-stubs.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info --test \"packages/*/test/*.test.ts\"",
     "test:strict": "tsc -b && node tools/no-skips/run.mjs",
     "lint": "node tools/check-core-deps.mjs && eslint .",
     "graph": "node tools/deps/graph.mjs",
