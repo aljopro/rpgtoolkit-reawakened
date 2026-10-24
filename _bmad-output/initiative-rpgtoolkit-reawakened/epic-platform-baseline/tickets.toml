@@ -186,3 +186,15 @@ after = [13]
 hitl = true
 risk = "medium"
 references = ["discovery - _bmad-output/initiative-rpgtoolkit-reawakened/discovery/docs-spec-reconciliation.md, section D"]
+[[entry]]
+id = 15
+tracker_id = "#616"
+type = "story"
+title = "Coverage: measured baseline, enforced thresholds, generated-code exemptions"
+description = "Add coverage to the existing test path using Node 24's built-in runner only. New pnpm coverage mirrors pnpm test (tsc -b && node --test ...) with --experimental-test-coverage, scoped by --test-coverage-include='packages/*/src/**', emitting coverage/lcov.info via node:test/reporters. CI uploads the lcov file as an artifact. Thresholds are set from the measured baseline on main and ratchet upward only."
+verify = "pnpm coverage exits 0 and writes coverage/lcov.info; CI enforces --test-coverage-lines and --test-coverage-branches at the recorded baseline; catalogue-stubs.ts is excluded; no golden hash moves; no new dependency; lint and licence checks still pass."
+covers = ["CAP-13"]
+after = []
+hitl = true
+risk = "medium"
+references = []
