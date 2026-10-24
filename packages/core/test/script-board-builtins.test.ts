@@ -1,6 +1,6 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-import { assetKey, createGameState, createScriptServices, createDefaultVirtuals, ScriptError, type Arg, type GameState, type WorldBoard } from "../src/index.ts";
+import { assetKey, createActorService, createGameState, createScriptServices, createDefaultVirtuals, ScriptError, type Arg, type GameState, type WorldBoard } from "../src/index.ts";
 import { applyWorldEffect } from "../src/world/effects.ts";
 import { WORLD_PLUGIN } from "../src/script/packs/world.ts";
 
@@ -80,7 +80,7 @@ test("obsolete world built-ins reject every documented call form", () => {
 
 test("board virtual variables read hydrated board data", () => {
   const state = stateWithBoard();
-  const virtuals = createDefaultVirtuals(state);
+  const virtuals = createDefaultVirtuals(state, createActorService(state.actors));
   equal(virtuals.read("boardBackground"), "battle.bkg");
   equal(virtuals.read("boardSkill"), 7);
   equal(virtuals.read("boardTitle[1]"), "Ground");

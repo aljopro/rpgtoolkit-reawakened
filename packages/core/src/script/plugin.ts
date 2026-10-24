@@ -44,9 +44,14 @@ import type { Value } from "../ports/value.ts";
 import type { NativeListener } from "../events/model.ts";
 import type { Wait } from "../ports/wait.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
+import type { ActorService } from "../actors/port.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import type { EffectKind } from "./effects.ts";
 import type { HostObjectType } from "./host.ts";
+import type { ProgramRef } from "./program.ts";
+import type { HostRequestKind } from "./manifest.ts";
+import type { ActorHooks } from "../actors/rules.ts";
+import type { MediaScriptService } from "../audio/script.ts";
 
 /**
  * The read-only view a command runs against (AD-8; decision U2). It holds game
@@ -58,12 +63,24 @@ export type CommandView = {
   readonly rng: RngPort;
   readonly clock: ClockPort;
   readonly state?: GameState;
+  /** The script-facing media owner (MEDIA-1): `mediaPlay`, track/voice objects and their operations. */
+  readonly media?: MediaScriptService;
+  /** Read one live object's members without writing them; the media option and method commands use it. */
+  readonly objectMembers?: (handle: number) => Readonly<Record<string, Value>> | undefined;
+  /**
+   * The owner-held actor operations (docs/spec/engine/actors.md#store-and-action-boundary).
+   * Every write resolves the actor's behaviour hooks and publishes the resulting
+   * transitions; a command never patches the actor section directly.
+   */
+  readonly actors?: ActorService;
   /** Stable core-derived identity used to scope host storage. */
   readonly gameId?: string;
   /** Manifest options for the layer currently handling this command. */
   readonly options?: PlainData;
+  /** True only while package startup is running; exposed read-only to lifecycle-aware built-ins. */
+  readonly packageStartup?: boolean;
   /** The id of the thread whose call is running; the VM sets it before every call. */
-  thread?: number;
+  readonly thread?: number;
 };
 
 /**
@@ -137,11 +154,16 @@ export type PluginDoc = {
   readonly requires?: readonly string[];
 };
 
+/** Package-scoped actor behaviour registration available during start-up. */
+export type BehaviourRegistrar = (name: string, hooks: ActorHooks) => boolean;
+
 /** One plugin: an ordered command and asset pack (ADR 0004 decisions 2 and 6). */
 export type PluginDefinition = {
   readonly id: string;
   readonly version: string;
   readonly commands: readonly BuiltinSpec[];
+  /** Ordered package track configuration applied during game boot (MEDIA-4); files remain RPGCode-selected. */
+  readonly audioTracks?: readonly { readonly name: string; readonly voiceCount?: number }[];
   /** Optional plain-data package documentation, excluded from VM state. */
   readonly doc?: PluginDoc;
   /** Optional format contributions layered after the core decoder set (AD-31). */
@@ -156,6 +178,29 @@ export type PluginDefinition = {
   readonly listeners?: readonly NativeListener[];
   /** Session-only host object declarations hydrated by type name (OOP-12). */
   readonly hostTypes?: readonly HostObjectType[];
+  /**
+   * Package-scoped actor behaviour registration. The host calls this during
+   * `runPackageStartup`, passing a registrar that accepts only this package's
+   * declared namespace.
+   */
+  readonly behaviourStartup?: (registerBehaviour: BehaviourRegistrar) => void;
+};
+
+/** A host-resolved package record; core receives definitions and source from the runner (G2). */
+export type PackageCatalogueEntry = {
+  readonly name: string;
+  readonly version: string;
+  readonly namespace?: string;
+  readonly requests: readonly HostRequestKind[];
+  readonly definition: PluginDefinition;
+  readonly startup?: ProgramRef;
+};
+
+export type ResolvedPackageMetadata = {
+  readonly name: string;
+  readonly version: string;
+  readonly namespace: string;
+  readonly requests: readonly HostRequestKind[];
 };
 
 /**
@@ -168,4 +213,6 @@ export type ResolvedPlugin = {
   readonly definition: PluginDefinition;
   readonly options?: PlainData;
   readonly namespace?: string;
+  readonly package?: ResolvedPackageMetadata;
+  readonly startup?: ProgramRef;
 };

@@ -123,6 +123,32 @@ export const UI_COMMANDS: readonly BuiltinSpec[] = [
     { name: "green", optional: true, byRef: false, variadic: false },
     { name: "blue", optional: true, byRef: false, variadic: false },
   ], cursorDoc("Choose the mouse cursor.", "Uses the bundled 32×32 arrow for `TK DEFAULT` or an empty file; otherwise uses the custom image with the supplied hot spot and transparent RGB key, and the call does not wait. A custom cursor is drawn at the current pointer position."), (_view, args) => ({ value: null, effects: [uiEffect("mousecursor", [text(args, 0), Math.trunc(number(args, 1)), Math.trunc(number(args, 2)), Math.trunc(number(args, 3)), Math.trunc(number(args, 4)), Math.trunc(number(args, 5))])] })),
+  uiCommand("dialogue", [textParam], { ...plainDoc("Show one dialogue message and wait for the player.", "Shows the message after `<var>` splicing, then waits for the next unclaimed input key and returns its name.", { kind: "until-input", summary: "Waits for a key press." }), see: ["docs/spec/engine/plugins-and-battle.md#e-123"] }, (view, args) => {
+    const state = view.state;
+    const thread = state?.vm.threads.find((candidate) => candidate.id === view.thread);
+    const source = thread?.source === null || thread?.source === undefined
+      ? undefined
+      : state?.sprites.players.find((sprite) => sprite.id === thread.source)
+        ?? state?.sprites.items.find((sprite) => sprite.id === thread.source);
+    const actorId = source?.actorId;
+    if (state === undefined || actorId === undefined || actorId === null || !state.actors.actors.some((actor) => actor.id === actorId)) {
+      throw new ScriptError("dialogue.no-source", "dialogue requires a live actor as its source");
+    }
+    const target = thread?.target === null || thread?.target === undefined
+      ? undefined
+      : state.sprites.players.find((sprite) => sprite.id === thread.target)
+        ?? state.sprites.items.find((sprite) => sprite.id === thread.target);
+    const targetActorId = target?.actorId;
+    const targetId = targetActorId !== undefined && targetActorId !== null && state.actors.actors.some((actor) => actor.id === targetActorId)
+      ? targetActorId
+      : null;
+    const line = spliceVariables(text(args, 0), view);
+    return {
+      value: null,
+      effects: [effect([line])],
+      wait: { kind: "input.key", global: true, key: null, dialogue: { actorId, targetId, text: line } },
+    };
+  }),
   uiCommand("mwin", [textParam], plainDoc("Show a line of dialogue.", "Shows the fixed 600×100 logical-pixel message window at the top, appending the text after `<var>` splicing and rendering all glyphs at once; it does not wait."), (view, args) => ({ value: null, effects: [effect([spliceVariables(text(args, 0), view)])] })),
   uiCommand("mwincls", NO_ARGS, plainDoc("Clear and hide the dialogue window.", "Hides the message window and clears all of its text immediately; it does not wait."), () => ({ value: null, effects: [effect()] })),
   uiCommand("mwinSize", [{ name: "percent", optional: true, byRef: false, variadic: true }], { summary: "Obsolete.", behaviour: "Raises the catchable obsolete-command error for every call; the fixed message-window geometry cannot be changed.", groups: [DIALOGUE], tags: ["obsolete"], waits: { kind: "never", summary: "Does not wait." } }, () => { throw new ScriptError("builtin.obsolete", '"mwinsize" is obsolete: the statement is skipped'); }),
@@ -174,6 +200,7 @@ export function applyUiEffect(state: { ui: UiSection; surfaces?: SurfacesSection
     if (state.surfaces !== undefined) ui.backgroundSurface = colourSurface(state.surfaces, background);
   };
   switch (name.toLowerCase()) {
+    case "dialogue":
     case "mwin":
     case "show":
     case "mbox": {

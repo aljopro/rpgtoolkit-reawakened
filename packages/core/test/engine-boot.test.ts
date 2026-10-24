@@ -12,16 +12,25 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TextEncoder } from "node:util";
 import {
+  actorFromSource,
+  addActor,
   assetKey,
   createAssetIndex,
   createEmptyBoard,
+  COMPILER_VERSION,
   createEmptyMainFile,
   createEngine,
   PACKAGE_ROOT,
   writeBoard,
   writeMainFile,
+  startProgram,
 } from "../src/index.ts";
-import type { AssetIndex, AssetRoot, Engine, EffectRecord, EngineInit, GameState, InputRecord, PlainData, TickReport } from "../src/index.ts";
+import { resolveManifestPlugins } from "../src/engine/boot.ts";
+import type { AssetIndex, AssetRoot, Engine, EffectRecord, EngineInit, GameState, InputRecord, PackageCatalogueEntry, PlainData, TickReport } from "../src/index.ts";
+import type { MainFileAudioSettings } from "../src/formats/main-file/model.ts";
+import type { AudioCue } from "../src/ports/audio.ts";
+import { BUILTIN_TRACKS } from "../src/audio/model.ts";
+import { createAudioRuntime } from "../src/audio/runtime.ts";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(testDir, "..", "..", "..");
@@ -39,6 +48,8 @@ type GameSpec = {
   readonly plugins?: readonly string[];
   /** The TKR package names of the main file's package-list extension, in order. */
   readonly packages?: readonly string[];
+  readonly audioSettings?: MainFileAudioSettings | null;
+  readonly soundFonts?: readonly string[];
   /** Lay the game out as a game folder (`Main/` plus `Game/<project>/`) instead of a package. */
   readonly project?: string;
 };
@@ -91,6 +102,7 @@ function authorGame(spec: GameSpec): AuthoredGame {
     initBoard: spec.initBoard ?? "start.brd",
     initChar: spec.initChar ?? "",
     plugins: (spec.plugins ?? []).map((pluginFile) => ({ enabled: 0, pluginFile })),
+    audioSettings: spec.audioSettings ?? null,
     ...(spec.packages === undefined ? {} : { packagePlugins: spec.packages }),
   };
   files.set(assetKey(mainPath), unwrap(writeMainFile(main)));
@@ -99,6 +111,7 @@ function authorGame(spec: GameSpec): AuthoredGame {
   for (const [name, bytes] of Object.entries(spec.fonts ?? {})) add(`Font/${name}`, bytes);
   if (spec.initChar !== undefined && spec.initChar !== "") add(`Chrs/${spec.initChar}`, new Uint8Array([0]));
   for (const media of ["theme.mid", "other.mid"]) add(`Media/${media}`, new Uint8Array([0]));
+  for (const name of spec.soundFonts ?? []) add(`Media/${name}`, new Uint8Array([0]));
   const root: AssetRoot = spec.project === undefined ? PACKAGE_ROOT : { kind: "game", projectPath: "" };
   return { files, index: createAssetIndex(paths), main: mainPath, root };
 }
@@ -153,11 +166,12 @@ function makeDoubles(restored = false): Doubles {
   };
 }
 
-type RunResult = { readonly report: TickReport; readonly requests: string[]; readonly diagnostics: { readonly code: string; readonly file: string; readonly message: string }[]; readonly ticksRun: number };
+type RunResult = { readonly report: TickReport; readonly cues: AudioCue[]; readonly requests: string[]; readonly diagnostics: { readonly code: string; readonly file: string; readonly line: number; readonly message: string }[]; readonly ticksRun: number };
 
 /** Play the host: answer every asset request from `files` and keep advancing until `ticks` ran or the engine stops. */
 function run(engine: Engine, files: Files, ticks: number, inputs: readonly InputRecord[] = []): RunResult {
   const requests: string[] = [];
+  const cues: AudioCue[] = [];
   const diagnostics: RunResult["diagnostics"][number][] = [];
   let remaining = ticks;
   let ran = 0;
@@ -168,17 +182,18 @@ function run(engine: Engine, files: Files, ticks: number, inputs: readonly Input
     ran += report.ticksRun;
     remaining -= report.ticksRun;
     diagnostics.push(...report.diagnostics);
+    cues.push(...report.audioCues);
     for (const request of report.requests) if (request.kind === "asset") requests.push(request.key);
     if (report.loading) {
       replies = report.requests.flatMap((request) => (request.kind === "asset" ? [{ tick: report.tickAfter, event: { kind: "asset" as const, reqId: request.reqId, bytes: files.get(request.key) ?? null } }] : []));
       continue;
     }
-    if (remaining <= 0 || report.ticksRun === 0) return { report, requests, diagnostics, ticksRun: ran };
+    if (remaining <= 0 || report.ticksRun === 0) return { report, cues, requests, diagnostics, ticksRun: ran };
   }
   throw new Error("the host loop did not settle");
 }
 
-function bootEngine(game: AuthoredGame, doubles: Doubles): Engine {
+function bootEngine(game: AuthoredGame, doubles: Doubles, packageCatalogue?: readonly PackageCatalogueEntry[]): Engine {
   return createEngine({
     seed: 11,
     assetIndex: game.index,
@@ -188,6 +203,7 @@ function bootEngine(game: AuthoredGame, doubles: Doubles): Engine {
     width: 320,
     height: 240,
     maxTicks: 600,
+    ...(packageCatalogue === undefined ? {} : { packageCatalogue }),
     ...doubles.options,
   });
 }
@@ -232,6 +248,51 @@ test("a scripted game boots from start.prg to its first board with the ruled eff
   deepEqual({ x: state.camera.x, y: state.camera.y }, { x: 0, y: 0 });
   equal(state.vm.threads.some((thread) => thread.kind === "board" && thread.status !== "finished"), true);
 });
+test("engine-backed dialogue displays through the message window and resumes on input", () => {
+  const game = authorGame(SCRIPTED);
+  const doubles = makeDoubles();
+  const engine = bootEngine(game, doubles);
+  run(engine, game.files, 30);
+  const state = doubles.state();
+  const board = state.world.board;
+  if (board == null) throw new Error("boot did not load its first board");
+  const actor = addActor(state.actors, {
+    kind: "party",
+    source: "hero.tem",
+    stats: { hp: 12, maxHp: 12, smp: 4, maxSmp: 4, dp: 2, fp: 3, level: 1 },
+    behaviour: "stock-rpg.hero",
+  });
+  const source = actorFromSource({
+    id: "dialogue-player",
+    kind: "player",
+    source: "hero.tem",
+    x: 64,
+    y: 64,
+    layer: 1,
+    controlled: true,
+  }, board, 0, null);
+  state.sprites.players = [{ ...source, actorId: actor.id }];
+  const thread = startProgram(state.vm, {
+    kind: "inline",
+    text: 'dialogue("Hello, <name>")',
+    compiler: COMPILER_VERSION,
+  });
+  thread.source = source.id;
+  state.vm.globals.name = "Ada";
+
+  engine.advance(1, []);
+  equal(state.ui.message.text, "Hello, Ada");
+  equal(thread.status, "waiting");
+  engine.advance(1, []);
+
+
+  engine.advance(1, [{
+    tick: state.time.tick,
+    event: { kind: "key", name: "Enter", code: "Enter", char: null, down: true },
+  }]);
+  equal(thread.status, "finished");
+});
+
 
 test("boot is deterministic and independent of how ticks are batched", () => {
   const game = authorGame(SCRIPTED);
@@ -284,10 +345,25 @@ test("a restored saved game skips initBoard and its board entry", () => {
   equal(doubles.audio.length, 0);
 });
 
-test("a main file's legacy plugin rows remain data and do not map to the manifest", () => {
-  const game = authorGame({ ...SCRIPTED, plugins: ["no-such-plugin.dll"] });
-  const result = run(bootEngine(game, makeDoubles()), game.files, 10);
-  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved" && diagnostic.message.includes("no-such-plugin.dll")), false);
+test("a legacy stock plugin row installs its package and an unmapped DLL is one located diagnostic", () => {
+  const game = authorGame({ ...SCRIPTED, plugins: ["no-such-plugin.dll", "Plugin\\tk3fight.dll"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "stock_battle",
+    version: "1.0.0",
+    requests: [],
+    definition: { id: "stock_battle", version: "1.0.0", commands: [] },
+    startup: { kind: "inline", text: "packageStarted = 1\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles, catalogue), game.files, 30);
+  deepEqual(
+    result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin.legacy-unmapped").map((diagnostic) => [diagnostic.file, diagnostic.line]),
+    [[game.main, 0]],
+  );
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved"), false);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "manifest.package-name"), false);
+  equal(doubles.state().vm.globals.packagestarted, 1);
+  equal(doubles.state().engine.boot?.stage, "running");
 });
 
 test("the main file's package names feed the manifest in stored order, and a name with no definition is a located diagnostic", () => {
@@ -296,7 +372,338 @@ test("the main file's package names feed the manifest in stored order, and a nam
   const unresolved = result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin.unresolved");
   deepEqual(unresolved.map((diagnostic) => diagnostic.message.includes("weather") ? "weather" : diagnostic.message.includes("quests") ? "quests" : "other"), ["weather", "quests"]);
   equal(unresolved.every((diagnostic) => diagnostic.file === game.main), true);
+  deepEqual(unresolved.map((diagnostic) => diagnostic.line), [0, 1]);
 });
+test("a host catalogue resolves the listed package and runs its owned startup before main startup", () => {
+  const game = authorGame({
+    ...SCRIPTED,
+    startup: "start.prg",
+    packages: ["WEATHER"],
+    programs: { ...SCRIPTED.programs, "start.prg": 'result = packagecmd()\ngame.emit("ping")\nobserved = packageStarted\nend()\n' },
+  });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "Weather",
+    version: "1.2",
+    namespace: "climate",
+    requests: ["asset"],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [
+        { name: "packagecmd", aliases: [], params: [], call: () => ({ value: 42 }) },
+        { name: "packagelistener", aliases: [], params: [{ name: "event", optional: false, byRef: false, variadic: false }], call: (view) => { const state = view.state; if (state === undefined) return { value: 0 }; state.vm.globals.packageEvents = Number(state.vm.globals.packageEvents ?? 0) + 1; return { value: 0 }; } },
+      ],
+      listeners: [{ emitter: "game", type: "ping", command: "packagelistener" }],
+    },
+    startup: { kind: "inline", text: "packageStarted = 1\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles, catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "plugin.unresolved"), false);
+  equal(doubles.state().vm.globals.result, 42);
+  equal(doubles.state().vm.globals.observed, 1);
+  equal(doubles.state().vm.globals.packageEvents, 1);
+});
+
+test("selected package audio tracks append in package order and duplicate names keep the larger voice count", () => {
+  const game = authorGame({
+    ...SCRIPTED,
+    packages: ["weather", "climate"],
+    audioSettings: {
+      tracks: [
+        { name: "music", voiceCount: 1 },
+        { name: "sfx", voiceCount: 1 },
+        { name: "ambience", voiceCount: 4 },
+        { name: "voice", voiceCount: 2 },
+        { name: "ui", voiceCount: 4 },
+        { name: "rain", voiceCount: 2 },
+      ],
+      voiceCap: 32,
+      defaultSoundFont: null,
+    },
+  });
+  const catalogue: readonly PackageCatalogueEntry[] = [
+    {
+      name: "weather",
+      version: "1.0.0",
+      requests: [],
+      definition: {
+        id: "weather",
+        version: "1.0.0",
+        commands: [],
+        audioTracks: [{ name: "cloud" }, { name: "Rain", voiceCount: 3 }, { name: "mist" }],
+      },
+    },
+    {
+      name: "climate",
+      version: "1.0.0",
+      requests: [],
+      definition: {
+        id: "climate",
+        version: "1.0.0",
+        commands: [],
+        audioTracks: [{ name: "CLOUD", voiceCount: 2 }, { name: "rain", voiceCount: 2 }],
+      },
+    },
+  ];
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles, catalogue), game.files, 10);
+  const tracks = doubles.state().audio.tracks;
+  deepEqual(tracks.map(({ name, voiceCount }) => [name, voiceCount]), [
+    ["music", 1],
+    ["sfx", 1],
+    ["ambience", 4],
+    ["voice", 2],
+    ["ui", 4],
+    ["rain", 3],
+    ["cloud", 2],
+    ["mist", 1],
+  ]);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "media.package-track"), false);
+});
+
+test("package audio declarations reject only invalid entries and retain later valid tracks", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.0.0",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.0.0",
+      commands: [],
+      audioTracks: [{ name: "bad name" }, { name: "silent", voiceCount: 0 }, { name: "hail" }],
+    },
+  }];
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles, catalogue), game.files, 10);
+  deepEqual(
+    doubles.state().audio.tracks.slice(5).map(({ name, voiceCount }) => [name, voiceCount]),
+    [["hail", 1]],
+  );
+  const rejected = result.diagnostics.filter((diagnostic) => diagnostic.code === "media.package-track");
+  equal(rejected.length, 2);
+  equal(rejected.every((diagnostic) => diagnostic.file === game.main && diagnostic.line === 0), true);
+  equal(rejected[0]?.message.includes('audioTracks[0]'), true);
+  equal(rejected[1]?.message.includes('audioTracks[1]'), true);
+});
+
+test("package audio cap failures preserve prior tracks and continue with later declarations", () => {
+  const game = authorGame({
+    ...SCRIPTED,
+    packages: ["weather", "climate"],
+    audioSettings: {
+      tracks: [
+        { name: "music", voiceCount: 1 },
+        { name: "sfx", voiceCount: 1 },
+        { name: "ambience", voiceCount: 4 },
+        { name: "voice", voiceCount: 2 },
+        { name: "ui", voiceCount: 4 },
+        { name: "rain", voiceCount: 1 },
+      ],
+      voiceCap: 16,
+      defaultSoundFont: null,
+    },
+  });
+  const catalogue: readonly PackageCatalogueEntry[] = [
+    {
+      name: "weather",
+      version: "1.0.0",
+      requests: [],
+      definition: {
+        id: "weather",
+        version: "1.0.0",
+        commands: [],
+        audioTracks: [{ name: "storm", voiceCount: 4 }, { name: "breeze", voiceCount: 2 }],
+      },
+    },
+    {
+      name: "climate",
+      version: "1.0.0",
+      requests: [],
+      definition: {
+        id: "climate",
+        version: "1.0.0",
+        commands: [],
+        audioTracks: [{ name: "rain", voiceCount: 4 }, { name: "wind" }],
+      },
+    },
+  ];
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles, catalogue), game.files, 10);
+  deepEqual(doubles.state().audio.tracks.map(({ name, voiceCount }) => [name, voiceCount]), [
+    ["music", 1],
+    ["sfx", 1],
+    ["ambience", 4],
+    ["voice", 2],
+    ["ui", 4],
+    ["rain", 1],
+    ["breeze", 2],
+    ["wind", 1],
+  ]);
+  const rejected = result.diagnostics.filter((diagnostic) => diagnostic.code === "media.package-track");
+  equal(rejected.length, 2);
+  equal(rejected.every((diagnostic) => diagnostic.file === game.main), true);
+  equal(rejected[0]?.message.includes('package "weather" audioTracks[0]'), true);
+  equal(rejected[1]?.message.includes('package "climate" audioTracks[0]'), true);
+});
+
+test("package audio declarations respect the 16-track limit without removing game tracks", () => {
+  const game = authorGame({
+    ...SCRIPTED,
+    packages: ["weather"],
+    audioSettings: {
+      tracks: [
+        { name: "music", voiceCount: 1 },
+        { name: "sfx", voiceCount: 1 },
+        { name: "ambience", voiceCount: 4 },
+        { name: "voice", voiceCount: 2 },
+        { name: "ui", voiceCount: 4 },
+        ...Array.from({ length: 11 }, (_, index) => ({ name: `game${index}`, voiceCount: 1 })),
+      ],
+      voiceCap: 32,
+      defaultSoundFont: null,
+    },
+  });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.0.0",
+    requests: [],
+    definition: { id: "weather", version: "1.0.0", commands: [], audioTracks: [{ name: "overflow" }] },
+  }];
+  const doubles = makeDoubles();
+  const result = run(bootEngine(game, doubles, catalogue), game.files, 10);
+  equal(doubles.state().audio.tracks.length, 16);
+  equal(doubles.state().audio.tracks.some(({ name }) => name === "overflow"), false);
+  equal(result.diagnostics.filter((diagnostic) => diagnostic.code === "media.package-track").length, 1);
+  equal(result.diagnostics.find((diagnostic) => diagnostic.code === "media.package-track")?.message.includes("track-limit"), true);
+});
+
+test("manifest package lookup folds ASCII package identity", () => {
+  const resolved = resolveManifestPlugins(
+    [{ id: "WEATHER", version: "1.2" }],
+    "main.gam",
+    [{
+      name: "Weather",
+      version: "1.2",
+      requests: [],
+      definition: { id: "weather", version: "1.2", commands: [] },
+      startup: { kind: "inline", text: "end()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+    }],
+  );
+  equal(resolved.diagnostics.length, 0);
+  equal(resolved.plugins[0]?.package?.name, "weather");
+  equal(resolved.plugins[0]?.startup?.owner, "weather");
+});
+test("a package startup that waits is rejected by the lifecycle clock guard", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: { id: "weather", version: "1.2", commands: [] },
+    startup: { kind: "inline", text: "sleep(1)\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-unfinished"), true);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "startup.no-player"), false);
+});
+test("a package startup that consumes randomness is rejected by the lifecycle guard", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: { id: "weather", version: "1.2", commands: [] },
+    startup: { kind: "inline", text: "random(3)\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+test("a package startup cannot read gametime through the virtual variable", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: { id: "weather", version: "1.2", commands: [] },
+    startup: { kind: "inline", text: "observed = gametime\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden" && diagnostic.message.includes('package "weather"') && diagnostic.message.includes("simulation clock")), true);
+});
+
+
+test("a direct package command cannot consume RNG during startup", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "directrng", aliases: [], params: [], call: (view) => { try { Object.assign(view, { packageStartup: false, rng: { nextUint32: () => 1 } }); } catch { /* frozen command view */ } try { Object.defineProperty(view, "rng", { value: { nextUint32: () => 1 } }); } catch { /* frozen command view */ } try { Object.defineProperty(view.rng, "nextUint32", { value: () => 1 }); } catch { /* frozen RNG port */ } view.rng.nextUint32(); return { value: null }; } }],
+    },
+    startup: { kind: "inline", text: "directrng()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
+test("a direct package command cannot consume the simulation clock during startup", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "directclock", aliases: [], params: [], call: (view) => { view.clock.tick(); return { value: null }; } }],
+    },
+    startup: { kind: "inline", text: "directclock()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
+test("a direct package command cannot reach RNG through state during startup", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "staterng", aliases: [], params: [], call: (view) => { Object.getOwnPropertyDescriptor(view.state!, "rng")?.value; return { value: null }; } }],
+    },
+    startup: { kind: "inline", text: "staterng()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
+test("a direct package command cannot reach the simulation clock through state during startup", () => {
+  const game = authorGame({ ...SCRIPTED, packages: ["weather"] });
+  const catalogue: readonly PackageCatalogueEntry[] = [{
+    name: "weather",
+    version: "1.2",
+    requests: [],
+    definition: {
+      id: "weather",
+      version: "1.2",
+      commands: [{ name: "stateclock", aliases: [], params: [], call: (view) => { Object.getOwnPropertyDescriptor(view.state!, "time")?.value; return { value: null }; } }],
+    },
+    startup: { kind: "inline", text: "stateclock()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  }];
+  const result = run(bootEngine(game, makeDoubles(), catalogue), game.files, 10);
+  equal(result.diagnostics.some((diagnostic) => diagnostic.code === "package.startup-forbidden"), true);
+});
+
+
 
 test("a game-folder root takes its project path from the main file", () => {
   const game = authorGame({ ...SCRIPTED, project: "Sample" });
@@ -465,4 +872,123 @@ test("a Toolkit 2 sample's start.prg reports a located syntax diagnostic instead
   const result = run(engine, sample.files, 5);
   const syntax = result.diagnostics.find((diagnostic) => diagnostic.code === "syntax.error");
   equal(syntax?.file, "prg/start.prg");
+});
+
+const AUTHORED_AUDIO: MainFileAudioSettings = {
+  tracks: [
+    { name: "Music", voiceCount: 2 },
+    { name: "sfx", voiceCount: 2 },
+    { name: "ambience", voiceCount: 2 },
+    { name: "voice", voiceCount: 2 },
+    { name: "ui", voiceCount: 2 },
+    { name: "weather", voiceCount: 3 },
+  ],
+  voiceCap: 16,
+  defaultSoundFont: "Media/town.sf2",
+};
+
+type AudioPhaseRun = NonNullable<EngineInit["phaseRegistrations"]>[number]["run"];
+type ResetRun = NonNullable<EngineInit["resetRegistrations"]>[number]["reset"];
+function audioBoot(game: AuthoredGame, onAudioPhase?: AudioPhaseRun, onReset?: ResetRun, replacementIndex: AssetIndex = game.index): { engine: Engine; state(): GameState } {
+  let latest: GameState | null = null;
+  const engine = createEngine({
+    seed: 11, assetIndex: replacementIndex, assetRoot: game.root, mainFile: game.main, maxTicks: 10,
+    width: 320, height: 240,
+    startup: { presence: { hasPlayer: () => true }, savedGame: { load: () => ({ kind: "missing" }), restored: () => false } },
+    defaultSoundFont: assetKey("media/ignored.sf2"),
+    phaseRegistrations: [{ phase: "audio", run: (state, postEffect) => { latest = state; onAudioPhase?.(state, postEffect); } }],
+    ...(onReset === undefined ? {} : { resetRegistrations: [{ section: "audio", reset: onReset }] }),
+  });
+  return { engine, state: () => {
+    if (latest === null) throw new Error("boot did not tick");
+    return latest;
+  } };
+}
+
+test("boot applies authored tracks and SoundFont before emitting exactly one initial bank cue", () => {
+  const game = authorGame({ boards: { "start.brd": {} }, programs: {}, audioSettings: AUTHORED_AUDIO, soundFonts: ["town.sf2"] });
+  const host = audioBoot(game);
+  const result = run(host.engine, game.files, 2);
+  deepEqual(result.diagnostics, []);
+  deepEqual(host.state().audio.tracks.map((track) => [track.name, track.voiceCount]), AUTHORED_AUDIO.tracks.map((track) => [track.name.toLowerCase(), track.voiceCount]));
+  deepEqual(result.cues.filter((cue) => cue.kind === "soundfont.set").map((cue) => cue.asset), [assetKey("media/town.sf2")]);
+});
+
+test("reset preserves authored audio settings, active playback and runtime-added tracks", () => {
+  const game = authorGame({ boards: { "start.brd": { music: "theme.mid" } }, programs: {}, audioSettings: AUTHORED_AUDIO });
+  game.files.set(assetKey("media/theme.mid"), readFileSync(join(testDir, "fixtures", "audio", "files", "midi0-480-default-tempo.mid")));
+  let resetRequested = false;
+  let resets = 0;
+  let playbackCueId = 0;
+  const host = audioBoot(game, (state, postEffect) => {
+    if (resetRequested) return;
+    const voice = state.audio.tracks[0]?.voices[0];
+    if (voice === undefined) return;
+    playbackCueId = voice.cueId;
+    const runtime = createAudioRuntime(state, { lookup: () => ({ kind: "known", lengthTicks: 120 }) });
+    equal(runtime.configurePackageTrack("runtime", 2), null);
+    state.audio.settings.masterVolume = 40;
+    state.audio.soundFont = assetKey("media/other.sf2");
+    resetRequested = true;
+    postEffect?.("engine", { thread: 0, name: "reset", kind: "state-write", args: [], out: {}, result: null, patch: null, wait: null, request: null });
+  }, () => { resets += 1; });
+  run(host.engine, game.files, 5);
+  equal(resets, 1);
+  const audio = host.state().audio;
+  deepEqual(audio.tracks.map(({ name, voiceCount }) => [name, voiceCount]), [
+    ["music", 2], ["sfx", 2], ["ambience", 2], ["voice", 2], ["ui", 2], ["weather", 3], ["runtime", 2],
+  ]);
+  equal(audio.tracks[0]?.state, "playing");
+  equal(audio.tracks[0]?.voices[0]?.cueId, playbackCueId);
+  equal(audio.tracks[0]?.voices[0]?.file, assetKey("media/theme.mid"));
+  equal(audio.settings.masterVolume, 40);
+  equal(audio.soundFont, assetKey("media/other.sf2"));
+});
+
+test("replacing the main file without audio settings restores built-in tracks", () => {
+  const game = authorGame({ boards: { "start.brd": {} }, programs: {}, audioSettings: AUTHORED_AUDIO });
+  const files = new Map(game.files);
+  files.set(assetKey("replacement.gam"), unwrap(writeMainFile({ ...createEmptyMainFile(), major: 2, minor: 9, projectPath: "", initBoard: "start.brd" })));
+  const switchedIndex = createAssetIndex([...files.keys()]);
+  let replacementRequested = false;
+  let resets = 0;
+  const host = audioBoot(game, (state, postEffect) => {
+    if (replacementRequested) return;
+    if (!state.audio.tracks.some(({ name }) => name === "weather")) return;
+    const runtime = createAudioRuntime(state, { lookup: () => ({ kind: "known", lengthTicks: 120 }) });
+    equal(runtime.configurePackageTrack("runtime", 2), null);
+    replacementRequested = true;
+    postEffect?.("engine", { thread: 0, name: "mainFile", kind: "state-write", args: [null, "replacement.gam"], out: {}, result: null, patch: null, wait: null, request: null });
+  }, () => { resets += 1; }, switchedIndex);
+  run(host.engine, files, 5);
+  equal(replacementRequested, true);
+  equal(resets, 1);
+  deepEqual(host.state().audio.tracks.map(({ name, voiceCount }) => [name, voiceCount]), BUILTIN_TRACKS);
+});
+
+
+test("boot without an audio block uses Epic 6 defaults and ignores the startup-only bank", () => {
+  const game = authorGame({ boards: { "start.brd": {} }, programs: {} });
+  const host = audioBoot(game);
+  const result = run(host.engine, game.files, 2);
+  deepEqual(result.diagnostics, []);
+  deepEqual(host.state().audio.tracks.map((track) => [track.name, track.voiceCount]), [["music", 1], ["sfx", 1], ["ambience", 4], ["voice", 2], ["ui", 4]]);
+  deepEqual(result.cues.filter((cue) => cue.kind === "soundfont.set").map((cue) => cue.asset), [null]);
+});
+
+test("boot recovers over-cap tracks once at the first offending track and retains the independent bank", () => {
+  const game = authorGame({ boards: { "start.brd": {} }, programs: {}, audioSettings: { ...AUTHORED_AUDIO, voiceCap: 9 }, soundFonts: ["town.sf2"] });
+  const host = audioBoot(game);
+  const result = run(host.engine, game.files, 2);
+  deepEqual(result.diagnostics.map(({ code, file, line }) => ({ code, file, line })), [{ code: "media.voice-cap", file: "main.gam", line: 4 }]);
+  deepEqual(host.state().audio.tracks.map((track) => [track.name, track.voiceCount]), [["music", 1], ["sfx", 1], ["ambience", 4], ["voice", 2], ["ui", 4]]);
+  deepEqual(result.cues.filter((cue) => cue.kind === "soundfont.set").map((cue) => cue.asset), [assetKey("media/town.sf2")]);
+});
+
+test("boot diagnoses a missing authored bank once and emits null without refusing the game", () => {
+  const game = authorGame({ boards: { "start.brd": {} }, programs: {}, audioSettings: AUTHORED_AUDIO });
+  const host = audioBoot(game);
+  const result = run(host.engine, game.files, 2);
+  deepEqual(result.diagnostics.map(({ code, file }) => ({ code, file })), [{ code: "media.soundfont-missing", file: "media/town.sf2" }]);
+  deepEqual(result.cues.filter((cue) => cue.kind === "soundfont.set").map((cue) => cue.asset), [null]);
 });

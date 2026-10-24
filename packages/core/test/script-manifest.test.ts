@@ -129,13 +129,13 @@ test("resolved layer options are injected only into the owning command view", ()
 test("a package entry parses with name, version, default namespace and declared requests", () => {
   const result = parsePluginManifest([
     { id: "core" },
-    { id: "stock_battle", version: "1.2.0", requests: ["saveBlob", "playVideo"] },
-    { id: "extras", version: "0.1", namespace: "Ex" },
+    { id: "stock-battle", version: "1.2.0", requests: ["saveBlob", "playVideo"] },
+    { id: "extras", version: "0.1", namespace: "extras-alt" },
   ]);
   deepEqual(result.diagnostics, []);
   deepEqual(listPackageDeclarations(result.manifest!), [
-    { name: "stock_battle", version: "1.2.0", namespace: "stock_battle", requests: ["saveBlob", "playVideo"], enabled: true },
-    { name: "extras", version: "0.1", namespace: "Ex", requests: [], enabled: true },
+    { name: "stock-battle", version: "1.2.0", namespace: "stock-battle", requests: ["saveBlob", "playVideo"], enabled: true },
+    { name: "extras", version: "0.1", namespace: "extras-alt", requests: [], enabled: true },
   ]);
   equal(isPackageManifestEntry(result.manifest![0]!), false);
 });
@@ -143,19 +143,20 @@ test("a package entry parses with name, version, default namespace and declared 
 test("reserved lower-case package IDs remain valid manifest names", () => {
   const result = parsePluginManifest([
     { id: "core" },
-    { id: "__proto__", version: "1" },
     { id: "constructor", version: "1" },
+    { id: "core-tools", version: "1" },
+    { id: "stock_battle", version: "1", namespace: "stock_battle" },
   ]);
   deepEqual(result.diagnostics, []);
-  deepEqual(result.manifest?.map((entry) => entry.id), ["core", "__proto__", "constructor"]);
+  deepEqual(result.manifest?.map((entry) => entry.id), ["core", "constructor", "core-tools", "stock_battle"]);
 });
 
 test("package fields are validated with located diagnostics", () => {
   const cases: readonly [unknown, string][] = [
     [{ id: "p", version: "" }, "manifest.version"],
     [{ id: "p", version: 3 }, "manifest.version"],
-    [{ id: "P", version: "1" }, "manifest.package-name"],
-    [{ id: "p", version: "1", namespace: "a.b" }, "manifest.namespace"],
+    [{ id: "Stock", version: "1" }, "manifest.package-name"],
+    [{ id: "p", version: "1", namespace: "Stock" }, "manifest.namespace"],
     [{ id: "p", version: "1", requests: "saveBlob" }, "manifest.requests"],
     [{ id: "p", version: "1", requests: ["teleport"] }, "manifest.request-kind"],
     [{ id: "p", version: "1", requests: ["quit", "quit"] }, "manifest.request-kind"],
@@ -169,11 +170,11 @@ test("package fields are validated with located diagnostics", () => {
   }
 });
 
-test("a duplicate namespace is a located diagnostic, defaulted or declared, case-folded", () => {
+test("a duplicate namespace is a located diagnostic", () => {
   const result = parsePluginManifest([
     { id: "core" },
-    { id: "alpha", version: "1" },
-    { id: "beta", version: "1", namespace: "ALPHA" },
+    { id: "alpha-pack", version: "1" },
+    { id: "beta-pack", version: "1", namespace: "alpha-pack" },
   ]);
   equal(result.manifest, null);
   deepEqual(result.diagnostics.map((d) => [d.code, d.index]), [["manifest.duplicate-namespace", 2]]);
@@ -182,17 +183,17 @@ test("a duplicate namespace is a located diagnostic, defaulted or declared, case
 test("package entries patch and order exactly like native entries", () => {
   const base = parsePluginManifest([{ id: "core" }, { id: "catalogue" }]).manifest!;
   const result = applyPluginManifestPatch(base, [
-    { op: "append", entry: { id: "pkg_a", version: "1", requests: ["asset"] } },
-    { op: "append", entry: { id: "pkg_b", version: "2" } },
-    { op: "reorder", ids: ["core", "pkg_b", "catalogue", "pkg_a"] },
-    { op: "disable", id: "pkg_b" },
+    { op: "append", entry: { id: "pkg-a", version: "1", requests: ["asset"] } },
+    { op: "append", entry: { id: "pkg-b", version: "2" } },
+    { op: "reorder", ids: ["core", "pkg-b", "catalogue", "pkg-a"] },
+    { op: "disable", id: "pkg-b" },
   ]);
   deepEqual(result.diagnostics, []);
-  deepEqual(result.manifest.map((e) => e.id), ["core", "pkg_b", "catalogue", "pkg_a"]);
-  deepEqual(listPackageDeclarations(result.manifest).map((d) => [d.name, d.enabled]), [["pkg_b", false], ["pkg_a", true]]);
+  deepEqual(result.manifest.map((e) => e.id), ["core", "pkg-b", "catalogue", "pkg-a"]);
+  deepEqual(listPackageDeclarations(result.manifest).map((d) => [d.name, d.enabled]), [["pkg-b", false], ["pkg-a", true]]);
   const clash = applyPluginManifestPatch(result.manifest, [
-    { op: "append", entry: { id: "pkg_c", version: "1", namespace: "pkg_a" } },
-    { op: "replace", id: "pkg_b", entry: { id: "pkg_b", version: "3", namespace: "pkg_a" } },
+    { op: "append", entry: { id: "pkg-c", version: "1", namespace: "pkg-a" } },
+    { op: "replace", id: "pkg-b", entry: { id: "pkg-b", version: "3", namespace: "pkg-a" } },
   ]);
   deepEqual(clash.diagnostics.map((d) => [d.code, d.index]), [["manifest.duplicate-namespace", 0], ["manifest.duplicate-namespace", 1]]);
   deepEqual(clash.manifest, result.manifest);

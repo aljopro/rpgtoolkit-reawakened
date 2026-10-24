@@ -1,5 +1,5 @@
 {
-  "comment": "Committed dump expectation over docs/spec/examples/{game,files,versions} (ticket 2.26). Current formats must parse with 0 failures and 0 residue; legacy text forms and TK2 binary minors name the tk2-support entry that clears them.",
+  "comment": "Committed dump expectation over docs/spec/examples/{game,files,versions} (ticket 2.26). Current formats must parse with 0 failures and 0 residue; legacy text forms and TK2 binary minors name the tk2-support entry that clears them. #481, 2026-10-22: deliberately re-recorded the eleven .gam parsed-model digests because the decoded model now always includes audioSettings:null when no native audio block exists. Legacy bytes, other model fields, parse counts and non-main-file digests are unchanged; no audio cue/image baseline is re-recorded.",
   "games": {
     "files": {
       "counts": {
@@ -38,7 +38,7 @@
         "Game/Example/Tiles/grass.iso": "0c284ef4560ba23f",
         "Game/Example/Tiles/village.tst": "70b891629eb90380",
         "Game/Example/Tiles/water.tan": "f1a3a9d00735b370",
-        "Main/example.gam": "1517c834ade86497"
+        "Main/example.gam": "74a2750b627c1ec7"
       }
     },
     "versions": {
@@ -75,16 +75,16 @@
         "item/item_minor7.itm": "243fef72aa38c202",
         "item/item_text_minor0.itm": "64282363452ff981",
         "item/item_text_minor1.itm": "15044923c528922c",
-        "main/main_minor1.gam": "808f5b8d1fbb0a76",
-        "main/main_minor2.gam": "5c76cb515f6be3d1",
-        "main/main_minor3.gam": "4dc6368b7336dbe5",
-        "main/main_minor4.gam": "a166f0e18269e18d",
-        "main/main_minor5.gam": "9cc2f90490d23e9d",
-        "main/main_minor6.gam": "aed240b00d68317f",
-        "main/main_minor7.gam": "b1ced5a7fb5b1ade",
-        "main/main_minor8.gam": "720b056ae9b2a7b9",
-        "main/main_minor9.gam": "299169586a38da61",
-        "main/main_tk2_text.gam": "d7a5c9da8d8c2257",
+        "main/main_minor1.gam": "f8fe592166270646",
+        "main/main_minor2.gam": "08c513696dab6021",
+        "main/main_minor3.gam": "be8a53654ad44315",
+        "main/main_minor4.gam": "bc355ef9ad38a23d",
+        "main/main_minor5.gam": "91a11110613fe48d",
+        "main/main_minor6.gam": "f99bb1d72eb6f48f",
+        "main/main_minor7.gam": "14e8095fc5294e6e",
+        "main/main_minor8.gam": "a42b076af79ee109",
+        "main/main_minor9.gam": "eea732e14b6a91d1",
+        "main/main_tk2_text.gam": "3d70b5ac279c9d07",
         "single-tile/tile_v2_compressed.gph": "5530fa399d3d6efb",
         "single-tile/tile_v2_detail2.gph": "863ae6d83d5092f9",
         "single-tile/tile_v2_uncompressed.gph": "57e97d7e9e633132",

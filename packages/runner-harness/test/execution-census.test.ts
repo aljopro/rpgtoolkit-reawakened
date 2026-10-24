@@ -105,3 +105,48 @@ test("catalogue ownership and actual stub usage use separate resolution and hand
   deepEqual(summary.calledWithoutOwner, [{ name: "unknown", count: 2, catalogue: null }]);
   deepEqual(summary.neverCalled, [unused]);
 });
+
+test("observers coexist with package startup lifecycle and its restore and forbidden-operation guards", () => {
+  const modes: boolean[] = [];
+  const plugin: PluginDefinition = { id: "trace-startup", version: "1", commands: [{
+    name: "startupprobe", aliases: [], params: [], call: (view) => {
+      modes.push(view.packageStartup === true);
+      return { value: 0 };
+    },
+  }] };
+  const packageStartups = [{ owner: plugin.id, ref: { kind: "inline" as const, text: "startupProbe()", compiler: "2" } }];
+  const init = { program: "answer = castint(3.7)\nsleep(2)", seed: 3, plugins: [plugin], packageStartups };
+  const calls: CallObservation[] = [];
+  const handlers: HandlerObservation[] = [];
+  let steps = 0;
+  const scriptObservers: ScriptObservers = {
+    postStep: () => { steps += 1; },
+    postCall: (call) => { calls.push(call); },
+    postHandler: (handler) => { handlers.push(handler); },
+  };
+  const plain = createScriptHost(init);
+  const traced = createScriptHost({ ...init, scriptObservers });
+  equal(traced.snapshot(), plain.snapshot());
+  equal(steps > 0, true, "startup instructions pass through stepThread");
+  equal(calls.some((call) => call.name === "startupprobe" && call.plugin === plugin.id), true);
+  equal(handlers.some((handler) => handler.plugin === plugin.id), true);
+  deepEqual(modes, [true, true]);
+  const restored = restoreScriptHost(traced.snapshot(), { plugins: [plugin], packageStartups, scriptObservers });
+  equal(restored.snapshot(), plain.snapshot());
+  equal(modes.every((mode) => mode), true);
+  for (let tick = 0; tick < 4; tick += 1) {
+    const expected = plain.advance(1, []).stateHash;
+    equal(traced.advance(1, []).stateHash, expected);
+    equal(restored.advance(1, []).stateHash, expected);
+  }
+  const forbidden = (observers?: ScriptObservers): string => {
+    try {
+      createScriptHost({ ...init, ...(observers === undefined ? {} : { scriptObservers: observers }), packageStartups: [{ owner: plugin.id, ref: { ...packageStartups[0]!.ref, text: "value = random(10)" } }] });
+      return "startup unexpectedly succeeded";
+    } catch (error) {
+      return (error as { code: string }).code;
+    }
+  };
+  equal(forbidden(), "package.startup-forbidden");
+  equal(forbidden(scriptObservers), "package.startup-forbidden");
+});

@@ -21,13 +21,15 @@ import type { GameState } from "../save/state.ts";
 import type { CommandEffect, PluginDefinition } from "../script/plugin.ts";
 import { findObject, readMember } from "../script/objects.ts";
 import { foldAscii } from "../script/values.ts";
-import { addListener, emitterKeyOf } from "./emitter.ts";
+import { addListener, emitterKeyOf, isEmitterPattern } from "./emitter.ts";
 import type { EventsSection, NativeListener } from "./model.ts";
 
-/** A listener that names a command its package does not define, so it was not registered (EMIT-21). */
+/** A listener that could not be registered, and why (EMIT-21). */
 export type NativeListenerProblem = {
   readonly plugin: string;
   readonly listener: NativeListener;
+  /** `unknown-command`: the package defines no such command. `bad-emitter`: a malformed pattern. */
+  readonly reason: "unknown-command" | "bad-emitter";
 };
 
 /**
@@ -44,9 +46,13 @@ export function registerNativeListeners(
   const problems: NativeListenerProblem[] = [];
   for (const { definition } of plugins) {
     for (const listener of definition.listeners ?? []) {
+      if (listener.emitter.includes("*") && !isEmitterPattern(listener.emitter)) {
+        problems.push({ plugin: definition.id, listener, reason: "bad-emitter" });
+        continue;
+      }
       const def = foldAscii(listener.command);
       if (!definition.commands.some((spec) => foldAscii(spec.name) === def)) {
-        problems.push({ plugin: definition.id, listener });
+        problems.push({ plugin: definition.id, listener, reason: "unknown-command" });
         continue;
       }
       const present = events.listeners.some(
@@ -77,11 +83,34 @@ export type EventView = {
   readonly canceled: boolean;
 };
 
-/** A script value as plain data: numbers and strings as they are, anything else (an object, a callable) as `null`. */
-function plainValue(value: Value | undefined): PlainData {
-  return typeof value === "number" || typeof value === "string" ? value : null;
+/** Convert a script value to plain data for a TypeScript listener. */
+function plainValue(state: GameState, value: Value | undefined, seen: Set<number> = new Set()): PlainData {
+  if (typeof value === "number" || typeof value === "string") return value;
+  if (typeof value === "boolean") return value;
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object" || !("kind" in value) || value.kind !== "object" || seen.has(value.handle)) return null;
+  const record = findObject(state.vm, value.handle);
+  if (record === undefined) return null;
+  const nextSeen = new Set(seen);
+  nextSeen.add(value.handle);
+  const plain: { [key: string]: PlainData } = {};
+  for (const name of record.keys) {
+    Object.defineProperty(plain, name, {
+      value: plainValue(state, record.members[name], nextSeen),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return plain;
 }
-
+function publicDetailName(type: string, name: string): string {
+  if ((type === "beforeEnter" || type === "entered" || type === "left") && name === "actorid") return "actorId";
+  if ((type === "beforeEnter" || type === "entered" || type === "left") && name === "boardkey") return "boardKey";
+  if (type === "statusChanged" && name === "previousrounds") return "previousRounds";
+  if ((type === "started" || type === "stopped" || type === "ended" || type === "looped" || type === "paused" || type === "resumed" || type === "faded") && name === "cueid") return "cueId";
+  return name;
+}
 /**
  * Read the event object `value` (the argument the dispatcher gives a listener command)
  * from `state`, or `undefined` when it is not an event object. The result is a copy.
@@ -96,7 +125,11 @@ export function readEvent(state: GameState, value: Value | undefined): EventView
   if (typeof type !== "string" || typeof target !== "object" || target === null || !("handle" in target)) return undefined;
   const fields: { [field: string]: PlainData } = {};
   const record = typeof detail === "object" && detail !== null && "handle" in detail ? findObject(state.vm, detail.handle) : undefined;
-  for (const name of record?.keys ?? []) Object.defineProperty(fields, name, { value: plainValue(record?.members[name]), writable: true, enumerable: true, configurable: true });
+  const nativeDetail = state.events.nativeDetails?.[String(event.handle)];
+  for (const name of record?.keys ?? []) {
+    const value = nativeDetail !== undefined && Object.hasOwn(nativeDetail, name) ? nativeDetail[name]! : plainValue(state, record?.members[name]);
+    Object.defineProperty(fields, publicDetailName(type, name), { value, writable: true, enumerable: true, configurable: true });
+  }
   return {
     type,
     emitter: emitterKeyOf(state.events, target.handle),

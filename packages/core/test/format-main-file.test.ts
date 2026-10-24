@@ -520,6 +520,130 @@ test("TKR package extension enforces independent count, empty, duplicate, and 25
   equal(readMainFile(new BinaryReader(append(1, [new Uint8Array(256).fill(0x61)]))).ok, false);
 });
 
+// --- TKR audio-settings extension -------------------------------------------
+// docs/spec/formats/main-file.md#tkr-audio-settings-extension
+
+const AUDIO_TRACKS = [
+  { name: "music", voiceCount: 2 },
+  { name: "sfx", voiceCount: 2 },
+  { name: "ambience", voiceCount: 4 },
+  { name: "voice", voiceCount: 2 },
+  { name: "ui", voiceCount: 4 },
+  { name: "weather", voiceCount: 1 },
+] as const;
+
+function audioTail(
+  tracks: readonly { readonly name: string; readonly voiceCount: number }[],
+  voiceCap: number,
+  font: string | null,
+  tag: readonly number[] = [0x54, 0x52, 0x4b, 0x41, 0x55, 0x44, 0],
+): Uint8Array {
+  const writer = new BinaryWriter();
+  writer.writeBytes(new Uint8Array(tag));
+  writer.u16(tracks.length);
+  for (const track of tracks) {
+    putStr(writer, track.name);
+    writer.u16(track.voiceCount);
+  }
+  writer.u16(voiceCap);
+  if (font === null) {
+    writer.u8(0);
+  } else {
+    writer.u8(1);
+    putStr(writer, font);
+  }
+  return writer.toBytes();
+}
+
+function withTail(base: Uint8Array, tail: Uint8Array): Uint8Array {
+  const out = new Uint8Array(base.length + tail.length);
+  out.set(base, 0);
+  out.set(tail, base.length);
+  return out;
+}
+
+test("TKR audio extension round-trips tracks, counts, cap, font, both-block order and residue", () => {
+  const legacy = readBuilt(buildGam(9));
+  const audioSettings = { tracks: AUDIO_TRACKS, voiceCap: 20, defaultSoundFont: "Media/town.sf2" };
+  const authored = {
+    ...legacy,
+    packagePlugins: ["quests"],
+    packagePluginsExtension: true,
+    audioSettings,
+    residue: new Uint8Array([0x99]),
+  };
+  const bytes = unwrap(writeMainFile(authored));
+  const decoded = unwrap(readMainFile(new BinaryReader(bytes, "audio.gam")));
+  deepEqual(decoded.audioSettings, audioSettings);
+  deepEqual(decoded.packagePlugins, ["quests"]);
+  deepEqual(decoded.residue, new Uint8Array([0x99]));
+  deepEqual(unwrap(writeMainFile(decoded)), bytes);
+
+  // The audio tag follows the package block, and it is the literal seven bytes TRKAUD\0.
+  const packageEnd = bytes.length - audioTail(AUDIO_TRACKS, 20, "Media/town.sf2").length - 1;
+  deepEqual([...bytes.slice(packageEnd, packageEnd + 7)], [0x54, 0x52, 0x4b, 0x41, 0x55, 0x44, 0]);
+  equal(unwrap(readMainFile(new BinaryReader(new Uint8Array([...bytes.slice(0, packageEnd)])))).audioSettings, null);
+});
+
+test("an audio block without a package list round-trips, and an absent block leaves the model unchanged", () => {
+  const legacy = readBuilt(buildGam(9));
+  deepEqual(unwrap(writeMainFile(legacy)), buildGam(9).bytes);
+  equal(legacy.audioSettings, null);
+  const noFont = { tracks: AUDIO_TRACKS, voiceCap: 12, defaultSoundFont: null };
+  const bytes = unwrap(writeMainFile({ ...legacy, audioSettings: noFont }));
+  const decoded = unwrap(readMainFile(new BinaryReader(bytes)));
+  deepEqual(decoded.audioSettings, noFont);
+  equal(decoded.packagePlugins, undefined);
+  equal(decoded.audioSettings?.defaultSoundFont, null);
+  equal(unwrap(writeMainFile(decoded)).length, bytes.length);
+});
+
+test("the audio writer refuses names, order, counts, caps and fonts it cannot represent", () => {
+  const legacy = readBuilt(buildGam(9));
+  const bad: readonly { readonly settings: unknown; readonly why: string }[] = [
+    { settings: { tracks: AUDIO_TRACKS.slice(0, 4), voiceCap: 12 }, why: "four tracks" },
+    { settings: { tracks: [...AUDIO_TRACKS, { name: "x", voiceCount: 1 }, { name: "y", voiceCount: 1 }, { name: "z", voiceCount: 1 }, { name: "w", voiceCount: 1 }, { name: "v", voiceCount: 1 }, { name: "u", voiceCount: 1 }, { name: "t", voiceCount: 1 }, { name: "s", voiceCount: 1 }, { name: "r", voiceCount: 1 }, { name: "q", voiceCount: 1 }, { name: "p", voiceCount: 1 }], voiceCap: 32 }, why: "seventeen tracks" },
+    { settings: { tracks: AUDIO_TRACKS.map((track, index) => index === 0 ? { ...track, name: "sfx" } : track), voiceCap: 20 }, why: "wrong first built-in" },
+    { settings: { tracks: [...AUDIO_TRACKS, { name: "Weather", voiceCount: 1 }], voiceCap: 20 }, why: "duplicate under folding" },
+    { settings: { tracks: AUDIO_TRACKS.map((track, index) => index === 5 ? { ...track, name: "bad name" } : track), voiceCap: 20 }, why: "invalid name" },
+    { settings: { tracks: AUDIO_TRACKS.map((track, index) => index === 5 ? { ...track, voiceCount: 0 } : track), voiceCap: 20 }, why: "zero voices" },
+    { settings: { tracks: AUDIO_TRACKS, voiceCap: 0 }, why: "cap zero" },
+    { settings: { tracks: AUDIO_TRACKS, voiceCap: 33 }, why: "cap 33" },
+    { settings: { tracks: AUDIO_TRACKS, voiceCap: 20, defaultSoundFont: "" }, why: "empty font" },
+  ];
+  for (const item of bad) {
+    equal(writeMainFile({ ...legacy, audioSettings: { defaultSoundFont: null, ...item.settings as object } as never }).ok, false, item.why);
+  }
+  // An aggregate over the cap is representable data; the engine reports it at load.
+  equal(writeMainFile({ ...legacy, audioSettings: { tracks: AUDIO_TRACKS, voiceCap: 10, defaultSoundFont: null } }).ok, true);
+  equal(writeMainFile({ ...legacy, audioSettings: { tracks: AUDIO_TRACKS, voiceCap: 20 } as never }).ok, false, "missing nullable font is not a typed settings shape");
+  equal(writeMainFile({ ...legacy, audioSettings: undefined } as never).ok, false, "missing nullable audioSettings is not a typed main-file shape");
+});
+
+test("the audio reader rejects malformed envelopes at a located offset", () => {
+  const base = unwrap(writeMainFile(readBuilt(buildGam(9))));
+  const rejects = (tail: Uint8Array): void => {
+    const result = readMainFile(new BinaryReader(withTail(base, tail)));
+    equal(result.ok, false);
+    if (!result.ok) {
+      equal(result.error.message.includes("tkr-audio-settings-extension"), true);
+      equal(result.error.offset >= base.length, true);
+    }
+  };
+  rejects(audioTail(AUDIO_TRACKS.slice(0, 4), 12, null));
+  rejects(audioTail(AUDIO_TRACKS.map((track, index) => index === 0 ? { ...track, name: "sfx" } : track), 20, null));
+  rejects(audioTail([...AUDIO_TRACKS, { name: "Weather", voiceCount: 1 }], 20, null));
+  rejects(audioTail(AUDIO_TRACKS.map((track, index) => index === 5 ? { ...track, name: "" } : track), 20, null));
+  rejects(audioTail(AUDIO_TRACKS.map((track, index) => index === 5 ? { ...track, voiceCount: 0 } : track), 20, null));
+  rejects(audioTail(AUDIO_TRACKS, 0, null));
+  rejects(audioTail(AUDIO_TRACKS, 33, null));
+  rejects(audioTail(AUDIO_TRACKS, 20, ""));
+  const badFlag = audioTail(AUDIO_TRACKS, 20, null);
+  badFlag[badFlag.length - 1] = 2;
+  rejects(badFlag);
+  rejects(audioTail(AUDIO_TRACKS, 20, "Media/town.sf2").slice(0, -3));
+});
+
 
 
 // --- The writer refuses a model it cannot represent (AD-18) ------------------

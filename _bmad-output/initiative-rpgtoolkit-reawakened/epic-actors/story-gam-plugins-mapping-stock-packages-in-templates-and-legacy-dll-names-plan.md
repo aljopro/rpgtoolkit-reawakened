@@ -3,7 +3,7 @@ title: ".gam plugins mapping: stock packages in templates and legacy DLL names"
 type: 'feature'
 ticket: 12
 created: '2026-10-19'
-status: draft
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "medium"
 context:
@@ -18,7 +18,7 @@ Mapping function and template default as core data; `pluginManifestFor` maps `Ma
 
 ## Boundaries
 
-Core data and mapping only; the editor's explicit save action is Epic 11 and 12, and package descriptor resolution is 19.16.
+Core data and mapping only; the editor's explicit save action is Epic 11 and 12, and package descriptor resolution is 19.17 (#562), with 19.16 as the closed docs handoff.
 
 ## Key Decisions
 

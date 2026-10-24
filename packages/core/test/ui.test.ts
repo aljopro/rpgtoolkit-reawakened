@@ -33,9 +33,28 @@ function firstEffect(result: ReturnType<typeof command>): NonNullable<NonNullabl
 }
 
 test("UI pack exposes message, cursor-map and cursor commands", () => {
-  equal(UI_COMMANDS.length, 33);
-  equal(new Set(UI_COMMANDS.map((entry) => entry.name)).size, 33);
+  equal(UI_COMMANDS.length, 34);
+  equal(new Set(UI_COMMANDS.map((entry) => entry.name)).size, 34);
   equal(UI_COMMANDS.every((entry) => (entry.doc?.summary.length ?? 0) > 0 && (entry.doc?.behaviour.length ?? 0) > 0), true);
+});
+test("dialogue UI effect uses the message window and appends text", () => {
+  const state = createGameState({ seed: 0 });
+  applyUiEffect(state, "dialogue", ["Hello Ada"]);
+  equal(state.ui.message.visible, true);
+  equal(state.ui.message.text, "Hello Ada");
+  applyUiEffect(state, "dialogue", ["How are you?"]);
+  equal(state.ui.message.text, "Hello Ada\nHow are you?");
+});
+
+test("dialogue without a live source actor raises its catchable error", () => {
+  const state = createGameState({ seed: 0 });
+  let code = "";
+  try {
+    command("dialogue", state, [arg("Hello")]);
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && typeof error.code === "string") code = error.code;
+  }
+  equal(code, "dialogue.no-source");
 });
 
 test("message-window effects splice globals and use deterministic defaults", () => {

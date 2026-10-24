@@ -20,8 +20,8 @@ export type OpenTickCursor = {
   skip?: { file: string; line: number };
 };
 
-/** What an outstanding host request is for (AD-17); boot adds the main file, fonts and programs; `audio` fetches a file only to learn its length. */
-export type EngineRequestKind = "main" | "font" | "program" | "board" | "tile" | "animation" | "image" | "board-preview" | "audio";
+/** Boot and runtime asset requests; script-character and script-item bridge AssetReply bytes to waiting RPGCode continuations (AD-17). */
+export type EngineRequestKind = "main" | "font" | "program" | "board" | "tile" | "animation" | "image" | "board-preview" | "audio" | "script-character" | "script-item";
 
 /** Boot progress (E-02): `main` and `assets` load files, `startup` runs the start-up program, `board` loads `initBoard`. */
 export type BootStage = "main" | "assets" | "startup" | "board" | "running" | "stopped";

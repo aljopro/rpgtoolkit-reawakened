@@ -21,39 +21,79 @@
  */
 
 import type { GameState } from "../save/state.ts";
+import { registerPackageBehaviours, resolveBehaviour } from "../actors/behaviour.ts";
+import { restorePluginLayers, snapshotPluginLayers } from "./layers.ts";
 import { ScriptError } from "./errors.ts";
 import type { ProgramRef } from "./program.ts";
 import { findThread, killThread, startProgram } from "./state.ts";
-import { runThreadsPhase, STEP_BUDGET, type ScriptServices } from "./vm.ts";
+import type { ResolvedPlugin } from "./plugin.ts";
+import { runThreadsPhase, STEP_BUDGET, threadLocation, type ScriptServices } from "./vm.ts";
 
 /** The most budget-sized slices one start-up program may take before the run is refused. */
 export const MAX_STARTUP_SLICES = 100;
 
 /**
- * Run each of `startups` in order to its end on `state`, so the `registerPlugin`
- * calls they make fill `services.layers`. `state` must be a fresh state and
- * `services` the services made over it.
+ * Run package startup contributions on a fresh session. Each package's
+ * behaviour-startup callback receives a namespace-scoped registrar before its
+ * RPGCode startup program runs. `state` must be a fresh state, `services` the
+ * services made over it, and `plugins` the exact resolved package list.
  */
 export function runPackageStartup(
   state: GameState,
   services: ScriptServices,
   startups: readonly ProgramRef[],
+  plugins: readonly ResolvedPlugin[],
+  listenersBeforeStartup?: readonly GameState["events"]["listeners"][number][],
 ): void {
-  for (const ref of startups) {
-    const thread = startProgram(state.vm, ref);
-    const id = thread.id;
-    for (let slice = 0; slice < MAX_STARTUP_SLICES; slice += 1) {
-      runThreadsPhase(state.vm, services, STEP_BUDGET);
-      const running = findThread(state.vm, id);
-      if (running === undefined || running.status !== "ready") break;
+  const listeners = [...(listenersBeforeStartup ?? services.listenersBeforePackageStartup)];
+  const layers = snapshotPluginLayers(services.layers);
+  const behaviours = services.behaviours.snapshot();
+  const initialThreadIds = new Set(state.vm.threads.map((thread) => thread.id));
+  let activeThread: number | undefined;
+  try {
+    registerPackageBehaviours(services.behaviours, plugins);
+    for (const actor of state.actors.actors) resolveBehaviour(services.behaviours, actor, services.diagnostics);
+    for (let startupIndex = 0; startupIndex < startups.length; startupIndex += 1) {
+      const ref = startups[startupIndex]!;
+      const matchedPlugin = plugins.find((plugin) => plugin.startup === ref);
+      const packageName = ref.owner ?? matchedPlugin?.package?.name ?? matchedPlugin?.definition.id;
+      const diagnosticStart = services.diagnostics.length;
+      services.setPackageStartup(true, packageName);
+      const thread = startProgram(state.vm, ref);
+      const id = thread.id;
+      activeThread = id;
+      for (let slice = 0; slice < MAX_STARTUP_SLICES; slice += 1) {
+        runThreadsPhase(state.vm, services, STEP_BUDGET);
+        const running = findThread(state.vm, id);
+        if (running === undefined || running.status !== "ready") break;
+      }
+      const startupDiagnostic = services.diagnostics.slice(diagnosticStart).find((diagnostic) => diagnostic.code === "package.startup-forbidden" || diagnostic.code === "package.startup-unfinished");
+      if (startupDiagnostic !== undefined) throw new ScriptError(startupDiagnostic.code, startupDiagnostic.message, { file: startupDiagnostic.file, line: startupDiagnostic.line });
+      const last = findThread(state.vm, id);
+      if (last !== undefined && last.status !== "finished") {
+        const location = threadLocation(last, services) ?? { file: ref.kind === "file" ? ref.path : "<inline>", line: 0 };
+        throw new ScriptError(
+          "package.startup-unfinished",
+          `a package start-up program ${last.status === "waiting" ? "waits" : "did not finish"}; start-up registers layers and neither waits nor runs on (PKG-5)`,
+          location,
+        );
+      }
+      killThread(state.vm, id);
+      activeThread = undefined;
     }
-    const last = findThread(state.vm, id);
-    if (last !== undefined && last.status !== "finished") {
-      throw new ScriptError(
-        "package.startup-unfinished",
-        `a package start-up program ${last.status === "waiting" ? "waits" : "did not finish"}; start-up registers layers and neither waits nor runs on (PKG-5)`,
-      );
+  } catch (error) {
+    for (const thread of [...state.vm.threads]) {
+      if (!initialThreadIds.has(thread.id)) killThread(state.vm, thread.id);
     }
-    killThread(state.vm, id);
+    if (activeThread !== undefined) {
+      killThread(state.vm, activeThread);
+      activeThread = undefined;
+    }
+    restorePluginLayers(services.layers, layers);
+    services.behaviours.restore(behaviours);
+    state.events.listeners.splice(0, state.events.listeners.length, ...listeners);
+    throw error;
+  } finally {
+    services.setPackageStartup(false);
   }
 }

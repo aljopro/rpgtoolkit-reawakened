@@ -1,6 +1,8 @@
 /** E-92 engine-backed virtual variables, including board data (R-37). */
 import type { Value } from "../ports/value.ts";
 import { musicFile } from "../audio/model.ts";
+import { MEDIA_EMITTER } from "../audio/events.ts";
+import { objectValue, type MediaScriptService } from "../audio/script.ts";
 import { GAME_EMITTER } from "../events/model.ts";
 import { registerEmitter } from "../events/emitter.ts";
 import { createActorService, type ActorService } from "../actors/port.ts";
@@ -48,6 +50,8 @@ function isSystemVirtual(name: string): boolean {
   return (
     name === "gametime" ||
     name === "music" ||
+    name === "party" ||
+    name === "media" ||
     name === GAME_EMITTER ||
     name === "boardbackground" ||
     name === "boardskill" ||
@@ -73,16 +77,31 @@ function requiresBoard(name: string): boolean {
 }
 
 /** Read the board-backed virtuals and owner-backed actor aliases. */
-export function createDefaultVirtuals(state: GameState, actors: ActorService = createActorService(state.actors)): VirtualVariablePort {
+export function createDefaultVirtuals(
+  state: GameState,
+  actors: ActorService = createActorService(state.actors),
+  media?: MediaScriptService,
+): VirtualVariablePort {
   const read = (rawName: string): Value | undefined => {
     const name = rawName.toLowerCase();
     const stat = actorAlias(name);
-    if (stat !== undefined) return actors.activeActor()?.stats[stat] ?? 0;
+    if (stat !== undefined) {
+      const selected = state.party.selected;
+      return (selected === null ? null : actors.readActor(selected))?.stats[stat] ?? 0;
+    }
     if (name === "gametime") return Math.floor(state.time.tick / TICKS_PER_SECOND);
     if (name === "music") return musicFile(state.audio) ?? "";
+    if (name === "media") {
+      const record = media === undefined ? registerEmitter(state.vm, state.events, MEDIA_EMITTER) : media.mediaObject();
+      return objectValue(record);
+    }
     if (name === GAME_EMITTER) {
       const game = registerEmitter(state.vm, state.events, GAME_EMITTER);
       return { kind: "object", handle: game.handle, className: game.className };
+    }
+    if (name === "party") {
+      const party = registerEmitter(state.vm, state.events, "party");
+      return { kind: "object", handle: party.handle, className: party.className };
     }
     const world = asRecord(state.world);
     const board = asRecord(world?.board);
@@ -97,27 +116,26 @@ export function createDefaultVirtuals(state: GameState, actors: ActorService = c
     if (name === "ambientblue") return typeof ambient?.b === "number" ? ambient.b : 0;
     let match = /^playerx\[([0-4])\]$/.exec(name);
     if (match !== null) {
-      const players = asRecord(state.sprites)?.players;
-      const player = asRecord(Array.isArray(players) ? players[Number(match[1])] : undefined);
+      const member = state.party.members[Number(match[1])];
+      const player = asRecord(state.sprites.players.find((value) => value.actorId === member));
       return typeof player?.x === "number" ? player.x : 0;
     }
     match = /^playery\[([0-4])\]$/.exec(name);
     if (match !== null) {
-      const players = asRecord(state.sprites)?.players;
-      const player = asRecord(Array.isArray(players) ? players[Number(match[1])] : undefined);
+      const member = state.party.members[Number(match[1])];
+      const player = asRecord(state.sprites.players.find((value) => value.actorId === member));
       return typeof player?.y === "number" ? player.y : 0;
     }
     match = /^playerlayer\[([0-4])\]$/.exec(name);
     if (match !== null) {
-      const players = asRecord(state.sprites)?.players;
-      const player = asRecord(Array.isArray(players) ? players[Number(match[1])] : undefined);
+      const member = state.party.members[Number(match[1])];
+      const player = asRecord(state.sprites.players.find((value) => value.actorId === member));
       return typeof player?.layer === "number" ? player.layer : 0;
     }
     match = /^playerhandle\[([0-4])\]$/.exec(name);
     if (match !== null) {
-      const members = asRecord(state.party)?.members;
-      const member = asRecord(Array.isArray(members) ? members[Number(match[1])] : undefined);
-      return typeof member?.name === "string" ? member.name : "";
+      const member = state.party.members[Number(match[1])];
+      return member === undefined ? "" : actors.readActor(member)?.name ?? "";
     }
     match = /^boardtitle\[([1-8])\]$/.exec(name);
     if (match !== null) {
@@ -145,10 +163,9 @@ export function createDefaultVirtuals(state: GameState, actors: ActorService = c
       const name = rawName.toLowerCase();
       const stat = actorAlias(name);
       if (stat !== undefined) {
-        if (typeof value !== "number" || actors.activeActor() === null || !actors.write(actors.activeActor()!.id, { [stat]: value } as Partial<ActorStats>)) {
-          return "read-only";
-        }
-        return "written";
+        const selected = state.party.selected;
+        if (typeof value !== "number" || selected === null) return "read-only";
+        return actors.updateStats(selected, { [stat]: value } as Partial<ActorStats>, { cause: "script" }) === null ? "read-only" : "written";
       }
       if (name === "ambientred" || name === "ambientgreen" || name === "ambientblue") {
         const world = asRecord(state.world);

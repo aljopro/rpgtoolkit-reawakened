@@ -16,7 +16,10 @@ export {
   createTrack,
   fadeValue,
   findTrack,
+  findVoice,
   musicFile,
+  trackVolume,
+  voiceWaitPayload,
   voicePass,
   voicePosition,
   withoutSettings,
@@ -28,21 +31,39 @@ export {
   type AudioTrackVolume,
   type AudioVoiceHandle,
   type AudioVoiceState,
+  type MediaVoiceRef,
 } from "./model.ts";
 export { AUDIO_HEADER_BYTES, assembleAudioDecoders, decodeAudioInfo } from "./info.ts";
 export {
   createAudioRuntime,
   type AudioEffectBus,
+  type AudioGameApply,
+  type AudioGameSettings,
   type AudioHost,
   type AudioLookup,
   type AudioNote,
   type AudioNoteDetail,
+  type AudioPackageTrackProblem,
   type AudioPlayRequest,
   type AudioPlayResult,
   type AudioRuntime,
   type AudioRuntimeOptions,
+  type AudioSource,
+  type BeforePlayDetail,
+  type BeforePlayOutcome,
   type AudioVoiceSelector,
   type AudioWait,
   type AudioWaitState,
 } from "./runtime.ts";
-export { audioSaveProjection, type AudioSaveProjection, type AudioSaveProjectionIsPlainData } from "./save.ts";
+export { audioSaveProjection, type AudioSaveProjection, type AudioSaveProjectionIsPlainData, type AudioSavedTrack } from "./save.ts";
+export {
+  createMediaScriptService,
+  MEDIA_HOST_TYPES,
+  mediaVoiceRef,
+  objectValue,
+  type MediaPlayOptions,
+  type MediaPlayOutcome,
+  type MediaScriptService,
+  type MediaVoiceView,
+} from "./script.ts";
+export { MEDIA_EMITTER, mediaTrackEmitterKey, mediaVoiceEmitterKey, queueAudioEvent, mediaEventsActive, type AudioLifecycleType, type AudioLifecycleDetail, type AudioLifecycleEvent } from "./events.ts";

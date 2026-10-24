@@ -14,7 +14,7 @@ export function settingsVersusSave() {
     cases: [
       makeCase(
         "save-and-load-restore-playback-not-settings",
-        "Saved at tick 10 and loaded at tick 20. The load re-emits soundfont.set first (the saved script bank), then music (restarted from zero at the load tick, loop kept), then non-music voices in track order at their saved positions (ambience 8 of 12, sfx 6 of 40: cue tick = load tick minus position, position 0). The master volume and the music bus volume changed after the save keep their newer values: settings are neither saved nor loaded. Cue ids go on from the counter.",
+        "Saved at tick 10 and loaded at tick 20. The load re-emits soundfont.set first using the current bank (town.sf2 after the reset), then music (restarted from zero at the load tick, loop kept), then non-music voices in track order at their saved positions (ambience 8 of 12, sfx 6 of 40: cue tick = load tick minus position, position 0). The master volume and music bus volume keep their newer values: configuration and settings are neither saved nor loaded (MEDIA-4/audio-save-load, #481). Cue ids go on from the counter.",
         setup({ assets, defaultSoundFont: "town.sf2" }),
         [
           music(0, "song.mid"),
@@ -107,8 +107,8 @@ export function soundfontSetting() {
         5,
       ),
       makeCase(
-        "load-reemits-the-saved-bank-first",
-        "The bank is in the save projection: saved with boss.sf2 set, then reset, a load restores the script bank and re-emits one soundfont.set before any media cue (the music restart).",
+        "load-reemits-the-current-bank-first",
+        "MEDIA-4/audio-save-load (#481): a playback save contains no bank configuration. Saved while boss.sf2 is set, then reset to the game's town.sf2 default, a load keeps that current bank and re-emits one soundfont.set before the music restart.",
         setup({ assets, defaultSoundFont: "town.sf2" }),
         [music(0, "town.mid"), cmd(2, "soundFont", { file: "boss.sf2" }), post(4, "save", { name: "s" }), cmd(6, "soundFontReset"), pre(8, "load", { save: "s" })],
         11,

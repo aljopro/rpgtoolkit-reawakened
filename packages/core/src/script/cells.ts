@@ -116,6 +116,12 @@ function walkRoots(
       if (isRecord(wait.reply) && Object.hasOwn(wait.reply, "value")) {
         onValue(paths ? `${base}.wait.reply.value` : "", wait.reply.value);
       }
+      if (wait.kind === "audio.track" && Array.isArray(wait.payload)) {
+        // Return value and pending-start voice are both saveable object roots.
+        for (let index = 1; index < wait.payload.length; index += 1) {
+          onValue(paths ? `${base}.wait.payload[${index}]` : "", wait.payload[index]);
+        }
+      }
     }
     if (!Array.isArray(thread.frames)) return;
     thread.frames.forEach((frame: unknown, frameIndex) => {

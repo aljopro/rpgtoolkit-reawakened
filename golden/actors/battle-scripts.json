@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "programs": [
+    {
+      "id": "zelda",
+      "finalHash": "48c989ad8f886075",
+      "ticks": [
+        "246f8c66a13a51de",
+        "4ffb2514efc5e087",
+        "b019f9fc30c70f0b",
+        "3939aeeec36b3f2b",
+        "a9a0ce0993024548",
+        "24fe1f5089f80773",
+        "48c989ad8f886075"
+      ]
+    },
+    {
+      "id": "ff",
+      "finalHash": "6761b3c9a588e808",
+      "ticks": [
+        "235af08bf5a29acc",
+        "2d59ea800a79d231",
+        "50329cf78035287b",
+        "9fbea9058d83ae85",
+        "e1aaabd2ae242c3b",
+        "9bc4b3835886ab7b",
+        "6761b3c9a588e808"
+      ]
+    }
+  ]
+}

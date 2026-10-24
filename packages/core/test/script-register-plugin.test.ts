@@ -32,12 +32,15 @@ import {
   startProgram,
   UI_PLUGIN,
   verifyRestoredHandles,
+  CORE_PLUGIN,
   type GameState,
+  type PluginDefinition,
   type PluginLayers,
   type ProgramLoader,
+  type ResolvedPlugin,
   type ScriptServices,
-  CORE_PLUGIN,
 } from "../src/index.ts";
+import { addRegistration } from "../src/script/layers.ts";
 import { advanceOrFail } from "./script-failures.ts";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "packages");
@@ -86,7 +89,7 @@ function freshGame(
   const state = createGameState({ seed });
   const layers = createPluginLayers();
   const services = servicesOf(state, loader, layers);
-  runPackageStartup(state, services, startups.map((name) => fileProgramRef(loader, name)));
+  runPackageStartup(state, services, startups.map((name) => fileProgramRef(loader, name)), []);
   startProgram(state.vm, fileProgramRef(loader, main));
   return { state, services, layers };
 }
@@ -104,7 +107,7 @@ function restoreGame(
   const scratch = createGameState({ seed });
   const layers = createPluginLayers();
   const scratchServices = servicesOf(scratch, loader, layers);
-  runPackageStartup(scratch, scratchServices, startups.map((name) => fileProgramRef(loader, name)));
+  runPackageStartup(scratch, scratchServices, startups.map((name) => fileProgramRef(loader, name)), []);
 
   const state = restoreGameState(json);
   const services = servicesOf(state, loader, layers);
@@ -368,10 +371,107 @@ test("package start-up that waits is refused with package.startup-unfinished", (
   const state = createGameState({ seed: 0 });
   const services = servicesOf(state, loader, createPluginLayers());
   throws(
-    () => runPackageStartup(state, services, [fileProgramRef(loader, "waiter.prg")]),
+    () => runPackageStartup(state, services, [fileProgramRef(loader, "waiter.prg")], []),
     (error: unknown) =>
       error instanceof ScriptError &&
       error.code === "package.startup-unfinished" &&
+      error.pos !== null &&
+      error.pos !== undefined &&
+      error.pos.file !== "" &&
       error.message.includes("waits"),
   );
+});
+
+test("package startup delay and positive threadSleep report unfinished without clock access", () => {
+  for (const [name, source] of [["delay.prg", "delay(1)\nend()\n"], ["threadsleep.prg", "threadsleep(getthreadid(), 1)\nend()\n"]] as const) {
+    const loader = loaderOf({ [name]: source });
+    const state = createGameState({ seed: 0 });
+    const services = servicesOf(state, loader, createPluginLayers());
+    throws(
+      () => runPackageStartup(state, services, [fileProgramRef(loader, name)], []),
+      (error: unknown) => error instanceof ScriptError && error.code === "package.startup-unfinished",
+    );
+  }
+});
+test("package startup helper rejects randomness directly", () => {
+  const loader = loaderOf({ "random.prg": `random(3)\nend()\n` });
+  const state = createGameState({ seed: 0 });
+  const services = servicesOf(state, loader, createPluginLayers());
+  throws(
+    () => runPackageStartup(state, services, [fileProgramRef(loader, "random.prg")], []),
+    (error: unknown) => error instanceof ScriptError && error.code === "package.startup-forbidden",
+  );
+});
+test("package startup helper rejects native clock access directly", () => {
+  const state = createGameState({ seed: 0 });
+  const definition: PluginDefinition = {
+    id: "clock-package",
+    version: "1.0.0",
+    commands: [{
+      name: "readclock",
+      aliases: [],
+      params: [],
+      call: (view) => {
+        const state = view.state;
+        if (state === undefined) return { value: null };
+        try { Object.defineProperty(state, "rng", { value: { nextUint32: () => 1 } }); } catch { /* guarded state */ }
+        try { delete (state as Record<string, unknown>).time; } catch { /* guarded state */ }
+        try { Object.getOwnPropertyDescriptor(state, "time"); } catch { /* guarded state */ }
+        state.rng;
+        return { value: null };
+      },
+    }],
+  };
+  const services = coreCreateScriptServices(state, [{ definition: CORE_PLUGIN }, { definition }]);
+  const plugin: ResolvedPlugin = { definition, startup: { kind: "inline", text: "readclock()\nend()\n", compiler: "2", dialect: "tk3" } };
+  throws(
+    () => runPackageStartup(state, services, [plugin.startup!], [plugin]),
+    (error: unknown) => error instanceof ScriptError && error.code === "package.startup-forbidden",
+  );
+});
+
+
+test("failed package startup removes package listeners, layers and behaviours but preserves prior listeners", () => {
+  const loader = loaderOf({
+    "rollback.prg": `h = registerPlugin({ name: "temporary", commands: { random: (value, next) => next(value) } })\ngame.on("startup", (event) => { observed = 1 })\nthread("threadsleep(getthreadid(), 0)", 1)\nforbiddenrng()\nend()\n`,
+  });
+  const state = createGameState({ seed: 0 });
+  const prior: PluginDefinition = {
+    id: "prior",
+    version: "1.0.0",
+    commands: [{ name: "priorlistener", aliases: [], params: [], call: () => ({ value: null }) }],
+    listeners: [{ emitter: "game", type: "prior", command: "priorlistener" }],
+  };
+  const packageDefinition: PluginDefinition = {
+    id: "rollback-package",
+    version: "1.0.0",
+  commands: [
+      { name: "packagelistener", aliases: [], params: [], call: () => ({ value: null }) },
+      { name: "forbiddenrng", aliases: [], params: [], call: (view) => { view.rng.nextUint32(); return { value: null }; } },
+    ],
+    listeners: [{ emitter: "game", type: "package", command: "packagelistener" }],
+    behaviourStartup(register) {
+      register("rollback-package.actor", { statsChanged: () => ({ dp: 1 }) });
+    },
+  };
+  coreCreateScriptServices(state, [{ definition: CORE_PLUGIN }, { definition: prior }], undefined, undefined, loader);
+  const services = coreCreateScriptServices(state, [{ definition: CORE_PLUGIN }, { definition: packageDefinition }], undefined, undefined, loader, "default", undefined, undefined, createPluginLayers());
+  const listenersBeforeStartup = services.listenersBeforePackageStartup;
+  const baselineRegistration = addRegistration(services.layers, "preexisting", [{
+    command: "random",
+    interceptor: { type: "callable", def: "prior-interceptor", captures: [], receiver: null },
+    engine: { type: "callable", def: "prior-engine", captures: [], receiver: null },
+  }]);
+  equal(services.behaviours.registerForNamespace("rollback-package", "rollback-package.prior", { statsChanged: () => ({ dp: 2 }) }), true);
+  const plugin: ResolvedPlugin = { definition: packageDefinition, startup: fileProgramRef(loader, "rollback.prg") };
+  throws(
+    () => runPackageStartup(state, services, [plugin.startup!], [plugin]),
+    (error: unknown) => error instanceof ScriptError && error.code === "package.startup-forbidden",
+  );
+  equal(state.vm.threads.some((thread) => thread.status !== "finished"), false);
+  deepEqual(state.events.listeners.map((listener) => listener.id), listenersBeforeStartup.map((listener) => listener.id));
+  equal(services.layers.layers.has(baselineRegistration.layers[0]!), true);
+  equal(services.layers.registrations.has(baselineRegistration.id), true);
+  deepEqual(services.behaviours.definitions().map((definition) => definition.name), ["rollback-package.prior"]);
+  equal(state.events.listeners.some((listener) => listener.id !== listenersBeforeStartup.find((before) => before.id === listener.id)?.id), false);
 });

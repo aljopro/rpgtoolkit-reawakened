@@ -59,6 +59,7 @@ export type InputKeyWait = {
   resumeRefs?: string[];
   cursorMap?: number;
   cursorSelection?: number;
+  dialogue?: { actorId: number; targetId: number | null; text: string };
 };
 
 /** A wait for coupled sprite movement (`multiRun`, E-33). */
@@ -145,6 +146,10 @@ export type WaitView = {
   readonly audio?: WaitAudioView;
   readonly video?: WaitVideoView;
   readonly events?: WaitEventsView;
+  /** The audio effects still held for an asset, so a pending start's wait can tell "not yet" from "never". */
+  readonly pendingAudio?: readonly { readonly seq: number }[];
+  /** The bound voice identity of a script voice object, or `null` while it has not started. */
+  readonly mediaStart?: (handle: number) => { readonly track: string; readonly slot: number; readonly cueId: number } | null;
 };
 
 export type WaitResult = { readonly value: Value; readonly ok: boolean; readonly claim?: number };

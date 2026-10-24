@@ -1,0 +1,200 @@
+# tickets.toml — planned entries of epic-menu-party-save, in build order. tickets.py reads it.
+# Entry 1 is the human-approved docs ruling; the final two entries sweep and prove the integrated epic.
+
+[[entry]]
+id = 1
+tracker_id = "#583"
+type = "story"
+title = "Rulings: menu ownership, save compatibility and dialogue completion"
+description = "Amend the normative spec and architecture spine to settle party/menu/inventory ownership, save and running-thread restore compatibility, legacy .sav import scope, and the Epic 8 dialogue wrapper/API while recording the approved dialogue.completed payload."
+verify = "A docs-only change records evidence, rejected alternatives, owner markers and accepted/deferred decisions for every open item, including the approved queued plain-data dialogue.completed payload { actorId, targetId (actor id or null), text }, before any dependent implementation starts."
+covers = ["CAP-5", "CAP-9", "CAP-10", "CAP-11"]
+after = []
+hitl = true
+risk = "high"
+plan_checkpoint = true
+done_checkpoint = true
+references = [
+  "spine - architecture-rpgtoolkit-reawakened.md (AD-7, AD-10, AD-11, AD-17, AD-23)",
+  "spec - docs/spec/formats/save-game.md (R-13, E-122, running thread state)",
+  "spec - docs/spec/engine/plugins-and-battle.md (E-80 to E-87, E-95, E-123)",
+  "spec - docs/spec/engine/rpgcode-modules-and-objects.md (EMIT-8, EMIT-13)",
+]
+notes = ["Owner approved expanding Epic 8 to CAP-5/CAP-9 and the Epic 8-owned dialogue completion wrapper; its queued dialogue.completed payload is { actorId, targetId (actor id or null), text }, 2026-10-22, and the story records it in normative docs before implementation."]
+
+[[entry]]
+id = 2
+tracker_id = "#587"
+type = "story"
+title = "Menu state sections and owner ports"
+description = "Defines and implements the plain-data party, inventory and menu state sections, their migrations, reset/restore integration and owner-scoped ports under the rulings from entry 1."
+verify = "Headless scripts exercise section-owned reads and writes across reset, snapshot, migration and restore, proving that each owner commits only its own section and that identical inputs produce equal canonical hashes."
+covers = ["CAP-10", "CAP-11"]
+after = [1, "3.11", "5.3", "20.3"]
+hitl = false
+risk = "high"
+plan_checkpoint = true
+references = ["spine - AD-10, AD-23", "spec - docs/spec/formats/save-game.md"]
+
+[[entry]]
+id = 3
+type = "story"
+tracker_id = "#584"
+title = "Party operations and RPGCode built-ins"
+description = "Implements the ruled party roster, active-member selection, swaps and legacy party/player built-ins as adapters over actor-owned state without duplicating actor stats."
+verify = "A headless RPGCode fixture adds, removes, selects and swaps party members and checks actor linkage, active selection, aliases, diagnostics and snapshot/restore results against the ruled contract."
+covers = ["CAP-10", "CAP-11"]
+after = [2, "20.3"]
+hitl = false
+risk = "high"
+references = ["spec - docs/spec/engine/plugins-and-battle.md#e-85", "spec - docs/spec/engine/actors.md"]
+
+[[entry]]
+id = 4
+tracker_id = "#586"
+type = "story"
+title = "Inventory, equipment, gold and event operations"
+description = "Implements canonical inventory quantities, item identity, equipment slots and bonuses, gold operations, legacy built-ins and the ruled itemAdded, itemRemoved and goldChanged event delivery."
+verify = "Deterministic script fixtures prove item identity/quantity changes, slot and user eligibility, bonus application and reversal, HP/SMP caps, gold boundaries and exactly-once queued inventory events through the public operations."
+covers = ["CAP-10", "CAP-11"]
+after = [2, 3, "20.6"]
+hitl = false
+risk = "high"
+plan_checkpoint = true
+references = ["spec - docs/spec/engine/plugins-and-battle.md#e-81", "spec - docs/spec/engine/plugins-and-battle.md#e-82", "spec - docs/spec/formats/item.md", "spec - docs/spec/engine/rpgcode-modules-and-objects.md#emit-13"]
+
+[[entry]]
+id = 5
+type = "story"
+tracker_id = "#589"
+title = "Item use, equip and remove programs"
+description = "Implements board and battle item use, equipment changes, item use/equip/remove programs and their specified effect, quantity, bonus and event order through the single Epic 8 inventory operation."
+verify = "Authored script and battle fixtures prove valid/invalid targets, HP/SMP effects, program order, one-time consumption, equipment bonus reversal and battle consumption through the same inventory API, with stable seeded output."
+covers = ["CAP-9", "CAP-10"]
+after = [4, "7.5"]
+hitl = false
+risk = "high"
+references = ["spec - docs/spec/engine/plugins-and-battle.md#e-73", "spec - docs/spec/engine/plugins-and-battle.md#e-81", "spec - docs/spec/engine/plugins-and-battle.md#e-82", "spec - docs/spec/formats/item.md"]
+
+[[entry]]
+id = 6
+tracker_id = "#590"
+type = "story"
+title = "Shop and inn operations"
+description = "Implements deterministic shop buy/sell and inn restoration using the ruled item price, party gold, inventory and member operations."
+verify = "RPGCode fixtures cover affordable and unaffordable purchases, sale quantities and proceeds, empty/invalid trades, and inn restoration of every eligible party member without violating inventory or gold invariants."
+covers = ["CAP-10"]
+after = [4]
+hitl = false
+risk = "medium"
+references = ["spec - docs/spec/engine/plugins-and-battle.md#e-86", "spec - docs/spec/formats/item.md"]
+
+[[entry]]
+id = 7
+tracker_id = "#588"
+type = "story"
+title = "Default menu controller, input waits and replacement seam"
+description = "Implements menu-key and InternalMenu(n) routing, the saveable menu.screen wait, input/selection flow and replaceable stock_menu package boundary using Epic 4's existing UI and input services."
+verify = "Scripted key and modal responses open each supported screen directly and through the main menu, resume at the recorded tick after waits, and preserve menu/input state through reset and snapshot/restore."
+covers = ["CAP-10", "CAP-11"]
+after = [2, 3, 4, "3.9", "4.19", "4.21", "20.11"]
+hitl = false
+risk = "high"
+plan_checkpoint = true
+references = ["spec - docs/spec/engine/plugins-and-battle.md#e-80", "spec - docs/spec/engine/plugins-and-battle.md#e-95", "spec - docs/spec/engine/rpgcode-language.md#threads"]
+
+[[entry]]
+id = 8
+tracker_id = "#585"
+type = "story"
+title = "Default menu screens and player-facing behaviors"
+description = "Implements the main, inventory, equipment and abilities screens with their documented party, gold, play-time, use/info/drop, equip/remove, and Save/Load/Quit behaviors routed through entries 9–10 where applicable, plus graphics and cursor sounds."
+verify = "Headless draw-list and scripted-input fixtures cover every E-80 menu path, including key-item drop refusal, Save/Load routing and save gating, direct screen entry, custom MenuGraphic and cursor sounds, with identical replay output."
+covers = ["CAP-10", "CAP-11"]
+after = [5, 6, 7, 9, 10, "21.5"]
+hitl = false
+risk = "high"
+references = ["spec - docs/spec/engine/plugins-and-battle.md#e-80", "spec - docs/spec/engine/plugins-and-battle.md#e-123"]
+
+[[entry]]
+id = 9
+tracker_id = "#591"
+type = "story"
+title = "Save operation and canonical game serialization"
+description = "Serializes the complete ruled game state, including party, inventory, equipment, menu/UI state, board live items, object/closure data, running threads, RNG and time, through saveBlob keyed by GameId and board save permission."
+verify = "A mid-script save fixture round-trips every required section and a board that forbids saving rejects Save() without state mutation, while repeated saves of equal state produce byte-identical canonical blobs and hashes."
+covers = ["CAP-10", "CAP-11"]
+after = [2, 3, 4, 7, "3.11", "5.9", "7.2"]
+hitl = false
+risk = "high"
+plan_checkpoint = true
+references = ["spec - docs/spec/formats/save-game.md", "spine - AD-7, AD-10, AD-11, AD-17, AD-23"]
+
+[[entry]]
+id = 10
+tracker_id = "#593"
+type = "story"
+title = "Load validation, restore order and thread continuation"
+description = "Validates untrusted save blobs and section versions, restores state and package/actor hydration in the ruled order, and resumes or restarts saved threads according to the approved compatibility rule."
+verify = "Valid and malformed saves exercise success and failure boundaries, prior-section migrations, package hydration order and ruled thread continuation; a deterministic post-load replay matches the expected state hashes and subsequent behavior."
+covers = ["CAP-11"]
+after = [9]
+hitl = false
+risk = "high"
+plan_checkpoint = true
+references = ["spec - docs/spec/formats/save-game.md", "spine - AD-7, AD-10, AD-23"]
+
+[[entry]]
+id = 11
+tracker_id = "#592"
+type = "story"
+title = "Dialogue interaction completion producer"
+description = "Adds the ruled Epic 8-owned RPGCode interaction wrapper around Epic 4.21's existing message/modal and input-wait commands, capturing the text argument and VM source/target and queuing dialogue.completed only after normal completion."
+verify = "A deterministic script fixture proves the wrapper presents the exact supplied text, emits one queued dialogue.completed event with the approved scalar detail on normal completion, emits none on interruption or failure, and restores identically mid-wait."
+covers = ["CAP-5", "CAP-9"]
+after = [1, "3.9", "4.19", "4.21"]
+hitl = false
+risk = "high"
+plan_checkpoint = true
+references = ["spec - docs/spec/engine/plugins-and-battle.md#e-95", "spec - docs/spec/engine/rpgcode-modules-and-objects.md#emit-13", "Epic 4 ticket 4.21 / issue #406"]
+
+[[entry]]
+id = 12
+tracker_id = "#564"
+type = "story"
+title = "Stock RPG dialogue event bridge: talked"
+description = "Loads the stock_rpg dialogue bridge through the package loader, consumes entry 11's dialogue.completed signal and emits one queued actor-scoped talked event with { actorId, targetId (actor id or null), text }, while failed or interrupted interactions emit none."
+verify = "A headless package-startup fixture proves one completed and one interrupted interaction, exact actor isolation and detail, and deterministic save/reset/restore of queued talked delivery."
+covers = ["CAP-5", "CAP-9"]
+after = [11, "20.15"]
+hitl = false
+risk = "high"
+plan_checkpoint = true
+references = ["spec - docs/spec/engine/actors.md", "spec - docs/spec/engine/rpgcode-modules-and-objects.md#emit-13", "handoff - Epic 20 actor event infrastructure and Epic 19 package loader"]
+
+[[entry]]
+id = 13
+tracker_id = "#594"
+type = "story"
+title = "Refactor sweep"
+description = "Reconciles the shared menu, party, inventory, serialization, built-in, UI and package seams touched by the epic and removes obsolete duplicate state or adapters without adding behavior."
+verify = "The review shows one owner for every persisted section and operation, no obsolete menu/save path remains, documentation and registrations match the final contracts, and the epic's done criteria are checked with evidence."
+covers = ["CAP-5", "CAP-9", "CAP-10", "CAP-11"]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+hitl = false
+risk = "low"
+references = ["epic - epic-menu-party-save.md, Done when"]
+
+[[entry]]
+id = 14
+tracker_id = "#595"
+type = "story"
+title = "Epic 8 end-to-end acceptance"
+description = "Proves the integrated menu and save epic against the full CAP-10/CAP-11 workflows and the newly owned dialogue bridge and battle inventory consumer paths."
+verify = "A clean headless play-through covers every E-80–87 and E-123 behavior, a mid-script save/load matches canonical hashes and later behavior under the entry 1 compatibility ruling, a completed dialogue emits actor-isolated talked, and Epic 7 consumes inventory through Epic 8's operation."
+covers = ["CAP-5", "CAP-9", "CAP-10", "CAP-11"]
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+hitl = false
+risk = "high"
+plan_checkpoint = true
+references = ["spec - docs/spec/engine/plugins-and-battle.md#e-80 to E-87, E-123", "spec - docs/spec/formats/save-game.md", "Epic 7 battle item-use contract"]

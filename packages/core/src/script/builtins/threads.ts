@@ -118,6 +118,7 @@ export const THREAD_SPECS: readonly BuiltinSpec[] = [
       }
       let until: number | null = null;
       if (ticks > 0) {
+        if (view.packageStartup === true) throw new ScriptError("package.startup-unfinished", "a package start-up program waits; start-up programs must not wait");
         const end = view.clock.tick() + ticks;
         if (end > MAX_TICK) {
           throw new ScriptError("builtin.bad-arg", "threadSleep: the end tick would exceed 2^53 - 1");

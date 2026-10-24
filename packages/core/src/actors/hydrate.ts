@@ -12,9 +12,12 @@ import type { Result } from "../formats/result.ts";
 import type { Character, Enemy } from "../formats/actor/model.ts";
 import {
   addActor,
+  validateActorProgression,
   type ActorCreateInput,
   type ActorKind,
   type ActorRecord,
+  type ActorStats,
+  type ActorProgression,
   type ActorsSection,
 } from "./model.ts";
 
@@ -42,6 +45,24 @@ export type ActorHydrationSource =
       readonly options?: ActorHydrationOptions;
     };
 
+function initialProgressionState(character: Character): { readonly remainingExperience: number; readonly nextRequirement: number } {
+  let nextRequirement = character.firstLevelExp;
+  let remainingExperience = nextRequirement - character.stats.experience;
+  for (let level = 1; level < character.stats.level; level += 1) {
+    nextRequirement = character.levelUpType === 0
+      ? nextRequirement + Math.trunc(nextRequirement * character.experienceIncrease / 100)
+      : nextRequirement + character.experienceIncrease;
+    remainingExperience += nextRequirement;
+  }
+  if (!Number.isSafeInteger(nextRequirement) || !Number.isSafeInteger(remainingExperience)) {
+    throw new RangeError("character progression threshold exceeds safe integer range");
+  }
+  return {
+    remainingExperience: Math.max(0, remainingExperience),
+    nextRequirement,
+  };
+}
+
 /** Build actor-owned fields from a `.tem` character model. */
 export function actorInputFromCharacter(
   source: string,
@@ -49,7 +70,8 @@ export function actorInputFromCharacter(
   character: Character,
   options: ActorHydrationOptions = {},
 ): ActorCreateInput {
-  return {
+  const progressionState = initialProgressionState(character);
+  const input: ActorCreateInput = {
     kind,
     source,
     name: character.name,
@@ -76,9 +98,14 @@ export function actorInputFromCharacter(
       levelFp: character.levelIncreases[2] ?? 0,
       levelSm: character.levelIncreases[3] ?? 0,
       levelUpType: character.levelUpType,
+      remainingExperience: progressionState.remainingExperience,
+      nextRequirement: progressionState.nextRequirement,
+      legacyLevelUp: character.levelUpProgram.length > 0,
     },
     behaviour: options.behaviour ?? null,
   };
+  validateActorProgression(input.stats as ActorStats, input.progression as ActorProgression);
+  return input;
 }
 
 /** Build actor-owned fields from an `.ene` enemy model. */

@@ -6,12 +6,18 @@ import type { GameState } from "../../save/state.ts";
 import type { SpriteActor, SpritePoint, Facing } from "../../sprites/model.ts";
 import { enqueueDirectionMove, movementCadence } from "../../sprites/movement.ts";
 import { enqueueMove, enqueuePathMove, enqueuePointPathMove, setWaypoint } from "../../sprites/runtime.ts";
+import type { Character } from "../../formats/actor/index.ts";
+import { actorFromSource } from "../../sprites/model.ts";
+import { createInitialPlayer } from "../../sprites/runtime.ts";
 import { findPath } from "../../sprites/pathfinding.ts";
 import { playStance } from "../../sprites/animation.ts";
 import type { WorldVector } from "../../world/model.ts";
 import type { Arg, BuiltinDoc, BuiltinSpec } from "../builtins.ts";
 import type { CommandEffect, CommandResult, CommandView } from "../plugin.ts";
 import { ScriptError } from "../errors.ts";
+import { readCharacter } from "../../formats/actor/character.ts";
+import { BinaryReader } from "../../formats/binary/reader.ts";
+import { actorInputFromCharacter } from "../../actors/hydrate.ts";
 
 const PAUSE = 4;
 const PATHFIND = 1;
@@ -152,10 +158,98 @@ function pathCommand(name: "playerpath" | "itempath"): BuiltinSpec {
 }
 const PLAYER_LOCATION: BuiltinSpec = { name: "playerlocation", aliases: [], params: [{ name: "handle", optional: false, byRef: false, variadic: false }, { name: "x", optional: false, byRef: true, variadic: false }, { name: "y", optional: false, byRef: true, variadic: false }, { name: "layer", optional: false, byRef: true, variadic: false }], doc: docs("Read a player's location.", "Returns the player's current pixel x,y and one-based layer immediately through by-reference outputs."), call: (view, args) => { const value = actor(view, playerId(view, number(args, 0))); return { value: value?.x ?? 0, out: [...output(args, 1, value?.x ?? 0), ...output(args, 2, value?.y ?? 0), ...output(args, 3, (value?.layer ?? 0) + 1)] }; } };
 const ITEM_LOCATION: BuiltinSpec = { ...PLAYER_LOCATION, name: "itemlocation", doc: docs("Read an item's location.", "Returns the item's current pixel x,y and one-based layer immediately through by-reference outputs."), call: (view, args) => { const value = actor(view, itemId(view, args[0]?.value as number | string ?? "")); return { value: value?.x ?? 0, out: [...output(args, 1, value?.x ?? 0), ...output(args, 2, value?.y ?? 0), ...output(args, 3, (value?.layer ?? 0) + 1)] }; } };
-const ACTIVE_PLAYER: BuiltinSpec = { name: "activeplayer", aliases: [], params: [{ name: "handle", optional: true, byRef: false, variadic: false }], doc: docs("Get or select the active player.", "With no argument returns the selected player index; with a handle or index emits a sprites effect selecting that player."), call: (view, args) => { const state = view.state?.sprites; if (args.length === 0) return { value: state?.players.findIndex((value) => value.id === state.selectedPlayer) ?? 0 }; return { value: null, effects: [moveEffect("activeplayer", args)] }; } };
-const PLAYER_DIRECTION: BuiltinSpec = { name: "playerdirection", aliases: [], params: movementParams(), doc: docs("Get or set a player's facing.", "Returns the current facing index, or emits an effect to set it when a direction is supplied."), call: (view, args) => { const value = actor(view, playerId(view, number(args, 0))); if (args.length < 2) return { value: value === null ? 0 : DIRECTIONS.indexOf(value.facing) }; return { value: null, effects: [moveEffect("playerdirection", args)] }; } };
-const ITEM_DIRECTION: BuiltinSpec = { ...PLAYER_DIRECTION, name: "itemdirection", doc: docs("Get or set an item's facing.", "Returns the current facing index, or emits an effect to set it when a direction is supplied."), call: (view, args) => { const value = actor(view, itemId(view, args[0]?.value as number | string ?? "")); if (args.length < 2) return { value: value === null ? 0 : DIRECTIONS.indexOf(value.facing) }; return { value: null, effects: [moveEffect("itemdirection", args)] }; } };
+const ACTIVE_PLAYER: BuiltinSpec = { name: "activeplayer", aliases: [], params: [{ name: "handle", optional: false, byRef: false, variadic: false }], doc: docs("Select the active party member.", "Resolves the supplied stable player handle and commits the selected actor id through the party owner."), call: (view, args) => {
+  const party = view.state?.party;
+  const raw = args[0]?.value;
+  const member = typeof raw === "number"
+    ? party?.members.find((id) => id === raw)
+    : typeof raw === "string"
+      ? party?.members.find((id) => {
+        const actorRecord = view.state?.actors.actors.find((candidate) => candidate.id === id);
+        return actorRecord?.name === raw || actorRecord?.source === raw || String(id) === raw;
+      })
+      : undefined;
+  if (member === undefined) return { value: null };
+  return { value: null, effects: [{ kind: "state-write", section: "party", args: [{ type: "select", actorId: member }] }] };
+} };
+function partyMember(view: CommandView, handle: unknown): number | undefined {
+  const party = view.state?.party;
+  if (typeof handle !== "string" && typeof handle !== "number") return undefined;
+  return party?.members.find((id) => {
+    const actorRecord = view.state?.actors.actors.find((candidate) => candidate.id === id);
+    return actorRecord?.name === String(handle) || actorRecord?.source === String(handle) || String(id) === String(handle);
+  });
+}
+function partyFileActor(view: CommandView, file: unknown): number | undefined {
+  if (typeof file !== "string") return undefined;
+  return view.state?.actors.actors.find((candidate) => candidate.kind === "party" && (candidate.source === file || candidate.name === file))?.id;
+}
+function partyFileAction(name: "addplayer" | "restoreplayer", type: "add" | "restore"): BuiltinSpec {
+  return { name, aliases: [], params: [{ name: "file", optional: false, byRef: false, variadic: false }], doc: docs(name === "addplayer" ? "Add a character-file-backed player to the party." : "Restore a previously removed player to the party.", "Applies a roster change through the party owner; addplayer requests and parses the character asset when it is not already hydrated."), call: (view, args) => {
+    const file = string(args, 0);
+    const actorId = partyFileActor(view, file);
+    if (actorId !== undefined) return { value: null, effects: [{ kind: "state-write", section: "party", args: [{ type, actorId }] }] };
+    if (type === "restore" || file === "") return { value: null };
+    return {
+      value: null,
+      request: { kind: "asset", area: "characters", path: file },
+      then: { command: "__party_addplayer_asset", args: [file] },
+    };
+  } };
+}
+const ADD_PLAYER = partyFileAction("addplayer", "add");
+const RESTORE_PLAYER = partyFileAction("restoreplayer", "restore");
+const NEW_PLAYER: BuiltinSpec = { name: "newplyr", aliases: ["newplayer"], params: [{ name: "file", optional: false, byRef: false, variadic: false }], doc: docs("Change the main player's graphics from a character file.", "Requests the character asset and updates graphics on the selected sprite while preserving actor identity, stats and roster position."), call: (_view, args) => ({
+  value: null,
+  request: { kind: "asset", area: "characters", path: string(args, 0) },
+  then: { command: "__party_newplyr_asset", args: [string(args, 0)] },
+}) };
+function partyAction(name: "removeplayer" | "destroyplayer"): BuiltinSpec {
+  return { name, aliases: [], params: [{ name: "handle", optional: false, byRef: false, variadic: false }], doc: docs(name === "removeplayer" ? "Remove a player from the active party roster." : "Permanently remove a player from the party.", "Resolves the documented player handle to its stable actor id and applies the membership change through the party owner."), call: (view, args) => {
+    const actorId = partyMember(view, args[0]?.value);
+    if (actorId === undefined) return { value: null };
+    return { value: null, effects: [{ kind: "state-write", section: "party", args: [{ type: name === "removeplayer" ? "remove" : "destroy", actorId }] }] };
+  } };
+}
+const REMOVE_PLAYER = partyAction("removeplayer");
+const DESTROY_PLAYER = partyAction("destroyplayer");
+function partyAssetContinuation(name: "__party_addplayer_asset" | "__party_newplyr_asset"): BuiltinSpec {
+  return {
+    name,
+    aliases: [],
+    params: [
+      { name: "ok", optional: false, byRef: false, variadic: false },
+      { name: "bytes", optional: false, byRef: false, variadic: false },
+      { name: "file", optional: false, byRef: false, variadic: false },
+    ],
+    doc: { ...docs("Resume a character asset request.", "Parses the AssetReply bytes with the documented character reader and applies the resulting owner action."), access: "internal" },
+    call: (_view, args) => {
+      if (number(args, 0) === 0) return { value: null };
+      const hex = string(args, 1);
+      if (hex.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(hex)) throw new ScriptError("request.bad-reply", "character asset reply must be hexadecimal bytes");
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+      const parsed = readCharacter(new BinaryReader(bytes));
+      if (!parsed.ok) throw new ScriptError("format.character", parsed.error.message);
+      const file = string(args, 2);
+      if (name === "__party_addplayer_asset") {
+        return {
+          value: null,
+          effects: [
+            { kind: "state-write", section: "party", args: [{ type: "add", actor: actorInputFromCharacter(file, "party", parsed.value) } as never] },
+            { kind: "state-write", section: "sprites", args: [file, hex] },
+          ],
+        };
+      }
+      return { value: null, effects: [{ kind: "state-write", section: "sprites", args: [file, hex] }] };
+    },
+};
+}
+const ADD_PLAYER_ASSET = partyAssetContinuation("__party_addplayer_asset");
+const NEW_PLAYER_ASSET = partyAssetContinuation("__party_newplyr_asset");
+const PLAYER_DIRECTION: BuiltinSpec = { name: "playerdirection", aliases: [], params: movementParams(), doc: docs("Read or set a player's facing.", "Returns the current facing index, or emits an effect to set it when a direction is supplied."), call: (view, args) => { const value = actor(view, playerId(view, number(args, 0))); if (args.length < 2) return { value: value === null ? 0 : DIRECTIONS.indexOf(value.facing) }; return { value: null, effects: [moveEffect("playerdirection", args)] }; } };
 const PLAYER_SPEED: BuiltinSpec = { name: "playerspeed", aliases: [], params: movementParams(), doc: docs("Set a player's walking speed.", "Emits an effect changing the selected player's deterministic step delay."), call: (_view, args) => ({ value: null, effects: [moveEffect("playerspeed", args)] }) };
+const ITEM_DIRECTION: BuiltinSpec = { ...PLAYER_DIRECTION, name: "itemdirection", doc: docs("Get or set an item's facing.", "Returns the current facing index, or emits an effect to set it when a direction is supplied."), call: (view, args) => { const value = actor(view, itemId(view, args[0]?.value as number | string ?? "")); if (args.length < 2) return { value: value === null ? 0 : DIRECTIONS.indexOf(value.facing) }; return { value: null, effects: [moveEffect("itemdirection", args)] }; } };
 const ITEM_SPEED: BuiltinSpec = { ...PLAYER_SPEED, name: "itemspeed", doc: docs("Set an item's walking speed.", "Emits an effect changing the item's deterministic step delay."), call: (_view, args) => ({ value: null, effects: [moveEffect("itemspeed", args)] }) };
 const PLAYER_GET_PATH: BuiltinSpec = { name: "playergetpath", aliases: [], params: [{ name: "handle", optional: false, byRef: false, variadic: false }, { name: "index", optional: false, byRef: false, variadic: false }, { name: "x", optional: false, byRef: true, variadic: false }, { name: "y", optional: false, byRef: true, variadic: false }], doc: docs("Read one queued player path point.", "Returns whether the point exists and writes its pixel coordinates to x and y."), call: (view, args) => { const point = actor(view, playerId(view, number(args, 0)))?.queue.moves[number(args, 1)]?.target; return { value: point === undefined ? 0 : 1, out: [...output(args, 2, point?.x ?? 0), ...output(args, 3, point?.y ?? 0)] }; } };
 const ITEM_GET_PATH: BuiltinSpec = { ...PLAYER_GET_PATH, name: "itemgetpath", doc: docs("Read one queued item path point.", "Returns whether the point exists and writes its pixel coordinates to x and y."), call: (view, args) => { const point = actor(view, itemId(view, args[0]?.value as number | string ?? ""))?.queue.moves[number(args, 1)]?.target; return { value: point === undefined ? 0 : 1, out: [...output(args, 2, point?.x ?? 0), ...output(args, 3, point?.y ?? 0)] }; } };
@@ -171,7 +265,7 @@ const MOUSE_CLICK: BuiltinSpec = { name: "mouseclick", aliases: [], params: [{ n
 const PLAYER_STANCE: BuiltinSpec = { name: "playerstance", aliases: [], params: [{ name: "handle", optional: false, byRef: false, variadic: false }, { name: "stance", optional: false, byRef: false, variadic: false }, { name: "flags", optional: true, byRef: false, variadic: false }], doc: docs("Play a player's stance animation.", "Starts the named stance through the sprite animation owner, then waits for that owner to report completion."), call: (view, args) => stanceResult(view, playerId(view, args[0]?.value as number | string ?? ""), string(args, 1), args) };
 const ITEM_STANCE: BuiltinSpec = { ...PLAYER_STANCE, name: "itemstance", doc: docs("Play an item's stance animation.", "Starts the named item stance through the sprite animation owner, then waits for that owner to report completion."), call: (view, args) => stanceResult(view, itemId(view, args[0]?.value as number | string ?? ""), string(args, 1), args) };
 
-export const MOVEMENT_COMMANDS: readonly BuiltinSpec[] = [PUSH, PUSH_ITEM, PLAYER_STEP, ITEM_STEP, pathCommand("playerpath"), pathCommand("itempath"), PLAYER_LOCATION, ITEM_LOCATION, ACTIVE_PLAYER, PLAYER_DIRECTION, ITEM_DIRECTION, PLAYER_SPEED, ITEM_SPEED, PLAYER_GET_PATH, ITEM_GET_PATH, WANDER, WAIT, GET, CLEAR_BUFFER, SET_BUTTON, CHECK_BUTTON, CLEAR_BUTTONS, MOUSE_MOVE, MOUSE_CLICK, PLAYER_STANCE, ITEM_STANCE];
+export const MOVEMENT_COMMANDS: readonly BuiltinSpec[] = [PUSH, PUSH_ITEM, PLAYER_STEP, ITEM_STEP, pathCommand("playerpath"), pathCommand("itempath"), PLAYER_LOCATION, ITEM_LOCATION, ACTIVE_PLAYER, ADD_PLAYER, REMOVE_PLAYER, RESTORE_PLAYER, DESTROY_PLAYER, NEW_PLAYER, ADD_PLAYER_ASSET, NEW_PLAYER_ASSET, PLAYER_DIRECTION, ITEM_DIRECTION, PLAYER_SPEED, ITEM_SPEED, PLAYER_GET_PATH, ITEM_GET_PATH, WANDER, WAIT, GET, CLEAR_BUFFER, SET_BUTTON, CHECK_BUTTON, CLEAR_BUTTONS, MOUSE_MOVE, MOUSE_CLICK, PLAYER_STANCE, ITEM_STANCE];
 
 export function applyInputEffect(state: GameState, name: string, args: readonly Value[]): void {
   state.engine.claims ??= [];
@@ -205,6 +299,47 @@ export function applySpriteEffect(state: GameState, name: string, args: readonly
     ? state.sprites.players.find((value) => value.id === String(idArg) || String(value.index) === String(idArg))?.id ?? selected
     : selected;
   const id = name === "push" ? selected : playerCommand ? playerId : String(idArg ?? "");
+  if (name === "__party_addplayer_asset") {
+    const file = String(args[0] ?? "");
+    const character = args[1] as unknown as Character;
+    const member = state.actors.actors.find((value) => value.kind === "party" && value.source === file);
+    const board = state.world.board;
+    if (member === undefined || board === null || board === undefined || state.sprites.players.some((value) => value.actorId === member.id)) return member !== undefined;
+    createInitialPlayer(state.sprites, board, {
+      id: `player:${member.id}`,
+      actorId: member.id,
+      kind: "player",
+      source: file,
+      x: board.start?.x ?? 64,
+      y: board.start?.y ?? 64,
+      layer: board.start?.layer ?? 1,
+      controlled: state.party.selected === member.id,
+      character,
+    });
+    return true;
+  }
+  if (name === "__party_newplyr_asset") {
+    const file = String(args[0] ?? "");
+    const character = args[1] as unknown as Character;
+    const player = state.sprites.players.find((value) => value.id === state.sprites.selectedPlayer);
+    const board = state.world.board;
+    if (player === undefined || board === null || board === undefined) return true;
+    const graphic = actorFromSource({
+      id: player.id, actorId: player.actorId ?? null, kind: "player", source: file,
+      x: player.x, y: player.y, layer: player.layer, character,
+    }, board, player.index, null);
+    state.sprites.players = state.sprites.players.map((value) => value.id === player.id
+      ? { ...value, source: file, visual: graphic.visual }
+      : value);
+    return true;
+  }
+  if (name === "newplyr" || name === "newplayer") {
+    const player = state.sprites.players.find((value) => value.id === state.sprites.selectedPlayer);
+    const graphic = state.sprites.players.find((value) => value.source === String(args[0] ?? ""));
+    if (player === undefined || graphic === undefined) return true;
+    state.sprites.players = state.sprites.players.map((value) => value.id === player.id ? { ...value, source: graphic.source, visual: graphic.visual } : value);
+    return true;
+  }
   const actor = [...state.sprites.players, ...state.sprites.items].find((value) => value.id === id || String(value.handle) === id);
   if (actor === undefined && name !== "activeplayer") return false;
   if (name === "activeplayer") { const target = String(args[0] ?? ""); state.sprites.selectedPlayer = state.sprites.players.find((value) => value.id === target || String(value.index) === target)?.id ?? state.sprites.selectedPlayer; return true; }

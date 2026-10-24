@@ -162,14 +162,17 @@ export type {
   EffectRecord,
 } from "./effects.ts";
 export type {
+  BehaviourRegistrar,
   CommandContinuation,
   CommandEffect,
   CommandHandler,
   CommandRequest,
   CommandResult,
   CommandView,
+  PackageCatalogueEntry,
   PluginDefinition,
   PluginDoc,
+  ResolvedPackageMetadata,
   ResolvedPlugin,
 } from "./plugin.ts";
 export type {
@@ -238,7 +241,8 @@ export {
   STEP_BUDGET,
   stepThread,
 } from "./vm.ts";
-export { createPluginLayers, layerRoots } from "./layers.ts";
+export type { PackageStartupLifecycle } from "./vm.ts";
+export { clearPluginLayers, createPluginLayers, layerRoots } from "./layers.ts";
 export type { PluginLayers } from "./layers.ts";
 export { runPackageStartup } from "./package-startup.ts";
 export {

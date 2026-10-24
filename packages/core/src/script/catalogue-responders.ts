@@ -22,6 +22,7 @@ import { UI_COMMANDS } from "./packs/ui.ts";
 import { GRAPHICS_COMMANDS } from "./packs/graphics.ts";
 import { RENDER_PLUGIN } from "./packs/render.ts";
 import { toNumberValue, toStringValue } from "./values.ts";
+import { INVENTORY_COMMANDS, INVENTORY_COMMAND_NAMES } from "./packs/inventory.ts";
 
 const TICKET_4_29_DOCS: Readonly<Record<string, BuiltinDoc>> = {
   mwin: {
@@ -263,7 +264,7 @@ const ROWS: readonly Row[] = [
   { name: "addplayer", kind: "mixed", params: "file", sections: ["party","inventory"], wait: null, obsolete: false, byRefOut: false },
   { name: "newplayer", kind: "mixed", params: "file", sections: ["party","sprites"], wait: null, obsolete: false, byRefOut: false },
   { name: "newplyr", kind: "mixed", params: "file", sections: ["party","sprites"], wait: null, obsolete: false, byRefOut: false },
-  { name: "activeplayer", kind: "mixed", params: "[handle]", sections: ["party"], wait: null, obsolete: false, byRefOut: false },
+  { name: "activeplayer", kind: "mixed", params: "handle", sections: ["party"], wait: null, obsolete: false, byRefOut: false },
   { name: "restoreplayer", kind: "mixed", params: "file", sections: ["party","sprites"], wait: null, obsolete: false, byRefOut: false },
   { name: "playerdirection", kind: "mixed", params: "[h,]dir", sections: ["sprites"], wait: null, obsolete: false, byRefOut: false },
   { name: "playerspeed", kind: "mixed", params: "[h,]speed", sections: ["sprites"], wait: null, obsolete: false, byRefOut: false },
@@ -485,11 +486,15 @@ const CATALOGUE_GRAPHICS_NAMES = new Set(GRAPHICS_COMMANDS.flatMap((command) => 
 const CATALOGUE_OWNED_NAMES = new Set([
   ...CATALOGUE_STUBS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
   ...CATALOGUE_RESPONDERS_PLUGIN.commands.map((command) => command.name).filter((name) => !CATALOGUE_GRAPHICS_NAMES.has(name)),
+  ...INVENTORY_COMMAND_NAMES,
 ]);
 const CORE_FILE_COMMANDS = new Set(["openfileinput", "openfileoutput", "openfileappend", "openfilebinary", "fileinput", "fileprint", "fileget", "fileput"]);
 const MOVEMENT_PACK_NAMES: Record<string, true> = {
   push: true, pushitem: true, playerstep: true, itemstep: true, playerpath: true, itempath: true,
   playerlocation: true, itemlocation: true, playergetpath: true, itemgetpath: true, activeplayer: true,
+  removeplayer: true, destroyplayer: true,
+  addplayer: true, restoreplayer: true,
+  newplyr: true, newplayer: true,
   playerdirection: true, itemdirection: true, playerspeed: true, itemspeed: true, playerstance: true,
   itemstance: true, wander: true, wait: true, get: true, clearbuffer: true, setbutton: true,
   checkbutton: true, clearbuttons: true, mousemove: true, mouseclick: true,
@@ -500,10 +505,11 @@ export const CATALOGUE_PLUGIN: PluginDefinition = {
   id: "catalogue",
   version: "1.0.0",
   commands: [
-    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true)),
+    ...documentCommands(CATALOGUE_STUBS_PLUGIN.commands.filter((command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true && !INVENTORY_COMMAND_NAMES.has(command.name))),
     ...CATALOGUE_RESPONDERS_PLUGIN.commands.filter(
-      (command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name),
+      (command) => MOVEMENT_PACK_NAMES[command.name] !== true && !CATALOGUE_GRAPHICS_NAMES.has(command.name) && MEDIA_PACK_NAMES[command.name] !== true && !CORE_FILE_COMMANDS.has(command.name) && !CORE_PURE_COMMANDS.has(command.name) && !INVENTORY_COMMAND_NAMES.has(command.name),
     ),
+    ...INVENTORY_COMMANDS,
     ...PACK_CATALOGUE_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name)),
     ...documentCommands(RENDER_PACK_FALLBACKS.filter((command) => !CATALOGUE_OWNED_NAMES.has(command.name))),
   ],

@@ -1,10 +1,15 @@
 import { hashDrawList } from "../canon/index.ts";
+import { actorEmitterKey, actorId } from "../actors/model.ts";
+import { registerActorObject } from "../actors/object.ts";
 import { resolveAsset, assetKey, resolveTileReference } from "../formats/resolver/resolver.ts";
 import { classifyImageReference } from "../formats/animation/image-reference.ts";
 import { decodeTexture, type DecodedTexture } from "../formats/image/index.ts";
 import { expandSingleTileToRgba, readSingleTile } from "../formats/single-tile/index.ts";
 import { expandTileToRgba, readTileset, tileDimensions } from "../formats/tileset/index.ts";
 import { BinaryReader } from "../formats/binary/reader.ts";
+import { readCharacter } from "../formats/actor/character.ts";
+import { readItem } from "../formats/actor/item.ts";
+import type { Character, Item } from "../formats/actor/model.ts";
 import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
 import { readLegacyFont } from "../formats/font/reader.ts";
@@ -20,11 +25,15 @@ import type { RunnerRequest } from "../ports/requests.ts";
 import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
+import { applyMenuStateEffect, createMenuOwnerPorts } from "../menu/index.ts";
 import { hashGameState } from "../save/hash.ts";
 import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
 import { createAudioRuntime } from "../audio/runtime.ts";
+import { createMediaScriptService, mediaVoiceRef } from "../audio/script.ts";
+import { mediaEventsActive, queueAudioEvent, MEDIA_EMITTER } from "../audio/events.ts";
 import type { AudioInfo } from "../formats/audio/model.ts";
 import type { AssetDecoder } from "../formats/registry/decoder.ts";
+import { BUILTIN_TRACKS, MAX_VOICES } from "../audio/model.ts";
 import type { Logger } from "../ports/logger.ts";
 import { composeBoard, type BoardBlit, type SpriteDraw } from "../render/compose.ts";
 import { composeUi, composeUiCursor } from "../render/ui.ts";
@@ -32,7 +41,7 @@ import { applyFxDrawList, advanceFx, applyFxEffect } from "../render/fx.ts";
 import { advanceAnimations, loadAnimation } from "../render/animation.ts";
 import { hydrateBoard } from "../world/hydrate.ts";
 import { coordLayout, tileToPixel } from "../world/coords.ts";
-import type { WorldBoard } from "../world/model.ts";
+import { boardEmitterKey, type WorldBoard } from "../world/model.ts";
 import type { FxSection } from "../save/sections.ts";
 import { applyInputEvent, createInputSection, inputView, processGamepadEvents, pruneClaimed } from "../input/index.ts";
 import { applyWorldEffect, expireProgramTileEdits } from "../world/effects.ts";
@@ -40,7 +49,7 @@ import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt,
 import { applyInputEffect, applySpriteEffect } from "../script/packs/world.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
 import type { SpriteActor, Facing } from "../sprites/model.ts";
-import { resetSpritesSection, placeSelectedPlayer, type SpriteRuntime } from "../sprites/runtime.ts";
+import { resetSpritesSection, placeSelectedPlayer, selectActor as selectPartyActor, removeActorSprite, type SpriteRuntime } from "../sprites/runtime.ts";
 import { boardCollisionAt } from "../sprites/movement.ts";
 import { resetTriggersSection } from "../triggers/model.ts";
 import { applyTriggerEffect } from "../triggers/runtime.ts";
@@ -49,7 +58,8 @@ import { runRandomEncounterPhase } from "../sprites/encounters.ts";
 import { EffectBus, type EffectApplier, type PostEffect } from "./effects.ts";
 import { engineEffect, pluginManifestFor, privateFontKeys, programKeys, resolveManifestPlugins } from "./boot.ts";
 import type { EnginePhase, EngineRequestKind, EngineSection } from "../save/sections/engine.ts";
-import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
+import { collectStateGarbage, runEngineCancelableEvent, runEngineCancelableEventOutcome, runEventsPhase } from "../events/dispatch.ts";
+import { deferUnregisterEmitter, queueNativeEvent, registerEmitter, unregisterEmitter } from "../events/emitter.ts";
 import {
   COMPILER_VERSION,
   createScriptServices,
@@ -59,10 +69,14 @@ import {
   endBoardThreads,
   endItemThreads,
   fileProgramRef,
+  runPackageStartup,
   runThreadsPhase,
-  layerRoots,
   runWaitsPhase,
+  layerRoots,
+  withOwner,
   ScriptError,
+  toDiagnostic,
+  replyToRequest,
   startProgram,
   startThread,
   STEP_BUDGET,
@@ -76,6 +90,7 @@ import {
   createVmState,
 } from "../script/index.ts";
 import type { Thread } from "../script/state.ts";
+import type { PackageCatalogueEntry } from "../script/plugin.ts";
 import { DEFAULT_FONT } from "../script/packs/ui.ts";
 import type { WaitView } from "../ports/wait.ts";
 import { runTimePhase } from "../time/time.ts";
@@ -136,6 +151,8 @@ type EngineCommonInit = {
   readonly maxTicks: number;
   /** Resolved plugin layers; when absent boot builds them from the main file (E-02 step 3). */
   readonly plugins?: readonly ResolvedPlugin[];
+  /** Host-resolved package catalogue; it supplies definitions and program references, never file access. */
+  readonly packageCatalogue?: readonly PackageCatalogueEntry[];
   readonly resetRegistrations?: readonly EngineResetRegistration[];
   readonly phaseRegistrations?: readonly EnginePhaseRegistration[];
   readonly effectAppliers?: readonly { readonly section: SectionKey; readonly applier: EffectApplier }[];
@@ -187,8 +204,13 @@ type Paused = { thread: number; frame: number; line: number };
 type Arrival = { readonly x: number; readonly y: number; readonly layer: number; readonly unit: "pixel" | "tile" };
 
 const DEFAULT_ENGINE_PLUGINS: readonly ResolvedPlugin[] = resolveManifestPlugins(ENGINE_DEFAULT_MANIFEST).plugins;
+const SCRIPT_REQUEST_BASE = 0x40000000;
 
 /** Create the deterministic fixed-tick engine; host assets arrive only as AD-14 replies. */
+const DEFAULT_GAME_AUDIO_SETTINGS = {
+  tracks: BUILTIN_TRACKS.map(([name, voiceCount]) => ({ name, voiceCount })),
+  voiceCap: MAX_VOICES,
+};
 export function createEngine(init: EngineInit): Engine {
   const index = init.assetIndex;
   const state: GameState = createGameState({ seed: init.seed });
@@ -202,6 +224,8 @@ export function createEngine(init: EngineInit): Engine {
   let mainKey: AssetKey | null = null;
   const installedFonts = new Map<AssetKey, Uint8Array>();
   const cache = new Map<AssetKey, Uint8Array>();
+  const inventoryItemDefinitions = new Map<AssetKey, Item>();
+  const inventoryCharacterDefinitions = new Map<AssetKey, Character>();
   const decodedImages = new Map<AssetKey, DecodedTexture>();
   const decodedTiles = new Map<AssetKey, DecodedTexture>();
   const decodedBundled = new Map<AssetKey, RasterAsset | null>();
@@ -219,6 +243,70 @@ export function createEngine(init: EngineInit): Engine {
     registrationByPhase.set(registration.phase, list);
   }
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
+  const menuOwners = createMenuOwnerPorts(
+    state,
+    (event) => {
+      if (event.type === "memberRemoved" && !state.actors.actors.some((actor) => actor.id === event.detail.actorId)) {
+        removeActorSprite(state.sprites, actorId(event.detail.actorId));
+        if (init.spriteRuntime !== undefined && init.spriteRuntime.section !== state.sprites) init.spriteRuntime.removeActor(actorId(event.detail.actorId));
+      }
+      if (event.type === "activeMemberChanged") {
+        selectPartyActor(state.sprites, event.detail.currentActorId === null ? null : actorId(event.detail.currentActorId));
+        if (init.spriteRuntime !== undefined && init.spriteRuntime.section !== state.sprites) {
+          init.spriteRuntime.selectActor(event.detail.currentActorId === null ? null : actorId(event.detail.currentActorId));
+        }
+      }
+      registerEmitter(state.vm, state.events, "party");
+      queueNativeEvent(state.vm, state.events, "party", event.type, event.detail);
+    },
+    {
+      item(source) {
+        const resolved = resolveAsset(index, root, "items", source);
+        if (!resolved.ok) return undefined;
+        const cached = inventoryItemDefinitions.get(resolved.value);
+        if (cached !== undefined) return cached;
+        const bytes = cache.get(resolved.value);
+        if (bytes === undefined) return undefined;
+        const parsed = readItem(new BinaryReader(bytes));
+        if (!parsed.ok) return undefined;
+        inventoryItemDefinitions.set(resolved.value, parsed.value);
+        return parsed.value;
+      },
+      character(source) {
+        const resolved = resolveAsset(index, root, "characters", source);
+        if (!resolved.ok) return undefined;
+        const cached = inventoryCharacterDefinitions.get(resolved.value);
+        if (cached !== undefined) return cached;
+        const bytes = cache.get(resolved.value);
+        if (bytes === undefined) return undefined;
+        const parsed = readCharacter(new BinaryReader(bytes));
+        if (!parsed.ok) return undefined;
+        inventoryCharacterDefinitions.set(resolved.value, parsed.value);
+        return parsed.value;
+      },
+      applyEquipment(actorId, equipped, catalog) {
+        return services.actors.applyEquipment(actorId, equipped, catalog) !== null;
+      },
+    },
+    (event) => {
+      registerEmitter(state.vm, state.events, "inventory");
+      queueNativeEvent(state.vm, state.events, "inventory", event.type, event.detail);
+    },
+  );
+  for (const section of ["party", "inventory", "menu"] as const) {
+    bus.register(section, (effect) => applyMenuStateEffect(menuOwners, effect));
+  }
+  // The script-facing media owner (MEDIA-1): starts post through the one bus so
+  // the audio applier stays the only start route; `bind` fills the returned voice.
+  const media = createMediaScriptService(
+    state,
+    (name, args) => bus.postEffect("audio", engineEffect("audio", name, args, "draw-audio-cue")),
+    (code, op, detail) => {
+      const file = detail["file"];
+      const text = Object.entries(detail).map(([key, value]) => `${key}=${String(value)}`).join(" ");
+      diagnostics.push({ code, file: typeof file === "string" ? file : "", line: 0, message: `${op}: ${code} ${text}`.trimEnd() });
+    },
+  );
   bus.register("world", (effect) => applyWorldEffect(state, effect));
   bus.register("camera", (effect) => applyCameraEffect(state, effect));
   bus.register("ui", (effect) => applyUiEffect(state, effect.name, effect.args));
@@ -231,9 +319,39 @@ export function createEngine(init: EngineInit): Engine {
   });
   bus.register("sprites", (effect) => {
     const values = effect.args as readonly Value[]; // Script effects use the VM Value subset.
+    if (effect.name === "__party_addplayer_asset" || effect.name === "__party_newplyr_asset") {
+      const file = typeof effect.args[0] === "string" ? effect.args[0] : "";
+      const hex = typeof effect.args[1] === "string" ? effect.args[1] : "";
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+      const character = readCharacter(new BinaryReader(bytes));
+      if (!character.ok) return;
+      applySpriteEffect(state, effect.name, [file, character.value] as unknown as readonly Value[]);
+      const runtime = init.spriteRuntime;
+      const board = state.world.board;
+      if (runtime === undefined || runtime.section === state.sprites || board === null || board === undefined) return;
+      if (effect.name === "__party_addplayer_asset") {
+        const member = state.actors.actors.find((actor) => actor.kind === "party" && actor.source === file);
+        const sprite = member === undefined ? undefined : state.sprites.players.find((player) => player.actorId === member.id);
+        if (member !== undefined && sprite !== undefined && !runtime.section.players.some((player) => player.actorId === member.id)) {
+          runtime.createPlayer(board, {
+            id: sprite.id, actorId: member.id, kind: "player", source: file,
+            x: sprite.x, y: sprite.y, layer: sprite.layer,
+            controlled: state.party.selected === member.id,
+            character: character.value,
+          });
+        }
+      } else if (state.party.selected !== null) {
+        runtime.changePlayerGraphics(actorId(state.party.selected), file, character.value);
+      }
+      return;
+    }
     applySpriteEffect(state, effect.name, values);
   });
   bus.register("triggers", (effect) => applyTriggerEffect(state, effect));
+  // The audio callback runs during an originating engine phase; services are
+  // initialized below before any phase can post an engine-originated start.
+  let services!: ScriptServices;
   // The audio track engine owns `state.audio`: it applies the `audio` effects and asks for a file's bytes only to
   // learn its length (docs/spec/engine/audio-media.md#audio-core-pins), then drops them.
   let audioDecoders: readonly AssetDecoder[] = [];
@@ -244,7 +362,10 @@ export function createEngine(init: EngineInit): Engine {
     warn: (record) => void diagnostics.push({ code: record.code, file: "", line: 0, message: record.message }),
     error: (record) => void diagnostics.push({ code: record.code, file: "", line: 0, message: record.message }),
   };
-  let defaultSoundFont = init.defaultSoundFont ?? null;
+  // Scene mode has no game file, so a host may supply the author default directly. Boot mode
+  // takes it from the main file's audio-settings block and ignores this start-up value.
+  let defaultSoundFont = init.mainFile === undefined ? init.defaultSoundFont ?? null : null;
+  let mainFileAudioNeedsApply = init.mainFile !== undefined;
   if (defaultSoundFont !== null && !index.byKey.has(defaultSoundFont)) {
     diagnostics.push({ code: "media.soundfont-missing", file: defaultSoundFont, line: 0, message: `default SoundFont "${defaultSoundFont}" is not in the asset index` });
     defaultSoundFont = null;
@@ -256,6 +377,10 @@ export function createEngine(init: EngineInit): Engine {
     },
     need: (key) => request(key, "audio"),
     defaultSoundFont,
+    bindVoice: (handle, result) => media.bind(handle, result),
+    engineBeforePlay: (detail) => runEngineCancelableEventOutcome(state, services, MEDIA_EMITTER, "beforePlay", detail, STEP_BUDGET),
+    transition: (event) => queueAudioEvent(state, event),
+    transitionsActive: () => mediaEventsActive(state),
     notify: (note) => {
       if (note.kind !== "diag") return;
       const file = note.detail.file;
@@ -263,8 +388,21 @@ export function createEngine(init: EngineInit): Engine {
       diagnostics.push({ code: note.code, file: typeof file === "string" ? file : "", line: 0, message: `${note.op}: ${note.code} ${detail}`.trimEnd() });
     },
   });
-  audio.register(bus);
-  for (const registration of init.effectAppliers ?? []) bus.register(registration.section, registration.applier);
+  let audioRegistered = false;
+  function registerAudio(): void {
+    if (audioRegistered) return;
+    audioRegistered = true;
+    audio.register(bus);
+    // Keep the host's explicit section override last, just as in scene mode.
+    for (const registration of init.effectAppliers ?? []) {
+      if (registration.section === "audio") bus.register("audio", registration.applier);
+    }
+  }
+  // Boot mode registers after the main file supplies the game's audio settings; scene mode has none.
+  if (init.mainFile === undefined) registerAudio();
+  for (const registration of init.effectAppliers ?? []) {
+    if (registration.section !== "audio") bus.register(registration.section, registration.applier);
+  }
   let nextRequestId = 1;
   let failed = false;
   let quitRequested = false;
@@ -295,10 +433,17 @@ export function createEngine(init: EngineInit): Engine {
       state.engine.boot = { stage: "main", main: found, fonts: [] };
     }
   }
-
-  function makeServices(plugins: readonly ResolvedPlugin[], programLoader?: ProgramLoader): ScriptServices {
+  let activePlugins: readonly ResolvedPlugin[] = init.plugins ?? DEFAULT_ENGINE_PLUGINS;
+  const packageStartupLifecycle = { active: false, packageName: undefined as string | undefined };
+  let startupServicesReady = false;
+  function makeServices(
+    plugins: readonly ResolvedPlugin[],
+    programLoader?: ProgramLoader,
+    runStartups = true,
+  ): ScriptServices {
+    const listenersBeforeStartup = [...state.events.listeners];
     audioDecoders = assembleAudioDecoders(plugins.map((plugin) => plugin.definition), decoderLogger);
-    return createScriptServices(
+    const nextServices = createScriptServices(
       state,
       plugins,
       undefined,
@@ -307,17 +452,53 @@ export function createEngine(init: EngineInit): Engine {
       "engine",
       (section, effect) => bus.dispatchRecorded(section, effect),
       (request) => {
+        if (request.kind === "asset" && (request.area === "characters" || request.area === "items") &&
+            typeof request.path === "string" && typeof request.reqId === "number" &&
+            Number.isSafeInteger(request.reqId) && request.reqId > 0 && request.reqId < SCRIPT_REQUEST_BASE) {
+          const area = request.area;
+          const resolved = resolveAsset(index, root, area, request.path);
+          const folder = area === "items" ? "item" : "characters";
+          const key = resolved.ok ? resolved.value : assetKey(`${folder}/${request.path}`);
+          const reqId = SCRIPT_REQUEST_BASE + request.reqId;
+          pending.set(reqId, { reqId, key, kind: area === "items" ? "script-item" : "script-character" });
+          requestsOut.push({ kind: "asset", reqId, key });
+          return;
+        }
         if (request.kind !== "playVideo" || typeof request.key !== "string" || (request.presentation !== "full" && request.presentation !== "small") || typeof request.reqId !== "number") return;
-        state.engine.video = { reqId: request.reqId, key: request.key, presentation: request.presentation, ended: false };
+        state.engine.video = { reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation, ended: false };
         requestsOut.push({ kind: "playVideo", reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation });
       },
       undefined,
       undefined,
+      packageStartupLifecycle,
+      media,
       init.scriptObservers,
     );
+    media.activateDeclared();
+    if (runStartups) {
+      nextServices.setPackageStartup(true);
+      try {
+        runPackageStartup(
+          state,
+          nextServices,
+          plugins.flatMap((plugin) => plugin.startup === undefined ? [] : [withOwner(plugin.startup, plugin.package?.name ?? plugin.definition.id)]),
+          plugins,
+          listenersBeforeStartup,
+        );
+      } catch (error) {
+        if (!(error instanceof ScriptError)) throw error;
+        fail(toDiagnostic(error));
+      } finally {
+        nextServices.setPackageStartup(false);
+      }
+    }
+    startupServicesReady = runStartups;
+    return nextServices;
   }
-  let services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS);
-  if (init.mainFile === undefined && init.program !== undefined) {
+  services = init.mainFile === undefined
+    ? makeServices(activePlugins, undefined, true)
+    : makeServices([], undefined, false);
+  if (init.mainFile === undefined && !failed && init.program !== undefined) {
     const ref: ProgramRef = typeof init.program === "string"
       ? { kind: "inline", text: init.program, compiler: COMPILER_VERSION, dialect: "tk3" }
       : init.program;
@@ -518,6 +699,17 @@ export function createEngine(init: EngineInit): Engine {
     if (entry === undefined) return;
     pending.delete(entry.reqId);
     consumed.push(record);
+    if (entry.kind === "script-character" || entry.kind === "script-item") {
+      if (record.event.bytes === null) {
+        replyToRequest(state.vm, entry.reqId - SCRIPT_REQUEST_BASE, { ok: false, value: "" });
+      } else {
+        let hex = "";
+        for (const byte of record.event.bytes) hex += byte.toString(16).padStart(2, "0");
+        cache.set(entry.key, new Uint8Array(record.event.bytes));
+        replyToRequest(state.vm, entry.reqId - SCRIPT_REQUEST_BASE, { ok: true, value: hex });
+      }
+      return;
+    }
     if (entry.kind === "audio") {
       rememberAudio(entry.key, record.event.bytes);
       audio.retry();
@@ -716,12 +908,16 @@ export function createEngine(init: EngineInit): Engine {
         diagnostics.push({ code: "asset.invalid", file: nextMain, line: 0, message: `main file "${nextMain}" is not in the asset index` });
       } else {
         mainKey = found;
-        mainFile = null;
-        root = init.assetRoot;
+        mainFileAudioNeedsApply = true;
         state.engine.boot = { stage: "main", main: found, fonts: [] };
       }
     }
-    services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS, loader ?? undefined);
+    if (nextMain !== undefined) {
+      startupServicesReady = false;
+      services = makeServices([], loader ?? undefined, false);
+    } else {
+      services = makeServices(activePlugins, loader ?? undefined, true);
+    }
     audio.retry();
   }
   function fail(diagnostic: Diagnostic): void {
@@ -834,9 +1030,31 @@ export function createEngine(init: EngineInit): Engine {
     }
   }
 
+  /** Emit the board lifecycle notification on the shared queued bus. */
+  function boardLifecycle(type: "entered" | "left", board: WorldBoard, player: SpriteActor | undefined): number {
+    const actor = state.actors.actors.find((candidate) => candidate.kind === "party") ?? state.actors.actors[0];
+    const detail = {
+      actorid: actor?.id ?? null,
+      boardkey: board.key,
+    };
+    const boardEvent = queueNativeEvent(state.vm, state.events, boardEmitterKey(board.key), type, detail);
+    if (actor !== undefined) {
+      registerActorObject(state.vm, state.events, state.actors, actor.id);
+      queueNativeEvent(state.vm, state.events, actorEmitterKey(actor.id), type, detail);
+    }
+    return boardEvent;
+  }
+
   /** Board entry (E-19, E-47; docs/spec/engine/main-loop-and-startup.md#reawakened-board-entry). */
   function arrive(board: WorldBoard, arrival: Arrival, fromSend: boolean): void {
+    const previous = state.world.board;
+    const player = state.sprites.players.find((candidate) => candidate.id === state.sprites.selectedPlayer) ?? state.sprites.players[0];
     if (fromSend) stopOldBoardThreads();
+    if (previous !== undefined && previous !== null && previous.key !== board.key) {
+      const leftEvent = boardLifecycle("left", previous, player);
+      deferUnregisterEmitter(state.events, boardEmitterKey(previous.key), leftEvent);
+    }
+    registerEmitter(state.vm, state.events, boardEmitterKey(board.key));
     clearPathfindingCache();
     state.world = { board };
     resetTriggersSection(state.triggers);
@@ -847,6 +1065,7 @@ export function createEngine(init: EngineInit): Engine {
     state.camera = realignCamera(state.camera, board, cameraAim(board, arrival));
     bus.postEffect("triggers", engineEffect("triggers", "deactivateat", placement));
     postBoardMusic(board);
+    boardLifecycle("entered", board, player);
     // An empty list is stored as one empty string and empty entries are ignored (docs/spec/formats/board.md#threads-constants-and-settings).
     for (const name of board.threads ?? []) if (name !== "") startFileProgram(name, board.key, "board");
     if (board.enterPrg !== undefined && board.enterPrg !== "") startFileProgram(board.enterPrg, board.key, blockingAlive() ? "board" : "blocking");
@@ -877,10 +1096,32 @@ export function createEngine(init: EngineInit): Engine {
     }
     const loaded = loadBoard(target.value);
     if (loaded === "pending") return;
-    clearPendingExit(player.id);
-    if (loaded === null) return;
+    if (loaded === null) {
+      clearPendingExit(player.id);
+      return;
+    }
     const arrival = edgeArrival(player, direction, loaded);
-    if (arrival === null) return;
+    if (arrival === null) {
+      clearPendingExit(player.id);
+      return;
+    }
+    registerEmitter(state.vm, state.events, boardEmitterKey(loaded.key));
+    const actor = state.actors.actors.find((candidate) => candidate.kind === "party") ?? state.actors.actors[0];
+    const allowed = runEngineCancelableEvent(
+      state,
+      services,
+      boardEmitterKey(loaded.key),
+      "beforeEnter",
+      { actorid: actor?.id ?? null, boardkey: loaded.key, entry: { x: arrival.x, y: arrival.y, layer: arrival.layer, unit: arrival.unit } },
+      STEP_BUDGET,
+    );
+    if (!allowed) {
+      clearPendingExit(player.id);
+      // A canceled entry leaves the target board available for another attempt; preserve
+      // its package/script listeners rather than treating it as an unloaded board.
+      return;
+    }
+    clearPendingExit(player.id);
     arrive(loaded, arrival, true);
   }
 
@@ -897,6 +1138,88 @@ export function createEngine(init: EngineInit): Engine {
     }
     return resolved.value;
   }
+  /**
+   * Apply package-owned track metadata after game-file settings and before the
+   * audio applier registers (docs/spec/engine/audio-media.md#media-4).
+   */
+  function applyPackageAudioTracks(plugins: readonly ResolvedPlugin[]): void {
+    const report = (packageName: string, index: number, reason: string): void => {
+      diagnostics.push({
+        code: "media.package-track",
+        file: mainKey ?? "",
+        line: 0,
+        message: `package "${packageName}" audioTracks[${index}] rejected: ${reason} (docs/spec/engine/audio-media.md#media-4)`,
+      });
+    };
+    for (const plugin of plugins) {
+      const packageMetadata = plugin.package;
+      if (packageMetadata === undefined) continue;
+      const declarations: unknown = plugin.definition.audioTracks;
+      if (declarations === undefined) continue;
+      if (!Array.isArray(declarations)) {
+        report(packageMetadata.name, 0, "audioTracks must be an array");
+        continue;
+      }
+      for (let index = 0; index < declarations.length; index += 1) {
+        const declaration: unknown = declarations[index];
+        if (typeof declaration !== "object" || declaration === null || Array.isArray(declaration)) {
+          report(packageMetadata.name, index, "declaration must be an object");
+          continue;
+        }
+        const record = declaration as { readonly name?: unknown; readonly voiceCount?: unknown };
+        const hasVoiceCount = Object.prototype.hasOwnProperty.call(record, "voiceCount");
+        const voiceCount = hasVoiceCount ? record.voiceCount : 1;
+        if (typeof record.name !== "string" || typeof voiceCount !== "number" || !Number.isInteger(voiceCount) || voiceCount < 1) {
+          report(packageMetadata.name, index, "name must be a string and voiceCount must be a positive integer when present");
+          continue;
+        }
+        const problem = audio.configurePackageTrack(record.name, voiceCount);
+        if (problem !== null) report(packageMetadata.name, index, problem);
+      }
+    }
+  }
+
+  /**
+   * Apply the main file's audio-settings block before the audio applier registers
+   * (docs/spec/formats/main-file.md#tkr-audio-settings-extension). An over-cap block keeps the
+   * Epic 6 defaults and cap 32, keeps the independent default SoundFont and reports once.
+   */
+  function applyMainFileAudio(main: MainFile, plugins: readonly ResolvedPlugin[]): void {
+    const settings = main.audioSettings;
+    if (settings === null) {
+      audio.setDefaultSoundFont(null);
+      audio.applyGameAudio(DEFAULT_GAME_AUDIO_SETTINGS);
+    } else {
+      let font: AssetKey | null = null;
+      if (settings.defaultSoundFont !== null) {
+        const resolved = assetKey(settings.defaultSoundFont);
+        if (index.byKey.has(resolved)) {
+          font = resolved;
+        } else {
+          diagnostics.push({
+            code: "media.soundfont-missing",
+            file: resolved,
+            line: 0,
+            message: `TKR audio default SoundFont "${settings.defaultSoundFont}" is not in the asset index (docs/spec/formats/main-file.md#tkr-audio-settings-extension)`,
+          });
+        }
+      }
+      audio.setDefaultSoundFont(font);
+      const applied = audio.applyGameAudio({ tracks: settings.tracks, voiceCap: settings.voiceCap });
+      if (!applied.ok) {
+        const track = settings.tracks[applied.overflowIndex]!;
+        diagnostics.push({
+          code: "media.voice-cap",
+          file: mainKey ?? "",
+          line: applied.overflowIndex,
+          message: `TKR audio settings exceed the ${settings.voiceCap}-voice cap at track ${applied.overflowIndex} "${track.name}"; Epic 6 defaults and cap 32 apply (docs/spec/formats/main-file.md#tkr-audio-settings-extension)`,
+        });
+      }
+    }
+    applyPackageAudioTracks(plugins);
+    registerAudio();
+  }
+
   function startBoot(boot: NonNullable<EngineSection["boot"]>): boolean {
     if (mainKey === null) return false;
     if (boot.stage === "main") {
@@ -930,12 +1253,19 @@ export function createEngine(init: EngineInit): Engine {
         installedFonts.set(key, cache.get(key) ?? new Uint8Array());
         boot.fonts.push(key);
       }
-      const manifest = pluginManifestFor(mainFile, mainKey);
-      diagnostics.push(...manifest.diagnostics);
-      const resolvedPlugins = resolveManifestPlugins(manifest.manifest, mainKey);
-      diagnostics.push(...resolvedPlugins.diagnostics);
+      const manifest = pluginManifestFor(mainFile, mainKey, init.packageCatalogue ?? []);
+      const resolvedPlugins = resolveManifestPlugins(manifest.manifest, mainKey, init.packageCatalogue ?? []);
+      diagnostics.push(...manifest.diagnostics, ...resolvedPlugins.diagnostics);
       loader = { index, root, read: (key) => cache.get(key) };
-      services = makeServices(init.plugins ?? resolvedPlugins.plugins, loader);
+      activePlugins = init.plugins ?? resolvedPlugins.plugins;
+      if (mainFileAudioNeedsApply) {
+        applyMainFileAudio(mainFile, activePlugins);
+        mainFileAudioNeedsApply = false;
+      } else {
+        registerAudio();
+      }
+      if (!startupServicesReady) services = makeServices(activePlugins, loader, true);
+      if (failed) return false;
       if (mainFile.initChar !== "") {
         const player = resolveAsset(index, root, "characters", mainFile.initChar);
         if (player.ok) bus.postEffect("sprites", engineEffect("sprites", "createplayer", [player.value]));
@@ -993,9 +1323,11 @@ export function createEngine(init: EngineInit): Engine {
     if (sceneBoardKey === null || state.world.board !== undefined && state.world.board !== null) return false;
     const loaded = loadBoard(sceneBoardKey);
     if (loaded === "pending" || loaded === null) return false;
+    registerEmitter(state.vm, state.events, boardEmitterKey(loaded.key));
     clearPathfindingCache();
     state.world = { board: loaded };
     state.camera = initCameraForBoard(state.camera, loaded, init.cameraTarget);
+    boardLifecycle("entered", loaded, state.sprites.players[0]);
     return true;
   }
   /**
@@ -1036,6 +1368,11 @@ export function createEngine(init: EngineInit): Engine {
       claims: state.engine.claims ?? [],
       audio: state.audio,
       events: state.events,
+      ...(state.engine.pendingEffects?.audio === undefined ? {} : { pendingAudio: state.engine.pendingEffects.audio }),
+      mediaStart: (handle: number) => {
+        const record = state.vm.objects.find((item) => item.handle === handle);
+        return record === undefined ? null : mediaVoiceRef(record);
+      },
       ...(state.engine.video === undefined ? {} : { video: { reqId: state.engine.video.reqId, ended: state.engine.video.ended } }),
     };
   }
@@ -1121,6 +1458,10 @@ export function createEngine(init: EngineInit): Engine {
         const videoBefore = state.engine.video;
         runWaitsPhase(state.vm, phaseView(), defaultWaitPoll, (seq) => {
           if (!(state.engine.claims ?? []).includes(seq)) (state.engine.claims ??= []).push(seq);
+        }, undefined, (wait) => {
+          if (wait.kind === "input.key" && wait.dialogue !== undefined) {
+            queueNativeEvent(state.vm, state.events, "game", "dialogue.completed", wait.dialogue);
+          }
         });
         if (videoBefore?.ended === true && state.engine.video?.reqId === videoBefore.reqId) {
           const music = state.audio.tracks.find((track) => track.name === "music");
@@ -1175,6 +1516,7 @@ export function createEngine(init: EngineInit): Engine {
         return;
       case "audio":
         audio.phase();
+        audio.retry();
         for (const registration of registrationByPhase.get(phase) ?? []) registration.run(state, (section, effect) => bus.postEffect(section, effect));
         return;
       default: {

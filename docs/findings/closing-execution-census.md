@@ -69,11 +69,18 @@ checkpoint, draw and pixel hashes. Neither closing PNGs nor `golden/ledger.json`
 changed. The ordinary headless golden gate also passed.
 
 The required `pnpm typecheck && pnpm test && pnpm test:strict && pnpm lint`
-passed: 1,666 tests, zero failures and zero skips. Focused tests pin an exact
+passed after merging main (`ef461636`): 1,837 tests, zero failures and zero skips. Focused tests pin an exact
 ten-step instruction histogram, repeated/restored hashes, observer isolation,
 all four resolution layers, a two-handler `next` chain with exactly one stub
-entry, and deterministic real-engine boot tracing. Provenance and catalogue
+entry, deterministic real-engine boot tracing, and observers alongside package
+startup/restore and its forbidden-operation guard. The merged coverage gate
+passed at 92.07% lines and 81.63% branches. Provenance and catalogue
 generation checks passed.
+
+Main's approved engine and golden updates are the baseline for this refreshed
+trace. Observer configuration follows the package-startup and media arguments
+in script-service construction, preserving both runtime features. No golden was
+recorded or edited during conflict resolution.
 
 After fetching fixtures, generate a new report with:
 

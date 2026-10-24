@@ -210,6 +210,7 @@ const FLOW_SPECS: readonly BuiltinSpec[] = [
       const seconds = toNumberValue(args[0]?.value ?? 0);
       const ticks = secondsToTicks(seconds);
       if (ticks === null || ticks < 1) throw new ScriptError("builtin.bad-arg", `delay: ${seconds} is not a valid duration`);
+      if (view.packageStartup === true) throw new ScriptError("package.startup-unfinished", "a package start-up program waits; start-up programs must not wait");
       return { value: null, wait: { kind: "sleep", global: true, until: view.clock.tick() + ticks, resumesCall: true } };
     },
   },

@@ -1,7 +1,18 @@
-import { actorId, getActor, patchActor, type ActorId, type ActorPatch, type ActorRecord, type ActorStats, type ActorsSection } from "./model.ts";
+import { actorId, getActor, patchActor as patchActorModel, type ActorId, type ActorRecord, type ActorStats, type ActorsSection } from "./model.ts";
+import {
+  advanceStatus,
+  applyEquipment,
+  awardExperience,
+  updateActorStats,
+  type ActorHooks,
+  type AdvanceStatusOptions,
+  type ActorRuleResult,
+  type EquipmentItemDefinition,
+  type StatsChangeOptions,
+} from "./rules.ts";
+import type { ActorEventSink } from "./object.ts";
 import type { HostObjectType } from "../script/host.ts";
 import type { Value } from "../ports/value.ts";
-
 /**
  * The actor-owned stats path used by legacy aliases (AD-10, E-85).
  *
@@ -13,44 +24,91 @@ export type StatsPort = {
   write(actor: ActorId | number, patch: Partial<ActorStats>): boolean;
 };
 
-/** The owner seam used by script views; runtime objects never own actor data. */
-export type ActorService = StatsPort & {
-  readActor(actor: ActorId | number): Readonly<ActorRecord> | null;
-  patchActor(actor: ActorId | number, patch: ActorPatch): Readonly<ActorRecord> | null;
-  activeActor(): Readonly<ActorRecord> | null;
+export type ActorOperationService = {
+  updateStats(actor: ActorId | number, patch: Partial<ActorStats>, options: Omit<StatsChangeOptions, "hooks">): ActorRuleResult | null;
+  advanceStatus(actor: ActorId | number, amount: number, options?: Omit<AdvanceStatusOptions, "hooks">): ActorRuleResult | null;
+  applyEquipment(actor: ActorId | number, equipped: readonly string[], items: readonly EquipmentItemDefinition[]): ActorRuleResult | null;
+  awardExperience(actor: ActorId | number, amount: number): ActorRuleResult | null;
 };
 
+export type ActorService = StatsPort & ActorOperationService & {
+  readActor(actor: ActorId | number): Readonly<ActorRecord> | null;
+  rename(actor: ActorId | number, name: string): Readonly<ActorRecord> | null;
+  activeActor(): Readonly<ActorRecord> | null;
+  hooks(actor: ActorId | number): ActorHooks;
+};
 /** Create the owner service over the one authoritative actor section. */
-export function createActorService(section: ActorsSection): ActorService {
-  const stats = createStatsPort(section);
+export function createActorService(
+  section: ActorsSection,
+  resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks = () => ({}),
+  events?: ActorEventSink,
+): ActorService {
+  const hooksFor = (actor: ActorId | number): ActorHooks => {
+    const record = getActor(section, actorId(actor));
+    return record === null ? {} : resolveHooks(record);
+  };
+  const stats = createStatsPort(section, (record) => resolveHooks(record), events);
   return {
     read(actor) {
       return stats.read(actor);
     },
     write(actor, patch) {
-      return stats.write(actor, patch);
+      const result = updateActorStats(section, actor, patch, { cause: "script", hooks: hooksFor(actor) });
+      if (result !== null) events?.(result);
+      return result !== null;
+    },
+    updateStats(actor, patch, options) {
+      const result = updateActorStats(section, actor, patch, { ...options, hooks: hooksFor(actor) });
+      if (result !== null) events?.(result);
+      return result;
+    },
+    advanceStatus(actor, amount, options = {}) {
+      const result = advanceStatus(section, actor, amount, { ...options, hooks: hooksFor(actor) });
+      if (result !== null) events?.(result);
+      return result;
+    },
+    applyEquipment(actor, equipped, items) {
+      const result = applyEquipment(section, actor, equipped, items, hooksFor(actor));
+      if (result !== null) events?.(result);
+      return result;
+    },
+    awardExperience(actor, amount) {
+      const result = awardExperience(section, actor, amount, hooksFor(actor));
+      if (result !== null) events?.(result);
+      return result;
     },
     readActor(actor) {
       return getActor(section, actorId(actor));
     },
-    patchActor(actor, patch) {
-      return patchActor(section, actorId(actor), patch);
+    rename(actor, name) {
+      return patchActorModel(section, actorId(actor), { name });
     },
     activeActor() {
       const party = section.actors.find((candidate) => candidate.kind === "party");
       return party ?? section.actors[0] ?? null;
     },
+    hooks(actor) {
+      return hooksFor(actor);
+    },
   };
 }
 
 /** Create the StatsPort view over the one authoritative actor section. */
-export function createStatsPort(section: ActorsSection): StatsPort {
+
+export function createStatsPort(
+  section: ActorsSection,
+  resolveHooks: (actor: Readonly<ActorRecord>) => ActorHooks = () => ({}),
+  events?: ActorEventSink,
+): StatsPort {
   return {
     read(actor) {
       return getActor(section, actorId(actor))?.stats ?? null;
     },
     write(actor, patch) {
-      return patchActor(section, actorId(actor), { stats: patch }) !== null;
+      const record = getActor(section, actorId(actor));
+      const result = updateActorStats(section, actor, patch, { cause: "script", hooks: record === null ? {} : resolveHooks(record) });
+      if (result !== null) events?.(result);
+      return result !== null;
     },
   };
 }
@@ -81,6 +139,7 @@ function actorIdFromEmitter(context: { readonly events: { readonly emitters?: Re
 export function createActorHostType(service: ActorService): HostObjectType {
   return {
     name: "actor",
+    methods: { damage: "actor_damage" },
     read(context, name): Value | undefined {
       const id = actorIdFromEmitter(context);
       if (id === null) return undefined;
@@ -110,11 +169,11 @@ export function createActorHostType(service: ActorService): HostObjectType {
       if (actor === null) return "not-host";
       const stat = ACTOR_STAT_FIELDS[name.toLowerCase()];
       if (stat !== undefined && typeof value === "number") {
-        service.write(id, { [stat]: value } as Partial<ActorStats>);
-        return "written";
+        const result = service.updateStats(id, { [stat]: value } as Partial<ActorStats>, { cause: "script" });
+        return result === null ? "not-host" : "written";
       }
       if (name.toLowerCase() === "name" && typeof value === "string") {
-        service.patchActor(id, { name: value });
+        service.rename(id, value);
         return "written";
       }
       return "read-only";

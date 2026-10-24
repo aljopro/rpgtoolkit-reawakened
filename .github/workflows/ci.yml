@@ -42,6 +42,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+      - run: pnpm coverage
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: node-test-coverage
+          path: coverage/lcov.info
+          if-no-files-found: error
       - run: pnpm fixtures:test
       - run: pnpm catalogue:check
       # Command metadata is checked after the TypeScript build; docs remain outside VM state.

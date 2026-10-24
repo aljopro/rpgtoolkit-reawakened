@@ -6,7 +6,149 @@ Header text: `RPGTLKIT SAVE`. The engine writes major **3**, minor **4** (Toolki
 
 **Counts here are exact counts** (not upper bounds), except the thread list.
 
-**Our own save format — Reawakened rule (R-13).** A rebuild may use its own save format; the legacy `.sav` layout on this page is an **import** concern only, not a format this project must write. Reading legacy saves is scoped with the menu/party/save work. Also note that the split into separate lists — numeric globals, object-handle globals and string globals, then redirects, party, inventory, equipment and the miscellany — is what a loader must reproduce; and since the serialised interpreter state (field 46) is engine-specific, a rebuild may fall back to restarting each saved thread from the top rather than resuming mid-program.
+**Our own save format — Reawakened rule (R-13).** A rebuild may use its own save format; this project's canonical Reawakened format is the save/load contract. Epic 8 implements that format only; legacy `.sav` import (E-122) is deferred. Restore a thread from its serialized execution state only when saved source and compiler compatibility match current source/compiler; otherwise that thread restarts from source rather than resuming an incompatible instruction position. Restore still validates every saved callable and definition owner: if a changed or incompatible program leaves an unresolved callable reference, reject the save with the existing located restore error rather than repairing or silently dropping callable state (see [rpgcode-language.md](../engine/rpgcode-language.md), “Saving, loading and tidying up closures”). The split into separate lists — numeric globals, object-handle globals and string globals, then redirects, party, inventory, equipment and the miscellany — documents legacy import behavior only.
+### Reawakened canonical actor state
+
+The Reawakened runtime uses its canonical state snapshot for its own save/load
+surface. The legacy binary layout above remains an import specification. The
+canonical state contains an `actors` section with schema version `2`, a
+monotonic `nextId`, and an `actors` array. Each actor record stores only:
+
+| Field | Type | Save rule |
+|---|---|---|
+| `id` | positive integer | Stable actor identity; never a VM object handle |
+| `kind` | `party`, `enemy`, or `npc` | Actor source domain |
+| `source` | asset reference string | Source asset, never a raw program path |
+| `name` | string | Actor display name |
+| `stats` | plain-data record | Current and maximum stats |
+| `statuses` | string-to-integer record | Active status counters |
+| `equipment` | plain-data record | Equipped references and derived bonuses |
+| `progression` | plain-data record | Compatibility and policy values |
+| `behaviour` | string or `null` | Package behaviour name only |
+| `customEvents` | string array | Declared actor event names |
+
+An actor record MUST NOT contain a callable, compiled program, host object,
+emitter listener, closure, or raw `.prg` path. VM object records may retain a
+host type name and ordinary plain-data members; their host methods are
+re-hydrated from the installed packages after load.
+
+Package startup runs in manifest order before actor hydration on boot and
+restore. It rebuilds the session behaviour registry and host declarations from
+the installed package code; neither registry is save data. Hydration resolves
+each saved behaviour name against that rebuilt registry. A missing behaviour
+keeps the actor data, uses core defaults, and emits one located
+`behaviour.missing` diagnostic per missing name. Loading never refuses a save
+for that condition. Reinstalling a package before loading resolves the same
+saved name to the newly installed implementation; actor records do not carry a
+package version.
+
+The actor section schema version MUST be bumped, with a migration and a
+previous-version restore fixture, whenever the persisted actor shape changes.
+
+### Reawakened canonical party, inventory and menu state
+
+The party, bag and open menu save as three owned sections of the same canonical
+game state, not as a second store. Schema version **2** replaces each section's
+version-1 empty placeholder. A version-1 section MUST be exactly `{}` and
+migrates to the fresh version-2 value below; other old or future versions and
+malformed current sections fail with `restore.shape` and an offending field
+path. Migration changes no actor, VM, RNG or time data.
+
+| Section | Version-2 fields | Fresh value |
+| --- | --- | --- |
+| `party` | `version`, `members` (ordered, distinct actor ids; at most five), `selected` (member id or `null`), `steps` (non-negative safe integer) | `{ version: 2, members: [], selected: null, steps: 0 }` |
+| `inventory` | `version`, `nextId` (positive monotonic item identity), `items`, `equipment`, `gold` (non-negative safe integer) | `{ version: 2, nextId: 1, items: [], equipment: [], gold: 0 }` |
+| `menu` | `version`, `screens` (ordered navigation stack), `graphic` (asset reference or `null`) | `{ version: 2, screens: [], graphic: null }` |
+
+An inventory item is exactly `{ id, source, handle, quantity }`: a positive
+safe integer identity below `nextId`, a non-empty item asset reference, its
+display/compatibility handle string, and a non-negative safe integer quantity.
+The `(source, handle)` pair is unique and identifies the item definition; `id`
+(called `entryId` by inventory operations and events) identifies this particular
+saved stack. `quantity` is the unequipped/available count. A zero-quantity stack
+is retained while an equipment record references it and retired only when it
+has neither available quantity nor equipment references. Equipment is an
+ordered list of `{ actorId, slot, itemId }`, with a live actor id, a non-empty
+slot name, an existing inventory identity and at most one entry per actor/slot.
+This is the inventory owner's slot assignment; actor-owned `equipment` remains
+the derived equipped-reference/bonus projection updated only through actor
+operations. It is not another roster or another copy of actor stats.
+
+Item identities never recycle during a run. An `items` action MUST NOT decrease
+`nextId`, introduce an id below the previous `nextId` unless that id is still
+present, or change an existing id's `(source, handle)` pair. Removing a stack
+retires its id only after its available quantity and all equipment references
+are absent; changing quantity preserves identity. Reset starts a new run with
+`nextId: 1`, while restore resumes the saved counter. Equipment actor
+references are derived, not saved: each `(actorId, slot, itemId)` tuple gets a
+stable actor-scoped opaque reference, used as both catalog `id` and equipped
+reference. Its deterministic encoding/disambiguation must avoid collisions
+with any catalog `name` or other reference because actor resolution matches
+`name` OR `id`. Thus multiple units from one stack can occupy distinct slots
+without adding save fields, and the same references reconstruct after restore.
+
+Every party member MUST name a live `party` actor and the roster MUST contain
+at most five distinct actor ids. Roster order is the party slot order. A
+non-empty party selects exactly one roster member by stable actor id; an empty
+party selects `null`. Adding the first member selects it; later additions
+preserve selection. Removing the selected member selects the member now at its
+former index, or the last remaining member if that index is past the end;
+removing the final member selects `null`. Reordering preserves selection by
+actor id.
+The party section stores membership, order, selection,
+and steps only; actor stats, progression, statuses, and equipment-derived
+state remain actor-owned. A roster operation validates its complete party and
+actor references before committing; failure changes neither owner. Snapshot and
+restore preserve the ordered ids and selected id, then restore the referenced
+actor records through the actor section. Party operations that add, remove,
+restore, select, or swap membership/order/selection emit only after the
+successful commit, exactly once per committed mutation; refusals and no-ops
+emit none (EMIT-13).
+
+A menu screen is exactly `{ screen, actorId, selection }`: a non-empty
+semantic screen name, a live actor id or `null`, and a non-negative safe
+integer selection. Empty optional references are explicit `null`; no field is
+omitted. Screen names and slot names are open identifiers, not legacy numeric
+limits. Modal/input waits remain VM-owned; menu state contains no callable,
+object handle or draw object.
+
+**Owner ports (entry 8.2).** Core exposes an object-valued capability with
+`party`, `inventory` and `menu` members. Each has `read()` (an immutable view)
+and `apply(action)` returning exactly `{ ok, error }`, where `error` is `null`
+on success or `{ path, message }` on failure. Validation happens before any
+write; a failure changes nothing. The actions are:
+
+| Owner | Plain-data action |
+| --- | --- |
+| `party` | `{ type: "roster", members, selected }` or `{ type: "steps", value }` |
+| `inventory` | `{ type: "items", items, nextId }`, `{ type: "equipment", equipment }`, or `{ type: "gold", value }` |
+| `menu` | `{ type: "navigation", screens }` or `{ type: "graphic", value }` |
+
+These are core section-owner ports, not game-facing unrestricted bag editing.
+Party/item/equipment operations add their semantic checks and events in their
+own tickets before invoking these ports. Cross-section workflows invoke each
+owner rather than mutating its records; an owner only commits its own section.
+Input records are copied on successful commit, and read views are deeply
+read-only. Existing ports keep resolving the current section after engine reset
+or restore rather than retaining an obsolete section object.
+
+The existing section-effect bus accepts the same one-record action in
+`args[0]` for the namespaced command `menu.state`, recorded by the existing VM
+as the unqualified effect name `state` (a manually posted `menu.state` effect
+is also accepted). Its patch names exactly one of `party`, `inventory`, or
+`menu`; that owner applies the action. Rejection is
+the catchable `menu.state-invalid` error with the offending field path.
+This makes authored script/native command adapters exercise the real owner
+path without introducing a second dispatch or public legacy command alias.
+
+**Capability design recommendation.** Prefer this object-valued, contextual
+capability to a flat callback list. TypeScript calls `ports.party.apply(...)`;
+an RPGCode-facing menu package can receive an OOP-12 hydrated capability object
+with equivalent domain queries/actions, with no methods serialized in these
+sections. The exact game-facing façade and calling syntax belong to entry 8.7;
+entry 8.2 does not register global menu objects or decide EMIT-8/EMIT-13. No
+emitter/event ruling is required for this data-only boundary.
+
 
 ## Layout (minor 4)
 

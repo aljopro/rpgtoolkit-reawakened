@@ -2,41 +2,86 @@
 title: "Rulings: the media object, its events, the game-file audio settings and the retired surface"
 type: 'feature'
 ticket: 1
-created: '2026-10-19'
-status: draft
-baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
-risk: "medium"
+created: '2026-10-21'
+status: 'done'
+baseline_revision: '9de95b3e9d57336f41e3d4bb59ef71fbd57249e9'
+route: 'full'
+route_source: 'auto'
+risk: 'medium'
+review: 'quick'
+review_source: 'pinned'
+lenses_ran: ['quick']
+review_loop_iteration: 0
 context:
-  - "spec - docs/spec/engine/audio-media.md (P3, P6, P7, legacy mapping, parity ledger, deferrals)"
-  - "spec - docs/spec/engine/rpgcode-functions.md (audio rows)"
-  - "spec - emitter and object sections written by 19.1"
-  - "spine - AD-10, AD-14, AD-16, AD-32"
+  - 'docs/guardrails.md'
+  - 'docs/spec/engine/audio-media.md'
+  - 'docs/spec/engine/rpgcode-modules-and-objects.md'
+  - 'docs/spec/engine/rpgcode-functions.md'
+  - 'docs/spec/formats/main-file.md'
 ---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent
 
-Rule, before any code, the media object the owner decided on 2026-10-19, and amend `audio-media.md` so its author surface is the object model. The playback, cue, wait and fade rules in that page stand; P3, P6 and P7's command tables are replaced by object rows. Anchors for later entries: `#media-1` (objects and `mediaPlay` return), `#media-2` (events and fields), `#media-3` (`beforePlay`), `#media-4` (game-file settings), `#media-5` (removed commands).
+**Problem:** Epic 6's procedural media API is not the approved Reawakened model. Later audio work needs one final, owner-approved script contract before code starts.
 
-## Boundaries
+**Approach:** Rule the media, track and voice objects, their event surface, game-file audio settings, and the exact procedural commands that are retired. Preserve the existing deterministic playback, cue, wait and fade rules and all Toolkit 3.1 audio calls.
 
-Documentation only. No TypeScript, no fixtures. The 3.1 alias table is carried over unchanged. Does not touch the cue stream, the runner protocol or Epic 9's handoff.
+## Boundaries & Constraints
+
+**Always:** Documentation first under G7; every owner ruling has evidence and a rejected alternative. Reuse Epic 19's object, emitter and engine-phase cancelable-dispatch rules. Keep audio state plain data and preserve the 3.1 compatibility surface.
+
+**Never:** Change TypeScript, fixtures, goldens, cue/state timing, runner protocol, or Epic 9 handoff. Do not edit the command catalogue in this ruling; the removed-name inventory must be checked against it for the later cutover.
 
 ## Key Decisions
 
-1. `mediaPlay(file[, options])` returns a voice object; legacy `mediaplay(file)` was `void`, so no 3.1 call site is affected.
-2. A voice object holds data only (track, slot, cueId); its methods come from the 19.1 host-provided method mechanism; a replaced voice is stale.
-3. Events are past-tense (`started`, `stopped`, `ended`, `looped`, `paused`, `resumed`, `faded`); voice events are re-emitted by the track and by `media`; cues stay imperative.
-4. `beforePlay` is the one cancelable event; it carries `source` (`script`, `board`, `animation`, `battle`, `menu`, `video`) and listeners may change file, volume and loop.
-5. Engine-phase cancelable emits are ruled with 19.11 (Assumption A-3).
-6. The game file carries tracks, voice counts, the voice cap and the default SoundFont; settings are not saved.
-7. Removed: `mediaTrack`, `mediaLoad`, `mediaPause`, `mediaResume`, `mediaSeek`, `mediaLoop`, `mediaFade`, `mediaWait`, `mediaVolume`, the query commands, `&voice`, `tkMD_*`, `priority` and `syncTrack` arguments.
+1. Use global `media`, `media.track(name)` and built-in track properties such as `media.music`. `mediaPlay(file[, options])` returns a data-only voice identified by track, slot and `cueId`; it reads `track`, `file`, `state`, `position`, `length`, `volume` and `loop`, and goes stale when its slot is replaced. Options are named `track`, `loop`, `volume`, `priority`, `sync` and `wait`. Hydrated voice methods are `stop`, `pause`, `resume`, `seek(seconds)`, `fade(percent, seconds)` and `wait`.
+2. Retain the case-insensitive `mediaStop(track[, voice])` extension alongside the 3.1 no-argument `mediastop()` call. Object control is through voice methods; the compatibility extension remains available.
+3. Store audio settings in a separate additive TKR extension beside the package-list block: ordered named tracks and voice counts, voice cap, and optional `defaultSoundFont`. Without the block, use Epic 6 defaults; settings are not saved.
+4. Events are past-tense state changes (`started`, `stopped`, `ended`, `looped`, `paused`, `resumed`, `faded`) with plain-data details `track`, `slot`, `cueId`, `file` and `tick`; tracks and `media` re-emit voice events. `beforePlay` is the one cancelable event, with sources `script`, `board`, `animation`, `battle`, `menu` and `video`; listeners may cancel or change `file`, `volume` and `loop`.
+5. Engine-originated cancelable dispatch follows Epic 19's EMIT-11 rule. Preserve the established 3.1 audio aliases and their behavior. Replace the old SoundFont deferral with the game-file setting decision.
 
-## Acceptance
+</frozen-after-approval>
 
-1. Every row cites evidence and a rejected alternative.
-2. The removed-command list matches the catalogue names exactly.
-3. The 2026-10-19 decisions each map to one ruled row.
+## Code Map
+
+- `docs/spec/engine/audio-media.md#media-command-family` — current P3/P6/P7 procedural signatures, limits, errors, examples and legacy mapping; preserve timing/cue/wait/fade rules outside the replaced API surface.
+- `docs/spec/engine/audio-media.md#audio-deferrals` — current default-SoundFont deferral to supersede with the owner decision.
+- `docs/spec/engine/rpgcode-functions.md` audio rows — authoritative inventory for checking retired names and unchanged 3.1 aliases; do not edit in this ticket.
+- `docs/spec/engine/rpgcode-modules-and-objects.md#oop-12`, `#emit-1`, `#emit-11` — data-only hydrated methods, event fields, and engine-originated cancelable dispatch; cite rather than redefine.
+- `docs/spec/formats/main-file.md` — existing additive TKR package-list extension; preserve legacy rows and package-list encoding.
+- `_bmad-output/initiative-rpgtoolkit-reawakened/epic-media-objects/epic-media-objects.md` — recorded 2026-10-19 owner decisions and remaining assumptions; the 21.2–21.6 plans consume this ruling.
+- `_bmad-output/initiative-rpgtoolkit-reawakened/epic-rpgcode-platform/story-rulings-objects-receivers-packages-emitters-and-the-trust-baseline-plan.md` and `story-cancelable-emit-parked-dispatch-cancel-and-event-mutation-plan.md` — completed Epic 19 object/emitter rulings.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] `docs/spec/engine/audio-media.md` — replace the procedural Reawakened surface with anchored `media-1` through `media-5` sections for objects and `mediaPlay` return, events and fields, `beforePlay`, game-file settings, and removed commands; explain simply first, then specify deterministic behavior.
+- [x] `docs/spec/engine/audio-media.md` — preserve and cross-reference the existing 3.1 alias table and Epic 6 playback/cue/wait/fade contracts; resolve the SoundFont deferral and cite EMIT-11 for engine-phase cancelable dispatch.
+- [x] `docs/spec/engine/audio-media.md` — inventory every removed Reawakened command/query/argument and verify its exact catalogue spelling without editing the catalogue.
+
+**Acceptance Criteria:**
+- Given the approved rulings, when an author reads the media section, then every object, event, setting and retired surface has an exact name and behavior that later tickets can implement without choosing semantics.
+- Given each owner ruling, when the spec is reviewed, then its row has an `OWNER` marker, evidence and a rejected alternative, and every 2026-10-19 decision maps to a row.
+- Given the final removed-name inventory, when compared with the command catalogue, then the names match exactly and every 3.1 audio alias and its call behavior remains unchanged.
+- Given the spec anchors, when later Epic 21 entries cite them, then no later entry depends on an unresolved media contract.
+
+## Implementation Notes
+
+- Replaced the procedural Reawakened author surface with MEDIA-1 through MEDIA-5 while retaining deterministic playback behavior and Toolkit 3.1 call semantics.
+- Resolved the game-file audio settings and SoundFont precedence; the save projection excludes configuration and restores playback against the loaded game's settings.
+- Incorporated the quick-review correction: built-in voice counts remain overridable by the game file; their fixed order and defaults are retained.
 
 ## Verification
 
-Link and anchor check; `pnpm provenance` and `pnpm licence` stay green; owner approval at the plan and done checkpoints.
+**Manual checks:**
+- Check all five `media-*` anchors and their inbound links; confirm no removed command remains described as the Reawakened author API and the Toolkit 3.1 alias names, signatures and behavior remain unchanged.
+- Run `pnpm provenance` and `pnpm licence`; both are expected to pass.
+
+**Results:** All five anchors are present, and their in-spec MEDIA-4/5 links resolve; no current Epic 21 follow-up plan links to these anchors yet. The alias names, signatures and behavior are preserved. `git diff --check`, `pnpm provenance` (0 violations), and `pnpm licence` (0 violations) passed; the quick review's one finding was patched and rechecked.
+
+## Review Triage Log
+
+- **medium — patch (resolved):** Review found that MEDIA-4's built-in default-count wording conflicted with Q14's requirement to enlarge `sfx` for overlapping frame and script sounds. MEDIA-4 now states that defaults apply unless overridden, while built-in order and uniqueness remain fixed.
+- **medium — patch (resolved):** The SoundFont layer table ranks the game's authored default 2nd (above the runner bank at 3rd), while two following descriptions incorrectly called it rank 3. Corrected the prose to rank 2 in `soundfont-layers` and the authoring handoff.

@@ -29,6 +29,7 @@ A runtime actor MAY contain:
 - declared custom event names from the source asset.
 
 It MUST NOT contain a callable, compiled program, host object, emitter listener table, or raw `.prg` path. Host methods and emitters are hydrated after load.
+The current persisted actor-section schema is version 2. A version-1 actor section is migrated in place during snapshot restoration without replacing its records: the restore step carries the saved actor, stats, and policy fields forward, derives `nextRequirement` and `remainingExperience` using the recurrence in [progression-and-levels.md](progression-and-levels.md), and sets `legacyLevelUp` to `null` because a version-1 save has no persisted source-program flag. `null` means legacy precedence is unresolved; the actor owner MUST resolve it from the source asset before awarding XP. A malformed or unsafe migrated policy is rejected as a restore-shape error; an actor-section version newer than version 2 is unsupported and MUST be rejected rather than treated as current. Existing actor identity, stats, statuses, equipment, and progression policy are never reset.
 
 ## Store and action boundary
 
@@ -44,6 +45,24 @@ The action and service layers are runtime machinery and are not serialized into
 the actor record. A hydrated RPGCode object may expose those operations as
 methods, but each method dispatches through the actor service and never turns
 the underlying record into an object with methods.
+
+A package command receives the actor operations themselves — `readActor`, `updateStats`, `damage`, `advanceStatus`, `applyEquipment` and `awardExperience` — as part of the view it is called with. Calling one dispatches through the actor owner, resolves that actor's behaviour hooks, validates the patch, commits it, and queues the resulting transitions. A command that patched the actor section directly would skip the hooks and the events, so it MUST NOT. An RPGCode battle script applies damage and awards experience through its package's commands and the actor owner's damage operation; the battle's damage formula still belongs to the package (Core and battle boundary).
+
+### Owner-mediated damage operation
+
+The actor host exposes a `damage(amount, source, pool)` operation to package
+code. `amount` MUST be a finite number. `pool` is `hp` by default and is `smp`
+only when explicitly selected; any other pool value resolves to `hp`.
+`source` is an actor id or `null`, and `null` is retained when the operation
+has no attacker attribution. The operation applies the requested subtraction
+through the actor owner with cause `damage`, so the normal stat validation and
+`[0, max]` clamping run before the committed result is observed. It returns
+the actual amount removed after clamping. A committed HP transition to
+non-positive emits the ordinary `fallen` transition with cause `damage` and
+the supplied source; an HP transition from non-positive to positive follows
+the ordinary revival rules. The operation does not choose battle formulas or
+dispatch battle timing events; those remain the stock battle package's
+responsibility.
 
 The action type is section-specific: `ActorAction` covers actor operations,
 while `BoardAction`, `InventoryAction`, `BattleAction`, and the other core
@@ -79,6 +98,18 @@ the normal board default. Visual bounds are presentation data and do not
 implicitly define gameplay geometry. Sprite state, geometry, movement queues,
 and animation playback belong to the sprites/presentation owner; actor state
 contains gameplay identity and rules.
+Board hydration joins the two records by copying only the actor's stable
+`actorId` onto the sprite. A sprite source MAY provide the actor id explicitly;
+when the source is a board NPC whose actor record is selected by the board
+hydration input, the owner links it only when exactly one actor source matches.
+Shared assets require an explicit sprite-to-actor mapping; the owner never
+silently chooses one actor. The sprite never copies stats, behaviour hooks, or
+actor methods.
+Actor operations (including behaviour resolution) dispatch through the actor
+owner using this id; movement, collision, activation, trigger state, and
+presentation continue to dispatch through the sprite owner. An asset-only
+sprite has no actor id and follows the same sprite phases as before.
+
 
 ## Progression
 
@@ -108,15 +139,27 @@ A behaviour that supplies `levelUp` receives the actor and a plain-data context,
 A package registers behaviours separately from `registerPlugin` during package startup:
 
 ```text
-registerBehaviour("stock-rpg.hero", hooks)
+package.behaviourStartup(registerBehaviour => {
+  registerBehaviour("stock-rpg.hero", hooks)
+})
 ```
+
+The host invokes each resolved package's `behaviourStartup` callback in
+manifest order during `runPackageStartup`, passing a registrar scoped to that
+package's declared namespace. The registrar is valid only while that callback
+executes; retaining it and calling it later MUST be rejected without mutating
+the session registry. A callback's `registerBehaviour(name, hooks)`
+call MUST use that namespace; a cross-package name is rejected with a located
+diagnostic. This is a distinct startup registration surface, not a
+`PluginDefinition.behaviours` data list and not a `registerPlugin` key.
+Registrations are session data, rebuilt at boot, reset, and restore before
+actor hydration.
 
 Behaviour names use a hyphenated package namespace followed by a dot and a
 behaviour identifier (`namespace.name`). The hook list is closed and defined by
-core. Unknown behaviour names, unknown hooks, malformed names, wrong namespaces,
-and duplicate registrations produce located diagnostics and register nothing.
-Registrations are session data, rebuilt at boot, reset, and restore before actor
-hydration.
+core. Unknown behaviour names, unknown hooks, malformed names, wrong
+namespaces, and duplicate registrations produce located diagnostics and
+register nothing.
 
 A behaviour hook takes the actor as an explicit argument. The actor is the
 canonical plain-data read view; the hydrated RPGCode object wrapper is a
@@ -138,7 +181,12 @@ The core hook surface includes:
 - `equipmentChanged(actor, context)`: may alter equipment-derived stat results;
 - `statsChanged(actor, context)`: may alter derived-stat results.
 
-These core-originated hooks do not wait. `levelUp` may wait only when it is invoked from a script thread, such as a script-driven XP award. The core owns validation, mutation, state transitions, and event emission.
+The `statusChanged` hook context receives `previousRounds`, clamped post-operation `rounds` (zero on expiry), and the caller-supplied `source` or `null`; countdown advancement supplies no implicit source. Hook result patches are validated separately from the returned `statusChanged` event detail.
+
+These core-originated hooks do not wait. `levelUp` may wait only when it is invoked from a script thread, such as a script-driven XP award. Hook contexts and result patches are separate from standard-event detail payloads; the core validates and mutates actor state and returns plain transition records, while the owning event layer performs dispatch.
+Hook result objects are closed plain-data patches. `revive` accepts only `hp`; `statusChanged` only `rounds` (a safe non-negative integer); `equipmentChanged` only `equipped` and `bonuses`, with bonus keys limited to `hp`, `dp`, `fp`, and `smp` and safe-integer values; `levelUp` only `deltas` and `stats`, with delta keys limited to `maxHp`, `dp`, `fp`, and `maxSmp` and safe-integer values. Unknown keys, unsafe or fractional values, and negative status-round patches are errors rather than silently ignored or clamped. The `statsChanged` patch uses the actor-stat key set and the same safe-integer validation.
+
+For a stat or equipment operation, the core applies its operation-specific hook and then `statsChanged`; if the final proposed HP is positive after those patches and the actor was fallen, it invokes `revive` exactly once. The resulting `revived` transition is returned only when the final committed HP is positive; a revive patch that leaves HP non-positive produces no `revived` transition. An XP award invokes `statsChanged` only when at least one non-legacy level-up applies core stat growth; XP-only, max-level, and legacy-handoff awards do not invoke that hook.
 
 ## Standard actor and board events
 
@@ -152,11 +200,11 @@ Notifications use past-tense lowerCamelCase names. Core actor and board events a
 | `leveledUp` | actor | no | core after applying the final level-up result |
 | `entered` | actor/board | no | board transition |
 | `left` | actor/board | no | board transition |
-| `talked` | actor | no | dialogue or actor package |
+| `talked` | actor | no | `stock_rpg` bridge after `dialogue.completed`; detail `{ actorId, targetId (actor id or null), text }` |
 | `beforeEnter` | board | yes | board transition; canceled step does not happen |
 | `beforeDamage` | actor/battle operation | yes | battle RPGCode thread, not a core actor rule |
 
-`fallen` detail contains `cause` (`damage`, `status`, or `script`) and `source` (an actor id or `null`). `defeated` belongs to the stock battle package and is not a core actor event. Package events re-emitted on shared emitters receive the package namespace prefix.
+`fallen` detail contains `cause` (`damage`, `status`, or `script`) and `source` (an actor id or `null`). `revived` carries the same `cause` and `source` fields; the revival cause is the operation that raised HP above zero. `statusChanged` detail is `{ status, previousRounds, rounds, expired, source }`, where `rounds` is the post-operation counter (zero when the status expires), `expired` is true only when the status is removed, and `source` is the actor id supplied by the caller when it attributes the operation, otherwise `null`; a countdown has no implicit source. Core hook result patches are not event details: `equipmentChanged` and `statsChanged` are hook names only. These are plain transition records returned by core operations; the core does not dispatch an event bus. `defeated` belongs to the stock battle package and is not a core actor event. Package events re-emitted on shared emitters receive the package namespace prefix.
 
 An unloaded board unregisters its emitter and drops its listeners. Queued work targeting that emitter is stale and is discarded; it does not keep the board or its actors alive.
 
@@ -245,7 +293,7 @@ permitted to mutate the value (a script may request a mutation through that owne
 | item prices/key flag | item.buyPrice/sellPrice/keyItem | int/int/byte | item definition | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 8–9 | Epic 8 |
 | item menu effect/program | item.menuHP/menuSM/prgMenuUse | ints/program reference | item definition | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 14–15 | Epic 8 |
 | item equipment slots/bonuses | item equip slot, accessory, equipHP/equipDP/equipFP/equipSM | array/strings/ints | item definition, interpreted by actor equipment rule | none | none (read-only asset); derived bonus written by actor owner | core-rule | [item](../formats/item.md#layout) 10–12; [E-82](plugins-and-battle.md#e-82) | 20.6 |
-| item equip/remove programs | item.prgEquip/prgRemove | program references | item definition, run on equip/remove | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 13 | 20.6 |
+| item equip/remove programs | item.prgEquip/prgRemove | program references | item definition, executed by inventory/equipment script layer | none | none (read-only asset) | core-rule | [item](../formats/item.md#layout) 13 | Epic 8 |
 | item battle effect/program | item.fightHP/fightSM/prgFightUse | ints/program reference | item definition | none | none (read-only asset); applied by Epic 7 | battle-rule | [item](../formats/item.md#layout) 16–17 | Epic 7 |
 | item board animation/programs | item.animation/prgOnBoard/prgPickUp | asset/program references | sprite (movement/presentation) | none | hydration/board | core-rule | [item](../formats/item.md#layout) 18–20 | 20.5/20.10 |
 | status identity and duration | status.name/rounds | string/short | statuses | none | core status owner | core-rule | [status](../formats/battle-data.md#status-effect) 3–4 | 20.3/20.6 |
@@ -253,7 +301,8 @@ permitted to mutate the value (a script may request a mutation through that owne
 | status HP/SMP tick | status.hp/hpAmount/smp/smpAmount | flags/shorts | statuses | none | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 8–11 | Epic 7 |
 | status program | status.code/prg | flag/program reference | statuses | none | Epic 7 | battle-rule | [status](../formats/battle-data.md#status-effect) 12–13 | Epic 7 |
 
-Item rows are asset definitions, hydrated by name and never saved. Inventory state (stacks, counts, and which actor has which item in which slot) belongs to the `inventory` section (AD-10) through `InventoryAction`, built by Epic 8. An actor holds only equipped item references and the bonuses derived from them by the core equipment rule (`equipmentChanged`); it never owns item records. Item speed, idle time, hulls and board animation belong to the sprite that represents a board item.
+Item rows are asset definitions, hydrated by name and never saved. Inventory state (stacks, counts, and which actor has which item in which slot) belongs to the `inventory` section (AD-10) through `InventoryAction`, built by Epic 8. An actor holds only equipped item references and the bonuses derived from them by the core equipment rule (`equipmentChanged`); it never owns item records. The equipment operation receives a normalized catalog built deterministically from `.itm` `itemName`, `equipHP`, `equipDP`, `equipFP`, and `equipSM` fields. Its caller supplies an already validated, unique equipped-reference list after inventory/slot/character eligibility checks; the core operation only resolves references and derives bonuses. A reference matching zero or multiple catalog entries is rejected. Applying a bonus changes current and maximum HP/SMP and DP/FP by the bonus delta; removing a bonus subtracts it and clamps current HP/SMP to their maxima. If the resulting HP crosses the `HP <= 0` boundary, the operation returns `fallen` or `revived` with cause `script` and source `null`; it does not dispatch an event. Equip/remove program references remain item data and are executed by Epic 8's owning inventory/equipment script layer, not by this pure derivation operation. Item speed, idle time, hulls and board animation belong to the sprite that represents a board item.
+The normalized catalog mapping is explicit: raw `.itm` `itemName` becomes `name`, and `equipHP`, `equipDP`, `equipFP`, and `equipSM` become the normalized `[hp, dp, fp, smp]` bonus tuple in that order. A supplied catalog `id` is a non-empty string; every bonus is a safe integer. The boundary rejects malformed entries and rejects a reference matching zero or more than one catalog entry. Inventory derives one stable actor-scoped reference for each equipment tuple `(actorId, slot, itemId)` and supplies that reference both as the catalog `id` and the equipped reference; it is not saved separately. The catalog `name` remains the item's `itemName`. Because matching accepts either `name` or `id`, derived ids must not collide with any catalog name or another reference; deterministically disambiguate against the finite catalog. This tuple-scoped identity lets two copies from one inventory stack be equipped in distinct slots without duplicate actor references and survives snapshot/restore because all tuple components are saved. The caller validates inventory writes, slot and character eligibility, and equip/remove program execution is owned by the calling operation, not this actor rule.
 
 ### Runtime state (actor)
 
@@ -267,6 +316,8 @@ Item rows are asset definitions, hydrated by name and never saved. Inventory sta
 | progression state/policy | runtime actor.progression | plain-data record | progression | aliases above | actor/behaviour | core-rule | [Progression](#progression) | 20.6/20.7 |
 | behaviour name | runtime actor.behaviour | string or absent | identity | none | hydration/registry | core-rule | [behaviours](#behaviours-and-hydration) | 20.7/20.8 |
 | declared custom events | runtime actor.customEvents | array<string> | identity | none | hydration | core-rule | [custom events](#custom-actor-events) | 20.5/20.9 |
+Progression state is saved as plain data. In addition to the compatibility policy fields, it contains `remainingExperience` (the unspent XP toward the next level), `nextRequirement` (the requirement used for the next threshold), and `legacyLevelUp` (`true` or `false` when source resolution is known, or `null` while a restored pre-version-2 actor still needs source resolution). The program source itself is resolved by the package/runtime and is never stored in the actor record. Hydration starts with `nextRequirement = firstLevelExp` and, when the source level is greater than one, applies the documented threshold recurrence once for each prior level while carrying the starting total experience into `remainingExperience`; it clamps a currently crossed threshold to zero. A restored record keeps its persisted values unchanged.
+The actor section migration is part of the save/restore boundary: version 1 records retain their actor ids and all existing fields, receive only the missing persisted progression fields, and set the unavailable legacy-program flag to `null`; XP progression refuses to proceed until the owner resolves that flag from the referenced source asset. Version 2 snapshots preserve all progression fields exactly; versions newer than 2 are unsupported and rejected, not accepted as current. Neither path stores a program path or callable.
 
 ### Sprite state (sprites section, separate from actors)
 
@@ -300,3 +351,4 @@ the progression arithmetic in [progression-and-levels.md](progression-and-levels
 Behaviour hooks may replace derived-stat, level-up, revival, status, or equipment results;
 the stock battle package may replace damage and charge rules. Random variance requires the
 injected seeded RNG; no equation may read wall-clock time or an ambient RNG.
+All progression policy fields, persisted threshold fields, actor level/experience values, equipment bonuses, and hook patches are safe integers at their validation boundaries. Arithmetic that would produce a non-safe result is rejected before the actor section is changed. The `statsChanged` hook is not a general XP observer: it runs for a level-up only when core stat growth is actually applied.

@@ -23,6 +23,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
 | `mwin` | `void mwin(string str)` | Show the message window. | Uses the logical-resolution message surface; the fixed 600×100 geometry, 50% default translucency and all-at-once text are defined below. |
+| `dialogue` | `string dialogue(string text)` | Show one dialogue message and wait for the player. | Uses the message window and waits for the next unclaimed input key; returns that key name and queues `dialogue.completed` on normal completion as defined by [E-123](plugins-and-battle.md#e-123). |
 | `wait` | `string wait([string &ret])` | Wait for a key press. The lowest unclaimed input sequence resumes the thread and is optionally written to `ret`. |  |
 | `mwincls` | `void mwincls()` | Clear and hide the message window. |  |
 | `text` | `void text(double x, double y, string str, [canvas cnv])` | Displays text on the screen. | Uses square cells one current-font-size on a side with 1-based coordinates; non-integer cell coordinates are truncated. |
@@ -243,22 +244,22 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 | Command | Signature | Purpose | Notes |
 |---|---|---|---|
-| `giveitem` | `void giveitem(string itm)` | Add an item to the inventory. |  |
-| `takeitem` | `void takeitem(string itm)` | Remove an item from the inventory. |  |
+| `giveitem` | `void giveitem(string itm)` | Add one item from an item file to the inventory. | Filename; `.itm` is appended when absent. |
+| `takeitem` | `void takeitem(string itm)` | Remove one available item from the inventory by item filename. | Filename; `.itm` is appended when absent. This script built-in is not blocked by the stock-menu key-item drop restriction. |
 | `pushitem` | `void pushitem(variant item, string direction [, int flags])` | Push an item in a direction. Each direction queues a fixed movement target, and pause or blocking waits for completion. |  |
 | `wander` | `void wander(variant target, [int restrict = 0])` | Let an item take a deterministic random step. The injected seed controls the chosen direction and the optional restriction. |  |
-| `equip` | `void equip(variant handle, int location, string item)` | Equip an item from the inventory (by handle or filename) to a location on the player's body. |  |
-| `remove` | `void remove(variant handle, int location)` | Remove an equipped item and return it to the inventory. |  |
-| `givegp` | `void givegp(int gp)` | Give gold pieces. |  |
-| `takegp` | `void takegp(int gp)` | Take gold pieces. |  |
-| `getgp` | `int getgp([int &ret])` | Return the amount of gold pieces held. |  |
+| `equip` | `void equip(variant handle, int location, string item)` | Equip one available item on a party member. | `handle` accepts a player handle or character filename; `item` accepts a handle or item filename. The 1-based location clamps to 1–16: head, neck, right hand, left hand, body, legs, then custom accessory slots 7–16. |
+| `remove` | `void remove(variant handle, int location)` | Unequip an item from a party member. | `handle` accepts a player handle or character filename; the 1-based location clamps to 1–16 as documented for `equip`. |
+| `givegp` | `void givegp(int gp)` | Add gold through the inventory owner. | Requires a non-negative safe integer; zero does nothing, and invalid or overflowing additions are refused atomically. |
+| `takegp` | `void takegp(int gp)` | Remove gold through the inventory owner. | Requires a non-negative safe integer; zero does nothing, and invalid or unaffordable removals are refused atomically. |
+| `getgp` | `int getgp([int &ret])` | Read current inventory gold. | Returns the balance and writes it through the optional reference. |
 | `callshop` | `void callshop(string item1, string item2, string item3, ...)` | Displays a basic shop interface that allows the buying of the items given as parameters and the selling of items in the player's inventory. |  |
 | `eraseitem` | `void eraseitem(variant handle)` | Erase an item from the screen, but keep it in memory. |  |
 | `putitem` | `void putitem(variant handle, int x, int y, int layer)` | Place the item on the board at the given location. |  |
 | `createitem` | `int createitem(string filename[, int &pos])` | Load an item and return the slot into which it was loaded. |  |
 | `destroyitem` | `void destroyitem(variant handle)` | Remove an item from memory. |  |
 | `itemwalkspeed` | `void itemwalkspeed()` | Obsolete. | obsolete: raises an error and the statement is skipped |
-| `itemcount` | `int itemcount(string fileName[, int &ret])` | Count the number of a certain item in the inventory. |  |
+| `itemcount` | `int itemcount(string fileName[, int &ret])` | Count available inventory items by filename or handle. | With `.itm`, compare item filenames case-insensitively; otherwise compare item handles case-insensitively. |
 | `itemlocation` | `void itemlocation(variant handle, int &x, int &y, int &layer)` | Read where an item is now. Pixel x/y and the one-based layer are written through the references. |  |
 | `itemstep` | `void itemstep(variant handle, int x, int y [, int flags])` | Move an item to a board point. The engine queues a deterministic path and pause or blocking waits for completion. |  |
 | `getitemname` | `string getitemname(string fileName[, string &ret])` | Get an item's handle. |  |
@@ -400,7 +401,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `wav` | `void wav(string file)` | Play a wave file (e.g. a sound effect). | deprecated; replaced by `mediaplay` |
 | `midiplay` | `void midiplay(string file)` | Play a media file on a named track. | deprecated; replaced by `mediaplay`; music loops |
 | `playmidi` | `void playmidi(string file)` | Play a media file on a named track. | deprecated; replaced by `mediaplay`; music loops |
-| `mediaplay` | `void mediaplay(string file[, string track[, int flags[, int priority[, string syncTrack[, int &voice]]]])` | Play a media file on a named track. | tkMD_WAIT waits for the finite track end; tkMD_LOOP and tkMD_WAIT conflict. |
+| `mediaplay` | `object mediaplay(string file[, object options])` | Play a media file on a named track. | Reawakened addition (MEDIA-1): returns the voice object; `options` may set `track`, `loop`, `volume`, `priority`, `sync` and `wait`; the one-argument Toolkit 3.1 call uses `music`/loop defaults and returns the voice object, which existing bare statements ignore. |
 | `mediatrack` | `void mediatrack(string name[, int voices])` | Create or resize a named audio track. |  |
 | `mediaload` | `void mediaload(string track, string file)` | Load a media file for a track without starting it. |  |
 | `mediastop` | `void mediastop([string track[, int voice]])` | Stop a track or voice. |  |

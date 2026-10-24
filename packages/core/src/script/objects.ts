@@ -132,7 +132,8 @@ export function checkMemberAccess(
  * found on the prototype chain.
  */
 export function readMember(record: ObjectRecord, key: string): Value {
-  return Object.hasOwn(record.members, key) ? record.members[key]! : 0;
+  if (Object.hasOwn(record.members, key)) return record.members[key]!;
+  return 0;
 }
 
 /**

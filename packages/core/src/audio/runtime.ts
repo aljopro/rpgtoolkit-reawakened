@@ -17,12 +17,18 @@
  * called with the answer.
  */
 
+import { assetKey } from "../formats/resolver/resolver.ts";
 import { floorDiv } from "../formats/audio/model.ts";
 import type { AudioCue, AudioCueKind } from "../ports/audio.ts";
 import type { AssetKey } from "../ports/keys.ts";
 import type { EffectRecord } from "../script/effects.ts";
 import type { GameState } from "../save/state.ts";
+import type { AudioLifecycleEvent } from "./events.ts";
+import { MEDIA_EMITTER } from "./events.ts";
+import { findObject, readMember, writeMember } from "../script/objects.ts";
+import { queueNativeEvent } from "../events/emitter.ts";
 import {
+  BUILTIN_TRACKS,
   MAX_TRACKS,
   MAX_VOICES,
   MEDIA_LOOP,
@@ -34,7 +40,6 @@ import {
   voicePass,
   voicePosition,
   type AudioFadeState,
-  type AudioStateV2,
   type AudioTrackState,
   type AudioVoiceHandle,
   type AudioVoiceState,
@@ -63,8 +68,24 @@ export type AudioNote =
   | { readonly kind: "no-op"; readonly op: string; readonly track: string }
   | { readonly kind: "diag"; readonly code: string; readonly op: string; readonly detail: AudioNoteDetail };
 
+/** The origin that is exposed in the shared `media.beforePlay` event. */
+export type AudioSource = "script" | "board" | "animation" | "battle" | "menu" | "video";
+
+/** The mutable, scalar detail exposed to `media.beforePlay` listeners. */
+export type BeforePlayDetail = {
+  source: AudioSource;
+  track: string;
+  slot: number;
+  cueId: number;
+  file: AssetKey;
+  volume: number;
+  loop: boolean;
+};
+
+export type BeforePlayOutcome = "allowed" | "canceled" | "failed";
+
 /** The part of a game state the runtime owns or reads. */
-export type AudioHost = Pick<GameState, "audio" | "time" | "engine">;
+export type AudioHost = Pick<GameState, "audio" | "time" | "engine" | "events" | "vm">;
 
 export type AudioRuntimeOptions = {
   /** The length of `asset`; `pending` makes the runtime hold effects and call `need`. */
@@ -74,6 +95,17 @@ export type AudioRuntimeOptions = {
   /** The author's default SoundFont (rank 3 of the bank layers); `null` when there is none. */
   readonly defaultSoundFont?: AssetKey | null;
   readonly notify?: (note: AudioNote) => void;
+  /**
+   * Bind a script-held voice object to the start the applier decided
+   * (MEDIA-1): `handle` is the plain object handle the object-form effect carried.
+   */
+  readonly bindVoice?: (handle: number, result: AudioPlayResult) => void;
+  /** Resolve an engine-originated beforePlay event synchronously. */
+  readonly engineBeforePlay?: (detail: BeforePlayDetail) => BeforePlayOutcome;
+  /** Queue a deterministic applied playback transition (MEDIA-2). */
+  readonly transition?: (event: AudioLifecycleEvent) => void;
+  /** Whether the lazy event domain is active; omitted means transitions are observed. */
+  readonly transitionsActive?: () => boolean;
 };
 
 /** A voice selector accepts the stable slot index or a cue-checked handle. */
@@ -95,6 +127,8 @@ export type AudioPlayRequest = {
   readonly track: string;
   readonly asset: AssetKey;
   readonly loop: boolean;
+  /** The event origin; omitted callers use the script origin for compatibility. */
+  readonly source?: AudioSource;
   /** An explicit slot always replaces that slot, even on a single-voice track. */
   readonly voice?: number | undefined;
   /** Start at the current position of this track's primary voice. */
@@ -104,12 +138,19 @@ export type AudioPlayRequest = {
   /** `tkMD_WAIT`: also make the wait for this voice's end. */
   readonly wait?: boolean;
   readonly priority?: number;
-
+  /** The voice's script volume at start, 0..100; omitted means 100 (MEDIA-1). */
+  readonly volume?: number;
+  /** Preserve the originating effect name in applied diagnostics. */
+  readonly diagnosticOp?: string;
+  /** Internal marker: a script beforePlay event has already completed. */
+  readonly beforePlayHandled?: boolean;
 };
 export type AudioPlayResult =
   | { readonly kind: "started"; readonly voice: number; readonly cueId: number; readonly wait: AudioWait | null }
-  | { readonly kind: "same-file"; readonly action: "carry-on" | "ignored" }
-  | { readonly kind: "pending" }
+  | { readonly kind: "same-file"; readonly action: "carry-on" | "ignored"; readonly voice: number; readonly cueId: number }
+  | { readonly kind: "before-play"; readonly event: number }
+  | { readonly kind: "canceled" }
+  | { readonly kind: "pending"; readonly beforePlayHandled?: boolean; readonly asset?: AssetKey; readonly volume?: number; readonly loop?: boolean }
   | { readonly kind: "rejected" };
 
 /** The structural slice of the effect bus the runtime registers with. */
@@ -117,13 +158,35 @@ export type AudioEffectBus = {
   register(section: "audio", applier: (effect: EffectRecord) => void): void;
 };
 
+/** The decoded game-file audio settings the runtime applies at start-up (docs/spec/formats/main-file.md#tkr-audio-settings-extension). */
+export type AudioGameSettings = {
+  readonly tracks: readonly { readonly name: string; readonly voiceCount: number }[];
+  readonly voiceCap: number;
+};
+
+/** Whether the settings were applied, or the first track index whose cumulative voice count crosses the cap. */
+export type AudioGameApply = { readonly ok: true } | { readonly ok: false; readonly overflowIndex: number };
+/** Why a package track declaration was rejected during game configuration. */
+export type AudioPackageTrackProblem = "invalid-name" | "voice-count" | "track-limit" | "voice-cap";
+
+
 export type AudioRuntime = {
   /** Emit the start `soundfont.set`, then take the `audio` section's effects from `bus` (draining any already queued). */
   register(bus: AudioEffectBus): void;
+  /**
+   * Apply the game-file track configuration before playback starts
+   * (docs/spec/formats/main-file.md#tkr-audio-settings-extension). An aggregate count above the cap leaves
+   * the Epic 6 defaults and cap 32 in place and reports the first offending track.
+   */
+  applyGameAudio(settings: AudioGameSettings): AudioGameApply;
+  /** Set the authored default bank without emitting; `register` emits it once (docs/spec/engine/audio-media.md#soundfont-layers). */
+  setDefaultSoundFont(font: AssetKey | null): void;
   /** Apply one `audio` effect, or hold it behind an earlier one that is waiting for an asset. */
   apply(effect: EffectRecord): void;
   /** Apply held effects, in order, until one still waits for its asset. */
   retry(): void;
+  /** Apply one package declaration without allowing a duplicate to reduce the configured count. */
+  configurePackageTrack(name: string, voices: number): AudioPackageTrackProblem | null;
   /** The `audio` phase: end finished one-shots and refresh positions. */
   phase(): void;
   /** The cues emitted since the last call, in order. */
@@ -157,6 +220,7 @@ type StartOptions = {
   readonly loop: boolean;
   readonly restart: boolean;
   readonly priority: number;
+  readonly volume?: number | undefined;
   readonly op: string;
   readonly voice?: number | undefined;
   readonly positionTicks?: number | undefined;
@@ -165,10 +229,71 @@ type StartOptions = {
 /** The 2^53 - 1 limit of an exact integer tick; a seek position above it is invalid. */
 const MAX_POSITION = 9007199254740991;
 
+/** Normalize an effect's voice argument: a slot number, a cue-checked `{track, slot, cueId}`, or `null` when malformed. */
+function selectorValue(value: unknown): AudioVoiceSelector | undefined | null {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "number") return value;
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const track = record["track"];
+    const slot = record["slot"];
+    const cueId = record["cueId"];
+    if (typeof track === "string" && Number.isInteger(slot) && Number.isInteger(cueId)) return { track, voice: slot as number, cueId: cueId as number };
+  }
+  return null;
+}
+
+/** Script effects retain their command name; args already use the owner's canonical layout. */
+const SCRIPT_AUDIO_OPERATIONS: Readonly<Record<string, string>> = {
+  mediatrack: "media.track", mediaload: "media.load", mediaplay: "media.play",
+  midiplay: "media.play", playmidi: "media.play", wav: "media.play", mp3: "media.play", mp3pause: "media.play",
+  mediastop: "media.stop", mediarest: "media.stop", midirest: "media.stop", wavstop: "media.stop",
+  mediapause: "media.pause", mediaresume: "media.resume", mediaseek: "media.seek",
+  medialoop: "media.loop", mediafade: "media.fade", mediavolume: "media.volume", setvolume: "media.volume",
+  soundfont: "soundfont.set", soundfontreset: "soundfont.set",
+};
+
+function syncEffectArgs(host: AudioHost, effect: EffectRecord, args: EffectRecord["args"]): void {
+  const recorded = host.vm.effects.find((candidate) => candidate.seq === effect.seq);
+  if (recorded === undefined || recorded.args === args) return;
+  recorded.args.length = args.length;
+  for (let index = 0; index < args.length; index += 1) recorded.args[index] = args[index]!;
+}
+
 export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions): AudioRuntime {
   const cues: AudioCue[] = [];
-  const defaultSoundFont = options.defaultSoundFont ?? null;
+  let defaultSoundFont = options.defaultSoundFont ?? null;
+  let voiceCap = MAX_VOICES;
   const notify = options.notify ?? ((): void => undefined);
+  const transition = options.transition;
+  let lifecycleEnabled = true;
+  /** Snapshot-owned cursors; never hide semantic event history in a session Map. */
+  const observedPass = {
+    get(voice: AudioVoiceState): number | undefined {
+      return host.events.audioPasses?.[String(voice.cueId)];
+    },
+    set(voice: AudioVoiceState, pass: number): void {
+      if (transition === undefined || options.transitionsActive?.() === false) return;
+      (host.events.audioPasses ??= {})[String(voice.cueId)] = pass;
+    },
+    delete(voice: AudioVoiceState): void {
+      const passes = host.events.audioPasses;
+      if (passes === undefined) return;
+      delete passes[String(voice.cueId)];
+      if (Object.keys(passes).length === 0) delete host.events.audioPasses;
+    },
+    clear(): void {
+      delete host.events.audioPasses;
+    },
+  };
+
+  function emitTransition(type: AudioLifecycleEvent["type"], track: AudioTrackState, voice: AudioVoiceState, tick: number): void {
+    if (!lifecycleEnabled || transition === undefined || options.transitionsActive?.() === false) return;
+    transition({
+      type,
+      detail: { track: track.name, slot: voice.index, cueId: voice.cueId, file: voice.file, tick },
+    });
+  }
 
   function emit(kind: AudioCueKind, fields: CueFields = {}, tick: number = host.time.tick): number {
     const cueId = host.audio.cueId;
@@ -203,6 +328,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         if (voice.state === "playing" && tick - voice.fade.startTick >= voice.fade.durationTicks) {
           voice.volume = voice.fade.targetVolume;
           voice.fade = null;
+          emitTransition("faded", track, voice, tick);
         }
       }
     }
@@ -213,6 +339,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         bus.volume = bus.fade.targetVolume;
         bus.fade = null;
         trackVolumeEntry(track.name, bus.volume, null);
+        for (const voice of track.voices) emitTransition("faded", track, voice, tick);
       }
     }
     const primary = track.voices.find((voice) => voice.index === 0);
@@ -221,10 +348,11 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     track.lengthTicks = primary?.lengthTicks ?? null;
     track.fade = copyFade(primary?.fade ?? null);
   }
-
-  function stopVoice(track: AudioTrackState, voice: AudioVoiceState): void {
+  function stopVoice(track: AudioTrackState, voice: AudioVoiceState, event: "stopped" | "ended" | null = "stopped"): void {
     emit("media.stop", { track: track.name, voice: voice.index });
     track.voices = track.voices.filter((item) => item !== voice);
+    observedPass.delete(voice);
+    if (event !== null) emitTransition(event, track, voice, host.time.tick);
   }
 
   function locate(op: string, name: string, selector: AudioVoiceSelector | undefined): Located | null {
@@ -240,6 +368,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     }
     const current = track.voices.find((item) => item.index === index);
     const stale = typeof selector === "object" && (asciiFold(selector.track) !== track.name || current?.cueId !== selector.cueId);
+    if (stale) diag("media.unknown-voice", op, { track: track.name, voice: index });
     return { track, index, voice: current, stale };
   }
 
@@ -248,10 +377,72 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     const taken = new Set(track.voices.map((voice) => voice.index));
     for (let index = 0; index < track.voiceCount; index += 1) if (!taken.has(index)) return index;
     const victim = [...track.voices].sort((a, b) => a.priority - b.priority || a.startTick - b.startTick || a.index - b.index)[0];
-    if (victim === undefined) return 0;
-    notify({ kind: "steal", track: track.name, voice: victim.index, cueId: victim.cueId });
-    stopVoice(track, victim);
-    return victim.index;
+    return victim?.index ?? 0;
+  }
+
+  function hasBeforePlayListeners(): boolean {
+    return host.events.listeners.some((listener) => listener.emitter === MEDIA_EMITTER && listener.type.toLowerCase() === "beforeplay");
+  }
+
+  function detailAfterDispatch(event: number, original: BeforePlayDetail): BeforePlayDetail {
+    const eventRecord = findObject(host.vm, event);
+    const detailValue = eventRecord === undefined ? undefined : readMember(eventRecord, "detail");
+    const detailRecord = typeof detailValue === "object" && detailValue !== null && "kind" in detailValue && detailValue.kind === "object"
+      ? findObject(host.vm, detailValue.handle)
+      : undefined;
+    if (detailRecord === undefined) return original;
+    const restore = (field: string, value: number | string | boolean, reason: string): void => {
+      writeMember(detailRecord, field, typeof value === "boolean" ? (value ? 1 : 0) : value);
+      diag("media.beforePlay-invalid", "media.beforePlay", { field, reason });
+    };
+    const source = readMember(detailRecord, "source");
+    if (source !== original.source) restore("source", original.source, "source is read-only");
+    const track = readMember(detailRecord, "track");
+    if (track !== original.track) restore("track", original.track, "track is read-only");
+    const slot = readMember(detailRecord, "slot");
+    if (slot !== original.slot) restore("slot", original.slot, "slot is read-only");
+    const cueId = readMember(detailRecord, "cueId");
+    if (cueId !== original.cueId) restore("cueId", original.cueId, "cueId is read-only");
+    let file = readMember(detailRecord, "file");
+    if (typeof file !== "string") {
+      restore("file", original.file, "file must be a string");
+      file = original.file;
+    }
+    let volume = readMember(detailRecord, "volume");
+    if (typeof volume !== "number" || !Number.isInteger(volume) || volume < 0 || volume > 100) {
+      restore("volume", original.volume, "volume must be an integer from 0 to 100");
+      volume = original.volume;
+    }
+    let loop = readMember(detailRecord, "loop");
+    if (loop !== 0 && loop !== 1) {
+      restore("loop", original.loop, "loop must be boolean");
+      loop = original.loop ? 1 : 0;
+    }
+    return { ...original, file: assetKey(file), volume: volume as number, loop: loop === 1 };
+  }
+  function validateEngineDetail(detail: BeforePlayDetail, original: BeforePlayDetail): BeforePlayDetail {
+    const candidate = detail as unknown as Record<string, unknown>;
+    let file = candidate["file"];
+    if (typeof file !== "string") {
+      diag("media.beforePlay-invalid", "media.beforePlay", { field: "file", reason: "file must be a string" });
+      file = original.file;
+    }
+    let volume = candidate["volume"];
+    if (typeof volume !== "number" || !Number.isInteger(volume) || volume < 0 || volume > 100) {
+      diag("media.beforePlay-invalid", "media.beforePlay", { field: "volume", reason: "volume must be an integer from 0 to 100" });
+      volume = original.volume;
+    }
+    let loop = candidate["loop"];
+    if (typeof loop !== "boolean") {
+      diag("media.beforePlay-invalid", "media.beforePlay", { field: "loop", reason: "loop must be boolean" });
+      loop = original.loop;
+    }
+    for (const field of ["source", "track", "slot", "cueId"] as const) {
+      if (candidate[field] !== original[field]) {
+        diag("media.beforePlay-invalid", "media.beforePlay", { field, reason: `${field} is read-only` });
+      }
+    }
+    return { ...original, file: assetKey(file as string), volume: volume as number, loop: loop as boolean };
   }
 
   /**
@@ -259,7 +450,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
    * single-voice track replaces its occupant (stop, then play); a track with
    * more than one voice has no same-file rule (6.6 pin 3).
    */
-  function startVoice(track: AudioTrackState, asset: AssetKey, info: AudioLookup, o: StartOptions): AudioVoiceState | "carry-on" | "ignored" {
+  function startVoice(track: AudioTrackState, asset: AssetKey, info: AudioLookup, o: StartOptions): AudioVoiceState | { action: "carry-on" | "ignored"; voice: AudioVoiceState } {
     const lengthTicks = info.kind === "known" ? info.lengthTicks : null;
     let index: number;
     if (o.voice !== undefined) {
@@ -271,12 +462,17 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       if (current !== undefined && current.state === "playing" && current.file === asset && !o.restart) {
         const action = track.name === "music" ? "carry-on" : "ignored";
         notify({ kind: "same-file", track: track.name, file: asset, action });
-        return action;
+        return { action, voice: current };
       }
       if (current !== undefined) stopVoice(track, current);
       index = 0;
     } else {
       index = allocate(track);
+      const victim = track.voices.find((voice) => voice.index === index);
+      if (victim !== undefined) {
+        notify({ kind: "steal", track: track.name, voice: victim.index, cueId: victim.cueId });
+        stopVoice(track, victim);
+      }
     }
     const positionTicks = o.positionTicks ?? 0;
     const startTick = host.time.tick - positionTicks;
@@ -286,7 +482,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       file: asset,
       cueId: 0,
       priority: o.priority,
-      volume: 100,
+      volume: o.volume ?? 100,
       loop: o.loop,
       startTick,
       positionTicks,
@@ -295,11 +491,16 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       pausedTick: null,
       fade: null,
     };
-    voice.cueId = emit("media.play", { track: track.name, voice: index, asset, loop: o.loop, flags: o.loop ? MEDIA_LOOP : 0, positionTicks, volume: 100 });
+    voice.cueId = emit("media.play", { track: track.name, voice: index, asset, loop: o.loop, flags: o.loop ? MEDIA_LOOP : 0, positionTicks, volume: voice.volume });
     track.voices.push(voice);
     track.voices.sort((a, b) => a.index - b.index);
     track.file = asset;
     if (index === 0) track.flags = o.loop ? MEDIA_LOOP : 0;
+    if (voice.loop) {
+      const pass = voicePass(voice, host.time.tick);
+      if (pass !== null) observedPass.set(voice, pass);
+    }
+    emitTransition("started", track, voice, host.time.tick);
     if (info.kind === "unsupported") diag("media.asset-format", o.op, { file: asset });
     refresh(track);
     return voice;
@@ -334,7 +535,8 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
   /** Decide one effect: `pending` when its file's length is not known yet and nothing was changed. */
   function applyEffect(effect: EffectRecord): "applied" | "pending" {
     const args = effect.args;
-    if (effect.name === "media.track") {
+    const operation = Object.hasOwn(SCRIPT_AUDIO_OPERATIONS, effect.name) ? SCRIPT_AUDIO_OPERATIONS[effect.name]! : effect.name;
+    if (operation === "media.track") {
       if (typeof args[0] !== "string" || typeof args[1] !== "number") {
         diag("audio.effect", effect.name, { reason: "malformed arguments" });
         return "applied";
@@ -342,7 +544,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       runtime.configureTrack(args[0], args[1]);
       return "applied";
     }
-    if (effect.name === "media.load") {
+    if (operation === "media.load") {
       const trackName = args[0];
       const asset = args[1];
       if (typeof trackName !== "string" || typeof asset !== "string") {
@@ -365,7 +567,52 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       emit("media.load", { track: track.name, asset: track.file });
       return "applied";
     }
-    if (effect.name === "media.play") {
+    if (operation === "media.play") {
+      const beforeEvent = args[10];
+      let beforeHandled = args[11] === true;
+      const handle = args[8];
+      if (typeof beforeEvent === "number" && !beforeHandled) {
+        if (host.events.dispatch?.event === beforeEvent || host.events.queue.some((queued) => queued.event === beforeEvent)) return "pending";
+        const eventRecord = findObject(host.vm, beforeEvent);
+        const canceled = eventRecord !== undefined && readMember(eventRecord, "canceled") === 1;
+        if (canceled) {
+          args[10] = null;
+          args[11] = true;
+          syncEffectArgs(host, effect, args);
+          if (typeof handle === "number") options.bindVoice?.(handle, { kind: "canceled" });
+          return "applied";
+        }
+        const originalFile = args[0];
+        const originalTrack = args[1];
+        const originalLoop = args[2];
+        const originalVolume = args[7];
+        if (typeof originalFile !== "string" || typeof originalTrack !== "string" || typeof originalLoop !== "boolean" || (originalVolume !== null && originalVolume !== undefined && typeof originalVolume !== "number")) {
+          diag("audio.effect", effect.name, { reason: "malformed arguments" });
+          return "applied";
+        }
+        const originalTrackState = findTrack(host.audio, originalTrack);
+        const originalSlot = typeof args[6] === "number"
+          ? args[6]
+          : originalTrackState === undefined || originalTrackState.voiceCount === 1
+            ? 0
+            : allocate(originalTrackState);
+        const detail = detailAfterDispatch(beforeEvent, {
+          source: typeof args[9] === "string" ? args[9] as AudioSource : "script",
+          track: originalTrack,
+          slot: originalSlot,
+          cueId: host.audio.cueId,
+          file: originalFile as AssetKey,
+          volume: typeof originalVolume === "number" ? originalVolume : 100,
+          loop: originalLoop,
+        });
+        args[0] = detail.file;
+        args[2] = detail.loop;
+        args[7] = detail.volume;
+        args[10] = null;
+        args[11] = true;
+        beforeHandled = true;
+        syncEffectArgs(host, effect, args);
+      }
       const asset = args[0];
       const track = args[1];
       const loop = args[2];
@@ -373,7 +620,9 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       const priority = args[4];
       const syncTrack = args[5];
       const voice = args[6];
-      if (typeof asset !== "string" || typeof track !== "string" || typeof loop !== "boolean" || typeof restart !== "boolean" || typeof priority !== "number" || (syncTrack !== null && typeof syncTrack !== "string") || (voice !== null && typeof voice !== "number")) {
+      const volume = args[7];
+      const source = args[9];
+      if (typeof asset !== "string" || typeof track !== "string" || typeof loop !== "boolean" || typeof restart !== "boolean" || typeof priority !== "number" || (syncTrack !== null && typeof syncTrack !== "string") || (voice !== null && !Number.isInteger(voice)) || (volume !== null && volume !== undefined && (typeof volume !== "number" || !Number.isInteger(volume) || volume < 0 || volume > 100)) || (handle !== null && handle !== undefined && !Number.isInteger(handle)) || (source !== undefined && typeof source !== "string")) {
         diag("audio.effect", effect.name, { reason: "malformed arguments" });
         return "applied";
       }
@@ -383,41 +632,70 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         loop,
         restart,
         priority,
+        source: (source ?? "script") as AudioSource,
         ...(syncTrack === null || syncTrack === "" ? {} : { syncTrack }),
-        ...(voice === null ? {} : { voice }),
+        ...(voice === null ? {} : { voice: voice as number }),
+        ...(typeof volume === "number" ? { volume } : {}),
+        ...(beforeHandled ? { beforePlayHandled: true } : {}),
+        diagnosticOp: effect.name,
       });
-      return result.kind === "pending" ? "pending" : "applied";
+      if (result.kind === "before-play") {
+        args[9] = typeof source === "string" ? source : "script";
+        args[10] = result.event;
+        args[11] = false;
+        syncEffectArgs(host, effect, args);
+      }
+      if (typeof handle === "number") options.bindVoice?.(handle, result);
+      return result.kind === "pending" || result.kind === "before-play" ? "pending" : "applied";
     }
-    if (effect.name === "media.stop" || effect.name === "media.pause" || effect.name === "media.resume") {
+    if (operation === "media.stop" || operation === "media.pause" || operation === "media.resume") {
       const track = args[0];
-      const voice = args[1];
-      if (typeof track !== "string" || (voice !== null && typeof voice !== "number")) {
+      const voice = selectorValue(args[1]);
+      if (typeof track !== "string" || voice === null) {
         diag("audio.effect", effect.name, { reason: "malformed arguments" });
         return "applied";
       }
-      if (effect.name === "media.stop") runtime.stop(track, voice === null ? undefined : voice);
-      else if (effect.name === "media.pause") runtime.pause(track, voice === null ? undefined : voice);
-      else runtime.resume(track, voice === null ? undefined : voice);
+      if (operation === "media.stop") runtime.stop(track, voice);
+      else if (operation === "media.pause") runtime.pause(track, voice);
+      else runtime.resume(track, voice);
       return "applied";
     }
-    if (effect.name === "media.seek" || effect.name === "media.loop" || effect.name === "media.fade" || effect.name === "media.volume") {
+    if (operation === "media.seek" || operation === "media.loop" || operation === "media.fade" || operation === "media.volume") {
       const track = args[0];
       const second = args[1];
-      const third = args[2];
-      if (effect.name === "media.volume" && track === null && typeof second === "number" && third === null) runtime.setMasterVolume(second);
-      else if (typeof track !== "string") {
+      if (operation === "media.volume" && track === null && typeof second === "number" && args[2] === null) {
+        runtime.setMasterVolume(second);
+        return "applied";
+      }
+      if (typeof track !== "string") {
         diag("audio.effect", effect.name, { reason: "malformed arguments" });
         return "applied";
-      } else if (effect.name === "media.seek" && typeof second === "number" && (third === null || typeof third === "number")) runtime.seek(track, second, third === null ? undefined : third);
-      else if (effect.name === "media.loop" && typeof second === "boolean" && (third === null || typeof third === "number")) runtime.setLoop(track, second, third === null ? undefined : third);
-      else if (effect.name === "media.fade" && typeof second === "number" && typeof third === "number" && (args[3] === null || typeof args[3] === "number")) runtime.fade(track, second, third, args[3] === null ? undefined : args[3] as number);
-      else if (effect.name === "media.volume" && typeof second === "number" && (third === null || typeof third === "number")) {
-        if (third === null) runtime.setTrackVolume(track, second);
-        else runtime.setVoiceVolume(track, third, second);
-      } else diag("audio.effect", effect.name, { reason: "malformed arguments" });
+      }
+      if (operation === "media.seek") {
+        const voice = selectorValue(args[2]);
+        if (typeof second !== "number" || voice === null) diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        else runtime.seek(track, second, voice);
+        return "applied";
+      }
+      if (operation === "media.loop") {
+        const voice = selectorValue(args[2]);
+        if (typeof second !== "boolean" || voice === null) diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        else runtime.setLoop(track, second, voice);
+        return "applied";
+      }
+      if (operation === "media.fade") {
+        const voice = selectorValue(args[3]);
+        if (typeof second !== "number" || typeof args[2] !== "number" || voice === null) diag("audio.effect", effect.name, { reason: "malformed arguments" });
+        else runtime.fade(track, second, args[2], voice);
+        return "applied";
+      }
+      const voice = selectorValue(args[2]);
+      if (typeof second !== "number" || voice === null) diag("audio.effect", effect.name, { reason: "malformed arguments" });
+      else if (voice === undefined) runtime.setTrackVolume(track, second);
+      else runtime.setVoiceVolume(track, voice, second);
       return "applied";
     }
-    if (effect.name === "soundfont.set") {
+    if (operation === "soundfont.set") {
       const asset = args[0] ?? null;
       if (asset !== null && typeof asset !== "string") {
         diag("audio.effect", effect.name, { reason: "asset is not a key or null" });
@@ -427,7 +705,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
       return "applied";
     }
-    if (effect.name !== "music.play" && effect.name !== "sfx.play") {
+    if (operation !== "music.play" && operation !== "sfx.play") {
       diag("audio.effect", effect.name, { reason: "unknown audio effect" });
       return "applied";
     }
@@ -435,11 +713,11 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     const loop = args[1];
     const restart = args[2] ?? null;
     const source = args[3];
-    if ((asset !== null && typeof asset !== "string") || typeof loop !== "boolean" || (restart !== null && typeof restart !== "boolean") || typeof source !== "string" || (effect.name === "sfx.play" && asset === null)) {
+    if ((asset !== null && typeof asset !== "string") || typeof loop !== "boolean" || (restart !== null && typeof restart !== "boolean") || typeof source !== "string" || (operation === "sfx.play" && asset === null)) {
       diag("audio.effect", effect.name, { reason: "malformed arguments" });
       return "applied";
     }
-    const isMusic = effect.name === "music.play";
+    const isMusic = operation === "music.play";
     const track = findTrack(host.audio, isMusic ? "music" : source === "ui" ? "ui" : "sfx");
     if (track === undefined) {
       diag("media.unknown-track", effect.name, { track: isMusic ? "music" : source === "ui" ? "ui" : "sfx" });
@@ -453,14 +731,39 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       notify({ kind: "silence", track: track.name, source });
       return "applied";
     }
-    const key = asset as AssetKey;
-    const info = options.lookup(key);
-    if (info.kind === "pending") {
-      options.need?.(key);
-      return "pending";
+    const sourceKind: AudioSource = source === "script"
+      ? "script"
+      : source === "video"
+        ? "video"
+        : source === "battle"
+          ? "battle"
+          : source === "ui" || source === "menu"
+            ? "menu"
+            : source === "frame" || source === "animation"
+              ? "animation"
+              : operation === "sfx.play"
+                ? "animation"
+                : "board";
+    const beforePlayHandled = args[4] === true;
+    const pendingVolume = typeof args[5] === "number" ? args[5] : undefined;
+    const result = runtime.play({
+      asset: asset as AssetKey,
+      track: track.name,
+      loop: isMusic ? loop : false,
+      restart: restart === true,
+      priority: 0,
+      source: sourceKind,
+      ...(pendingVolume === undefined ? {} : { volume: pendingVolume }),
+      diagnosticOp: effect.name,
+      ...(beforePlayHandled ? { beforePlayHandled: true } : {}),
+    });
+    if (result.kind === "pending" && result.beforePlayHandled === true) {
+      args[4] = true;
+      if (result.asset !== undefined) args[0] = result.asset;
+      if (result.loop !== undefined) args[1] = result.loop;
+      if (result.volume !== undefined) args[5] = result.volume;
     }
-    startVoice(track, key, info, { loop: isMusic ? loop : false, restart: restart === true, priority: 0, op: effect.name });
-    return "applied";
+    return result.kind === "pending" || result.kind === "before-play" ? "pending" : "applied";
   }
 
   /** The effects waiting for an asset: the engine section's own pending queue for `audio`, so a snapshot keeps them. */
@@ -494,10 +797,62 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     if (applyEffect(effect) === "pending") hold(effect);
   }
 
+  function applyTrackConfiguration(name: string, voices: number): AudioPackageTrackProblem | null {
+    if (typeof name !== "string" || !MEDIA_TRACK_NAME.test(name)) return "invalid-name";
+    if (!Number.isInteger(voices) || voices < 1) return "voice-count";
+    const existing = findTrack(host.audio, name);
+    const sum = host.audio.tracks.reduce((total, track) => total + track.voiceCount, 0) - (existing?.voiceCount ?? 0) + voices;
+    if (existing !== undefined) {
+      if (existing.voices.some((voice) => voice.index >= voices)) return "voice-count";
+      if (sum > voiceCap) return "voice-cap";
+      existing.voiceCount = voices;
+      return null;
+    }
+    if (host.audio.tracks.length >= MAX_TRACKS) return "track-limit";
+    if (sum > voiceCap) return "voice-cap";
+    host.audio.tracks.push(createTrack(asciiFold(name), voices));
+    return null;
+  }
+
+  function reportTrackConfiguration(name: string, voices: number, problem: AudioPackageTrackProblem): void {
+    const code = problem === "invalid-name"
+      ? "media.invalid-track-name"
+      : problem === "voice-count"
+        ? "media.voice-count"
+        : problem === "track-limit"
+          ? "media.track-limit"
+          : "media.voice-cap";
+    if (problem === "invalid-name" || problem === "track-limit") {
+      diag(code, "mediaTrack", { name });
+      return;
+    }
+    diag(code, "mediaTrack", { name, voices });
+  }
+  function resetGameAudio(): void {
+    voiceCap = MAX_VOICES;
+    host.audio.tracks = BUILTIN_TRACKS.map(([name, voiceCount]) => createTrack(name, voiceCount));
+  }
+
   const runtimeApi: AudioRuntime = {
     register(bus) {
       emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
       bus.register("audio", apply);
+    },
+    applyGameAudio(settings) {
+      let sum = 0;
+      for (let index = 0; index < settings.tracks.length; index += 1) {
+        sum += settings.tracks[index]!.voiceCount;
+        if (sum > settings.voiceCap) {
+          resetGameAudio();
+          return { ok: false, overflowIndex: index };
+        }
+      }
+      voiceCap = settings.voiceCap;
+      host.audio.tracks = settings.tracks.map((track) => createTrack(asciiFold(track.name), track.voiceCount));
+      return { ok: true };
+    },
+    setDefaultSoundFont(font) {
+      defaultSoundFont = font;
     },
     apply,
     retry,
@@ -507,7 +862,23 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         for (const voice of [...track.voices]) {
           if (voice.state === "playing" && !voice.loop && voice.endTick !== null && tick >= voice.endTick) {
             notify({ kind: "finished", track: track.name, voice: voice.index, cueId: voice.cueId, endTick: voice.endTick });
-            stopVoice(track, voice);
+            stopVoice(track, voice, "ended");
+          }
+        }
+        for (const voice of [...track.voices]) {
+          if (voice.state !== "playing" || !voice.loop) continue;
+          const pass = voicePass(voice, tick);
+          if (pass === null) continue;
+          const previous = observedPass.get(voice);
+          if (previous === undefined) {
+            const baseline = voicePass(voice, tick - 1);
+            if (baseline !== null) {
+              for (let crossed = baseline + 1; crossed <= pass; crossed += 1) emitTransition("looped", track, voice, tick);
+            }
+            observedPass.set(voice, pass);
+          } else {
+            for (let crossed = previous + 1; crossed <= pass; crossed += 1) emitTransition("looped", track, voice, tick);
+            observedPass.set(voice, pass);
           }
         }
         refresh(track, tick);
@@ -519,39 +890,21 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
     heldCount() {
       return queued().length;
     },
+    configurePackageTrack(name, voices) {
+      if (typeof name === "string" && MEDIA_TRACK_NAME.test(name) && Number.isInteger(voices) && voices >= 1) {
+        const existing = findTrack(host.audio, name);
+        if (existing !== undefined && voices <= existing.voiceCount) return null;
+      }
+      return applyTrackConfiguration(name, voices);
+    },
     configureTrack(name, voices = 1) {
-      if (!MEDIA_TRACK_NAME.test(name)) {
-        diag("media.invalid-track-name", "mediaTrack", { name });
-        return false;
-      }
-      if (!Number.isInteger(voices) || voices < 1) {
-        diag("media.voice-count", "mediaTrack", { name, voices });
-        return false;
-      }
-      const existing = findTrack(host.audio, name);
-      const sum = host.audio.tracks.reduce((total, track) => total + track.voiceCount, 0) - (existing?.voiceCount ?? 0) + voices;
-      if (existing !== undefined) {
-        if (existing.voices.some((voice) => voice.index >= voices)) {
-          diag("media.voice-count", "mediaTrack", { name: existing.name, voices });
-          return false;
-        }
-        if (sum > MAX_VOICES) {
-          diag("media.voice-cap", "mediaTrack", { name: existing.name, voices });
-          return false;
-        }
-        existing.voiceCount = voices;
-        return true;
-      }
-      if (host.audio.tracks.length >= MAX_TRACKS) {
-        diag("media.track-limit", "mediaTrack", { name });
-        return false;
-      }
-      if (sum > MAX_VOICES) {
-        diag("media.voice-cap", "mediaTrack", { name, voices });
-        return false;
-      }
-      host.audio.tracks.push(createTrack(asciiFold(name), voices));
-      return true;
+      const existing = typeof name === "string" && MEDIA_TRACK_NAME.test(name) ? findTrack(host.audio, name) : undefined;
+      const problem = applyTrackConfiguration(name, voices);
+      if (problem === null) return true;
+      const existingFailure = existing !== undefined &&
+        (problem === "voice-cap" || (problem === "voice-count" && Number.isInteger(voices) && voices >= 1));
+      reportTrackConfiguration(existingFailure ? existing.name : name, voices, problem);
+      return false;
     },
     play(request) {
       const found = findTrack(host.audio, request.track);
@@ -567,33 +920,80 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         diag("media.wait-loop", "mediaPlay", { track: found.name });
         return { kind: "rejected" };
       }
-      const info = options.lookup(request.asset);
+      let info = options.lookup(request.asset);
       if (info.kind === "pending") {
         options.need?.(request.asset);
         return { kind: "pending" };
       }
+      const current = found.voices[0];
+      if (request.voice === undefined && found.voiceCount === 1 && current !== undefined && current.state === "playing" && current.file === request.asset && request.restart !== true) {
+        const action = found.name === "music" ? "carry-on" : "ignored";
+        notify({ kind: "same-file", track: found.name, file: request.asset, action });
+        return { kind: "same-file", action, voice: current.index, cueId: current.cueId };
+      }
+      let asset = request.asset;
+      let loop = request.loop;
+      let volume = request.volume ?? 100;
+      let beforePlayHandled = request.beforePlayHandled === true;
+      const source = request.source ?? "script";
+      const slot = request.voice ?? (found.voiceCount === 1 ? 0 : allocate(found));
+      const original: BeforePlayDetail = {
+        source,
+        track: found.name,
+        slot,
+        cueId: host.audio.cueId,
+        file: asset,
+        volume,
+        loop,
+      };
+      if (!beforePlayHandled && hasBeforePlayListeners()) {
+        if (source === "script") {
+          const event = queueNativeEvent(host.vm, host.events, MEDIA_EMITTER, "beforePlay", original, true);
+          return { kind: "before-play", event };
+        }
+        const detail = { ...original };
+        const outcome = options.engineBeforePlay?.(detail) ?? "failed";
+        if (outcome === "canceled") return { kind: "canceled" };
+        if (outcome === "failed") return { kind: "rejected" };
+        const validated = validateEngineDetail(detail, original);
+        asset = validated.file;
+        volume = validated.volume;
+        loop = validated.loop;
+        beforePlayHandled = true;
+      }
+      if (asset !== request.asset) {
+        info = options.lookup(asset);
+        if (info.kind === "pending") {
+          options.need?.(asset);
+          return beforePlayHandled
+            ? { kind: "pending", beforePlayHandled: true, asset, volume, loop }
+            : { kind: "pending" };
+        }
+      }
       let positionTicks: number | undefined;
       if (request.syncTrack !== undefined) {
         const sourceTrack = findTrack(host.audio, request.syncTrack);
-        const source = sourceTrack?.voices.find((voice) => voice.index === 0);
-        if (sourceTrack === undefined || source === undefined || source.lengthTicks === null || info.kind !== "known" || info.lengthTicks === null) {
-          diag("media.sync-source", "mediaPlay", { sync: request.syncTrack });
-          return { kind: "rejected" };
+        const syncVoice = sourceTrack?.voices.find((voice) => voice.index === 0);
+        if (sourceTrack === undefined || syncVoice === undefined || syncVoice.lengthTicks === null || syncVoice.lengthTicks <= 0 || info.kind !== "known" || info.lengthTicks === null || info.lengthTicks <= 0) {
+          diag("media.sync-source", request.diagnosticOp ?? "mediaPlay", { sync: request.syncTrack });
+          positionTicks = 0;
+        } else {
+          positionTicks = voicePosition(syncVoice, host.time.tick) % info.lengthTicks;
         }
-        positionTicks = voicePosition(source, host.time.tick) % info.lengthTicks;
       }
-      const started = startVoice(found, request.asset, info, {
-        loop: request.loop,
+      const started = startVoice(found, asset, info, {
+        loop,
         restart: request.restart === true,
         priority: request.priority ?? 0,
-        op: "mediaPlay",
+        volume,
+        op: request.diagnosticOp ?? "mediaPlay",
         voice: request.voice,
         positionTicks,
       });
-      if (typeof started === "string") return { kind: "same-file", action: started };
+      if (!("index" in started)) return { kind: "same-file", action: started.action, voice: started.voice.index, cueId: started.voice.cueId };
       let wait: AudioWait | null = null;
       if (request.wait === true) {
-        if (started.lengthTicks === null) diag("media.asset-length", "mediaPlay", { track: found.name, voice: started.index });
+        if (started.lengthTicks === null) diag("media.asset-length", request.diagnosticOp ?? "mediaPlay", { track: found.name, voice: started.index });
         else wait = makeWait(found, started, false);
       }
       return { kind: "started", voice: started.index, cueId: started.cueId, wait };
@@ -620,9 +1020,14 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       const tick = host.time.tick;
       refresh(at.track, tick);
       target.positionTicks = voicePosition(target, tick);
+      if (target.loop) {
+        const pass = voicePass(target, tick);
+        if (pass !== null) observedPass.set(target, pass);
+      }
       target.pausedTick = tick;
       target.state = "paused";
       emit("media.pause", { track: at.track.name, voice: at.index });
+      emitTransition("paused", at.track, target, tick);
       refresh(at.track);
       return true;
     },
@@ -641,7 +1046,12 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       if (target.fade !== null) target.fade.startTick += tick - Math.max(target.pausedTick, target.fade.startTick);
       target.state = "playing";
       target.pausedTick = null;
+      if (target.loop) {
+        const pass = voicePass(target, tick);
+        if (pass !== null) observedPass.set(target, pass);
+      }
       emit("media.resume", { track: at.track.name, voice: at.index });
+      emitTransition("resumed", at.track, target, tick);
       refresh(at.track);
       return true;
     },
@@ -667,6 +1077,10 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       target.startTick = base - position;
       if (target.state === "paused") target.positionTicks = position;
       target.endTick = target.loop ? null : target.startTick + length;
+      if (target.loop) {
+        const pass = target.state === "paused" ? floorDiv(target.positionTicks, length) : voicePass(target, host.time.tick);
+        if (pass !== null) observedPass.set(target, pass);
+      }
       emit("media.seek", { track: at.track.name, voice: at.index, positionTicks: position });
       refresh(at.track);
       return true;
@@ -687,6 +1101,12 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
           const base = target.state === "paused" && target.pausedTick !== null ? target.pausedTick : host.time.tick;
           target.endTick = target.startTick + (floorDiv(base - target.startTick, length) + 1) * length;
         }
+      }
+      if (loop) {
+        const pass = target.state === "paused" && length !== null ? floorDiv(target.positionTicks, length) : voicePass(target, host.time.tick);
+        if (pass !== null) observedPass.set(target, pass);
+      } else {
+        observedPass.delete(target);
       }
       if (at.index === 0) at.track.flags = loop ? MEDIA_LOOP : 0;
       emit("media.flags", { track: at.track.name, voice: at.index, loop, flags: loop ? MEDIA_LOOP : 0 });
@@ -750,6 +1170,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
         const fade = durationTicks === 0 ? null : { fromVolume: from, targetVolume: percent, startTick: tick, durationTicks };
         trackVolumeEntry(found.name, durationTicks === 0 ? percent : from, fade);
         emit("media.fade", { track: found.name, volume: from, targetVolume: percent, durationTicks });
+        if (durationTicks === 0) for (const active of found.voices) emitTransition("faded", found, active, tick);
         return true;
       }
       const at = locate("mediaFade", track, voice);
@@ -759,6 +1180,7 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       at.voice.fade = durationTicks === 0 ? null : { fromVolume: from, targetVolume: percent, startTick: tick, durationTicks };
       at.voice.volume = durationTicks === 0 ? percent : from;
       emit("media.fade", { track: at.track.name, voice: at.index, volume: from, targetVolume: percent, durationTicks });
+      if (durationTicks === 0) emitTransition("faded", at.track, at.voice, tick);
       refresh(at.track, tick);
       return true;
     },
@@ -784,43 +1206,60 @@ export function createAudioRuntime(host: AudioHost, options: AudioRuntimeOptions
       return voice.endTick !== null && tick >= voice.endTick ? { wake: true, why: "end" } : { wake: false };
     },
     load(saved) {
-      const tick = host.time.tick;
-      const shift = tick - saved.tick;
-      host.audio.cueId = Math.max(host.audio.cueId, saved.cueId);
-      host.audio.soundFont = saved.soundFont;
-      emit("soundfont.set", { asset: saved.soundFont ?? defaultSoundFont });
-      const tracks: AudioTrackState[] = [];
-      for (const savedTrack of saved.tracks) {
-        const track = createTrack(savedTrack.name, savedTrack.voiceCount);
-        track.flags = savedTrack.flags;
-        track.file = savedTrack.file;
-        const isMusic = savedTrack.name === "music";
-        for (const source of [...savedTrack.voices].sort((a, b) => a.index - b.index)) {
-          const voice = copyVoice(source, saved.tick);
-          if (voice.state === "paused") {
-            voice.startTick += shift;
-            if (voice.endTick !== null) voice.endTick += shift;
-            voice.pausedTick = (voice.pausedTick ?? saved.tick) + shift;
-            voice.fade = copyFade(source.fade, shift);
-            voice.cueId = emit("media.play", { track: track.name, voice: voice.index, asset: voice.file, loop: voice.loop, flags: voice.loop ? MEDIA_LOOP : 0, positionTicks: voice.positionTicks, volume: voice.volume });
-            emit("media.pause", { track: track.name, voice: voice.index });
-          } else {
-            const length = voice.lengthTicks;
-            if (length !== null && !voice.loop && voice.positionTicks >= length) continue;
-            const position = isMusic ? 0 : voice.positionTicks;
-            voice.startTick = tick - position;
-            voice.positionTicks = position;
-            voice.endTick = length !== null && !voice.loop ? voice.startTick + length : null;
-            voice.pausedTick = null;
-            voice.fade = copyFade(source.fade, shift);
-            voice.cueId = emit("media.play", { track: track.name, voice: voice.index, asset: voice.file, loop: voice.loop, flags: voice.loop ? MEDIA_LOOP : 0, positionTicks: 0, volume: voice.volume }, voice.startTick);
+      const wasEnabled = lifecycleEnabled;
+      lifecycleEnabled = false;
+      observedPass.clear();
+      try {
+        const tick = host.time.tick;
+        const shift = tick - saved.tick;
+        host.audio.cueId = Math.max(host.audio.cueId, saved.cueId);
+        emit("soundfont.set", { asset: host.audio.soundFont ?? defaultSoundFont });
+        const savedByName = new Map(saved.tracks.map((track) => [asciiFold(track.name), track]));
+        const tracks: AudioTrackState[] = [];
+        for (const configured of host.audio.tracks) {
+          const track = createTrack(configured.name, configured.voiceCount);
+          const savedTrack = savedByName.get(configured.name);
+          if (savedTrack === undefined) {
+            tracks.push(track);
+            continue;
           }
-          track.voices.push(voice);
+          track.flags = savedTrack.flags;
+          track.file = savedTrack.file;
+          const isMusic = configured.name === "music";
+          for (const source of [...savedTrack.voices].sort((a, b) => a.index - b.index)) {
+            if (source.index >= configured.voiceCount) continue;
+            const voice = copyVoice(source, saved.tick);
+            if (voice.state === "paused") {
+              voice.startTick += shift;
+              if (voice.endTick !== null) voice.endTick += shift;
+              voice.pausedTick = (voice.pausedTick ?? saved.tick) + shift;
+              voice.fade = copyFade(source.fade, shift);
+              voice.cueId = emit("media.play", { track: track.name, voice: voice.index, asset: voice.file, loop: voice.loop, flags: voice.loop ? MEDIA_LOOP : 0, positionTicks: voice.positionTicks, volume: voice.volume });
+              emit("media.pause", { track: track.name, voice: voice.index });
+            } else {
+              const length = voice.lengthTicks;
+              if (length !== null && !voice.loop && voice.positionTicks >= length) continue;
+              const position = isMusic ? 0 : voice.positionTicks;
+              voice.startTick = tick - position;
+              voice.positionTicks = position;
+              voice.endTick = length !== null && !voice.loop ? voice.startTick + length : null;
+              voice.pausedTick = null;
+              voice.fade = copyFade(source.fade, shift);
+              voice.cueId = emit("media.play", { track: track.name, voice: voice.index, asset: voice.file, loop: voice.loop, flags: voice.loop ? MEDIA_LOOP : 0, positionTicks: 0, volume: voice.volume }, voice.startTick);
+            }
+            track.voices.push(voice);
+            if (voice.loop && voice.lengthTicks !== null) {
+              const pass = voice.state === "paused" ? floorDiv(voice.positionTicks, voice.lengthTicks) : voicePass(voice, tick);
+              if (pass !== null) observedPass.set(voice, pass);
+            }
+          }
+          refresh(track);
+          tracks.push(track);
         }
-        refresh(track);
-        tracks.push(track);
+        host.audio.tracks = tracks;
+      } finally {
+        lifecycleEnabled = wasEnabled;
       }
-      host.audio.tracks = tracks;
     },
   };
   runtime = runtimeApi;

@@ -1,11 +1,14 @@
+import type { ActorId } from "../actors/model.ts";
 import type { ProgramRef } from "../script/program.ts";
 import { endItemThreads, findThread, startThread, type VmState } from "../script/state.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
 import type { PlayerPresencePort } from "../ports/startup.ts";
 import type { SpriteDraw } from "../render/compose.ts";
+import type { Character } from "../formats/actor/model.ts";
 import type { WorldBoard } from "../world/model.ts";
 import {
   actorFromSource,
+  actorLinkForSource,
   boardItemSources,
   createSpritesSection,
   SPRITES_SCHEMA_VERSION,
@@ -70,16 +73,17 @@ function updateItem(section: SpritesSection, index: number, update: (item: Sprit
   return replacement;
 }
 
-function actorSourceForPlayer(source: SpriteActorSource, index: number, board: WorldBoard): SpriteActor {
-  return actorFromSource({ ...source, kind: "player" }, board, index, null);
+function actorSourceForPlayer(source: SpriteActorSource, index: number, board: WorldBoard, actors: SpriteHydrationInput["actors"]): SpriteActor {
+  const link = actorLinkForSource(source, actors);
+  return actorFromSource({ ...source, kind: "player", ...(link === undefined ? {} : { actorId: link }) }, board, index, null);
 }
 
 /** Hydrate players and compacted board items into the authoritative sprites section. */
 export function hydrateSprites(input: SpriteHydrationInput, section = createSpritesSection()): SpritesSection {
   const board = input.board;
   const actors = input.actorFiles ?? new Map();
-  const players = (input.players ?? []).map((source, index) => actorSourceForPlayer(source, index, board));
-  const itemSources = boardItemSources(board, actors, input.variables ?? {});
+  const players = (input.players ?? []).map((source, index) => actorSourceForPlayer(source, index, board, input.actors));
+  const itemSources = boardItemSources(board, actors, input.variables ?? {}, input.actors, input.actorIds);
   const items = itemSources.map((source, index) => {
     const actor = actorFromSource(source, board, index, index);
     const thread = startsItemThread(actor, input.vm, input.programRef);
@@ -102,7 +106,7 @@ export function createInitialPlayer(
   board: WorldBoard,
   source: SpriteActorSource,
 ): SpriteActor {
-  const player = actorSourceForPlayer({ ...source, controlled: source.controlled ?? section.players.length === 0 }, section.players.length, board);
+  const player = actorSourceForPlayer({ ...source, controlled: source.controlled ?? section.players.length === 0 }, section.players.length, board, undefined);
   section.players = [...section.players, player];
   if (section.selectedPlayer === null || player.controlled) section.selectedPlayer = player.id;
   return player;
@@ -144,6 +148,43 @@ export function selectPlayer(section: SpritesSection, id: string): boolean {
   if (!section.players.some((player) => player.id === id)) return false;
   section.selectedPlayer = id;
   section.players = section.players.map((player) => ({ ...player, controlled: player.id === id }));
+  return true;
+}
+
+/** Select the sprite linked to a stable party actor id without changing sprite order. */
+export function selectActor(section: SpritesSection, actorId: ActorId | null): boolean {
+  if (actorId === null) {
+    section.selectedPlayer = null;
+    section.players = section.players.map((player) => ({ ...player, controlled: false }));
+    return true;
+  }
+  const player = section.players.find((candidate) => candidate.actorId === actorId);
+  return player === undefined ? false : selectPlayer(section, player.id);
+}
+/** Replace only the selected actor's sprite presentation while preserving its identity and runtime position. */
+export function changePlayerGraphics(section: SpritesSection, board: WorldBoard, actorId: ActorId, file: string, character: Character): boolean {
+  const player = section.players.find((candidate) => candidate.actorId === actorId);
+  if (player === undefined) return false;
+  const graphic = actorFromSource({
+    id: player.id, actorId, kind: "player", source: file,
+    x: player.x, y: player.y, layer: player.layer, character,
+  }, board, player.index, null);
+  section.players = section.players.map((candidate) => candidate.id === player.id
+    ? { ...candidate, source: file, visual: graphic.visual }
+    : candidate);
+  return true;
+}
+
+/** Remove a destroyed actor's linked sprite; roster removal alone retains it for restoration. */
+export function removeActorSprite(section: SpritesSection, actorId: ActorId): boolean {
+  const player = section.players.find((candidate) => candidate.actorId === actorId);
+  if (player === undefined) return false;
+  section.players = section.players.filter((candidate) => candidate.actorId !== actorId);
+  if (section.selectedPlayer === player.id) {
+    const selected = section.players.find((candidate) => candidate.controlled) ?? section.players[0] ?? null;
+    section.selectedPlayer = selected?.id ?? null;
+  }
+  section.players = section.players.map((candidate) => ({ ...candidate, controlled: candidate.id === section.selectedPlayer }));
   return true;
 }
 
@@ -252,6 +293,9 @@ export type SpriteRuntime = CameraTarget & PlayerPresencePort & {
   hideItem(id: string | number): boolean;
   removeItem(id: string | number): boolean;
   selectPlayer(id: string): boolean;
+  selectActor(actorId: ActorId | null): boolean;
+  changePlayerGraphics(actorId: ActorId, file: string, character: Character): boolean;
+  removeActor(actorId: ActorId): boolean;
   draws(): SpriteDraw[];
   applyEffect(effect: SpriteEffect): boolean;
 };
@@ -278,6 +322,9 @@ export function createSpriteRuntime(options: SpriteRuntimeOptions = {}): SpriteR
     hideItem(id) { return setItemVisible(section, id, false, vm, resolver); },
     removeItem(id) { return removeItem(section, id, vm); },
     selectPlayer(id) { return selectPlayer(section, id); },
+    selectActor(actorId) { return selectActor(section, actorId); },
+    changePlayerGraphics(actorId, file, character) { return board === null ? false : changePlayerGraphics(section, board, actorId, file, character); },
+    removeActor(actorId) { return removeActorSprite(section, actorId); },
     draws() { return spriteDraws(section); },
     hasPlayer() { return section.players.length > 0; },
     getPlayerPosition(): CameraPoint | null {

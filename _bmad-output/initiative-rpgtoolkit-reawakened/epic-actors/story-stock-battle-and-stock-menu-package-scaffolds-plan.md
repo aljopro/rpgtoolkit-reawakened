@@ -3,7 +3,7 @@ title: "stock_battle and stock_menu package scaffolds"
 type: 'feature'
 ticket: 11
 created: '2026-10-19'
-status: draft
+status: done
 baseline_revision: '0975a26b54f8d7bf569f463a02b783b16ec0ea98'
 risk: "medium"
 context:
@@ -24,7 +24,7 @@ Structure, descriptor, manifest, start-up registration and the spec's empty beha
 
 1. Stock packages are ordinary packages: no engine privilege (E-99 one plugin contract).
 2. `stock_battle` wraps existing `fight`/`fightenemy` role commands; `stock_menu` supplies the host-defined no-op menu role. If the owner requires a different menu command, only the role mapping changes, not package loading.
-3. The package loader is 19.16; package ids are lower-case ASCII identifiers with underscores, and package start-ups are the only registration path.
+3. The package loader implementation is 19.17 (#562); 19.16 is the closed docs handoff. Package ids are lower-case ASCII identifiers with underscores, and package start-ups are the only registration path.
 
 ## Acceptance
 

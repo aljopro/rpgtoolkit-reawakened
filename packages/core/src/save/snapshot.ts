@@ -47,7 +47,7 @@ import {
 } from "../script/errors.ts";
 import { COMPILER_VERSION } from "../script/program.ts";
 import { SCHEMA_VERSIONS, type GameState } from "./state.ts";
-import { asActorsSection, createActorsSection, ACTORS_SCHEMA_VERSION } from "../actors/model.ts";
+import { asActorsSection, createActorsSection, ACTORS_SCHEMA_VERSION, validateActorProgression, type ActorProgression, type ActorStats } from "../actors/model.ts";
 import { asSpritesSection, createSpritesSection, SPRITES_SCHEMA_VERSION } from "../sprites/model.ts";
 import { createInputSection } from "../input/input.ts";
 import { createTriggersSection, TRIGGERS_SCHEMA_VERSION } from "../triggers/model.ts";
@@ -55,6 +55,7 @@ import { INPUT_SCHEMA_VERSION } from "./sections/input.ts";
 import { AUDIO_SCHEMA_VERSION, createAudioSection } from "../audio/model.ts";
 import { createEventsSection } from "../events/model.ts";
 import { EVENT_DISPATCH_WAIT } from "../events/emitter.ts";
+import { migrateMenuSections } from "../menu/migrate.ts";
 /** The canonical form of a whole game state (AD-10/AD-11). */
 export function snapshot(state: GameState): string {
   return canon(tagNonFinite(state) as never);
@@ -161,7 +162,46 @@ function migrateSprites(record: Record<string, unknown>, schema: Record<string, 
   }
 }
 
-/** Add the actor section to saves made before the unified actor owner existed. */
+function migrationInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) shapeError(`the snapshot's ${field} must be a safe integer`);
+  return value;
+}
+
+function migrateActorProgression(actor: Record<string, unknown>, index: number): void {
+  const stats = recordAt(actor.stats, `actors.actors[${index}].stats`) as unknown as ActorStats;
+  const old = recordAt(actor.progression, `actors.actors[${index}].progression`);
+  const fields = ["levelType", "experienceIncrease", "maxLevel", "levelHp", "levelDp", "levelFp", "levelSm", "levelUpType"] as const;
+  const policy = Object.fromEntries(fields.map((field) => [field, migrationInteger(old[field], `actors.actors[${index}].progression.${field}`)])) as unknown as ActorProgression;
+  let nextRequirement = policy.levelType;
+  let remainingExperience = nextRequirement - migrationInteger(stats.experience, `actors.actors[${index}].stats.experience`);
+  const level = migrationInteger(stats.level, `actors.actors[${index}].stats.level`);
+  for (let priorLevel = 1; priorLevel < level; priorLevel += 1) {
+    const product = nextRequirement * policy.experienceIncrease;
+    if (!Number.isSafeInteger(product)) shapeError(`the snapshot's actors.actors[${index}] progression threshold is unsafe`);
+    nextRequirement = policy.levelUpType === 0
+      ? nextRequirement + Math.trunc(product / 100)
+      : nextRequirement + policy.experienceIncrease;
+    if (!Number.isSafeInteger(nextRequirement)) shapeError(`the snapshot's actors.actors[${index}] progression threshold is unsafe`);
+    remainingExperience += nextRequirement;
+    if (!Number.isSafeInteger(remainingExperience)) shapeError(`the snapshot's actors.actors[${index}] remaining experience is unsafe`);
+  }
+  const migrated = {
+    ...old,
+    ...policy,
+    remainingExperience: Math.max(0, remainingExperience),
+    nextRequirement,
+    // Version 1 did not persist whether a source legacy program was present.
+    legacyLevelUp: null,
+  };
+  try {
+    validateActorProgression(stats, migrated);
+  } catch {
+    shapeError(`the snapshot's actors.actors[${index}] has invalid progression`);
+  }
+  actor.progression = migrated;
+}
+
+/** Migrate actor records while retaining their saved identity and state. */
 function migrateActors(record: Record<string, unknown>, schema: Record<string, unknown>): void {
   const version = schema.actors;
   if (version === undefined) {
@@ -170,9 +210,18 @@ function migrateActors(record: Record<string, unknown>, schema: Record<string, u
     return;
   }
   if (typeof version !== "number") shapeError("the snapshot's `schema` has no numeric `actors` version");
-  if (version >= ACTORS_SCHEMA_VERSION) return;
-  record.actors = createActorsSection();
+  if (version > ACTORS_SCHEMA_VERSION) shapeError(`the snapshot's actors schema version ${String(version)} is newer than supported version ${ACTORS_SCHEMA_VERSION}`);
+  if (version === ACTORS_SCHEMA_VERSION) return;
+  if (version !== 1) shapeError(`the snapshot's actors schema version ${String(version)} has no migration`);
+  const section = recordAt(record.actors, "actors");
+  if (section.version !== 1 || !Array.isArray(section.actors)) shapeError("the snapshot's actors section is not a version-1 actor section");
+  for (const [index, value] of section.actors.entries()) {
+    if (!isRecord(value)) shapeError(`the snapshot's actors.actors[${index}] is not an object`);
+    migrateActorProgression(value, index);
+  }
+  section.version = ACTORS_SCHEMA_VERSION;
   schema.actors = ACTORS_SCHEMA_VERSION;
+  record.actors = section;
 }
 
 /** Migrate the old empty trigger placeholder to the activation-state schema. */
@@ -252,6 +301,20 @@ function nullableRecord(value: unknown, path: string): Record<string, unknown> |
   if (value === null) return null;
   return recordAt(value, path);
 }
+function validateNativeData(value: unknown, path: string): void {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) shapeError(`the snapshot's ${path} must be finite`);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) validateNativeData(entry, `${path}[${index}]`);
+    return;
+  }
+  const record = recordAt(value, path);
+  for (const [name, entry] of Object.entries(record)) validateNativeData(entry, `${path}.${name}`);
+}
+
 
 function validateProgramRef(value: unknown, path: string): void {
   const ref = recordAt(value, path);
@@ -478,6 +541,17 @@ function validateEventsShape(value: unknown, vm: Record<string, unknown>): void 
   const events = recordAt(value, "events");
   const next = numberAt(events.nextListener, "events.nextListener");
   if (next < 1) shapeError("the snapshot's events.nextListener must be at least 1");
+  if (events.audioPasses !== undefined) {
+    const passes = recordAt(events.audioPasses, "events.audioPasses");
+    for (const [cue, pass] of Object.entries(passes)) {
+      if (!Number.isSafeInteger(Number(cue)) || Number(cue) < 1 || String(Number(cue)) !== cue) {
+        shapeError(`the snapshot's events.audioPasses.${cue} must name a positive cue id`);
+      }
+      if (typeof pass !== "number" || !Number.isSafeInteger(pass) || pass < 0) {
+        shapeError(`the snapshot's events.audioPasses.${cue} must be a non-negative pass number`);
+      }
+    }
+  }
   const objects = new Set<number>();
   for (const object of arrayAt(vm.objects, "vm.objects")) objects.add(numberAt(recordAt(object, "vm.objects[]").handle, "vm.objects[].handle"));
   const threads = new Set<number>();
@@ -506,6 +580,17 @@ function validateEventsShape(value: unknown, vm: Record<string, unknown>): void 
     stringAt(queued.emitter, `events.queue[${index}].emitter`);
     liveEvent(queued.event, `events.queue[${index}].event`);
   }
+  if (events.nativeDetails !== undefined) {
+    const nativeDetails = recordAt(events.nativeDetails, "events.nativeDetails");
+    for (const [rawHandle, detailValue] of Object.entries(nativeDetails)) {
+      const path = `events.nativeDetails.${rawHandle}`;
+      const handle = Number(rawHandle);
+      if (!Number.isSafeInteger(handle) || handle < 1) shapeError(`the snapshot's ${path} must name a positive event handle`);
+      liveEvent(handle, path);
+      const detail = recordAt(detailValue, path);
+      for (const [name, entry] of Object.entries(detail)) validateNativeData(entry, `${path}.${name}`);
+    }
+  }
   for (const [index, threadValue] of arrayAt(vm.threads, "vm.threads").entries()) {
     const wait = recordAt(threadValue, `vm.threads[${index}]`).wait;
     if (!isRecord(wait) || wait.kind !== EVENT_DISPATCH_WAIT) continue;
@@ -517,6 +602,18 @@ function validateEventsShape(value: unknown, vm: Record<string, unknown>): void 
       liveEvent(handle, `events.emitters.${key}`);
       if (registered.has(handle as number)) shapeError(`the snapshot's events.emitters.${key} names a handle another key already names`);
       registered.add(handle as number);
+    }
+  }
+  if (events.retiring !== undefined) {
+    const retiring = arrayAt(events.retiring, "events.retiring");
+    if (!isRecord(events.emitters)) shapeError("the snapshot's events.retiring requires registered emitters");
+    const seen = new Set<string>();
+    for (const [index, value] of retiring.entries()) {
+      stringAt(value, `events.retiring[${index}]`);
+      const key = value as string;
+      if (seen.has(key)) shapeError(`the snapshot's events.retiring[${index}] repeats an emitter`);
+      seen.add(key);
+      if (!Object.hasOwn(events.emitters, key)) shapeError(`the snapshot's events.retiring[${index}] names no registered emitter`);
     }
   }
   if (events.dispatch === null) return;
@@ -675,6 +772,8 @@ export function restoreGameState(json: string): GameState {
 
   migrateEvents(record, schema as Record<string, unknown>);
   migrateActors(record, schema as Record<string, unknown>);
+  validateActorsShape(record.actors);
+  migrateMenuSections(record, schema as Record<string, unknown>);
   for (const key of Object.keys(SCHEMA_VERSIONS)) {
     if (!Object.hasOwn(record, key)) {
       throw new ScriptError("restore.shape", `the snapshot is missing the "${key}" section`);

@@ -20,12 +20,16 @@ import {
   KILL_SYSTEM_OWNED,
   hashGameState,
   hydrateCharacterResult,
+  actorInputFromCharacter,
   hydrateEnemyResult,
   readCharacter,
   readEnemy,
   readItem,
   patchActor,
   BinaryReader,
+  readEvent,
+  type EventView,
+  type PluginDefinition,
   resetActorsSection,
   restoreGameState,
   registerActorObject,
@@ -77,6 +81,9 @@ test("actor hydration maps character and enemy reader fields deterministically",
     levelFp: character.value.levelIncreases[2],
     levelSm: character.value.levelIncreases[3],
     levelUpType: character.value.levelUpType,
+    remainingExperience: Math.max(0, character.value.firstLevelExp - character.value.stats.experience),
+    nextRequirement: character.value.firstLevelExp,
+    legacyLevelUp: character.value.levelUpProgram.length > 0,
   });
   deepEqual(firstCharacter.value.statuses, {});
   deepEqual(firstEnemy.value.stats, {
@@ -98,6 +105,31 @@ test("actor hydration maps character and enemy reader fields deterministically",
   equal(secondCharacter.ok, true);
   equal(secondEnemy.ok, true);
   deepEqual(second, first);
+});
+
+test("actor hydration derives the current threshold for stored levels above one", () => {
+  const source = readCharacter(new BinaryReader(new Uint8Array(example("Game/Example/Chrs/ada.tem")), "threshold.tem"));
+  equal(source.ok, true);
+  if (!source.ok) return;
+  const base = source.value;
+  const character = {
+    ...base,
+    firstLevelExp: 10,
+    experienceIncrease: 5,
+    levelUpType: 1,
+    stats: { ...base.stats, level: 2, experience: 24 },
+  };
+  const near = actorInputFromCharacter("threshold.tem", "party", character);
+  ok(near.progression);
+  equal(near.progression.nextRequirement, 15);
+  equal(near.progression.remainingExperience, 1);
+  const crossing = actorInputFromCharacter("threshold.tem", "party", {
+    ...character,
+    stats: { ...character.stats, experience: 25 },
+  });
+  ok(crossing.progression);
+  equal(crossing.progression.nextRequirement, 15);
+  equal(crossing.progression.remainingExperience, 0);
 });
 
 test("actor hydration preserves reader warnings from character residue", () => {
@@ -149,6 +181,9 @@ test("actor hydration carries defaults from an authored minor-zero character", (
     levelFp: read.value.levelIncreases[2],
     levelSm: read.value.levelIncreases[3],
     levelUpType: read.value.levelUpType,
+    remainingExperience: Math.max(0, read.value.firstLevelExp - read.value.stats.experience),
+    nextRequirement: read.value.firstLevelExp,
+    legacyLevelUp: read.value.levelUpProgram.length > 0,
   });
   deepEqual(hydrated.value.statuses, {});
   equal(hydrated.value.behaviour, null);
@@ -255,7 +290,7 @@ test("actor records round-trip through the owned state section with equal hash",
 test("StatsPort reads and writes the actor-owned stats without a vm.globals copy", () => {
   const state = createGameState({ seed: 5 });
   const actor = addActor(state.actors, partyFixture);
-  const port = createStatsPort(state.actors);
+  const port = createStatsPort(state.actors, () => ({}));
   const before = port.read(actor.id);
   ok(before === actor.stats);
   ok(!Object.hasOwn(state.vm.globals, "HP!"));
@@ -303,6 +338,116 @@ test("actor script object is the owner-backed emitter registration", () => {
   equal(host.read?.(context, "hp"), 9);
 });
 
+test("actor owner transitions are queued on the actor emitter and reach script listeners", () => {
+  const state = createGameState({ seed: 41 });
+  const actor = addActor(state.actors, { ...partyFixture, stats: { ...partyFixture.stats, hp: 4 }, statuses: { poison: 2 } });
+  const object = registerActorObject(state.vm, state.events, state.actors, actor.id);
+  ok(object !== null);
+  state.vm.globals.actor = { kind: "object", handle: object!.handle, className: object!.className };
+  const nativeEvents: EventView[] = [];
+  const nativePlugin: PluginDefinition = {
+    id: "actor-native-test",
+    version: "1.0.0",
+    commands: [{
+      name: "observeactorevent",
+      aliases: [],
+      params: [{ name: "event", optional: false, byRef: false, variadic: false }],
+      call: (view, args) => {
+        const event = readEvent(view.state!, args[0]!.value);
+        if (event !== undefined) nativeEvents.push(event);
+        return { value: 0 };
+      },
+    }],
+    listeners: [{ emitter: actorEmitterKey(actor.id), type: "statusChanged", command: "observeactorevent" }],
+  };
+  const services = createScriptServices(state, [nativePlugin]);
+  startProgram(state.vm, {
+    kind: "inline",
+    compiler: "2",
+    text: `
+fallenCause = ""
+fallenSource = 99
+fallenCount = 0
+revivedCause = ""
+revivedSource = 99
+revivedCount = 0
+statusName = ""
+statusSource = 99
+statusExpired = -1
+actor.on("fallen", (event) => { fallenCause = event.detail.cause; fallenSource = event.detail.source; fallenCount = fallenCount + 1 })
+actor.on("revived", (event) => { revivedCause = event.detail.cause; revivedSource = event.detail.source; revivedCount = revivedCount + 1 })
+actor.on("statusChanged", (event) => { statusName = event.detail.status + ":" + event.detail.previousrounds + ":" + event.detail.rounds; statusSource = event.detail.source; statusExpired = event.detail.expired })
+actor.hp = 0
+actor.hp = 0
+`,
+  });
+  for (let tick = 0; tick < 5; tick += 1) advanceScriptTick(state, services);
+  equal(state.vm.globals.fallencause, "script");
+  equal(state.vm.globals.fallensource, 0);
+  equal(state.vm.globals.fallencount, 1);
+  equal(state.actors.actors[0]?.statuses.poison, 2);
+  const statusResult = services.actors.advanceStatus(actor.id, 1, { source: 7 });
+  equal(statusResult?.transitions[0]?.type, "statusChanged");
+  for (let tick = 0; tick < 10; tick += 1) advanceScriptTick(state, services);
+  equal(state.vm.globals.statusname, "poison:2:1");
+  equal(state.vm.globals.statussource, 7);
+  equal(state.vm.globals.statusexpired, 0);
+  const expiredResult = services.actors.advanceStatus(actor.id, 1);
+  equal(expiredResult?.transitions[0]?.type, "statusChanged");
+  for (let tick = 0; tick < 10; tick += 1) advanceScriptTick(state, services);
+  equal(state.vm.globals.statusname, "poison:1:0");
+  equal(state.vm.globals.statussource, 0);
+  equal(state.vm.globals.statusexpired, 1);
+  equal(nativeEvents.length, 2);
+  deepEqual(nativeEvents.map((event) => event.detail), [
+    { status: "poison", previousRounds: 2, rounds: 1, expired: false, source: 7 },
+    { status: "poison", previousRounds: 1, rounds: 0, expired: true, source: null },
+  ]);
+  const reviveResult = services.actors.updateStats(actor.id, { hp: 4 }, { cause: "damage", source: 7 });
+  deepEqual(reviveResult?.transitions.map((transition) => transition.type), ["revived"]);
+  for (let tick = 0; tick < 10; tick += 1) advanceScriptTick(state, services);
+  equal(state.vm.globals.revivedcause, "damage");
+  equal(state.vm.globals.revivedsource, 7);
+  equal(state.vm.globals.revivedcount, 1);
+});
+
+test("actor transition events deliver revive and level details only to the changed actor", () => {
+  const state = createGameState({ seed: 42 });
+  const progression = { levelType: 0, experienceIncrease: 1, maxLevel: 3, levelHp: 1, levelDp: 1, levelFp: 1, levelSm: 1, levelUpType: 1, remainingExperience: 1, nextRequirement: 1, legacyLevelUp: false };
+  const first = addActor(state.actors, { ...partyFixture, id: 1, stats: { ...partyFixture.stats, hp: 0, level: 1, experience: 0 }, progression });
+  const second = addActor(state.actors, { ...partyFixture, id: 2, stats: { ...partyFixture.stats, hp: 0 }, progression });
+  const firstObject = registerActorObject(state.vm, state.events, state.actors, first.id);
+  const secondObject = registerActorObject(state.vm, state.events, state.actors, second.id);
+  ok(firstObject !== null && secondObject !== null);
+  state.vm.globals.first = { kind: "object", handle: firstObject!.handle, className: firstObject!.className };
+  state.vm.globals.second = { kind: "object", handle: secondObject!.handle, className: secondObject!.className };
+  const services = createScriptServices(state);
+  startProgram(state.vm, {
+    kind: "inline",
+    compiler: "2",
+    text: `
+firstRevived = 0
+secondRevived = 0
+leveled = 0
+leveledExperience = 0
+leveledApplied = 0
+first.on("revived", (event) => { firstRevived = event.detail.cause })
+second.on("revived", (event) => { secondRevived = event.detail.cause })
+first.on("leveledUp", (event) => { leveled = event.detail.level; leveledExperience = event.detail.experience; leveledApplied = event.detail.applied["maxHp"] + event.detail.applied["dp"] + event.detail.applied["fp"] + event.detail.applied["maxSmp"] })
+`,
+  });
+  advanceScriptTick(state, services);
+  services.actors.updateStats(first.id, { hp: 4 }, { cause: "script" });
+  const levelResult = services.actors.awardExperience(first.id, 1);
+  deepEqual(levelResult?.transitions.map((transition) => transition.type), ["leveledUp"]);
+  advanceScriptTick(state, services);
+  equal(state.vm.globals.firstrevived, "script");
+  equal(state.vm.globals.secondrevived, 0);
+  equal(state.vm.globals.leveled, 2);
+  equal(state.vm.globals.leveledexperience, 1);
+  equal(state.vm.globals.leveledapplied, 4);
+});
+
 test("actor host fields hydrate through dot and indexed VM access", () => {
   const state = createGameState({ seed: 10 });
   const actor = addActor(state.actors, partyFixture);
@@ -319,7 +464,9 @@ test("actor host fields hydrate through dot and indexed VM access", () => {
 test("actor aliases write through and protected virtuals keep their links", () => {
   const state = createGameState({ seed: 9 });
   const actor = addActor(state.actors, partyFixture);
-  const virtuals = createDefaultVirtuals(state);
+  state.party.members = [actor.id];
+  state.party.selected = actor.id;
+  const virtuals = createDefaultVirtuals(state, createActorService(state.actors));
   equal(virtuals.read("HP!"), 12);
   equal(virtuals.write?.("HP!", 4), "written");
   equal(state.actors.actors[0]?.stats.hp, 4);

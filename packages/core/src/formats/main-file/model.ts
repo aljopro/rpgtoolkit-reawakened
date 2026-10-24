@@ -48,6 +48,17 @@ export const MAIN_PACKAGE_EXTENSION_TAG = new Uint8Array([0x54, 0x4b, 0x52, 0x50
 export const MAIN_PACKAGE_MAX_COUNT = 256;
 export const MAIN_PACKAGE_MAX_BYTES = 255;
 
+/** TKR audio-settings extension (docs/spec/formats/main-file.md#tkr-audio-settings-extension). */
+export const MAIN_AUDIO_EXTENSION_TAG = new Uint8Array([0x54, 0x52, 0x4b, 0x41, 0x55, 0x44, 0x00]);
+export const MAIN_AUDIO_MIN_TRACKS = 5;
+export const MAIN_AUDIO_MAX_TRACKS = 16;
+export const MAIN_AUDIO_MAX_NAME_BYTES = 32;
+export const MAIN_AUDIO_MAX_FONT_BYTES = 255;
+export const MAIN_AUDIO_MIN_VOICE_CAP = 1;
+export const MAIN_AUDIO_MAX_VOICE_CAP = 32;
+/** The five built-in tracks, always first in this order (docs/spec/engine/audio-media.md#media-4). */
+export const MAIN_AUDIO_BUILTIN_TRACKS: readonly string[] = ["music", "sfx", "ambience", "voice", "ui"];
+
 /**
  * Decode the stored `gameSpeed` byte (docs/spec/formats/main-file.md#layout row 38). At minor ≥ 8 the
  * byte is `speed + 128`, so the speed is in −4…+4 (each step ±10 %); below 8 the
@@ -105,6 +116,24 @@ export interface MainFileReservedRuns {
   readonly multitask: Uint8Array;
   /** Row 29, minor < 3: the `i16` old fight style after `customFightPrg`. */
   readonly fightStyle: Uint8Array;
+}
+
+/** One configured audio track: its authored name and positive voice count (docs/spec/formats/main-file.md#tkr-audio-settings-extension). */
+export interface MainFileAudioTrack {
+  /** The stored track name, 1–32 bytes; canonicalised by ASCII folding at load. */
+  readonly name: string;
+  /** The number of voice slots, 1–32. */
+  readonly voiceCount: number;
+}
+
+/** The TKR audio-settings block (docs/spec/formats/main-file.md#tkr-audio-settings-extension). */
+export interface MainFileAudioSettings {
+  /** The full ordered list: the five built-ins first, then authored tracks. */
+  readonly tracks: readonly MainFileAudioTrack[];
+  /** The game's total voice budget, 1–32. */
+  readonly voiceCap: number;
+  /** The authored default bank as an `AssetKey`, or `null` when the game supplies none. */
+  readonly defaultSoundFont: string | null;
 }
 
 /** A parsed main game file (docs/spec/formats/main-file.md#layout). */
@@ -190,6 +219,8 @@ export interface MainFile {
   readonly packagePlugins?: readonly string[];
   /** Whether the TKR package-list block was present, including an explicit empty list. */
   readonly packagePluginsExtension?: boolean;
+  /** The TKR audio-settings block, or `null` when the file carries none. */
+  readonly audioSettings: MainFileAudioSettings | null;
   /** Row 30: `0`/`1`. */
   readonly useDayNight: number;
   /** Row 31: `0` = real clock, `1` = game clock. */

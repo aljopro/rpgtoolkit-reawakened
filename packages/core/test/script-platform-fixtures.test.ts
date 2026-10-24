@@ -103,6 +103,7 @@ function freshGame(fixture: Fixture, seed: number): { state: GameState; services
     state,
     services,
     fixture.startups.map((entry) => withOwner(fileProgramRef(loader, entry.file), entry.owner)),
+    [],
   );
   startProgram(state.vm, fileProgramRef(loader, fixture.main));
   return { state, services };
@@ -117,6 +118,7 @@ function restoreGame(fixture: Fixture, json: string, seed: number): { state: Gam
     scratch,
     servicesOf(scratch, loader, layers),
     fixture.startups.map((entry) => withOwner(fileProgramRef(loader, entry.file), entry.owner)),
+    [],
   );
 
   const state = restoreGameState(json);

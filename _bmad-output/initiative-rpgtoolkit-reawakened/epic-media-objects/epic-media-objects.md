@@ -46,6 +46,7 @@ Changes `core/audio` only at its script-facing edge (events out, `beforePlay` in
 
 - Decision: Jensen, 2026-10-19: Epic 6's media surface is net new, so only 3.1 compatibility must be preserved. There is ONE handle model and it is an object: `mediaPlay` returns a media (voice) object with the core audio information on it and events that can be processed on it, as the battle system's objects and events do. No integer `&voice` handle and no object façade over one.
 - Decision: Jensen, 2026-10-19: legacy `mediaplay` is `void` and took one argument, so returning an object is compatible; every 3.1 call site is a bare statement.
+- Confirmation: Jensen, 2026-10-23: the one-argument `mediaPlay(file)` form returns the MEDIA-1 voice object with the 3.1 music/loop defaults; the legacy-game corpus review found those calls are bare statements, so existing callers ignore the added value.
 - Decision: Jensen, 2026-10-19: the core audio system is configured in the game file (`.gam` is the csproj of the toolkit); the default SoundFont lives there too.
 - Decision: Jensen, 2026-10-19: naming standard: events are past-tense state changes (`ended`, `fallen`); cues stay imperative (`media.play`); diagnostics keep their `media.*` codes.
 - Decision: owner position carried over from the Epic 19 party session (2026-10-19): actors and saves hold data only, never callables; listeners are script state, saved per 18.6.

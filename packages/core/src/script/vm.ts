@@ -18,10 +18,14 @@ import type { CallableValue, ObjectValue, RefId, Value, VarScope } from "../port
 import type { Wait, WaitPoll, WaitReply, WaitView } from "../ports/wait.ts";
 import { createRngPort } from "../rng/xoshiro.ts";
 import type { GameState, SectionKey } from "../save/state.ts";
+import type { ClockPort } from "../ports/time.ts";
 import { createClockPort, MAX_TICK, runTimePhase } from "../time/time.ts";
-import { createActorHostType, createActorService } from "../actors/port.ts";
+import { createActorHostType, createActorService, type ActorService } from "../actors/port.ts";
+import { createActorEventSink } from "../actors/object.ts";
+import { createBehaviourRegistry, resolveBehaviour, type BehaviourRegistry } from "../actors/behaviour.ts";
 import type { Arg, BuiltinSpec } from "./builtins.ts";
 import { createDefaultVirtuals, type VirtualVariablePort } from "./virtuals.ts";
+import { MEDIA_HOST_TYPES, objectValue, mediaVoiceRef, type MediaPlayOptions, type MediaScriptService } from "../audio/script.ts";
 import { recordDiagnostic, recordEffect, type EffectRecord } from "./effects.ts";
 import type { HostObjectContext, HostObjectType } from "./host.ts";
 import {
@@ -55,7 +59,7 @@ import {
   type PluginLayers,
 } from "./layers.ts";
 import { collectStateGarbage, runEventsPhase } from "../events/dispatch.ts";
-import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef, queueErrorEvent } from "../events/emitter.ts";
+import { applyEmitEffect, applyEmitterOp, EVENT_DISPATCH_WAIT, forgetEmitter, isEmitterMethod, isHostMethodDef, queueErrorEvent, queueNativeEvent, registerEmitter } from "../events/emitter.ts";
 import { GAME_EMITTER, type EventsSection } from "../events/model.ts";
 import { registerNativeListeners } from "../events/native.ts";
 import { classInfo, findMember, findMethod } from "./classes.ts";
@@ -143,10 +147,24 @@ export type ScriptStatus = "running" | "waiting" | "finished";
  * debug channel (AD-24); `diagnostics` collects the located host diagnostics
  * of every runtime failure until the engine drains them into a `TickReport`.
  */
+export type PackageStartupLifecycle = {
+  active: boolean;
+  packageName: string | undefined;
+};
+
 export type ScriptServices = ScriptObservers & {
   /** Attribution only, built from the same resolved manifest as dispatch. */
   readonly callPlugin?: (name: string, namespace?: string) => string | undefined;
   readonly view: CommandView;
+  /** Unrestricted clock used by the deterministic VM scheduler; commands use view.clock. */
+  readonly clock: ClockPort;
+  /** Private lifecycle capability; native command code receives no startup-mode mutator. */
+  readonly isPackageStartup: () => boolean;
+  readonly packageStartupForbidden: (operation: string) => ScriptError;
+  readonly setPackageStartup: (active: boolean, packageName?: string) => void;
+  readonly setCommandThread: (thread: number | undefined) => void;
+  /** Listener baseline captured before this service installs its plugin listeners. */
+  readonly listenersBeforePackageStartup: readonly GameState["events"]["listeners"][number][];
   readonly commands: CommandLookup;
   readonly programs: ProgramCache;
   /** Where file programs and includes load from; absent when the host serves none (G2). */
@@ -154,9 +172,12 @@ export type ScriptServices = ScriptObservers & {
   readonly virtuals: VirtualVariablePort;
   readonly logger: Logger;
   readonly diagnostics: Diagnostic[];
-  /** Manifest options remain host/service data and never enter VM state. */
+  /** Actor operations resolve the session behaviour before applying core rules. */
+  readonly actors: ActorService;
+  /** Session-only actor behaviour registrations; never saved as game state. */
+  readonly behaviours: BehaviourRegistry;
   readonly pluginOptions: ReadonlyMap<string, PlainData>;
-  /** The `namespace.prg` files a package namespace already warned about, so each warns once (PKG-4); a log aid, never state. */
+  /** The packages' session data, rebuilt at boot/reset/restore. */
   readonly hiddenFileWarned: Set<string>;
   /** Session host declarations keyed by the saved object's `hostType` name. */
   readonly hostTypes: ReadonlyMap<string, HostObjectType>;
@@ -168,6 +189,8 @@ export type ScriptServices = ScriptObservers & {
   readonly postEffect?: (section: SectionKey, effect: EffectRecord) => void;
   /** Engine-owned synchronous host-request dispatch hook. */
   readonly postRequest?: (request: CommandRequest) => void;
+  /** The script-facing media owner (MEDIA-1), when the engine provides one. */
+  readonly media?: MediaScriptService;
 };
 
 /** Take every diagnostic collected since the last drain, oldest first. */
@@ -187,23 +210,95 @@ export function createScriptServices(
   postRequest?: (request: CommandRequest) => void,
   layers: PluginLayers = createPluginLayers(),
   hostTypes: readonly HostObjectType[] = [],
+  packageStartup: boolean | PackageStartupLifecycle = false,
+  media?: MediaScriptService,
   observers?: ScriptObservers,
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
-  const view: CommandView = {
-    rng: createRngPort(state.rng),
-    clock: createClockPort(state.time),
-    state,
+  const runtimeRng = createRngPort(state.rng);
+  const runtimeClock = createClockPort(state.time);
+  const lifecycle: PackageStartupLifecycle = typeof packageStartup === "boolean" ? { active: packageStartup, packageName: undefined } : packageStartup;
+  const packageStartupActive = lifecycle;
+  const packageStartupName = lifecycle;
+  const startupForbidden = (operation: string): ScriptError =>
+    new ScriptError("package.startup-forbidden", `package "${packageStartupName.packageName ?? "unknown"}" startup cannot ${operation}`);
+  let commandThread: number | undefined;
+  const listenersBeforePackageStartup = [...state.events.listeners];
+  const commandState = new Proxy(state, {
+    get(target, property, receiver) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "consume the seeded RNG" : "read the simulation clock");
+      }
+      return Reflect.get(target, property, receiver);
+    },
+    set(target, property, value, receiver) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "consume the seeded RNG" : "read the simulation clock");
+      }
+      return Reflect.set(target, property, value, receiver);
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "consume the seeded RNG" : "read the simulation clock");
+      }
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+    defineProperty(target, property, descriptor) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "replace the seeded RNG" : "replace the simulation clock");
+      }
+      return Reflect.defineProperty(target, property, descriptor);
+    },
+    deleteProperty(target, property) {
+      if (packageStartupActive.active && (property === "rng" || property === "time")) {
+        throw startupForbidden(property === "rng" ? "delete the seeded RNG" : "delete the simulation clock");
+      }
+      return Reflect.deleteProperty(target, property);
+    },
+  });
+  const rng = Object.freeze({
+    nextUint32: () => {
+      if (packageStartupActive.active) throw startupForbidden("consume the seeded RNG");
+      return runtimeRng.nextUint32();
+    },
+  });
+  const clock = Object.freeze({
+    tick: () => {
+      if (packageStartupActive.active) throw startupForbidden("read the simulation clock");
+      return runtimeClock.tick();
+    },
+  });
+  const diagnostics: Diagnostic[] = [];
+  const behaviours = createBehaviourRegistry(
+    plugins.map((plugin) => plugin.namespace ?? plugin.definition.id),
+    diagnostics,
+  );
+  const actors = createActorService(
+    state.actors,
+    (actor) => resolveBehaviour(behaviours, actor, diagnostics),
+    createActorEventSink(state.vm, state.events, state.actors),
+  );
+  const view = Object.freeze({
+    rng,
+    clock,
+    state: commandState,
+    actors,
+    ...(media === undefined ? {} : { media }),
+    objectMembers: (handle: number) => state.vm.objects.find((record) => record.handle === handle)?.members,
     gameId,
-  };
-  const virt = virtuals ?? createDefaultVirtuals(state);
+    get packageStartup() { return packageStartupActive.active; },
+    get thread() { return commandThread; },
+  }) as CommandView;
+  const virt = virtuals ?? createDefaultVirtuals(state, actors, media);
   const registry = assembleCommands(observePlugins(plugins, observers?.postHandler), logger);
   for (const problem of registerNativeListeners(state.events, plugins)) {
     logger.warn({
       level: "warn",
-      code: "plugin.listener-unknown-command",
-      message: `plugin "${problem.plugin}" declares a listener for "${problem.listener.type}" on "${problem.listener.emitter}" that names "${problem.listener.command}", which is not one of its commands; it was not registered`,
+      code: problem.reason === "bad-emitter" ? "plugin.listener-bad-emitter" : "plugin.listener-unknown-command",
+      message: problem.reason === "bad-emitter"
+        ? `plugin "${problem.plugin}" declares a listener on "${problem.listener.emitter}", which is not an emitter key or a pattern of a non-empty prefix followed by one trailing "*"; it was not registered`
+        : `plugin "${problem.plugin}" declares a listener for "${problem.listener.type}" on "${problem.listener.emitter}" that names "${problem.listener.command}", which is not one of its commands; it was not registered`,
       data: { plugin: problem.plugin, emitter: problem.listener.emitter, type: problem.listener.type, command: problem.listener.command },
     });
   }
@@ -211,12 +306,6 @@ export function createScriptServices(
   for (const plugin of plugins) {
     if (plugin.options !== undefined) pluginOptions.set(plugin.definition.id, plugin.options);
   }
-  const hydratedTypes = new Map<string, HostObjectType>();
-  hydratedTypes.set("actor", createActorHostType(createActorService(state.actors)));
-  for (const plugin of plugins) {
-    for (const type of plugin.definition.hostTypes ?? []) hydratedTypes.set(type.name, type);
-  }
-  for (const type of hostTypes) hydratedTypes.set(type.name, type);
   // The engine's own packs are the built-in tier (R-35); every other plugin is an extension.
   const builtinPacks = new Set(ENGINE_DEFAULT_MANIFEST.map((entry) => entry.id));
   const commands = createCommandLookup({
@@ -225,7 +314,13 @@ export function createScriptServices(
     extension: (name) => registry.get(name),
     namespace: { has: (namespace) => registry.hasNamespace(namespace), get: (namespace, name) => registry.getIn(namespace, name) },
   });
-  const diagnostics: Diagnostic[] = [];
+  const hydratedTypes = new Map<string, HostObjectType>();
+  hydratedTypes.set("actor", createActorHostType(actors));
+  if (media !== undefined) for (const type of MEDIA_HOST_TYPES) hydratedTypes.set(type.name, type);
+  for (const plugin of plugins) {
+    for (const type of plugin.definition.hostTypes ?? []) hydratedTypes.set(type.name, type);
+  }
+  for (const type of hostTypes) hydratedTypes.set(type.name, type);
   // Load-time notices (clashes, shadowed built-ins, include cycles) are raised once, when a program
   // compiles: each is a located warn record, and a cycle is also a located host diagnostic (MOD-3).
   const programs = createProgramCache(
@@ -254,11 +349,22 @@ export function createScriptServices(
   );
   return {
     view,
+    clock: runtimeClock,
+    isPackageStartup: () => packageStartupActive.active,
+    packageStartupForbidden: startupForbidden,
+    setPackageStartup: (active, packageName) => {
+      packageStartupActive.active = active;
+      packageStartupActive.packageName = packageName;
+    },
+    setCommandThread: (thread) => { commandThread = thread; },
+    listenersBeforePackageStartup,
     commands,
     programs,
     virtuals: virt,
     logger,
     diagnostics,
+    actors,
+    behaviours,
     pluginOptions,
     hiddenFileWarned: new Set(),
     hostTypes: hydratedTypes,
@@ -266,6 +372,7 @@ export function createScriptServices(
     ...(loader === undefined ? {} : { loader }),
     ...(postEffect === undefined ? {} : { postEffect }),
     ...(postRequest === undefined ? {} : { postRequest }),
+    ...(media === undefined ? {} : { media }),
     ...observers,
     ...(observers?.postCall === undefined ? {} : {
       callPlugin: (name: string, namespace?: string): string | undefined => {
@@ -290,25 +397,26 @@ export function runWaitsPhase(
   poll: WaitPoll = defaultWaitPoll,
   claim?: (seq: number) => void,
   services?: ScriptServices,
+  onResolved?: (wait: Wait) => void,
 ): void {
   const waiting = vm.threads.filter((thread) => thread.status === "waiting" && thread.wait !== null);
   waiting.sort((left, right) => left.id - right.id);
   const blocker = findBlockingThread(vm);
   if (blocker !== null) {
-    resolveWait(vm, view, poll, blocker, claim, services);
+    resolveWait(vm, view, poll, blocker, claim, services, onResolved);
     if (blocker.status === "waiting") {
       refreshBlock(vm, view.tick);
       return;
     }
   }
   for (const thread of waiting) {
-    if (thread !== blocker) resolveWait(vm, view, poll, thread, claim, services);
+    if (thread !== blocker) resolveWait(vm, view, poll, thread, claim, services, onResolved);
   }
   refreshBlock(vm, view.tick);
 }
 
 /** Poll one thread's wait; on a result, make the thread ready and hand it the wake value. */
-function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread, claim?: (seq: number) => void, services?: ScriptServices): void {
+function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread, claim?: (seq: number) => void, services?: ScriptServices, onResolved?: (wait: Wait) => void): void {
   const wait = thread.wait;
   if (wait === null) return;
   if (wait.kind === "input.key" && wait.parkSeq === undefined) wait.parkSeq = view.input?.nextSeq ?? 0;
@@ -322,6 +430,7 @@ function resolveWait(vm: VmState, view: WaitView, poll: WaitPoll, thread: Thread
     thread.status = "finished";
     return;
   }
+  onResolved?.(wait);
   if (wait.kind === "request" || wait.kind === "blob") {
     if (!result.ok) {
       recordDiagnostic(vm, view.tick, thread.id, "request.failed", wait.file, wait.line, toStringValue(result.value));
@@ -385,9 +494,9 @@ export function runThreadsPhase(vm: VmState, services: ScriptServices, budget: n
     if (findBlockingThread(vm) !== null) break;
     if (thread.status !== "ready") continue;
     stepThread(thread, vm, services, budget);
-    refreshBlock(vm, services.view.clock.tick());
+    refreshBlock(vm, services.clock.tick());
   }
-  refreshBlock(vm, services.view.clock.tick());
+  refreshBlock(vm, services.clock.tick());
 }
 
 /**
@@ -494,7 +603,11 @@ export function advanceScriptTick(
   budget: number = STEP_BUDGET,
   poll: WaitPoll = defaultWaitPoll,
 ): ScriptStatus {
-  runWaitsPhase(state.vm, { tick: state.time.tick, events: state.events }, poll);
+  runWaitsPhase(state.vm, { tick: state.time.tick, events: state.events }, poll, undefined, undefined, (wait) => {
+    if (wait.kind === "input.key" && wait.dialogue !== undefined) {
+      queueNativeEvent(state.vm, state.events, "game", "dialogue.completed", wait.dialogue);
+    }
+  });
   runThreadsPhase(state.vm, services, budget);
   runEventsPhase(state, services, budget);
   assertNoDeadlock(state.vm, services);
@@ -517,7 +630,7 @@ function scriptStatus(state: GameState): ScriptStatus {
 }
 
 /** `file:line` of the call a thread is parked at, or the program's name when it has none. */
-function threadLocation(thread: Thread, services: ScriptServices): SourcePos | null {
+export function threadLocation(thread: Thread, services: ScriptServices): SourcePos | null {
   const frame = thread.frames[thread.frames.length - 1];
   if (frame === undefined) return null;
   const program = services.programs.get(frame.program);
@@ -548,7 +661,7 @@ function assertNoDeadlock(vm: VmState, services: ScriptServices): void {
   });
   throw new ScriptError(
     "vm.deadlock",
-    `deadlock at tick ${services.view.clock.tick()}: ${parts.join("; ")}`,
+    `deadlock at tick ${services.clock.tick()}: ${parts.join("; ")}`,
     threadLocation(stuck[0]!, services),
   );
 }
@@ -665,6 +778,21 @@ function liveObject(vm: VmState, value: Value | undefined, pos: SourcePos, what:
 }
 
 /** The events section a host-provided emitter method works on (EMIT-14). */
+/**
+ * Register a host object under the emitter key its type names, on first emitter
+ * access only (MEDIA-2, EMIT-20): the media event domain stays lazy.
+ */
+function registerHostEmitter(vm: VmState, services: ScriptServices, emitter: Value | undefined): void {
+  if (typeof emitter !== "object" || emitter === null || !("kind" in emitter) || emitter.kind !== "object") return;
+  const record = findObject(vm, emitter.handle);
+  if (record === undefined || record.hostType === undefined) return;
+  const key = services.hostTypes.get(record.hostType)?.emitterKey?.(record) ?? null;
+  if (key === null) return;
+  const events = eventsOf(services);
+  if (events.emitters?.[key] === record.handle) return;
+  registerEmitter(vm, events, key, record);
+}
+
 function eventsOf(services: ScriptServices): EventsSection {
   const state = services.view.state;
   if (state === undefined) throw new ScriptError("emit.no-state", "the events section is not reachable");
@@ -691,7 +819,7 @@ function isHostMethod(program: Program, record: ObjectRecord, name: string, serv
 
 function hostContext(services: ScriptServices, record: ObjectRecord): HostObjectContext | null {
   const state = services.view.state;
-  return state === undefined ? null : { state, events: state.events, vm: state.vm, record };
+  return state === undefined ? null : { state, events: state.events, vm: state.vm, record, ...(services.media === undefined ? {} : { media: services.media }) };
 }
 
 function hostMemberName(name: string): string {
@@ -707,10 +835,15 @@ function readObjectValue(services: ScriptServices, record: ObjectRecord, name: s
 }
 
 function writeObjectValue(services: ScriptServices, record: ObjectRecord, name: string, value: Value): void {
+  const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
+  const memberName = hostMemberName(name);
+  const normalizedName = memberName.toLowerCase();
+  if (type?.readOnlyMembers?.some((field) => field.toLowerCase() === normalizedName)) {
+    throw new ScriptError(ASSIGN_READ_ONLY, `host member "${name}" is read-only`);
+  }
   if (!Object.hasOwn(record.members, name)) {
-    const type = record.hostType === undefined ? undefined : services.hostTypes.get(record.hostType);
     const context = hostContext(services, record);
-    const result = type?.write !== undefined && context !== null ? type.write(context, hostMemberName(name), value) : "not-host";
+    const result = type?.write !== undefined && context !== null ? type.write(context, memberName, value) : "not-host";
     if (result === "written") return;
     if (result === "read-only") throw new ScriptError(ASSIGN_READ_ONLY, `host member "${name}" is read-only`);
   }
@@ -738,6 +871,7 @@ function callEmitterMethod(
   args: Arg[],
 ): CallOutcome {
   const emitter: Value = { kind: "object", handle: record.handle, className: record.className };
+  registerHostEmitter(vm, services, emitter);
   const parked = applyEmitterOp(vm, eventsOf(services), name, emitter, args.map((arg) => arg.value), thread.id);
   frame.ip += 1;
   if (parked !== null) {
@@ -1054,12 +1188,19 @@ function resumeAfterFailure(frame: Frame, frameIndex: number, pos: SourcePos): v
   handler.active = false;
 }
 
+function readVirtual(services: ScriptServices, name: string): Value | undefined {
+  if (services.isPackageStartup() && name.toLowerCase() === "gametime") {
+    throw services.packageStartupForbidden("read the simulation clock");
+  }
+  return services.virtuals.read(name);
+}
+
 function readRef(vm: VmState, thread: Thread, frameIndex: number, ref: RefId, services?: ScriptServices): Value {
   const separator = ref.indexOf(":");
   const scope = ref.slice(0, separator);
   const name = ref.slice(separator + 1);
   if (scope === "cell") return vm.cells?.[name] ?? 0;
-  if (scope === "virtual") return services?.virtuals.read(name) ?? 0;
+  if (scope === "virtual") return services === undefined ? 0 : readVirtual(services, name) ?? 0;
   if (scope === "object") {
     const object = parseObjectRef(ref);
     const record = object === null ? undefined : findObject(vm, object.handle);
@@ -1158,9 +1299,8 @@ function loadArg(
   scope?: VarScope,
   services?: ScriptServices,
 ): Arg {
-  const virtuals = services?.virtuals;
   if (scope === "global") {
-    const virt = virtuals?.read(name);
+    const virt = services === undefined ? undefined : readVirtual(services, name);
     if (virt !== undefined) return { value: virt, ref: virtualRef(name) };
     if (Object.hasOwn(vm.globals, name)) return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
     setOwnValue(vm.globals, name, 0);
@@ -1180,7 +1320,7 @@ function loadArg(
     const val = readRef(vm, thread, frameIndex, slot.ref, services);
     return { value: val, ref: slot.ref };
   }
-  const virtVal = virtuals?.read(name);
+  const virtVal = services === undefined ? undefined : readVirtual(services, name);
   if (virtVal !== undefined) return { value: virtVal, ref: virtualRef(name) };
   if (Object.hasOwn(vm.globals, name)) return { value: vm.globals[name] ?? 0, ref: globalRef(name) };
   if (frame.autoLocal) {
@@ -1794,7 +1934,7 @@ function dispatchResolved(
   }
   if (advance) frame.ip += 1;
 
-  const tick = services.view.clock.tick();
+  const tick = services.clock.tick();
   let controlApplied = false;
   let parked = false;
   let produced: Value | undefined;
@@ -1873,6 +2013,7 @@ function dispatchResolved(
         });
       }
       if (action === "emitter") {
+        registerHostEmitter(vm, services, effect.args?.[2] as Value | undefined);
         const event = applyEmitterOp(
           vm,
           eventsOf(services),
@@ -1885,6 +2026,43 @@ function dispatchResolved(
           parkOnEvent(thread, event);
           parked = true;
         }
+      }
+      if (action === "mediaplay") {
+        if (services.media === undefined) throw new ScriptError("unknown.command", "mediaPlay: the media owner is not installed", pos);
+        const file = effect.args?.[1];
+        const options = effect.args?.[2] as MediaPlayOptions | undefined;
+        const returnVoice = effect.args?.[3] !== false;
+        if (typeof file !== "string" || options === undefined) throw new ScriptError("builtin.bad-arg", "mediaPlay: malformed start", pos);
+        const started = services.media.play(file, options);
+        const outcome = started.outcome;
+        produced = returnVoice && (outcome.kind === "pending" || outcome.kind === "started" || (outcome.kind === "same-file" && outcome.action === "carry-on"))
+          ? objectValue(started.record)
+          : null;
+        if (outcome.kind === "before-play") {
+          thread.wait = services.media.beforePlayWait(started, returnVoice, options.wait);
+          thread.status = "waiting";
+          parked = true;
+          produced = null;
+        } else if (options.wait) {
+          let wait: Wait | null = null;
+          if (outcome.kind === "pending") wait = services.media.pendingWait(started);
+          else if (outcome.kind === "started" || (outcome.kind === "same-file" && outcome.action === "carry-on")) {
+            const ref = mediaVoiceRef(started.record);
+            wait = ref === null ? null : services.media.voiceWait(ref);
+          }
+          if (wait !== null) {
+            if (wait.kind === "audio.track") wait.payload[1] = produced;
+            thread.wait = wait;
+            thread.status = "waiting";
+            parked = true;
+          }
+        }
+      }
+      if (action === "mediaTrackObject") {
+        const name = effect.args?.[1];
+        if (typeof name !== "string" || services.media === undefined) throw new ScriptError("builtin.bad-arg", "media.track: malformed track", pos);
+        const record = services.media.trackObject(name);
+        produced = record === null ? null : objectValue(record);
       }
       if (action === "registerPlugin") {
         produced = registerPluginCall(vm, services, program, args, pos);
@@ -2102,6 +2280,10 @@ function dispatchResolved(
   }
 
   if (result.request !== undefined) {
+    if (services.isPackageStartup()) {
+      const packageName = frame.program.owner ?? "unknown";
+      throw new ScriptError("package.startup-forbidden", `package "${packageName}" startup cannot issue host request "${result.request.kind}"`, pos);
+    }
     const timeout = result.timeoutTicks;
     let deadline: number | null = null;
     if (timeout !== undefined) {
@@ -2237,10 +2419,10 @@ export function stepThread(
 ): number {
   let steps = 0;
   const finish = (): number => {
-    refreshBlock(vm, services.view.clock.tick());
+    refreshBlock(vm, services.clock.tick());
     return steps;
   };
-  services.view.thread = thread.id;
+  services.setCommandThread(thread.id);
   while (thread.status === "ready" && steps < budget) {
     const frameBeforeRestore = thread.frames[thread.frames.length - 1];
     if (frameBeforeRestore !== undefined) {

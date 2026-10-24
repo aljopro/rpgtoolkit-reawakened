@@ -3,10 +3,82 @@
 // the empty Engine contract that keeps the golden job green.
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-import { hashState, snapshot, type BuiltinSpec, type Diagnostic, type LogRecord, type PluginDefinition, type SurfaceId } from "@tk-reawakened/core";
+import { addActor, COMPILER_VERSION, createHostObject, hashState, snapshot, type BuiltinSpec, type Diagnostic, type LogRecord, type PluginDefinition, type SurfaceId } from "@tk-reawakened/core";
 import { createNullAudio, createScriptHost, restoreScriptHost, runLog, type Run } from "../src/index.ts";
 
 const TRACER = 'greeting = "hi"\ncount = 2\nsleep(count)\ncount = 3\nend()\n';
+
+function actorBehaviourPlugin(version: string, delta: number): PluginDefinition {
+  return {
+    id: "test-actors",
+    version,
+    commands: [],
+    behaviourStartup(registerBehaviour) {
+      registerBehaviour("test-actors.hero", {
+        statsChanged: () => ({ dp: delta }),
+      });
+    },
+  };
+}
+
+const ACTOR_BEHAVIOUR_PLUGIN = actorBehaviourPlugin("1.0.0", 42);
+
+const HOST_OBJECT_PLUGIN: PluginDefinition = {
+  id: "test-host-objects",
+  version: "1.0.0",
+  commands: [],
+  hostTypes: [{
+    name: "test-object",
+    methods: { ping: "ping" },
+  }],
+};
+
+const MISSING_PACKAGE_PROGRAM = "HP! = 5\nend()\n";
+function savedActorRecord(text: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(text);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed) || !("actors" in parsed)) {
+    throw new Error("snapshot has no actors section");
+  }
+  const actors = parsed.actors;
+  if (typeof actors !== "object" || actors === null || Array.isArray(actors) || !("actors" in actors) || !Array.isArray(actors.actors)) {
+    throw new Error("snapshot actors section has no actor records");
+  }
+  const actor = actors.actors[0];
+  if (typeof actor !== "object" || actor === null || Array.isArray(actor)) throw new Error("snapshot has no first actor");
+  return actor;
+}
+
+
+const ACTOR_STARTUP_CALLS: string[] = [];
+const ACTOR_STARTUP_PLUGIN: PluginDefinition = {
+  id: "test-startup-actors",
+  version: "1.0.0",
+  commands: [{
+    name: "seedactor",
+    aliases: [],
+    params: [],
+    call: (view) => {
+      if (view.state === undefined) return { value: null };
+      const actor = addActor(view.state.actors, {
+        kind: "party",
+        source: "hero.tem",
+        behaviour: "test-startup-actors.hero",
+        stats: { hp: 10, maxHp: 10, dp: 1 },
+      });
+      view.state.party.members = [actor.id];
+      view.state.party.selected = actor.id;
+      return { value: null };
+    },
+  }],
+  behaviourStartup(registerBehaviour) {
+    registerBehaviour("test-startup-actors.hero", {
+      statsChanged: () => {
+        ACTOR_STARTUP_CALLS.push("statsChanged");
+        return { dp: 42 };
+      },
+    });
+  },
+};
 
 test("selects the TK2 dialect and compatibility manifest entry", () => {
   const host = createScriptHost({
@@ -188,6 +260,103 @@ test("a fixture built-in drawing through view.rng leaves the draw in state and r
   equal(restored.stateHash(), host.stateHash());
 });
 
+test("registers behaviour-only plugins before a host program runs", () => {
+  const host = createScriptHost({
+    program: "HP! = 5\nend()\n",
+    seed: 0,
+    plugins: [ACTOR_BEHAVIOUR_PLUGIN],
+  });
+  const actor = addActor(host.state().actors, {
+    kind: "party",
+    source: "hero.tem",
+    behaviour: "test-actors.hero",
+    stats: { hp: 10, maxHp: 10, dp: 1 },
+  });
+  host.state().party.members = [actor.id];
+  host.state().party.selected = actor.id;
+
+  host.advance(1, []);
+  equal(host.state().actors.actors[0]?.stats.hp, 5);
+  equal(host.state().actors.actors[0]?.stats.dp, 42);
+});
+
+test("restores the host with behaviour hooks attached to the restored actor service", () => {
+  const host = createScriptHost({
+    program: "HP! = 5\nend()\n",
+    seed: 0,
+    plugins: [ACTOR_BEHAVIOUR_PLUGIN],
+  });
+  const actor = addActor(host.state().actors, {
+    kind: "party",
+    source: "hero.tem",
+    behaviour: "test-actors.hero",
+    stats: { hp: 10, maxHp: 10, dp: 1 },
+  });
+  host.state().party.members = [actor.id];
+  host.state().party.selected = actor.id;
+
+  const restored = restoreScriptHost(host.snapshot(), { plugins: [ACTOR_BEHAVIOUR_PLUGIN] });
+  restored.advance(1, []);
+  equal(restored.state().actors.actors[0]?.stats.hp, 5);
+  equal(restored.state().actors.actors[0]?.stats.dp, 42);
+});
+test("restore keeps actor data with core defaults when its package is absent, then uses newer package code", () => {
+  const host = createScriptHost({
+    program: MISSING_PACKAGE_PROGRAM,
+    seed: 0,
+    plugins: [ACTOR_BEHAVIOUR_PLUGIN],
+  });
+  const actor = addActor(host.state().actors, {
+    kind: "party",
+    source: "hero.tem",
+    behaviour: "test-actors.hero",
+    stats: { hp: 10, maxHp: 10, dp: 1 },
+  });
+  host.state().party.members = [actor.id];
+  host.state().party.selected = actor.id;
+  const saved = host.snapshot();
+  const savedActor = savedActorRecord(saved);
+  equal(savedActor.behaviour, "test-actors.hero");
+  equal(Object.hasOwn(savedActor, "hooks"), false);
+  equal(Object.values(savedActor).some((value) => typeof value === "function"), false);
+
+  const withoutPackage = restoreScriptHost(saved, {});
+  const missingReport = withoutPackage.advance(1, []);
+  equal(withoutPackage.state().actors.actors[0]?.stats.hp, 5);
+  equal(withoutPackage.state().actors.actors[0]?.stats.dp, 1);
+  equal(missingReport.diagnostics.filter((entry) => entry.code === "behaviour.missing").length, 1);
+  equal(missingReport.diagnostics.find((entry) => entry.code === "behaviour.missing")?.file, "<package startup>");
+  equal(missingReport.diagnostics.find((entry) => entry.code === "behaviour.missing")?.line, 0);
+
+  const newerPlugin = actorBehaviourPlugin("2.0.0", 99);
+  const withNewerPackage = restoreScriptHost(saved, { plugins: [newerPlugin] });
+  const newerReport = withNewerPackage.advance(1, []);
+  equal(newerReport.diagnostics.some((entry) => entry.code === "behaviour.missing"), false);
+  equal(withNewerPackage.state().actors.actors[0]?.stats.hp, 5);
+  equal(withNewerPackage.state().actors.actors[0]?.stats.dp, 99);
+  equal(withNewerPackage.state().actors.actors[0]?.id, actor.id);
+});
+
+test("restore keeps an unknown host type as data until its first method call", () => {
+  const host = createScriptHost({
+    program: "saved.ping()\nend()\n",
+    seed: 0,
+    plugins: [HOST_OBJECT_PLUGIN],
+  });
+  const object = createHostObject(host.state().vm, "test-object");
+  host.state().vm.globals.saved = { kind: "object", handle: object.handle, className: object.className };
+  const saved = host.snapshot();
+
+  const restored = restoreScriptHost(saved, {});
+  equal(restored.state().vm.objects[0]?.hostType, "test-object");
+  const report = restored.advance(1, []);
+  const failure = report.diagnostics.find((entry) => entry.code === "object.invalid");
+  equal(failure?.file, "<inline>");
+  equal(failure?.line, 1);
+  equal(failure?.message.includes('host type "test-object" is not installed'), true);
+});
+
+
 test("mid-expression yield restores into a fresh host with identical per-tick stateHash", () => {
   const program = "result = 1 + sleep(2) + 3\nend()\n";
   const host = createScriptHost({ program, seed: 0 });
@@ -212,8 +381,39 @@ test("mid-expression yield restores into a fresh host with identical per-tick st
   equal(restored.stateHash(), host.stateHash());
   equal(host.state().vm.globals.result, 4);
   equal(restored.state().vm.globals.result, 4);
+
   equal(host.state().vm.threads[0]!.status, "finished");
   equal(restored.state().vm.threads[0]!.status, "finished");
+});
+
+test("restore reruns startup hooks on scratch and actual services", () => {
+  ACTOR_STARTUP_CALLS.length = 0;
+  const packageStartup = {
+    kind: "inline" as const,
+    text: "seedactor()\nHP! = 5\nend()\n",
+    compiler: COMPILER_VERSION,
+    dialect: "tk3" as const,
+  };
+  const host = createScriptHost({
+    seed: 0,
+    program: "HP! = 6\nend()\n",
+    packageStartups: [{ owner: "test-startup-actors", ref: packageStartup }],
+    plugins: [ACTOR_STARTUP_PLUGIN],
+  });
+  equal(ACTOR_STARTUP_CALLS.length, 1);
+  equal(host.state().actors.actors[0]?.stats.hp, 5);
+  equal(host.state().actors.actors[0]?.stats.dp, 42);
+  equal((host.state().vm.stepCounters?.["test-startup-actors"] ?? 0) > 0, true);
+
+  const restored = restoreScriptHost(host.snapshot(), {
+    plugins: [ACTOR_STARTUP_PLUGIN],
+    packageStartups: [{ owner: "test-startup-actors", ref: packageStartup }],
+  });
+  restored.advance(1, []);
+  equal(ACTOR_STARTUP_CALLS.length, 3);
+  equal(restored.state().actors.actors[0]?.stats.hp, 6);
+  equal(restored.state().actors.actors[0]?.stats.dp, 42);
+  equal((restored.state().vm.stepCounters?.["test-startup-actors"] ?? 0) > 0, true);
 });
 
 test("a runtime failure reaches the report as a located diagnostic and runLog observes it", () => {

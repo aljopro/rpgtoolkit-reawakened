@@ -1,0 +1,262 @@
+import type { ActorsSection, ActorRecord } from "../actors/model.ts";
+import type { Character, Item } from "../formats/actor/model.ts";
+import type { EquipmentItemDefinition } from "../actors/rules.ts";
+import { assetKey } from "../formats/resolver/resolver.ts";
+import {
+  validateActionFields,
+  validateInventorySection,
+  type InventoryEquipment,
+  type InventoryItem,
+  type InventorySection,
+  type MenuStateResult,
+  type StateIssue,
+} from "./model.ts";
+
+export type InventoryAction =
+  | { readonly type: "addItem"; readonly source: string; readonly handle: string; readonly amount: number }
+  | { readonly type: "removeItem"; readonly entryId: number; readonly amount: number }
+  | { readonly type: "equip"; readonly actorId: number; readonly slot: string; readonly entryId: number }
+  | { readonly type: "unequip"; readonly actorId: number; readonly slot: string }
+  | { readonly type: "addGold"; readonly amount: number }
+  | { readonly type: "removeGold"; readonly amount: number };
+
+export type InventoryEvent =
+  | { readonly type: "itemAdded" | "itemRemoved"; readonly detail: { readonly entryId: number; readonly source: string; readonly handle: string; readonly amount: number; readonly previousQuantity: number; readonly currentQuantity: number } }
+  | { readonly type: "goldChanged"; readonly detail: { readonly previous: number; readonly current: number; readonly delta: number } };
+
+export type InventoryRuntime = {
+  readonly item: (source: string) => Item | undefined;
+  readonly character: (source: string) => Character | undefined;
+  readonly applyEquipment: (actorId: number, equipped: readonly string[], catalog: readonly EquipmentItemDefinition[]) => boolean;
+};
+
+const ACCEPTED: MenuStateResult = Object.freeze({ ok: true, error: null });
+const MAX_SAFE = Number.MAX_SAFE_INTEGER;
+const STANDARD_SLOTS: Readonly<Record<string, number>> = {
+  head: 1,
+  neck: 2,
+  "right-hand": 3,
+  "left-hand": 4,
+  body: 5,
+  legs: 6,
+};
+
+function rejected(path: string, message: string): MenuStateResult {
+  return { ok: false, error: { path, message } };
+}
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+function safeAmount(value: unknown, allowZero = false): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= (allowZero ? 0 : 1);
+}
+function slotLocation(slot: string): number | null {
+  const standard = STANDARD_SLOTS[slot];
+  if (standard !== undefined) return standard;
+  const match = /^accessory-(\d{1,2})$/.exec(slot);
+  if (match === null) return null;
+  const location = Number(match[1]);
+  return location >= 7 && location <= 16 ? location : null;
+}
+function equippedReference(actorId: number, slot: string, itemId: number): string {
+  return `tkr-equipment:${JSON.stringify([actorId, slot, itemId])}`;
+}
+function equipmentCatalog(
+  actorId: number,
+  equipment: readonly InventoryEquipment[],
+  items: readonly InventoryItem[],
+  itemForSource: InventoryRuntime["item"],
+): { readonly equipped: string[]; readonly catalog: EquipmentItemDefinition[] } | null {
+  const entries = equipment.filter((entry) => entry.actorId === actorId);
+  const names: string[] = [];
+  const definitions: Array<{ entry: InventoryEquipment; item: Item }> = [];
+  for (const entry of entries) {
+    const stack = items.find((candidate) => candidate.id === entry.itemId);
+    const item = stack === undefined ? undefined : itemForSource(stack.source);
+    if (item === undefined) return null;
+    names.push(item.name);
+    definitions.push({ entry, item });
+  }
+  const used = new Set(names);
+  const equipped: string[] = [];
+  const catalog: EquipmentItemDefinition[] = [];
+  for (const { entry, item } of definitions) {
+    const base = equippedReference(actorId, entry.slot, entry.itemId);
+    let id = base;
+    let suffix = 0;
+    while (used.has(id)) {
+      suffix += 1;
+      id = `${base}#${suffix}`;
+    }
+    used.add(id);
+    equipped.push(id);
+    catalog.push({ name: item.name, id, equipBonus: item.equipBonus });
+  }
+  return { equipped, catalog };
+}
+function validEquipment(
+  actor: ActorRecord,
+  slot: string,
+  item: Item,
+  character: Character,
+): boolean {
+  const location = slotLocation(slot);
+  if (location === null || item.equipable !== 1) return false;
+  const names = item.allowedCharacters.filter((name) => name !== "");
+  if (item.usedBy === 1 && !names.includes(actor.name)) return false;
+  const slotIndex = location === 3 ? 4 : location === 4 ? 3 : location;
+  const slotFlag = location <= 6 ? item.equipSlots[slotIndex] : item.equipSlots[7];
+  if (slotFlag !== 1) return false;
+  if (location <= 6 && character.bodySlots[slotIndex] !== 1) return false;
+  if (location >= 7) {
+    const characterSlot = character.accessorySlots[location - 6];
+    return characterSlot !== undefined && characterSlot !== "" && characterSlot === item.accessoryName;
+  }
+  return true;
+}
+function exactAction(recordValue: Record<string, unknown>, keys: readonly string[]): StateIssue | null {
+  return validateActionFields(recordValue, keys, "inventory.action");
+}
+
+/** Apply one inventory action atomically; event details describe committed available-quantity changes. */
+export function applyInventoryAction(
+  state: { inventory: InventorySection; actors: ActorsSection },
+  value: unknown,
+  runtime: InventoryRuntime | undefined,
+): { readonly result: MenuStateResult; readonly events: readonly InventoryEvent[] } {
+  const action = record(value);
+  if (action === null) return { result: rejected("inventory.action", "expected an action object"), events: [] };
+  const current = state.inventory;
+  let next: InventorySection = current;
+  let event: InventoryEvent | null = null;
+  let actorOperation: { readonly actorId: number; readonly equipment: readonly InventoryEquipment[] } | null = null;
+  let keys: readonly string[];
+
+  switch (action.type) {
+    case "addItem": {
+      keys = ["type", "source", "handle", "amount"];
+      const error = exactAction(action, keys);
+      if (error !== null) return { result: { ok: false, error }, events: [] };
+      if (typeof action.source !== "string" || !action.source.toLowerCase().endsWith(".itm")) return { result: rejected("inventory.action.source", "expected an .itm asset reference"), events: [] };
+      const relativeSource = action.source.replaceAll("\\", "/").replace(/^item\//i, "");
+      const source = assetKey(`item/${relativeSource}`);
+      if (typeof action.handle !== "string") return { result: rejected("inventory.action.handle", "expected an item handle"), events: [] };
+      if (!safeAmount(action.amount)) return { result: rejected("inventory.action.amount", "expected a positive safe integer"), events: [] };
+      const old = current.items.find((entry) => entry.source === source && entry.handle === action.handle);
+      const previousQuantity = old?.quantity ?? 0;
+      const currentQuantity = previousQuantity + action.amount;
+      if (!Number.isSafeInteger(currentQuantity)) return { result: rejected("inventory.items.quantity", "quantity exceeds the safe-integer range"), events: [] };
+      if (old === undefined) {
+        if (!safeAmount(current.nextId) || current.nextId === MAX_SAFE) return { result: rejected("inventory.nextId", "item identity counter is exhausted"), events: [] };
+        const item: InventoryItem = { id: current.nextId, source, handle: action.handle, quantity: currentQuantity };
+        next = { ...current, nextId: current.nextId + 1, items: [...current.items, item] };
+        event = { type: "itemAdded", detail: { entryId: item.id, source: item.source, handle: item.handle, amount: action.amount, previousQuantity, currentQuantity } };
+      } else {
+        next = { ...current, items: current.items.map((entry) => entry.id === old.id ? { ...entry, quantity: currentQuantity } : entry) };
+        event = { type: "itemAdded", detail: { entryId: old.id, source: old.source, handle: old.handle, amount: action.amount, previousQuantity, currentQuantity } };
+      }
+      break;
+    }
+    case "removeItem": {
+      keys = ["type", "entryId", "amount"];
+      const error = exactAction(action, keys);
+      if (error !== null) return { result: { ok: false, error }, events: [] };
+      if (!safeAmount(action.entryId) || !safeAmount(action.amount)) return { result: rejected("inventory.action", "expected a positive entry id and amount"), events: [] };
+      const old = current.items.find((entry) => entry.id === action.entryId);
+      if (old === undefined) return { result: rejected("inventory.action.entryId", "unknown inventory entry"), events: [] };
+      if (old.quantity < action.amount) return { result: rejected("inventory.items.quantity", "insufficient available quantity"), events: [] };
+      const currentQuantity = old.quantity - action.amount;
+      const retained = currentQuantity !== 0 || current.equipment.some((entry) => entry.itemId === old.id);
+      next = { ...current, items: retained
+        ? current.items.map((entry) => entry.id === old.id ? { ...entry, quantity: currentQuantity } : entry)
+        : current.items.filter((entry) => entry.id !== old.id) };
+      event = { type: "itemRemoved", detail: { entryId: old.id, source: old.source, handle: old.handle, amount: action.amount, previousQuantity: old.quantity, currentQuantity } };
+      break;
+    }
+    case "equip": {
+      keys = ["type", "actorId", "slot", "entryId"];
+      const error = exactAction(action, keys);
+      if (error !== null) return { result: { ok: false, error }, events: [] };
+      if (!safeAmount(action.actorId) || typeof action.slot !== "string" || !safeAmount(action.entryId)) return { result: rejected("inventory.action", "expected actor, slot, and entry identities"), events: [] };
+      const actor = state.actors.actors.find((candidate) => candidate.id === action.actorId);
+      const entry = current.items.find((candidate) => candidate.id === action.entryId);
+      const slot = action.slot;
+      if (actor === undefined || actor.kind !== "party") return { result: rejected("inventory.action.actorId", "expected a live party actor"), events: [] };
+      if (entry === undefined) return { result: rejected("inventory.action.entryId", "unknown inventory entry"), events: [] };
+      if (entry.quantity < 1) return { result: rejected("inventory.items.quantity", "no available item to equip"), events: [] };
+      if (current.equipment.some((candidate) => candidate.actorId === actor.id && candidate.slot === slot)) return { result: rejected("inventory.action.slot", "actor slot is already occupied"), events: [] };
+      if (runtime === undefined) return { result: rejected("inventory.action.asset", "item and character definitions are unavailable"), events: [] };
+      const item = runtime.item(entry.source);
+      const character = runtime.character(actor.source);
+      if (item === undefined || character === undefined) return { result: rejected("inventory.action.asset", "item or character definition is not available"), events: [] };
+      if (!validEquipment(actor, slot, item, character)) return { result: rejected("inventory.action.eligibility", "item is not eligible for this actor and slot"), events: [] };
+      const previousQuantity = entry.quantity;
+      const currentQuantity = previousQuantity - 1;
+      const equipment = [...current.equipment, { actorId: actor.id, slot, itemId: entry.id }];
+      const retained = currentQuantity !== 0 || equipment.some((candidate) => candidate.itemId === entry.id);
+      next = { ...current,
+        items: retained ? current.items.map((candidate) => candidate.id === entry.id ? { ...candidate, quantity: currentQuantity } : candidate) : current.items.filter((candidate) => candidate.id !== entry.id),
+        equipment,
+      };
+      actorOperation = { actorId: actor.id, equipment };
+      event = { type: "itemRemoved", detail: { entryId: entry.id, source: entry.source, handle: entry.handle, amount: 1, previousQuantity, currentQuantity } };
+      break;
+    }
+    case "unequip": {
+      keys = ["type", "actorId", "slot"];
+      const error = exactAction(action, keys);
+      if (error !== null) return { result: { ok: false, error }, events: [] };
+      if (!safeAmount(action.actorId) || typeof action.slot !== "string") return { result: rejected("inventory.action", "expected actor and slot identities"), events: [] };
+      if (slotLocation(action.slot) === null) return { result: rejected("inventory.action.slot", "unknown equipment slot"), events: [] };
+      const actor = state.actors.actors.find((candidate) => candidate.id === action.actorId);
+      if (actor === undefined || actor.kind !== "party") return { result: rejected("inventory.action.actorId", "expected a live party actor"), events: [] };
+      const oldEquipment = current.equipment.find((candidate) => candidate.actorId === actor.id && candidate.slot === action.slot);
+      if (oldEquipment === undefined) return { result: { ok: true, error: null }, events: [] };
+      if (runtime === undefined) return { result: rejected("inventory.action.asset", "item definitions are unavailable"), events: [] };
+      const itemEntry = current.items.find((candidate) => candidate.id === oldEquipment.itemId);
+      if (itemEntry === undefined) return { result: rejected("inventory.equipment.itemId", "equipped item entry is missing"), events: [] };
+      const currentQuantity = itemEntry.quantity + 1;
+      if (!Number.isSafeInteger(currentQuantity)) return { result: rejected("inventory.items.quantity", "quantity exceeds the safe-integer range"), events: [] };
+      const equipment = current.equipment.filter((candidate) => candidate !== oldEquipment);
+      next = { ...current,
+        items: current.items.map((candidate) => candidate.id === itemEntry.id ? { ...candidate, quantity: currentQuantity } : candidate),
+        equipment,
+      };
+      actorOperation = { actorId: actor.id, equipment };
+      event = { type: "itemAdded", detail: { entryId: itemEntry.id, source: itemEntry.source, handle: itemEntry.handle, amount: 1, previousQuantity: itemEntry.quantity, currentQuantity } };
+      break;
+    }
+    case "addGold":
+    case "removeGold": {
+      keys = ["type", "amount"];
+      const error = exactAction(action, keys);
+      if (error !== null) return { result: { ok: false, error }, events: [] };
+      if (!safeAmount(action.amount, true)) return { result: rejected("inventory.action.amount", "expected a non-negative safe integer"), events: [] };
+      if (action.amount === 0) return { result: ACCEPTED, events: [] };
+      const currentGold = action.type === "addGold" ? current.gold + action.amount : current.gold - action.amount;
+      if (!Number.isSafeInteger(currentGold) || currentGold < 0) return { result: rejected("inventory.gold", "gold operation exceeds available safe-integer bounds"), events: [] };
+      next = { ...current, gold: currentGold };
+      event = { type: "goldChanged", detail: { previous: current.gold, current: currentGold, delta: currentGold - current.gold } };
+      break;
+    }
+    default:
+      return { result: rejected("inventory.action.type", "unknown inventory action"), events: [] };
+  }
+
+  const validation = validateInventorySection(next, state.actors);
+  if (validation !== null) return { result: { ok: false, error: validation }, events: [] };
+  if (actorOperation !== null) {
+    if (runtime === undefined) return { result: rejected("inventory.action.asset", "item definitions are unavailable"), events: [] };
+    const catalog = equipmentCatalog(actorOperation.actorId, actorOperation.equipment, next.items, runtime.item);
+    if (catalog === null) return { result: rejected("inventory.equipment", "an equipped item definition is not available"), events: [] };
+    try {
+      if (!runtime.applyEquipment(actorOperation.actorId, catalog.equipped, catalog.catalog)) {
+        return { result: rejected("inventory.equipment", "actor equipment operation refused"), events: [] };
+      }
+    } catch {
+      return { result: rejected("inventory.equipment", "actor equipment operation refused"), events: [] };
+    }
+  }
+  state.inventory = next;
+  return { result: ACCEPTED, events: event === null ? [] : [event] };
+}

@@ -144,8 +144,7 @@ function isPlainData(value: unknown, seen: Set<object> = new Set()): value is Pl
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const FOLDED_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
+const FOLDED_IDENTIFIER = /^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$/;
 
 function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   const allowed = new Set(keys);
@@ -198,7 +197,7 @@ function parseEntry(
     }
     entry.version = record.version;
     if (record.namespace !== undefined) {
-      if (typeof record.namespace !== "string" || !IDENTIFIER.test(record.namespace)) {
+      if (typeof record.namespace !== "string" || !FOLDED_IDENTIFIER.test(record.namespace)) {
         return { entry: null, diagnostic: diagnostic("manifest.namespace", path, index, "package namespace must be an ASCII identifier") };
       }
       entry.namespace = record.namespace;

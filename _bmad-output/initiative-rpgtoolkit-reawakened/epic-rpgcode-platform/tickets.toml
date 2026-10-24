@@ -284,25 +284,24 @@ references = [
   "code - packages/runner-harness/src/script-host.ts (createScriptHost, restoreScriptHost), script-plugin-resolver.ts, corpus.ts (startups)",
   "audit - _bmad-output/initiative-rpgtoolkit-reawakened/epic-actors/discovery/actor-readiness.md (F-11 to F-14)",
 ]
-
-# Entry 17 tracks the implementation follow-up to the closed 19.16 documentation handoff (#540).
+# Entry 17 was added on 2026-10-21 as the implementation follow-up to the closed 19.16 documentation handoff. It does not reopen or rewrite 19.16; it turns that normative package-loader contract into the real runtime required by Epic 20.11.
 [[entry]]
 id = 17
 tracker_id = "#562"
 type = "story"
-title = "Implement package catalogue loader and startup runtime"
-description = "Implements the host-supplied package catalogue and startup runtime specified by 19.16: resolve `.gam` package ids to versioned manifest entries, run package startup at boot/reset/restore, and rebuild session registrations without core I/O or serialized callbacks."
-verify = "A host-supplied catalogue resolves listed packages with identity, version, namespace, host requests and startup program; missing packages diagnose and boot continues; startup runs before main startup in manifest order and cannot wait; reset/restore rebuild registrations deterministically; an end-to-end package boots through the real host boundary; no-package/native compatibility and legacy goldens remain unchanged."
+title = "Package catalogue loader runtime and package startup lifecycle"
+description = "Implements the real host package catalogue and loader runtime promised by 19.16: the host supplies package identity/version/namespace, declared host requests and source/startup program; the .gam package-list IDs resolve during boot into the shared manifest; package startup executes through the normative lifecycle in manifest order; and real package commands/roles register through the documented plugin interface. Core remains deterministic and performs no I/O (G2), package session registrations are rebuilt on reset and restore from a scratch state, and the runtime enables Epic 20.11."
+verify = "Given a real project folder package and a .gam TKR package-list entry, a headless boot test observes the host catalogue's package ID, version, namespace, declared requests and owner-tagged startup ProgramRef in the shared manifest; the startup executes in manifest order and registers a real command/role through the documented plugin interface. A missing catalogue entry emits one located plugin.unresolved naming the main file/list position while compatibility boot continues; startup wait/I/O/random/time violations produce the specified diagnostic; reset rebuilds session registrations and restore runs startup on scratch state before loading saved state. Tests exercise 19.9's package-list reader and actual startup, not a fake catalogue or runner-harness-only injection; no-package/native-plugin behavior and legacy goldens remain unchanged, and G1-G3/G5/G7 gates pass."
 covers = ["CAP-5"]
-after = [16, "19.6", "19.7", "19.8", "19.9", "19.13"]
+after = [6, 7, 8, 9, 13, 16]
 hitl = false
 risk = "high"
 references = [
-  "tracker - https://github.com/tk-reawakened/rpgtoolkit-reawakened/issues/562",
-  "handoff - Epic 19.16 docs handoff, issue #540 (closed; do not reopen)",
+  "handoff - issue #540 (closed 19.16; documentation only, not reopened)",
   "spec - docs/spec/engine/rpgcode-modules-and-objects.md (PKG-1 to PKG-8)",
-  "spec - docs/spec/engine/main-loop-and-startup.md (E-02 package boot, reset, restore)",
+  "spec - docs/spec/engine/main-loop-and-startup.md (E-02 package boot, reset and restore)",
   "spec - docs/spec/formats/main-file.md (TKR package-list extension)",
-  "code - packages/core/src/engine, packages/core/src/script/manifest.ts, plugin.ts, package-startup.ts",
-  "code - packages/runner-headless and packages/runner-harness tests/fixtures",
+  "code - packages/core/src/engine/boot.ts, engine.ts, script/manifest.ts, plugin.ts, package-startup.ts",
+  "tests - packages/runner-headless and packages/runner-harness package boot/startup tests",
+  "handoff - Epic 20.11 stock package shells and behavior registration",
 ]

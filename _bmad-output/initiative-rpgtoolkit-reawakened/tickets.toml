@@ -67,7 +67,7 @@ id = 20
 slug = "epic-actors"
 title = "Actors: one data model for party members, enemies and NPCs, with behaviours and stock packages"
 covers = ["CAP-3", "CAP-9", "CAP-10", "CAP-11"]
-after = [{ epic = 2, needs = "the character, enemy, item and battle-data readers (2.6, 2.7)" }, { epic = 5, needs = "the unified actor runtime and board edges and transitions (5.3, 5.9)" }, { epic = 18, needs = "closure saving, which stays the only place callables are saved (18.6)" }, { epic = 19, needs = "objects, receivers, packages, registerPlugin, the plugins list, emitters, the step-budget spike and the host package loader (19.1, 19.2, 19.4, 19.6, 19.8, 19.9, 19.10, 19.12, 19.16)" }]
+after = [{ epic = 2, needs = "the character, enemy, item and battle-data readers (2.6, 2.7)" }, { epic = 5, needs = "the unified actor runtime and board edges and transitions (5.3, 5.9)" }, { epic = 18, needs = "closure saving, which stays the only place callables are saved (18.6)" }, { epic = 19, needs = "objects, receivers, packages, registerPlugin, the plugins list, emitters, the step-budget spike and the host package loader implementation (19.1, 19.2, 19.4, 19.6, 19.8, 19.9, 19.10, 19.12, 19.17)" }]
 
 [[epic]]
 id = 21
@@ -85,10 +85,11 @@ after = [{ epic = 2, needs = "enemy, special-move, status-effect and background 
 
 [[epic]]
 id = 8
+tracker_id = "#582"
 slug = "epic-menu-party-save"
 title = "Menu, party, inventory and saves work, including running threads"
-covers = ["CAP-10", "CAP-11"]
-after = [{ epic = 3, needs = "thread snapshot support" }, { epic = 5, needs = "party and board state" }, { epic = 7, needs = "battle state to save" }, { epic = 20, needs = "the actor model and the stock_menu package shell" }, { epic = 21, needs = "the media object, for cursor and menu sounds" }]
+covers = ["CAP-5", "CAP-9", "CAP-10", "CAP-11"]
+after = [{ epic = 3, needs = "thread/wait registry and snapshot support (3.9, 3.11)" }, { epic = 4, needs = "existing menu/message/input contracts in 4.19 and 4.21" }, { epic = 5, needs = "party/actor and board state (5.3, 5.9)" }, { epic = 7, needs = "battle state and item API used by Epic 8 (7.2, 7.5)" }, { epic = 20, needs = "actor model, interpretation rules, stock package and actor event bridge (20.3, 20.6, 20.11, 20.15)" }, { epic = 21, needs = "media object used for menu/cursor sounds (21.5)" }]
 
 [[epic]]
 id = 9

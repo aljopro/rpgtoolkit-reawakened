@@ -1,6 +1,7 @@
 import { deepEqual, equal } from "node:assert/strict";
+import { TextEncoder } from "node:util";
 import { test } from "node:test";
-import { ENGINE_PHASES, applyEmitterOp, createAssetIndex, createEmptyBoard, createEngine, PACKAGE_ROOT, writeBoard, type Board, type GameState } from "../src/index.ts";
+import { addActor, applyEmitterOp, COMPILER_VERSION, createAssetIndex, createEmptyBoard, createEmptyMainFile, createEngine, ENGINE_PHASES, ENGINE_PLUGIN_TABLE, PACKAGE_ROOT, writeBoard, writeMainFile, type Board, type GameState, type PluginDefinition, type ResolvedPlugin } from "../src/index.ts";
 
 function boardBytes(board: Board): Uint8Array {
   const encoded = writeBoard(board);
@@ -61,6 +62,260 @@ function loadedEngine(registrations: Parameters<typeof createEngine>[0]["phaseRe
   return engine;
 }
 
+test("createEngine routes actor alias writes through package behaviour hooks", () => {
+  const plugin: ResolvedPlugin = {
+    namespace: "engine-actors",
+    definition: {
+      id: "engine-actors",
+      version: "1.0.0",
+      commands: [],
+      behaviourStartup(register) {
+        register("engine-actors.hero", { statsChanged: () => ({ dp: 33 }) });
+      },
+    },
+  };
+  const encoded = writeBoard(createEmptyBoard());
+  if (!encoded.ok) throw new Error(encoded.error.message);
+  let seen: GameState["actors"]["actors"][number] | undefined;
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program: "HP! = 5\n",
+    plugins: [plugin],
+    phaseRegistrations: [
+      {
+        phase: "input",
+        run: (state) => {
+          if (state.time.tick !== 0) return;
+          const actor = addActor(state.actors, {
+            kind: "party",
+            source: "hero.tem",
+            behaviour: "engine-actors.hero",
+            stats: { hp: 10, maxHp: 10, dp: 1 },
+          });
+          state.party.members = [actor.id];
+          state.party.selected = actor.id;
+        },
+      },
+      {
+        phase: "movement",
+        run: (state) => { seen = state.actors.actors[0]; },
+      },
+    ],
+  });
+  const request = engine.advance(0, []).requests[0];
+  if (request?.kind !== "asset") throw new Error("expected authored board request");
+  engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: encoded.value } }]);
+  engine.advance(3, []);
+  equal(seen?.stats.hp, 5);
+  equal(seen?.stats.dp, 33);
+});
+
+test("createEngine preserves manifest package behaviours and actor operations across reset", () => {
+  let registrations = 0;
+  let startupProgramRuns = 0;
+  let retainedGuardFailures = 0;
+  let retainedView: { readonly packageStartup?: boolean; readonly rng: { readonly nextUint32: () => number } } | undefined;
+  const plugin: PluginDefinition = {
+    id: "test-reset-package",
+    version: "1.0.0",
+    commands: [{
+      name: "seedactor",
+      aliases: [],
+      params: [],
+      call: (view) => {
+        if (view.state !== undefined) {
+          const actor = addActor(view.state.actors, {
+            kind: "party",
+            source: "hero.tem",
+            behaviour: "test-reset-package.hero",
+            stats: { hp: 10, maxHp: 10, dp: 1 },
+          });
+          view.state.party.members = [actor.id];
+          view.state.party.selected = actor.id;
+        }
+        return { value: null };
+      },
+    }, {
+      name: "countstartup",
+      aliases: [],
+      params: [],
+      call: (view) => {
+        if (retainedView === undefined) retainedView = view;
+        else if (view.packageStartup) {
+          try { retainedView.rng.nextUint32(); } catch { retainedGuardFailures += 1; }
+        }
+        startupProgramRuns += 1;
+        return { value: null };
+      },
+    }],
+    behaviourStartup(register) {
+      registrations += 1;
+      register("test-reset-package.hero", { statsChanged: () => ({ dp: 42 }) });
+    },
+  };
+  const resolvedPlugin: ResolvedPlugin = {
+    definition: plugin,
+    startup: { kind: "inline", text: "countstartup()\nend()\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  };
+  const main = writeMainFile({
+    ...createEmptyMainFile(),
+    major: 2,
+    minor: 9,
+    projectPath: "",
+    plugins: [],
+    startupPrg: "start.prg",
+    initBoard: "start.brd",
+    initChar: "hero.tem",
+    packagePluginsExtension: true,
+    packagePlugins: ["test-reset-package"],
+  });
+  if (!main.ok) throw new Error(main.error.message);
+  const board = writeBoard(createEmptyBoard());
+  if (!board.ok) throw new Error(board.error.message);
+  const files = new Map([
+    ["main.gam", main.value],
+    ["prg/start.prg", new TextEncoder().encode("seedactor()\nHP! = 5\nend()\n")],
+    ["boards/start.brd", board.value],
+    ["chrs/hero.tem", new Uint8Array([0])],
+  ]);
+  const table = ENGINE_PLUGIN_TABLE as Record<string, PluginDefinition>;
+  const previous = table["test-reset-package"];
+  table["test-reset-package"] = plugin;
+  try {
+    let resetRequested = false;
+    let latestActor: GameState["actors"]["actors"][number] | undefined;
+    const engine = createEngine({
+      seed: 7,
+      assetIndex: createAssetIndex([...files.keys()]),
+      assetRoot: PACKAGE_ROOT,
+      mainFile: "main.gam",
+      plugins: [resolvedPlugin],
+      startup: { presence: { hasPlayer: () => true }, savedGame: { load: () => ({ kind: "missing" }), restored: () => false } },
+      width: 32,
+      height: 32,
+      maxTicks: 8,
+      phaseRegistrations: [
+        {
+          phase: "events",
+          run: (state, postEffect) => {
+            if (state.time.tick === 2 && !resetRequested) {
+              resetRequested = true;
+              postEffect?.("engine", { thread: 0, name: "reset", kind: "state-write", args: [], out: {}, result: null, patch: null, wait: null, request: null });
+            }
+          },
+        },
+        { phase: "movement", run: (state) => { latestActor = state.actors.actors[0]; } },
+      ],
+    });
+    let report = engine.advance(0, []);
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const replies = report.requests.flatMap((request) => {
+        if (request.kind !== "asset") return [];
+        return [{ tick: report.tickAfter, event: { kind: "asset" as const, reqId: request.reqId, bytes: files.get(request.key) ?? null } }];
+      });
+      report = engine.advance(report.loading ? 0 : 1, replies);
+    }
+    equal(resetRequested, true);
+    equal(registrations, 2);
+    equal(startupProgramRuns, 2);
+    equal(retainedGuardFailures, 1);
+    equal(latestActor?.stats.hp, 5);
+    equal(latestActor?.stats.dp, 42);
+  } finally {
+    if (previous === undefined) delete table["test-reset-package"];
+    else table["test-reset-package"] = previous;
+  }
+});
+
+test("createEngine runs inline-program package startup exactly once", () => {
+  let registrations = 0;
+  const plugin: PluginDefinition = {
+    id: "test-inline-package",
+    version: "1.0.0",
+    commands: [],
+    behaviourStartup(register) {
+      registrations += 1;
+      register("test-inline-package.hero", { statsChanged: () => ({ dp: 1 }) });
+    },
+  };
+  createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program: "end()\n",
+    plugins: [{ definition: plugin }],
+  });
+  equal(registrations, 1);
+});
+test("createEngine installs one native listener for inline package boot", () => {
+  let listenerCalls = 0;
+  const plugin: PluginDefinition = {
+    id: "test-inline-listener-package",
+    version: "1.0.0",
+    commands: [{ name: "onping", aliases: [], params: [{ name: "event", optional: false, byRef: false, variadic: false }], call: () => { listenerCalls += 1; return { value: null }; } }],
+    listeners: [{ emitter: "game", type: "ping", command: "onping" }],
+  };
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program: 'game.emit("ping")\nend()\n',
+    plugins: [{ definition: plugin }],
+  });
+  const request = engine.advance(0, []).requests[0];
+  if (request?.kind !== "asset") throw new Error("expected authored board request");
+  engine.advance(0, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: boardBytes(createEmptyBoard()) } }]);
+  engine.advance(2, []);
+  equal(listenerCalls, 1);
+});
+test("createEngine does not start inline main program after package startup failure", () => {
+  let mainRuns = 0;
+  const plugin: ResolvedPlugin = {
+    definition: {
+      id: "test-inline-failure-package",
+      version: "1.0.0",
+      commands: [{
+        name: "markmain",
+        aliases: [],
+        params: [],
+        call: () => {
+          mainRuns += 1;
+          return { value: null };
+        },
+      }],
+    },
+    startup: { kind: "inline", text: "sleep(1)\n", compiler: COMPILER_VERSION, dialect: "tk3" },
+  };
+  const engine = createEngine({
+    seed: 7,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 32,
+    height: 32,
+    maxTicks: 8,
+    program: "markmain()\nend()\n",
+    plugins: [plugin],
+  });
+  engine.advance(0, []);
+  equal(mainRuns, 0);
+});
+
+
 test("engine runs the fixed phase order, registers audio after animation, and pauses on focus loss", () => {
   deepEqual(ENGINE_PHASES, ["input", "waits", "threads", "events", "movement", "edges", "triggers", "battle", "animation", "audio", "time"]);
   const phases: string[] = [];
@@ -105,7 +360,13 @@ test("the events phase delivers an emit made earlier in the tick; an emit made b
       {
         phase: "movement",
         run: (state) => {
-          if (state.time.tick === 0) applyEmitterOp(state.vm, state.events, "emit", { kind: "object", handle: 1, className: "" }, ["late"], null);
+          if (state.time.tick === 0) {
+            const emitter = state.vm.globals.h;
+            if (typeof emitter !== "object" || emitter === null || !("kind" in emitter) || emitter.kind !== "object") {
+              throw new Error("expected h to be an emitter object");
+            }
+            applyEmitterOp(state.vm, state.events, "emit", emitter, ["late"], null);
+          }
         },
       },
       { phase: "audio", run: (state) => seen.push(`${state.time.tick}:${String(state.vm.globals.log)}`) },
@@ -357,9 +618,10 @@ test("the end-of-tick object pass runs in the engine as it does in the script ho
   const request = engine.advance(0, []).requests[0];
   if (request?.kind !== "asset") throw new Error("expected board asset request");
   engine.advance(1, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: board.value } }]);
-  equal(latest!.vm.objects.length, 1, "the object is referenced by a global");
+  const initialObjects = latest!.vm.objects.length;
+  equal(initialObjects > 1, true, "built-in actor and event objects remain rooted alongside the script object");
   engine.advance(1, []);
-  equal(latest!.vm.objects.length, 0, "the tick that dropped the last reference frees it");
+  equal(latest!.vm.objects.length, initialObjects - 1, "the tick that dropped the last script reference frees only that object");
 });
 
 test("the engine frees a closure cell no script can reach, then the objects it alone kept (R-34, FUN-8)", () => {
@@ -398,8 +660,9 @@ test("the engine frees a closure cell no script can reach, then the objects it a
   if (request?.kind !== "asset") throw new Error("expected board asset request");
   engine.advance(1, [{ tick: 0, event: { kind: "asset", reqId: request.reqId, bytes: board.value } }]);
   deepEqual(Object.keys(latest!.vm.cells ?? {}), ["cell1"], "the closure's cell is reachable through f");
-  equal(latest!.vm.objects.length, 1);
+  const initialObjects = latest!.vm.objects.length;
+  equal(initialObjects > 1, true, "built-in actor and event objects remain rooted alongside the closure-owned object");
   engine.advance(1, []);
   deepEqual(Object.keys(latest!.vm.cells ?? {}), [], "the tick that dropped f frees its cell");
-  equal(latest!.vm.objects.length, 0, "and the object only that cell named, in the same pass");
+  equal(latest!.vm.objects.length, initialObjects - 1, "and the object only that cell named is freed in the same pass");
 });
