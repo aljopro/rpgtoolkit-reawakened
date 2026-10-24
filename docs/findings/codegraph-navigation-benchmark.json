@@ -1,0 +1,140 @@
+{
+  "issue": 620,
+  "date": "2026-10-24",
+  "sourceCommit": "90bdead39149f76d609aa135c4084efd639c2f5d",
+  "cli": "Codex 0.163.0-alpha.11.2",
+  "model": "CLI default; no override; model identifier not emitted by exec JSONL",
+  "codegraph": "1.6.2",
+  "index": {
+    "root": "packages/",
+    "files": 482,
+    "nodes": 10899,
+    "edges": 43400
+  },
+  "method": {
+    "sessions": 6,
+    "mode": "ephemeral read-only, ignore-user-config, one turn per session",
+    "parallelism": "three independent question pairs",
+    "control": "MCP disabled; rg and targeted source reads; CodeGraph forbidden",
+    "indexed": "one codegraph_explore followed by source reads",
+    "tokenSource": "turn.completed.usage; input includes cached_input_tokens; total=input+output",
+    "toolUnit": "one completed command_execution or mcp_tool_call; a shell call can batch commands",
+    "answerLimitWords": 350,
+    "caveats": [
+      "One sample per arm; no significance or general savings claim.",
+      "Host skill/context loading warnings in both arms; these are whole-agent usage totals, not retrieved-context token counts.",
+      "Textual exclusions pinned the unwanted runtime parser in two indexed queries. Its source was not used to derive the grammar ADR.",
+      "Claude quota failures and zero-token configuration failures excluded."
+    ]
+  },
+  "comparisons": [
+    {
+      "id": "inventory",
+      "order": [
+        "without",
+        "with"
+      ],
+      "question": "How do RPGCode inventory add/equip/unequip operations reach the inventory owner and change actor stats and queued events? Identify the key functions, validation order, state ownership, and relevant test files.",
+      "without": {
+        "toolCalls": 12,
+        "shellCalls": 12,
+        "mcpCalls": 0,
+        "usage": {
+          "input_tokens": 474432,
+          "cached_input_tokens": 434816,
+          "output_tokens": 1424
+        },
+        "totalTokens": 475856,
+        "seconds": 61.205,
+        "answerSha256": "dc74509c3a17bd06d39921b60bbe9bf501277bbe7bbf3a66b332362a0c012fb3",
+        "unwantedParserSourceReturned": false
+      },
+      "with": {
+        "toolCalls": 9,
+        "shellCalls": 8,
+        "mcpCalls": 1,
+        "usage": {
+          "input_tokens": 432573,
+          "cached_input_tokens": 383872,
+          "output_tokens": 1323
+        },
+        "totalTokens": 433896,
+        "seconds": 53.949,
+        "answerSha256": "921b651d0a80c82228cb9fa13da5c3a93cfc276ce93ef3777cedd740f3fc5f65",
+        "unwantedParserSourceReturned": true
+      }
+    },
+    {
+      "id": "before-play",
+      "order": [
+        "with",
+        "without"
+      ],
+      "question": "How does script-originated mediaPlay reach the cancelable beforePlay decision, and how does this differ from engine-originated music playback? Identify the functions and phases involved, what cancellation prevents, and relevant tests.",
+      "without": {
+        "toolCalls": 6,
+        "shellCalls": 6,
+        "mcpCalls": 0,
+        "usage": {
+          "input_tokens": 284019,
+          "cached_input_tokens": 213248,
+          "output_tokens": 1188
+        },
+        "totalTokens": 285207,
+        "seconds": 76.267,
+        "answerSha256": "f9a2a298c63dce886679ea59187af18fb202c495befddab1a67aa22171692602",
+        "unwantedParserSourceReturned": false
+      },
+      "with": {
+        "toolCalls": 5,
+        "shellCalls": 4,
+        "mcpCalls": 1,
+        "usage": {
+          "input_tokens": 270325,
+          "cached_input_tokens": 232448,
+          "output_tokens": 1102
+        },
+        "totalTokens": 271427,
+        "seconds": 47.513,
+        "answerSha256": "eb51a90df0477270ab1e336a46af9ad0b2a0bf515f292b7c710336be9ce92ad0",
+        "unwantedParserSourceReturned": false
+      }
+    },
+    {
+      "id": "board-rendering",
+      "order": [
+        "without",
+        "with"
+      ],
+      "question": "How does a booted game turn its current board into pixels returned by surfacePixels? Identify createEngine, draw-list composition, refreshFrame, the rasterizer and revision guard, explaining which layer owns state and relevant tests.",
+      "without": {
+        "toolCalls": 5,
+        "shellCalls": 5,
+        "mcpCalls": 0,
+        "usage": {
+          "input_tokens": 229912,
+          "cached_input_tokens": 195072,
+          "output_tokens": 1178
+        },
+        "totalTokens": 231090,
+        "seconds": 42.334,
+        "answerSha256": "0aa96181e858e3a94a417f1c4a2b7606c91f254d9bf0c4fbaa5514f433a69ad0",
+        "unwantedParserSourceReturned": false
+      },
+      "with": {
+        "toolCalls": 6,
+        "shellCalls": 5,
+        "mcpCalls": 1,
+        "usage": {
+          "input_tokens": 314374,
+          "cached_input_tokens": 276992,
+          "output_tokens": 1194
+        },
+        "totalTokens": 315568,
+        "seconds": 42.626,
+        "answerSha256": "a98e605aed8901a164cad1e8f68aa68251180d173d7425a874887afe0392aa13",
+        "unwantedParserSourceReturned": true
+      }
+    }
+  ]
+}

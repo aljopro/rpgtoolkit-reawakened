@@ -33,3 +33,23 @@ Setup, choosing a ticket, the checks to run and the pull-request flow are in [CO
   - New Epics are created as GitHub Parent Issues (`[Epic <num>] <title>`) with their stories attached as native sub-issues (`addSubIssue`).
   - Active sprint tasks belong to the current sprint (`sprint:@current`); unstarted future epics sit in the Backlog (`no:sprint`).
   - Branches name the ticket/issue (`feat/<ticket>-<short-name>`), and pull requests must cite their issue (`Fixes #<num>`).
+
+<!-- CODEGRAPH_START -->
+## CodeGraph (TypeScript navigation)
+
+The optional CodeGraph index is rooted at `packages/` and lives in
+`packages/.codegraph/`. **Never initialize or index the repository root**: `docs/`
+and `_bmad-output/` are outside its scope. The project-local Codex MCP configuration
+passes `--path packages`; launch the agent from this repository root. For other
+clients, pass the absolute path to this checkout's `packages/` directory.
+
+When the index is available, use `codegraph_explore` for TypeScript navigation, or
+`codegraph explore --path packages "<question or symbol>"` from the repository root.
+Use targeted searches/reads when the graph is missing or insufficient. Initialize
+with `codegraph init packages --yes`; refresh with `codegraph sync packages`.
+The CLI is an external development tool, not a workspace dependency.
+
+CodeGraph does not parse RPGCode (`.rnc`/`.prg`). Its TypeScript graph is not a
+language specification. Any independent RPGCode grammar must derive from
+`docs/spec/`, never from `packages/core/src/script/parse.ts` (G7).
+<!-- CODEGRAPH_END -->
