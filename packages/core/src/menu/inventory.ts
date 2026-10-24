@@ -31,7 +31,8 @@ export type InventoryRuntime = {
   readonly character: (source: string) => Character | undefined;
   readonly applyEquipment: (actorId: number, equipped: readonly string[], catalog: readonly EquipmentItemDefinition[]) => boolean;
   readonly shopStock?: () => readonly string[];
-  readonly setShopStock?: (sources: readonly string[]) => void;
+  readonly setShopStock?: (sources: readonly string[]) => boolean | void;
+  readonly closeShop?: () => void;
 };
 
 const ACCEPTED: MenuStateResult = Object.freeze({ ok: true, error: null });

@@ -42,6 +42,9 @@ import {
 import { createScriptServices } from "./script-test-services.ts";
 import { writeItem } from "../src/formats/actor/item.ts";
 import { INVENTORY_COMMANDS } from "../src/script/packs/inventory.ts";
+import { runWaitsPhase } from "../src/script/vm.ts";
+import { defaultWaitPoll } from "../src/script/waits.ts";
+import { createShopSessionRuntime } from "../src/engine/shop-session.ts";
 
 const fixtureDirectory = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "menu");
 const saveFixtureDirectory = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "save");
@@ -278,9 +281,79 @@ test("headless RPGCode CallShop resolves filename assets and parks until the men
   ]));
   const state = holder.value;
   if (state === null) throw new Error("CallShop fixture did not reach the input phase");
-  ok(state.vm.threads.some((thread) => thread.wait?.kind === "menu.screen"), "CallShop remains blocked on the active menu");
+  const sources = ["item/potion.itm", "item/elixir.itm"];
+  const activeWaiter = state.vm.threads.find((thread) => thread.wait?.kind === "menu.screen" && thread.wait.id === "callshop");
+  if (activeWaiter?.wait?.kind !== "menu.screen") throw new Error("CallShop did not park on its menu wait");
+  deepEqual(activeWaiter.wait.payload, [sources]);
   equal(state.vm.globals.shopreturned, undefined, "the RPGCode call resumes only after the menu closes");
+
+  const restored = restoreGameState(snapshot(state));
+  const restoredWaiter = restored.vm.threads.find((thread) => thread.wait?.kind === "menu.screen" && thread.wait.id === "callshop");
+  if (restoredWaiter?.wait?.kind !== "menu.screen") throw new Error("restored CallShop waiter is missing");
+  const restoredShop = createShopSessionRuntime(() => restored.vm.threads);
+  const restoredPorts = createMenuOwnerPorts(restored, undefined, {
+    item: () => undefined,
+    character: () => undefined,
+    applyEquipment: () => true,
+    shopStock: restoredShop.stock,
+    setShopStock: restoredShop.setStock,
+    closeShop: restoredShop.close,
+  });
+  deepEqual(restoredPorts.shop.stock(), sources);
+  runWaitsPhase(restored.vm, { tick: restored.time.tick, shopStock: restoredPorts.shop.stock() }, defaultWaitPoll);
+  equal(restoredWaiter.status, "waiting", "restored CallShop remains parked while stock is active");
+
+  const duplicate = restoreGameState(snapshot(restored));
+  const duplicateWaiter = duplicate.vm.threads.find((thread) => thread.wait?.kind === "menu.screen" && thread.wait.id === "callshop");
+  if (duplicateWaiter?.wait?.kind !== "menu.screen") throw new Error("duplicate fixture lacks its original waiter");
+  const duplicateCopy = JSON.parse(JSON.stringify(duplicateWaiter)) as NonNullable<typeof duplicateWaiter>;
+  duplicateCopy.id = Math.max(...duplicate.vm.threads.map((thread) => thread.id)) + 1;
+  duplicate.vm.threads.push(duplicateCopy);
+  const duplicateShop = createShopSessionRuntime(() => duplicate.vm.threads);
+  equal(duplicateShop.setStock(sources), false, "a second CallShop cannot activate over an existing session");
+  deepEqual(duplicateShop.stock(), [], "ambiguous duplicate waiters fail closed");
+  duplicateShop.close();
+  deepEqual(duplicateWaiter.wait?.kind === "menu.screen" ? duplicateWaiter.wait.payload : null, []);
+  deepEqual(duplicateCopy.wait?.kind === "menu.screen" ? duplicateCopy.wait.payload : null, [], "close invalidates every malformed duplicate waiter");
+  duplicate.vm.threads = duplicate.vm.threads.filter((thread) => thread !== duplicateWaiter);
+  deepEqual(duplicateShop.stock(), [], "the remaining waiter stays closed after the first waiter resolves");
+  runWaitsPhase(duplicate.vm, { tick: duplicate.time.tick, shopStock: duplicateShop.stock() }, defaultWaitPoll);
+  equal(duplicateCopy.status, "ready", "the remaining malformed waiter resumes closed");
+  deepEqual(duplicateShop.stock(), [], "a resolved duplicate cannot reopen stock");
+
+  const resetState = restoreGameState(snapshot(state));
+  const resetWaiter = resetState.vm.threads.find((thread) => thread.wait?.kind === "menu.screen" && thread.wait.id === "callshop");
+  if (resetWaiter?.wait?.kind !== "menu.screen") throw new Error("reset fixture lacks its CallShop waiter");
+  const resetCopy = JSON.parse(JSON.stringify(resetWaiter)) as NonNullable<typeof resetWaiter>;
+  const resetShop = createShopSessionRuntime(() => resetState.vm.threads);
+  resetState.vm.threads = [];
+  equal(resetShop.setStock(sources), true);
+  resetState.vm.threads.push(resetCopy);
+  deepEqual(resetShop.stock(), sources);
+  resetState.vm.threads = [];
+  resetShop.reset();
+  deepEqual(resetShop.stock(), [], "engine reset clears closure-owned stock with the replaced VM");
+
+  restoredPorts.shop.close();
+  const closed = restoreGameState(snapshot(restored));
+  const closedWaiter = closed.vm.threads.find((thread) => thread.wait?.kind === "menu.screen" && thread.wait.id === "callshop");
+  if (closedWaiter?.wait?.kind !== "menu.screen") throw new Error("closed CallShop waiter was not persisted");
+  const closedShop = createShopSessionRuntime(() => closed.vm.threads);
+  const closedPorts = createMenuOwnerPorts(closed, undefined, {
+    item: () => undefined,
+    character: () => undefined,
+    applyEquipment: () => true,
+    shopStock: closedShop.stock,
+    setShopStock: closedShop.setStock,
+    closeShop: closedShop.close,
+  });
+  deepEqual(closedPorts.shop.stock(), []);
+  runWaitsPhase(closed.vm, { tick: closed.time.tick, shopStock: closedPorts.shop.stock() }, defaultWaitPoll);
+  equal(closedWaiter.status, "ready", "closed CallShop resumes after restore");
+  equal(closedWaiter.wait, null);
+  deepEqual(closedPorts.shop.stock(), [], "a restored closed shop does not reopen");
 });
+
 test("headless RPGCode smoke applies documented party commands through the engine owners", () => {
   const holder: { value: GameState | null } = { value: null };
   let seeded = false;

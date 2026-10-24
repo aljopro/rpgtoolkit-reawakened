@@ -27,6 +27,7 @@ import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
 import { applyMenuStateEffect, createMenuOwnerPorts } from "../menu/index.ts";
+import { createShopSessionRuntime } from "./shop-session.ts";
 import { hashGameState } from "../save/hash.ts";
 import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
 import { createAudioRuntime } from "../audio/runtime.ts";
@@ -228,7 +229,6 @@ export function createEngine(init: EngineInit): Engine {
   const inventoryItemDefinitions = new Map<AssetKey, Item>();
   const inventoryCharacterDefinitions = new Map<AssetKey, Character>();
   const decodedImages = new Map<AssetKey, DecodedTexture>();
-  let activeShopStock: string[] = [];
   const decodedTiles = new Map<AssetKey, DecodedTexture>();
   const decodedBundled = new Map<AssetKey, RasterAsset | null>();
   const pending = new Map<number, RequestEntry>();
@@ -245,6 +245,8 @@ export function createEngine(init: EngineInit): Engine {
     registrationByPhase.set(registration.phase, list);
   }
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
+
+  const shopSession = createShopSessionRuntime(() => state.vm.threads);
   const menuOwners = createMenuOwnerPorts(
     state,
     (event) => {
@@ -289,12 +291,9 @@ export function createEngine(init: EngineInit): Engine {
       applyEquipment(actorId, equipped, catalog) {
         return services.actors.applyEquipment(actorId, equipped, catalog) !== null;
       },
-      shopStock() {
-        return activeShopStock;
-      },
-      setShopStock(sources) {
-        activeShopStock = [...sources];
-      },
+      shopStock: () => shopSession.stock(),
+      setShopStock: shopSession.setStock,
+      closeShop: shopSession.close,
     },
     (event) => {
       registerEmitter(state.vm, state.events, "inventory");
@@ -925,7 +924,7 @@ export function createEngine(init: EngineInit): Engine {
     state.surfaces = createSurfacesSection(init.width, init.height);
     state.rng = rng;
     state.time = time;
-    activeShopStock = [];
+    shopSession.reset();
     pending.clear();
     pendingImageEffects.length = 0;
     pendingBoardPreviews.length = 0;
@@ -1406,7 +1405,7 @@ export function createEngine(init: EngineInit): Engine {
       claims: state.engine.claims ?? [],
       audio: state.audio,
       events: state.events,
-      shopStock: activeShopStock,
+      shopStock: shopSession.stock(),
       ...(state.engine.pendingEffects?.audio === undefined ? {} : { pendingAudio: state.engine.pendingEffects.audio }),
       mediaStart: (handle: number) => {
         const record = state.vm.objects.find((item) => item.handle === handle);

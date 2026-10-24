@@ -255,7 +255,7 @@ const ITEM_ASSET_CONTINUATION: BuiltinSpec = {
 const CALL_SHOP: BuiltinSpec = {
   name: "callshop", aliases: [],
   params: [{ name: "item", optional: false, byRef: false, variadic: true }],
-  doc: docs("Displays a basic shop interface that allows buying the listed items and selling available items from the player's inventory.", "Resolves every filename relative to Item (appending .itm when absent) before activating any stock; then waits for the menu screen to close."),
+  doc: docs("Run a blocking shop session with the listed items.", "Resolves every filename relative to Item (appending .itm when absent) before activating any stock; then yields to the menu owner until it closes the session. The menu owns screen presentation."),
   call: (_view, args) => {
     if (args.length === 0) throw new ScriptError("menu.shop-invalid", "CallShop requires at least one item filename");
     return shopRequest(args.map((arg) => itemFilename(String(arg.value))));
@@ -281,7 +281,7 @@ const SHOP_ASSET_CONTINUATION: BuiltinSpec = {
     return {
       value: null,
       effects: [{ kind: "state-write", section: "menu", args: [{ type: "shop.open", sources }] }],
-      wait: { kind: "menu.screen", global: true, id: "callshop", payload: [], resumeRefs: [] },
+      wait: { kind: "menu.screen", global: true, id: "callshop", payload: [sources], resumeRefs: [] },
     };
   },
 };

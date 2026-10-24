@@ -88,6 +88,7 @@ function actionRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
+
 /** Resolves current section values on every call, including after reset/restore. */
 export function createMenuOwnerPorts(
   state: OwnerState,
@@ -125,11 +126,12 @@ export function createMenuOwnerPorts(
           if (inventoryRuntime.item(source) === undefined) return rejected({ path: "shop.stock", message: `item definition is unavailable: ${source}` });
           sources.push(source);
         }
-        inventoryRuntime.setShopStock(sources);
+        if (inventoryRuntime.setShopStock(sources) === false) return rejected({ path: "shop.stock", message: "another shop session is already active" });
         return ACCEPTED;
       },
       close() {
-        inventoryRuntime?.setShopStock?.([]);
+        if (inventoryRuntime?.closeShop !== undefined) inventoryRuntime.closeShop();
+        else inventoryRuntime?.setShopStock?.([]);
       },
     },
     party: {
