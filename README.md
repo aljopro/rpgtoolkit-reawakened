@@ -42,6 +42,7 @@ One known limit: the old Toolkit allowed Windows-only add-ons called plugins, an
 - [Editor features](docs/editor-features.md): what the editor does
 - [Architecture options](docs/architecture-options.md) and [decision records](docs/adr/0001-typescript-core.md): how it's built, and why
 - [Script execution observers](docs/adr/0010-script-execution-observers.md): observation-only closing-game census
+- [CodeGraph navigation](docs/codegraph.md) and [independent RPGCode grammar proposal](docs/adr/0011-tree-sitter-rpgcode.md): developer navigation and editor syntax design
 - [Engineering rules](docs/guardrails.md): the rules every change follows
 
 ## Helping out
