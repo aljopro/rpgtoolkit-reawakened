@@ -4,12 +4,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
+  advanceScriptTick,
   addActor,
   applyMenuStateEffect,
   createAssetIndex,
   createEngine,
   createEmptyBoard,
   createGameState,
+  startProgram,
   hashGameState,
   PACKAGE_ROOT,
   restoreGameState,
@@ -23,15 +25,19 @@ import {
   snapshot,
   writeBoard,
   validateInventorySection,
+  createEmptyCharacter,
+  writeCharacter,
   validateMenuSection,
   validatePartySection,
   type EffectRecord,
   type Engine,
   type GameState,
+  type PartyEvent,
   type PluginDefinition,
   type ResolvedPlugin,
   type ScriptError,
 } from "../src/index.ts";
+import { createScriptServices } from "./script-test-services.ts";
 
 const fixtureDirectory = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "menu");
 const saveFixtureDirectory = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "save");
@@ -82,6 +88,9 @@ test("validators reject malformed fields, duplicates and dead actor or item refe
 
   issue(validatePartySection({ members: [actorIds[0], actorIds[0]], selected: actorIds[0], steps: 0 }, state.actors));
   issue(validatePartySection({ version: 2, members: [999], selected: 999, steps: 0 }, state.actors));
+  const sixIds = [...actorIds, ...Array.from({ length: 4 }, (_, index) =>
+    addActor(state.actors, { kind: "party", source: `extra-${index}.tem` }).id)];
+  issue(validatePartySection({ version: 2, members: sixIds, selected: sixIds[0], steps: 0 }, state.actors));
   issue(validatePartySection({ version: 2, members: [], selected: undefined, steps: 0 }, state.actors));
   issue(validatePartySection({ version: 2, members: [], selected: null, steps: -1 }, state.actors));
   issue(validateInventorySection({ ...inventory, items: [{ id: 1, source: "a.itm", handle: "A", quantity: -1 }] }, state.actors));
@@ -155,6 +164,144 @@ test("owner actions isolate sections and reject invalid actions atomically", () 
   equal(snapshot(state), unchanged);
   rejected(ports.menu.apply({ type: "navigation", screens: [{ screen: "status", actorId: 999, selection: 0 }] }));
   equal(snapshot(state), unchanged);
+});
+test("authored RPGCode party operations preserve actor identity and emit only committed events", () => {
+  const state = createGameState({ seed: 21 });
+  const first = addActor(state.actors, { kind: "party", source: "first.tem", name: "First" });
+  const second = addActor(state.actors, { kind: "party", source: "second.tem", name: "Second" });
+  const third = addActor(state.actors, { kind: "party", source: "third.tem", name: "Third" });
+  state.party.members = [first.id, second.id];
+  state.party.selected = first.id;
+  const events: PartyEvent[] = [];
+  const ports = createMenuOwnerPorts(state, (event) => events.push(event));
+  const services = createScriptServices(state);
+  const program = readFileSync(join(fixtureDirectory, "party-operations.prg"), "utf8").split("\n").filter((line) => !line.startsWith("newplyr(") && !line.startsWith("newplayer(")).join("\n");
+  startProgram(state.vm, { kind: "inline", text: program, compiler: "2" });
+  let lastEffect = 0;
+  for (let tick = 0; tick < 24; tick += 1) {
+    advanceScriptTick(state, services);
+    for (const effect of state.vm.effects) {
+      if (effect.seq <= lastEffect) continue;
+      lastEffect = effect.seq;
+      if (["activeplayer", "addplayer", "removeplayer", "restoreplayer", "destroyplayer"].includes(effect.name)) {
+        applyMenuStateEffect(ports, effect);
+      }
+    }
+  }
+  deepEqual(state.party.members, [first.id, third.id]);
+  equal(state.party.selected, third.id);
+  equal(state.actors.actors.some((actor) => actor.id === second.id), false);
+  deepEqual(events, [
+    { type: "memberAdded", detail: { actorId: third.id, index: 2 } },
+    { type: "activeMemberChanged", detail: { previousActorId: first.id, currentActorId: second.id } },
+    { type: "memberRemoved", detail: { actorId: second.id, index: 1 } },
+    { type: "activeMemberChanged", detail: { previousActorId: second.id, currentActorId: third.id } },
+    { type: "memberAdded", detail: { actorId: second.id, index: 2 } },
+    { type: "memberRemoved", detail: { actorId: second.id, index: 2 } },
+  ]);
+  const restored = restoreGameState(snapshot(state));
+  deepEqual(restored.party, state.party);
+  deepEqual(restored.actors, state.actors);
+});
+
+test("headless RPGCode smoke applies documented party commands through the engine owners", () => {
+  const holder: { value: GameState | null } = { value: null };
+  let seeded = false;
+  const engine = createEngine({
+    seed: 22,
+    assetIndex: createAssetIndex(["Boards/test.brd", "Characters/third.tem", "Characters/graphic.tem"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 64,
+    height: 64,
+    maxTicks: 24,
+    program: readFileSync(join(fixtureDirectory, "party-operations.prg"), "utf8"),
+    phaseRegistrations: [{ phase: "input", run: (state) => {
+      holder.value = state;
+      if (seeded) return;
+      seeded = true;
+      const first = addActor(state.actors, { kind: "party", source: "first.tem", name: "First" });
+      const second = addActor(state.actors, { kind: "party", source: "second.tem", name: "Second" });
+      state.party.members = [first.id, second.id];
+      state.party.selected = first.id;
+    }}],
+  });
+  runEngine(engine, new Map([["boards/test.brd", boardBytes], ["characters/third.tem", thirdCharacterBytes], ["characters/graphic.tem", graphicCharacterBytes]]));
+  const latest = holder.value;
+  if (latest === null) throw new Error("headless party smoke did not reach the input phase");
+  const first = latest.actors.actors.find((actor) => actor.source === "first.tem");
+  const third = latest.actors.actors.find((actor) => actor.source === "third.tem");
+  if (first === undefined || third === undefined) throw new Error("headless party actors were not preserved");
+  deepEqual(latest.party.members, [first.id, third.id]);
+  equal(latest.party.selected, third.id);
+  equal(latest.vm.globals.selected, "Third", "party virtuals expose the ordered compatibility slot");
+  equal(latest.actors.actors.some((actor) => actor.source === "second.tem"), false);
+  const addedSprite = latest.sprites.players.find((player) => player.actorId === third.id);
+  ok(addedSprite !== undefined, "added party actor has a linked sprite");
+  equal(addedSprite?.source, "graphic.tem", "newplyr/newplayer load graphics without changing actor source");
+});
+test("party semantic actions preserve selection by actor identity and queue exact post-commit events", () => {
+  const state = actorState();
+  const events: PartyEvent[] = [];
+  const ports = createMenuOwnerPorts(state, (event) => events.push(event));
+  const [first, second] = state.actors.actors;
+  if (first === undefined || second === undefined) throw new Error("party actor fixture is incomplete");
+
+  deepEqual(ports.party.apply({ type: "add", actorId: first.id }), { ok: true, error: null });
+  deepEqual(state.party.members, [first.id]);
+  equal(state.party.selected, first.id);
+  deepEqual(events.splice(0), [
+    { type: "memberAdded", detail: { actorId: first.id, index: 0 } },
+    { type: "activeMemberChanged", detail: { previousActorId: null, currentActorId: first.id } },
+  ]);
+  deepEqual(ports.party.apply({ type: "add", actorId: second.id }), { ok: true, error: null });
+  deepEqual(ports.party.apply({ type: "select", actorId: second.id }), { ok: true, error: null });
+  deepEqual(events.splice(0), [
+    { type: "memberAdded", detail: { actorId: second.id, index: 1 } },
+    { type: "activeMemberChanged", detail: { previousActorId: first.id, currentActorId: second.id } },
+  ]);
+
+  deepEqual(ports.party.apply({ type: "swap", firstActorId: first.id, secondActorId: second.id }), { ok: true, error: null });
+  deepEqual(state.party.members, [second.id, first.id]);
+  equal(state.party.selected, second.id);
+  deepEqual(events.splice(0), [
+    { type: "membersSwapped", detail: { firstActorId: first.id, secondActorId: second.id, firstIndex: 0, secondIndex: 1 } },
+  ]);
+
+  deepEqual(ports.party.apply({ type: "remove", actorId: second.id }), { ok: true, error: null });
+  deepEqual(state.party.members, [first.id]);
+  equal(state.party.selected, first.id);
+  deepEqual(events.splice(0), [
+    { type: "memberRemoved", detail: { actorId: second.id, index: 0 } },
+    { type: "activeMemberChanged", detail: { previousActorId: second.id, currentActorId: first.id } },
+  ]);
+  deepEqual(ports.party.apply({ type: "restore", actorId: second.id }), { ok: true, error: null });
+  deepEqual(state.party.members, [first.id, second.id]);
+  deepEqual(events.splice(0), [{ type: "memberAdded", detail: { actorId: second.id, index: 1 } }]);
+
+  const before = snapshot(state);
+  deepEqual(ports.party.apply({ type: "restore", actorId: second.id }), { ok: true, error: null });
+  deepEqual(ports.party.apply({ type: "select", actorId: first.id }), { ok: true, error: null });
+  deepEqual(ports.party.apply({ type: "remove", actorId: 999 }), { ok: true, error: null });
+  deepEqual(ports.party.apply({ type: "swap", firstActorId: first.id, secondActorId: first.id }), { ok: true, error: null });
+  equal(snapshot(state), before);
+  deepEqual(events, []);
+
+  rejected(ports.party.apply({ type: "add", actorId: 999 }));
+  equal(snapshot(state), before);
+  deepEqual(events, []);
+  const capped = actorState();
+  const cappedIds = [...capped.actors.actors.map((value) => value.id)];
+  for (let index = 0; index < 3; index += 1) cappedIds.push(addActor(capped.actors, { kind: "party", source: `extra-${index}.tem` }).id);
+  const sixth = addActor(capped.actors, { kind: "party", source: "sixth.tem" });
+  capped.party.members = cappedIds;
+  capped.party.selected = cappedIds[0] ?? null;
+  const capEvents: PartyEvent[] = [];
+  const capPorts = createMenuOwnerPorts(capped, (event) => capEvents.push(event));
+  const capBefore = snapshot(capped);
+  rejected(capPorts.party.apply({ type: "add", actorId: sixth.id }));
+  equal(snapshot(capped), capBefore);
+  deepEqual(capEvents, []);
 });
 
 test("owner ports copy input and expose deeply immutable read views", () => {
@@ -287,6 +434,38 @@ const boardBytes = (() => {
   if (!encoded.ok) throw new Error(encoded.error.message);
   return encoded.value;
 })();
+const thirdCharacterBytes = (() => {
+  const encoded = writeCharacter({
+    ...createEmptyCharacter(),
+    minor: 8,
+    name: "Third",
+    movementAnimations: Array(8).fill(""),
+    battleStances: Array(6).fill(""),
+    idleAnimations: Array(8).fill(""),
+    idleTime: 3,
+    speed: 0.05,
+    customStances: [],
+    vectorBases: [],
+  });
+  if (!encoded.ok) throw new Error(encoded.error.message);
+  return encoded.value;
+})();
+const graphicCharacterBytes = (() => {
+  const encoded = writeCharacter({
+    ...createEmptyCharacter(),
+    minor: 8,
+    name: "Graphic",
+    movementAnimations: Array(8).fill(""),
+    battleStances: Array(6).fill(""),
+    idleAnimations: Array(8).fill(""),
+    idleTime: 3,
+    speed: 0.05,
+    customStances: [],
+    vectorBases: [],
+  });
+  if (!encoded.ok) throw new Error(encoded.error.message);
+  return encoded.value;
+})();
 
 function menuEngine(onState: (state: GameState) => void, effects: EffectRecord[]): { engine: Engine; state: () => GameState | null } {
   const actions = [
@@ -357,13 +536,13 @@ function menuEngine(onState: (state: GameState) => void, effects: EffectRecord[]
   return { engine, state: () => latest };
 }
 
-function runEngine(engine: Engine): string[] {
+function runEngine(engine: Engine, assets: ReadonlyMap<string, Uint8Array> = new Map([["boards/test.brd", boardBytes]])): string[] {
   const hashes: string[] = [];
   let report = engine.advance(0, []);
   hashes.push(report.stateHash);
-  for (let turn = 0; turn < 8; turn += 1) {
+  for (let turn = 0; turn < 24; turn += 1) {
     const asset = report.requests.find((request) => request.kind === "asset");
-    const inputs = asset === undefined ? [] : [{ tick: report.tickAfter, event: { kind: "asset" as const, reqId: asset.reqId, bytes: boardBytes } }];
+    const inputs = asset === undefined ? [] : [{ tick: report.tickAfter, event: { kind: "asset" as const, reqId: asset.reqId, bytes: assets.get(asset.key) ?? null } }];
     report = engine.advance(1, inputs);
     hashes.push(report.stateHash);
     if (report.requests.length === 0 && report.ticksRun === 0) break;

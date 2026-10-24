@@ -59,12 +59,14 @@ const ACTOR_STARTUP_PLUGIN: PluginDefinition = {
     params: [],
     call: (view) => {
       if (view.state === undefined) return { value: null };
-      addActor(view.state.actors, {
+      const actor = addActor(view.state.actors, {
         kind: "party",
         source: "hero.tem",
         behaviour: "test-startup-actors.hero",
         stats: { hp: 10, maxHp: 10, dp: 1 },
       });
+      view.state.party.members = [actor.id];
+      view.state.party.selected = actor.id;
       return { value: null };
     },
   }],
@@ -264,12 +266,14 @@ test("registers behaviour-only plugins before a host program runs", () => {
     seed: 0,
     plugins: [ACTOR_BEHAVIOUR_PLUGIN],
   });
-  addActor(host.state().actors, {
+  const actor = addActor(host.state().actors, {
     kind: "party",
     source: "hero.tem",
     behaviour: "test-actors.hero",
     stats: { hp: 10, maxHp: 10, dp: 1 },
   });
+  host.state().party.members = [actor.id];
+  host.state().party.selected = actor.id;
 
   host.advance(1, []);
   equal(host.state().actors.actors[0]?.stats.hp, 5);
@@ -282,12 +286,14 @@ test("restores the host with behaviour hooks attached to the restored actor serv
     seed: 0,
     plugins: [ACTOR_BEHAVIOUR_PLUGIN],
   });
-  addActor(host.state().actors, {
+  const actor = addActor(host.state().actors, {
     kind: "party",
     source: "hero.tem",
     behaviour: "test-actors.hero",
     stats: { hp: 10, maxHp: 10, dp: 1 },
   });
+  host.state().party.members = [actor.id];
+  host.state().party.selected = actor.id;
 
   const restored = restoreScriptHost(host.snapshot(), { plugins: [ACTOR_BEHAVIOUR_PLUGIN] });
   restored.advance(1, []);
@@ -306,6 +312,8 @@ test("restore keeps actor data with core defaults when its package is absent, th
     behaviour: "test-actors.hero",
     stats: { hp: 10, maxHp: 10, dp: 1 },
   });
+  host.state().party.members = [actor.id];
+  host.state().party.selected = actor.id;
   const saved = host.snapshot();
   const savedActor = savedActorRecord(saved);
   equal(savedActor.behaviour, "test-actors.hero");

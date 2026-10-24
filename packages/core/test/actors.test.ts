@@ -464,6 +464,8 @@ test("actor host fields hydrate through dot and indexed VM access", () => {
 test("actor aliases write through and protected virtuals keep their links", () => {
   const state = createGameState({ seed: 9 });
   const actor = addActor(state.actors, partyFixture);
+  state.party.members = [actor.id];
+  state.party.selected = actor.id;
   const virtuals = createDefaultVirtuals(state, createActorService(state.actors));
   equal(virtuals.read("HP!"), 12);
   equal(virtuals.write?.("HP!", 4), "written");

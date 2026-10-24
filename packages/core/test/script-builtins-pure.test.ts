@@ -2,6 +2,7 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
+  addActor,
   advanceScriptTick,
   createGameState,
   hashState,
@@ -626,10 +627,10 @@ test("E-92 virtual variables read engine state sections", () => {
     constants: { 0: 42, 1: 100 },
   };
   (state.surfaces as { renderNow?: number }).renderNow = 7;
-  (state.sprites as { players?: Array<{ x?: number; y?: number; layer?: number }> }).players = [
-    { x: 12, y: 34, layer: 2 },
-  ];
-  (state.party as { members?: Array<{ name?: string }> }).members = [{ name: "Hero" }];
+  const hero = addActor(state.actors, { kind: "party", source: "hero.tem", name: "Hero" });
+  state.sprites.players = [{ actorId: hero.id, x: 12, y: 34, layer: 2 } as never];
+  state.party.members = [hero.id];
+  state.party.selected = hero.id;
 
   startProgram(state.vm, {
     kind: "inline",

@@ -7,6 +7,8 @@ risk: "high"
 context:
   - "spec - docs/spec/engine/movement-and-collision.md#e-85"
   - "spec - docs/spec/engine/actors.md"
+status: in-progress
+assignee: "Codex"
 ---
 
 ## Intent

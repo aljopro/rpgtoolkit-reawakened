@@ -1,5 +1,5 @@
 import { hashDrawList } from "../canon/index.ts";
-import { actorEmitterKey } from "../actors/model.ts";
+import { actorEmitterKey, actorId } from "../actors/model.ts";
 import { registerActorObject } from "../actors/object.ts";
 import { resolveAsset, assetKey, resolveTileReference } from "../formats/resolver/resolver.ts";
 import { classifyImageReference } from "../formats/animation/image-reference.ts";
@@ -7,6 +7,7 @@ import { decodeTexture, type DecodedTexture } from "../formats/image/index.ts";
 import { expandSingleTileToRgba, readSingleTile } from "../formats/single-tile/index.ts";
 import { expandTileToRgba, readTileset, tileDimensions } from "../formats/tileset/index.ts";
 import { BinaryReader } from "../formats/binary/reader.ts";
+import { readCharacter } from "../formats/actor/character.ts";
 import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
 import { readLegacyFont } from "../formats/font/reader.ts";
@@ -46,7 +47,7 @@ import { applyCameraEffect, createCameraSection, initCameraForBoard, positionAt,
 import { applyInputEffect, applySpriteEffect } from "../script/packs/world.ts";
 import type { CameraPoint, CameraTarget } from "../ports/camera.ts";
 import type { SpriteActor, Facing } from "../sprites/model.ts";
-import { resetSpritesSection, placeSelectedPlayer, type SpriteRuntime } from "../sprites/runtime.ts";
+import { resetSpritesSection, placeSelectedPlayer, selectActor as selectPartyActor, removeActorSprite, type SpriteRuntime } from "../sprites/runtime.ts";
 import { boardCollisionAt } from "../sprites/movement.ts";
 import { resetTriggersSection } from "../triggers/model.ts";
 import { applyTriggerEffect } from "../triggers/runtime.ts";
@@ -73,6 +74,7 @@ import {
   withOwner,
   ScriptError,
   toDiagnostic,
+  replyToRequest,
   startProgram,
   startThread,
   STEP_BUDGET,
@@ -198,6 +200,7 @@ type Paused = { thread: number; frame: number; line: number };
 type Arrival = { readonly x: number; readonly y: number; readonly layer: number; readonly unit: "pixel" | "tile" };
 
 const DEFAULT_ENGINE_PLUGINS: readonly ResolvedPlugin[] = resolveManifestPlugins(ENGINE_DEFAULT_MANIFEST).plugins;
+const SCRIPT_REQUEST_BASE = 0x40000000;
 
 /** Create the deterministic fixed-tick engine; host assets arrive only as AD-14 replies. */
 const DEFAULT_GAME_AUDIO_SETTINGS = {
@@ -234,7 +237,22 @@ export function createEngine(init: EngineInit): Engine {
     registrationByPhase.set(registration.phase, list);
   }
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
-  const menuOwners = createMenuOwnerPorts(state);
+  const menuOwners = createMenuOwnerPorts(state, (event) => {
+    if (event.type === "memberRemoved" && !state.actors.actors.some((actor) => actor.id === event.detail.actorId)) {
+      removeActorSprite(state.sprites, actorId(event.detail.actorId));
+      if (init.spriteRuntime !== undefined && init.spriteRuntime.section !== state.sprites) {
+        init.spriteRuntime.removeActor(actorId(event.detail.actorId));
+      }
+    }
+    if (event.type === "activeMemberChanged") {
+      selectPartyActor(state.sprites, event.detail.currentActorId === null ? null : actorId(event.detail.currentActorId));
+      if (init.spriteRuntime !== undefined && init.spriteRuntime.section !== state.sprites) {
+        init.spriteRuntime.selectActor(event.detail.currentActorId === null ? null : actorId(event.detail.currentActorId));
+      }
+    }
+    registerEmitter(state.vm, state.events, "party");
+    queueNativeEvent(state.vm, state.events, "party", event.type, event.detail);
+  });
   for (const section of ["party", "inventory", "menu"] as const) {
     bus.register(section, (effect) => applyMenuStateEffect(menuOwners, effect));
   }
@@ -261,6 +279,33 @@ export function createEngine(init: EngineInit): Engine {
   });
   bus.register("sprites", (effect) => {
     const values = effect.args as readonly Value[]; // Script effects use the VM Value subset.
+    if (effect.name === "__party_addplayer_asset" || effect.name === "__party_newplyr_asset") {
+      const file = typeof effect.args[0] === "string" ? effect.args[0] : "";
+      const hex = typeof effect.args[1] === "string" ? effect.args[1] : "";
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+      const character = readCharacter(new BinaryReader(bytes));
+      if (!character.ok) return;
+      applySpriteEffect(state, effect.name, [file, character.value] as unknown as readonly Value[]);
+      const runtime = init.spriteRuntime;
+      const board = state.world.board;
+      if (runtime === undefined || runtime.section === state.sprites || board === null || board === undefined) return;
+      if (effect.name === "__party_addplayer_asset") {
+        const member = state.actors.actors.find((actor) => actor.kind === "party" && actor.source === file);
+        const sprite = member === undefined ? undefined : state.sprites.players.find((player) => player.actorId === member.id);
+        if (member !== undefined && sprite !== undefined && !runtime.section.players.some((player) => player.actorId === member.id)) {
+          runtime.createPlayer(board, {
+            id: sprite.id, actorId: member.id, kind: "player", source: file,
+            x: sprite.x, y: sprite.y, layer: sprite.layer,
+            controlled: state.party.selected === member.id,
+            character: character.value,
+          });
+        }
+      } else if (state.party.selected !== null) {
+        runtime.changePlayerGraphics(actorId(state.party.selected), file, character.value);
+      }
+      return;
+    }
     applySpriteEffect(state, effect.name, values);
   });
   bus.register("triggers", (effect) => applyTriggerEffect(state, effect));
@@ -367,6 +412,16 @@ export function createEngine(init: EngineInit): Engine {
       "engine",
       (section, effect) => bus.dispatchRecorded(section, effect),
       (request) => {
+        if (request.kind === "asset" && request.area === "characters" &&
+            typeof request.path === "string" && typeof request.reqId === "number" &&
+            Number.isSafeInteger(request.reqId) && request.reqId > 0 && request.reqId < SCRIPT_REQUEST_BASE) {
+          const resolved = resolveAsset(index, root, "characters", request.path);
+          const key = resolved.ok ? resolved.value : assetKey(`characters/${request.path}`);
+          const reqId = SCRIPT_REQUEST_BASE + request.reqId;
+          pending.set(reqId, { reqId, key, kind: "script-character" });
+          requestsOut.push({ kind: "asset", reqId, key });
+          return;
+        }
         if (request.kind !== "playVideo" || typeof request.key !== "string" || (request.presentation !== "full" && request.presentation !== "small") || typeof request.reqId !== "number") return;
         state.engine.video = { reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation, ended: false };
         requestsOut.push({ kind: "playVideo", reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation });
@@ -601,6 +656,17 @@ export function createEngine(init: EngineInit): Engine {
     if (entry === undefined) return;
     pending.delete(entry.reqId);
     consumed.push(record);
+    if (entry.kind === "script-character") {
+      if (record.event.bytes === null) {
+        replyToRequest(state.vm, entry.reqId - SCRIPT_REQUEST_BASE, { ok: false, value: "" });
+      } else {
+        let hex = "";
+        for (const byte of record.event.bytes) hex += byte.toString(16).padStart(2, "0");
+        cache.set(entry.key, new Uint8Array(record.event.bytes));
+        replyToRequest(state.vm, entry.reqId - SCRIPT_REQUEST_BASE, { ok: true, value: hex });
+      }
+      return;
+    }
     if (entry.kind === "audio") {
       rememberAudio(entry.key, record.event.bytes);
       audio.retry();

@@ -71,6 +71,7 @@ export function validatePartySection(value: unknown, actors: ActorsSection): Sta
   const section = value as Record<string, unknown>;
   if (section.version !== PARTY_SCHEMA_VERSION) return issue("party.version", "expected version 2");
   if (!Array.isArray(section.members)) return issue("party.members", "expected an array");
+  if (section.members.length > 5) return issue("party.members", "expected at most five members");
   const seen = new Set<number>();
   for (const [index, member] of section.members.entries()) {
     if (!actorExists(actors, member, true)) return issue(`party.members[${index}]`, "expected a live party actor id");

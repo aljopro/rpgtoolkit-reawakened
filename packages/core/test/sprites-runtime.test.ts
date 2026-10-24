@@ -8,7 +8,9 @@ import {
   createGameState,
   enqueueDirectionMove,
   createVmState,
+  createSpritesSection,
   hydrateSprites,
+  selectActor,
   linkedActor,
   registerPackageBehaviours,
   resolveBehaviour,
@@ -40,6 +42,25 @@ function board(): WorldBoard {
     ],
   } as unknown) as WorldBoard;
 }
+test("party actor selection updates linked sprite control without reordering sprites", () => {
+  const actors = createActorsSection();
+  const one = addActor(actors, { kind: "party", source: "one.tem", name: "One" });
+  const two = addActor(actors, { kind: "party", source: "two.tem", name: "Two" });
+  const section = createSpritesSection();
+  section.players = [
+    { id: "sprite-one", actorId: one.id, index: 0, controlled: true },
+    { id: "sprite-two", actorId: two.id, index: 1, controlled: false },
+  ] as never;
+  section.selectedPlayer = "sprite-one";
+  const before = section.players.map((player) => player.id);
+  equal(selectActor(section, two.id), true);
+  deepEqual(section.players.map((player) => player.id), before);
+  equal(section.selectedPlayer, "sprite-two");
+  deepEqual(section.players.map((player) => player.controlled), [false, true]);
+  equal(selectActor(section, null), true);
+  equal(section.selectedPlayer, null);
+  deepEqual(section.players.map((player) => player.controlled), [false, false]);
+});
 test("actor-backed board sprites link to actor behaviour dispatch without copying actor state", () => {
   const actors = createActorsSection();
   const npc = addActor(actors, {
