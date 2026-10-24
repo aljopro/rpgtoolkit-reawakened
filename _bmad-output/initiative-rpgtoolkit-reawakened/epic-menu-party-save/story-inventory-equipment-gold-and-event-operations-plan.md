@@ -9,7 +9,7 @@ context:
   - "spec - docs/spec/engine/plugins-and-battle.md#e-82"
   - "spec - docs/spec/formats/item.md"
   - "spec - docs/spec/engine/rpgcode-modules-and-objects.md#emit-13"
-status: built
+status: done
 ---
 
 ## Intent
