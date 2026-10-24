@@ -2,6 +2,7 @@
 import type { GameState } from "../save/state.ts";
 import type { EffectRecord } from "../script/effects.ts";
 import { addActor, removeActor, type ActorCreateInput } from "../actors/model.ts";
+import { assetKey } from "../formats/resolver/resolver.ts";
 import { ScriptError } from "../script/errors.ts";
 import {
   readonlySection,
@@ -23,7 +24,8 @@ export type PartyAction =
   | { readonly type: "steps"; readonly value: number }
   | { readonly type: "add"; readonly actor?: ActorCreateInput; readonly actorId?: number }
   | { readonly type: "restore" | "remove" | "destroy" | "select"; readonly actorId: number }
-  | { readonly type: "swap"; readonly firstActorId: number; readonly secondActorId: number };
+  | { readonly type: "swap"; readonly firstActorId: number; readonly secondActorId: number }
+  | { readonly type: "inn" };
 export type MenuAction =
   | { readonly type: "navigation"; readonly screens: readonly Readonly<MenuScreen>[] }
   | { readonly type: "graphic"; readonly value: string | null };
@@ -35,6 +37,11 @@ export type MenuOwnerPorts = {
   readonly party: SectionOwnerPort<PartySection, PartyAction>;
   readonly inventory: SectionOwnerPort<InventorySection, InventoryActionType>;
   readonly menu: SectionOwnerPort<MenuSection, MenuAction>;
+  readonly shop: {
+    readonly stock: () => readonly string[];
+    activate(sources: unknown): MenuStateResult;
+    close(): void;
+  };
 };
 export type PartyEvent =
   | { readonly type: "memberAdded"; readonly detail: { readonly actorId: number; readonly index: number } }
@@ -43,6 +50,7 @@ export type PartyEvent =
   | { readonly type: "activeMemberChanged"; readonly detail: { readonly previousActorId: number | null; readonly currentActorId: number | null } };
 export type PartyEventSink = (event: PartyEvent) => void;
 export type InventoryEventSink = (event: InventoryEvent) => void;
+export type PartyInnOperation = () => MenuStateResult;
 
 function rosterEvents(previous: PartySection, current: PartySection): PartyEvent[] {
   const events: PartyEvent[] = [];
@@ -80,12 +88,14 @@ function actionRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
+
 /** Resolves current section values on every call, including after reset/restore. */
 export function createMenuOwnerPorts(
   state: OwnerState,
   onPartyEvent?: PartyEventSink,
   inventoryRuntime?: InventoryRuntime,
   onInventoryEvent?: InventoryEventSink,
+  innOperation?: PartyInnOperation,
 ): MenuOwnerPorts {
   const commitParty = (next: PartySection, destroyActorId?: number): MenuStateResult => {
     const previous = state.party;
@@ -102,11 +112,38 @@ export function createMenuOwnerPorts(
     return ACCEPTED;
   };
   return {
+    shop: {
+      stock: () => Object.freeze([...(inventoryRuntime?.shopStock?.() ?? [])]),
+      activate(value: unknown): MenuStateResult {
+        if (!Array.isArray(value) || value.length === 0) return rejected({ path: "shop.stock", message: "expected at least one item source" });
+        if (inventoryRuntime?.setShopStock === undefined) return rejected({ path: "shop.stock", message: "shop context is unavailable" });
+        const sources: string[] = [];
+        for (const entry of value) {
+          if (typeof entry !== "string") return rejected({ path: "shop.stock", message: "expected item asset sources" });
+          const relative = entry.replaceAll("\\", "/").replace(/^item\//i, "");
+          if (!relative.toLowerCase().endsWith(".itm")) return rejected({ path: "shop.stock", message: "expected an .itm asset source" });
+          const source = assetKey(`item/${relative}`);
+          if (inventoryRuntime.item(source) === undefined) return rejected({ path: "shop.stock", message: `item definition is unavailable: ${source}` });
+          sources.push(source);
+        }
+        if (inventoryRuntime.setShopStock(sources) === false) return rejected({ path: "shop.stock", message: "another shop session is already active" });
+        return ACCEPTED;
+      },
+      close() {
+        if (inventoryRuntime?.closeShop !== undefined) inventoryRuntime.closeShop();
+        else inventoryRuntime?.setShopStock?.([]);
+      },
+    },
     party: {
       read: () => readonlySection(state.party),
       apply(action: unknown): MenuStateResult {
         const record = actionRecord(action);
         if (record === null) return rejected({ path: "party.action", message: "expected an action object" });
+        if (record.type === "inn") {
+          const error = validateActionFields(record, ["type"], "party.action");
+          if (error !== null) return rejected(error);
+          return innOperation?.() ?? rejected({ path: "party.inn", message: "inn operation is unavailable" });
+        }
         let keys: readonly string[];
         let candidate: unknown;
         let destroyActorId: number | undefined;
@@ -220,11 +257,35 @@ export function createMenuOwnerPorts(
 /** Routes documented party effects and section actions through their owners. */
 export function applyMenuStateEffect(ports: MenuOwnerPorts, effect: EffectRecord): void {
   const section = effect.patch?.section;
-  if (effect.name === "activeplayer" || effect.name === "addplayer" || effect.name === "restoreplayer" || effect.name === "removeplayer" || effect.name === "destroyplayer" || effect.name === "__party_addplayer_asset") {
+  if (effect.name === "shop.open") {
+    if (effect.args.length !== 1) throw new ScriptError("menu.state-invalid", "shop.stock: expected one source list");
+    const result = ports.shop.activate(effect.args[0]);
+    if (result.error !== null) throw new ScriptError("menu.state-invalid", `${result.error.path}: ${result.error.message}`);
+    return;
+  }
+  if (effect.name === "shop.close") {
+    if (effect.args.length !== 0) throw new ScriptError("menu.state-invalid", "shop.close: expected no arguments");
+    ports.shop.close();
+    return;
+  }
+  if (effect.name === "activeplayer" || effect.name === "addplayer" || effect.name === "restoreplayer" || effect.name === "removeplayer" || effect.name === "destroyplayer" || effect.name === "__party_addplayer_asset" || effect.name === "inn") {
     if (section !== "party" || effect.args.length !== 1) throw new ScriptError("menu.state-invalid", "party.action: expected one party action");
     const result = ports.party.apply(effect.args[0] as PartyAction);
     if (result.error !== null) throw new ScriptError("menu.state-invalid", `${result.error.path}: ${result.error.message}`);
     return;
+  }
+  if (section === "menu" && effect.kind === "state-write" && effect.args.length === 1) {
+    const action = actionRecord(effect.args[0]);
+    if (action?.type === "shop.open") {
+      const result = ports.shop.activate(action.sources);
+      if (result.error !== null) throw new ScriptError("menu.state-invalid", `${result.error.path}: ${result.error.message}`);
+      return;
+    }
+    if (action?.type === "shop.close") {
+      if (Object.keys(action).length !== 1) throw new ScriptError("menu.state-invalid", "shop.close: expected no fields");
+      ports.shop.close();
+      return;
+    }
   }
   if (effect.name !== "state" && effect.name !== "menu.state" && !(section === "inventory" && effect.kind === "state-write")) return;
   if (section !== "party" && section !== "inventory" && section !== "menu") {

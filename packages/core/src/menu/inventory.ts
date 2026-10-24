@@ -17,6 +17,8 @@ export type InventoryAction =
   | { readonly type: "removeItem"; readonly entryId: number; readonly amount: number }
   | { readonly type: "equip"; readonly actorId: number; readonly slot: string; readonly entryId: number }
   | { readonly type: "unequip"; readonly actorId: number; readonly slot: string }
+  | { readonly type: "buyItem"; readonly source: string; readonly amount: number }
+  | { readonly type: "sellItem"; readonly entryId: number; readonly amount: number }
   | { readonly type: "addGold"; readonly amount: number }
   | { readonly type: "removeGold"; readonly amount: number };
 
@@ -28,6 +30,9 @@ export type InventoryRuntime = {
   readonly item: (source: string) => Item | undefined;
   readonly character: (source: string) => Character | undefined;
   readonly applyEquipment: (actorId: number, equipped: readonly string[], catalog: readonly EquipmentItemDefinition[]) => boolean;
+  readonly shopStock?: () => readonly string[];
+  readonly setShopStock?: (sources: readonly string[]) => boolean | void;
+  readonly closeShop?: () => void;
 };
 
 const ACCEPTED: MenuStateResult = Object.freeze({ ok: true, error: null });
@@ -131,8 +136,64 @@ export function applyInventoryAction(
   let event: InventoryEvent | null = null;
   let actorOperation: { readonly actorId: number; readonly equipment: readonly InventoryEquipment[] } | null = null;
   let keys: readonly string[];
+  let trailingEvent: InventoryEvent | null = null;
 
   switch (action.type) {
+    case "buyItem": {
+      keys = ["type", "source", "amount"];
+      const error = exactAction(action, keys);
+      if (error !== null) return { result: { ok: false, error }, events: [] };
+      if (!safeAmount(action.amount) || typeof action.source !== "string") return { result: rejected("inventory.action", "expected item source and positive safe integer amount"), events: [] };
+      const source = assetKey(`item/${action.source.replaceAll("\\", "/").replace(/^item\//i, "")}`);
+      if (!(runtime?.shopStock?.() ?? []).includes(source)) return { result: rejected("shop.stock", "item is not in the active shop stock"), events: [] };
+      const definition = runtime?.item(source);
+      if (definition === undefined) return { result: rejected("inventory.action.asset", "item definition is unavailable"), events: [] };
+      if (!Number.isSafeInteger(definition.buyPrice) || definition.buyPrice < 0) return { result: rejected("inventory.action.price", "buy price must be a non-negative safe integer"), events: [] };
+      const cost = definition.buyPrice * action.amount;
+      if (!Number.isSafeInteger(cost)) return { result: rejected("inventory.gold", "trade total exceeds the safe-integer range"), events: [] };
+      if (cost > current.gold) return { result: rejected("inventory.gold", "insufficient gold"), events: [] };
+      const old = current.items.find((entry) => entry.source === source && entry.handle === definition.name);
+      const previousQuantity = old?.quantity ?? 0;
+      const currentQuantity = previousQuantity + action.amount;
+      if (!Number.isSafeInteger(currentQuantity)) return { result: rejected("inventory.items.quantity", "quantity exceeds the safe-integer range"), events: [] };
+      let item: InventoryItem;
+      if (old === undefined) {
+        if (!safeAmount(current.nextId) || current.nextId === MAX_SAFE) return { result: rejected("inventory.nextId", "item identity counter is exhausted"), events: [] };
+        item = { id: current.nextId, source, handle: definition.name, quantity: currentQuantity };
+        next = { ...current, nextId: current.nextId + 1, items: [...current.items, item] };
+      } else {
+        item = old;
+        next = { ...current, items: current.items.map((entry) => entry.id === old.id ? { ...entry, quantity: currentQuantity } : entry) };
+      }
+      next = { ...next, gold: current.gold - cost };
+      event = { type: "itemAdded", detail: { entryId: item.id, source, handle: item.handle, amount: action.amount, previousQuantity, currentQuantity } };
+      if (cost > 0) trailingEvent = { type: "goldChanged", detail: { previous: current.gold, current: next.gold, delta: -cost } };
+      break;
+    }
+    case "sellItem": {
+      keys = ["type", "entryId", "amount"];
+      const error = exactAction(action, keys);
+      if (error !== null) return { result: { ok: false, error }, events: [] };
+      if (!safeAmount(action.entryId) || !safeAmount(action.amount)) return { result: rejected("inventory.action", "expected positive entry id and amount"), events: [] };
+      if ((runtime?.shopStock?.().length ?? 0) === 0) return { result: rejected("shop.stock", "selling requires an active shop"), events: [] };
+      const old = current.items.find((entry) => entry.id === action.entryId);
+      if (old === undefined) return { result: rejected("inventory.action.entryId", "unknown inventory entry"), events: [] };
+      if (old.quantity < action.amount) return { result: rejected("inventory.items.quantity", "insufficient available quantity"), events: [] };
+      const definition = runtime?.item(old.source);
+      if (definition === undefined) return { result: rejected("inventory.action.asset", "item definition is unavailable"), events: [] };
+      if (!Number.isSafeInteger(definition.sellPrice) || definition.sellPrice < 0) return { result: rejected("inventory.action.price", "sell price must be a non-negative safe integer"), events: [] };
+      const proceeds = definition.sellPrice * action.amount;
+      const gold = current.gold + proceeds;
+      if (!Number.isSafeInteger(proceeds) || !Number.isSafeInteger(gold)) return { result: rejected("inventory.gold", "trade total exceeds the safe-integer range"), events: [] };
+      const currentQuantity = old.quantity - action.amount;
+      const retained = currentQuantity !== 0 || current.equipment.some((entry) => entry.itemId === old.id);
+      next = { ...current, gold, items: retained
+        ? current.items.map((entry) => entry.id === old.id ? { ...entry, quantity: currentQuantity } : entry)
+        : current.items.filter((entry) => entry.id !== old.id) };
+      event = { type: "itemRemoved", detail: { entryId: old.id, source: old.source, handle: old.handle, amount: action.amount, previousQuantity: old.quantity, currentQuantity } };
+      if (proceeds > 0) trailingEvent = { type: "goldChanged", detail: { previous: current.gold, current: gold, delta: proceeds } };
+      break;
+    }
     case "addItem": {
       keys = ["type", "source", "handle", "amount"];
       const error = exactAction(action, keys);
@@ -258,5 +319,5 @@ export function applyInventoryAction(
     }
   }
   state.inventory = next;
-  return { result: ACCEPTED, events: event === null ? [] : [event] };
+  return { result: ACCEPTED, events: event === null ? [] : trailingEvent === null ? [event] : [event, trailingEvent] };
 }

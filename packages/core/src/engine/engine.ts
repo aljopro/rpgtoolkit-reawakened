@@ -1,6 +1,7 @@
 import { hashDrawList } from "../canon/index.ts";
 import { actorEmitterKey, actorId } from "../actors/model.ts";
-import { registerActorObject } from "../actors/object.ts";
+import { updateActorStats, type ActorTransition } from "../actors/rules.ts";
+import { queueActorTransition, registerActorObject } from "../actors/object.ts";
 import { resolveAsset, assetKey, resolveTileReference } from "../formats/resolver/resolver.ts";
 import { classifyImageReference } from "../formats/animation/image-reference.ts";
 import { decodeTexture, type DecodedTexture } from "../formats/image/index.ts";
@@ -26,6 +27,7 @@ import type { StartupPorts } from "../ports/startup.ts";
 import type { AssetKey, SurfaceId } from "../ports/keys.ts";
 import { createGameState, type GameState, type SectionKey } from "../save/state.ts";
 import { applyMenuStateEffect, createMenuOwnerPorts } from "../menu/index.ts";
+import { createShopSessionRuntime } from "./shop-session.ts";
 import { hashGameState } from "../save/hash.ts";
 import { assembleAudioDecoders, decodeAudioInfo } from "../audio/info.ts";
 import { createAudioRuntime } from "../audio/runtime.ts";
@@ -243,6 +245,8 @@ export function createEngine(init: EngineInit): Engine {
     registrationByPhase.set(registration.phase, list);
   }
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
+
+  const shopSession = createShopSessionRuntime(() => state.vm.threads);
   const menuOwners = createMenuOwnerPorts(
     state,
     (event) => {
@@ -287,10 +291,42 @@ export function createEngine(init: EngineInit): Engine {
       applyEquipment(actorId, equipped, catalog) {
         return services.actors.applyEquipment(actorId, equipped, catalog) !== null;
       },
+      shopStock: () => shopSession.stock(),
+      setShopStock: shopSession.setStock,
+      closeShop: shopSession.close,
     },
     (event) => {
       registerEmitter(state.vm, state.events, "inventory");
       queueNativeEvent(state.vm, state.events, "inventory", event.type, event.detail);
+    },
+    () => {
+      const candidate = {
+        ...state.actors,
+        actors: state.actors.actors.map((actor) => ({
+          ...actor,
+          stats: { ...actor.stats },
+          equipment: { ...actor.equipment, equipped: [...actor.equipment.equipped], bonuses: { ...actor.equipment.bonuses } },
+          statuses: { ...actor.statuses },
+        })),
+      };
+      const transitions: ActorTransition[] = [];
+      try {
+        for (const id of state.party.members) {
+          const actor = candidate.actors.find((entry) => entry.id === id && entry.kind === "party");
+          if (actor === undefined) return { ok: false, error: { path: "party.inn", message: "party member actor is unavailable" } };
+          const result = updateActorStats(candidate, id, { hp: actor.stats.maxHp, smp: actor.stats.maxSmp }, {
+            cause: "script",
+            hooks: services.actors.hooks(id),
+          });
+          if (result === null) return { ok: false, error: { path: "party.inn", message: "actor restoration was refused" } };
+          transitions.push(...result.transitions);
+        }
+      } catch {
+        return { ok: false, error: { path: "party.inn", message: "actor restoration was refused" } };
+      }
+      state.actors.actors = candidate.actors;
+      for (const transition of transitions) queueActorTransition(state.vm, state.events, state.actors, transition);
+      return { ok: true, error: null };
     },
   );
   for (const section of ["party", "inventory", "menu"] as const) {
@@ -888,6 +924,7 @@ export function createEngine(init: EngineInit): Engine {
     state.surfaces = createSurfacesSection(init.width, init.height);
     state.rng = rng;
     state.time = time;
+    shopSession.reset();
     pending.clear();
     pendingImageEffects.length = 0;
     pendingBoardPreviews.length = 0;
@@ -1368,6 +1405,7 @@ export function createEngine(init: EngineInit): Engine {
       claims: state.engine.claims ?? [],
       audio: state.audio,
       events: state.events,
+      shopStock: shopSession.stock(),
       ...(state.engine.pendingEffects?.audio === undefined ? {} : { pendingAudio: state.engine.pendingEffects.audio }),
       mediaStart: (handle: number) => {
         const record = state.vm.objects.find((item) => item.handle === handle);

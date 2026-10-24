@@ -14,6 +14,7 @@ import {
   type Arg,
   type Wait,
 } from "../src/index.ts";
+import { pollMenuScreen } from "../src/script/waits.ts";
 
 function arg(value: Arg["value"], ref: string | null = null): Arg {
   return { value, ref: ref as never };
@@ -110,6 +111,11 @@ test("prompt and msgBox waits resolve from modal state or unclaimed keys", () =>
   applyUiEffect(state, "msgbox", msgEffect.args ?? []);
   const msgWait = msg.wait as Wait;
   equal(pollRenderMsgBox({ tick: 0, input: { keys: [{ seq: 4, name: "No", code: "KeyN", char: null }], focused: true }, claims: [] }, msgWait)?.value, 7);
+});
+test("menu.screen CallShop waits resolve only after active stock closes", () => {
+  const wait: Wait = { kind: "menu.screen", global: true, id: "callshop", payload: [], resumeRefs: [] };
+  equal(pollMenuScreen({ tick: 0, shopStock: ["item/potion.itm"] }, wait), null);
+  deepEqual(pollMenuScreen({ tick: 1, shopStock: [] }, wait), { value: null, ok: true });
 });
 
 test("cursor maps allocate points, claim keys and draw the hand last", () => {

@@ -128,6 +128,12 @@ export function pollRenderMsgBox(view: WaitView, wait: Wait): WaitResult | null 
   }
   return null;
 }
+/** `menu.screen`: resume once the active menu-owned shop context is closed. */
+export function pollMenuScreen(view: WaitView, wait: Wait): WaitResult | null {
+  if (wait.kind !== "menu.screen") return null;
+  if (view.shopStock === undefined) throw new ScriptError("wait.no-menu-view", "a menu.screen wait was polled with no shop view");
+  return view.shopStock.length === 0 ? DONE : null;
+}
 
 /** The audio owner resolver for finite-end and loop-pass waits. */
 export function pollAudioTrack(view: WaitView, wait: Wait): WaitResult | null {
@@ -223,6 +229,7 @@ export function pollEventDispatch(view: WaitView, wait: Wait): WaitResult | null
 
 export const UI_WAIT_KIND_RESOLVERS: readonly WaitKindResolver[] = [
   { kind: "render.msgbox", poll: pollRenderMsgBox },
+  { kind: "menu.screen", poll: pollMenuScreen },
 ];
 
 /** The VM-owned wait kinds. */
