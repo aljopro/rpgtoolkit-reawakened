@@ -256,6 +256,7 @@ export {
   WAIT_KIND_RESOLVERS,
 } from "./waits.ts";
 export type { ScriptServices, ScriptStatus } from "./vm.ts";
+export type { ScriptObservers, CallObservation, HandlerObservation } from "./observers.ts";
 export { createDefaultVirtuals } from "./virtuals.ts";
 export type { VirtualVariablePort, VirtualWriteResult } from "./virtuals.ts";
 export { STRING_SPECS } from "./builtins/strings.ts";

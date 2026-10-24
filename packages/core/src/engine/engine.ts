@@ -126,6 +126,8 @@ export type DebugOverlayConfig = {
 };
 
 type EngineCommonInit = {
+  /** Observation-only, outside state; ADR 0010. Rebound with services on boot/reset. */
+  readonly scriptObservers?: import("../script/observers.ts").ScriptObservers;
   readonly seed: number;
   readonly assetIndex: AssetIndex;
   readonly assetRoot: AssetRoot;
@@ -309,6 +311,9 @@ export function createEngine(init: EngineInit): Engine {
         state.engine.video = { reqId: request.reqId, key: request.key, presentation: request.presentation, ended: false };
         requestsOut.push({ kind: "playVideo", reqId: request.reqId, key: request.key as AssetKey, presentation: request.presentation });
       },
+      undefined,
+      undefined,
+      init.scriptObservers,
     );
   }
   let services = makeServices(init.plugins ?? DEFAULT_ENGINE_PLUGINS);

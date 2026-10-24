@@ -10,6 +10,7 @@
  */
 
 import { pow } from "../fmath/index.ts";
+import { observe, observePlugins, type ScriptObservers, type CallObservation } from "./observers.ts";
 import type { Diagnostic } from "../ports/engine.ts";
 import type { Logger } from "../ports/logger.ts";
 import type { PlainData } from "../ports/plain-data.ts";
@@ -142,7 +143,9 @@ export type ScriptStatus = "running" | "waiting" | "finished";
  * debug channel (AD-24); `diagnostics` collects the located host diagnostics
  * of every runtime failure until the engine drains them into a `TickReport`.
  */
-export type ScriptServices = {
+export type ScriptServices = ScriptObservers & {
+  /** Attribution only, built from the same resolved manifest as dispatch. */
+  readonly callPlugin?: (name: string, namespace?: string) => string | undefined;
   readonly view: CommandView;
   readonly commands: CommandLookup;
   readonly programs: ProgramCache;
@@ -184,6 +187,7 @@ export function createScriptServices(
   postRequest?: (request: CommandRequest) => void,
   layers: PluginLayers = createPluginLayers(),
   hostTypes: readonly HostObjectType[] = [],
+  observers?: ScriptObservers,
 ): ScriptServices {
   const loader = typeof loaderOrGameId === "string" ? undefined : loaderOrGameId;
   const gameId = typeof loaderOrGameId === "string" ? loaderOrGameId : explicitGameId;
@@ -194,7 +198,7 @@ export function createScriptServices(
     gameId,
   };
   const virt = virtuals ?? createDefaultVirtuals(state);
-  const registry = assembleCommands(plugins, logger);
+  const registry = assembleCommands(observePlugins(plugins, observers?.postHandler), logger);
   for (const problem of registerNativeListeners(state.events, plugins)) {
     logger.warn({
       level: "warn",
@@ -262,6 +266,13 @@ export function createScriptServices(
     ...(loader === undefined ? {} : { loader }),
     ...(postEffect === undefined ? {} : { postEffect }),
     ...(postRequest === undefined ? {} : { postRequest }),
+    ...observers,
+    ...(observers?.postCall === undefined ? {} : {
+      callPlugin: (name: string, namespace?: string): string | undefined => {
+        if (namespace !== undefined) return plugins.find((plugin) => (plugin.namespace ?? "").toLowerCase() === namespace.toLowerCase())?.definition.id;
+        return registry.layerPlugins(name).at(-1);
+      },
+    }),
   };
 }
 
@@ -1704,12 +1715,31 @@ function performContinuation(
   return dispatchResolved(thread, vm, services, program, frame, frameIndex, name, resolved, args, pos, false);
 }
 
+/** Report the actual AD-8 result at its VM call site, never in the registry. */
+function postResolution(
+  services: ScriptServices,
+  thread: number,
+  name: string,
+  argc: number,
+  resolved: CallResolution,
+  pos: SourcePos,
+  via: CallObservation["via"],
+  namespace?: string,
+): void {
+  if (services.postCall === undefined) return;
+  const kind = resolved.kind === "callable" ? "callable"
+    : resolved.kind === "function" ? "script"
+      : namespace === undefined && services.commands.builtin(name) !== undefined ? "builtin" : "extension";
+  const plugin = kind === "extension" ? services.callPlugin?.(name, namespace) : undefined;
+  observe(services.postCall, {
+    kind, name: namespace === undefined ? name : `${namespace}.${name}`, argc, via, pos,
+    ...(plugin === undefined ? {} : { plugin }),
+  }, thread);
+}
+
 /**
- * Dispatch one resolved call: a script function pushes a frame, a command runs
- * and its effects are applied (control effects, the effect log, thread
- * operations), then the call parks the thread (a wait, a request, a self-sleep,
- * a movement), or pushes its value. `advance` is false for a request
- * continuation, whose call site was already passed.
+ * Dispatch one resolved call. `advance` is false for a request continuation;
+ * `observed` is true when the source call site already reported its resolution.
  */
 function dispatchResolved(
   thread: Thread,
@@ -1723,7 +1753,9 @@ function dispatchResolved(
   args: Arg[],
   pos: SourcePos,
   advance: boolean,
+  observed = false,
 ): CallOutcome {
+  if (!observed) postResolution(services, thread.id, name, args.length, resolved, pos, advance ? "handle" : "continuation");
   if (resolved.kind === "function") {
     if (advance) frame.ip += 1;
     const target = resolved.target;
@@ -2273,6 +2305,7 @@ export function stepThread(
     }
     steps += 1;
     incrementStepCounter(vm, frame.program.owner);
+    if (services.postStep !== undefined) observe(services.postStep, op, thread.id);
     const opIp = frame.ip;
     const depth = frame.operands.length;
 
@@ -2887,10 +2920,11 @@ export function stepThread(
           }
           throw new ScriptError("unknown.command", `no built-in or function named "${op.name}"`, op.pos);
         }
+        postResolution(services, thread.id, op.name, op.argc, resolved, op.pos, "source", inPackage === undefined ? undefined : op.file);
         const outcome =
           resolved.kind === "callable"
             ? performCallable(thread, vm, services, program, frame, frameIndex, resolved.value, args, op.pos)
-            : dispatchResolved(thread, vm, services, program, frame, frameIndex, op.name, resolved, args, op.pos, true);
+            : dispatchResolved(thread, vm, services, program, frame, frameIndex, op.name, resolved, args, op.pos, true, true);
         if (outcome === "yield") return finish();
         break;
       }
