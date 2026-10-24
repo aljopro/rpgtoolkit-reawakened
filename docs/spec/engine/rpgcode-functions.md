@@ -253,7 +253,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `givegp` | `void givegp(int gp)` | Add gold through the inventory owner. | Requires a non-negative safe integer; zero does nothing, and invalid or overflowing additions are refused atomically. |
 | `takegp` | `void takegp(int gp)` | Remove gold through the inventory owner. | Requires a non-negative safe integer; zero does nothing, and invalid or unaffordable removals are refused atomically. |
 | `getgp` | `int getgp([int &ret])` | Read current inventory gold. | Returns the balance and writes it through the optional reference. |
-| `callshop` | `void callshop(string item1, string item2, string item3, ...)` | Displays a basic shop interface that allows the buying of the items given as parameters and the selling of items in the player's inventory. |  |
+| `callshop` | `void callshop(string item1, string item2, string item3, ...)` | Displays a basic shop interface that allows buying the listed items and selling available items from the player's inventory. | Reawakened `CallShop` waits for `menu.screen`; its menu performs transactions through the E-83 owner actions. Stock-string resolution is an owner question in the Epic 8.6 plan. |
 | `eraseitem` | `void eraseitem(variant handle)` | Erase an item from the screen, but keep it in memory. |  |
 | `putitem` | `void putitem(variant handle, int x, int y, int layer)` | Place the item on the board at the given location. |  |
 | `createitem` | `int createitem(string filename[, int &pos])` | Load an item and return the slot into which it was loaded. |  |
@@ -298,7 +298,7 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 | `fightenemy` | `void fightenemy(string enemy, string enemy, ... string background)` | Start a fight. |  |
 | `attackall` | `void attackall(int fp)` | Deal the specified amount in HP to all the members of the target's party. |  |
 | `drainall` | `void drainall(int fp)` | Deal the specified amount in SMP to all the members of the target's party. |  |
-| `inn` | `inn()` | Fully heal the player party. |  |
+| `inn` | `inn()` | Fully heal the player party. | Reawakened `Inn()` dispatches the existing party-owner restoration action described under E-84; exact restoration fields remain subject to the owner ruling in the Epic 8.6 plan. |
 | `getlevel` | `int getlevel(string handle[, int &ret])` | Get the level of a player. |  |
 | `ai` | `void ai(int level)` | Have the source enemy use the internal AI. |  |
 | `menugraphic` | `void menugraphic(string image)` | Choose an image for the menu. |  |
@@ -324,6 +324,14 @@ All 282 command names the 3.1 engine registers, grouped by area. Names are case-
 
 <a id="e-86"></a>
 **E-86 Gold.** A global integer, changed by battle rewards, by the shop and by scripts.
+
+**Epic 8.6 Reawakened operation proposal (TKR design; owner confirmation required; not a trans3 fact).** E-83/E-84/E-86 remain the compatibility baseline: shop uses item buy/sell prices and party gold, Inn fully restores the party, and gold is inventory-owned. The existing `callshop(item1, ...)` opens and waits for the shop screen; `inn()` performs its party operation synchronously. No public RPGCode built-ins are added. `getitemcost(fileName)` and `getitemsellprice(fileName)` remain read-only asset-price queries.
+
+The shared TypeScript/RPGCode menu context exposes a read-only `shop.stock` list for the active `CallShop` invocation (empty outside a shop), with canonical item asset sources. Its named actions are `inventory.buyItem({ source, amount })`, `inventory.sellItem({ entryId, amount })`, and `party.inn()`, using the same language-appropriate calling syntax and `MenuStateResult` as E-81. The transaction owner is inventory for buy/sell and the party owner coordinating actor operations for Inn; no separate shop-owned gold or inventory is introduced.
+
+A buy requires `source` in the active `shop.stock`, an available item definition, and a positive safe-integer `amount`; it merges `amount` under the item's `(source, itemName)` stack and debits `buyPrice × amount`. A sell requires an existing stack and sufficient available (unequipped) quantity; it removes `amount` and credits `sellPrice × amount`. No key-item prohibition is added to selling: E-81's key-item rule covers only the stock-menu drop affordance, and item field 9 has no general engine rule. Item definition prices are signed integers; the proposed TKR rule refuses negative prices, accepts zero, and refuses an unsafe product or resulting gold outside `[0, Number.MAX_SAFE_INTEGER]`. A buy with insufficient gold, unavailable/out-of-stock asset, invalid price, unknown entry, insufficient quantity, exhausted stack ID, or unsafe resulting value refuses without any mutation.
+
+A committed buy emits exactly one `itemAdded`, followed by `goldChanged` if gold changed; a committed sell emits exactly one `itemRemoved`, followed by `goldChanged` if gold changed. Existing EMIT-13 detail shapes are unchanged; zero-price trade emits only its item event. Refusal emits nothing and leaves inventory/gold untouched. Inn is one atomic party-owner operation; the recommended scope is to set HP/SMP to maxima for every current party member including fallen members, without charging gold or changing status, equipment, roster, inventory or gold. It adds no shop/party/inventory event; an actor-owner `revived` transition may occur when HP crosses from `<= 0` to positive. Refusal returns the existing `MenuStateResult` with a deterministic `path` and `message`; the RPGCode adapter preserves that location in the existing `menu.state-invalid` diagnostic.
 
 ## Graphics, canvases, animation & video (31)
 
