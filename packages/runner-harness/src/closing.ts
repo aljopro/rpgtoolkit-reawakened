@@ -37,6 +37,7 @@ import type {
 } from "@tk-reawakened/core";
 import { createNullAudio } from "./audio.ts";
 import { compareRgbaWithPng } from "./png.ts";
+import { createExecutionCensus, type ExecutionCensus } from "./execution-census.ts";
 
 /** What the suite must find for a game: it boots clean, or it is a known failure that names the epic that fixes it. */
 export type ClosingExpectation =
@@ -110,6 +111,7 @@ export type ClosingBaseline = {
 
 /** One game's result: its record plus the pixels of every frame that owns a PNG (in record order). */
 export type ClosingGameRun = {
+  readonly census?: ExecutionCensus;
   readonly name: string;
   readonly record: ClosingGameRecord;
   readonly images: ReadonlyMap<string, DecodedTexture>;
@@ -150,6 +152,7 @@ export function parseClosingPlan(text: string): ClosingPlan {
 }
 
 export type ClosingRunOptions = {
+  readonly trace?: boolean;
   readonly captureAudio?: boolean;
   readonly syntheticBattle?: boolean;
 };
@@ -210,6 +213,7 @@ function createBootDoubles(options: ClosingRunOptions = {}) {
 
 type Capture = { readonly frame: ClosingFrameRecord; readonly image: DecodedTexture };
 type Trace = {
+  readonly census?: ExecutionCensus;
   readonly ticks: number;
   readonly stalled: boolean;
   readonly bootStage: string | null;
@@ -244,6 +248,7 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
   const bundledFiles = new Map<AssetKey, Uint8Array>();
   for (const [path, bytes] of bundled) bundledFiles.set(assetKey(path), bytes);
   const doubles = createBootDoubles(options);
+  const census = options.trace === true ? createExecutionCensus() : undefined;
   const engine = createEngine({
     seed: plan.seed,
     assetIndex: index,
@@ -256,6 +261,10 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
     include: INCLUDE,
     bundled: bundledFiles,
     ...doubles.options,
+    ...(census === undefined ? {} : {
+      scriptObservers: census.observers,
+      phaseRegistrations: [...doubles.options.phaseRegistrations, { phase: "input" as const, run: census.beforeTick }],
+    }),
   });
   const nullAudio = options.captureAudio === true ? createNullAudio() : null;
   const diagnostics: ClosingDiagnostic[] = [];
@@ -264,12 +273,14 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
   let stateHash = "";
   let stalled = false;
 
-  const reply = (request: RunnerRequest, at: number): InputRecord[] =>
-    request.kind === "asset"
+  const reply = (request: RunnerRequest, at: number): InputRecord[] => {
+    if (request.kind === "asset") census?.asset(request.key, at, files.has(request.key));
+    return request.kind === "asset"
       ? [{ tick: at, event: { kind: "asset", reqId: request.reqId, bytes: files.get(request.key) ?? null } }]
       : request.kind === "playVideo"
         ? [{ tick: at, event: { kind: "video.ended", reqId: request.reqId } }]
         : [];
+  };
 
   /** Run `count` ticks, answering asset requests the way a host does; false when the engine stops advancing. */
   function advance(count: number): boolean {
@@ -281,6 +292,7 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
       remaining -= report.ticksRun;
       tick = report.tickAfter;
       stateHash = report.stateHash;
+      census?.checkpoint(tick, stateHash);
       for (const cue of report.audioCues) nullAudio?.handle(cue);
       for (const diagnostic of report.diagnostics) diagnostics.push({ code: diagnostic.code, file: diagnostic.file, line: diagnostic.line, message: diagnostic.message });
       const videoReplies = report.requests.flatMap((request) => reply(request, report.tickAfter));
@@ -320,6 +332,7 @@ function runOnce(plan: ClosingPlan, files: ClosingFiles, bundled: ClosingFiles, 
   // The state is only visible once a tick has run; an engine that never advanced stopped during boot.
   const state = doubles.observed();
   return {
+    ...(census === undefined ? {} : { census: census.result() }),
     ticks: tick,
     stalled,
     bootStage: state?.engine.boot?.stage ?? (stalled ? "stopped" : null),
@@ -380,10 +393,13 @@ function traceDifferences(batch: number, reference: Trace, other: Trace): string
 /** Run one game for every batch size of the plan and return the reference record with any batching disagreement. */
 export function runClosingGame(plan: ClosingPlan, game: ClosingGamePlan, files: ClosingFiles, bundled: ClosingFiles, options: ClosingRunOptions = {}): ClosingGameRun {
   const { all, index, mainKey } = gameFiles(game, files);
-  const traces = plan.batches.map((batch) => runOnce(plan, all, bundled, index, mainKey, batch, options));
+  const plainOptions = { ...options, trace: false };
+  const traces = plan.batches.map((batch) => runOnce(plan, all, bundled, index, mainKey, batch, plainOptions));
   const reference = traces[0];
   if (reference === undefined) throw new Error("the plan has no batch sizes");
   const batchProblems = plan.batches.flatMap((batch, position) => (position === 0 || traces[position] === undefined ? [] : traceDifferences(batch, reference, traces[position] as Trace)));
+  const traced = options.trace === true ? runOnce(plan, all, bundled, index, mainKey, 1, options) : undefined;
+  if (traced !== undefined) batchProblems.push(...traceDifferences(1, reference, traced).map((problem) => `trace changed execution: ${problem}`));
   const images = new Map<string, DecodedTexture>();
   const frames: ClosingFrameRecord[] = [];
   const seen = new Map<string, string>();
@@ -400,6 +416,7 @@ export function runClosingGame(plan: ClosingPlan, game: ClosingGamePlan, files: 
   }
   return {
     name: game.name,
+    ...(traced?.census === undefined ? {} : { census: traced.census }),
     batchProblems,
     audioCues: reference.audioCues,
     images,
@@ -417,8 +434,8 @@ export function runClosingGame(plan: ClosingPlan, game: ClosingGamePlan, files: 
 }
 
 /** Run every game of the plan; `load` supplies one game's files at a time so only one game is held in memory. */
-export function runClosingSuite(plan: ClosingPlan, load: (name: string) => ClosingFiles, bundled: ClosingFiles): readonly ClosingGameRun[] {
-  return plan.games.map((game) => runClosingGame(plan, game, load(game.name), bundled));
+export function runClosingSuite(plan: ClosingPlan, load: (name: string) => ClosingFiles, bundled: ClosingFiles, options: ClosingRunOptions = {}): readonly ClosingGameRun[] {
+  return plan.games.map((game) => runClosingGame(plan, game, load(game.name), bundled, options));
 }
 
 const BASELINE_COMMENT = "Regression baselines of the closing suite (ticket 4.28): each sample game booted through the real engine, driven by golden/closing/plan.json. Every PNG is class regression-baseline in golden/ledger.json: it locks what Reawakened draws today and is no independent reference. Regenerating is a deliberate act like a golden (G5): run `pnpm closing:record` and review the diff.";

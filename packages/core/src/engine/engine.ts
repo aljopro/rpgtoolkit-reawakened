@@ -141,6 +141,8 @@ export type DebugOverlayConfig = {
 };
 
 type EngineCommonInit = {
+  /** Observation-only, outside state; ADR 0010. Rebound with services on boot/reset. */
+  readonly scriptObservers?: import("../script/observers.ts").ScriptObservers;
   readonly seed: number;
   readonly assetIndex: AssetIndex;
   readonly assetRoot: AssetRoot;
@@ -470,6 +472,7 @@ export function createEngine(init: EngineInit): Engine {
       undefined,
       packageStartupLifecycle,
       media,
+      init.scriptObservers,
     );
     media.activateDeclared();
     if (runStartups) {

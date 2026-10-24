@@ -83,6 +83,29 @@ test("an authored game boots, enters its board and gives the same hashes for eve
   deepEqual(again.record, run.record);
 });
 
+test("closing observation fires for booted games, preserves frames and records deterministic program boundaries", () => {
+  const plain = runClosingGame(PLAN, GAME, authoredFiles(), bundled);
+  const first = runClosingGame(PLAN, GAME, authoredFiles(), bundled, { trace: true });
+  const second = runClosingGame(PLAN, GAME, authoredFiles(), bundled, { trace: true });
+  deepEqual(first.record, plain.record);
+  deepEqual(first.batchProblems, []);
+  deepEqual(first.census, second.census);
+  const census = first.census;
+  if (census === undefined) throw new Error("missing census");
+  equal(Object.values(census.opcodeHistogram).reduce((sum, count) => sum + count, 0) > 0, true);
+  equal(census.commandHistogram.text, 1);
+  equal(census.commandHistogram.wait, 1);
+  equal(census.commandHistogram.end, 1);
+  equal(census.bootSequence.some((asset) => asset.file === "main.gam"), true);
+  equal(census.bootSequence.some((asset) => asset.file === "prg/start.prg" && asset.executed), true);
+  const span = census.programSpans[0];
+  if (span === undefined || span.finish === null) throw new Error("missing finished startup span");
+  equal(span.source, "prg/start.prg");
+  equal(span.status, "finished");
+  for (const boundary of [span.start, span.lastStep, span.finish]) equal(boundary.stateHash, census.stateHashes.find((hash) => hash.tick === boundary.tick)?.stateHash);
+  for (const [path, image] of plain.images) deepEqual(first.images.get(path), image);
+});
+
 test("a game that cannot boot reports its diagnostic and records only the frames it reached", () => {
   const files = authoredFiles({ withPlayer: false });
   const run = runClosingGame(PLAN, { ...GAME, expect: { outcome: "stopped", epic: "none-yet", reason: "authored without a player" } }, files, bundled);

@@ -96,6 +96,16 @@ Every row above except the modulo row and the callable row is legacy behaviour (
 
 ### Blocking commands (R-32)
 
+**Reawakened rule — execution observation.** A host can count instructions and
+inspect successful call resolutions without changing a game's execution. Optional
+VM service observers run synchronously in the step machine, outside saved state:
+one step notification per attempted instruction, one call notification per
+successful resolution, and separate native-handler accounting for layers actually
+entered through `next`. Payloads are detached immutable data; observer failures
+do not become script failures. Unobserved execution allocates no observation
+payload. Tracing must preserve every state hash and golden; a difference is an
+instrumentation bug. See [ADR 0010](../../adr/0010-script-execution-observers.md).
+
 * A blocking command inside any program stops **all** script execution, movement and frame updates until it finishes, because everything runs on the engine's single main loop. *Legacy fact:* In 3.1, `Delay` froze the window entirely with no repaint at all; only `Wait` and `Prompt` kept the window responsive while waiting for input (round 5, Q4; facts-round-6, Q9). In Reawakened, our host renderer always repaints (no window freeze), but all script execution, movement and frame updates remain stopped until the blocking command completes, matching 3.1's execution behaviour without freezing the host window (no behaviour change). Threads do not pump window messages, so a thread that needs to pause without freezing the game must use `threadSleep` instead.
 
 **Reawakened rule — a deliberate departure from our own earlier design.** This project's earlier per-thread wait model — a blocking command blocking only the thread that ran it, while other threads and the world kept running — is **withdrawn**. A blocking command now waits the whole game, always, matching 3.1. There is no per-project setting to restore the old behaviour; a setting for new games (with imported games defaulting to off) is a possible future enhancement, and nothing is built or reserved for it. *Reason:* the legacy freeze is what existing games were written against, and a save cannot contain a half-pumped main loop. (Owner ruling U1, 2026-10-15.) The VM's wait registry and the wait kinds it yields (`input.key`, `sleep`, `menu.screen`, `movement`, …) are unchanged; what changes is that a blocked program blocks the world, not just itself.

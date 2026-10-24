@@ -141,6 +141,7 @@ export type PackageStartupRef = {
 };
 /** How to build a fresh host: the inline program, seed, manifest and plugin layers. */
 export type ScriptHostInit = {
+  readonly scriptObservers?: import("@tk-reawakened/core").ScriptObservers;
   readonly program: string | ProgramRef;
   readonly seed: number;
   /** Selects the pure TK2 frontend; default is the TK3 frontend. */
@@ -161,6 +162,7 @@ export type ScriptHostInit = {
 
 /** How to rebuild a host from a snapshot: the registry is code, not state. */
 export type ScriptHostRestore = {
+  readonly scriptObservers?: import("@tk-reawakened/core").ScriptObservers;
   readonly manifest?: PluginManifest;
   readonly dialect?: "tk2" | "tk3";
   readonly gameId?: string;
@@ -348,6 +350,8 @@ export function createScriptHost(init: ScriptHostInit): ScriptHost {
     layers,
     undefined,
     packageStartupLifecycle,
+    undefined,
+    init.scriptObservers,
   );
   runPackageStartup(
     gameState,
@@ -387,6 +391,8 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
       layers,
       undefined,
       packageStartupLifecycle,
+      undefined,
+      init.scriptObservers,
     );
     runPackageStartup(
       scratch,
@@ -409,6 +415,8 @@ export function restoreScriptHost(json: string, init: ScriptHostRestore): Script
     layers,
     undefined,
     packageStartupLifecycle,
+    undefined,
+    init.scriptObservers,
   );
   runPackageStartup(gameState, services, [], resolution.plugins, listenersBeforeStartup);
   // The compiled programs are not in the snapshot: check that every callable in it

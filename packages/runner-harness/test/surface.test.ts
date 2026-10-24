@@ -42,6 +42,7 @@ test("runner-harness public surface matches the pinned export list with no doubl
     "runFetchedCorpus",
     "runLog",
     "runTracerScene",
+    "summariseCensus",
     "verifyCatalogueCompleteness",
   ].sort();
 

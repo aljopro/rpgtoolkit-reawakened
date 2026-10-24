@@ -67,3 +67,19 @@ test("closing reports a missing fixtures directory instead of passing", () => {
   }
   ok(errors[0]?.includes("fixtures directory not found"), errors.join("\n"));
 });
+
+test("closing trace rejects missing paths, existing inputs and golden recording before running", () => {
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (message: string) => { errors.push(message); };
+  try {
+    equal(runClosing(["--trace"]), 1);
+    equal(runClosing(["--trace", join(repoRoot, "package.json")]), 1);
+    equal(runClosing(["--trace", "/tmp/never-written-trace-614.json", "--record"]), 1);
+  } finally {
+    console.error = original;
+  }
+  ok(errors.some((error) => error.includes("requires one new .json")));
+  ok(errors.some((error) => error.includes("already exists")));
+  ok(errors.some((error) => error.includes("cannot be combined with --record")));
+});

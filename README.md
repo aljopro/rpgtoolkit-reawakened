@@ -41,6 +41,7 @@ One known limit: the old Toolkit allowed Windows-only add-ons called plugins, an
 - [Specification](docs/spec/README.md): what Toolkit 3.1 does, byte by byte and behaviour by behaviour (the legacy file formats the player has to read, and the engine's behaviour)
 - [Editor features](docs/editor-features.md): what the editor does
 - [Architecture options](docs/architecture-options.md) and [decision records](docs/adr/0001-typescript-core.md): how it's built, and why
+- [Script execution observers](docs/adr/0010-script-execution-observers.md): observation-only closing-game census
 - [Engineering rules](docs/guardrails.md): the rules every change follows
 
 ## Helping out

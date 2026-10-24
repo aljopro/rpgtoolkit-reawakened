@@ -10,6 +10,9 @@ import {
   formatClosingBaseline,
   parseClosingPlan,
   runClosingSuite,
+  summariseCensus,
+  type CatalogueRow,
+  type ExecutionCensus,
   type ClosingFiles,
 } from "@tk-reawakened/runner-harness";
 
@@ -54,10 +57,17 @@ function formatLedger(ledgerText: string, rows: readonly Readonly<Record<string,
 export function runClosing(argv: string[]): number {
   try {
     let record = false;
+    let tracePath: string | undefined;
     const positionals: string[] = [];
-    for (const arg of argv) {
+    for (let index = 0; index < argv.length; index += 1) {
+      const arg = argv[index]!;
       if (!arg.startsWith("-")) positionals.push(arg);
       else if (arg === "--record") record = true;
+      else if (arg === "--trace") {
+        const path = argv[++index];
+        if (tracePath !== undefined || path === undefined || path.startsWith("-") || !path.endsWith(".json")) throw new Error("--trace requires one new .json output path");
+        tracePath = path;
+      }
       else {
         console.error(`closing: unknown flag: ${arg}`);
         return 1;
@@ -68,6 +78,10 @@ export function runClosing(argv: string[]): number {
       return 1;
     }
     const root = positionals[0] ?? process.cwd();
+    if (tracePath !== undefined) {
+      if (record) throw new Error("--trace cannot be combined with --record; tracing never records goldens");
+      if (existsSync(tracePath)) throw new Error(`trace output '${tracePath}' already exists; choose a new path`);
+    }
     const legacy = join(root, "fixtures", "legacy");
     if (!existsSync(legacy)) {
       console.error(`closing: fixtures directory not found at '${legacy}'. Run 'pnpm fixtures:fetch' first.`);
@@ -87,7 +101,7 @@ export function runClosing(argv: string[]): number {
       const gameRoot = join(legacy, name);
       if (!existsSync(gameRoot)) throw new Error(`${name}: not found under ${legacy}; run 'pnpm fixtures:fetch'`);
       return loadGameFiles(gameRoot);
-    }, bundled);
+    }, bundled, { trace: tracePath !== undefined });
     const ledgerText = readOrUndefined(join(root, LEDGER_PATH));
 
     if (record) {
@@ -122,6 +136,26 @@ export function runClosing(argv: string[]): number {
     );
     for (const line of result.lines) (result.ok ? console.log : console.error)(line);
     if (!result.ok) return 1;
+    if (tracePath !== undefined) {
+      const cataloguePath = join(root, "_bmad-output", "initiative-rpgtoolkit-reawakened", "epic-rpgcode-vm", "discovery", "command-effect-catalogue.json");
+      const catalogue: { readonly names: readonly CatalogueRow[] } = JSON.parse(readFileSync(cataloguePath, "utf8"));
+      const games: Record<string, ExecutionCensus> = {};
+      for (const run of runs) {
+        if (run.census === undefined) throw new Error(`${run.name}: missing execution census`);
+        games[run.name] = run.census;
+      }
+      const aggregate = summariseCensus(games, catalogue.names);
+      if (Object.keys(aggregate.opcodeHistogram).length === 0) throw new Error("execution census is empty: stepThread observation did not fire");
+      writeAtomic(tracePath, `${JSON.stringify({
+        schema: 1,
+        kind: "closing-execution-census",
+        seed: plan.seed,
+        tickConvention: "Span start/lastStep use the VM clock tick before execution; finish uses the completed TickReport tick. Hashes are the final settled TickReport at that tick. Null finish means still active at the observation limit.",
+        games: Object.fromEntries(runs.map((run) => [run.name, { ...games[run.name], outcome: run.record.outcome, diagnostics: run.record.diagnostics }])),
+        aggregate,
+      }, null, 2)}\n`);
+      console.log(`closing: wrote execution census to ${tracePath}`);
+    }
     const clean = runs.filter((run) => run.record.outcome === "boots").length;
     console.log(`closing: ${runs.length}/${runs.length} games match their baselines (${clean} boot clean, ${runs.length - clean} expected failures with located diagnostics; batching ${plan.batches.join("/")} identical)`);
     return 0;
