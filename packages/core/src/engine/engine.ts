@@ -8,6 +8,8 @@ import { expandSingleTileToRgba, readSingleTile } from "../formats/single-tile/i
 import { expandTileToRgba, readTileset, tileDimensions } from "../formats/tileset/index.ts";
 import { BinaryReader } from "../formats/binary/reader.ts";
 import { readCharacter } from "../formats/actor/character.ts";
+import { readItem } from "../formats/actor/item.ts";
+import type { Character, Item } from "../formats/actor/model.ts";
 import { readMainFile } from "../formats/main-file/reader.ts";
 import type { MainFile } from "../formats/main-file/model.ts";
 import { readLegacyFont } from "../formats/font/reader.ts";
@@ -220,6 +222,8 @@ export function createEngine(init: EngineInit): Engine {
   let mainKey: AssetKey | null = null;
   const installedFonts = new Map<AssetKey, Uint8Array>();
   const cache = new Map<AssetKey, Uint8Array>();
+  const inventoryItemDefinitions = new Map<AssetKey, Item>();
+  const inventoryCharacterDefinitions = new Map<AssetKey, Character>();
   const decodedImages = new Map<AssetKey, DecodedTexture>();
   const decodedTiles = new Map<AssetKey, DecodedTexture>();
   const decodedBundled = new Map<AssetKey, RasterAsset | null>();
@@ -237,22 +241,56 @@ export function createEngine(init: EngineInit): Engine {
     registrationByPhase.set(registration.phase, list);
   }
   const bus = new EffectBus(state, (diagnostic) => diagnostics.push(diagnostic));
-  const menuOwners = createMenuOwnerPorts(state, (event) => {
-    if (event.type === "memberRemoved" && !state.actors.actors.some((actor) => actor.id === event.detail.actorId)) {
-      removeActorSprite(state.sprites, actorId(event.detail.actorId));
-      if (init.spriteRuntime !== undefined && init.spriteRuntime.section !== state.sprites) {
-        init.spriteRuntime.removeActor(actorId(event.detail.actorId));
+  const menuOwners = createMenuOwnerPorts(
+    state,
+    (event) => {
+      if (event.type === "memberRemoved" && !state.actors.actors.some((actor) => actor.id === event.detail.actorId)) {
+        removeActorSprite(state.sprites, actorId(event.detail.actorId));
+        if (init.spriteRuntime !== undefined && init.spriteRuntime.section !== state.sprites) init.spriteRuntime.removeActor(actorId(event.detail.actorId));
       }
-    }
-    if (event.type === "activeMemberChanged") {
-      selectPartyActor(state.sprites, event.detail.currentActorId === null ? null : actorId(event.detail.currentActorId));
-      if (init.spriteRuntime !== undefined && init.spriteRuntime.section !== state.sprites) {
-        init.spriteRuntime.selectActor(event.detail.currentActorId === null ? null : actorId(event.detail.currentActorId));
+      if (event.type === "activeMemberChanged") {
+        selectPartyActor(state.sprites, event.detail.currentActorId === null ? null : actorId(event.detail.currentActorId));
+        if (init.spriteRuntime !== undefined && init.spriteRuntime.section !== state.sprites) {
+          init.spriteRuntime.selectActor(event.detail.currentActorId === null ? null : actorId(event.detail.currentActorId));
+        }
       }
-    }
-    registerEmitter(state.vm, state.events, "party");
-    queueNativeEvent(state.vm, state.events, "party", event.type, event.detail);
-  });
+      registerEmitter(state.vm, state.events, "party");
+      queueNativeEvent(state.vm, state.events, "party", event.type, event.detail);
+    },
+    {
+      item(source) {
+        const resolved = resolveAsset(index, root, "items", source);
+        if (!resolved.ok) return undefined;
+        const cached = inventoryItemDefinitions.get(resolved.value);
+        if (cached !== undefined) return cached;
+        const bytes = cache.get(resolved.value);
+        if (bytes === undefined) return undefined;
+        const parsed = readItem(new BinaryReader(bytes));
+        if (!parsed.ok) return undefined;
+        inventoryItemDefinitions.set(resolved.value, parsed.value);
+        return parsed.value;
+      },
+      character(source) {
+        const resolved = resolveAsset(index, root, "characters", source);
+        if (!resolved.ok) return undefined;
+        const cached = inventoryCharacterDefinitions.get(resolved.value);
+        if (cached !== undefined) return cached;
+        const bytes = cache.get(resolved.value);
+        if (bytes === undefined) return undefined;
+        const parsed = readCharacter(new BinaryReader(bytes));
+        if (!parsed.ok) return undefined;
+        inventoryCharacterDefinitions.set(resolved.value, parsed.value);
+        return parsed.value;
+      },
+      applyEquipment(actorId, equipped, catalog) {
+        return services.actors.applyEquipment(actorId, equipped, catalog) !== null;
+      },
+    },
+    (event) => {
+      registerEmitter(state.vm, state.events, "inventory");
+      queueNativeEvent(state.vm, state.events, "inventory", event.type, event.detail);
+    },
+  );
   for (const section of ["party", "inventory", "menu"] as const) {
     bus.register(section, (effect) => applyMenuStateEffect(menuOwners, effect));
   }
@@ -412,13 +450,15 @@ export function createEngine(init: EngineInit): Engine {
       "engine",
       (section, effect) => bus.dispatchRecorded(section, effect),
       (request) => {
-        if (request.kind === "asset" && request.area === "characters" &&
+        if (request.kind === "asset" && (request.area === "characters" || request.area === "items") &&
             typeof request.path === "string" && typeof request.reqId === "number" &&
             Number.isSafeInteger(request.reqId) && request.reqId > 0 && request.reqId < SCRIPT_REQUEST_BASE) {
-          const resolved = resolveAsset(index, root, "characters", request.path);
-          const key = resolved.ok ? resolved.value : assetKey(`characters/${request.path}`);
+          const area = request.area;
+          const resolved = resolveAsset(index, root, area, request.path);
+          const folder = area === "items" ? "item" : "characters";
+          const key = resolved.ok ? resolved.value : assetKey(`${folder}/${request.path}`);
           const reqId = SCRIPT_REQUEST_BASE + request.reqId;
-          pending.set(reqId, { reqId, key, kind: "script-character" });
+          pending.set(reqId, { reqId, key, kind: area === "items" ? "script-item" : "script-character" });
           requestsOut.push({ kind: "asset", reqId, key });
           return;
         }
@@ -656,7 +696,7 @@ export function createEngine(init: EngineInit): Engine {
     if (entry === undefined) return;
     pending.delete(entry.reqId);
     consumed.push(record);
-    if (entry.kind === "script-character") {
+    if (entry.kind === "script-character" || entry.kind === "script-item") {
       if (record.event.bytes === null) {
         replyToRequest(state.vm, entry.reqId - SCRIPT_REQUEST_BASE, { ok: false, value: "" });
       } else {
