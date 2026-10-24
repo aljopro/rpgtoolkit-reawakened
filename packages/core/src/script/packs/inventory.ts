@@ -78,6 +78,27 @@ function itemRequest(operation: ItemOperation, filename: string): CommandResult 
     then: { command: "__inventory_item_asset", args: [operation, path] },
   };
 }
+function shopRequest(paths: readonly string[], index = 0, sources: readonly string[] = []): CommandResult {
+  const path = paths[index];
+  if (path === undefined) throw new ScriptError("menu.shop-invalid", "shop stock requires at least one item filename");
+  return {
+    value: null,
+    request: { kind: "asset", area: "items", path },
+    then: { command: "__inventory_shop_asset", args: [path, JSON.stringify(paths), JSON.stringify(sources)] },
+  };
+}
+function jsonStrings(value: string, label: string): string[] {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(value);
+  } catch {
+    throw new ScriptError("request.bad-reply", `${label} must be a JSON string list`);
+  }
+  if (!Array.isArray(decoded) || !decoded.every((entry) => typeof entry === "string")) {
+    throw new ScriptError("request.bad-reply", `${label} must be a JSON string list`);
+  }
+  return decoded;
+}
 function partyActor(view: CommandView, handle: unknown): number | undefined {
   const state = view.state;
   if (state === undefined) return undefined;
@@ -231,6 +252,44 @@ const ITEM_ASSET_CONTINUATION: BuiltinSpec = {
   },
 };
 
-export const INVENTORY_COMMANDS: readonly BuiltinSpec[] = [GIVE_ITEM, TAKE_ITEM, ITEM_COUNT, GIVE_GOLD, TAKE_GOLD, GET_GOLD, EQUIP, REMOVE, EQUIPMENT_ASSET_CONTINUATION, ITEM_ASSET_CONTINUATION];
-export const INVENTORY_COMMAND_NAMES = new Set<string>([...ITEM_NAMES, "__inventory_item_asset", "__inventory_equipment_asset"]);
+const CALL_SHOP: BuiltinSpec = {
+  name: "callshop", aliases: [],
+  params: [{ name: "item", optional: false, byRef: false, variadic: true }],
+  doc: docs("Displays a basic shop interface that allows buying the listed items and selling available items from the player's inventory.", "Resolves every filename relative to Item (appending .itm when absent) before activating any stock; then waits for the menu screen to close."),
+  call: (_view, args) => {
+    if (args.length === 0) throw new ScriptError("menu.shop-invalid", "CallShop requires at least one item filename");
+    return shopRequest(args.map((arg) => itemFilename(String(arg.value))));
+  },
+};
+const SHOP_ASSET_CONTINUATION: BuiltinSpec = {
+  name: "__inventory_shop_asset", aliases: [],
+  params: params([{ name: "ok" }, { name: "bytes" }, { name: "file" }, { name: "paths" }, { name: "sources" }]),
+  doc: { ...docs("Resume a shop item request.", "Parses every stock item before committing the active shop context, then waits until the shop closes."), access: "internal" },
+  call: (_view, args) => {
+    const path = text(args, 2);
+    if (integer(args, 0) === 0) throw new ScriptError("asset.missing", `shop item asset not found: ${path}`);
+    const hex = text(args, 1);
+    if (hex.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(hex)) throw new ScriptError("request.bad-reply", "shop item reply must be hexadecimal bytes");
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+    const parsed = readItem(new BinaryReader(bytes));
+    if (!parsed.ok) throw new ScriptError("format.item", parsed.error.message);
+    const paths = jsonStrings(text(args, 3), "shop paths");
+    const sources = [...jsonStrings(text(args, 4), "shop sources"), itemSource(path)];
+    if (paths.length === 0 || paths[sources.length - 1] !== path) throw new ScriptError("request.bad-reply", "shop request sequence is inconsistent");
+    if (sources.length < paths.length) return shopRequest(paths, sources.length, sources);
+    return {
+      value: null,
+      effects: [{ kind: "state-write", section: "menu", args: [{ type: "shop.open", sources }] }],
+      wait: { kind: "menu.screen", global: true, id: "callshop", payload: [], resumeRefs: [] },
+    };
+  },
+};
+const INN: BuiltinSpec = {
+  name: "inn", aliases: [], params: [],
+  doc: { ...docs("Fully heal the player party.", "Sets every party member's current HP and SMP to their maxima immediately, including fallen members; it does not change status effects, equipment, inventory, roster or gold."), groups: [INVENTORY_GROUP, "battle-stats-menus-29"] },
+  call: () => ({ value: null, effects: [{ kind: "state-write", section: "party", args: [{ type: "inn" }] }] }),
+};
+export const INVENTORY_COMMANDS: readonly BuiltinSpec[] = [GIVE_ITEM, TAKE_ITEM, ITEM_COUNT, GIVE_GOLD, TAKE_GOLD, GET_GOLD, EQUIP, REMOVE, EQUIPMENT_ASSET_CONTINUATION, ITEM_ASSET_CONTINUATION, CALL_SHOP, SHOP_ASSET_CONTINUATION, INN];
+export const INVENTORY_COMMAND_NAMES = new Set<string>([...ITEM_NAMES, "inn", "callshop", "__inventory_item_asset", "__inventory_equipment_asset", "__inventory_shop_asset"]);
 export const INVENTORY_PLUGIN: PluginDefinition = { id: "inventory", version: "1.0.0", commands: INVENTORY_COMMANDS };

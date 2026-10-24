@@ -209,6 +209,78 @@ test("authored RPGCode party operations preserve actor identity and emit only co
   deepEqual(restored.actors, state.actors);
 });
 
+test("headless RPGCode Inn restores every active party member without changing unrelated state", () => {
+  const holder: { value: GameState | null } = { value: null };
+  let seeded = false;
+  const engine = createEngine({
+    seed: 23,
+    assetIndex: createAssetIndex(["Boards/test.brd"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 64,
+    height: 64,
+    maxTicks: 24,
+    program: readFileSync(join(fixtureDirectory, "inn-operations.prg"), "utf8"),
+    phaseRegistrations: [{ phase: "input", run: (state) => {
+      holder.value = state;
+      if (seeded) return;
+      seeded = true;
+      const fallen = addActor(state.actors, { kind: "party", source: "fallen.tem", name: "Fallen" });
+      const tired = addActor(state.actors, { kind: "party", source: "tired.tem", name: "Tired" });
+      state.party.members = [fallen.id, tired.id];
+      state.party.selected = fallen.id;
+      fallen.stats = { ...fallen.stats, hp: 0, maxHp: 45, smp: 0, maxSmp: 17 };
+      tired.stats = { ...tired.stats, hp: 12, maxHp: 38, smp: 3, maxSmp: 11 };
+      fallen.statuses.poison = 4;
+      tired.statuses.sleep = 2;
+      state.inventory.gold = 29;
+    }}],
+  });
+  runEngine(engine);
+  const state = holder.value;
+  if (state === null) throw new Error("Inn fixture did not reach the input phase");
+  deepEqual(state.party.members, [1, 2]);
+  equal(state.party.selected, 1);
+  deepEqual(state.actors.actors.map(({ stats }) => [stats.hp, stats.maxHp, stats.smp, stats.maxSmp]), [[45, 45, 17, 17], [38, 38, 11, 11]]);
+  deepEqual(state.actors.actors.map(({ statuses }) => statuses), [{ poison: 4 }, { sleep: 2 }]);
+  equal(state.inventory.gold, 29);
+  deepEqual(state.inventory.items, []);
+});
+test("headless RPGCode CallShop resolves filename assets and parks until the menu closes", () => {
+  const itemBytes = (name: string): Uint8Array => {
+    const result = writeItem({
+      ...createEmptyItem(),
+      minor: 3,
+      legacyWalk: { frames: Array.from({ length: 16 }, () => ({ top: "", bottom: "" })), restTiles: ["", ""] },
+      name,
+      buyPrice: 2,
+      sellPrice: 1,
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    return result.value;
+  };
+  const holder: { value: GameState | null } = { value: null };
+  const engine = createEngine({
+    seed: 24,
+    assetIndex: createAssetIndex(["Boards/test.brd", "Item/potion.itm", "Item/elixir.itm"]),
+    assetRoot: PACKAGE_ROOT,
+    initialBoard: "test.brd",
+    width: 64,
+    height: 64,
+    maxTicks: 8,
+    program: readFileSync(join(fixtureDirectory, "shop-operations.prg"), "utf8"),
+    phaseRegistrations: [{ phase: "input", run: (state) => { holder.value = state; } }],
+  });
+  runEngine(engine, new Map([
+    ["boards/test.brd", boardBytes],
+    ["item/potion.itm", itemBytes("Potion")],
+    ["item/elixir.itm", itemBytes("Elixir")],
+  ]));
+  const state = holder.value;
+  if (state === null) throw new Error("CallShop fixture did not reach the input phase");
+  ok(state.vm.threads.some((thread) => thread.wait?.kind === "menu.screen"), "CallShop remains blocked on the active menu");
+  equal(state.vm.globals.shopreturned, undefined, "the RPGCode call resumes only after the menu closes");
+});
 test("headless RPGCode smoke applies documented party commands through the engine owners", () => {
   const holder: { value: GameState | null } = { value: null };
   let seeded = false;
@@ -377,6 +449,136 @@ test("inventory actions preserve stack identity, emit exact quantity events, and
     { type: "itemRemoved", detail: { entryId: 1, source: "item/potion.itm", handle: "Potion", amount: 2, previousQuantity: 2, currentQuantity: 0 } },
     { type: "itemAdded", detail: { entryId: 2, source: "item/potion.itm", handle: "Potion", amount: 1, previousQuantity: 0, currentQuantity: 1 } },
   ]);
+});
+
+test("shop buy and sell actions commit item and gold events atomically", () => {
+  const state = actorState();
+  state.inventory.gold = 20;
+  const potion = { ...createEmptyItem(), name: "Potion", buyPrice: 3, sellPrice: 1 };
+  const events: { readonly type: string; readonly detail: unknown }[] = [];
+  const stock = ["item/potion.itm"];
+  const ports = createMenuOwnerPorts(state, undefined, {
+    item: (source) => source === stock[0] ? potion : undefined,
+    character: () => undefined,
+    applyEquipment: () => true,
+    shopStock: () => stock,
+  }, (event) => events.push(event));
+  deepEqual(ports.shop.stock(), stock);
+  ok(ports.inventory.apply({ type: "buyItem", source: stock[0]!, amount: 2 }).ok);
+  const entryId = state.inventory.items[0]!.id;
+  equal(state.inventory.items[0]!.quantity, 2);
+  equal(state.inventory.gold, 14);
+  const beforeUnavailable = snapshot(state);
+  const unavailable = ports.inventory.apply({ type: "buyItem", source: "item/missing.itm", amount: 1 });
+  deepEqual(unavailable.error, { path: "shop.stock", message: "item is not in the active shop stock" });
+  equal(snapshot(state), beforeUnavailable);
+  const beforeUnaffordable = snapshot(state);
+  const unaffordable = ports.inventory.apply({ type: "buyItem", source: stock[0]!, amount: 5 });
+  deepEqual(unaffordable.error, { path: "inventory.gold", message: "insufficient gold" });
+  equal(snapshot(state), beforeUnaffordable);
+  stock.length = 0;
+  const beforeNoShop = snapshot(state);
+  const noShop = ports.inventory.apply({ type: "sellItem", entryId, amount: 1 });
+  deepEqual(noShop.error, { path: "shop.stock", message: "selling requires an active shop" });
+  equal(snapshot(state), beforeNoShop);
+  stock.push("item/potion.itm");
+  ok(ports.inventory.apply({ type: "sellItem", entryId, amount: 1 }).ok);
+  equal(state.inventory.items[0]!.quantity, 1);
+  equal(state.inventory.gold, 15);
+  const beforeTooMany = snapshot(state);
+  rejected(ports.inventory.apply({ type: "sellItem", entryId, amount: 2 }));
+  equal(snapshot(state), beforeTooMany);
+  ok(ports.inventory.apply({ type: "sellItem", entryId, amount: 1 }).ok);
+  equal(state.inventory.items.length, 0);
+  equal(state.inventory.gold, 16);
+  deepEqual(events, [
+    { type: "itemAdded", detail: { entryId: 1, source: "item/potion.itm", handle: "Potion", amount: 2, previousQuantity: 0, currentQuantity: 2 } },
+    { type: "goldChanged", detail: { previous: 20, current: 14, delta: -6 } },
+    { type: "itemRemoved", detail: { entryId, source: "item/potion.itm", handle: "Potion", amount: 1, previousQuantity: 2, currentQuantity: 1 } },
+    { type: "goldChanged", detail: { previous: 14, current: 15, delta: 1 } },
+    { type: "itemRemoved", detail: { entryId, source: "item/potion.itm", handle: "Potion", amount: 1, previousQuantity: 1, currentQuantity: 0 } },
+    { type: "goldChanged", detail: { previous: 15, current: 16, delta: 1 } },
+  ]);
+});
+test("shop activation validates every canonical source before exposing ordered stock", () => {
+  const state = actorState();
+  const potion = { ...createEmptyItem(), name: "Potion", buyPrice: 2, sellPrice: 1 };
+  const before = snapshot(state);
+  let stock: readonly string[] = [];
+  const ports = createMenuOwnerPorts(state, undefined, {
+    item: (source) => source === "item/potion.itm" ? potion : undefined,
+    character: () => undefined,
+    applyEquipment: () => true,
+    shopStock: () => stock,
+    setShopStock: (sources) => { stock = [...sources]; },
+  });
+  const unavailable = ports.shop.activate(["Potion.itm", "Missing.itm"]);
+  deepEqual(unavailable.error, { path: "shop.stock", message: "item definition is unavailable: item/missing.itm" });
+  deepEqual(ports.shop.stock(), []);
+  ok(ports.shop.activate(["Potion.itm", "item/POTION.ITM"]).ok);
+  deepEqual(ports.shop.stock(), ["item/potion.itm", "item/potion.itm"]);
+  equal(snapshot(state), before, "the ephemeral shop context is not saved in menu state");
+  ports.shop.close();
+  deepEqual(ports.shop.stock(), []);
+});
+test("active shops sell available inventory even when its item is not stocked", () => {
+  const state = actorState();
+  const potion = { ...createEmptyItem(), name: "Potion", buyPrice: 2, sellPrice: 1 };
+  const elixir = { ...createEmptyItem(), name: "Elixir", buyPrice: 9, sellPrice: 4 };
+  const events: { readonly type: string; readonly detail: unknown }[] = [];
+  const ports = createMenuOwnerPorts(state, undefined, {
+    item: (source) => source === "item/potion.itm" ? potion : source === "item/elixir.itm" ? elixir : undefined,
+    character: () => undefined,
+    applyEquipment: () => true,
+    shopStock: () => ["item/potion.itm"],
+  }, (event) => events.push(event));
+  ok(ports.inventory.apply({ type: "addItem", source: "item/elixir.itm", handle: "Elixir", amount: 3 }).ok);
+  const entryId = state.inventory.items[0]!.id;
+  ok(ports.inventory.apply({ type: "sellItem", entryId, amount: 2 }).ok);
+  equal(state.inventory.items[0]!.quantity, 1);
+  equal(state.inventory.gold, 8);
+  deepEqual(events.slice(1), [
+    { type: "itemRemoved", detail: { entryId, source: "item/elixir.itm", handle: "Elixir", amount: 2, previousQuantity: 3, currentQuantity: 1 } },
+    { type: "goldChanged", detail: { previous: 0, current: 8, delta: 8 } },
+  ]);
+});
+test("shop rejects invalid quantities and arithmetic or inventory boundaries without mutation", () => {
+  const state = actorState();
+  const events: { readonly type: string }[] = [];
+  let definition = { ...createEmptyItem(), name: "Potion", buyPrice: 0, sellPrice: 0 };
+  const stock = ["item/potion.itm"];
+  const ports = createMenuOwnerPorts(state, undefined, {
+    item: () => definition,
+    character: () => undefined,
+    applyEquipment: () => true,
+    shopStock: () => stock,
+  }, (event) => events.push(event));
+  ok(ports.inventory.apply({ type: "buyItem", source: stock[0]!, amount: 1 }).ok);
+  equal(state.inventory.gold, 0);
+  equal(events.length, 1, "zero-price trade emits no gold event");
+  const entryId = state.inventory.items[0]!.id;
+  state.inventory.items[0]!.quantity = Number.MAX_SAFE_INTEGER;
+  const maxed = snapshot(state);
+  const overflowQuantity = ports.inventory.apply({ type: "buyItem", source: stock[0]!, amount: 1 });
+  equal(overflowQuantity.error?.path, "inventory.items.quantity");
+  equal(snapshot(state), maxed);
+  definition = { ...definition, buyPrice: -1 };
+  const invalidBuyPrice = ports.inventory.apply({ type: "buyItem", source: stock[0]!, amount: 1 });
+  equal(invalidBuyPrice.error?.path, "inventory.action.price");
+  equal(snapshot(state), maxed);
+  definition = { ...definition, buyPrice: Number.MAX_SAFE_INTEGER, sellPrice: 1 };
+  state.inventory.gold = Number.MAX_SAFE_INTEGER;
+  const costOverflow = ports.inventory.apply({ type: "buyItem", source: stock[0]!, amount: 2 });
+  equal(costOverflow.error?.path, "inventory.gold");
+  const goldBoundary = snapshot(state);
+  const quantityInvalid = ports.inventory.apply({ type: "sellItem", entryId, amount: 0 });
+  equal(quantityInvalid.error?.path, "inventory.action");
+  equal(snapshot(state), goldBoundary);
+  definition = { ...definition, sellPrice: Number.MAX_SAFE_INTEGER };
+  const proceedsOverflow = ports.inventory.apply({ type: "sellItem", entryId, amount: 1 });
+  equal(snapshot(state), goldBoundary);
+  equal(proceedsOverflow.error?.path, "inventory.gold");
+  equal(events.length, 1, "rejected trades emit no events");
 });
 
 test("existing ports follow section replacement and restored sections", () => {
@@ -691,6 +893,58 @@ test("RPGCode equipment locations map and clamp to all canonical inventory slots
       slot: expected[location],
     });
   }
+});
+test("RPGCode CallShop rejects empty and unavailable stock before opening", () => {
+  const state = actorState();
+  const services = createScriptServices(state);
+  const callShop = INVENTORY_COMMANDS.find((command) => command.name === "callshop");
+  const continuation = INVENTORY_COMMANDS.find((command) => command.name === "__inventory_shop_asset");
+  if (callShop === undefined || continuation === undefined) throw new Error("missing CallShop implementation");
+  const next = () => ({ value: null });
+  const unchanged = snapshot(state);
+  throws(() => callShop.call(services.view, [], next), (error: unknown) =>
+    typeof error === "object" && error !== null && "code" in error && error.code === "menu.shop-invalid");
+  const paths = ["Potion.itm", "Elixir.itm"];
+  const start = callShop.call(services.view, [{ value: "Potion", ref: null }], next);
+  deepEqual(start.request, { kind: "asset", area: "items", path: "Potion.itm" });
+  const item = writeItem({
+    ...createEmptyItem(),
+    minor: 3,
+    legacyWalk: { frames: Array.from({ length: 16 }, () => ({ top: "", bottom: "" })), restTiles: ["", ""] },
+    name: "Potion",
+  });
+  if (!item.ok) throw new Error(item.error.message);
+  const bytes = Array.from(item.value, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const firstContinuation = continuation.call(services.view, [
+    { value: 1, ref: null }, { value: bytes, ref: null }, { value: "Potion.itm", ref: null },
+    { value: JSON.stringify(paths), ref: null }, { value: "[]", ref: null },
+  ], next);
+  const secondItem = writeItem({
+    ...createEmptyItem(),
+    minor: 3,
+    legacyWalk: { frames: Array.from({ length: 16 }, () => ({ top: "", bottom: "" })), restTiles: ["", ""] },
+    name: "Elixir",
+  });
+  if (!secondItem.ok) throw new Error(secondItem.error.message);
+  const secondBytes = Array.from(secondItem.value, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const opened = continuation.call(services.view, [
+    { value: 1, ref: null }, { value: secondBytes, ref: null }, { value: "Elixir.itm", ref: null },
+    { value: JSON.stringify(paths), ref: null }, { value: JSON.stringify(["item/potion.itm"]), ref: null },
+  ], next);
+  deepEqual(opened.effects?.[0]?.args?.[0], { type: "shop.open", sources: ["item/potion.itm", "item/elixir.itm"] });
+  equal(opened.wait?.kind, "menu.screen");
+  deepEqual(firstContinuation.request, { kind: "asset", area: "items", path: "Elixir.itm" });
+  throws(() => continuation.call(services.view, [
+    { value: 0, ref: null }, { value: "", ref: null }, { value: "Elixir.itm", ref: null },
+    { value: JSON.stringify(paths), ref: null }, { value: JSON.stringify(["item/potion.itm"]), ref: null },
+  ], next), (error: unknown) =>
+    typeof error === "object" && error !== null && "code" in error && error.code === "asset.missing");
+  throws(() => continuation.call(services.view, [
+    { value: 1, ref: null }, { value: "00", ref: null }, { value: "Elixir.itm", ref: null },
+    { value: JSON.stringify(["Elixir.itm"]), ref: null }, { value: "[]", ref: null },
+  ], next), (error: unknown) =>
+    typeof error === "object" && error !== null && "code" in error && error.code === "format.item");
+  equal(snapshot(state), unchanged);
 });
 test("headless RPGCode inventory commands request assets and apply item, equipment and gold operations", () => {
   const item = writeItem({

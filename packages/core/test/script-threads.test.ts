@@ -469,7 +469,7 @@ test("registering a wait kind twice fails, and an unregistered kind fails loudly
   const vm = createVmState();
   const thread = startProgram(vm, ref("end()"));
   thread.status = "waiting";
-  thread.wait = { kind: "menu.screen", global: false } as unknown as Wait;
+  thread.wait = { kind: "custom.unregistered", global: false } as unknown as Wait;
   equal(errorOf(() => runWaitsPhase(vm, { tick: 0 })).code, "wait.unknown-kind");
 });
 
