@@ -34,24 +34,35 @@ Run deterministic script-level scenarios with exact before/after state and diagn
 
 ## Contract required before coding
 
-**Implementation checkpoint: BLOCKED** until the owner resolves the questions below and this normative contract PR is accepted and merged. The actions and TKR policies here are recommendations, not claims about Toolkit 3 trans3 behavior.
+**Implementation checkpoint: CLEARED.** The owner has supplied authoritative Toolkit 3 trans3 runtime answers and approved the proposed operation surface for Epic 8.6. PR #621 establishes the normative contract.
 
-**Recommended shared operation surface.** TypeScript and RPGCode menu implementations use the same read-only context and language-appropriate syntax. The context exposes read-only `shop.stock` (the active `CallShop` item sources in order, empty outside a shop) and `inventory.buyItem({ source, amount })`, `inventory.sellItem({ entryId, amount })`, and `party.inn()` actions. Each returns exactly `MenuStateResult`: `{ ok: true, error: null }` on commit/no-op, or `{ ok: false, error: { path, message } }` on refusal. These are menu capabilities, not new global RPGCode built-ins.
+**Approved shared operation surface (OWNER).** TypeScript and RPGCode menu implementations use the same read-only context and language-appropriate syntax. The context exposes read-only `shop.stock` (the active `CallShop` item sources in order, empty outside a shop) and `inventory.buyItem({ source, amount })`, `inventory.sellItem({ entryId, amount })`, and `party.inn()` actions. Each returns exactly `MenuStateResult`: `{ ok: true, error: null }` on commit/no-op, or `{ ok: false, error: { path, message } }` on refusal. These are menu capabilities, not new global RPGCode built-ins.
 
-**Recommended transaction rules (TKR design, pending owner decisions).**
+**Owner/engineer compatibility ruling (trans3 runtime answer supplied for Epic 8.6; not inferred from repository extraction).**
 
-- `CallShop(item1, ...)` supplies the active shop's read-only stock. A buy is allowed only for a listed, resolvable `.itm` source; it adds `amount` of the definition's `itemName` handle to the unique `(source, handle)` stack and debits `buyPrice × amount`. A sell addresses an existing `entryId`, removes only available/unequipped quantity, and credits `sellPrice × amount`; it is not limited to the current buy stock. `keyItem` does not prohibit shop sale: E-81 restricts only the stock-menu drop affordance and item.md assigns no general engine rule to the flag.
-- Buy/sell amounts are positive safe integers. Prices are read from the item's signed integer `buyPrice`/`sellPrice` fields; recommend refusing a negative price and allowing zero. Refuse an unavailable asset, out-of-stock buy, unknown stack, insufficient quantity or gold, negative price, unsafe product, quantity/ID exhaustion, or unsafe/negative resulting balance atomically. A refusal changes no state and emits no event.
+1. `callshop(item1, ...)` requires at least one parameter; 0 parameters raises a script error immediately and the shop fails to open entirely. Parameters resolve strictly as filenames relative to the Item asset directory (appending `.itm` if missing, case-insensitively); item handles are NOT resolved. If any listed item file is missing or invalid on disk, the engine raises a script error and the shop fails to open entirely (no partial opening, no skipping).
+2. `inn()` sets current HP to max HP and current SMP to max SMP for all active party members immediately. Fallen party members (HP <= 0) are restored unconditionally (`revived`). `inn()` does not clear status effects, charges 0 GP, and is a pure headless stat restoration with no UI or audio.
+3. Prices: a price of 0 GP is permitted for buying and selling (0 GP added or deducted).
+
+**TKR design choice (Epic 8.6).**
+
+- Item definition prices are signed integers on disk, but TKR cleanly rejects negative prices with atomic refusal (`MenuStateResult` error).
+- Buy and sell quantities are positive safe integers.
+
+**Transaction rules and event ordering.**
+
+- `CallShop(item1, ...)` supplies the active shop's read-only stock via `shop.stock`. A buy is allowed only for a listed, resolvable `.itm` source; it adds `amount` of the definition's `itemName` handle to the unique `(source, handle)` stack and debits `buyPrice × amount`. A sell addresses an existing `entryId`, removes only available/unequipped quantity, and credits `sellPrice × amount`; it is not limited to the current buy stock. `keyItem` does not prohibit shop sale: E-81 restricts only the stock-menu drop affordance and item.md assigns no general engine rule to the flag.
+- Refuse an unavailable asset, out-of-stock buy, unknown stack, insufficient quantity or gold, negative price, unsafe product, quantity/ID exhaustion, or unsafe/negative resulting balance atomically. A refusal changes no state and emits no event.
 - A committed buy emits one existing `itemAdded` and, when the balance changes, one existing `goldChanged`; a committed sell emits one `itemRemoved` and, when the balance changes, one `goldChanged`. Emit after the whole transaction commits, in item-then-gold order; zero-price trades emit only the item event. No shop-specific event or saved shop/inventory field is added.
-- `party.inn()` is a single party-owner operation coordinated through actor operations, not the existing `PartyAction.restore` (which re-adds a removed roster member). Recommend restoring HP and SMP to their maxima for every current `party.members` entry, including fallen members; leave status effects, equipment, roster, inventory and gold unchanged, and charge no gold. Refusal is atomic. It adds no inn/party/inventory event; actor-owned `revived` transitions remain possible when a member crosses HP <= 0 to positive.
+- `party.inn()` is a single party-owner operation coordinated through actor operations, not the existing `PartyAction.restore` (which re-adds a removed roster member). It restores HP and SMP to their maxima for every active party member, including fallen members; leaves status effects, equipment, roster, inventory and gold unchanged, and charges no gold. Refusal is atomic. It adds no inn/party/inventory event; actor-owned `revived` transitions occur when a member crosses HP <= 0 to positive.
 - `callshop(item1, ...)` remains the existing blocking `void` built-in that opens the stock UI; the menu commits its trades through these shared actions. Existing `inn()` remains `void` and dispatches `party.inn()` synchronously through the party owner. `getitemcost` and `getitemsellprice` remain read-only price getters. The existing `MenuStateResult` refusal is surfaced through the normal `menu.state-invalid` diagnostic with its path and message when invoked from RPGCode.
 
-**Owner questions (no source-backed answer found; recommendations above).**
+**Owner resolutions.**
 
-1. Do `CallShop` stock strings resolve as item filenames (recommended: append `.itm` if absent and resolve case-insensitively) or by handle? E-83 and the built-in signature do not specify; 8.4's filename ruling covers `giveitem`/`takeitem`, not `CallShop`. Also confirm whether any invalid listed stock entry rejects the whole shop opening (recommended) or is omitted.
-2. Does `Inn()` restore HP and SMP for every current party member, including fallen members, without curing statuses or charging gold (recommended), or does “fully restores the party” include other effects/costs?
-3. Are negative item prices invalid and zero-price transactions allowed (recommended)? The item fields are signed integers, but E-83 does not specify their transaction meaning.
-4. Approve the proposed read/action surface `shop.stock`, `inventory.buyItem`, `inventory.sellItem`, and `party.inn()` with `MenuStateResult`, or specify the alternative.
+1. *CallShop stock resolution:* 0 parameters raises a script error and shop fails to open; parameters resolve strictly as filenames relative to Item asset directory (appends `.itm` if missing, case-insensitive); item handles are not resolved; any missing/invalid file raises a script error and shop fails to open entirely.
+2. *Inn restoration scope:* sets current HP to max HP and current SMP to max SMP for all active party members immediately; fallen members restored unconditionally (`revived`); does not clear status effects, charges 0 GP; pure headless stat restoration with no UI/audio.
+3. *Prices:* price of 0 permitted for buying and selling; negative prices rejected cleanly by TKR with atomic refusal.
+4. *Operation surface:* approved as proposed (`shop.stock`, `inventory.buyItem`, `inventory.sellItem`, `party.inn()` with `MenuStateResult`).
 
 ## Contract impact scan
 
